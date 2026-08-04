@@ -12,24 +12,25 @@ use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-// ─── the retired vendored-lib byte gate (CUTOVER) ──────────────────────────
+// ─── the retired vendored-lib byte gate ────────────────────────────────────
 //
-// The `.mjs` guard dynamically imported vendored lib modules from
-// `<storeRoot>/.bee/bin/lib/*.mjs`, so this port embedded that whole import
-// closure (state + guards + validate-args + command-registry, 26 files) and
-// byte-compared it at runtime: if a host's vendored copy differed by one byte,
-// the native semantics were unproven and the run delegated. That gate was
-// correct for the whole two-runtime window and is WRONG the moment the window
-// closes — there is no vendored lib to compare against, so every comparison
-// would fail, every run would delegate, and the delegation would fail open.
-// A guard that fails open on every single event is not a guard.
+// During the two-runtime window this guard byte-compared its embedded
+// implementation (state + guards + validate-args + command-registry, 26
+// files) against the host's on-disk vendored copy at runtime: any one-byte
+// difference meant the native semantics were unproven, so the run delegated.
+// That gate was correct for the whole two-runtime window and is WRONG the
+// moment the window closes — there is no vendored copy to compare against,
+// so every comparison would fail, every run would delegate, and the
+// delegation would fail open. A guard that fails open on every single event
+// is not a guard.
 //
-// Its activation probe went the same way, and that one was the sharper hazard:
-// the wrapper began `if (!existsSync(storeRoot/.bee/bin/lib/state.mjs)) return
-// 0;` — "bee is not installed here, decide nothing". Left alone, that line
-// alone would have switched the write guard OFF in every repo on earth. The
-// replacement asks the same question against the install shape that exists
-// now: `.bee/onboarding.json`, the marker roots.rs already stops its walk on.
+// Its activation probe went the same way, and that one was the sharper
+// hazard: it asked "does the vendored library exist at this store root?" —
+// "no" meant "bee is not installed here, decide nothing". Left alone, that
+// question would have switched the write guard OFF in every repo on earth.
+// The replacement asks the same question against the install shape that
+// exists now: `.bee/onboarding.json`, the marker roots.rs already stops its
+// walk on.
 
 // ─── JS string / value helpers ─────────────────────────────────────────────
 
@@ -80,11 +81,6 @@ pub(crate) fn str_trim_nonempty(v: Option<&Value>) -> Option<String> {
         Some(Value::String(s)) if !js_trim(s).is_empty() => Some(js_trim(s).to_string()),
         _ => None,
     }
-}
-
-/// UTF-16 code-unit length (JS String.length).
-pub(crate) fn utf16_len(s: &str) -> usize {
-    s.encode_utf16().count()
 }
 
 pub(crate) fn ascii_eq_ci(a: &str, b: &str) -> bool {

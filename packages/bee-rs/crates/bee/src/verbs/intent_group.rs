@@ -88,10 +88,10 @@ fn sanitize_intent_key(key: &str) -> String {
     }
 }
 
-/// activeFeature — the active feature slug, or None. Err(()) => delegate
-/// (corrupt state.json: Node warns with the V8 message).
+/// activeFeature — the active feature slug, or None. A corrupt state.json
+/// warns natively and reads as absent (read_state_brief is infallible).
 fn active_feature(root: &Path) -> Result<Option<String>, ()> {
-    let state = read_state_brief(root).map_err(|_| ())?;
+    let state = read_state_brief(root);
     let no_work = matches!(&state.phase, Value::String(s) if s == "idle" || s == "compounding-complete");
     if no_work {
         return Ok(None);

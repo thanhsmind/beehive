@@ -7,7 +7,7 @@ use super::*;
 use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_worktree, LinkedRoots, RootsWt};
-use crate::state::{bypass_level, read_config_raw, Bail};
+use crate::state::{bypass_level, read_config_raw};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::cell::RefCell;

@@ -28,18 +28,15 @@
 //     failure line> — fix before capping", exit 1 (record still written).
 //     Undeclared: 4 fixed lines, {green:null, undeclared:true}, exit 0.
 //
-// Strangler routing: only `bee test` and `bee test --json` (bare --json
-// tokens) are served natively. Everything else — other flags, --json=x
-// forms, positionals, non-unicode argv, linked-worktree roots, and win32
-// hosts without a POSIX shell (Node's cmd.exe fallback) — returns None
-// before ANY output and before the drift-cache write.
+// Routing: only `bee test` and `bee test --json` (bare --json tokens) are
+// served natively. Everything else — other flags, --json=x forms,
+// positionals, non-unicode argv, linked-worktree roots, and win32 hosts
+// without a POSIX shell — returns None before ANY output and before the
+// drift-cache write.
 //
-// CUTOVER: corrupt config / drift-cache JSON used to be on that list (Node's
-// warn-with-V8-message paths). `state::read_config_raw` and
-// `registry::check_manifest_drift` warn natively and fall back now, so the two
-// `.ok()?` sites below can no longer fire — a corrupt config reads as no
-// config and `bee test` reports "undeclared", exactly as Node did after its
-// own warning.
+// `state::read_config_raw` and `registry::check_manifest_drift` warn
+// natively and fall back, and are infallible — a corrupt config reads as no
+// config and `bee test` reports "undeclared" after its own warning.
 //
 // Known divergences (documented, unreachable in practice): a spawn error
 // AFTER the successful shell probe embeds Rust's io error text where Node
@@ -54,6 +51,7 @@ use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::read_config_raw;
+use crate::textutil::truncate_chars_tail;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Value};
 use std::ffi::OsString;
@@ -63,8 +61,8 @@ use std::time::Instant;
 
 /// TEST_RESULTS_RELATIVE (lib/test-runner.mjs:30).
 const TEST_RESULTS_RELATIVE: &str = ".bee/logs/test-results.json";
-/// FAILURE_EXCERPT_MAX_CHARS (lib/test-runner.mjs:35) — UTF-16 units, like
-/// JS String.prototype.slice.
+/// FAILURE_EXCERPT_MAX_CHARS (lib/test-runner.mjs:35) — CHARS (decision D3:
+/// char-based, not the historical UTF-16-unit count).
 const FAILURE_EXCERPT_MAX: usize = 500;
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
@@ -93,7 +91,7 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
 
     // Everything that can still delegate happens BEFORE the drift check: its
     // cache write would otherwise swallow the Node re-run's drift line.
-    let commands = declared_test_commands(&root).ok()?;
+    let commands = declared_test_commands(&root);
     let shell = if commands.is_some() {
         let s = posix_shell()?; // no POSIX sh — Node's cmd.exe fallback owns it
         // Pre-flight the record dir so the post-run writeJsonAtomic (whose
@@ -104,7 +102,7 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
         None
     };
 
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
 
     // ── handleTest ─────────────────────────────────────────────────────────
     let (result, text, exit_code) = match commands {
@@ -187,9 +185,9 @@ fn emit_error(message: &str, use_json: bool) -> ExitCode {
 
 /// Ordered declared commands, or None when the repo declares no test path
 /// (absent commands.test, empty after normalization, or only the "none"
-/// sentinel). Err bubbles Node-owned shapes (corrupt config JSON).
-fn declared_test_commands(root: &Path) -> Result<Option<Vec<String>>, crate::state::Bail> {
-    let config = read_config_raw(root)?;
+/// sentinel).
+fn declared_test_commands(root: &Path) -> Option<Vec<String>> {
+    let config = read_config_raw(root);
     // normalizeCommands: non-object (or array) commands -> {}.
     let raw_test = config
         .get("commands")
@@ -210,7 +208,7 @@ fn declared_test_commands(root: &Path) -> Result<Option<Vec<String>>, crate::sta
     };
     // declaredTestCommands: drop the no-test sentinel (decision 55b951e1).
     let cleaned: Vec<String> = normalized.into_iter().filter(|c| c != "none").collect();
-    Ok(if cleaned.is_empty() { None } else { Some(cleaned) })
+    if cleaned.is_empty() { None } else { Some(cleaned) }
 }
 
 // ── runner (test-runner.mjs runDeclaredTests) ──────────────────────────────
@@ -284,7 +282,7 @@ fn run_declared_tests(root: &Path, commands: &[String], shell: &str) -> TestRun 
             None
         } else {
             let trimmed = js_trim(&output);
-            let tail = utf16_tail(&trimmed, FAILURE_EXCERPT_MAX);
+            let tail = truncate_chars_tail(&trimmed, FAILURE_EXCERPT_MAX);
             Some(if tail.is_empty() {
                 format!("(no output; exit {})", js_exit(exit))
             } else {
@@ -401,22 +399,6 @@ fn js_trim(s: &str) -> String {
     s.trim_matches(is_js_whitespace).to_string()
 }
 
-/// JS `.slice(-n)` counts UTF-16 code units. When the boundary would split a
-/// surrogate pair (where JS keeps a lone low surrogate no Rust String can
-/// hold) the window widens by one unit to keep the pair — the sole excerpt
-/// divergence, unreachable for ASCII/BMP output.
-fn utf16_tail(s: &str, n: usize) -> String {
-    let units: Vec<u16> = s.encode_utf16().collect();
-    if units.len() <= n {
-        return s.to_string();
-    }
-    let mut start = units.len() - n;
-    if (0xDC00..=0xDFFF).contains(&units[start]) {
-        start -= 1;
-    }
-    String::from_utf16_lossy(&units[start..])
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -433,32 +415,32 @@ mod tests {
         let root = tmp.path();
         // Absent commands.test -> undeclared.
         write_config(root, r#"{"commands":{}}"#);
-        assert!(declared_test_commands(root).ok().unwrap().is_none());
+        assert!(declared_test_commands(root).is_none());
         // String trims; empty/whitespace normalizes away.
         write_config(root, r#"{"commands":{"test":"  npm test  "}}"#);
-        assert_eq!(declared_test_commands(root).ok().unwrap(), Some(vec!["npm test".to_string()]));
+        assert_eq!(declared_test_commands(root), Some(vec!["npm test".to_string()]));
         write_config(root, r#"{"commands":{"test":"   "}}"#);
-        assert!(declared_test_commands(root).ok().unwrap().is_none());
+        assert!(declared_test_commands(root).is_none());
         // Array filters non-strings and empties, keeps order, trims.
         write_config(root, r#"{"commands":{"test":[" a ",1,""," b "]}}"#);
         assert_eq!(
-            declared_test_commands(root).ok().unwrap(),
+            declared_test_commands(root),
             Some(vec!["a".to_string(), "b".to_string()])
         );
         // The "none" sentinel (decision 55b951e1) declares no-test.
         write_config(root, r#"{"commands":{"test":"none"}}"#);
-        assert!(declared_test_commands(root).ok().unwrap().is_none());
+        assert!(declared_test_commands(root).is_none());
         write_config(root, r#"{"commands":{"test":["none"," none "]}}"#);
-        assert!(declared_test_commands(root).ok().unwrap().is_none());
+        assert!(declared_test_commands(root).is_none());
         // Non-object commands -> {} -> undeclared.
         write_config(root, r#"{"commands":["x"]}"#);
-        assert!(declared_test_commands(root).ok().unwrap().is_none());
+        assert!(declared_test_commands(root).is_none());
         // CUTOVER: a corrupt config used to bail to Node. readConfig warned
         // and returned {}, so `bee test` reported "undeclared" — that is what
         // the native read does now, warning on stderr in our own words.
         write_config(root, "{broken");
         assert!(
-            declared_test_commands(root).ok().unwrap().is_none(),
+            declared_test_commands(root).is_none(),
             "a corrupt config reads as no config, and no config is undeclared"
         );
     }
@@ -550,14 +532,18 @@ mod tests {
     }
 
     #[test]
-    fn excerpt_keeps_only_the_last_500_utf16_units() {
+    fn excerpt_keeps_only_the_last_500_chars() {
         let long = "x".repeat(650);
-        assert_eq!(utf16_tail(&long, FAILURE_EXCERPT_MAX).len(), 500);
-        assert_eq!(utf16_tail("short", FAILURE_EXCERPT_MAX), "short");
-        // Astral chars count 2 units each, like JS .slice.
-        let astral = "🐝".repeat(300); // 600 units
-        let tail = utf16_tail(&astral, FAILURE_EXCERPT_MAX);
-        assert_eq!(tail.encode_utf16().count(), 500); // boundary lands on a pair
+        assert_eq!(truncate_chars_tail(&long, FAILURE_EXCERPT_MAX).len(), 500);
+        assert_eq!(truncate_chars_tail("short", FAILURE_EXCERPT_MAX), "short");
+        // Decision D3: the cap counts CHARS, not UTF-16 units — an astral
+        // char is one char, so 300 of them (600 UTF-16 units) fits under the
+        // 500-char cap untouched, where the old UTF-16-unit cap would have
+        // truncated it.
+        let astral = "🐝".repeat(300);
+        let tail = truncate_chars_tail(&astral, FAILURE_EXCERPT_MAX);
+        assert_eq!(tail.chars().count(), 300);
+        assert_eq!(tail, astral);
     }
 
     #[test]

@@ -49,8 +49,7 @@
 
 use super::feedback::{
     backlog_allowed_type, emit_error, emit_success, find_ci, js_is_space, js_trim, js_truthy,
-    now_iso, parse_shape, random_bytes, read_jsonl, require_flag, utf16_len, value_js_safe,
-    ParsedArgs,
+    now_iso, parse_shape, random_bytes, read_jsonl, require_flag, value_js_safe, ParsedArgs,
 };
 use crate::fsutil::append_jsonl;
 use crate::jsjson;
@@ -58,6 +57,7 @@ use crate::lock::{acquire_store_lock_once, AcquireOnce};
 use crate::registry::{check_manifest_drift, Drift};
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::read_config_raw;
+use crate::textutil::char_len;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -249,7 +249,7 @@ fn normalize_status(cell: &str) -> String {
 /// missing dir, drive-relative absolutes where Node's win32 isAbsolute and
 /// Rust's disagree) delegates.
 fn resolve_product_root(root: &Path) -> Option<PathBuf> {
-    let config = read_config_raw(root).ok()?;
+    let config = read_config_raw(root);
     match config.get("product_root") {
         None | Some(Value::Null) => Some(root.to_path_buf()),
         Some(Value::String(s)) if s.is_empty() => Some(root.to_path_buf()),
@@ -472,9 +472,10 @@ fn add_pbi(
     // Pre-lock delegation probe: a deterministic duplicate id must delegate
     // WITHOUT acquiring the lock — acquiring writes an "acquired"
     // contention-telemetry row, and a write before returning None breaks the
-    // strangler contract. The same check re-runs under the lock below for the
-    // (vanishingly rare) racing-writer case. (The fold itself can no longer
-    // fail: an unparseable JSONL line is skipped, not delegated.)
+    // no-output-before-decision contract. The same check re-runs under the
+    // lock below for the (vanishingly rare) racing-writer case. (The fold
+    // itself can no longer fail: an unparseable JSONL line is skipped, not
+    // delegated.)
     {
         let fold = fold_pbis(root);
         if let Some(id) = requested {
@@ -584,7 +585,7 @@ fn preamble(cmd: &str, pre_json: bool, t0: Instant) -> Result<Option<Ctx>, ExitC
         }
         Roots::None => return Err(emit_no_root_error(&cwd, cmd, pre_json, t0)),
     };
-    let Ok(drift) = check_manifest_drift(&root) else { return Ok(None) };
+    let drift = check_manifest_drift(&root);
     Ok(Some(Ctx { root, drift }))
 }
 
@@ -740,7 +741,7 @@ fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCo
         return None;
     }
     let layer = require_flag(&parsed, "layer")?;
-    if utf16_len(title) > BACKLOG_MAX_TITLE || utf16_len(layer) > BACKLOG_MAX_LAYER {
+    if char_len(title) > BACKLOG_MAX_TITLE || char_len(layer) > BACKLOG_MAX_LAYER {
         return None;
     }
     // `flags.detail !== undefined && !== true ? String(flags.detail) : ''`.
@@ -794,11 +795,11 @@ fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCo
 
 fn run_propose(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let story = js_trim(require_flag(&parsed, "story")?).to_string();
-    if story.is_empty() || utf16_len(&story) > BACKLOG_MAX_STORY {
+    if story.is_empty() || char_len(&story) > BACKLOG_MAX_STORY {
         return None;
     }
     let cos = js_trim(require_flag(&parsed, "cos")?).to_string();
-    if cos.is_empty() || utf16_len(&cos) > BACKLOG_MAX_COS {
+    if cos.is_empty() || char_len(&cos) > BACKLOG_MAX_COS {
         return None;
     }
     let feature = parsed.flags.get("feature").cloned().unwrap_or_default();

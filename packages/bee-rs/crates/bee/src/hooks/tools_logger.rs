@@ -55,16 +55,7 @@ fn run_inner(argv: &[String], stdin: &str) -> ExitCode {
     if !crate::hooks::adapter::bee_installed(root) {
         return ExitCode::SUCCESS;
     }
-    let enabled = match hook_enabled(root, HOOK_NAME) {
-        Ok(e) => e,
-        Err(_) => {
-            // The .mjs surfaces a corrupt-config readJson warn via Node; a
-            // logger must stay silent-fail-open here — log the crash shape.
-            log_crash(Some(root), HOOK_NAME, "config unreadable", ctx.source);
-            return ExitCode::SUCCESS;
-        }
-    };
-    if !enabled {
+    if !hook_enabled(root, HOOK_NAME) {
         return ExitCode::SUCCESS;
     }
     if let Err(e) = log_tool_call(root, &ctx.payload) {

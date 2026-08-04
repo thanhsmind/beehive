@@ -11,7 +11,7 @@ use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
 use crate::verbs::reservations::{
     date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
-    js_numberify, js_strict_eq, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
+    js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
     Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
@@ -64,23 +64,10 @@ pub(crate) fn default_state() -> Map<String, Value> {
     m
 }
 
-/// `{ ...defaults, ...(overlay || {}) }` over the gates map. Falsy and
-/// no-own-props truthy primitives (true, numbers) yield the defaults; string/
-/// array spreads add JS exotica → delegate.
-pub(crate) fn spread_gates(overlay: Option<&Value>) -> Ex<Map<String, Value>> {
-    match overlay {
-        Some(Value::Object(over)) => {
-            let mut merged = default_gates();
-            for (k, v) in over {
-                merged.insert(k.clone(), v.clone());
-            }
-            Ok(merged)
-        }
-        Some(Value::String(s)) if !s.is_empty() => Err(Exotic),
-        Some(Value::Array(_)) => Err(Exotic),
-        _ => Ok(default_gates()),
-    }
-}
+/// The Rust-native gate merge (D2, docs/history/js-parity-cleanup/CONTEXT.md)
+/// lives beside `default_gates` in state.rs; re-exported here so every
+/// state_group caller reaches it through this module, unchanged.
+pub(crate) use crate::state::spread_gates;
 
 /// coerceLegacyPhase applied to the merged map's phase slot (D13).
 pub(crate) fn coerce_legacy_phase(m: &mut Map<String, Value>) -> Ex<()> {
@@ -102,7 +89,7 @@ pub(crate) fn merge_state_with_defaults(parsed: &Map<String, Value>) -> Ex<Map<S
     for (k, v) in parsed {
         merged.insert(k.clone(), v.clone());
     }
-    let gates = spread_gates(parsed.get("approved_gates"))?;
+    let gates = spread_gates(parsed.get("approved_gates"));
     merged.insert("approved_gates".into(), Value::Object(gates));
     coerce_legacy_phase(&mut merged)?;
     Ok(merged)

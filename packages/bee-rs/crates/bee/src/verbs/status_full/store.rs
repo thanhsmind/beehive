@@ -7,7 +7,7 @@ use super::*;
 use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_worktree, LinkedRoots, RootsWt};
-use crate::state::{bypass_level, read_config_raw, Bail};
+use crate::state::{bypass_level, read_config_raw};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::cell::RefCell;
@@ -514,11 +514,11 @@ pub(crate) fn dogfood_warnings(ctx: &mut Ctx, raw: &JMap) {
 }
 
 /// state.mjs readConfig — merged tracked+overlay (via crate::state::
-/// read_config_raw, which bails on corrupt), advisor stripped, plus the
-/// normalized commands/models this port consumes. Emits dogfood warnings on
-/// EVERY call, mirroring Node's per-call normalization.
+/// read_config_raw, which warns and falls back on corrupt), advisor stripped,
+/// plus the normalized commands/models this port consumes. Emits dogfood
+/// warnings on EVERY call, mirroring Node's per-call normalization.
 pub(crate) fn read_config(ctx: &mut Ctx) -> R<Config> {
-    let raw = read_config_raw(&ctx.root)?;
+    let raw = read_config_raw(&ctx.root);
     let commands = normalize_commands(raw.get("commands"));
     let models = normalize_models(raw.get("models"));
     dogfood_warnings(ctx, &raw);

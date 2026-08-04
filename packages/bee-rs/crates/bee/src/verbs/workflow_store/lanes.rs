@@ -8,7 +8,7 @@ use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock::{self, LockGuard, MAX_ATTEMPTS};
 use crate::verbs::reservations::{
-    date_parse_val, jget, js_disp, js_disp_opt, js_strict_eq, js_trim, now_iso, pseudo_uuid_v4,
+    date_parse_val, jget, js_disp, js_disp_opt, js_trim, now_iso, pseudo_uuid_v4,
     truthy, Err2, Ex, Exotic,
 };
 use crate::verbs::state_group::{
@@ -70,7 +70,7 @@ pub(crate) fn lane_record_from(feature: &str, parsed: &Value) -> Ex<Option<Map<S
     for (k, v) in obj {
         merged.insert(k.clone(), v.clone());
     }
-    let gates = spread_gates(obj.get("approved_gates"))?;
+    let gates = spread_gates(obj.get("approved_gates"));
     merged.insert("approved_gates".into(), Value::Object(gates));
     coerce_legacy_phase(&mut merged)?;
     Ok(Some(merged))

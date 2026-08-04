@@ -1,6 +1,4 @@
-// bee reviews — native port of the reviews verb group (bee.mjs
-// handleReviewsCreate/List/Show/Record/CandidateAdd/Candidates/Status +
-// lib/reviews.mjs).
+// bee reviews — the reviews verb group.
 //
 // Verbs served natively (exact argv shapes only — see the probe):
 //   reviews list          [--json]
@@ -15,27 +13,22 @@
 // requireFlag misses, invalid ids/kinds/modes, frozen-field payloads,
 // missing sessions/cells) are served natively byte-identical.
 //
-// CUTOVER (2026-08-01) — `--stdin` IS NOW NATIVE, and so is corrupt JSON.
-// Both exclusions existed only to serve contract C2 (byte-identical output
-// with a Node runtime that no longer exists):
-//   - `--stdin` was permanently delegated because the probe had to choose
-//     native-vs-Node BEFORE the pipe was consumed — a delegated Node child
-//     would have re-read it and found EOF. With nowhere to delegate, that
-//     constraint is void: read_json_input reads the pipe and validates it
-//     here. `flags.stdin === true` stays STRICT (see its doc comment), and
-//     the labelled refusal "<label>: input is not valid JSON." is unchanged.
+// `--stdin` and corrupt JSON are both native:
+//   - `--stdin` reads the pipe and validates it here (read_json_input).
+//     `flags.stdin === true` stays STRICT (see its doc comment), and the
+//     labelled refusal "<label>: input is not valid JSON." holds.
 //     `record --stdin` pre-scans the stored session id before consuming the
 //     pipe (see run_record); `create --stdin` has no payload-independent
 //     trigger left to pre-scan.
-//   - corrupt JSON on the READ path now warns via fsutil::warn_corrupt_json
-//     and takes the same readJson fallback (list skips the session with its
-//     own "skipping corrupt session file" line; show reports "not found";
-//     candidate rows are skipped like every other corrupt JSONL line), and
-//     readReviewStrict raises its OWN loud corrupt refusal — the byte-exact
-//     sentence Node's `catch` threw — instead of handing the command back.
-//     A lone-surrogate escape is covered by whichever of those the site uses.
-//   - the unreadable-file branches that interpolated a libuv err.code carry
-//     the Rust io error in the same sentence.
+//   - corrupt JSON on the READ path warns via fsutil::warn_corrupt_json and
+//     takes the same fallback (list skips the session with its own "skipping
+//     corrupt session file" line; show reports "not found"; candidate rows
+//     are skipped like every other corrupt JSONL line), and
+//     read_review_strict raises its OWN loud corrupt refusal instead of
+//     handing the command back. A lone-surrogate escape is covered by
+//     whichever of those the site uses.
+//   - the unreadable-file branches carry the Rust io error in the refusal
+//     sentence.
 //
 // Delegation triggers that remain (None before any output/write):
 //   - --help anywhere, unknown flags, non-flag tokens
@@ -55,25 +48,12 @@
 //     probe-calibrated natural_cmp copied from verbs/cells.rs (ASCII slugs
 //     exact; anything wider is delegated by the charset guard above).
 //
-// Provenance: bee.mjs readReviewsJsonInput/summarizeReview/
-// candidateStatusLine/buildReviewsStatusSummary/renderReviewsStatusText/
-// handleReviewsCreate/List/Show/Record/CandidateAdd/Candidates/Status/
-// requireFlag/readFileText/splitList, lib/reviews.mjs (ID_PATTERN/
-// SCOPE_ENTRY_TYPES/REVIEW_MODES/IMMUTABLE_FIELDS/RECORD_KINDS/
-// DECISION_STATUSES/utcNow/reviewsDir/reviewFile/candidatesPath/
-// assertValidId/readReviewStrict/readReview/listReviews/writeReview/
-// normalizeScopeEntry/runPreflight/createReview/recordOnReview/addCandidate/
-// listCandidates/CANDIDATE_STATUSES/sessionCoversCandidate/isSessionOpen/
-// defaultRunGit/coveredByKey/commitsSinceKey/headCoveredBy/commitsSince/
-// deriveCandidateStatus), lib/cells.mjs readCell/listCells (read slice),
-// lib/fsutil.mjs readJson/readJsonl.
-
 use crate::fsutil::{append_jsonl, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::verbs::feedback::{random_uuid_v4, read_jsonl, value_js_safe};
 use crate::verbs::knowledge::{g_prelude, js_str_or_undefined, pre_json_scan, GCtx, GPre};
 use crate::verbs::reservations::{
-    js_numberify, js_strict_eq, js_trim, keys_known, now_iso, parse_flags, truthy, FlagV, Flags,
+    js_numberify, js_trim, keys_known, now_iso, parse_flags, truthy, FlagV, Flags,
 };
 use serde_json::{Map, Value};
 use std::cmp::Ordering;
@@ -155,7 +135,7 @@ fn candidates_path(root: &Path) -> PathBuf {
     root.join(".bee").join("review-candidates.jsonl")
 }
 
-/// lib/reviews.mjs + lib/cells.mjs ID_PATTERN: /^[A-Za-z0-9][A-Za-z0-9._-]*$/.
+/// ID_PATTERN: /^[A-Za-z0-9][A-Za-z0-9._-]*$/.
 fn id_pattern_ok(id: &str) -> bool {
     let mut chars = id.chars();
     match chars.next() {
@@ -165,7 +145,7 @@ fn id_pattern_ok(id: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
 }
 
-/// bee.mjs requireFlag: value must be present, not '', not bare-boolean true.
+/// Value must be present, not '', not bare-boolean true.
 fn require_flag(flags: &Flags, name: &str) -> Result<String, String> {
     match flags.get(name) {
         Some(FlagV::S(s)) if !s.is_empty() => Ok(s.clone()),
@@ -173,7 +153,6 @@ fn require_flag(flags: &Flags, name: &str) -> Result<String, String> {
     }
 }
 
-/// bee.mjs splitList.
 fn split_list(raw: &str) -> Vec<String> {
     raw.split(',')
         .map(js_trim)
@@ -334,8 +313,8 @@ fn read_review(root: &Path, id: &str) -> R<Value> {
     }
 }
 
-/// readReviewStrict — the write-verb sibling. Ok(Err(msg)) carries the loud
-/// refusal — including, since the cutover, the corrupt-JSON one.
+/// The write-verb sibling. Ok(Err(msg)) carries the loud refusal, including
+/// the corrupt-JSON one.
 fn read_review_strict(root: &Path, id: &str) -> R<Result<Map<String, Value>, String>> {
     if !id_pattern_ok(id) {
         return Ok(Err(format!(
@@ -351,8 +330,6 @@ fn read_review_strict(root: &Path, id: &str) -> R<Result<Map<String, Value>, Str
                 file.display()
             )));
         }
-        // Node interpolated err.code here; the Rust io error stands in its
-        // place and the refusal is otherwise unchanged.
         Err(e) => {
             return Ok(Err(format!(
                 "readReviewStrict: could not read \"{}\" ({e}).",
@@ -363,10 +340,8 @@ fn read_review_strict(root: &Path, id: &str) -> R<Result<Map<String, Value>, Str
     let text = String::from_utf8_lossy(&bytes);
     let parsed = match serde_json::from_str::<Value>(&text) {
         Ok(v) => js_numberify(&v).map_err(|_| Delegate)?,
-        // CUTOVER: this used to delegate because V8's JSON grammar might have
-        // accepted what serde refused (a lone-surrogate escape). Nothing else
-        // parses it now, so it takes readReviewStrict's OWN loud corrupt
-        // refusal — the same one Node's `catch` threw, byte for byte.
+        // A lone-surrogate escape serde refuses takes this same loud corrupt
+        // refusal.
         Err(_) => {
             return Ok(Err(format!(
                 "readReviewStrict: \"{0}\" exists but is not valid JSON. The bee CLI refuses to mutate a present-but-corrupt review session — that could silently clobber real review state (findings, decision, scope). FIX: inspect/restore the file (e.g. \"git checkout -- {0}\"), then retry.",
@@ -402,8 +377,8 @@ fn list_candidates(root: &Path) -> R<Vec<Value>> {
     read.rows.iter().map(|r| js_numberify(r).map_err(|_| Delegate)).collect()
 }
 
-// ─── lib/cells.mjs read slice (readCell / listCells) — provenance: the
-// already-proved port in verbs/cells.rs (module-private there) ─────────────
+// ─── cell read slice (read_cell / list_cells) — mirrors the already-proved
+// logic in verbs/cells.rs (module-private there) ────────────────────────────
 
 fn cells_dir(root: &Path) -> PathBuf {
     root.join(".bee").join("cells")
@@ -487,7 +462,7 @@ fn list_cells(root: &Path) -> R<Vec<Value>> {
 
 // ─── JSON input (readReviewsJsonInput — BOTH branches) ─────────────────────
 
-/// bee.mjs readReviewsJsonInput (:5328):
+/// The read/parse contract:
 ///
 /// ```js
 /// const text = flags.stdin === true ? fs.readFileSync(0, 'utf8')
@@ -508,13 +483,8 @@ fn list_cells(root: &Path) -> R<Vec<Value>> {
 ///      not valid JSON." / "payload: input is not valid JSON." — not a
 ///      readJson-style fail-open.
 ///
-/// CUTOVER (2026-08-01): `--stdin` was permanently delegated because the
-/// native probe had to choose Node-vs-native BEFORE the pipe was consumed (a
-/// delegated Node child would have read EOF). With no runtime to delegate to,
-/// that constraint is gone: stdin is read and validated here.
-///
-/// Which side of readReviewsJsonInput's ternary this argv selects. Split out
-/// so the STRICT `=== true` rule is testable without touching a real pipe.
+/// Which side of the ternary above this argv selects. Split out so the
+/// STRICT `=== true` rule is testable without touching a real pipe.
 #[derive(Debug, PartialEq)]
 enum JsonInput {
     Stdin,
@@ -578,7 +548,7 @@ fn read_stdin_text() -> Result<String, String> {
 fn strict_eq_opt(a: Option<&Value>, b: Option<&Value>) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(x), Some(y)) => js_strict_eq(x, y),
+        (Some(x), Some(y)) => x == y,
         _ => false,
     }
 }
@@ -586,7 +556,7 @@ fn strict_eq_opt(a: Option<&Value>, b: Option<&Value>) -> bool {
 /// SameValueZero over parsed JSON (Set.has): primitives by value, composites
 /// by identity — never equal across independent parses.
 fn same_value_zero(a: &Value, b: &Value) -> bool {
-    js_strict_eq(a, b)
+    a == b
 }
 
 fn session_covers_candidate(session: &Value, candidate: &Value) -> bool {
@@ -854,10 +824,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let pre_json = pre_json_scan(&toks);
     let (flags, json) = parse_flags(&toks)?;
 
-    // CUTOVER: `--stdin` no longer delegates. The blanket bail that used to
-    // stand here existed for one reason — the probe had to decide before the
-    // pipe was consumed — and `keys_known` below already confines the flag to
-    // create/record, the only two verbs whose Node handler reads stdin at all.
+    // `keys_known` below confines `--stdin` to create/record, the only two
+    // verbs that read it at all.
 
     let known: &[&str] = match cmd {
         "reviews list" | "reviews candidates" => &[],
@@ -1426,9 +1394,9 @@ mod tests {
         let sessions = list_reviews(tmp.path()).ok().unwrap();
         let ids: Vec<&str> = sessions.iter().map(|s| s["id"].as_str().unwrap()).collect();
         assert_eq!(ids, vec!["rev-2", "rev-10"]); // numeric-aware order
-        // CUTOVER: corrupt JSON no longer delegates. readJson warns, returns
-        // null, and the shape check skips it with listReviews' own line —
-        // the listing stays fail-open and the good sessions still come back.
+        // A corrupt file warns, reads as absent, and the shape check skips it
+        // with list_reviews' own line — the listing stays fail-open and the
+        // good sessions still come back.
         std::fs::write(reviews_dir(tmp.path()).join("bad.json"), "{broken").unwrap();
         std::fs::write(reviews_dir(tmp.path()).join("sur.json"), r#"{"id":"\ud800"}"#).unwrap();
         let sessions = list_reviews(tmp.path()).expect("corrupt session must not delegate");
@@ -1528,8 +1496,7 @@ mod tests {
         assert_eq!(split_list("  "), Vec::<String>::new());
     }
 
-    // ─── write-path fixtures (R5 test migration; oracle: packages/bee/tests/
-    // test_reviews.mjs makeReviewRepo/reviewCell/baseScope) ────────────────
+    // ─── write-path fixtures ────────────────────────────────────────────────
 
     /// The dispatch frame the write verbs take. Its non-root fields are
     /// private to `verbs::knowledge`, so the only way to mint one is
@@ -1595,8 +1562,8 @@ mod tests {
         std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify(&body)).unwrap();
     }
 
-    /// test_reviews.mjs seedCappedCellWithEvidence — a capped behavior_change
-    /// cell, which runPreflight keeps included AND counts in cells_checked.
+    /// A capped behavior_change cell, which preflight keeps included AND
+    /// counts in cells_checked.
     fn capped_cell(root: &Path, id: &str) {
         write_cell(
             root,
@@ -1612,7 +1579,6 @@ mod tests {
         file.to_string_lossy().into_owned()
     }
 
-    /// test_reviews.mjs baseScope.
     fn base_scope() -> Value {
         json!({
             "id": "rev-1",
@@ -1634,11 +1600,11 @@ mod tests {
         run_record(ctx, &flags_of(&["--id", id, "--kind", kind, "--file", &file]))
     }
 
-    // ─── CUTOVER: readReviewsJsonInput, both branches ──────────────────────
+    // ─── JSON input source selection, both branches ────────────────────────
 
-    /// `--stdin` used to be permanently delegated. These pin the two halves
-    /// of readReviewsJsonInput (bee.mjs:5328) without touching a real pipe —
-    /// a unit test that read fd 0 would block on an interactive runner.
+    /// These pin the two halves of the read/parse contract above without
+    /// touching a real pipe — a unit test that read fd 0 would block on an
+    /// interactive runner.
     #[test]
     fn stdin_is_selected_only_by_a_bare_flag_and_wins_over_file() {
         // A valid payload parses and is handed back as-is.
@@ -1839,16 +1805,15 @@ mod tests {
         assert_eq!(std::fs::read(cells_dir(root).join("claimed-1.json")).unwrap(), claimed_before);
     }
 
-    /// Oracle: "bee.mjs reviews create exits non-zero and writes nothing when
-    /// the preflight cannot resolve an included cell".
+    /// `reviews create` exits non-zero and writes nothing when the preflight
+    /// cannot resolve an included cell.
     #[test]
     fn create_refuses_an_unresolvable_included_cell_and_writes_nothing() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         let ctx = ctx_or_skip!(root, "create_refuses_an_unresolvable_included_cell_and_writes_nothing");
         let msg = thrown(create_with(&ctx, root, &base_scope())); // ok-1 never seeded
-        // Refusal wording is a pinned contract here: bee.mjs serves these
-        // legacy stderr refusals byte-identical to Node (see file header).
+        // Refusal wording is a pinned contract (see file header).
         assert_eq!(
             msg,
             "create: preflight cannot resolve included cell \"ok-1\" — no such cell. FIX: fix the scope input or drop the entry."
@@ -2090,7 +2055,6 @@ mod tests {
     /// An unknown kind is refused BEFORE the session is read or written — the
     /// proof is that a nonexistent id still yields the kind refusal, and the
     /// same call with a legal kind reaches the not-found refusal instead.
-    /// Oracle: recordOnReview's check order in lib/reviews.mjs.
     #[test]
     fn record_refuses_an_unknown_kind_before_the_session_is_touched() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2147,8 +2111,8 @@ mod tests {
 
     // ─── reviews candidate add ─────────────────────────────────────────────
 
-    /// Oracle: "bee.mjs reviews candidate add requires --mode and rejects an
-    /// unrecognized mode, leaving the ledger untouched".
+    /// `reviews candidate add` requires --mode and rejects an unrecognized
+    /// mode, leaving the ledger untouched.
     #[test]
     fn candidate_add_requires_mode_and_rejects_an_unrecognized_one() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2195,9 +2159,7 @@ mod tests {
     // ─── fail-open read path ───────────────────────────────────────────────
 
     /// A corrupt session entry and an unreadable candidates ledger degrade the
-    /// review block instead of failing it. Oracle: "bee.mjs status: a corrupt
-    /// .bee/reviews entry and an unreadable candidates ledger degrade the
-    /// review block but leave bee_status exiting 0".
+    /// review block instead of failing it — `bee status` still exits 0.
     #[test]
     fn a_corrupt_session_entry_and_an_unreadable_ledger_degrade_rather_than_fail() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2271,8 +2233,8 @@ mod tests {
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     }
 
-    /// test_reviews.mjs makeReviewGitRepo — bee scaffolding plus a real repo,
-    /// because coverage/staleness is defined over actual commit ancestry.
+    /// bee scaffolding plus a real repo, because coverage/staleness is
+    /// defined over actual commit ancestry.
     fn git_repo(dir: &Path) -> String {
         git(dir, &["init", "-q"]);
         git(dir, &["config", "user.email", "bee-review@example.com"]);

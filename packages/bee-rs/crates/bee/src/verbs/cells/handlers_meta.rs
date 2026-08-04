@@ -623,7 +623,7 @@ pub(crate) fn run_archive(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opt
     let feature_flag = flags.truthy_str("feature").map(str::to_string);
     dispatch("cells archive", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
-        let state = bstate::read_state_brief(&root).map_err(|_| Fail::Delegate)?;
+        let state = bstate::read_state_brief(&root);
         let active: Option<String> = match &state.feature {
             Value::String(f) if js_truthy(&state.feature) => Some(f.clone()),
             _ => None,

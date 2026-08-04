@@ -6,10 +6,9 @@
 // command. `bee rs-info` is a diagnostic outside the porcelain namespace, so
 // it can never collide with a porcelain command.
 //
-// CUTOVER: None used to mean "hand it to `node bee.mjs`". The Node tree is
-// gone, so None now ends at `emit_unsupported_shape` below — a named refusal
-// on stderr with a non-zero exit. Silence is the one outcome forbidden here:
-// a dispatcher that neither serves nor complains is indistinguishable from a
+// None ends at `emit_unsupported_shape` below — a named refusal on stderr
+// with a non-zero exit. Silence is the one outcome forbidden here: a
+// dispatcher that neither serves nor complains is indistinguishable from a
 // command that succeeded and did nothing.
 //
 // "Corrupt JSON input" used to be on the list of decline reasons. It no longer
@@ -214,25 +213,25 @@ fn dispatch(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if let Some(code) = crate::hooks::try_native(args) {
         return Some(code);
     }
-    // onboard is a maintenance surface, not a bee.mjs porcelain verb, so it
-    // probes BEFORE the verb tree: nothing in `verbs` can claim the word.
+    // onboard is a maintenance surface, not a porcelain verb, so it probes
+    // BEFORE the verb tree: nothing in `verbs` can claim the word.
     if let Some(code) = crate::onboard::try_native(args) {
         return Some(code);
     }
     // `bee dev …` is the R4 dev-surface namespace (render-skill-trees,
-    // render-prompt, statusline, release-manifest). Like
-    // onboard it is not a bee.mjs porcelain verb, so it probes before the
-    // verb tree; a `dev` shape it does not serve returns None with no output
-    // and the delegate reports unknown-command exactly as Node does.
+    // render-prompt, statusline, release-manifest). Like onboard it is not a
+    // porcelain verb, so it probes before the verb tree; a `dev` shape it
+    // does not serve returns None with no output and the unknown-command
+    // refusal below reports it.
     if let Some(code) = crate::devtools::try_native(args) {
         return Some(code);
     }
     // `bee herding …` is the R6a home of the bee-herding cockpit's two
-    // executable helpers (classify-lane, interlock), ported off their .mjs.
-    // No Node command ever spelled `herding`, so like onboard and dev it
-    // probes ahead of the verb tree and cannot shadow a delegated verb.
+    // executable helpers (classify-lane, interlock). No porcelain verb ever
+    // spelled `herding`, so like onboard and dev it probes ahead of the verb
+    // tree and cannot shadow a served verb.
     // `bee doctor` is the runtime health verdict. Like onboard and dev it is
-    // not a bee.mjs porcelain verb, so it probes ahead of the verb tree.
+    // not a porcelain verb, so it probes ahead of the verb tree.
     if let Some(code) = crate::doctor::try_native(args) {
         return Some(code);
     }

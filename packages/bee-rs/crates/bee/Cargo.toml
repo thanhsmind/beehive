@@ -2,7 +2,7 @@
 name = "bee"
 version.workspace = true
 edition.workspace = true
-description = "bee harness CLI — Rust port (strangler front door; unported verbs delegate to node bee.mjs)"
+description = "bee harness CLI — gated, verified agent-coding workflow (state, cells, hooks, worktrees)"
 
 [dependencies]
 anyhow.workspace = true

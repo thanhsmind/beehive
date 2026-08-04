@@ -1,59 +1,31 @@
-// cli_shape — write-guard check (d), the CLI-shape schema guard, ported
-// natively. Until this module existed the Rust guard answered
-// `Outcome::Delegate` for every Bash command carrying a bee-CLI-shaped token
-// and Node performed the check; once bee.mjs is deleted that delegation has
-// no owner, so a malformed bee CLI call would execute unguarded
-// (plans/rust-port.md § "Hard blockers for deleting the Node runtime").
-//
-// PROVENANCE, function by function (source → this file):
-//   hooks/bee-write-guard.mjs
-//     LEGACY_HELPER_RE / DISPATCHER_RE  → recognize_script
-//     CLI_SEGMENT_SEPARATORS / splitCliSegments → split_cli_segments
-//     resolveCliCommandName             → resolve_cli_command_name
-//     parseCliFlags                     → parse_cli_flags
-//     checkCliShape                     → check_cli_shape
-//   lib/validate-args.mjs
-//     isValidParameterSchema            → is_valid_parameter_schema
-//     isPresent / typeMatches           → is_present / type_matches
-//     validate                          → validate
+// cli_shape — write-guard check (d), the CLI-shape schema guard. Recognizes a
+// bee-CLI-shaped token in a Bash command and validates it against the
+// embedded command registry — a malformed bee CLI call is denied rather than
+// executing unguarded.
 //
 // The command registry is NOT re-derived here: crate::registry::
-// REGISTRY_PAYLOAD is the byte-exact `JSON.stringify({schema_version,
-// commands})` string exported from lib/command-registry.mjs (freshness pinned
-// by tests/front_door.rs::embedded_registry_payload_is_fresh, shape pinned by
-// tests/registry_contracts.rs). It is parsed once, insertion-ordered, the same
-// way verbs/help.rs parses it for the help surface. The write guard's vendored
-// -lib byte gate independently proves the host's own command-registry.mjs /
-// validate-args.mjs match the embedded bytes before this ever runs, so a
-// skewed host still delegates.
+// REGISTRY_PAYLOAD is the `{schema_version, commands}` JSON string compiled
+// into the binary (shape and freshness pinned by
+// tests/registry_contracts.rs). It is parsed once, insertion-ordered, the
+// same way verbs/help.rs parses it for the help surface.
 //
-// ONE DELIBERATE WIDENING OVER THE .mjs (R6a): Node only ever recognized the
-// `.mjs` spellings — `node .bee/bin/bee.mjs <verb>` (DISPATCHER_RE) and the
-// legacy `node .bee/bin/bee_<group>.mjs <verb>` shims (LEGACY_HELPER_RE).
-// After the R6a sweep every documented command names the BINARY
-// (`.bee/bin/bee <verb>`, or a bare `bee <verb>` on PATH), which no `.mjs`
-// regex can see — a guard that only knows the `.mjs` shape is already
-// half-blind on today's hosts. `recognize_script` therefore also accepts a
-// `bee` / `bee.exe` basename, treated exactly like the dispatcher shape.
-// This is the ONE place this module's decision can differ from bee.mjs's, and
-// it differs in exactly one direction: a malformed binary-spelled call that
-// Node silently allowed is now denied with the same bytes the `.mjs` spelling
-// has always produced. It is never the reverse (nothing Node denied becomes
-// allowed), and a WELL-FORMED call is unaffected in both spellings.
+// RECOGNIZED SPELLINGS: both the legacy `node .bee/bin/bee.mjs <verb>` /
+// `node .bee/bin/bee_<group>.mjs <verb>` shapes (DISPATCHER_RE /
+// LEGACY_HELPER_RE) and the current BINARY spelling (`.bee/bin/bee <verb>`,
+// or a bare `bee <verb>` on PATH) are recognized identically by
+// `recognize_script`, so a malformed call is denied the same way regardless
+// of which spelling it uses.
 //
 // The bare (path-less) `bee` token is only honoured in COMMAND position — the
 // first token of a shell segment, or the first token after a run of
 // `NAME=value` environment assignments (`BEE_AGENT_NAME=w1 bee cells cap …`,
 // the spelling AGENTS.md prescribes). A `bee` appearing as a mid-command
-// argument (`echo bee cells cap`) is left alone, which keeps the widening from
-// inventing denials for prose. A PATH-SPELLED token (`.bee/bin/bee`) is
-// recognized anywhere in the segment, exactly as Node recognized
-// `.bee/bin/bee.mjs` anywhere.
+// argument (`echo bee cells cap`) is left alone, which keeps recognition from
+// inventing denials for prose. A PATH-SPELLED token (`.bee/bin/bee` or
+// `.bee/bin/bee.mjs`) is recognized anywhere in the segment.
 //
 // Never fails: every arm is deterministic, so unlike most guard branches this
-// one never needs the `Nd` strangler bail. Node wraps its own call in a
-// try/catch that logs a crash and fails open for check (d) alone; there is no
-// throwing construct here to mirror.
+// one never needs the `Nd` delegate refusal.
 
 use crate::hooks::write_guard::{js_trim, tokenize};
 use serde_json::{Map, Value};
@@ -270,7 +242,7 @@ fn array_index_key(key: &str) -> Option<u32> {
     (n != u32::MAX).then_some(n)
 }
 
-// ─── validate-args.mjs ─────────────────────────────────────────────────────
+// ─── parameter-schema validation ────────────────────────────────────────────
 
 /// isValidParameterSchema — the structural D3 check.
 pub(crate) fn is_valid_parameter_schema(schema: &Value) -> bool {
@@ -412,7 +384,7 @@ pub(crate) fn validate(entry: &Entry, args: &ParsedArgs) -> Option<Vec<Problem>>
     (!problems.is_empty()).then_some(problems)
 }
 
-// ─── bee-write-guard.mjs checkCliShape ─────────────────────────────────────
+// ─── check_cli_shape ────────────────────────────────────────────────────────
 
 const CLI_SEGMENT_SEPARATORS: [&str; 5] = ["&&", "||", ";", "|", "&"];
 
@@ -494,8 +466,7 @@ fn recognize_script(segment: &[String], index: usize) -> Option<Script> {
     if eq_ignore_ascii_case(base, "bee.mjs") {
         return Some(Script::Dispatcher);
     }
-    // R6a widening — the binary. See the module header for why this is the one
-    // deliberate divergence from bee-write-guard.mjs.
+    // The binary spelling, recognized identically to the dispatcher shape.
     if eq_ignore_ascii_case(base, "bee") || eq_ignore_ascii_case(base, "bee.exe") {
         let path_spelled = token.contains('/') || token.contains('\\');
         let command_position =
@@ -699,7 +670,7 @@ mod tests {
         assert!(is_valid_parameter_schema(&cap.parameters));
     }
 
-    // ── test_write_guard.mjs rows 5/5b/5c/5d ───────────────────────────────
+    // ── legacy/dispatcher spellings resolve identically (rows 5/5b/5c/5d) ──
 
     #[test]
     fn row5_plain_legacy_helper_invocations_fail_open() {
@@ -722,7 +693,7 @@ mod tests {
         assert!(reason.contains("field: id"), "{reason}");
     }
 
-    // ── test_bee_write_guard_hook.mjs § (a) ────────────────────────────────
+    // ── check (a): required-flag denial ─────────────────────────────────────
 
     #[test]
     fn a_malformed_call_missing_a_required_flag_is_denied() {
@@ -907,7 +878,7 @@ parameters (see `bee cells show --help --json`)."
         allow("echo 'hi;' bee cells cap");
     }
 
-    // ── validate-args.mjs unit table ───────────────────────────────────────
+    // ── parameter validation unit table ─────────────────────────────────────
 
     #[test]
     fn type_matches_models_the_argv_value_domain() {
@@ -1021,11 +992,10 @@ parameters (see `bee cells show --help --json`)."
     }
 
     #[test]
-    fn an_unquoted_windows_path_is_eaten_by_the_tokenizer_in_both_runtimes() {
-        // guards.mjs/tokenize-command.mjs treat `\` as escaping the next
-        // character, so `.bee\bin\bee.exe` tokenizes to `.beebinbee.exe` and
-        // resolves to nothing — exactly what happened to `.bee\bin\bee.mjs`
-        // under Node. Pinned as a shared limitation, not a port defect.
+    fn an_unquoted_windows_path_is_eaten_by_the_tokenizer() {
+        // The tokenizer treats `\` as escaping the next character, so
+        // `.bee\bin\bee.exe` tokenizes to `.beebinbee.exe` and resolves to
+        // nothing. Pinned as a known limitation, not a defect.
         assert_eq!(tokenize(".bee\\bin\\bee.exe cells cap")[0], ".beebinbee.exe");
         allow(".bee\\bin\\bee.exe cells cap");
         // A quoted path keeps its backslashes and IS recognized.
@@ -1116,9 +1086,8 @@ mod documented_invocations {
                 // A real INVOCATION, not a prose mention of a command name: it
                 // must carry at least one flag and no placeholder syntax. A
                 // bare `bee decisions log` names the command; run literally it
-                // is exactly the malformed call this guard exists to refuse
-                // (Node refused the `.mjs` spelling of it too), so it must NOT
-                // be in the must-not-refuse corpus.
+                // is exactly the malformed call this guard exists to refuse,
+                // so it must NOT be in the must-not-refuse corpus.
                 if candidate.contains("--")
                     && !candidate.contains(['<', '>', '[', ']', '{', '}', '\u{2026}'])
                 {
@@ -1189,14 +1158,11 @@ mod registry_examples {
     /// here would mean the registry contradicts itself. This is the widening's
     /// most stable fence: it does not depend on prose, and it grows with the
     /// command surface automatically.
-    /// ONE known defect, found by this sweep and NOT introduced by it: this
-    /// example omits `--budget`, which `knowledge.context` declares required.
-    /// Node's guard refuses the `.mjs` spelling of it identically (verified
-    /// 2026-08-01 against `hooks/bee-write-guard.mjs`, exit 2, same bytes), so
-    /// it is a registry defect — either the example needs `--budget` or
-    /// `budget` should not be required. Pinned here rather than papered over:
-    /// when the registry is fixed this row goes red and the exception comes
-    /// out.
+    /// ONE known registry defect, pinned rather than papered over: this
+    /// example omits `--budget`, which `knowledge.context` declares required
+    /// — either the example needs `--budget` or `budget` should not be
+    /// required. When the registry is fixed this row goes red and the
+    /// exception comes out.
     const KNOWN_SELF_CONTRADICTING_EXAMPLES: [&str; 1] =
         ["bee knowledge context --work okf-foundation --lane standard --json"];
 

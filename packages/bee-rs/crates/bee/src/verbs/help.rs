@@ -1,14 +1,11 @@
-// bee help surfaces — Rust port of bee.mjs's handleHelp (~8334),
-// renderHelpText (~8316), toManifestEntries (~8281), toSurfacedManifestEntries
-// (~8304), helpFooterLine (~8311), and main()'s group/command-scoped help
-// block (~8409, GH #23), backed by splitCommandTokens (~8110) and
-// resolveCommand (~8129).
+// bee help surfaces — top-level `--help`, and group/command-scoped help
+// (`bee <group> [verb] --help` [--json], GH #23).
 //
-// Registry data: crate::registry::REGISTRY_PAYLOAD is the byte-exact
-// `JSON.stringify({schema_version, commands})` string Node hashes — parsed
+// Registry data: crate::registry::REGISTRY_PAYLOAD is the
+// `{schema_version, commands}` JSON string compiled into the binary — parsed
 // ONCE here (serde_json preserve_order keeps registry order) and rendered.
 //
-// Verified semantics (bee.mjs + live Node runs, 2026-08-01):
+// Semantics:
 //   - Top-level `--help` fires on `argv[0] === '--help'` ONLY, BEFORE root
 //     resolution and BEFORE the drift-cache write (no manifest_changed line,
 //     no .bee/cache/manifest-hash.json touch). The isDirectRun wrapper still
@@ -30,16 +27,16 @@
 //     'porcelain'|'all'; total_commands is ALWAYS the full registry length),
 //     group-scoped {schema_version, commands}.
 //
-// Strangler routing: only proven shapes are served —
+// Routing: only proven shapes are served —
 //   - `--help` with every following token in {--json, --all};
 //   - `<leading...> --help` where every flag token is in {--help, --json},
 //     the leading tokens resolve (longest registry prefix, or the legacy
 //     fallback shape) with NO extra tokens, and the resolved name matches at
 //     least one registry entry (itself or a "<name>." prefix).
-// Anything else — junk flags, `--json=x` forms, unresolved groups (Node's
-// GROUP_USAGE_FALLBACKS / nearest-match machinery owns those bytes), stray
-// positionals, non-unicode argv, linked-worktree roots — returns None before
-// ANY output and the whole command re-runs under Node.
+// Anything else — junk flags, `--json=x` forms, unresolved groups (the
+// nearest-match machinery owns those bytes), stray positionals, non-unicode
+// argv, linked-worktree roots — returns None before ANY output, and the
+// unknown-command refusal reports it.
 
 use crate::jsjson;
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
@@ -107,9 +104,9 @@ fn registry() -> Option<&'static ParsedRegistry> {
 
 fn top_level(json: bool, all: bool, names: bool, t0: Instant) -> Option<ExitCode> {
     let reg = registry()?;
-    // Timing root exactly as the wrapper computes it: findRepoRoot(cwd) ||
-    // cwd. CUTOVER: help reads NOTHING but the embedded registry, so the WIDE
-    // door serves both grant states; only a broken link is left to emit.
+    // Timing root: the resolved repo root, falling back to cwd. Help reads
+    // NOTHING but the embedded registry, so the WIDE door serves both grant
+    // states; only a broken link is left to emit.
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
         Roots::Ordinary(r) => r,
@@ -322,7 +319,7 @@ fn group_scoped(argv: &[&str], t0: Instant) -> Option<ExitCode> {
     Some(ExitCode::SUCCESS)
 }
 
-// ── splitCommandTokens / resolveCommand (bee.mjs ~8110/~8129) ──────────────
+// ── split_command_tokens / resolve_command ──────────────────────────────────
 
 fn split_command_tokens<'a>(argv: &[&'a str]) -> (Vec<&'a str>, Vec<&'a str>) {
     let mut i = 0;
@@ -474,7 +471,7 @@ fn help_footer_lines(total: usize, porcelain: usize, unavailable: usize) -> Vec<
     lines
 }
 
-// ── renderHelpText (bee.mjs ~8316) ─────────────────────────────────────────
+// ── render_help_text ─────────────────────────────────────────────────────
 
 /// JS template-literal interpolation for a manifest field: missing key →
 /// "undefined", null → "null", strings raw.

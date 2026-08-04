@@ -429,6 +429,22 @@ use std::process::ExitCode;
         assert!(e.stdout.is_empty());
     }
 
+    #[test]
+    fn ask_astral_header_counts_utf16_code_units_not_chars() {
+        // 7 astral chars is 7 by char_len (≤12, would wrongly pass) but 14
+        // UTF-16 code units (>12) — the length AskUserQuestion's own (JS)
+        // schema validator actually enforces. Non-ASCII fixes delegate
+        // rather than auto-truncate, so the guard must not silently allow.
+        let fx = build_fixture("swarming", true);
+        let header = "🐝".repeat(7);
+        expect_delegate(
+            json!({"tool_name":"AskUserQuestion","tool_input":{"questions":[
+                {"question":"q","header":header,"options":[
+                    {"label":"A","description":"x"},{"label":"B","description":"y"}]}]}}),
+            &fx.root,
+        );
+    }
+
     // ── apply_patch matrix (rows 8-29) ─────────────────────────────────────
 
     #[test]

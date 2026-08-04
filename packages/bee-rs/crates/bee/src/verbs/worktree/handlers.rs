@@ -272,7 +272,7 @@ pub(crate) struct WorktreeCommands {
 }
 
 pub(crate) fn read_worktree_commands(main_root: &Path) -> Option<WorktreeCommands> {
-    let config = crate::state::read_config_raw(main_root).ok()?;
+    let config = crate::state::read_config_raw(main_root);
     let mut out = WorktreeCommands {
         test_string: None,
         companion_start: None,

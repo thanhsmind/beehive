@@ -194,7 +194,7 @@ pub(crate) fn sweep_reset_cell(
             Some(Value::Object(t)) => nullish(t.get("claim_session")),
             Some(_) => Value::Null, // truthy non-object: .claim_session is undefined
         };
-        if !rsv::js_strict_eq(&current_session, swept_session) {
+        if &current_session != swept_session {
             return Ok(false); // a fresher claim already owns it
         }
         let mut record = record;
@@ -236,7 +236,7 @@ pub(crate) enum Pipeline {
 /// control-plane (msn-18a); the default record stays on the caller's own root.
 pub(crate) fn resolve_pipeline(root: &Path, control: &Path, session_id: &str) -> MR<Pipeline> {
     let defaults = || -> MR<Pipeline> {
-        let state = bstate::read_state_brief(root).map_err(|_| Fail::Delegate)?;
+        let state = bstate::read_state_brief(root);
         Ok(Pipeline::Ok {
             feature: match &state.feature {
                 v if js_truthy(v) => Some(jsjson::js_to_string(v)),
@@ -419,7 +419,7 @@ pub(crate) fn ready_cells(root: &Path, feature: Option<&str>) -> MR<Vec<Value>> 
 /// probed BEFORE the sweep's first write. See the section header for why a
 /// residual post-sweep delegate is still byte-safe.
 pub(crate) fn prescan_claim_next(root: &Path, control: &Path) -> MR<()> {
-    delegate_only(bstate::read_state_brief(root).map_err(|_| Fail::Delegate))?;
+    bstate::read_state_brief(root);
     delegate_only(list_session_records(control))?;
     delegate_only(read_holds_store(root))?;
     // CUTOVER: the lane-record walk that used to live here probed for exactly
@@ -508,8 +508,8 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
             }
         }
         // applyWritePolicy — a no-op for this verb (see the section header);
-        // only readConfig's own corrupt-file delegation survives.
-        delegate_only(bstate::read_config_raw(&root).map_err(|_| Fail::Delegate))?;
+        // readConfig's corrupt-file case now warns and reads as absent.
+        bstate::read_config_raw(&root);
 
         prescan_claim_next(&root, &control)?;
 
@@ -539,7 +539,7 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
         }
 
         if candidate.is_none() {
-            let state = bstate::read_state_brief(&root).map_err(|_| Fail::Delegate)?;
+            let state = bstate::read_state_brief(&root);
             // feature -> (approved, created_at); insertion-ordered like the Map.
             let mut pipelines: Vec<(String, bool, Value)> = Vec::new();
             let state_feature = match &state.feature {

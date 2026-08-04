@@ -8,6 +8,7 @@ use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::read_config_raw;
+use crate::textutil::{char_len, code_unit_cmp, js_default_sort, truncate_chars_head};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{js_trim, keys_known, parse_flags, FlagV, Flags};
 use serde_json::{json, Map, Number, Value};
@@ -35,8 +36,9 @@ use std::time::Instant;
 // deterministic text with no V8 message and no lock attempt, so they are
 // reproduced natively.
 
-/// `text.split(/\s+/).join(' ').trim()`, optionally capped at `limit` UTF-16
-/// units with a trailing ellipsis.
+/// `text.split(/\s+/).join(' ').trim()`, optionally capped at `limit` CHARS
+/// with a trailing ellipsis (decision D3: char-based, not the historical
+/// UTF-16-unit count).
 pub(crate) fn one_line(text: &str, limit: usize) -> String {
     let mut flat = String::new();
     let mut in_ws = false;
@@ -55,14 +57,10 @@ pub(crate) fn one_line(text: &str, limit: usize) -> String {
         flat.push(' ');
     }
     let flat = flat.trim_matches(js_is_space).to_string();
-    if limit == 0 {
+    if limit == 0 || char_len(&flat) <= limit {
         return flat;
     }
-    let units: Vec<u16> = flat.encode_utf16().collect();
-    if units.len() <= limit {
-        return flat;
-    }
-    format!("{}\u{2026}", String::from_utf16_lossy(&units[..limit - 1]))
+    format!("{}\u{2026}", truncate_chars_head(&flat, limit - 1))
 }
 
 /// deviationText: a plain string, `type: description`, or JSON.stringify.
@@ -151,9 +149,7 @@ pub(crate) fn compare_cell_ids(a: &str, b: &str) -> std::cmp::Ordering {
                         return if nl < nr { Ordering::Less } else { Ordering::Greater };
                     }
                 } else if l != r {
-                    let (lu, ru): (Vec<u16>, Vec<u16>) =
-                        (l.encode_utf16().collect(), r.encode_utf16().collect());
-                    return lu.cmp(&ru);
+                    return code_unit_cmp(l, r);
                 }
             }
         }
@@ -343,14 +339,6 @@ pub(crate) fn read_capped_cell_traces(root: &Path, feature: &str) -> Option<Vec<
     Some(cells)
 }
 
-pub(crate) fn sort_utf16(list: &mut [String]) {
-    list.sort_by(|a, b| {
-        a.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.encode_utf16().collect::<Vec<_>>())
-    });
-}
-
 pub(crate) fn str_array(map: &Map<String, Value>, key: &str) -> Vec<String> {
     match map.get(key) {
         Some(Value::Array(a)) => a
@@ -405,7 +393,7 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
         .iter()
         .filter_map(|c| iso_date(c.capped_at.as_ref().map(|s| Value::String(s.clone())).as_ref()))
         .collect();
-    sort_utf16(&mut capped_dates);
+    js_default_sort(&mut capped_dates);
     let timestamp = match capped_dates.last() {
         Some(d) => Some(d.clone()),
         None => iso_date(work_concept.data.get("timestamp")),
@@ -578,7 +566,7 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
             bullets.push(Value::Object(b));
         }
         let mut sorted = subjects.clone();
-        sort_utf16(&mut sorted);
+        js_default_sort(&mut sorted);
         let mut u = Map::new();
         u.insert("area".into(), Value::String(area.clone()));
         u.insert(

@@ -131,7 +131,7 @@ pub(crate) fn gated_add_refusal(root: &Path, feature: &str) -> MR<Option<String>
         // like this one never guesses.
         ReadJson::Parsed(_) | ReadJson::Corrupt => None,
         ReadJson::Missing => {
-            let state = bstate::read_state_brief(root).map_err(|_| Fail::Delegate)?;
+            let state = bstate::read_state_brief(root);
             match &state.feature {
                 Value::String(f) if *f == id => {
                     let approved = matches!(state.gates.get("execution"), Some(Value::Bool(true)));
@@ -880,8 +880,8 @@ pub(crate) fn claim_cell_from_flags_ex(
         prescan_claim(&root, &id)?;
         let control = control_root(&root)?;
         delegate_only(list_session_records(&control))?;
-        delegate_only(bstate::read_state_brief(&root).map_err(|_| Fail::Delegate))?;
-        let config = bstate::read_config_raw(&root).map_err(|_| Fail::Delegate)?;
+        bstate::read_state_brief(&root);
+        let config = bstate::read_config_raw(&root);
         let cell_for_policy = read_cell_norm(&root, &id)?;
         if let Some(cell) = &cell_for_policy {
             if !matches!(cell, Value::Object(_)) {

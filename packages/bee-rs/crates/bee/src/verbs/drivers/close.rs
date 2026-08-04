@@ -8,6 +8,7 @@ use crate::fsutil::{ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state::read_config_raw;
+use crate::textutil::truncate_chars_tail;
 use crate::verbs::reservations::{
     finish, js_is_ws, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
 };
@@ -42,7 +43,7 @@ pub(crate) const CLOSE_CAPTURE_DEBT_PREFIX: &str = "Capture debt for";
 /// normalizeCommands (verbs/test_runner.rs:184 declared_test_commands).
 /// `None` == JS `null` (undeclared).
 pub(crate) fn declared_test_commands(root: &Path) -> D<Option<Vec<String>>> {
-    let config = read_config_raw(root)?;
+    let config = read_config_raw(root);
     if let Some(Value::Array(items)) = config.get("dogfood_repos") {
         if !items.is_empty() {
             return Err(Delegate); // normalizeDogfoodRepos may warn to stderr
@@ -134,7 +135,7 @@ pub(crate) fn run_declared_tests(root: &Path, commands: &[String], shell: &str) 
             None
         } else {
             let trimmed = js_trim(&output).to_string();
-            let tail = utf16_tail(&trimmed, FAILURE_EXCERPT_MAX);
+            let tail = truncate_chars_tail(&trimmed, FAILURE_EXCERPT_MAX);
             Some(if tail.is_empty() {
                 format!(
                     "(no output; exit {})",
@@ -160,19 +161,6 @@ pub(crate) fn run_declared_tests(root: &Path, commands: &[String], shell: &str) 
     .err()
     .map(|e| e.to_string());
     TestRun { ran_at, green, undeclared: false, commands: results, write_error }
-}
-
-/// JS `.slice(-n)` over UTF-16 units (verbs/test_runner.rs:420 utf16_tail).
-pub(crate) fn utf16_tail(s: &str, n: usize) -> String {
-    let units: Vec<u16> = s.encode_utf16().collect();
-    if units.len() <= n {
-        return s.to_string();
-    }
-    let mut start = units.len() - n;
-    if (0xDC00..=0xDFFF).contains(&units[start]) {
-        start -= 1;
-    }
-    String::from_utf16_lossy(&units[start..])
 }
 
 /// The `tests` result field shared by every close outcome that has already
@@ -759,7 +747,7 @@ impl Retirement {
 /// remembering. `.bee/config.json` `cells_archive_on_close: false` opts out —
 /// for a repo whose own tooling reads `.bee/cells/*.json` by path.
 fn archive_on_close_enabled(root: &Path) -> bool {
-    let Ok(config) = read_config_raw(root) else { return true };
+    let config = read_config_raw(root);
     !matches!(config.get("cells_archive_on_close"), Some(Value::Bool(false)))
 }
 

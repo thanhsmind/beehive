@@ -1,17 +1,13 @@
-// bee dev render-skill-trees — Rust port of
-// scripts/render_plugin_skill_trees.mjs, plus the four renderer primitives it
-// imports from packages/bee/scripts/onboard_bee.mjs.
+// bee dev render-skill-trees.
 //
-// PROVENANCE. Every function below names its .mjs source. The onboard_bee.mjs
-// half (`RENDER_RUNTIMES`, `RENDER_SCHEMA`, `RENDER_SIDECAR`,
-// `validateSkillMarkers`, `renderSkillBytes`, `manifestFingerprint`,
-// `skillDigest`, `buildRenderSidecar`) is RE-DERIVED here rather than shared:
-// the onboard port lands in its own `onboard/` module, which this port may
-// not edit, and a dev tool that cannot regenerate the committed trees on its
-// own is not a port. Both ports answer to the same .mjs; `render_matches_the_
-// committed_trees` below re-renders the REAL skills/ tree and byte-compares
-// it against the committed projections, which is the pin that catches either
-// port drifting.
+// The marker-grammar and sidecar primitives below (RENDER_RUNTIMES,
+// RENDER_SCHEMA, RENDER_SIDECAR, validate_skill_markers, render_skill_bytes,
+// manifest_fingerprint, skill_digest, build_render_sidecar) are RE-DERIVED
+// here rather than shared with the `onboard/` module: a dev tool that cannot
+// regenerate the committed trees on its own is not a real check.
+// `render_matches_the_committed_trees` below re-renders the REAL skills/ tree
+// and byte-compares it against the committed projections, which is the pin
+// that catches either copy drifting.
 //
 // WHAT IT DOES. Regenerates the two committed plugin skill-route trees:
 //   .claude-plugin/skills/ = render(canonical skills/, "claude")
@@ -20,18 +16,13 @@
 // rendered into a tmp sibling and swapped in via two renames, under ONE
 // withStoreLock(repo, "plugin-render") critical section.
 //
-// STRANGLER ROUTING. Takes no arguments (neither does the .mjs), so any
-// argument returns None.
+// Takes no arguments; any argument returns None.
 //
-// CUTOVER: every failure detectable BEFORE output — a symlink in the skill
-// source, an unsupported dirent, an unreadable file — used to return None as
-// well, so Node could print the V8 stack. Node is gone, and a None here falls
-// through to unknown-command, so each of those now refuses natively with its
-// own reason through the same `render_plugin_skill_trees: <message>` line and
-// exit 1 the post-lock failures already used — Node printed that same message
-// followed by `at` frames (see the devtools/mod.rs header on this documented
-// error-path divergence). The one case still returning None is "this is not a
-// bee source checkout", which is routing, not failure.
+// Every failure detectable BEFORE output — a symlink in the skill source, an
+// unsupported dirent, an unreadable file — refuses natively with its own
+// reason through the `render_plugin_skill_trees: <message>` line and exit 1
+// the post-lock failures already use. The one case still returning None is
+// "this is not a bee source checkout", which is routing, not failure.
 
 use super::{rel_platform, sha256_hex, sort_by_locale};
 use crate::jsjson;
@@ -40,18 +31,14 @@ use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-/// provenance: onboard_bee.mjs RENDER_RUNTIMES.
 const RENDER_RUNTIMES: [&str; 2] = ["claude", "codex"];
-/// provenance: onboard_bee.mjs RENDER_SCHEMA (bee-render/2, D7).
+/// Sidecar schema id (bee-render/2, D7).
 const RENDER_SCHEMA: &str = "bee-render/2";
-/// provenance: onboard_bee.mjs RENDER_SIDECAR.
 const RENDER_SIDECAR: &str = ".bee-render.json";
-/// provenance: render_plugin_skill_trees.mjs TMP_STALE_MS.
+/// A tmp swap dir older than this is considered abandoned and safe to sweep.
 const TMP_STALE_MS: f64 = 5.0 * 60.0 * 1000.0;
-/// provenance: render_plugin_skill_trees.mjs SWAP_DIR_PREFIXES.
 const SWAP_DIR_PREFIXES: [&str; 2] = ["tmp-", "old-"];
 
-/// provenance: render_plugin_skill_trees.mjs TARGET_ROOTS.
 fn target_root(root: &Path, runtime: &str) -> PathBuf {
     let dir = if runtime == "claude" { ".claude-plugin" } else { ".codex-plugin" };
     root.join(dir).join("skills")
@@ -61,14 +48,8 @@ fn source_root(root: &Path) -> PathBuf {
     root.join("skills")
 }
 
-/// "Needs Node": a shape this port has not proven — the caller returns None
-/// before any output.
-///
-/// CUTOVER: this used to be a payload-free marker that made the caller return
-/// None (delegate to Node), because Node reported these failures as a V8
-/// stack. It carries its own message now, and `run` prints it through the same
-/// `render_plugin_skill_trees: <message>` channel with the same exit code —
-/// only the interpreter's `at` frames are gone.
+/// A refusal this port has proven, carrying its own message. `run` prints it
+/// through the `render_plugin_skill_trees: <message>` channel with exit 1.
 #[derive(Debug)]
 struct Nd(String);
 type R<T> = Result<T, Nd>;
@@ -77,9 +58,9 @@ fn nd(message: impl Into<String>) -> Nd {
     Nd(message.into())
 }
 
-// ═══ marker grammar (onboard_bee.mjs) ══════════════════════════════════════
+// ═══ marker grammar ═════════════════════════════════════════════════════════
 
-/// provenance: onboard_bee.mjs NEAR_MARKER_RE = /^[ \t]*<!--[ \t]*bee:(only|end)\b/
+/// Matches a near-marker line: `/^[ \t]*<!--[ \t]*bee:(only|end)\b/`.
 fn is_near_marker(line: &str) -> bool {
     let rest = line.trim_start_matches([' ', '\t']);
     let Some(rest) = rest.strip_prefix("<!--") else { return false };
@@ -107,7 +88,7 @@ enum MarkerClass {
     Error(String),
 }
 
-/// provenance: onboard_bee.mjs classifyMarkerLine, with MARKER_ONLY_RE =
+/// Classifies a full marker line: MARKER_ONLY_RE =
 /// /^<!-- bee:only (\S+) -->[ \t]*$/ and MARKER_END_RE = /^<!-- bee:end -->[ \t]*$/.
 fn classify_marker_line(line: &str) -> MarkerClass {
     let body = line.trim_end_matches([' ', '\t']);
@@ -134,13 +115,13 @@ fn classify_marker_line(line: &str) -> MarkerClass {
     ))
 }
 
-/// provenance: onboard_bee.mjs FRONTMATTER_DELIM_RE = /^---[ \t]*$/.
+/// Matches a frontmatter delimiter line: /^---[ \t]*$/.
 fn is_frontmatter_delim(line: &str) -> bool {
     line.strip_prefix("---")
         .is_some_and(|rest| rest.chars().all(|c| c == ' ' || c == '\t'))
 }
 
-/// provenance: onboard_bee.mjs fenceChar — /^[ \t]*(`{3,}|~{3,})/, first char.
+/// Matches a code-fence opener: /^[ \t]*(`{3,}|~{3,})/, returns its first char.
 fn fence_char(line: &str) -> Option<char> {
     let rest = line.trim_start_matches([' ', '\t']);
     for c in ['`', '~'] {
@@ -174,8 +155,8 @@ fn split_lines(text: &str) -> Vec<&str> {
     out
 }
 
-/// provenance: onboard_bee.mjs splitLinesPreserving — [content, terminator]
-/// pairs whose concatenation rebuilds the input byte for byte.
+/// [content, terminator] pairs whose concatenation rebuilds the input byte
+/// for byte.
 fn split_lines_preserving(text: &str) -> Vec<(&str, &str)> {
     let mut out = Vec::new();
     let bytes = text.as_bytes();
@@ -197,8 +178,8 @@ fn split_lines_preserving(text: &str) -> Vec<(&str, &str)> {
     out
 }
 
-/// provenance: onboard_bee.mjs validateSkillMarkers — whole-file grammar
-/// check; an empty result means well-formed (or marker-free).
+/// Whole-file grammar check; an empty result means well-formed (or
+/// marker-free).
 fn validate_skill_markers(text: &str) -> Vec<String> {
     let mut errors = Vec::new();
     let lines = split_lines(text);
@@ -297,8 +278,8 @@ fn validate_skill_markers(text: &str) -> Vec<String> {
     errors
 }
 
-/// provenance: onboard_bee.mjs bufHasMarkerBytes — the cheap gate that keeps
-/// the no-marker path from ever decoding (the byte-identity guarantee).
+/// The cheap gate that keeps the no-marker path from ever decoding (the
+/// byte-identity guarantee).
 fn buf_has_marker_bytes(buf: &[u8]) -> bool {
     fn contains(h: &[u8], n: &[u8]) -> bool {
         h.windows(n.len()).any(|w| w == n)
@@ -306,10 +287,9 @@ fn buf_has_marker_bytes(buf: &[u8]) -> bool {
     contains(buf, b"bee:only") || contains(buf, b"bee:end")
 }
 
-/// provenance: onboard_bee.mjs renderSkillBytes — filter one file's bytes for
-/// `runtime`. A file with no marker LINE is returned byte-identical (never
-/// decoded); a marked file is rebuilt with exact line endings, markers
-/// stripped and off-runtime blocks dropped.
+/// Filters one file's bytes for `runtime`. A file with no marker LINE is
+/// returned byte-identical (never decoded); a marked file is rebuilt with
+/// exact line endings, markers stripped and off-runtime blocks dropped.
 fn render_skill_bytes(buf: &[u8], runtime: &str) -> Vec<u8> {
     if !buf_has_marker_bytes(buf) {
         return buf.to_vec();
@@ -344,9 +324,9 @@ fn render_skill_bytes(buf: &[u8], runtime: &str) -> Vec<u8> {
     out.into_bytes()
 }
 
-// ═══ sidecar (onboard_bee.mjs D7) ══════════════════════════════════════════
+// ═══ sidecar (D7) ═══════════════════════════════════════════════════════════
 
-/// provenance: onboard_bee.mjs manifestFingerprint —
+/// Equivalent to
 /// `JSON.stringify([...files.entries()].sort((a,b) => a[0] < b[0] ? -1 : 1))`.
 /// Keys are unique, so that comparator is a plain code-unit ascending sort.
 fn manifest_fingerprint(files: &[(String, String)]) -> String {
@@ -361,14 +341,13 @@ fn manifest_fingerprint(files: &[(String, String)]) -> String {
     jsjson::stringify(&arr)
 }
 
-/// provenance: onboard_bee.mjs skillDigest — sha256 over manifestFingerprint.
+/// sha256 over the manifest fingerprint.
 fn skill_digest(files: &[(String, String)]) -> String {
     sha256_hex(manifest_fingerprint(files).as_bytes())
 }
 
-/// provenance: onboard_bee.mjs buildRenderSidecar — {schema, target_runtime,
-/// skills:[{name, sha256}]}, skills sorted by name with the `<`/`>`
-/// comparator (code units).
+/// Builds {schema, target_runtime, skills:[{name, sha256}]}, skills sorted by
+/// name with the `<`/`>` comparator (code units).
 fn build_render_sidecar(target_runtime: &str, entries: &[(String, Vec<(String, String)>)]) -> Value {
     let mut skills: Vec<(String, String)> = entries
         .iter()
@@ -395,9 +374,8 @@ fn build_render_sidecar(target_runtime: &str, entries: &[(String, Vec<(String, S
     Value::Object(root)
 }
 
-/// provenance: render_plugin_skill_trees.mjs groupRenderedBySkill — one entry
-/// per skill, in the rendered map's insertion order, each carrying its
-/// per-file sha256 of the RENDERED bytes.
+/// One entry per skill, in the rendered map's insertion order, each carrying
+/// its per-file sha256 of the RENDERED bytes.
 fn group_rendered_by_skill(rendered: &[(String, Vec<u8>)]) -> Vec<(String, Vec<(String, String)>)> {
     let mut by_skill: Vec<(String, Vec<(String, String)>)> = Vec::new();
     for (skill_rel, bytes) in rendered {
@@ -416,8 +394,7 @@ fn group_rendered_by_skill(rendered: &[(String, Vec<u8>)]) -> Vec<(String, Vec<(
     by_skill
 }
 
-/// provenance: render_plugin_skill_trees.mjs sidecarBytes —
-/// `JSON.stringify(obj, null, 2) + "\n"`.
+/// Equivalent to `JSON.stringify(obj, null, 2) + "\n"`.
 fn sidecar_bytes(runtime: &str, rendered: &[(String, Vec<u8>)]) -> Vec<u8> {
     let obj = build_render_sidecar(runtime, &group_rendered_by_skill(rendered));
     format!("{}\n", jsjson::stringify_pretty(&obj)).into_bytes()
@@ -425,8 +402,8 @@ fn sidecar_bytes(runtime: &str, rendered: &[(String, Vec<u8>)]) -> Vec<u8> {
 
 // ═══ the canonical walk ════════════════════════════════════════════════════
 
-/// provenance: render_plugin_skill_trees.mjs listBeeSkillDirs — directories
-/// (never symlinks) named `bee-*`, `.sort()`ed (code units, NOT localeCompare).
+/// Directories (never symlinks) named `bee-*`, sorted by code unit (NOT
+/// locale collation).
 fn list_bee_skill_dirs(src: &Path) -> R<Vec<String>> {
     let Ok(entries) = std::fs::read_dir(src) else {
         return Err(nd(format!("cannot list {}", src.display())));
@@ -448,11 +425,8 @@ fn list_bee_skill_dirs(src: &Path) -> R<Vec<String>> {
     Ok(names)
 }
 
-/// provenance: render_plugin_skill_trees.mjs walkFiles — depth-first over
-/// `readdirSync(...).sort((a,b) => a.name.localeCompare(b.name))`. A symlink
-/// or an unsupported entry is a loud refusal in Node (a thrown stack); here
-/// it refuses natively with that same reason (cutover: it used to be a
-/// payload-free `Err(Nd)` so the probe returned None before any output).
+/// Depth-first walk, entries sorted by locale collation at each level. A
+/// symlink or an unsupported entry is a loud, native refusal.
 fn walk_files(dir: &Path, rel_prefix: &str, out: &mut Vec<(String, PathBuf)>) -> R<()> {
     let Ok(read) = std::fs::read_dir(dir) else {
         return Err(nd(format!("cannot list {}", dir.display())));
@@ -468,10 +442,6 @@ fn walk_files(dir: &Path, rel_prefix: &str, out: &mut Vec<(String, PathBuf)>) ->
         entries.push((entry.file_name().to_string_lossy().into_owned(), entry.path(), ft));
     }
     if !sort_by_locale(&mut entries, |e| e.0.as_str()) {
-        // NOT a V8-text arm: localeCompare collation over free prose is its
-        // own delegate class, left as-is by the cutover sweep. It now refuses
-        // natively rather than delegating, because there is nothing to
-        // delegate to.
         return Err(nd("skill name outside the proven collation alphabet"));
     }
     for (name, abs, ft) in entries {
@@ -494,7 +464,6 @@ fn walk_files(dir: &Path, rel_prefix: &str, out: &mut Vec<(String, PathBuf)>) ->
     Ok(())
 }
 
-/// provenance: render_plugin_skill_trees.mjs canonicalFiles.
 fn canonical_files(root: &Path) -> R<Vec<(String, PathBuf)>> {
     let src = source_root(root);
     let mut files = Vec::new();
@@ -508,7 +477,6 @@ fn canonical_files(root: &Path) -> R<Vec<(String, PathBuf)>> {
     Ok(files)
 }
 
-/// provenance: render_plugin_skill_trees.mjs validateWholeTree.
 fn validate_whole_tree(files: &[(String, PathBuf)]) -> R<Vec<String>> {
     let mut errors = Vec::new();
     for (skill_rel, abs) in files {
@@ -523,7 +491,6 @@ fn validate_whole_tree(files: &[(String, PathBuf)]) -> R<Vec<String>> {
     Ok(errors)
 }
 
-/// provenance: render_plugin_skill_trees.mjs renderTree.
 fn render_tree(runtime: &str, files: &[(String, PathBuf)]) -> R<Vec<(String, Vec<u8>)>> {
     let mut out = Vec::with_capacity(files.len());
     for (skill_rel, abs) in files {
@@ -537,10 +504,9 @@ fn render_tree(runtime: &str, files: &[(String, PathBuf)]) -> R<Vec<(String, Vec
 
 // ═══ tmp/backup hygiene + the swap ═════════════════════════════════════════
 
-/// provenance: render_plugin_skill_trees.mjs randomSuffix —
-/// `crypto.randomBytes(6).toString("hex")`. Only uniqueness is load-bearing
-/// (the name never appears in output), so this derives 12 hex chars from
-/// pid + a monotonic counter + the clock instead of pulling in an RNG crate.
+/// Only uniqueness is load-bearing (the name never appears in output), so
+/// this derives 12 hex chars from pid + a monotonic counter + the clock
+/// instead of pulling in an RNG crate.
 fn random_suffix() -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -557,10 +523,9 @@ fn random_suffix() -> String {
     sha256_hex(seed.as_bytes())[..12].to_string()
 }
 
-/// provenance: render_plugin_skill_trees.mjs isSwapDirRemovable — LIVE-PID
-/// discipline first (a dir whose owning pid is proven alive is never touched,
-/// at any age; a proven-dead pid is swept immediately, at any age), falling
-/// back to age only when the pid segment cannot be parsed at all.
+/// LIVE-PID discipline first (a dir whose owning pid is proven alive is never
+/// touched, at any age; a proven-dead pid is swept immediately, at any age),
+/// falling back to age only when the pid segment cannot be parsed at all.
 fn is_swap_dir_removable(entry_name: &str, prefix: &str, mtime_ms: f64, now_ms: f64) -> bool {
     // `new RegExp("\\." + prefix + "(\\d+)-")`, unanchored.
     let needle = format!(".{prefix}");
@@ -577,9 +542,8 @@ fn is_swap_dir_removable(entry_name: &str, prefix: &str, mtime_ms: f64, now_ms: 
     now_ms - mtime_ms > TMP_STALE_MS
 }
 
-/// provenance: render_plugin_skill_trees.mjs cleanStaleTmpDirs. Runs BEFORE
-/// the lock, deliberately: a leaked dir from a dead pid must not need the
-/// lock to clean up.
+/// Runs BEFORE the lock, deliberately: a leaked dir from a dead pid must not
+/// need the lock to clean up.
 fn clean_stale_tmp_dirs(target_root: &Path) {
     let Some(parent) = target_root.parent() else { return };
     let Some(base) = target_root.file_name().map(|n| n.to_string_lossy().into_owned()) else {
@@ -617,9 +581,9 @@ fn clean_stale_tmp_dirs(target_root: &Path) {
     }
 }
 
-/// provenance: render_plugin_skill_trees.mjs writeTree — render into a fresh
-/// tmp SIBLING (never touching targetRoot), sidecar included pre-swap, then
-/// two renames. Caller MUST hold the "plugin-render" lock.
+/// Renders into a fresh tmp SIBLING (never touching target_root), sidecar
+/// included pre-swap, then two renames. Caller MUST hold the "plugin-render"
+/// lock.
 fn write_tree(target_root: &Path, rendered: &[(String, Vec<u8>)], runtime: &str) -> std::io::Result<()> {
     let parent = target_root.parent().ok_or_else(|| {
         std::io::Error::other("render_plugin_skill_trees: target root has no parent")
@@ -672,26 +636,22 @@ fn write_tree(target_root: &Path, rendered: &[(String, Vec<u8>)], runtime: &str)
 // ═══ CLI ═══════════════════════════════════════════════════════════════════
 
 fn fail(message: &str) -> ExitCode {
-    // Node prints `${error.stack}` here — this is the message without the V8
-    // `at` frames (devtools/mod.rs header, error-path divergence).
     eprintln!("render_plugin_skill_trees: {message}");
     ExitCode::FAILURE
 }
 
 pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
     if !args.is_empty() {
-        return None; // the .mjs takes no arguments
+        return None; // this command takes no arguments
     }
     let root = super::bee_source_root()?;
     if !source_root(&root).is_dir() {
         return None;
     }
 
-    // provenance: main() — validate the WHOLE tree before any write.
-    // CUTOVER: these three used to `.ok()?` — a pre-write failure returned
-    // None so Node could print its V8 stack. There is no Node; each one now
-    // reports its own reason through `fail`, the same channel and exit code
-    // the post-lock failures already used.
+    // Validate the WHOLE tree before any write; each failure reports its own
+    // reason through `fail`, the same channel and exit code the post-lock
+    // failures use.
     let files = match canonical_files(&root) {
         Ok(f) => f,
         Err(Nd(m)) => return Some(fail(&m)),
@@ -781,10 +741,6 @@ mod tests {
         }
     }
 
-    /// Every expected value here was CAPTURED from the live
-    /// `onboard_bee.mjs::validateSkillMarkers` over the same inputs (a Node
-    /// harness, 13 cases) — this is the ported grammar pinned against its
-    /// original, not against my reading of it.
     #[test]
     fn validate_catches_every_grammar_error() {
         let none: Vec<String> = Vec::new();

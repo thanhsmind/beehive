@@ -188,7 +188,7 @@ pub(crate) fn normalize_models(raw: Option<&Value>) -> Map<String, Value> {
 /// per-dead-repo console.warn. (A corrupt config no longer delegates — it
 /// warns and reads as "no config", readJson's own fallback.)
 pub(crate) fn read_models(root: &Path) -> D<Map<String, Value>> {
-    let config = read_config_raw(root)?;
+    let config = read_config_raw(root);
     if let Some(Value::Array(items)) = config.get("dogfood_repos") {
         if !items.is_empty() {
             return Err(Delegate); // normalizeDogfoodRepos may warn to stderr

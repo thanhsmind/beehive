@@ -7,9 +7,10 @@ use super::*;
 use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce};
+use crate::textutil::truncate_chars_head;
 use crate::verbs::reservations::{
     date_parse_val, finish, jget, js_date_parse, js_disp, js_disp_opt, js_is_ws, js_number_flag,
-    js_numberify, js_quote, js_strict_eq, js_trim, keys_known, now_iso, parse_flags,
+    js_numberify, js_quote, js_trim, keys_known, now_iso, parse_flags,
     pseudo_uuid_v4, truthy, v_is_str, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use serde_json::{json, Map, Number, Value};
@@ -191,7 +192,7 @@ pub(crate) fn do_supersede(root: &Path, p: SupersedeParams, lock_retries: u32) -
     classify_decision_tags(root, &resolved_tags.clone().unwrap_or_default(), lock_retries)?;
 
     // Sweep BEFORE the append (lock doctrine): the event carries it inline.
-    let short8 = js_slice_head(&target_id, 8);
+    let short8 = truncate_chars_head(&target_id, 8);
     let sweep = sweep_decision_citations(root, &target_id, &short8);
 
     let mut event = Map::new();

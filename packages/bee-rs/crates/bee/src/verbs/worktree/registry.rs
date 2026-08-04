@@ -72,7 +72,7 @@ pub(crate) fn prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<
             return Some(Pre::Emitted(emit_no_root_error(&cwd, cmd, use_json, t0)))
         }
     };
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     Some(Pre::Go(Box::new(Ctx {
         root,
         kind,
@@ -144,12 +144,11 @@ pub(crate) fn grants_file(main_store_root: &Path) -> PathBuf {
     main_store_root.join("runtime").join("worktree-grants.json")
 }
 
-/// readGrants with the ONE difference the strangler needs: a file that
-/// exists but does not parse HERE is `None` (delegate), because Node's `{}`
-/// fallback also covers "V8 parsed it fine and serde would not".
-/// Missing/unreadable file, or a parsed non-object, is `{}` exactly like
-/// Node. An ARRAY registry (JS `typeof [] === 'object'`, so Node keeps it)
-/// also delegates rather than model Object.keys over array indices.
+/// A file that exists but does not parse is `None` (delegate) — a broader
+/// fallback would cover "parses as JSON but not as an object" too readily.
+/// Missing/unreadable file, or a parsed non-object, is `{}`. An ARRAY
+/// registry (`typeof [] === 'object'` in JS) also delegates rather than
+/// model Object.keys over array indices.
 pub(crate) fn read_grants_strict(main_store_root: &Path) -> Option<Map<String, Value>> {
     let file = grants_file(main_store_root);
     let Ok(bytes) = std::fs::read(&file) else {

@@ -1,4 +1,4 @@
-// bee state — native port of the `state` verb group (strangler subset).
+// bee state — the `state` verb group.
 //
 // R6 coverage debt "the lane/workflow world" — CLOSED for the record-mutating
 // verbs. Through R3 wave 2 these verbs served natively ONLY in the "C1 world"
@@ -117,15 +117,16 @@
 // prune's mid-loop rmSync failure message is reconstructed from the errno
 // class; the scribing-ledger append-failure warning (embeds a Node error
 // message) is not replicated — the append virtually never fails and the
-// verb's own success output is unaffected. STILL delegating and out of this
-// cutover's scope: JS spread exotica (`approved_gates` holding a string or
-// array — see spread_gates), the passing-close / feature-swap / high-risk
-// approval doors, and fs WRITE failures after the preflight.
+// verb's own success output is unaffected. `approved_gates` holding a string
+// or array is CLOSED (D2, docs/history/js-parity-cleanup/CONTEXT.md) —
+// spread_gates merges only the object shape and falls back to defaults for
+// everything else, natively, no delegate. STILL delegating and out of this
+// cutover's scope: the passing-close / feature-swap / high-risk approval
+// doors, and fs WRITE failures after the preflight.
 
 
 
 
-use crate::verbs::reservations::js_strict_eq;
 
 
 
@@ -174,7 +175,7 @@ const EXAMPLE_COMPOUNDING: &str =
 fn opt_strict_eq(a: Option<&Value>, b: Option<&Value>) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(x), Some(y)) => js_strict_eq(x, y),
+        (Some(x), Some(y)) => x == y,
         _ => false,
     }
 }

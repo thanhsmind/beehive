@@ -190,12 +190,6 @@ impl From<Delegate> for crate::verbs::reservations::Err2 {
     }
 }
 
-impl From<crate::state::Bail> for Delegate {
-    fn from(_: crate::state::Bail) -> Self {
-        Delegate
-    }
-}
-
 // ═══ kctx — VERBATIM LIFT of the knowledge-context port ════════════════════
 //
 // `bee knowledge context` is already ported in verbs/knowledge.rs, but every

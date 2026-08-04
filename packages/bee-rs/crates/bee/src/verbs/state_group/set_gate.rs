@@ -11,7 +11,7 @@ use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
 use crate::verbs::reservations::{
     date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
-    js_numberify, js_strict_eq, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
+    js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
     Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
@@ -168,10 +168,9 @@ pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         let scope = resolve_mutation_lock_scope(&ctx.root, lane_feature.as_deref(), no_lane)?;
         let workflows = list_workflows(&ctx.root)?;
 
-        // Strangler: the two scribing-debt doors (cells.mjs scribingDebt +
-        // decisions.mjs logDecision — a DIFFERENT R6 debt, for BOTH the lane
-        // and default branches) are decided here, BEFORE any lock or output,
-        // off a silent peek at the record the strict read will land on.
+        // The two scribing-debt delegate triggers (for BOTH the lane and
+        // default branches) are decided here, BEFORE any lock or output, off
+        // a silent peek at the record the strict read will land on.
         if let Some(peek) = peek_target_record(&ctx.root, &scope, lane_feature.as_deref())?
         {
             if let Some(p) = &phase_flag {

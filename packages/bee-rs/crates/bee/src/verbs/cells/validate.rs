@@ -10,6 +10,7 @@ use crate::lock;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state as bstate;
+use crate::textutil::{code_unit_cmp, js_default_sort};
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
@@ -331,7 +332,7 @@ pub(crate) fn detect_cycles(cells: &[Value]) -> Vec<Vec<String>> {
         if component.len() > 1 {
             let mut members: Vec<String> =
                 component.iter().map(|&i| by_id[i].0.clone()).collect();
-            js_default_str_sort(&mut members);
+            js_default_sort(&mut members);
             cycles.push(members);
             continue;
         }
@@ -340,11 +341,7 @@ pub(crate) fn detect_cycles(cells: &[Value]) -> Vec<Vec<String>> {
             cycles.push(vec![by_id[idx].0.clone()]);
         }
     }
-    cycles.sort_by(|a, b| {
-        let au: Vec<u16> = a[0].encode_utf16().collect();
-        let bu: Vec<u16> = b[0].encode_utf16().collect();
-        au.cmp(&bu)
-    });
+    cycles.sort_by(|a, b| code_unit_cmp(&a[0], &b[0]));
     cycles
 }
 

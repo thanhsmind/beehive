@@ -1,56 +1,21 @@
-// bee hook state-sync — port of hooks/bee-state-sync.mjs: PostToolUse +
-// SubagentStop + Stop. Refreshes cell status counts and last_activity into
-// .bee/state.json (via the state-projection full rebuild) and renews the
-// session heartbeat / claim TTLs / lease holds / cross-worktree holds, all
-// with the try-once/never-wait lock posture. ALWAYS silent on stdout.
-// Fail-open: any miss or crash -> exit 0 (crash logged to .bee/logs/hooks.jsonl).
+// bee hook state-sync — PostToolUse + SubagentStop + Stop. Refreshes cell
+// status counts and last_activity into .bee/state.json (via the
+// state-projection full rebuild) and renews the session heartbeat / claim
+// TTLs / lease holds / cross-worktree holds, all with the try-once/never-wait
+// lock posture. ALWAYS silent on stdout. Fail-open: any miss or crash -> exit
+// 0 (crash logged to .bee/logs/hooks.jsonl).
 //
-// CUTOVER (2026-08-01). Under contract C2 every branch where Node would emit a
-// V8-specific message (fsutil.mjs readJson's corrupt-JSON warn; a corrupt
-// workflow record's JSON.parse message inside listWorkflows' skip warn)
-// delegated via a PRE-FLIGHT scan over state.json, the cells dir, the claims
-// dir, the cross-worktree ledger and the workflow records. Node is gone, so
-// those scans are DELETED and each corruption is handled at its real read —
-// which is also the only way to warn exactly ONCE per file, since the probe
-// and the real read would otherwise both report it. Semantics are unchanged:
-// readJson's `null` fallback means "reads as absent", so a corrupt state.json
-// still projects from defaultState(), a corrupt cell is still skipped from the
-// counts, a corrupt claim still reads as unowned, a corrupt cross-worktree
-// ledger still reads as `{holds: []}`, and a corrupt workflow record is still
-// skipped with listWorkflows' own per-record warn (one line per bad record,
-// its `(...)` reason now serde's instead of V8's).
+// Every corrupt read is handled at its real read site, and warns exactly ONCE
+// per file: a corrupt state.json still projects from default_state(), a
+// corrupt cell is still skipped from the counts, a corrupt claim still reads
+// as unowned, a corrupt cross-worktree ledger still reads as `{holds: []}`,
+// and a corrupt workflow record is still skipped with its own per-record warn
+// (one line per bad record). A corrupt .bee/config.json is native too, inside
+// crate::state::read_config_raw — it warns and reads as absent.
 //
-// The pre-flight still exists for the delegations that were never about V8
-// text: readState's truthy-non-object `approved_gates` (JS spread exotica) and
-// resolveProductRoot's warn conditions. (A corrupt .bee/config.json is native
-// too, inside crate::state::read_config_raw — it warns and reads as absent.)
-//
-// Log-file lines match in shape/field-order; `error` text for crash logs
-// approximates Node's `String(err.stack || err)` without the V8 stack frames
-// (documented divergence, log-only).
-//
-// Ported lib functions (source file → private fn here):
-//   claims.mjs heartbeatTouch                     → heartbeat_block (inlined)
-//   claims.mjs readSession/sessionPath/requireId  → read_session / well_formed_id
-//   claims.mjs heartbeatStale                     → heartbeat_stale
-//   claims.mjs heartbeatSession (lockAttempts: 1) → heartbeat_session
-//   claims.mjs renewClaimTTL/readClaim/acquireGate/releaseGate → renew_claim_ttl
-//   claims.mjs withTransientFsRetry               → write_json_atomic_retry/remove_file_retry
-//   reservations.mjs renewHoldsBySession/controlRootFor/findMainRoot/leaseTtlSeconds
-//                                                 → renew_holds_by_session / find_main_root / lease_ttl_seconds
-//   lease-store.mjs renewLease/renewLeaseFile/resolveResourceFile/canonicalizePath/
-//                   hashString/lockNameForFile/computeExpiresAt/listAllLeaseFiles/readLeaseSafe
-//                                                 → renew_lease_path / list_lease_files / read_lease_safe
-//   worktree-holds.mjs renewHolds/readStore/writeStore/isActive/isExpired → renew_holds
-//   cells.mjs listCells (status counting slice)   → count_cells
-//   state-projection.mjs rebuildStateProjection/workflowGatesToApprovedGates/
-//                        pickNewestActiveWorkflow → rebuild_state_projection etc.
-//   workflow-store.mjs listWorkflows/readWorkflowRecord/mergeGates/baseWorkflowDefaults
-//                                                 → list_workflows / read_workflow_record
-//   state.mjs readState/defaultState/writeState/coerceLegacyPhase → read_state_failopen/default_state
-//   state.mjs controlRootFor/resolveContext/resolveRootsCore → control_root_for/resolve_roots_core
-//   state.mjs hookEnabled → crate::state::hook_enabled (already ported)
-//   lock.mjs withStoreLock/acquireStoreLockOnceSync/LockBusyError → crate::lock (already ported)
+// Two shapes still resolve to Delegate rather than a native answer: readState's
+// truthy-non-object `approved_gates` (a JS-spread-exotic shape this hook does
+// not model) and resolveProductRoot's warn conditions.
 
 use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::hooks::adapter::{log_crash, read_hook_context, HookContext};
@@ -64,11 +29,11 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const HOOK_NAME: &str = "state-sync";
-const HEARTBEAT_TOUCH_THROTTLE_SECONDS: f64 = 60.0; // claims.mjs D5 throttle
+const HEARTBEAT_TOUCH_THROTTLE_SECONDS: f64 = 60.0; // D5 throttle
 const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
 
-/// The native path cannot reproduce Node's observable bytes for this input —
-/// re-run the .mjs wrapper with the same stdin (decided BEFORE any write).
+/// The native path cannot serve this input; the run answers with
+/// `Outcome::Delegate` instead (decided BEFORE any write).
 struct Delegate;
 
 pub fn run(argv: &[String], stdin: &str) -> Outcome {
@@ -76,7 +41,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     let Some(root) = ctx.root.clone() else {
         return Outcome::Done(ExitCode::SUCCESS);
     };
-    // Vendored-lib presence gate, byte-parity with the .mjs's existsSync check.
+    // Vendored-lib presence gate: no installed harness under this root, so skip.
     if !crate::hooks::adapter::bee_installed(&root) {
         return Outcome::Done(ExitCode::SUCCESS);
     }
@@ -87,12 +52,8 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
 }
 
 fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
-    match hook_enabled(root, HOOK_NAME) {
-        Ok(true) => {}
-        Ok(false) => return Ok(()),
-        // read_config_raw warns and reads a corrupt config as absent, so this
-        // arm is unreachable; kept because the signature is still fallible.
-        Err(_) => return Err(Delegate),
+    if !hook_enabled(root, HOOK_NAME) {
+        return Ok(());
     }
 
     let plan = preflight(ctx, root)?;
@@ -105,14 +66,7 @@ fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
         }
     }
 
-    // CUTOVER: three `await import(libModuleUrl(root, …))` presence gates
-    // stood here (cells / lock / state-projection). Node threw
-    // ERR_MODULE_NOT_FOUND into the outer catch when a host's vendored copy
-    // was incomplete; a compiled-in module cannot be incomplete, so the gates
-    // and their fabricated V8 crash-log text are gone.
     let counts = count_cells(root);
-    {
-    }
 
     // D3-amended: the state read-modify-write runs under the 'state' store
     // lock, try-once — LOCK_BUSY skips the sync silently.
@@ -135,8 +89,8 @@ fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
 // ── pre-flight: native/delegate decision before any write ──────────────────
 
 struct Plan {
-    /// controlRootFor(root) — Ok(control root) or the WorktreeLinkInvalidError
-    /// message the .mjs would throw (and crash-log) at projection time.
+    /// Ok(control root) or the WorktreeLinkInvalidError message crash-logged
+    /// at projection time.
     ctrl: Result<PathBuf, String>,
     sid: Option<String>,
 }
@@ -156,7 +110,7 @@ fn preflight(ctx: &HookContext, root: &Path) -> Result<Plan, Delegate> {
 }
 
 /// readState's remaining delegate condition only (result discarded; the
-/// projection re-reads inside the lock like the .mjs does).
+/// projection re-reads inside the lock).
 fn read_state_strict_for_delegate(root: &Path) -> Result<(), Delegate> {
     match read_json(&root.join(".bee").join("state.json")) {
         ReadJson::Parsed(Value::Object(m)) => match m.get("approved_gates") {
@@ -191,16 +145,6 @@ fn truthy(v: &Value) -> bool {
         Value::Number(n) => n.as_f64().is_some_and(|f| f != 0.0),
         Value::String(s) => !s.is_empty(),
         Value::Array(_) | Value::Object(_) => true,
-    }
-}
-
-fn js_strict_eq(a: &Value, b: &Value) -> bool {
-    match (a, b) {
-        (Value::String(x), Value::String(y)) => x == y,
-        (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
-        (Value::Bool(x), Value::Bool(y)) => x == y,
-        (Value::Null, Value::Null) => true,
-        _ => false, // two separately-parsed objects are never === in JS
     }
 }
 
@@ -252,7 +196,7 @@ fn path_relative(root: &Path, file: &Path) -> String {
     }
 }
 
-// ── transient-FS retry (claims.mjs rel1710rc-5 / lock.mjs rel180-4 class) ──
+// ── transient-FS retry ───────────────────────────────────────────────────────
 
 #[cfg(windows)]
 fn is_transient_fs_error(e: &std::io::Error) -> bool {
@@ -295,7 +239,7 @@ fn remove_file_retry(file: &Path) -> Result<(), String> {
     .map_err(|e| format!("Error: {e}"))
 }
 
-// ── state.mjs readState / defaultState ─────────────────────────────────────
+// ── state read / defaults ───────────────────────────────────────────────────
 
 fn default_gates() -> Map<String, Value> {
     let mut m = Map::new();
@@ -321,10 +265,10 @@ fn default_state() -> Map<String, Value> {
     m
 }
 
-/// state.mjs readState, fail-open flavor for the execution phase: a corrupt
-/// state.json warns once and collapses to defaultState() exactly as readJson's
-/// `null` fallback did. (Exotic-gates inputs are still delegated in pre-flight,
-/// so the gates merge below only ever sees objects outside a race window.)
+/// Reads state.json, fail-open flavor for the execution phase: a corrupt
+/// state.json warns once and collapses to default_state(). (Exotic-gates
+/// inputs are still delegated in pre-flight, so the gates merge below only
+/// ever sees objects outside a race window.)
 fn read_state_failopen(root: &Path) -> Map<String, Value> {
     let state_file = root.join(".bee").join("state.json");
     let file_state = match read_json(&state_file) {
@@ -356,7 +300,7 @@ fn read_state_failopen(root: &Path) -> Map<String, Value> {
     merged
 }
 
-// ── state.mjs resolveRootsCore / controlRootFor ────────────────────────────
+// ── root resolution / control-root lookup ───────────────────────────────────
 
 enum RootsCore {
     None,
@@ -368,9 +312,8 @@ fn js_absolute(p: &Path) -> PathBuf {
     std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf())
 }
 
-/// state.mjs readGitdirFile: trim, strip "gitdir:", backslash-normalize,
-/// path.resolve against `base`. (Byte-identical logic backs reservations.mjs's
-/// readGitdirFileForRoot, reused by find_main_root below.)
+/// Trim, strip a leading "gitdir:", backslash-normalize, resolve against
+/// `base`. (Same logic backs find_main_root below.)
 fn read_gitdir_file(file: &Path, base: &Path) -> Option<PathBuf> {
     let raw = std::fs::read_to_string(file).ok()?;
     let mut raw = raw.trim();
@@ -384,8 +327,8 @@ fn read_gitdir_file(file: &Path, base: &Path) -> Option<PathBuf> {
     Some(js_absolute(&base.join(sep_fixed)))
 }
 
-/// state.mjs resolveRootsCore. Err(message) mirrors the thrown
-/// WorktreeLinkInvalidError's `${reason} (${marker})`.
+/// Err(message) carries the WorktreeLinkInvalidError message, formatted as
+/// `{reason} ({marker})`.
 fn resolve_roots_core(start: &Path) -> Result<RootsCore, String> {
     let mut nearest = js_absolute(start);
     loop {
@@ -456,10 +399,10 @@ enum CtrlErr {
     Crash(String),
 }
 
-/// state.mjs resolveProductRoot's warn conditions, as a delegate gate (see
+/// resolveProductRoot's warn conditions, as a delegate gate (see
 /// chain_nudge.rs's twin for the reasoning).
 fn check_product_root(work_root: &Path) -> Result<(), CtrlErr> {
-    let config = crate::state::read_config_raw(work_root).map_err(|_| CtrlErr::Delegate)?;
+    let config = crate::state::read_config_raw(work_root);
     match config.get("product_root") {
         None | Some(Value::Null) => Ok(()),
         Some(Value::String(s)) if s.is_empty() => Ok(()),
@@ -474,7 +417,8 @@ fn check_product_root(work_root: &Path) -> Result<(), CtrlErr> {
     }
 }
 
-/// state.mjs controlRootFor(root) = resolveContext(root).controlRoot ?? root.
+/// The control root for `root`, falling back to `root` itself when there is
+/// none.
 fn control_root_for(root: &Path) -> Result<PathBuf, CtrlErr> {
     match resolve_roots_core(root) {
         Err(msg) => Err(CtrlErr::Crash(format!("WorktreeLinkInvalidError: {msg}"))),
@@ -490,14 +434,13 @@ fn control_root_for(root: &Path) -> Result<PathBuf, CtrlErr> {
     }
 }
 
-// ── claims.mjs: sessions, heartbeats, claim TTL renewal ────────────────────
+// ── sessions, heartbeats, claim TTL renewal ─────────────────────────────────
 
-/// claims.mjs readSession (fail-open display read). A corrupt record warns and
-/// reads as "no session" — readJson's `null` fallback, then the
-/// `!session || session.id !== id` guard.
+/// Fail-open display read. A corrupt record warns and reads as "no session":
+/// a corrupt/missing file falls back to None, and so does an id mismatch.
 fn read_session_failopen(control_root: &Path, session_id: &str) -> Option<Map<String, Value>> {
     if !well_formed_id(session_id) {
-        return None; // sessionPath's requireId throw reads as "no session"
+        return None; // a malformed id reads as "no session"
     }
     let file = control_root.join(".bee").join("sessions").join(format!("{session_id}.json"));
     let session = match read_json(&file) {
@@ -515,23 +458,22 @@ fn read_session_failopen(control_root: &Path, session_id: &str) -> Option<Map<St
     Some(session)
 }
 
-/// claims.mjs heartbeatStale.
+/// A record is stale if it is absent, has no readable last_heartbeat, or its
+/// last_heartbeat plus `stale_seconds` has already passed.
 fn heartbeat_stale(record: Option<&Map<String, Value>>, now_ms: f64, stale_seconds: f64) -> bool {
     let Some(rec) = record else { return true };
     let Some(beat) = rec.get("last_heartbeat").and_then(date_parse_ms) else { return true };
     beat + stale_seconds * 1000.0 <= now_ms
 }
 
-/// The heartbeat/lease-renewal block of bee-state-sync.mjs main(), i.e.
-/// claims.mjs heartbeatTouch composed with reservations.renewHoldsBySession
-/// and worktree-holds.renewHolds. Err(text) is the crash the .mjs's own catch
-/// would logCrash (silently — never stdout/stderr).
+/// The heartbeat/lease-renewal block: read → throttle → session heartbeat +
+/// claim TTL renewal → path-lease renewal → cross-worktree hold renewal.
+/// Err(text) is crash-logged silently — never stdout/stderr.
 fn heartbeat_block(ctx: &HookContext, root: &Path, sid: &str) -> Result<(), String> {
     let ctrl = ctx.control_root.clone().unwrap_or_else(|| root.to_path_buf());
     let now = Utc::now();
     let now_ms = now.timestamp_millis() as f64;
 
-    // heartbeatTouch: read → throttle → heartbeatSession + renewClaimTTL.
     let record = read_session_failopen(&ctrl, sid);
     if !heartbeat_stale(record.as_ref(), now_ms, HEARTBEAT_TOUCH_THROTTLE_SECONDS) {
         return Ok(()); // { touched: false, reason: 'throttled' } — nothing else runs
@@ -547,8 +489,8 @@ fn heartbeat_block(ctx: &HookContext, root: &Path, sid: &str) -> Result<(), Stri
     Ok(())
 }
 
-/// claims.mjs heartbeatSession with lockAttempts: 1. LOCK_BUSY and
-/// SESSION_MISSING are typed results (not throws) — both read as Ok here.
+/// Tries the session lock at most once. LOCK_BUSY and SESSION_MISSING are
+/// typed results, not errors — both read as Ok here.
 fn heartbeat_session(ctrl: &Path, sid: &str, now: &DateTime<Utc>) -> Result<(), String> {
     match acquire_store_lock_once(ctrl, "sessions") {
         AcquireOnce::Busy { .. } => Ok(()),
@@ -567,7 +509,7 @@ fn heartbeat_session(ctrl: &Path, sid: &str, now: &DateTime<Utc>) -> Result<(), 
     }
 }
 
-/// claims.mjs renewClaimTTL (no fencing — the hook never presents an epoch).
+/// No fencing — the hook never presents an epoch.
 fn renew_claim_ttl(ctrl: &Path, sid: &str, now: &DateTime<Utc>) -> Result<(), String> {
     // requireId(sessionId, 'session id') — malformed ids throw.
     if !well_formed_id(sid) {
@@ -625,9 +567,9 @@ fn renew_claim_ttl(ctrl: &Path, sid: &str, now: &DateTime<Utc>) -> Result<(), St
     Ok(())
 }
 
-/// claims.mjs readClaim: fail-open readJson; non-objects read as "no claim".
-/// A corrupt claim warns and reads as "no claim", so renewClaimTTL leaves it
-/// strictly alone (it can never be proven ours).
+/// Fail-open read; non-objects read as "no claim". A corrupt claim warns and
+/// reads as "no claim", so renew_claim_ttl leaves it strictly alone (it can
+/// never be proven ours).
 fn read_claim(file: &Path) -> Option<Map<String, Value>> {
     match read_json(file) {
         ReadJson::Parsed(Value::Object(m)) => Some(m),
@@ -639,10 +581,10 @@ fn read_claim(file: &Path) -> Option<Map<String, Value>> {
     }
 }
 
-// ── reservations.mjs + lease-store.mjs: path-lease renewal ─────────────────
+// ── path-lease renewal ───────────────────────────────────────────────────────
 
-/// reservations.mjs findMainRoot (fail-open, never throws) — the cycle-safe
-/// controlRootFor replica reservations.mjs carries.
+/// Fail-open, never panics — a cycle-safe main-root walk independent of
+/// control_root_for.
 fn find_main_root(root: &Path) -> Option<PathBuf> {
     let mut dir = js_absolute(root);
     let work_root = loop {
@@ -675,7 +617,7 @@ fn find_main_root(root: &Path) -> Option<PathBuf> {
     common_git_dir.parent().map(Path::to_path_buf)
 }
 
-/// lease-store.mjs listAllLeaseFiles: cells dir then paths dir, *.json files.
+/// Cells dir then paths dir, *.json files.
 fn list_lease_files(root: &Path) -> Vec<PathBuf> {
     let leases = root.join(".bee").join("runtime").join("leases");
     let mut files = Vec::new();
@@ -691,7 +633,7 @@ fn list_lease_files(root: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// lease-store.mjs readLeaseSafe (raw parse, no BOM strip, never warns).
+/// Raw parse, no BOM strip, never warns.
 fn read_lease_safe(file: &Path) -> Option<Map<String, Value>> {
     let bytes = std::fs::read(file).ok()?;
     let text = String::from_utf8_lossy(&bytes);
@@ -701,8 +643,8 @@ fn read_lease_safe(file: &Path) -> Option<Map<String, Value>> {
     }
 }
 
-/// reservations.mjs leaseTtlSeconds: renew by the lease's OWN window; the
-/// 0 sentinel (and NaN math) mean "never expires".
+/// Renews by the lease's OWN window; the 0 sentinel (and NaN math) mean
+/// "never expires".
 fn lease_ttl_seconds(record: &Map<String, Value>) -> f64 {
     match record.get("expires_at") {
         None | Some(Value::Null) => 0.0,
@@ -717,7 +659,6 @@ fn lease_ttl_seconds(record: &Map<String, Value>) -> f64 {
     }
 }
 
-/// lease-store.mjs computeExpiresAt.
 fn compute_expires_at(ttl: f64, now: &DateTime<Utc>) -> Value {
     if ttl.is_finite() && ttl > 0.0 {
         let expires = chrono::DateTime::from_timestamp_millis(
@@ -732,9 +673,8 @@ fn compute_expires_at(ttl: f64, now: &DateTime<Utc>) -> Value {
     }
 }
 
-/// reservations.mjs renewHoldsBySession(root, sessionId, {lockOptions:
-/// {maxAttempts: 1}}) over lease-store.mjs renewLease. Err(text) mirrors the
-/// throw that escapes into the hook's heartbeat catch (crash-logged).
+/// Renews every path lease this session holds, at most one lock attempt per
+/// file. Err(text) escapes into the hook's heartbeat handling (crash-logged).
 fn renew_holds_by_session(root: &Path, sid: &str) -> Result<(), String> {
     let ctrl2 = find_main_root(root).unwrap_or_else(|| root.to_path_buf());
     let now = Utc::now();
@@ -757,8 +697,8 @@ fn renew_holds_by_session(root: &Path, sid: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// lease-store.mjs canonicalizePath: backslash-normalize, strip one anchored
-/// leading "./+", strip trailing slashes.
+/// Backslash-normalize, strip one anchored leading "./+", strip trailing
+/// slashes.
 fn canonicalize_path(v: &str) -> String {
     let s = v.replace('\\', "/");
     let s = match s.strip_prefix('.') {
@@ -768,9 +708,9 @@ fn canonicalize_path(v: &str) -> String {
     s.trim_end_matches('/').to_string()
 }
 
-/// lease-store.mjs renewLease → renewLeaseFile for one path resource, under
-/// the per-file `lease:<sha256(file)>` store lock, try-once. LEASE_MISSING is
-/// skipped (Ok); LEASE_CORRUPT / LockBusy propagate as crash text.
+/// Renews one path resource's lease file, under the per-file
+/// `lease:<sha256(file)>` store lock, try-once. LEASE_MISSING is skipped
+/// (Ok); LEASE_CORRUPT / LockBusy propagate as crash text.
 fn renew_lease_path(ctrl2: &Path, id: &str, ttl: f64, now: &DateTime<Utc>) -> Result<(), String> {
     if id.trim().is_empty() {
         return Err("LeaseStoreError: lease request: path id is required.".to_string());
@@ -819,14 +759,13 @@ fn renew_lease_path(ctrl2: &Path, id: &str, ttl: f64, now: &DateTime<Utc>) -> Re
     }
 }
 
-// ── worktree-holds.mjs renewHolds (cross-worktree ledger) ──────────────────
+// ── cross-worktree hold renewal ─────────────────────────────────────────────
 
-/// The hook's own D3 inner try/catch body: main-root resolution via the
-/// THROWING resolveRoots over the caller's root (the hook resolves that root
-/// from cwd, so production behavior is unchanged; keying on the argument —
-/// like renew_holds_by_session above — keeps the resolution hermetic when a
-/// test injects a tmp root), then
-/// worktree-holds.renewHolds(mainRoot, sessionId, {maxAttempts: 1}).
+/// Resolves the main root from the caller's root argument (never process
+/// cwd — keying on the argument, like renew_holds_by_session above, keeps
+/// the resolution hermetic when a test injects a tmp root), then renews
+/// this session's active holds in that root's cross-worktree ledger, at
+/// most one lock attempt.
 fn renew_cross_worktree_holds(root: &Path, sid: &str) -> Result<(), String> {
     let main_root = match resolve_roots_core(root) {
         Ok(RootsCore::LinkedValid { main_root, .. }) => main_root,
@@ -896,7 +835,6 @@ fn renew_cross_worktree_holds(root: &Path, sid: &str) -> Result<(), String> {
     }
 }
 
-/// worktree-holds.mjs isExpired.
 fn hold_expired(hold: &Map<String, Value>, now_ms: f64) -> bool {
     let ttl = match hold.get("ttl_seconds").and_then(Value::as_f64) {
         Some(t) if t.is_finite() && t > 0.0 => t,
@@ -908,10 +846,10 @@ fn hold_expired(hold: &Map<String, Value>, now_ms: f64) -> bool {
     mirrored + ttl * 1000.0 <= now_ms
 }
 
-// ── cells.mjs listCells → status counts ────────────────────────────────────
+// ── status counts ────────────────────────────────────────────────────────────
 
-/// The hook's counts loop over cells.mjs listCells(root, {}): active-dir scan
-/// only, non-objects dropped, `counts[cell.status] !== undefined` guard.
+/// Active-dir scan only, non-objects dropped, counted only for a recognized
+/// status.
 fn count_cells(root: &Path) -> Map<String, Value> {
     let mut open = 0u64;
     let mut claimed = 0u64;
@@ -955,7 +893,7 @@ fn count_cells(root: &Path) -> Map<String, Value> {
     counts
 }
 
-// ── workflow-store.mjs listWorkflows / readWorkflowRecord ──────────────────
+// ── workflow record read / enumeration ──────────────────────────────────────
 
 fn base_workflow_defaults() -> Map<String, Value> {
     let mut m = Map::new();
@@ -976,7 +914,7 @@ fn default_gate_entry() -> Map<String, Value> {
     m
 }
 
-/// workflow-store.mjs mergeGates(defaultGates(), parsed.gates).
+/// Merges `overrides` over the default gate entries, per-gate and per-field.
 fn merge_gates(overrides: Option<&Value>) -> Value {
     let mut merged = Map::new();
     for name in GATE_NAMES {
@@ -1010,13 +948,10 @@ fn found_kind(v: &Value) -> &'static str {
     }
 }
 
-/// workflow-store.mjs readWorkflowRecord. Err(reason) carries the exact
-/// WorkflowStoreError message listWorkflows quotes in its skip warn. The
-/// read-error and JSON-corrupt variants used to delegate because Node
-/// interpolated libuv's errno / V8's parse sentence into `(...)`; they are
-/// native now, with std::io::Error / serde_json's own deterministic text in
-/// that slot. The refusal itself is unchanged — the record is still skipped,
-/// never rebuilt from defaults over a file we could not read.
+/// Err(reason) carries the exact WorkflowStoreError message list_workflows
+/// quotes in its skip warn, with std::io::Error / serde_json's own
+/// deterministic text filling the `(...)` slot. The record is never rebuilt
+/// from defaults over a file that could not be read.
 fn read_workflow_record(ctrl_root: &Path, id: &str) -> Result<Map<String, Value>, String> {
     let file = ctrl_root
         .join(".bee")
@@ -1067,8 +1002,7 @@ fn read_workflow_record(ctrl_root: &Path, id: &str) -> Result<Map<String, Value>
     Ok(merged)
 }
 
-/// workflow-store.mjs listWorkflows: fail-open enumeration; unreadable
-/// entries are skipped with the byte-identical console.warn line.
+/// Fail-open enumeration; unreadable entries are skipped, one warn line each.
 fn list_workflows(ctrl_root: &Path) -> Vec<Map<String, Value>> {
     let dir = ctrl_root.join(".bee").join("runtime").join("workflows");
     let Ok(rd) = std::fs::read_dir(&dir) else { return Vec::new() };
@@ -1088,9 +1022,11 @@ fn list_workflows(ctrl_root: &Path) -> Vec<Map<String, Value>> {
     out
 }
 
-// ── state-projection.mjs rebuildStateProjection ────────────────────────────
+// ── state projection rebuild ────────────────────────────────────────────────
 
-/// state-projection.mjs workflowGatesToApprovedGates(gates, planRev).
+/// Reduces a workflow's `gates` to the approved_gates shape: a gate is
+/// approved only when its entry is truthy, `approved` is true, and its
+/// `approved_for_plan_rev` is absent/null or matches the current `plan_rev`.
 fn workflow_gates_to_approved(gates: &Value, plan_rev: &Value) -> Value {
     let mut approved = Map::new();
     for name in GATE_NAMES {
@@ -1111,23 +1047,21 @@ fn workflow_gates_to_approved(gates: &Value, plan_rev: &Value) -> Value {
         };
         let rev_effective = match rev {
             None | Some(Value::Null) => true,
-            Some(v) => js_strict_eq(v, plan_rev),
+            Some(v) => v == plan_rev,
         };
         approved.insert(name.to_string(), Value::Bool(is_approved && rev_effective));
     }
     Value::Object(approved)
 }
 
-/// state-projection.mjs pickNewestActiveWorkflow.
+/// The active workflow with the newest created_at, ties broken by id
+/// descending.
 fn pick_newest_active(workflows: &[Map<String, Value>]) -> Option<&Map<String, Value>> {
     let mut active: Vec<&Map<String, Value>> = workflows
         .iter()
         .filter(|wf| {
             wf.get("status") == Some(&json!("active"))
-                && !js_strict_eq(
-                    wf.get("phase").unwrap_or(&Value::Null),
-                    &json!("compounding-complete"),
-                )
+                && wf.get("phase").unwrap_or(&Value::Null) != &json!("compounding-complete")
         })
         .collect();
     active.sort_by(|a, b| {
@@ -1143,17 +1077,17 @@ fn pick_newest_active(workflows: &[Map<String, Value>]) -> Option<&Map<String, V
     active.first().copied()
 }
 
-/// state-projection.mjs rebuildStateProjection(root, {cellCounts,
-/// lastActivity}) — the hook always passes both overrides, so every branch
-/// writes. Err(text) is the throw the .mjs's outer catch would crash-log.
+/// Rebuilds the state.json projection from `counts` and `last_activity` — the
+/// hook always passes both, so every branch writes. Err(text) is crash-logged
+/// by the caller.
 fn rebuild_state_projection(
     root: &Path,
     ctrl: &Result<PathBuf, String>,
     counts: &Map<String, Value>,
     last_activity: &str,
 ) -> Result<(), String> {
-    // listWorkflows(controlRootFor(root)) — an invalid linked worktree throws
-    // WorktreeLinkInvalidError right here in the .mjs.
+    // An invalid linked worktree's WorktreeLinkInvalidError surfaces here,
+    // before workflows are listed.
     let ctrl_root = match ctrl {
         Ok(p) => p.clone(),
         Err(msg) => return Err(msg.clone()),
@@ -1181,8 +1115,8 @@ fn rebuild_state_projection(
     if truthy(&feature) {
         // Branch (1) — feature-matched, msn-10.
         let wf = workflows.iter().find(|w| {
-            js_strict_eq(w.get("feature").unwrap_or(&Value::Null), &feature)
-                && !js_strict_eq(w.get("status").unwrap_or(&Value::Null), &json!("closed"))
+            w.get("feature").unwrap_or(&Value::Null) == &feature
+                && w.get("status").unwrap_or(&Value::Null) != &json!("closed")
         });
         let mut next = current;
         if let Some(wf) = wf {
@@ -1440,10 +1374,6 @@ mod tests {
     #[test]
     fn renew_cross_worktree_holds_renews_active_session_rows_only() {
         let tmp = setup_root();
-        // The vendored-module presence gate must pass for the tmp root.
-        let lib = tmp.path().join(".bee").join("bin").join("lib");
-        std::fs::create_dir_all(&lib).unwrap();
-        std::fs::write(lib.join("worktree-holds.mjs"), "// vendored").unwrap();
         let runtime = tmp.path().join(".bee").join("runtime");
         std::fs::create_dir_all(&runtime).unwrap();
         // Row 0: active + owned (mirrored 30min ago, 1h TTL) → renewed.
@@ -1467,8 +1397,9 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        // Resolution keys on the passed root (tmp is an ordinary checkout →
-        // the solo/main fallback branch), independent of the test process cwd.
+        // tmp is an ordinary checkout (not a linked worktree), so main_root
+        // falls back to the `root` argument itself — the solo/main no-op
+        // branch. Resolution is hermetic: it reads `root`, never process cwd.
         renew_cross_worktree_holds(tmp.path(), "s1").unwrap();
         let after: Value = serde_json::from_str(
             &std::fs::read_to_string(runtime.join("cross-worktree-holds.json")).unwrap(),
@@ -1561,9 +1492,6 @@ mod tests {
     #[test]
     fn corrupt_cross_worktree_ledger_reads_as_empty_and_is_not_clobbered() {
         let tmp = setup_root();
-        let lib = tmp.path().join(".bee").join("bin").join("lib");
-        std::fs::create_dir_all(&lib).unwrap();
-        std::fs::write(lib.join("worktree-holds.mjs"), "// vendored").unwrap();
         let runtime = tmp.path().join(".bee").join("runtime");
         std::fs::create_dir_all(&runtime).unwrap();
         std::fs::write(runtime.join("cross-worktree-holds.json"), "{nope").unwrap();

@@ -219,7 +219,7 @@ fn run(verb: Verb, flags: Flags, t0: Instant) -> Option<ExitCode> {
         Roots::None => return Some(emit_no_root_error(&cwd, verb.cmd(), use_json, t0)),
     };
 
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
 
     // handleCellsList/Ready: `flags.feature ? String(flags.feature) : null` —
     // empty string is falsy, so it never filters.

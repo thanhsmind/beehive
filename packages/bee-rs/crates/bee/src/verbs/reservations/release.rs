@@ -86,7 +86,7 @@ pub(crate) fn release_exec(
             let cell_match = match cell {
                 None => true,
                 Some(c) => {
-                    matches!(&r.cell, Some(v) if js_strict_eq(v, &Value::String(c.to_string())))
+                    matches!(&r.cell, Some(v) if v == &Value::String(c.to_string()))
                 }
             };
             agent_match && cell_match
@@ -130,7 +130,7 @@ pub(crate) fn release_exec(
         }
         if let Some(c) = cell {
             let matches_cell =
-                matches!(rec.get("workflow_id"), Some(v) if js_strict_eq(v, &Value::String(c.to_string())));
+                matches!(rec.get("workflow_id"), Some(v) if v == &Value::String(c.to_string()));
             if !matches_cell {
                 continue;
             }
@@ -172,12 +172,12 @@ pub(crate) fn release_exec(
                     continue;
                 }
                 if let Some(s) = session_v {
-                    let sess_match = matches!(jget(hold, "session"), Some(v) if js_strict_eq(v, s));
+                    let sess_match = matches!(jget(hold, "session"), Some(v) if v == s);
                     if !sess_match {
                         continue;
                     }
                 }
-                let cell_match = matches!(jget(hold, "cell"), Some(v) if js_strict_eq(v, cell_v));
+                let cell_match = matches!(jget(hold, "cell"), Some(v) if v == cell_v);
                 if !cell_match {
                     continue;
                 }

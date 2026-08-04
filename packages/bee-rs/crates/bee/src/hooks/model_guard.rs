@@ -1,37 +1,18 @@
-// bee hook model-guard — Rust port of hooks/bee-model-guard.mjs (PreToolUse,
-// Agent|Task|spawn_agent). HOT path: the deny/allow decision, the stderr deny
-// reason, the dispatch.jsonl audit line and the hooks.jsonl deny line are all
-// fully native and byte-identical to the Node wrapper.
+// bee hook model-guard (PreToolUse, Agent|Task|spawn_agent). HOT path: the
+// deny/allow decision, the stderr deny reason, the dispatch.jsonl audit line
+// and the hooks.jsonl deny line are all fully native.
 //
-// Ported lib functions (provenance, all from the vendored <root>/.bee/bin/lib
-// copies, byte-identical to packages/bee/lib at port time):
-//   - dispatch-guard.mjs: evaluateDispatch (evaluateClaudeDispatch +
-//     evaluateCodexSpawn), ANCHORED_TIER_MARKER_RE / ANCHORED_CODEX_TIER_-
-//     MARKER_RE, PINNED_AGENT_TYPE, configuredModelSet, deriveEconomics.
-//   - state.mjs: normalizeTierValue / normalizeModels (DEFAULT_MODELS seed),
-//     resolveTier (3-arg form; purpose never passed => cli slots refuse),
-//     resolveAdvisor, modelForTier (inlined into configured_model_set),
-//     hookEnabled (over the merged tracked+overlay config).
+// A present-but-corrupt .bee/config.json or .bee/config.local.json is native:
+// crate::state::read_config_raw warns in bee's own words and takes its
+// fallback, so the unreadable file reads as absent and the merge proceeds
+// from whatever survives (the sibling overlay still applies).
 //
-// CUTOVER (2026-08-01). The one strangler bail this hook had — a
-// present-but-corrupt .bee/config.json or .bee/config.local.json, whose Node
-// readJson warning embedded V8's own parse-error message — is NATIVE now, in
-// crate::state::read_config_raw: it warns in bee's own words and takes
-// readConfig's fallback, so the unreadable file reads as absent and the merge
-// proceeds from whatever survives (the sibling overlay still applies). The
-// guard therefore evaluates against the same config Node would have used, and
-// still denies/allows identically.
-//
-// Strangler bails (Outcome::Delegate, all before any output/log write): none
-// remain.
-// Known accepted divergence (not detectable natively): a vendored state.mjs /
-// dispatch-guard.mjs that PARSES as present but throws on import (Node:
-// crash-log + exit 0). A wholly MISSING dispatch-guard.mjs is handled: crash
-// line + exit 0, like Node's failed dynamic import (log text differs, shape
-// matches).
+// No branch in this hook still returns Outcome::Delegate; every decision is
+// native.
 
 use crate::hooks::adapter::{append_hook_log, now_iso, read_hook_context};
 use crate::hooks::Outcome;
+use crate::textutil::truncate_chars_head;
 use crate::jsjson;
 use crate::state::read_config_raw;
 use serde_json::{Map, Value};
@@ -87,17 +68,12 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
     let tool_name = tool_name.expect("dispatch tools are string-named");
 
     // hookEnabled over the merged config. read_config_raw warns and treats an
-    // unparseable file as absent (readConfig's readJson fallback), so this can
-    // no longer bail — the `Err` arm is kept only because the signature is
-    // still fallible.
-    let config = read_config_raw(&root).unwrap_or_default();
+    // unparseable file as absent (readConfig's readJson fallback), so a
+    // corrupt config just reads as {} — no fallible arm to handle here.
+    let config = read_config_raw(&root);
     if matches!(config.get("hooks").and_then(|h| h.get(HOOK_NAME)), Some(Value::Bool(false))) {
         return Ok((0, String::new(), String::new()));
     }
-
-    // CUTOVER: a dispatch-guard.mjs presence gate stood here — a missing
-    // vendored module threw in Node and landed in the fail-open catch. The
-    // guard is compiled in now.
 
     let models = normalize_models(config.get("models"));
     let tool_input = ctx.payload.get("tool_input").cloned().unwrap_or(Value::Null);
@@ -225,14 +201,14 @@ fn strip_prefix_ascii_ci<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
 }
 
 fn marker_tier(tool_input: &Map<String, Value>) -> Option<String> {
-    // description FIRST, then prompt (dispatch-guard.mjs markerTier order).
+    // description FIRST, then prompt.
     tool_input
         .get("description")
         .and_then(|d| starts_with_tier_marker(d, &CLAUDE_TIERS))
         .or_else(|| tool_input.get("prompt").and_then(|p| starts_with_tier_marker(p, &CLAUDE_TIERS)))
 }
 
-// ─── state.mjs model config (normalizeTierValue / normalizeModels) ─────────
+// ─── model config (normalize_tier_value / normalize_models) ────────────────
 
 #[derive(Clone, Debug, PartialEq)]
 enum Slot {
@@ -259,7 +235,7 @@ struct Models {
     codex: Slots,
 }
 
-/// normalizeTierValue — None means "undefined" (invalid shape, keep default).
+/// None means "undefined" (invalid shape, keep default).
 fn normalize_tier_value(value: &Value) -> Option<Slot> {
     match value {
         Value::String(s) if !s.trim().is_empty() => Some(Slot::Name(s.trim().to_string())),
@@ -304,7 +280,7 @@ fn normalize_tier_value(value: &Value) -> Option<Slot> {
 }
 
 fn normalize_models(raw: Option<&Value>) -> Models {
-    // DEFAULT_MODELS (state.mjs).
+    // Default model set.
     let mut out = Models {
         claude: Slots {
             extraction: Slot::Name("haiku".into()),
@@ -356,7 +332,7 @@ impl Resolved {
     }
 }
 
-/// state.mjs resolveTier (3-arg form; no purpose => cli slots refuse).
+/// No purpose => cli slots refuse.
 fn resolve_tier(models: &Models, slot: &str, runtime: &str) -> Resolved {
     if slot == "ceiling" {
         return Resolved::Inherit;
@@ -379,7 +355,7 @@ fn resolve_tier(models: &Models, slot: &str, runtime: &str) -> Resolved {
     }
 }
 
-/// state.mjs resolveAdvisor — None = "no advisor".
+/// None = "no advisor".
 fn resolve_advisor(models: &Models, runtime: &str) -> Option<Resolved> {
     let slots = if runtime == "codex" { &models.codex } else { &models.claude };
     match &slots.advisor {
@@ -390,8 +366,7 @@ fn resolve_advisor(models: &Models, runtime: &str) -> Option<Resolved> {
     }
 }
 
-/// dispatch-guard.mjs configuredModelSet: CONFIGURABLE_SLOTS models + the
-/// advisor slot's own resolved model (cnt-7 union).
+/// The configurable-slot models plus the advisor slot's own resolved model.
 fn configured_model_set(models: &Models) -> BTreeSet<String> {
     let mut set = BTreeSet::new();
     for slot in ["extraction", "generation", "review"] {
@@ -409,17 +384,16 @@ fn configured_model_set(models: &Models) -> BTreeSet<String> {
     set
 }
 
-// ─── the verdict (dispatch-guard.mjs evaluateDispatch) ─────────────────────
+// ─── the verdict ────────────────────────────────────────────────────────────
 
 struct Verdict {
     deny: bool,
-    /// None = noOpinion — the caller never logs.
+    /// None = no opinion — the caller never logs.
     transport: Option<&'static str>,
     reason: Option<String>,
     tier: Option<String>,
     model: Option<String>,
-    /// Mirrors dispatch-guard's result shape; the audit line reads
-    /// subagent_type straight from tool_input like the .mjs does.
+    /// The audit line reads subagent_type straight from tool_input.
     #[allow(dead_code)]
     subagent_type: Option<String>,
     /// Set when the guard repaired the request instead of refusing it. Carries
@@ -673,7 +647,7 @@ expensive session model.\n{bare_fix}"
     deny(reason, "bare-denied", None, None, subagent_type)
 }
 
-// ─── dispatch economics (dispatch-guard.mjs deriveEconomics, g22-2) ────────
+// ─── dispatch economics (g22-2) ─────────────────────────────────────────────
 
 fn derive_dispatch_economics(
     models: &Models,
@@ -716,23 +690,6 @@ fn derive_dispatch_economics(
 
 // ─── audit logs ─────────────────────────────────────────────────────────────
 
-/// JS String.prototype.slice(0, n) — UTF-16 code units. When the cut lands
-/// inside a surrogate pair we keep 119 units instead of emitting the lone
-/// surrogate Node would (log-only field; shape unchanged).
-fn utf16_slice(text: &str, max_units: usize) -> String {
-    let mut units = 0usize;
-    let mut out = String::new();
-    for c in text.chars() {
-        let w = c.len_utf16();
-        if units + w > max_units {
-            break;
-        }
-        units += w;
-        out.push(c);
-    }
-    out
-}
-
 fn log_dispatch(
     root: &Path,
     tool_name: &str,
@@ -749,7 +706,7 @@ fn log_dispatch(
     let description = tool_input
         .get("description")
         .and_then(Value::as_str)
-        .map(|d| utf16_slice(d, 120))
+        .map(|d| truncate_chars_head(d, 120))
         .unwrap_or_default();
     let str_or_null = |v: Option<&str>| v.map_or(Value::Null, |s| Value::String(s.to_string()));
     let mut entry = Map::new();
@@ -1178,9 +1135,9 @@ mod tests {
         assert_eq!(d["tier"], "advisor");
     }
 
-    // R5 port of test_model_guard.mjs rows 11/12/15/16 — the fail-open arms
-    // the existing malformed-input test never reaches, because `run_payload`
-    // always hands the hook a well-formed JSON object with a cwd.
+    // Rows 11/12/15/16 — the fail-open arms the existing malformed-input test
+    // never reaches, because `run_payload` always hands the hook a
+    // well-formed JSON object with a cwd.
     #[test]
     fn rows11_16_unparseable_and_non_object_stdin_fail_open() {
         let fx = fixture(&repo_config());
@@ -1233,9 +1190,8 @@ mod tests {
 
     #[test]
     fn missing_vendored_lib_is_silent_success() {
-        // Presence gate (bee-model-guard.mjs's existsSync on the vendored
-        // state.mjs): a host mid-vendoring gets no verdict rather than a
-        // wrong one.
+        // Presence gate (the onboarding marker): a host with no installed
+        // harness gets no verdict rather than a wrong one.
         let fx = fixture(&repo_config());
         std::fs::remove_file(fx.path().join(".bee").join("onboarding.json")).unwrap();
         let (code, stderr) = run_payload(
@@ -1288,7 +1244,7 @@ mod tests {
     }
 
     #[test]
-    fn description_is_truncated_to_120_utf16_units() {
+    fn description_is_truncated_to_120_chars() {
         let fx = fixture(&repo_config());
         let (code, _) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"model": "haiku", "description": "z".repeat(300)}}));
         assert_eq!(code, 0);

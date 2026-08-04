@@ -198,7 +198,7 @@ fn preamble(cmd: &str, pre_json: bool, t0: Instant) -> Result<Option<Ctx>, ExitC
         }
         Roots::None => return Err(emit_no_root_error(&cwd, cmd, pre_json, t0)),
     };
-    let Ok(drift) = check_manifest_drift(&root) else { return Ok(None) };
+    let drift = check_manifest_drift(&root);
     Ok(Some(Ctx { root, drift }))
 }
 

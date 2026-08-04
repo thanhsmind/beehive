@@ -11,7 +11,7 @@ use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
 use crate::verbs::reservations::{
     date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
-    js_numberify, js_strict_eq, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
+    js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
     Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
@@ -39,15 +39,6 @@ pub(crate) fn disp_or_idle(from: Option<&Value>) -> String {
         Some(v) if truthy(v) => js_disp(v),
         _ => "idle".to_string(),
     }
-}
-
-/// JS Array.prototype.sort default comparator (UTF-16 code units).
-pub(crate) fn js_sort(v: &mut [String]) {
-    v.sort_by(|a, b| {
-        a.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.encode_utf16().collect::<Vec<_>>())
-    });
 }
 
 /// splitList (bee.mjs): split on ',', JS-trim, drop empties.

@@ -1,9 +1,6 @@
-// bee feedback — native port of the feedback verb group (bee.mjs
-// handleFeedbackCount/Digest/Collect/Rank + lib/feedback.mjs's
-// collectFeedback/buildEntry/buildDigest/mergeDigests/clusterEntries/
-// rankClusters/normalizeTitle).
+// bee feedback — the feedback verb group.
 //
-// STILL DELEGATED TO NODE (strangler note):
+// STILL DELEGATED (returns None before any output):
 //   - `feedback collect` / `feedback rank` whenever `dogfood_repos` is a
 //     non-empty configured value: the foreign arm (realpath containment
 //     warnings, corrupt-foreign-digest skips, datamark neutralization, and
@@ -50,6 +47,7 @@ use crate::fsutil::{read_json, ReadJson};
 use crate::jsjson;
 use crate::registry::{check_manifest_drift, Drift};
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
+use crate::textutil::{code_unit_cmp, js_default_sort};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -96,11 +94,6 @@ pub(crate) fn js_truthy(v: &Value) -> bool {
         Value::String(s) => !s.is_empty(),
         _ => true,
     }
-}
-
-/// String.prototype.length / .slice unit: UTF-16 code units.
-pub(crate) fn utf16_len(s: &str) -> usize {
-    s.chars().map(char::len_utf16).sum()
 }
 
 /// True when re-serializing this parsed value via jsjson is provably
@@ -803,11 +796,7 @@ fn list_in_scope(real_root: &Path, rel: &str) -> Listing {
     // JS `names.sort()` — default comparator, i.e. UTF-16 code-unit order.
     // (Byte order diverges from it above the BMP, which the digest's entry
     // order would then inherit.)
-    names.sort_by(|a, b| {
-        a.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.encode_utf16().collect::<Vec<_>>())
-    });
+    js_default_sort(&mut names);
     Listing::Names(names)
 }
 
@@ -1146,13 +1135,13 @@ fn raw_title_str(c: &RawCandidate) -> &str {
     c.title.as_str().unwrap_or("")
 }
 
-/// capTitle: >200 UTF-16 units -> first 199 + '…'.
+/// capTitle: >200 CHARS -> first 199 + '…' (decision D3: char-based, not the
+/// historical UTF-16-unit count).
 fn cap_title(text: &str) -> String {
-    let units: Vec<u16> = text.encode_utf16().collect();
-    if units.len() <= MAX_TITLE {
+    if crate::textutil::char_len(text) <= MAX_TITLE {
         return text.to_string();
     }
-    format!("{}\u{2026}", String::from_utf16_lossy(&units[..MAX_TITLE - 1]))
+    format!("{}\u{2026}", crate::textutil::truncate_chars_head(text, MAX_TITLE - 1))
 }
 
 /// validFirstSeen: STRICT_ISO_DATE or null — never Date.parse's leniency.
@@ -1308,11 +1297,7 @@ fn counts_value(data: &CountsData) -> Value {
         }
     }
     // Object.keys(byKind).sort() — default JS sort, UTF-16 code units.
-    by_kind.sort_by(|a, b| {
-        a.0.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.0.encode_utf16().collect::<Vec<_>>())
-    });
+    by_kind.sort_by(|a, b| code_unit_cmp(&a.0, &b.0));
     let mut by_kind_map = Map::new();
     for (k, n) in by_kind {
         by_kind_map.insert(k, Value::from(n));
@@ -1347,11 +1332,7 @@ fn summary_line(data: &CountsData) -> String {
             None => by_reason.push((key, 1)),
         }
     }
-    by_reason.sort_by(|a, b| {
-        a.0.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.0.encode_utf16().collect::<Vec<_>>())
-    });
+    by_reason.sort_by(|a, b| code_unit_cmp(&a.0, &b.0));
     let summary = if by_reason.is_empty() {
         "none".to_string()
     } else {
@@ -1390,7 +1371,7 @@ fn run_count(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
             return Some(emit_no_root_error(&cwd, "feedback count", parsed.pre_json, t0))
         }
     };
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     let data = collect_counts(&root)?;
     let result = counts_value(&data);
     let text = format!("{}.", summary_line(&data));
@@ -1623,11 +1604,7 @@ fn digest_summary_line(digest: &Value) -> String {
             }
         }
     }
-    by_reason.sort_by(|a, b| {
-        a.0.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.0.encode_utf16().collect::<Vec<_>>())
-    });
+    by_reason.sort_by(|a, b| code_unit_cmp(&a.0, &b.0));
     let summary = if by_reason.is_empty() {
         "none".to_string()
     } else {
@@ -1668,7 +1645,7 @@ fn run_digest(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
             return Some(emit_no_root_error(&cwd, "feedback digest", parsed.pre_json, t0))
         }
     };
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     let digest = build_digest(&root)?;
     let mut out_path = root.clone();
     for part in out_rel.split(['/', '\\']) {
@@ -1700,7 +1677,7 @@ fn run_digest(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
 // — none of which is ported. Any non-empty dogfood_repos delegates.
 
 fn merge_digests(root: &Path) -> Option<Value> {
-    let config = crate::state::read_config_raw(root).ok()?;
+    let config = crate::state::read_config_raw(root);
     match config.get("dogfood_repos") {
         None | Some(Value::Null) => {}
         Some(Value::Array(a)) if a.is_empty() => {}
@@ -1727,7 +1704,7 @@ fn run_collect(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
             return Some(emit_no_root_error(&cwd, "feedback collect", parsed.pre_json, t0))
         }
     };
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     let digest = merge_digests(&root)?;
     // `merged.length` is always 0 on this arm, so the suffix is always empty.
     let text = format!("Merged digest — {}.", digest_summary_line(&digest));
@@ -1916,7 +1893,7 @@ fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
         value: Value,
         rank: f64,
         first_seen: String,
-        key_units: Vec<u16>,
+        key: String,
     }
     let mut ranked: Vec<Ranked> = clusters
         .into_iter()
@@ -1929,8 +1906,8 @@ fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
                 if let Some(Value::String(fs)) = e.get("first_seen") {
                     if !fs.is_empty()
                         && (earliest.is_none()
-                            || fs.encode_utf16().collect::<Vec<_>>()
-                                < earliest.as_ref().unwrap().encode_utf16().collect::<Vec<_>>())
+                            || code_unit_cmp(fs, earliest.as_ref().unwrap())
+                                == std::cmp::Ordering::Less)
                     {
                         earliest = Some(fs.clone());
                     }
@@ -1951,7 +1928,7 @@ fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
                 value: Value::Object(m),
                 rank,
                 first_seen: earliest.unwrap_or_default(),
-                key_units: c.key.encode_utf16().collect(),
+                key: c.key,
             }
         })
         .collect();
@@ -1959,13 +1936,8 @@ fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
         b.rank
             .partial_cmp(&a.rank)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| {
-                a.first_seen
-                    .encode_utf16()
-                    .collect::<Vec<_>>()
-                    .cmp(&b.first_seen.encode_utf16().collect::<Vec<_>>())
-            })
-            .then_with(|| a.key_units.cmp(&b.key_units))
+            .then_with(|| code_unit_cmp(&a.first_seen, &b.first_seen))
+            .then_with(|| code_unit_cmp(&a.key, &b.key))
     });
     ranked.into_iter().map(|r| r.value).collect()
 }
@@ -1981,7 +1953,7 @@ fn run_rank(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
             return Some(emit_no_root_error(&cwd, "feedback rank", parsed.pre_json, t0))
         }
     };
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     let digest = merge_digests(&root)?;
     let ranked = rank_clusters(cluster_entries(&digest));
     let top_word = match ranked.first() {
@@ -2239,9 +2211,11 @@ mod tests {
     }
 
     #[test]
-    fn js_trim_and_utf16_len() {
+    fn js_trim_and_char_len() {
         assert_eq!(js_trim("\u{feff} x \u{a0}"), "x");
-        assert_eq!(utf16_len("ab😀"), 4); // astral char = 2 UTF-16 units
+        // char_len counts CHARS, not UTF-16 units: an astral char is one
+        // char even though it is two UTF-16 code units (decision D3).
+        assert_eq!(crate::textutil::char_len("ab😀"), 3);
     }
 
     #[test]

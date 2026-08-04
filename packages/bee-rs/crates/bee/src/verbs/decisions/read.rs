@@ -9,7 +9,7 @@ use crate::jsjson;
 use crate::lock::{self, AcquireOnce};
 use crate::verbs::reservations::{
     date_parse_val, finish, jget, js_date_parse, js_disp, js_disp_opt, js_is_ws, js_number_flag,
-    js_numberify, js_quote, js_strict_eq, js_trim, keys_known, now_iso, parse_flags,
+    js_numberify, js_quote, js_trim, keys_known, now_iso, parse_flags,
     pseudo_uuid_v4, truthy, v_is_str, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use serde_json::{json, Map, Number, Value};
@@ -22,7 +22,9 @@ use std::time::Instant;
 
 // ─── the read model: overlay + activeDecisions (decisions.mjs) ─────────────
 
-/// JS Set over parsed JSON values (SameValueZero ≈ js_strict_eq here).
+/// A Vec-backed set over parsed JSON values, deduplicated by native
+/// `Value` equality (deep structural equality; JSON has no NaN literal, so
+/// there is no SameValueZero edge case to model here).
 pub(crate) struct VSet(pub(crate) Vec<Value>);
 
 impl VSet {
@@ -35,7 +37,7 @@ impl VSet {
         }
     }
     pub(crate) fn has(&self, v: &Value) -> bool {
-        self.0.iter().any(|x| js_strict_eq(x, v))
+        self.0.iter().any(|x| x == v)
     }
     pub(crate) fn has_opt(&self, v: Option<&Value>) -> bool {
         v.map(|v| self.has(v)).unwrap_or(false)
@@ -88,7 +90,7 @@ pub(crate) fn build_tag_overlay(events: &[Value]) -> Ex<Vec<(Value, Patch)>> {
                 _ => None,
             },
         };
-        if let Some(slot) = overlay.iter_mut().find(|(k, _)| js_strict_eq(k, &target)) {
+        if let Some(slot) = overlay.iter_mut().find(|(k, _)| k == &target) {
             slot.1 = patch;
         } else {
             overlay.push((target, patch));
@@ -103,7 +105,7 @@ pub(crate) fn apply_tag_overlay(event: &Value, overlay: &[(Value, Patch)]) -> Va
     let Some(id) = jget(event, "id") else {
         return event.clone();
     };
-    let Some((_, patch)) = overlay.iter().find(|(k, _)| js_strict_eq(k, id)) else {
+    let Some((_, patch)) = overlay.iter().find(|(k, _)| k == id) else {
         return event.clone();
     };
     let Value::Object(m) = event else {

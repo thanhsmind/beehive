@@ -28,6 +28,7 @@ mod roots;
 mod router;
 mod shell;
 mod state;
+mod textutil;
 mod verbs;
 mod version;
 

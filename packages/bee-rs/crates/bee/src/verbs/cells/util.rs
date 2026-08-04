@@ -145,15 +145,6 @@ pub(crate) fn js_json_or_undefined(v: Option<&Value>) -> String {
     }
 }
 
-/// JS default Array#sort comparator over strings (UTF-16 code-unit order).
-pub(crate) fn js_default_str_sort(items: &mut [String]) {
-    items.sort_by(|a, b| {
-        let au: Vec<u16> = a.encode_utf16().collect();
-        let bu: Vec<u16> = b.encode_utf16().collect();
-        au.cmp(&bu)
-    });
-}
-
 /// JSON.parse with JS number semantics. `strip_bom` mirrors readJson's BOM
 /// strip (the strict readers do NOT strip). Only two outcomes now:
 /// - Value: parsed and JS-number-normalized.

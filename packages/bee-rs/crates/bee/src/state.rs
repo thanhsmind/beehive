@@ -1,34 +1,19 @@
-// state — Rust port of the state-layer reads `status --brief` needs
-// (state.mjs readState / readConfig / bypassLevel / shipVisibility).
+// state — the state-layer reads `status --brief` needs (read_state /
+// read_config / bypass_level / ship_visibility).
 //
-// CUTOVER (2026-08-01). The strangler rule used to read: any input Node
-// handles via warn-with-V8-message (corrupt JSON) or via JS spread exotica (a
-// truthy non-object approved_gates) makes the native path bail with
-// `Bail::NeedsNode` before emitting anything, and the whole command re-runs
-// under Node. Node is gone. Both classes are native now:
+// Every read here is infallible and total:
 //
-//   * corrupt JSON — `fsutil::warn_corrupt_json` says what Node's warning
-//     said, in our words, and the read falls back to defaults exactly as
-//     `readJson(file, null)` did.
-//   * a truthy non-object `approved_gates` — the JS object spread is
-//     reproduced directly (see `spread_gates`), so no input shape is left
-//     without an answer.
-//
-// `Bail` survives as the error type of these signatures so the ~15 call sites
-// across the tree keep compiling unchanged; nothing constructs it any more.
+//   * corrupt JSON — `fsutil::warn_corrupt_json` logs a warning and the read
+//     falls back to defaults.
+//   * a non-object `approved_gates` — `spread_gates` (D2,
+//     docs/history/js-parity-cleanup/CONTEXT.md) merges only for the object
+//     shape; every other shape falls back to defaults, so no input shape is
+//     left without an answer.
 
 use crate::fsutil::{read_json, warn_corrupt_json, ReadJson};
 use crate::jsjson;
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
-
-#[allow(dead_code)]
-#[derive(Debug)]
-pub enum Bail {
-    /// No longer constructed — see the cutover note above. Kept so callers'
-    /// `Result<_, Bail>` plumbing stays untouched.
-    NeedsNode,
-}
 
 pub fn state_path(root: &Path) -> PathBuf {
     root.join(".bee").join("state.json")
@@ -54,7 +39,7 @@ pub struct BriefState {
     pub route: Value,
 }
 
-pub fn read_state_brief(root: &Path) -> Result<BriefState, Bail> {
+pub fn read_state_brief(root: &Path) -> BriefState {
     let state_file = state_path(root);
     let file_state = match read_json(&state_file) {
         ReadJson::Missing => None,
@@ -72,13 +57,13 @@ pub fn read_state_brief(root: &Path) -> Result<BriefState, Bail> {
 
     let default_phase = json!("idle");
     let Some(state) = file_state else {
-        return Ok(BriefState {
+        return BriefState {
             phase: default_phase,
             feature: Value::Null,
             mode: Value::Null,
             gates: default_gates(),
             route: Value::Null,
-        });
+        };
     };
 
     // { ...defaultState(), ...state } — file value wins whenever the KEY is
@@ -87,10 +72,9 @@ pub fn read_state_brief(root: &Path) -> Result<BriefState, Bail> {
         state.get(key).cloned().unwrap_or(default)
     };
 
-    // approved_gates: { ...defaults, ...(state.approved_gates || {}) }.
-    // Falsy (null/false/0/"") -> defaults. A truthy non-object spreads an
-    // exotic key set in JS, which `spread_gates` now reproduces instead of
-    // bailing (cutover note at the top of this file).
+    // approved_gates: an object merges its keys over the defaults; every
+    // other shape (missing/null/bool/number/string/array) falls back to the
+    // defaults (D2, docs/history/js-parity-cleanup/CONTEXT.md).
     let gates = spread_gates(state.get("approved_gates"));
 
     // coerceLegacyPhase: 'validating' -> 'planning' (D13).
@@ -99,7 +83,7 @@ pub fn read_state_brief(root: &Path) -> Result<BriefState, Bail> {
         phase = json!("planning");
     }
 
-    Ok(BriefState {
+    BriefState {
         phase,
         feature: pick("feature", Value::Null),
         mode: pick("mode", Value::Null),
@@ -109,58 +93,40 @@ pub fn read_state_brief(root: &Path) -> Result<BriefState, Bail> {
             None | Some(Value::Null) => Value::Null,
             Some(v) => v.clone(),
         },
-    })
+    }
 }
 
-/// `{ ...defaultGates(), ...(value || {}) }` for EVERY JS value, not just the
-/// object case. The spread copies own enumerable properties, so:
-///   * falsy (absent / null / false / 0 / "") — `|| {}` makes it the empty
-///     object: defaults, untouched.
-///   * an object — its keys win over the defaults, in insertion order.
-///   * an array — index keys "0".."n-1" carrying the elements.
-///   * a non-empty string — index keys "0".."n-1" carrying single characters.
-///   * any other truthy primitive (true, a non-zero number) — primitives have
-///     no own enumerable properties, so the spread copies nothing: defaults.
+/// Rust-native gate merge (D2, docs/history/js-parity-cleanup/CONTEXT.md):
+/// `approved_gates` merges over the defaults only when it is a JSON object —
+/// its keys win, in insertion order. EVERY other shape (missing, null, bool,
+/// number, string, array) yields the defaults untouched.
 ///
-/// This used to be `Bail::NeedsNode` for the last three cases, because the
-/// port refused to guess at JS spread semantics while Node could still answer.
-/// Divergence worth naming: a string is indexed here by Unicode scalar, where
-/// JS indexes by UTF-16 code unit — they differ only for astral characters in
-/// a value that is already nonsense (`approved_gates` holding a string).
-fn spread_gates(value: Option<&Value>) -> Map<String, Value> {
-    let mut merged = default_gates();
+/// This replaces two diverging JS-spread emulations: one that char/index-keyed
+/// strings and arrays, and one that bailed to a Node delegate that no longer
+/// exists. Neither the Rust store nor a legitimate writer ever produces a
+/// non-object `approved_gates`; a hand-corrupted state.json holding one used
+/// to surface char/index-indexed gate keys and now reads as defaults instead
+/// — a deliberate, logged behavior change, not a compatibility gap.
+pub(crate) fn spread_gates(value: Option<&Value>) -> Map<String, Value> {
     match value {
-        None | Some(Value::Null) | Some(Value::Bool(false)) => {}
-        Some(Value::String(s)) if s.is_empty() => {}
-        Some(Value::Number(n)) if n.as_f64() == Some(0.0) => {}
         Some(Value::Object(overlay)) => {
+            let mut merged = default_gates();
             for (k, v) in overlay {
                 merged.insert(k.clone(), v.clone());
             }
+            merged
         }
-        Some(Value::Array(items)) => {
-            for (i, v) in items.iter().enumerate() {
-                merged.insert(i.to_string(), v.clone());
-            }
-        }
-        Some(Value::String(s)) => {
-            for (i, c) in s.chars().enumerate() {
-                merged.insert(i.to_string(), Value::String(c.to_string()));
-            }
-        }
-        // true, or a non-zero number: nothing to copy.
-        Some(_) => {}
+        _ => default_gates(),
     }
-    merged
 }
 
 // ── config (gate_bypass / ship_visibility slice of readConfig) ─────────────
 
-/// mergeConfigOverlay: overlay wins; plain objects merge recursively; arrays
-/// replace wholesale; scalars replace.
-/// (pub(crate) since the cutover: hooks/compaction.rs's fail-open readConfig
-/// twin needs the SAME merge, and a second copy of it would be a second
-/// answer to "which value wins".)
+/// Overlay wins; plain objects merge recursively; arrays replace wholesale;
+/// scalars replace.
+/// (pub(crate): hooks/compaction.rs's fail-open config-read twin needs the
+/// SAME merge, and a second copy of it would be a second answer to "which
+/// value wins".)
 pub(crate) fn merge_config_overlay(base: &Value, overlay: &Value) -> Value {
     match overlay {
         Value::Array(items) => Value::Array(items.clone()),
@@ -188,23 +154,23 @@ pub(crate) fn merge_config_overlay(base: &Value, overlay: &Value) -> Value {
 
 /// Merged tracked+overlay config as a raw object (advisor key stripped like
 /// readConfig does; the normalize* steps don't touch the keys brief reads).
-pub fn read_config_raw(root: &Path) -> Result<Map<String, Value>, Bail> {
-    let read_obj = |file: PathBuf| -> Result<Option<Map<String, Value>>, Bail> {
+pub fn read_config_raw(root: &Path) -> Map<String, Value> {
+    let read_obj = |file: PathBuf| -> Option<Map<String, Value>> {
         match read_json(&file) {
-            ReadJson::Missing => Ok(None),
+            ReadJson::Missing => None,
             // readConfig's `readJson(file, {})` warned and fell back; a
             // corrupt config therefore reads as "no config here", exactly
             // like an absent one, and the merge continues.
             ReadJson::Corrupt => {
                 warn_corrupt_json(&file);
-                Ok(None)
+                None
             }
-            ReadJson::Parsed(Value::Object(m)) => Ok(Some(m)),
-            ReadJson::Parsed(_) => Ok(None),
+            ReadJson::Parsed(Value::Object(m)) => Some(m),
+            ReadJson::Parsed(_) => None,
         }
     };
-    let tracked = read_obj(root.join(".bee").join("config.json"))?.unwrap_or_default();
-    let overlay = read_obj(root.join(".bee").join("config.local.json"))?;
+    let tracked = read_obj(root.join(".bee").join("config.json")).unwrap_or_default();
+    let overlay = read_obj(root.join(".bee").join("config.local.json"));
     let mut merged = match overlay {
         Some(over) => match merge_config_overlay(&Value::Object(tracked), &Value::Object(over)) {
             Value::Object(m) => m,
@@ -213,19 +179,19 @@ pub fn read_config_raw(root: &Path) -> Result<Map<String, Value>, Bail> {
         None => tracked,
     };
     merged.shift_remove("advisor");
-    Ok(merged)
+    merged
 }
 
 /// hookEnabled: `config.hooks[name] !== false` over merged tracked+overlay
 /// config — enabled unless the file explicitly carries `false` (unknown
 /// names default enabled; DEFAULT_HOOKS are all true, so the merge with
 /// defaults never changes this predicate).
-pub fn hook_enabled(root: &Path, name: &str) -> Result<bool, Bail> {
-    let config = read_config_raw(root)?;
-    Ok(!matches!(
+pub fn hook_enabled(root: &Path, name: &str) -> bool {
+    let config = read_config_raw(root);
+    !matches!(
         config.get("hooks").and_then(|h| h.get(name)),
         Some(Value::Bool(false))
-    ))
+    )
 }
 
 pub fn bypass_level(config: &Map<String, Value>) -> &'static str {
@@ -266,7 +232,7 @@ mod tests {
     #[test]
     fn missing_state_yields_defaults() {
         let tmp = tempfile::tempdir().unwrap();
-        let s = read_state_brief(tmp.path()).ok().unwrap();
+        let s = read_state_brief(tmp.path());
         assert_eq!(s.phase, json!("idle"));
         assert_eq!(s.feature, Value::Null);
         assert_eq!(jsjson::stringify(&Value::Object(s.gates)),
@@ -277,7 +243,7 @@ mod tests {
     fn file_keys_override_defaults_and_legacy_phase_coerces() {
         let tmp = tempfile::tempdir().unwrap();
         write_state(tmp.path(), r#"{"phase":"validating","feature":"f1","approved_gates":{"shape":true,"extra":1}}"#);
-        let s = read_state_brief(tmp.path()).ok().unwrap();
+        let s = read_state_brief(tmp.path());
         assert_eq!(s.phase, json!("planning"));
         assert_eq!(s.feature, json!("f1"));
         // Default key order first, extras appended in file order.
@@ -285,14 +251,13 @@ mod tests {
             r#"{"context":false,"shape":true,"execution":false,"review":false,"extra":1}"#);
     }
 
-    /// CUTOVER: this used to assert `Err(Bail::NeedsNode)`. Node's readJson
-    /// warned and returned null, and defaultState() took over — so that is
-    /// what the native read does now, warning in our own words on stderr.
+    /// Corrupt state.json warns on stderr and falls back to the default
+    /// state.
     #[test]
     fn corrupt_state_warns_and_falls_back_to_defaults() {
         let tmp = tempfile::tempdir().unwrap();
         write_state(tmp.path(), "{broken");
-        let s = read_state_brief(tmp.path()).ok().expect("corrupt state must fail open");
+        let s = read_state_brief(tmp.path());
         assert_eq!(s.phase, json!("idle"));
         assert_eq!(s.feature, Value::Null);
         assert_eq!(s.mode, Value::Null);
@@ -310,10 +275,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
         std::fs::write(tmp.path().join(".bee").join("config.json"), "{broken").unwrap();
-        let cfg = read_config_raw(tmp.path()).ok().expect("corrupt config must fail open");
+        let cfg = read_config_raw(tmp.path());
         assert!(cfg.is_empty());
         assert_eq!(bypass_level(&cfg), "off");
-        assert!(hook_enabled(tmp.path(), "session-init").unwrap(), "unknown names default enabled");
+        assert!(hook_enabled(tmp.path(), "session-init"), "unknown names default enabled");
     }
 
     /// A corrupt OVERLAY leaves the tracked config standing, exactly as
@@ -328,35 +293,33 @@ mod tests {
         )
         .unwrap();
         std::fs::write(tmp.path().join(".bee").join("config.local.json"), "nope").unwrap();
-        let cfg = read_config_raw(tmp.path()).ok().unwrap();
+        let cfg = read_config_raw(tmp.path());
         assert_eq!(bypass_level(&cfg), "full");
     }
 
-    /// The JS object spread, for every shape `approved_gates` can hold. Each
-    /// expectation is what `node -p 'JSON.stringify({...d, ...(v||{})})'`
-    /// prints. These four truthy non-object cases used to bail to Node.
+    /// D2 (docs/history/js-parity-cleanup/CONTEXT.md): the Rust-native gate
+    /// merge, for every shape `approved_gates` can hold. An object merges its
+    /// keys over the defaults; every other shape — including the array/string
+    /// cases that used to spread to index-keyed JS exotica — falls back to
+    /// the defaults untouched.
     #[test]
-    fn approved_gates_spread_covers_every_js_shape() {
+    fn approved_gates_merge_is_object_or_defaults() {
         let defaults = r#"{"context":false,"shape":false,"execution":false,"review":false}"#;
-        let s = |v: Option<Value>| {
-            jsjson::stringify(&Value::Object(spread_gates(v.as_ref())))
-        };
+        let s = |v: Option<Value>| jsjson::stringify(&Value::Object(spread_gates(v.as_ref())));
         assert_eq!(s(None), defaults);
         assert_eq!(s(Some(json!(null))), defaults);
         assert_eq!(s(Some(json!(false))), defaults);
         assert_eq!(s(Some(json!(0))), defaults);
         assert_eq!(s(Some(json!(""))), defaults);
-        // Primitives carry no own enumerable properties.
         assert_eq!(s(Some(json!(true))), defaults);
         assert_eq!(s(Some(json!(7))), defaults);
-        // Arrays and strings spread to index keys.
+        // Exotic shapes that used to spread to index keys now fall to defaults.
+        assert_eq!(s(Some(json!([true, false]))), defaults);
+        assert_eq!(s(Some(json!("ab"))), defaults);
+        // An object still merges its keys over the defaults.
         assert_eq!(
-            s(Some(json!([true, false]))),
-            r#"{"context":false,"shape":false,"execution":false,"review":false,"0":true,"1":false}"#
-        );
-        assert_eq!(
-            s(Some(json!("ab"))),
-            r#"{"context":false,"shape":false,"execution":false,"review":false,"0":"a","1":"b"}"#
+            s(Some(json!({"context": true}))),
+            r#"{"context":true,"shape":false,"execution":false,"review":false}"#
         );
     }
 
@@ -365,11 +328,11 @@ mod tests {
     fn exotic_approved_gates_no_longer_bails() {
         let tmp = tempfile::tempdir().unwrap();
         write_state(tmp.path(), r#"{"phase":"executing","approved_gates":"ab"}"#);
-        let s = read_state_brief(tmp.path()).ok().expect("exotic gates must not bail");
+        let s = read_state_brief(tmp.path());
         assert_eq!(s.phase, json!("executing"));
         assert_eq!(
             jsjson::stringify(&Value::Object(s.gates)),
-            r#"{"context":false,"shape":false,"execution":false,"review":false,"0":"a","1":"b"}"#
+            r#"{"context":false,"shape":false,"execution":false,"review":false}"#
         );
     }
 
@@ -381,9 +344,6 @@ mod tests {
         assert_eq!(jsjson::stringify(&merged), r#"{"gate_bypass":"full","o":{"a":1,"b":3}}"#);
     }
 
-    // R5 port of scripts/tests/test_ship_visibility.mjs — the normalizer had
-    // no test at all; only its absent→"off" case was incidentally asserted
-    // from the status renderer.
     #[test]
     fn ship_visibility_passes_the_two_known_values_and_normalizes_the_rest() {
         let cfg = |v: Value| -> Map<String, Value> {
