@@ -545,6 +545,63 @@ pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
     })
 }
 
+// ─── D4 (route-record warn-to-deny escalation, docs/history/counter-teeth
+// CONTEXT.md) ────────────────────────────────────────────────────────────
+//
+// D3 gave every claim on a no-route feature the same stderr warning,
+// forever. D4 spends that warning once per feature: the FIRST `cells claim`
+// (or `dispatch prepare --claim`, the other door onto claim_cell_from_flags)
+// against a feature with no route record still only warns; the SECOND and
+// each later one refuses outright, naming "bee state route --set" as the
+// remedy (D5: safe to flip now that ct-1 ported the granted-worktree arm the
+// remedy needs).
+//
+// The count has to survive a claim being unclaimed and reclaimed — of the
+// SAME cell, not just a different one in the same feature. Neither existing
+// claim-adjacent field can carry that: release_trace() (trace.rs) nulls a
+// cell's own trace.claimed_at back to null on every unclaim, and
+// claim_cell_file (claims.rs) always stamps a brand-new claim file with
+// fence_epoch=1 on the next O_EXCL claim — both are scoped to "is this ONE
+// cell claimed right now", not "how many times has this feature been
+// claimed into while routeless". So this is its own small per-feature
+// counter, persisted beside claims_dir under the control root (msn-18b:
+// control-plane, the same root every claim/session file already resolves
+// through) and bumped ONLY after a claim actually succeeds — a refused
+// claim never advances it, and a different feature's counter file is never
+// touched by this one.
+pub(crate) fn no_route_claim_counts_dir(control: &Path) -> PathBuf {
+    control.join(".bee").join("no_route_claims")
+}
+
+pub(crate) fn no_route_claim_count_path(control: &Path, feature: &str) -> MR<PathBuf> {
+    Ok(no_route_claim_counts_dir(control).join(format!("{}.json", require_id(feature, "feature id")?)))
+}
+
+/// How many cells have already been claimed for `feature` while it had no
+/// route record. 0 when the marker file is absent, unreadable, or malformed
+/// — a corrupt counter fails open to "first claim", it never blocks a claim
+/// door on its own bookkeeping.
+pub(crate) fn no_route_claim_count(control: &Path, feature: &str) -> MR<u64> {
+    let file = no_route_claim_count_path(control, feature)?;
+    let Ok(text) = std::fs::read_to_string(&file) else { return Ok(0) };
+    let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&text) else { return Ok(0) };
+    Ok(match m.get("count") {
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(0),
+        _ => 0,
+    })
+}
+
+/// Records that `feature` just had another cell claimed with no route
+/// record on file, advancing the persisted count by exactly one.
+pub(crate) fn bump_no_route_claim_count(control: &Path, feature: &str) -> MR<u64> {
+    let next = no_route_claim_count(control, feature)? + 1;
+    let file = no_route_claim_count_path(control, feature)?;
+    let _ = std::fs::create_dir_all(no_route_claim_counts_dir(control));
+    transient_fs_retry(|| write_json_atomic(&file, &json!({ "feature": feature, "count": next })))
+        .map_err(|e| Fail::Thrown(format!("{e}")))?;
+    Ok(next)
+}
+
 /// claimCellFromFlags's product — bee.mjs returns `{cell, sessionId}`.
 ///
 /// `policy` has no variant here on purpose: `applyWritePolicy` runs with
@@ -670,6 +727,24 @@ pub(crate) fn claim_cell_from_flags(
             }
         }
 
+        // D4: decided BEFORE the claim door opens — a refusal here must
+        // never create a claim file or mutate the cell record at all. The
+        // feature read is the same pre-read `cell_for_policy` the budget
+        // check below reuses, so this can never see a different cell than
+        // the one about to be claimed.
+        let feature_for_route = cell_for_policy.as_ref().and_then(|c| c.get("feature")).cloned();
+        let had_route_before_claim = claimed_feature_has_route(&root, feature_for_route.as_ref())?;
+        if !had_route_before_claim {
+            if let Some(Value::String(feature_name)) = &feature_for_route {
+                let already_warned = no_route_claim_count(&control, feature_name)?;
+                if already_warned >= 1 {
+                    return Err(Fail::Thrown(format!(
+                        "claim: cell \"{id}\" refused — feature \"{feature_name}\" still has no route record, and an earlier claim already spent this feature's one-time warning (D4: warn once, then refuse). FIX: bee state route --set --class <c> --lane <l> --flags <f> --files <n> to record the triage, then retry."
+                    )));
+                }
+            }
+        }
+
         // claimCellCrossSession (shared with claim-next — see its own comment).
         let session = session_id.clone();
         let cell_id = js_trim(&id).to_string();
@@ -688,10 +763,15 @@ pub(crate) fn claim_cell_from_flags(
             }
         };
         let _ = &cell_id;
-        // explicit-triage D3 soft route warning (stderr, never a refusal).
-        if !claimed_feature_has_route(&root, claimed.get("feature"))? {
+        // explicit-triage D3/D4 soft route warning — now spent once per
+        // feature; the NEXT no-route claim is refused above instead of
+        // warned again.
+        if !had_route_before_claim {
+            if let Some(Value::String(feature_name)) = &feature_for_route {
+                bump_no_route_claim_count(&control, feature_name)?;
+            }
             eprint!(
-                "WARNING: cell \"{}\" claimed for feature \"{}\" with no route record — run \"bee state route --set --class <c> --lane <l> --flags <f> --files <n>\" to record the triage (D3, soft enforcement).\n",
+                "WARNING: cell \"{}\" claimed for feature \"{}\" with no route record — run \"bee state route --set --class <c> --lane <l> --flags <f> --files <n>\" to record the triage (D3, soft enforcement; the next no-route claim for this feature will be refused — D4).\n",
                 js_string_or_undefined(claimed.get("id")),
                 js_string_or_undefined(claimed.get("feature"))
             );
