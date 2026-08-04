@@ -2096,6 +2096,144 @@ use std::time::Instant;
         assert!(read_cell_norm(root, "cyc-b").ok().unwrap().is_none());
     }
 
+    // ── D3: no cells before the gate (docs/history/hook-teeth CONTEXT.md) ──
+    // Oracle: none — new mechanical enforcement. D7's sequencing law: the
+    // resolution primitive (`gated_add_refusal`) is proven on its own FIRST
+    // — lane vs. default precedence, docs-lane exemption, unknown-feature
+    // "no opinion" — before it is exercised through the whole-batch add
+    // report the refusal actually wires into.
+
+    fn write_lane_record(root: &Path, feature: &str, phase: &str, mode: Option<&str>, execution: bool) {
+        let dir = lanes_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = json!({
+            "feature": feature,
+            "phase": phase,
+            "mode": mode,
+            "approved_gates": {"execution": execution},
+        });
+        std::fs::write(dir.join(format!("{feature}.json")), jsjson::stringify_pretty(&body)).unwrap();
+    }
+
+    fn write_default_state(root: &Path, feature: &str, phase: &str, mode: Option<&str>, execution: bool) {
+        let dir = root.join(".bee");
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = json!({
+            "feature": feature,
+            "phase": phase,
+            "mode": mode,
+            "approved_gates": {"execution": execution},
+        });
+        std::fs::write(bstate::state_path(root), jsjson::stringify_pretty(&body)).unwrap();
+    }
+
+    fn addable_for(id: &str, feature: &str) -> Value {
+        let mut c = addable(id);
+        c["feature"] = json!(feature);
+        c
+    }
+
+    #[test]
+    fn gated_add_refusal_resolves_phase_and_gate_lane_beats_default_unknown_no_opinion() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Unknown feature: no lane record, no default state.json at all —
+        // "no opinion", never a guess.
+        assert!(gated_add_refusal(root, "nowhere").unwrap().is_none());
+
+        // Lane record, gated (planning) + unapproved -> refused, naming
+        // both the feature and the merged-gate remedy.
+        write_lane_record(root, "gated-lane", "planning", None, false);
+        let reason = gated_add_refusal(root, "gated-lane").unwrap().unwrap();
+        assert!(reason.contains("gated-lane"), "{reason}");
+        assert!(reason.contains("bee state gate --merge --approved true"), "{reason}");
+
+        // Same lane, execution now approved -> allowed.
+        write_lane_record(root, "gated-lane", "planning", None, true);
+        assert!(gated_add_refusal(root, "gated-lane").unwrap().is_none());
+
+        // swarming is not a gated phase, even with execution false.
+        write_lane_record(root, "swarming-lane", "swarming", None, false);
+        assert!(gated_add_refusal(root, "swarming-lane").unwrap().is_none());
+
+        // exploring is gated too, same as planning.
+        write_lane_record(root, "exploring-lane", "exploring", None, false);
+        assert!(gated_add_refusal(root, "exploring-lane").unwrap().is_some());
+
+        // A docs-lane record (mode "docs") is exempt regardless of phase or
+        // gate.
+        write_lane_record(root, "docs-lane", "planning", Some("docs"), false);
+        assert!(gated_add_refusal(root, "docs-lane").unwrap().is_none());
+
+        // Lane beats default: the lane record's own gated+unapproved state
+        // wins even when the default state.json disagrees (approved) for
+        // the very same feature.
+        write_lane_record(root, "lane-wins", "planning", None, false);
+        write_default_state(root, "lane-wins", "swarming", None, true);
+        assert!(
+            gated_add_refusal(root, "lane-wins").unwrap().is_some(),
+            "the lane record must win over the default pipeline"
+        );
+
+        // No lane record at all: the default state.json is consulted ONLY
+        // when its own feature names this same feature.
+        write_default_state(root, "default-only", "planning", None, false);
+        assert!(gated_add_refusal(root, "default-only").unwrap().is_some());
+        assert!(
+            gated_add_refusal(root, "some-other-feature").unwrap().is_none(),
+            "a default state.json naming a DIFFERENT feature is no opinion"
+        );
+    }
+
+    #[test]
+    fn add_cells_refuses_whole_batch_when_target_feature_is_gated_and_unapproved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        write_lane_record(root, "gate-add", "planning", None, false);
+        let batch = vec![addable_for("ga-1", "gate-add")];
+        let (ok, rows, normalized) = build_add_cells_report(root, &batch).unwrap();
+        assert!(!ok);
+        assert!(!rows[0].ok);
+        assert!(
+            rows[0]
+                .problems
+                .iter()
+                .any(|p| p.contains("gate-add") && p.contains("bee state gate --merge --approved true")),
+            "{:?}",
+            rows[0].problems
+        );
+        assert!(normalized.is_none());
+        assert!(
+            read_cell_norm(root, "ga-1").ok().unwrap().is_none(),
+            "a gated refusal writes nothing"
+        );
+
+        // Execution approved -> allowed.
+        write_lane_record(root, "gate-add", "planning", None, true);
+        let (ok, rows, normalized) = build_add_cells_report(root, &batch).unwrap();
+        assert!(ok, "{:?}", rows.iter().flat_map(|r| r.problems.clone()).collect::<Vec<_>>());
+        assert!(normalized.is_some());
+
+        // swarming phase -> allowed even with execution still false.
+        write_lane_record(root, "gate-add", "swarming", None, false);
+        let (ok, _, _) = build_add_cells_report(root, &batch).unwrap();
+        assert!(ok);
+
+        // Mixed batch: one gated-feature cell alongside one open-feature
+        // cell — the whole batch refuses (nothing written), and only the
+        // gated cell's row names the gated feature.
+        write_lane_record(root, "gate-add", "planning", None, false);
+        let mixed = vec![addable_for("mix-open", "open-feature"), addable_for("mix-gated", "gate-add")];
+        let (ok, rows, normalized) = build_add_cells_report(root, &mixed).unwrap();
+        assert!(!ok);
+        assert!(rows[0].ok && rows[0].problems.is_empty(), "the open feature's own row carries no gate problem");
+        assert!(!rows[1].ok);
+        assert!(rows[1].problems.iter().any(|p| p.contains("gate-add")));
+        assert!(normalized.is_none(), "one gated cell refuses the whole batch");
+    }
+
     // ── verify:"none" (R5): the no-test-repo sentinel ─────────────────────
     // Oracle: lib/cells.mjs assertVerifySentinelAllowed (decision 55b951e1) —
     // the sentinel is accepted only where the repo has declared itself.

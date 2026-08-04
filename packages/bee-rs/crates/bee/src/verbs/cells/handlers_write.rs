@@ -95,6 +95,66 @@ pub(crate) fn emit_manifest_lint_warnings(cells: &[Value]) {
 
 // ── cells add ──────────────────────────────────────────────────────────────
 
+// ─── D3 (no cells before the gate, docs/history/hook-teeth CONTEXT.md) ────
+//
+// `cells add` refuses (whole batch, same as every other addCells problem)
+// when the target CELL's feature is gated — phase "exploring" or "planning"
+// — and that feature's OWN approved_gates.execution is not true.
+//
+// Lane-aware, mirroring plan_freeze_shape_approved's precedence (D1,
+// hooks/write_guard/checks.rs): `.bee/lanes/<feature>.json` wins when it
+// parses as an object naming this same feature; the default `.bee/
+// state.json` is consulted ONLY when its own `feature` field names this
+// same feature too — never borrowed for a feature it doesn't name (unlike
+// claim's `default_gate_approved`, which floats the default pipeline's gate
+// over every lane-less feature; D3 draws the line tighter). A mismatched,
+// corrupt, or nowhere-found resolution is "no opinion" — an unknown feature
+// (a greenfield add, no route or lane taken yet) is always allowed, never
+// guessed at. A docs-lane record (`mode` "docs") is exempt regardless of
+// phase or gate — docs-lane work never gates on execution.
+pub(crate) fn gated_add_refusal(root: &Path, feature: &str) -> MR<Option<String>> {
+    let Some(id) = lane_feature_ok(feature) else { return Ok(None) };
+    let lane_file = lanes_dir(root).join(format!("{id}.json"));
+    let resolved: Option<(Value, Value, bool)> = match read_json(&lane_file) {
+        ReadJson::Parsed(Value::Object(m)) if matches!(m.get("feature"), Some(Value::String(f)) if *f == id) => {
+            let phase = m.get("phase").cloned().unwrap_or_else(|| Value::String("idle".into()));
+            let mode = m.get("mode").cloned().unwrap_or(Value::Null);
+            let approved = matches!(
+                m.get("approved_gates").and_then(|g| g.as_object()).and_then(|g| g.get("execution")),
+                Some(Value::Bool(true))
+            );
+            Some((phase, mode, approved))
+        }
+        // Corrupt or present-but-mismatched (names a different feature): no
+        // opinion, exactly like plan_freeze_shape_approved's own corrupt arm
+        // — mutation doors refuse loudly elsewhere; a display-shaped read
+        // like this one never guesses.
+        ReadJson::Parsed(_) | ReadJson::Corrupt => None,
+        ReadJson::Missing => {
+            let state = bstate::read_state_brief(root).map_err(|_| Fail::Delegate)?;
+            match &state.feature {
+                Value::String(f) if *f == id => {
+                    let approved = matches!(state.gates.get("execution"), Some(Value::Bool(true)));
+                    Some((state.phase.clone(), state.mode.clone(), approved))
+                }
+                _ => None,
+            }
+        }
+    };
+    let Some((phase, mode, approved)) = resolved else { return Ok(None) };
+    if matches!(&mode, Value::String(s) if s == "docs") {
+        return Ok(None);
+    }
+    let gated = matches!(&phase, Value::String(s) if s == "exploring" || s == "planning");
+    if !gated || approved {
+        return Ok(None);
+    }
+    Ok(Some(format!(
+        "addCells: feature \"{id}\" is gated (phase \"{}\") and its execution gate is not approved — D3: no cells before the gate. FIX: get the merged shape+execution gate approved (`bee state gate --merge --approved true`) for feature \"{id}\", then retry.",
+        jsjson::js_to_string(&phase)
+    )))
+}
+
 /// buildAddCellsReport row.
 pub(crate) struct AddReportRow {
     pub(crate) id: String,
@@ -115,6 +175,15 @@ pub(crate) fn build_add_cells_report(root: &Path, cells: &[Value]) -> MR<(bool, 
             Ok(()) => {}
             Err(Fail::Thrown(message)) => problems.push(message),
             Err(Fail::Delegate) => return Err(Fail::Delegate),
+        }
+        // D3: gated-phase refusal folds into the SAME whole-batch problem
+        // list every other addCells check uses — one gated cell fails the
+        // whole batch, nothing written, exactly like a duplicate id or a
+        // batch-wide cycle.
+        if let Some(Value::String(feature)) = cell.get("feature") {
+            if let Some(reason) = gated_add_refusal(root, feature)? {
+                problems.push(reason);
+            }
         }
         if let Some(Value::String(cid)) = cell.get("id") {
             if !cid.is_empty() {
@@ -262,6 +331,14 @@ pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<
             return Ok(Out::Emit(Value::Array(normalized), text, 0));
         }
         validate_new_cell(&root, &payload)?;
+        // D3: the single-cell shape is the same "cells add" door as the
+        // batch array — one cell IS a batch of one, so it takes the same
+        // gated-phase refusal.
+        if let Some(Value::String(feature)) = payload.get("feature") {
+            if let Some(reason) = gated_add_refusal(&root, feature)? {
+                return Err(Fail::Thrown(reason));
+            }
+        }
         let normalized = normalize_new_cell(&payload)?;
         assert_no_cycle(&root, "addCell", std::slice::from_ref(&normalized))?;
         write_cell(&root, &normalized)?;
