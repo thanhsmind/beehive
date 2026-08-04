@@ -48,7 +48,17 @@ the cell's `trace`, one git commit.
   tier to satisfy, no red-first evidence flag, and no `cells verify` step: the
   cell's own `verify` field is plan text MAIN runs once at feature close
   (`verify_owner`), never the worker.
-- **Never build on a red base** — a red is its own fix-first cell.
+- **Never build on a red base** — a red is its own fix-first cell. The claim door
+  refuses against a recorded red run unless it carries `--fix-first "<reason>"`.
+- **Commit before you cap.** A cap on a cell that changed files refuses unless a
+  commit in the last 50 carries the trailer `cell: <id>`; `--commit-pending
+  "<reason>"` is the one recorded exception. On a `small`+ lane the cap also refuses
+  when `trace.worker` names no registered execution worker, unless it carries
+  `--inline-reason`.
+- **`bee finish` may run from the feature's worktree.** It resolves the cell and its
+  claim at the main store while running the declared tests in the worktree's own
+  directory — every other mutating `cells` verb still refuses there and names the
+  main checkout.
 - **No stubs, TODO-only, or dead code.**
 - **Deviation has four answers**: a bug in touched code → fix it and record the
   deviation; a missing piece the outcome depends on → add it and record; blocking

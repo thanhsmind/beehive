@@ -55,7 +55,9 @@ not any feature — their already-closed state stays untouched.
 - **Gate bypass never creates or auto-approves a review session** — only the merge
   question, and only when P1=0 and UAT all pass.
 - **Never continue past open P1s** without explicit user acknowledgment. Silence is
-  not acknowledgment.
+  not acknowledgment — and `reviews record` refuses an `approved` decision while any
+  P1 is unnamed: every open P1 must appear in `p1_resolutions[]` with the cell that
+  fixes it. `blocked` and `pending` decisions record freely.
 
 ## Source
 `skills/bee-reviewing/SKILL.md` + `references/reviewing-reference.md`;

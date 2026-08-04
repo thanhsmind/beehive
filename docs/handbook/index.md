@@ -49,6 +49,7 @@ the Qualify move of `bee-shaping` (unattended triage of a backlog row),
 | How an independent review is run, findings graded, merge approved | [reviewing](stages/reviewing.md) |
 | A runtime file's schema (`state.json`, `cells`, `decisions.jsonl`, …) | [register.md](register.md) |
 | The CLI's two surfaces, the flow verbs, the refusal taxonomy | [register.md](register.md#the-cli--how-registers-are-mutated) |
+| Which door refuses an operation, and what its one escape hatch is | [register.md](register.md#the-doors-that-refuse) |
 | Multisession state: workflow records, leases, handoff mailboxes, worktrees | [register.md](register.md#the-control-plane-beeruntime) |
 | Craft content — how to plan, test, review, document, debug well | `expertise/` (routed from its own `INDEX.md`) — never a stage page |
 | Using this handbook to localize an edit before touching code | [using-as-planner.md](using-as-planner.md) |

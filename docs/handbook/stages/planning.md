@@ -47,12 +47,16 @@ source edits happen until `approved_gates.execution` is true.
 
 ## Key rules
 - **The route is mechanical flag-counting**, and it runs first. Re-route upward on
-  new evidence at any time; de-escalate only on cited evidence.
+  new evidence at any time; de-escalate only on cited evidence — and the demotion is
+  validated, not trusted: `high-risk` never demotes, a hard-gate flag never demotes,
+  and a feature demotes at most once, ever.
 - **The SMALLER PATH check runs in every lane** — one inline question, one line of
   evidence: is there a cheaper shape that still honors every locked decision? FAIL
   → redraft. Standard/high-risk add the review wave before the gate.
 - **Once approved, `plan.md` is frozen** — a stamp may follow, a content edit may
-  not. The next slice is shaped as new work; an approved plan is never reopened.
+  not. The next slice is shaped as new work; an approved plan is never reopened. The
+  write guard enforces it: an edit to `docs/history/<feature>/plan.md` is denied once
+  that feature's shape gate is approved, whoever is editing.
 - **Cells only for the current slice** — a future-slice cell does not exist yet.
 - **A user-visible surface makes slice 1 a walking skeleton** — end to end, real
   behavior, no stubs.

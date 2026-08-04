@@ -55,6 +55,15 @@ Writes onboarding state and gate approvals (`bee gate`).
 - **The hook is a safety net, not the authority** — an unblocked write is not an
   approved write. Route through hive *before* touching source, every time.
 - **Never build on a red base** — a red result is the next work item, never a base.
+  `cells claim` enforces it: a claim against a recorded red run refuses unless it
+  carries `--fix-first "<reason>"`.
+- **A handoff is adopted only at a fresh-session boundary.** `state handoff adopt`
+  refuses from a resumed or compacted session, and never adopts a `pause` record —
+  those are presented to the user, who decides. A session with no recorded start
+  source warns and proceeds.
+- **The capture queue turns into a blocker on its own.** At 10 pending stubs, or one
+  older than 7 days, `bee orient` moves the queue out of its offer line and into
+  `work.blockers[]`.
 - **Onboarding is a three-step contract**: missing or stale → `bee onboard
   --repo-root <root> --json`; `changes_needed` → summarize, get approval, re-run
   with `--apply`, never silently; `blocked_*` → zero mutations, surface `versions`.

@@ -66,6 +66,11 @@ reservation conflict the claim is unwound and nothing is left half-done),
   in-flight workers.
 - At ~65% context, write `.bee/HANDOFF.json` and pause cleanly — never push through
   the budget mid-wave. Finishing a unit is never on its own a reason to stop.
+- **The doors here have teeth.** A claim onto a red base, a `small`+ cap with no
+  registered execution worker, a cap with no `cell: <id>` commit trailer, and a
+  ceiling tier past the 40% budget each refuse by name — see
+  [the doors that refuse](../register.md#the-doors-that-refuse) for each one's
+  single escape hatch.
 
 ## Source
 `skills/bee-swarming/SKILL.md` ("Orchestrate") + `references/swarming-reference.md`

@@ -9,7 +9,8 @@ invariants govern all of them:
    as friction (`bee backlog add`), then edited by hand — never silently.
 2. **State is the truth the hook cannot see.** The write-guard hook is a net; the
    phase and gate fields below are what actually decide whether work may proceed.
-   Its hard direct-edit deny list is *narrower* than the rule — `.bee/state.json`,
+   Its hard direct-edit deny list is *narrower* than the rule — any `.json` under
+   `.bee/cells/` or `.bee/lanes/`, plus `.bee/state.json`, `.bee/onboarding.json`,
    `.bee/backlog.jsonl`, `docs/backlog.md`, the two `.bee/runtime/` ledgers, and
    the companion marker, each named with the verb that owns it. Everything else in
    `.bee/` is held by discipline, not by the guard. Silence is never permission.
@@ -23,10 +24,11 @@ file marked *projection* below is derived from it.
 
 | Path | Holds |
 |------|-------|
-| `runtime/workflows/<wf-id>/state.json` | the workflow record (truth): `id`, `feature`, `phase`, `mode`, `plan_rev`, `gates` (each `{approved, approved_for_plan_rev}`), `route`, `feature_verify`, `summary`, `next_action`, `status`, `created_at` |
+| `runtime/workflows/<wf-id>/state.json` | the workflow record (truth): `id`, `feature`, `phase`, `mode`, `plan_rev`, `gates` (each `{approved, approved_for_plan_rev}`), `route`, `summary`, `next_action`, `status`, `created_at` (older records also carry a `feature_verify` object — legacy residue of the retired `commands.verify`; no code reads or writes it) |
 | `runtime/leases/cells/<cell-id>.json` · `runtime/leases/paths/<prefix>/<hash>.json` | sharded per-resource leases (exclusive/advisory) — replace the monolithic reservations store |
 | `runtime/handoffs/<wf-id>/<seq>.json` | per-workflow handoff mailbox — one workflow pausing never blocks another |
 | `runtime/workspaces/` · `cross-worktree-holds.json` · `worktree-grants.json` | worktree registry, path-keyed cross-checkout holds, and the grants `bee worktree new/register` issue |
+| `runtime/integration/queue/<seq>.json` | the durable merge queue `bee worktree merge` drains, one file per queued worktree, plus the processor lease that keeps two mergers from draining it at once |
 
 The data plane (cells in flight, logs, tmp) stays isolated per worktree. Every
 state verb resolves the live workflow's record first.
@@ -57,6 +59,13 @@ of the live workflow record, kept for compatibility. Same keys as before:
 joined with their workflow id and cell claims. The `workers` array is vestigial
 and `state worker add/update/remove/clear/prune` are compatibility no-ops.
 
+> **Open gap (as of 2.1.9).** One door disagrees: the `small`+ cap guard reads the
+> stored `workers[]` array to decide whether an execution worker was registered
+> ([below](#the-doors-that-refuse)), while multisession-native D6 says that array is
+> display-only and no gate treats it as truth. The door ships as written; re-anchoring
+> it onto the derived view is filed work. Recorded as a disagreement on purpose — the
+> spec is not rewritten to match whatever shipped.
+
 Written by: every stage, via `state set --owner <phase>`, `bee gate`,
 `state scribing-run`, `state compounding-run`, `state start-feature`,
 `bee route --set`, `state advisor-ref record` — each verb mutates the live
@@ -69,14 +78,20 @@ Per-repo configuration.
 | Key | Holds |
 |-----|-------|
 | `commands` | `{setup, start, test}` shell commands. **`test` is the single declaration of how the project is tested** (a string or an array run in order) — the one command the green base check, every cap, close, merge, and CI all run. A `"none"` sentinel means the gate is deliberately disabled |
-| `hooks` | toggle map: `session-init`, `prompt-context`, `state-sync`, `chain-nudge`, `session-close`, `write-guard` — each default-on |
+| `hooks` | toggle map over the nine handlers: `session-init`, `prompt-context`, `state-sync`, `chain-nudge`, `session-close`, `write-guard`, `model-guard`, `tools-logger`, `codex-subagent-audit` — each default-on |
+| `guards` | write-guard tuning: `idle_gate`, `max_read_lines` |
 | `gate_bypass` | `off` · `normal` · `full` · `total` — the opt-in gate autopilot level |
 | `models` | per-runtime tier→model map: `{claude:{extraction, generation, review, advisor}, codex:{…}}`. A tier may be an object `{kind:"cli", command, promptVia}` — an external gather-only executor |
-| `lanes`, `capabilities` | per-repo overrides |
+| `product_root` | subdirectory the product lives in, when the repo root is not it — the product-file count that picks the lane is measured against it |
+| `worktree_first` | whether a code-touching route must open its feature worktree before execution |
+| `cells_archive_on_close` | default true — a capped cell is relocated to `.bee/cells/archive/<feature>/` at close |
+| `ship_visibility` | how much of the ship line a session prints |
+| `dogfood_repos` | the foreign repos `bee feedback` collects a digest from |
 
 Read by hive (bypass level), planning (test scoping), swarming (model tiers),
 `bee test` / `bee cells finish` / `bee close` (`commands.test`), and
-`bee worktree merge` (`commands.test`).
+`bee worktree merge` (`commands.test`). `.bee/config-sample.json` is the annotated
+copy of the whole schema — its `_doc` block is the per-key contract.
 
 **Config is the one hand-edited register.** The `config get/set/unset/validate`
 verbs are [declared but not built](#declared-but-not-built), and `config.json` is
@@ -108,7 +123,7 @@ One unit of executable work — the atom the swarm dispatches. One file per cell
 | `deps` | cell ids that must cap first |
 | `tier` | dispatch tier (`generation`, …) |
 | `status` | `open` · `claimed` · `capped` · `blocked` · `dropped` |
-| `trace` | populated on finish: `{worker, outcome, files_changed[], deviations[], friction, behavior_change, capped_at, warnings[], tests, results, ran_at, attempts[], budget_resets[]}` |
+| `trace` | populated on finish: `{worker, outcome, files_changed[], deviations[], friction, behavior_change, capped_at, warnings[], tests, results, ran_at, attempts[], budget_resets[], claim_session, claimed_at, verify_passed, verify_output, verification_evidence}` |
 
 `trace.tests` is `"green"` when the declared suite ran and passed — with
 `trace.results` pointing at `.bee/logs/test-results.json` and `trace.ran_at`
@@ -119,6 +134,8 @@ were deleted with the proof-economy machinery. A red finish appends a
 
 Created by planning (`bee cells add --stdin`, whole slice in one call), mutated by
 swarming/executing (`cells claim` / `bee finish` / `cells block` / `cells reopen` / …).
+At close, `cells_archive_on_close` (default true) moves capped cells to
+`.bee/cells/archive/<feature>/`, so an old cell id resolves there, not here.
 
 ### `.bee/claims/<cell-id>.json`
 Atomic single-winner cell claims — TTL plus heartbeat on every claim path, typed
@@ -250,6 +267,7 @@ the next action in plain language.
 | `bee capture add` · `bee backlog add` | Queue a learning stub · park future work |
 | `bee test` | Run `commands.test`, write `.bee/logs/test-results.json` |
 | `bee close` | Feature close driver: declared test run → what remains |
+| `bee doctor` | Install health: verdict ladder over the wiring, the vendored binary, and the runtime (`doctor attest` is the plumbing-surface attestation) |
 
 Four of them are **aliases**, not new behavior — argv is rewritten and the proven
 verb runs, so there is one implementation and one test set per operation:
@@ -267,8 +285,8 @@ verb runs, so there is one implementation and one test set per operation:
 after the prefix is stripped and **refuses a flow verb** ("call it as `bee gate`,
 without `internal`"), so the boundary is real in both directions. The bare
 top-level spellings still work. `bee --help --all [--json]` lists the full registry
-(127 entries), each carrying its `surface` value; `bee internal --help` lists just
-the plumbing.
+(141 entries, 18 of them porcelain), each carrying its `surface` value;
+`bee internal --help` lists just the plumbing.
 
 | Group | Verbs |
 |-------|-------|
@@ -283,7 +301,7 @@ the plumbing.
 | `knowledge` | check · index · list · context · promote |
 | `worktree` | new · merge · list · register · unregister |
 | `intent` | set · show · advance · clear |
-| *other* | `dispatch prepare` · `tmp sweep` · `recovery scan/window` · `config.*` · `perf.*` · `herding.*` · `doctor` |
+| *other* | `dispatch prepare` · `tmp sweep` · `recovery scan/window` · `config.*` · `perf.*` · `herding.*` · `doctor attest` |
 
 ### Maintenance surfaces (outside the registry)
 
@@ -295,8 +313,9 @@ These probe **before** the verb tree, so nothing in it can shadow them:
   undecidable payload allows the operation and says the guard did not run on it.
 - `bee onboard [--repo-root R] [--apply] [--json]` — the installer. `changes_needed`
   → summarize, get approval, re-run with `--apply`; `blocked_*` → zero mutations.
-- `bee dev render-skill-trees | render-prompt | statusline | release-manifest` — the
-  maintainer surface.
+- `bee dev render-skill-trees | render-prompt | render-hook-manifests | statusline |
+  release-manifest | plugin-distribution | install-support` — the maintainer surface:
+  the first three regenerate payload assets, the last two build what ships.
 - `bee herding classify-lane | interlock | command-template | …` — the cockpit's
   executable helpers.
 - `bee rs-info` — diagnostic: runtime, version, and the ported-shape list.
@@ -315,15 +334,48 @@ on stdout so a caller can branch instead of regex-matching prose. The five kinds
 | `bee: missing required argument` | names the flags and quotes the command's own example |
 | `bee: unsupported argument shape` | required flags all present; an optional flag, a value, or a target is wrong |
 
+### The doors that refuse
+
+The five kinds above are *shape* refusals — they answer "is this a command". A
+second class refuses a well-formed command because the **state says the work may
+not proceed**. These are the harness's teeth: each names its own remedy, and each
+either has one explicit escape hatch or none at all. An escape hatch is a recorded
+reason, never a silent skip — it is written onto the record it excuses.
+
+| Door | Refuses when | Escape hatch |
+|---|---|---|
+| `cells add` | the target feature is in `exploring`/`planning` and its execution gate is not approved — no cells before the gate. One gated cell fails the whole batch | none — approve Gate 2 (`bee gate --merge`). A `docs` lane is exempt |
+| `cells claim` | `.bee/logs/test-results.json` records the last run as red — never claim onto a red base | `--fix-first "<reason>"`, stored on `trace.fix_first` |
+| `cells claim` | the feature has no route record **and** this session already spent its one-time warning on an earlier claim (warn once, then refuse) | `bee route --set …`. A racing loser sees the typed `CLAIMED` refusal first, so a claim conflict never reads as a routing problem |
+| `cells finish` (cap) | lane is `small`/`standard`/`high-risk` and `trace.worker` names no registered execution worker — a lane that must dispatch cannot cap as if it had | `--inline-reason "<why>"`, stored on `trace.inline_reason`. `tiny` never reaches this branch |
+| `cells finish` (cap) | the cell changed files and no commit in the last 50 commits carries the trailer `cell: <id>` — one commit per cell, checked, not asserted | `--commit-pending "<reason>"`, stored on `trace.commit_pending` |
+| `cells tier` | assigning `ceiling` would put more than 40% of the feature's tiered cells on the ceiling tier (exactly 40% passes) | `--reason "<text>"`, stored on `trace.tier_reason` |
+| `bee close` | the feature has `behavior_change` cells capped since the last scribing stamp and nothing captured them | run `bee-capturing`, or log a `capture-deferral` decision naming the feature |
+| `bee route --set` | a re-lane would demote a `high-risk` feature, demote while a hard-gate flag is present, or demote a second time (`demoted_at` already stamped) | **none** — all three are absolute |
+| `state start-feature` | the current phase is neither `idle` nor the terminal alias `compounding-complete` — a prior feature is still in flight | none — finish it, or drop its remaining cells |
+| `state handoff adopt` | the session started from `resume` or `compact`, not a fresh-session boundary; or the record's `kind` is `pause` | **none** — present the handoff and wait for the user. A session with no recorded start source warns and proceeds |
+| `reviews record` (`approved`) | a `P1` finding is not named in the decision's `p1_resolutions[]` with a fixing cell | none — land the fix cell, then record with `p1_resolutions` |
+| write-guard, `docs/history/<feature>/plan.md` | that feature's `approved_gates.shape` is true — plan.md freezes once shape is locked | `bee state plan-rev bump --lane <feature>`, or unapprove shape to redraft |
+| model-guard, `Agent`/`Task` | the dispatch declares no tier and names no pinned subagent type. A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` now *derives* its tier instead of refusing | declare `[bee-tier: <tier>]` or a `model` param. A derived `cli` tier still refuses — an external process is not dispatchable as an agent |
+
+Two notes on doors that are not refusals:
+
+- **`bee orient`'s capture queue escalates.** Below 10 pending stubs *and* under 7
+  days old, it is an offer line; at or past either threshold it moves into
+  `work.blockers[]`. Nothing is blocked mechanically — the blocker is the report.
+- **`cells finish` is the one worktree exemption.** Every other mutating cells verb
+  refuses to run from a granted linked worktree and names the main checkout. `finish`
+  resolves its cell and claim at the main store while running the declared tests in
+  the calling worktree's own directory, so a worker caps where it worked.
+
 ### Declared but not built
 
-23 registry entries have no implementation in the current binary — the R6 Node
+21 registry entries have no implementation in the current binary — the R6 Node
 deletion removed the only one they had. Each refuses by name, states that nothing
 ran and nothing changed, and names its fallback:
 
 | Unbuilt | Count |
 |---|---|
-| `doctor` · `doctor attest` | 2 |
 | `config get/set/unset/validate` | 4 |
 | `perf start/stop/section/log/render/report/sync` | 7 |
 | `herding enable/disable/status` | 3 |
@@ -331,10 +383,9 @@ ran and nothing changed, and names its fallback:
 | `state compact-capsule/check/log` | 3 |
 | `recovery scan/window` | 2 |
 
-Treat them as known gaps, not as verbs to route around: a Codex install cannot be
-attested until `doctor` is ported, so that runtime reads as degraded; config
-changes go through the hand-edit exception above; and `bee status --json` still
-reports onboarding health.
+Treat them as known gaps, not as verbs to route around: config changes go through
+the hand-edit exception above, and `bee doctor` (now ported) plus
+`bee status --json` cover install and onboarding health.
 
 Run `.bee/bin/bee --help --json` for the porcelain manifest, `--help --all --json`
 for every command, or `<group> --help` before a group's first use in a session.

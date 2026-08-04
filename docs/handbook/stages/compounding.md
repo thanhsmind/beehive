@@ -53,6 +53,10 @@ git commit.
   reads the workflow record's stamp *and* the durable ledger
   `.bee/logs/scribing-runs.jsonl`; `--waive-scribing-debt` is the recorded, visible
   exception.
+- **Capture debt stops the close itself.** `bee close` refuses while the feature has
+  `behavior_change` cells capped since the last scribing stamp and nothing captured
+  them. Drain it with `bee-capturing`, or log a `capture-deferral` decision naming the
+  feature — the deferral is a record, not a skip.
 - **Housekeeping warns, never blocks** — a failed digest refresh or scratch sweep
   is a one-line warning, never a delay or a reversal of the close.
 - The phase is set **only after the close commit lands** — close, then flip.
