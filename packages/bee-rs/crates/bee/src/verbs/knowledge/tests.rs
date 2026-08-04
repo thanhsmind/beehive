@@ -189,7 +189,14 @@ use std::time::Instant;
 
     #[test]
     fn bundle_target_normalization_matches_path_resolve_containment() {
+        // An absolute dir whose components this platform can actually see:
+        // on Linux "D:\\repo\\docs\\knowledge" is ONE opaque component, so
+        // `../knowledge/y.md` escapes the base and the containment cases
+        // below stop testing containment.
+        #[cfg(windows)]
         let dir = Path::new("D:\\repo\\docs\\knowledge");
+        #[cfg(not(windows))]
+        let dir = Path::new("/repo/docs/knowledge");
         let norm = |t: &str| normalize_bundle_target(dir, t);
         assert_eq!(norm("areas/x.md").unwrap().unwrap(), "areas/x.md");
         assert_eq!(norm("a/./b/../c.md").unwrap().unwrap(), "a/c.md");

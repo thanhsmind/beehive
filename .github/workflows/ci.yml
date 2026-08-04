@@ -77,8 +77,16 @@ jobs:
       # start) is fixed in src/shell.rs; the suite is green and ~8x faster
       # parallel. Pinning threads here would only hide the next such defect
       # from CI while local sessions kept hitting it.
+      # `set -o pipefail` is load-bearing, not decoration: without it the step
+      # exits with tee's status, so a RED suite reported success. Run
+      # 30894209268 logged three failures on the 2.1.8 release commit and this
+      # job passed — the reds had been invisible to CI for as long as the pipe
+      # had been there. Windows CI, which does not pipe, was the only honest
+      # report.
       - name: Run verify chain
+        shell: bash
         run: |
+          set -o pipefail
           cargo test --release --manifest-path packages/bee-rs/Cargo.toml 2>&1 | tee verify-output.log
 
       # Freshness only matters on the green path — the default step condition
