@@ -23,7 +23,7 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 9] = [
+pub(crate) const CAP_FLAGS: [&str; 10] = [
     "id",
     "outcome",
     "files",
@@ -33,6 +33,7 @@ pub(crate) const CAP_FLAGS: [&str; 9] = [
     "session-id",
     "force-ownership",
     "commit-pending",
+    "inline-reason",
 ];
 
 /// resolveDeclaredBehaviorChange (E6).
@@ -81,6 +82,34 @@ pub(crate) struct CapFlags {
     /// `None` = not passed. Escapes the commit-trailer check below and is
     /// recorded on the capped cell's own `trace.commit_pending`.
     pub(crate) commit_pending: Option<String>,
+    /// wp-1 (AGENTS.md "never zero execution workers"): `--inline-reason
+    /// <reason>`, trimmed; `None` = not passed. Escapes the registered-
+    /// worker check below for a small+ cell and is recorded on the capped
+    /// cell's own `trace.inline_reason`.
+    pub(crate) inline_reason: Option<String>,
+}
+
+/// wp-1: is `worker` (the cap's own `trace.worker`) a REGISTERED worker for
+/// cell `id` — an entry in state.json's `workers[]` (the shape `bee state
+/// worker add --nickname N --cell ID --tier T --status S` writes, see
+/// verbs/state_group/workers.rs's `run_worker_add`) whose own `nickname`
+/// matches `worker` AND whose own `cell` matches `id`? A missing/empty
+/// `worker`, a missing/corrupt/non-array `workers` key, or a missing
+/// state.json altogether all answer `false` — fail CLOSED, matching this
+/// check's own "unless --inline-reason" contract (an unprovable registry is
+/// never silently treated as satisfying the rule).
+pub(crate) fn registered_worker_for_cell(root: &Path, id: &str, worker: Option<&str>) -> MR<bool> {
+    let Some(worker) = worker else { return Ok(false) };
+    let state = read_store_json(&bstate::state_path(root))?;
+    let workers = match state.as_ref().and_then(|s| s.get("workers")) {
+        Some(Value::Array(a)) => a,
+        _ => return Ok(false),
+    };
+    Ok(workers.iter().any(|w| {
+        js_truthy(w)
+            && matches!(w.get("nickname"), Some(Value::String(n)) if n == worker)
+            && matches!(w.get("cell"), Some(Value::String(c)) if c == id)
+    }))
 }
 
 /// capCellFromFlags — the ONE cap door cap and finish share.
@@ -292,6 +321,26 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                     "capCell: lane \"{lane}\" cell \"{id}\" requires non-empty files_changed (--files a.js,b.js) — record what the worker actually touched. A cell that changed nothing is a drop or a NOOP, not a cap."
                 )));
             }
+            // wp-1 (AGENTS.md "never zero execution workers"): from `small`
+            // up, the cell's claiming worker (trace.worker) must be a
+            // REGISTERED worker for THIS cell — an entry in state.json's
+            // workers[] whose own `cell` names this id (the shape `bee
+            // state worker add` writes). `tiny` never reaches this branch,
+            // matching AGENTS.md's own carve-out ("a tiny cell may run
+            // inline"). `--inline-reason` is the named-deviation escape,
+            // recorded on the cap's own trace below.
+            if f.inline_reason.is_none() {
+                let worker = match trace.get("worker") {
+                    Some(Value::String(w)) if !w.is_empty() => Some(w.as_str()),
+                    _ => None,
+                };
+                if !registered_worker_for_cell(root, id, worker)? {
+                    let worker_disp = worker.unwrap_or("unknown");
+                    return Err(Fail::Thrown(format!(
+                        "capCell: lane \"{lane}\" cell \"{id}\" refused — no registered execution worker: trace.worker \"{worker_disp}\" does not appear in state.json workers[] with cell \"{id}\" (AGENTS.md: cells from small up run through dispatched workers, never zero execution workers). FIX: dispatch this cell to a registered worker (bee state worker add --nickname <nickname> --cell {id} --tier <tier> --status running), then retry — or re-run with --inline-reason \"<why>\" to record the named deviation on this cap's own trace (trace.inline_reason)."
+                    )));
+                }
+            }
         }
         if lane == "high-risk" && f.outcome.as_deref().map(|o| js_trim(o).is_empty()).unwrap_or(true) {
             return Err(Fail::Thrown(format!(
@@ -311,6 +360,12 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         // without re-deriving it from git history.
         if let Some(reason) = &f.commit_pending {
             trace.insert("commit_pending".into(), Value::String(reason.clone()));
+        }
+        // wp-1: the --inline-reason reason, when passed — recorded so a cold
+        // reader can see WHY this small+ cap escaped the registered-worker
+        // check without re-deriving it from state.json's workers[] history.
+        if let Some(reason) = &f.inline_reason {
+            trace.insert("inline_reason".into(), Value::String(reason.clone()));
         }
         let outcome_value = match &f.outcome {
             Some(o) if !js_trim(o).is_empty() => Value::String(o.clone()),
@@ -367,6 +422,11 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         Some(s) if !js_trim(&s).is_empty() => Some(js_trim(&s).to_string()),
         _ => None,
     };
+    // wp-1: same --fix-first convention as --commit-pending above.
+    let inline_reason = match opt_string_flag(flags, "inline-reason")? {
+        Some(s) if !js_trim(&s).is_empty() => Some(js_trim(&s).to_string()),
+        _ => None,
+    };
     Some(CapFlags {
         id,
         outcome,
@@ -377,6 +437,7 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         session_flag,
         force_ownership,
         commit_pending,
+        inline_reason,
     })
 }
 

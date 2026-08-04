@@ -2298,6 +2298,7 @@ use std::time::Instant;
             session_flag: None,
             force_ownership: false,
             commit_pending: None,
+            inline_reason: None,
         };
         let cell_body = |id: &str| {
             json!({
@@ -2413,6 +2414,7 @@ use std::time::Instant;
             session_flag: None,
             force_ownership: false,
             commit_pending: commit_pending.map(str::to_string),
+            inline_reason: None,
         }
     }
 
@@ -2500,6 +2502,133 @@ use std::time::Instant;
 
         let capped =
             cap_cell_from_flags(root, &cap_flags_d6("bh-6e", vec!["a.rs"], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    // ══ D-WP-1 — a small+ cap names a REGISTERED execution worker ═════════
+    //
+    // AGENTS.md ("Work in parallel, coordinate through the store"): "From
+    // `small` up, cells run through dispatched workers (never zero
+    // execution workers)" — nothing at the cap door read the registry to
+    // enforce that until this cell. `tiny` stays exempt (it may run inline
+    // by contract, same posture as the D6 trailer check's own scoping).
+    // `--inline-reason "<why>"` escapes the refusal for a named, recorded
+    // deviation instead of a real dispatch.
+
+    fn cap_flags_wp(id: &str, files: Vec<&str>, inline_reason: Option<&str>) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: files.into_iter().map(|f| json!(f)).collect(),
+            deviations: Vec::new(),
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: inline_reason.map(str::to_string),
+        }
+    }
+
+    fn cell_body_wp(id: &str, lane: &str, worker: Option<&str>) -> Value {
+        json!({
+            "id": id, "feature": "f", "title": "t", "action": "a",
+            "verify": "echo ok", "lane": lane, "status": "claimed",
+            "deps": [], "files": [],
+            "trace": worker.map(|w| json!({"worker": w})).unwrap_or_else(|| json!({})),
+        })
+    }
+
+    fn write_workers_state(root: &Path, workers: Value) {
+        let dir = root.join(".bee");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            bstate::state_path(root),
+            jsjson::stringify_pretty(&json!({"workers": workers})),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn small_plus_cap_refuses_with_no_registered_worker_for_the_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "wp-a", &cell_body_wp("wp-a", "standard", Some("kevin")));
+
+        // No .bee/state.json at all — the emptiest possible "no registry".
+        let refusal =
+            thrown(cap_cell_from_flags(root, &cap_flags_wp("wp-a", vec!["a.rs"], None), false));
+        assert!(
+            refusal.starts_with("capCell: lane \"standard\" cell \"wp-a\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains("wp-a"), "{refusal}");
+        assert!(refusal.contains("kevin"), "{refusal}");
+        assert!(refusal.contains("bee state worker add"), "{refusal}");
+        assert!(refusal.contains("--inline-reason"), "{refusal}");
+        let after = read_cell_norm(root, "wp-a").ok().unwrap().unwrap();
+        assert_eq!(after.get("status"), Some(&json!("claimed")), "an unregistered worker never caps");
+    }
+
+    #[test]
+    fn small_plus_cap_refuses_when_the_registered_worker_names_a_different_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "wp-e", &cell_body_wp("wp-e", "standard", Some("kevin")));
+        write_workers_state(
+            root,
+            json!([{"nickname": "kevin", "cell": "some-other-cell", "tier": "generation", "status": "running"}]),
+        );
+
+        let refusal =
+            thrown(cap_cell_from_flags(root, &cap_flags_wp("wp-e", vec!["a.rs"], None), false));
+        assert!(refusal.contains("no registered execution worker"), "{refusal}");
+    }
+
+    #[test]
+    fn small_plus_cap_succeeds_once_the_worker_is_registered_for_that_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "wp-b", &cell_body_wp("wp-b", "standard", Some("kevin")));
+        write_workers_state(
+            root,
+            json!([{"nickname": "kevin", "cell": "wp-b", "tier": "generation", "status": "running"}]),
+        );
+
+        let capped =
+            cap_cell_from_flags(root, &cap_flags_wp("wp-b", vec!["a.rs"], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn small_plus_cap_inline_reason_escapes_and_is_recorded_on_the_trace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "wp-c", &cell_body_wp("wp-c", "standard", Some("kevin")));
+
+        // No state.json at all — the escape must still cap.
+        let capped = cap_cell_from_flags(
+            root,
+            &cap_flags_wp("wp-c", vec!["a.rs"], Some("solo session, no dispatch available")),
+            false,
+        )
+        .unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(
+            capped["trace"]["inline_reason"],
+            json!("solo session, no dispatch available")
+        );
+    }
+
+    #[test]
+    fn tiny_lane_cap_is_never_checked_for_a_registered_worker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "wp-d", &cell_body_wp("wp-d", "tiny", Some("kevin")));
+
+        // No workers[] entry at all — a tiny cap must never even look.
+        let capped =
+            cap_cell_from_flags(root, &cap_flags_wp("wp-d", vec!["a.rs"], None), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
