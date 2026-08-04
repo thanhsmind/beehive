@@ -270,10 +270,14 @@ pub(crate) fn sort_by_locale<T, F: Fn(&T) -> &str>(items: &mut [T], key: F) -> b
     true
 }
 
-/// Default string order for the sidecar/skill-tree sorts below: kept as
-/// UTF-16 code-unit order (`crate::textutil::code_unit_cmp`/`js_default_sort`
-/// — see that module's EXCEPTION note for the reproduction rationale), and
-/// distinct from `sort_by_locale` above, which reproduces `localeCompare`.
+/// Default string order for the skill-tree sidecar digests and the
+/// stored-vs-current diff report: kept as UTF-16 code-unit order
+/// (`crate::textutil::code_unit_cmp`/`js_default_sort` — see that module's
+/// EXCEPTION note for the reproduction rationale: `skill_trees.rs`'s
+/// `manifest_fingerprint`/sha256 sidecar digests and `release_manifest.rs`'s
+/// `diff.missing`/`diff.added`). Distinct from `sort_by_locale` above, which
+/// reproduces `localeCompare` — and which is what orders the release
+/// manifest's OWN stored path list, not this comparator.
 pub(crate) use crate::textutil::{code_unit_cmp, js_default_sort};
 
 #[cfg(test)]

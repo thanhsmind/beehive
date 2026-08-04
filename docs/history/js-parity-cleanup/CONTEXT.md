@@ -37,6 +37,13 @@
   status_full/tests.rs:402, release_manifest.rs:1023). The release-manifest
   code-unit sort comparator (devtools/mod.rs:282) is a REAL reproduction
   constraint: stamped manifests were sorted by UTF-16 code units.
+  CORRECTION (jp-9): the release manifest's own stored path list is sorted
+  by `sort_by_locale`/`localeCompare` (release_manifest.rs's `sort_records`),
+  proven by its own `code_unit_sort_would_not_reproduce_the_manifest` test —
+  NOT by the code-unit comparator. The real code-unit reproduction
+  constraints are `devtools/skill_trees.rs`'s `manifest_fingerprint` (sha256
+  sidecar digests) and `release_manifest.rs`'s `diff.missing`/`diff.added`
+  ordering, locked by `changed_uses_locale_order_while_missing_uses_code_units`.
 - Glob matcher (hooks/write_guard/paths.rs:36-127): one production caller
   (checks.rs:332 via is_exclusive_path), grammar limited to `*`/`**`/`**/`,
   carries a JS-regex `\n` quirk, provenance comment names guards.mjs. No

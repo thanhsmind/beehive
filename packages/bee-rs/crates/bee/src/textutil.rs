@@ -16,15 +16,20 @@
 //
 // EXCEPTION — `code_unit_cmp` / `js_default_sort` below still order strings
 // by UTF-16 code unit. That is not a truncation cap; it is the exact
-// ordering already baked into release manifests stamped before this
-// decision existed. Re-sorting those same paths in char/byte order (which,
-// for the ASCII repo-relative paths these tools see, usually — but not
-// always — coincides with code-unit order) produces a DIFFERENT sequence
-// than the committed file; `release_manifest.rs`'s
-// `code_unit_sort_would_not_reproduce_the_manifest` test proves the
-// divergence is real, not theoretical. Converting this comparator to a
-// char-based order is not authorized: it would silently desynchronize the
-// binary from history it has already written.
+// ordering already baked into artifacts stamped before this decision
+// existed. NOTE: the release manifest's own path list is NOT one of those
+// artifacts — it is sorted by `sort_by_locale` (`localeCompare`), proven by
+// `release_manifest.rs`'s own `code_unit_sort_would_not_reproduce_the_manifest`
+// test (stored order IS the locale order; a code-unit sort of the same set
+// diverges from it). The real byte-reproduction constraints on
+// `code_unit_cmp` are: `devtools/skill_trees.rs`'s `manifest_fingerprint`
+// (feeding the sha256 sidecar digests, also used at the skill/sidecar sort
+// sites) and `release_manifest.rs`'s `diff.missing`/`diff.added` ordering in
+// its stored-vs-current diff report — locked by that same file's
+// `changed_uses_locale_order_while_missing_uses_code_units` test. Converting
+// this comparator to a char-based order is not authorized: it would
+// silently desynchronize those digests and diff reports from history they
+// have already written.
 
 use std::cmp::Ordering;
 
@@ -33,6 +38,18 @@ use std::cmp::Ordering;
 /// copies).
 pub(crate) fn char_len(s: &str) -> usize {
     s.chars().count()
+}
+
+/// UTF-16 code-unit count. Kept distinct from `char_len` above for the one
+/// caller that is NOT a display/log cap: the `AskUserQuestion` header-length
+/// guard in `hooks/write_guard/detectors.rs`. That guard mirrors a limit
+/// enforced by an EXTERNAL, JS-side validator (Claude Code's own
+/// `AskUserQuestion` tool schema), which counts a header the way JS does —
+/// `String.length`, i.e. UTF-16 code units — not Rust `char`s. An astral
+/// header of 7 chars is 14 code units and must still trip a ">12" guard even
+/// though `char_len` would report 7.
+pub(crate) fn utf16_len(s: &str) -> usize {
+    s.encode_utf16().count()
 }
 
 /// The first `n` CHARACTERS of `s` (the whole string when it is already
@@ -92,6 +109,15 @@ mod tests {
         // the whole point of the D3 cutover.
         assert_eq!(char_len("🐝"), 1);
         assert_eq!(char_len("ab🐝"), 3);
+    }
+
+    #[test]
+    fn utf16_len_counts_code_units_not_chars() {
+        assert_eq!(utf16_len("abc"), 3);
+        // An astral char is TWO UTF-16 code units, unlike char_len's ONE —
+        // the whole point of keeping this helper distinct from char_len.
+        assert_eq!(utf16_len("🐝"), 2);
+        assert_eq!(utf16_len("ab🐝"), 4);
     }
 
     #[test]

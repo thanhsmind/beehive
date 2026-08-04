@@ -8,7 +8,7 @@ use crate::hooks::adapter::{append_hook_log, now_iso, read_hook_context, HookCon
 use crate::hooks::Outcome;
 use crate::jsjson;
 use crate::state::hook_enabled;
-use crate::textutil::char_len;
+use crate::textutil::{char_len, utf16_len};
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -153,7 +153,10 @@ pub(crate) fn check_ask_user_question(tool_input: &Map<String, Value>) -> R<AskR
         };
         let where_ = if n > 1 { format!(" (question {})", i + 1) } else { String::new() };
         if let Some(Value::String(h)) = q.get("header") {
-            if char_len(h) > 12 {
+            // Counts UTF-16 code units, not chars: the paired validator is
+            // Claude Code's own (external, JS) AskUserQuestion tool schema,
+            // which measures `header.length` — see textutil::utf16_len.
+            if utf16_len(h) > 12 {
                 fixes.push((i, h.clone()));
             }
         }
