@@ -116,7 +116,7 @@ Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 3 afte
 
 **TICK:** the concurrency plan emits its own progress line per the Progress ticks catalog above — same silent-bookkeeping rule as every other tick, never suppressed by bypass.
 
-Full doctrine for the cell/wave tier — the wave-barrier regen protocol and the execution-worker class relationship: `bee-swarming/references/swarming-reference.md` ("Single execution worker in full", "Parallel by default"), and the Delegation contract below.
+Full doctrine for the cell/wave tier — the wave-barrier regen protocol and the execution-worker class relationship: `bee-swarming/references/swarming-reference.md` ("Single execution worker in full", "Default — parallel"), and the Delegation contract below.
 
 ### Docs lane
 
