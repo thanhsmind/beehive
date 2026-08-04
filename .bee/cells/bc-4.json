@@ -1,0 +1,44 @@
+{
+  "id": "bc-4",
+  "feature": "doctrine-prose-diet",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier",
+  "title": "Cut the last true restatements of gate ownership",
+  "action": "go-mode.md:142 repeats the headless self-approval rule that gates-and-delegation.md:88 owns, and :146 ends with a second statement of the bypass-off case the level table already carries. Point both at the home. Leave the role-scoped one-liners in planning, shaping, reviewing and swarming as they are - each names its own gate or step and is already a signpost.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+  "must_haves": {
+    "truths": [
+      "headless self-approval stated once",
+      "bypass-off stated once",
+      "role-scoped reminders survive"
+    ]
+  },
+  "files": [
+    "skills/bee-hive/references/go-mode.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [
+      "skills/bee-hive/references/go-mode.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T09:47:51.694Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T09:47:40.050Z"
+  }
+}

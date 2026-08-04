@@ -1,0 +1,48 @@
+{
+  "id": "bc-5",
+  "feature": "doctrine-prose-diet",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [
+    "bc-4"
+  ],
+  "title": "Run the keep-prose sieve over swarming-reference, the largest unpruned file",
+  "action": "606 lines, the biggest normative block left. Put every rule through one question: if an agent broke it, would a hook, a test, or a human at a gate catch it? Caught by a hook or test -> one line pointing at the enforcing surface. Caught by a gate reviewer -> keep as prose, one home. Caught by nobody -> it is a default, not a law; say so or delete it. Then run the wave-close regen: render-skill-trees, onboard --repo-root . --apply, release-manifest --write.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "every surviving rule is enforced, gate-checkable, or named a default",
+      "no rule silently disappears",
+      "normative line count reported before and after"
+    ]
+  },
+  "files": [
+    "skills/bee-swarming/references/swarming-reference.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [
+      "skills/bee-swarming/references/swarming-reference.md",
+      "docs/history/worktree-isolation/integration-transaction.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T09:50:15.947Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T09:50:04.378Z"
+  }
+}
