@@ -2223,3 +2223,124 @@ use std::time::Instant;
         assert_eq!(r.code, "CLAIM_FENCE_STALE");
         assert!(claims_dir(root).join("c-1.json").exists(), "still there — a stale fence never proceeds");
     }
+
+    // ══ cells tier — ceiling-share budget (D3, decision 0012) ══════════════
+    //
+    // D6 sequencing: these prove the share computation first (exactly-40
+    // allowed, just-over refused) and the refusal/override contract, before
+    // trusting the flip in set_tier to refuse anything for real.
+
+    fn tiered_cell(id: &str, feature: &str, tier: Option<&str>) -> Value {
+        let mut body = cell(id, "open", feature, json!([]));
+        if let Some(t) = tier {
+            body["tier"] = json!(t);
+        }
+        body
+    }
+
+    /// Others: 1 ceiling + 3 non-ceiling (4 tiered). Assigning "ceiling" to
+    /// the target makes 2/5 — exactly the 40% budget — which D3 allows.
+    #[test]
+    fn ceiling_share_of_exactly_40_percent_is_allowed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("extraction")));
+        write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("generation")));
+        write_cell_fixture(root, "o-4", &tiered_cell("o-4", "f", Some("extraction")));
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let cell = set_tier(root, "target", "ceiling", None).expect("exactly 40% must be allowed");
+        assert_eq!(cell["tier"], json!("ceiling"));
+        let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert_eq!(after["tier"], json!("ceiling"), "the write actually landed");
+    }
+
+    /// Others: 2 ceiling + 4 non-ceiling (6 tiered). Assigning "ceiling" to
+    /// the target makes 3/7 (~43%) — strictly over the 40% budget — which
+    /// D3 refuses without an override. The refusal names both the computed
+    /// share and the threshold (message-contract precedent: router.rs).
+    #[test]
+    fn ceiling_share_just_over_40_percent_refuses_naming_share_and_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("extraction")));
+        write_cell_fixture(root, "o-4", &tiered_cell("o-4", "f", Some("extraction")));
+        write_cell_fixture(root, "o-5", &tiered_cell("o-5", "f", Some("generation")));
+        write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let refusal = thrown(set_tier(root, "target", "ceiling", None));
+        assert!(
+            refusal.starts_with("setTier: cell \"target\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains("3/7"), "{refusal}");
+        assert!(refusal.contains("43%"), "names the computed share: {refusal}");
+        assert!(refusal.contains("40%"), "names the threshold: {refusal}");
+        // Refused — the tier on disk never moved.
+        let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert!(after.get("tier").is_none(), "a refused assignment writes nothing");
+    }
+
+    /// The same over-budget shape as above, but with `--reason` supplied:
+    /// the override succeeds and the reason persists on the cell's trace
+    /// (the cell's tier record) as `tier_reason`.
+    #[test]
+    fn reason_override_bypasses_the_refusal_and_persists_on_the_tier_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("extraction")));
+        write_cell_fixture(root, "o-4", &tiered_cell("o-4", "f", Some("extraction")));
+        write_cell_fixture(root, "o-5", &tiered_cell("o-5", "f", Some("generation")));
+        write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let cell = set_tier(root, "target", "ceiling", Some("owner-approved rescue ladder bump"))
+            .expect("a named reason overrides the refusal");
+        assert_eq!(cell["tier"], json!("ceiling"));
+        assert_eq!(cell["trace"]["tier_reason"], json!("owner-approved rescue ladder bump"));
+
+        let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert_eq!(after["tier"], json!("ceiling"), "the override write actually landed");
+        assert_eq!(after["trace"]["tier_reason"], json!("owner-approved rescue ladder bump"));
+    }
+
+    /// A whitespace-only reason is not an override — D1/D3's "non-blank"
+    /// convention (mirrors the `--reason` required-flag blank check on
+    /// block/drop) — so the over-budget assignment still refuses.
+    #[test]
+    fn a_blank_reason_does_not_override_the_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("extraction")));
+        write_cell_fixture(root, "o-4", &tiered_cell("o-4", "f", Some("extraction")));
+        write_cell_fixture(root, "o-5", &tiered_cell("o-5", "f", Some("generation")));
+        write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let refusal = thrown(set_tier(root, "target", "ceiling", Some("   ")));
+        assert!(refusal.starts_with("setTier: cell \"target\" refused"), "{refusal}");
+    }
+
+    /// Any other tier is never budget-checked, however skewed the ceiling
+    /// share already is.
+    #[test]
+    fn assigning_a_non_ceiling_tier_never_checks_the_ceiling_budget() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("ceiling")));
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let cell = set_tier(root, "target", "generation", None)
+            .expect("a non-ceiling tier is never budget-checked");
+        assert_eq!(cell["tier"], json!("generation"));
+    }
