@@ -13,7 +13,7 @@ use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock;
 use crate::registry::check_manifest_drift;
-use crate::roots::{resolve_store_root, Roots};
+use crate::roots::{resolve_store_root, resolve_store_root_worktree, Roots, RootsWt, StoreRoots};
 use crate::state as bstate;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
@@ -2314,7 +2314,7 @@ use std::time::Instant;
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
         write_cell_fixture(root, "nt-1", &cell_body("nt-1"));
-        let capped = cap_cell_from_flags(root, &cap_flags("nt-1"), false).unwrap();
+        let capped = cap_cell_from_flags(root, root, &cap_flags("nt-1"), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
         assert_eq!(
             capped["trace"]["tests"],
@@ -2330,7 +2330,7 @@ use std::time::Instant;
         let root2 = tmp2.path();
         write_bee_config(root2, &json!({"commands": {"test": "exit 3"}}));
         write_cell_fixture(root2, "nt-2", &cell_body("nt-2"));
-        let refusal = thrown(cap_cell_from_flags(root2, &cap_flags("nt-2"), false));
+        let refusal = thrown(cap_cell_from_flags(root2, root2, &cap_flags("nt-2"), false));
         assert!(
             refusal.starts_with("refusing to cap \"nt-2\" — the declared test run is RED"),
             "{refusal}"
@@ -2435,6 +2435,7 @@ use std::time::Instant;
 
         let refusal = thrown(cap_cell_from_flags(
             root,
+            root,
             &cap_flags_d6("bh-6a", vec!["a.rs"], None),
             true, // finish
         ));
@@ -2455,7 +2456,7 @@ use std::time::Instant;
         commit_with_message(root, "y", "Wire the thing\n\ncell: bh-6b");
 
         let capped =
-            cap_cell_from_flags(root, &cap_flags_d6("bh-6b", vec!["a.rs"], None), true).unwrap();
+            cap_cell_from_flags(root, root, &cap_flags_d6("bh-6b", vec!["a.rs"], None), true).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
@@ -2467,6 +2468,7 @@ use std::time::Instant;
         write_cell_fixture(root, "bh-6c", &cell_body_d6("bh-6c"));
 
         let capped = cap_cell_from_flags(
+            root,
             root,
             &cap_flags_d6("bh-6c", vec!["a.rs"], Some("commit lands after cap, batching two")),
             true,
@@ -2487,7 +2489,7 @@ use std::time::Instant;
         // shells out to git when files_changed is empty.
         write_cell_fixture(root, "bh-6d", &cell_body_d6("bh-6d"));
 
-        let capped = cap_cell_from_flags(root, &cap_flags_d6("bh-6d", vec![], None), true).unwrap();
+        let capped = cap_cell_from_flags(root, root, &cap_flags_d6("bh-6d", vec![], None), true).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
@@ -2501,7 +2503,7 @@ use std::time::Instant;
         write_cell_fixture(root, "bh-6e", &cell_body_d6("bh-6e"));
 
         let capped =
-            cap_cell_from_flags(root, &cap_flags_d6("bh-6e", vec!["a.rs"], None), false).unwrap();
+            cap_cell_from_flags(root, root, &cap_flags_d6("bh-6e", vec!["a.rs"], None), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
@@ -2557,7 +2559,7 @@ use std::time::Instant;
 
         // No .bee/state.json at all — the emptiest possible "no registry".
         let refusal =
-            thrown(cap_cell_from_flags(root, &cap_flags_wp("wp-a", vec!["a.rs"], None), false));
+            thrown(cap_cell_from_flags(root, root, &cap_flags_wp("wp-a", vec!["a.rs"], None), false));
         assert!(
             refusal.starts_with("capCell: lane \"standard\" cell \"wp-a\" refused"),
             "{refusal}"
@@ -2581,7 +2583,7 @@ use std::time::Instant;
         );
 
         let refusal =
-            thrown(cap_cell_from_flags(root, &cap_flags_wp("wp-e", vec!["a.rs"], None), false));
+            thrown(cap_cell_from_flags(root, root, &cap_flags_wp("wp-e", vec!["a.rs"], None), false));
         assert!(refusal.contains("no registered execution worker"), "{refusal}");
     }
 
@@ -2596,7 +2598,7 @@ use std::time::Instant;
         );
 
         let capped =
-            cap_cell_from_flags(root, &cap_flags_wp("wp-b", vec!["a.rs"], None), false).unwrap();
+            cap_cell_from_flags(root, root, &cap_flags_wp("wp-b", vec!["a.rs"], None), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
@@ -2608,6 +2610,7 @@ use std::time::Instant;
 
         // No state.json at all — the escape must still cap.
         let capped = cap_cell_from_flags(
+            root,
             root,
             &cap_flags_wp("wp-c", vec!["a.rs"], Some("solo session, no dispatch available")),
             false,
@@ -2628,7 +2631,7 @@ use std::time::Instant;
 
         // No workers[] entry at all — a tiny cap must never even look.
         let capped =
-            cap_cell_from_flags(root, &cap_flags_wp("wp-d", vec!["a.rs"], None), false).unwrap();
+            cap_cell_from_flags(root, root, &cap_flags_wp("wp-d", vec!["a.rs"], None), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
@@ -3134,4 +3137,257 @@ use std::time::Instant;
         let cell = set_tier(root, "target", "generation", None)
             .expect("a non-ceiling tier is never budget-checked");
         assert_eq!(cell["tier"], json!("generation"));
+    }
+
+    // ══ wf-1 — `cells finish` from a granted worktree ═════════════════════
+    //
+    // "Today `bee cells finish` refuses inside a granted worktree... Fix
+    // that one verb." The fixture is the same real `git worktree add` shape
+    // reservations/tests.rs's `worktree_fixture` uses (main + a REGISTERED
+    // `wt-granted` + an unregistered `wt-ungranted`), grown a cell store and
+    // a `commands.test` declaration in MAIN so the new FULL-door code path
+    // is exercised end to end, not just its root arithmetic.
+
+    /// main + `wt-granted` (registered) + `wt-ungranted` (not) — a REAL git
+    /// worktree link, same fixture shape as reservations/tests.rs's own
+    /// `worktree_fixture` (which this deliberately does not import: that
+    /// module's fixture is private to its own `#[cfg(test)] mod tests`).
+    fn wf_worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(main.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        git_ok(&main, &["config", "user.email", "a@b.c"]);
+        git_ok(&main, &["config", "user.name", "t"]);
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "init"]);
+        let granted = tmp.join("wt-granted");
+        let ungranted = tmp.join("wt-ungranted");
+        git_ok(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        git_ok(&main, &["worktree", "add", "-q", ungranted.to_str().unwrap(), "-b", "wt/u"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-granted\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(granted.join(".bee")).unwrap();
+        std::fs::write(granted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        (main, granted, ungranted)
+    }
+
+    fn wf_roots_at(cwd: &Path) -> StoreRoots {
+        match resolve_store_root_worktree(cwd) {
+            RootsWt::Go(r) => r,
+            _ => panic!("expected a resolvable root at {}", cwd.display()),
+        }
+    }
+
+    /// Identity, not spelling — same rationale as reservations/tests.rs's
+    /// own `nrm`: a tempdir path and its 8.3/case-folded twin resolve to the
+    /// same directory on a Windows runner, and a byte compare fails for a
+    /// reason unrelated to what is being asserted.
+    fn wf_nrm(p: &Path) -> String {
+        let c = dunce::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        c.to_string_lossy().replace('/', "\\")
+    }
+
+    fn wf_cap_flags(id: &str) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+        }
+    }
+
+    fn wf_cell_body(id: &str, worker: Option<&str>) -> Value {
+        json!({
+            "id": id, "feature": "f", "title": "t", "action": "a",
+            "verify": "echo ok", "lane": "tiny", "status": "claimed",
+            "deps": [], "files": [],
+            "trace": worker.map(|w| json!({"worker": w})).unwrap_or_else(|| json!({})),
+        })
+    }
+
+    /// `finish_topology` (finish_support.rs) is the exact split wf-1's
+    /// must-haves depend on: the cell/claim root is ALWAYS main, the
+    /// declared-test cwd is the calling worktree only when granted, and the
+    /// hold topology matches `StoreRoots::hold_topology()` unchanged. From
+    /// MAIN itself the answer is byte-identical to what the narrow door
+    /// produced before this cell (must-have 4).
+    #[test]
+    fn finish_topology_puts_the_cell_root_at_main_and_the_test_cwd_at_a_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, ungranted) = wf_worktree_fixture(tmp.path());
+
+        // ORDINARY (from main): root == test_root == main, holder "main".
+        let (cr, tr, topo) = finish_topology(&wf_roots_at(&main));
+        assert_eq!(wf_nrm(&cr), wf_nrm(&main));
+        assert_eq!(wf_nrm(&tr), wf_nrm(&main));
+        let (m, h) = topo.expect("ordinary always has a topology");
+        assert_eq!(wf_nrm(&m), wf_nrm(&main));
+        assert_eq!(h, "main");
+
+        // GRANTED worktree: cell root at MAIN, test cwd at the worktree
+        // itself, holder the git-verified worktree id.
+        let (cr, tr, topo) = finish_topology(&wf_roots_at(&granted));
+        assert_eq!(wf_nrm(&cr), wf_nrm(&main), "the cell record and claim resolve at MAIN");
+        assert_eq!(wf_nrm(&tr), wf_nrm(&granted), "the declared test cwd is the calling worktree");
+        let (m, h) = topo.expect("a granted worktree holds");
+        assert_eq!(wf_nrm(&m), wf_nrm(&main));
+        assert_eq!(h, "wt-granted");
+
+        // UNGRANTED worktree: unchanged from today — root already IS main's
+        // store, and hold release is skipped entirely (topology === null).
+        let (cr, tr, topo) = finish_topology(&wf_roots_at(&ungranted));
+        assert_eq!(wf_nrm(&cr), wf_nrm(&main));
+        assert_eq!(wf_nrm(&tr), wf_nrm(&main));
+        assert!(topo.is_none());
+    }
+
+    /// Every OTHER mutating cells verb (here: the door `cap` and everything
+    /// else in `try_mutating` actually dispatch through) still refuses a
+    /// granted worktree by name — `finish` alone widened.
+    #[test]
+    fn the_narrow_door_still_refuses_a_granted_worktree_while_the_full_door_serves_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = wf_worktree_fixture(tmp.path());
+
+        match resolve_store_root(&granted) {
+            Roots::Unsupported(crate::roots::Unsupported::GrantedWorktree { main_root }) => {
+                assert_eq!(wf_nrm(&main_root), wf_nrm(&main));
+            }
+            _ => panic!("expected the narrow door (cap and every other verb) to still refuse"),
+        }
+        assert!(matches!(resolve_store_root_worktree(&granted), RootsWt::Go(_)));
+    }
+
+    /// must-have 1 + 2: `finish_cap_and_release` — `cells finish`'s tested
+    /// core — caps the cell at the MAIN store (never writing anything under
+    /// the worktree's own `.bee/cells`) and runs the declared test command
+    /// with cwd in the WORKTREE, not main. The red control on the same
+    /// command against `root` itself proves the green above is not
+    /// vacuous.
+    #[test]
+    fn finish_caps_at_main_and_runs_declared_tests_against_the_worktree_tree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = wf_worktree_fixture(tmp.path());
+        write_bee_config(&main, &json!({"commands": {"test": "test -f marker.txt"}}));
+        std::fs::write(granted.join("marker.txt"), "present").unwrap();
+
+        write_cell_fixture(&main, "wf-cwd-a", &wf_cell_body("wf-cwd-a", None));
+        let out = finish_cap_and_release(&main, &granted, None, wf_cap_flags("wf-cwd-a"), None)
+            .expect("the declared test finds marker.txt in the worktree");
+        let Out::Emit(cell, _, 0) = out else { panic!("expected a green cap") };
+        assert_eq!(cell["status"], json!("capped"));
+        assert_eq!(cell["trace"]["tests"], json!("green"));
+        assert!(
+            !granted.join(".bee").join("cells").join("wf-cwd-a.json").exists(),
+            "the cell record is never written to the worktree's own store"
+        );
+        assert_eq!(
+            read_cell_norm(&main, "wf-cwd-a").ok().unwrap().unwrap()["status"],
+            json!("capped"),
+            "it lands in MAIN's store instead"
+        );
+
+        // Control: the identical command run with cwd=root (no marker.txt
+        // there) refuses RED.
+        write_cell_fixture(&main, "wf-cwd-b", &wf_cell_body("wf-cwd-b", None));
+        let refusal = thrown(finish_cap_and_release(&main, &main, None, wf_cap_flags("wf-cwd-b"), None));
+        assert!(
+            refusal.starts_with("refusing to cap \"wf-cwd-b\" — the declared test run is RED"),
+            "{refusal}"
+        );
+    }
+
+    /// must-have 3: reservation/hold release names the worktree id as
+    /// holder and actually releases both the local lease and the mirrored
+    /// MAIN ledger hold — via `finish_topology`'s own `hold_topology()`,
+    /// not a hardcoded `"main"`.
+    #[test]
+    fn finish_releases_reservations_under_the_worktree_holder_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = wf_worktree_fixture(tmp.path());
+        write_bee_config(&main, &json!({"commands": {"test": "echo ok"}}));
+        write_cell_fixture(&main, "wf-rel-a", &wf_cell_body("wf-rel-a", Some("wt-agent")));
+
+        // Reserve from inside the GRANTED worktree — mirrors into MAIN's
+        // ledger under the worktree's own git-verified id, same as
+        // reservations/tests.rs's `granted_worktree_mirrors_under_its_id_and_blocks_main`.
+        let g = wf_roots_at(&granted);
+        let (gm, gh) = g.hold_topology().expect("a granted worktree holds");
+        assert_eq!(gh, "wt-granted");
+        let g_topo = Some(rsv::Topo { main_root: &gm, holder: &gh });
+        let g_root_s = g.root.to_str().unwrap().to_string();
+        let params = rsv::ReserveParams {
+            agent: "wt-agent".to_string(),
+            cell: "wf-rel-a".to_string(),
+            path: "src/shared.ts".to_string(),
+            ttl: None,
+            session: None,
+            kind: None,
+        };
+        assert!(matches!(rsv::reserve_exec(g_topo, &g_root_s, &params, 1), Ok(Out::Emit(_, _, 0))));
+        let ledger: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(&main)).unwrap()).unwrap();
+        assert_eq!(ledger["holds"][0]["holder"], json!("wt-granted"));
+        assert!(ledger["holds"][0]["released_at"].is_null());
+
+        // `cells finish`, from the granted worktree, releases BOTH the
+        // local lease and the mirrored MAIN hold under that same id.
+        let (cells_root, test_root, topo) = finish_topology(&g);
+        let topo_ref = topo.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
+        let out = finish_cap_and_release(&cells_root, &test_root, topo_ref, wf_cap_flags("wf-rel-a"), None)
+            .expect("a clean finish");
+        let Out::Emit(result, text, 0) = out else { panic!("expected a green finish") };
+        assert_eq!(result["released"], json!(["src/shared.ts"]));
+        assert!(text.contains("Released 1 reservation(s): src/shared.ts."), "{text}");
+
+        let ledger_after: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(&main)).unwrap()).unwrap();
+        assert!(
+            ledger_after["holds"][0]["released_at"].is_string(),
+            "the mirrored hold was released, not just the local lease"
+        );
+    }
+
+    /// The ordinary-checkout release path is unchanged: holder `"main"`,
+    /// ledger at `root` — `finish_topology`'s own `None`-linked arm.
+    #[test]
+    fn finish_from_main_releases_under_holder_main_exactly_as_before() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "echo ok"}}));
+        write_cell_fixture(root, "wf-rel-main", &wf_cell_body("wf-rel-main", Some("main-agent")));
+        let params = rsv::ReserveParams {
+            agent: "main-agent".to_string(),
+            cell: "wf-rel-main".to_string(),
+            path: "src/only.ts".to_string(),
+            ttl: None,
+            session: None,
+            kind: None,
+        };
+        let m_topo = Some(rsv::Topo { main_root: root, holder: "main" });
+        let root_s = root.to_str().unwrap().to_string();
+        assert!(matches!(rsv::reserve_exec(m_topo, &root_s, &params, 1), Ok(Out::Emit(_, _, 0))));
+
+        let out = finish_cap_and_release(
+            root,
+            root,
+            Some((root, "main")),
+            wf_cap_flags("wf-rel-main"),
+            None,
+        )
+        .expect("a clean finish");
+        let Out::Emit(result, _, 0) = out else { panic!("expected a green finish") };
+        assert_eq!(result["released"], json!(["src/only.ts"]));
     }

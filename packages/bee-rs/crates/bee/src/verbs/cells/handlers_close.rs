@@ -8,7 +8,7 @@ use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock;
 use crate::registry::check_manifest_drift;
-use crate::roots::{resolve_store_root, Roots};
+use crate::roots::{resolve_store_root, resolve_store_root_worktree, Roots, RootsWt};
 use crate::state as bstate;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
@@ -113,7 +113,12 @@ pub(crate) fn registered_worker_for_cell(root: &Path, id: &str, worker: Option<&
 }
 
 /// capCellFromFlags — the ONE cap door cap and finish share.
-pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR<Value> {
+/// `test_root` is the declared-test command's cwd — `root` itself for `cap`
+/// and for `finish` from an ordinary checkout or an ungranted worktree, the
+/// calling worktree's own physical directory for `finish` from a GRANTED
+/// one (wf-1: the changed code is the evidence). Every other read/write here
+/// stays keyed at `root`, the cell/claim store — always MAIN's.
+pub(crate) fn cap_cell_from_flags(root: &Path, test_root: &Path, f: &CapFlags, finish: bool) -> MR<Value> {
     let id = &f.id;
     // Pre-scan (see the pre-scan section header).
     prescan_claim(root, id)?;
@@ -149,7 +154,7 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         .map(|list| list.iter().filter(|c| *c != NO_TEST_SENTINEL).cloned().collect::<Vec<_>>())
         .filter(|l| !l.is_empty());
     let tests_run: Option<TestsRun> = match &declared {
-        Some(list) => Some(run_declared_tests(root, list)?),
+        Some(list) => Some(run_declared_tests(test_root, list)?),
         None => None,
     };
     if let Some(run) = &tests_run {
@@ -456,15 +461,23 @@ pub(crate) fn cap_text(cell: &Value) -> String {
     )
 }
 
+/// `cells cap` stays on the narrow door (`dispatch`, `resolve_store_root`):
+/// it refuses from a granted worktree exactly as it did before this cell.
+/// `cells finish` is the one mutating verb ported onto the FULL door —
+/// `run_finish` below — per wf-1's logged decision.
 pub(crate) fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !rsv::keys_known(&flags, &CAP_FLAGS) {
         return None;
     }
     let cap_flags = cap_flags_from(&flags)?;
     let deviations_file = opt_string_flag(&flags, "deviations-file")?;
-    let cmd: &'static str = if finish { "cells finish" } else { "cells cap" };
     let cap_flags_owned = cap_flags;
-    dispatch(cmd, use_json, t0, move |ctx| {
+
+    if finish {
+        return run_finish("cells finish", use_json, t0, cap_flags_owned, deviations_file);
+    }
+
+    dispatch("cells cap", use_json, t0, move |ctx| {
         let mut cap_flags = cap_flags_owned;
         let root = ctx.root.clone();
         if let Some(file) = &deviations_file {
@@ -473,62 +486,139 @@ pub(crate) fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Insta
                 cap_flags.deviations = parse_deviations_file(file)?;
             }
         }
-        let cell = cap_cell_from_flags(&root, &cap_flags, finish)?;
-        if !finish {
-            let text = cap_text(&cell);
-            return Ok(Out::Emit(cell, text, 0));
-        }
-        // cells.finish: release every reservation the claiming agent holds.
-        let agent = match cell.get("trace").and_then(|t| t.get("worker")) {
-            Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
-            _ => None,
-        };
-        let cell_id = js_string_or_undefined(cell.get("id"));
-        let mut released: Vec<String> = Vec::new();
-        let mut release_failure: Option<(String, String)> = None;
-        if let Some(agent) = &agent {
-            match release_reservations_for_agent(&root, agent, &cell_id) {
-                Ok(outcome) => released = outcome.paths,
-                Err(Fail::Thrown(message)) => {
-                    release_failure = Some((
-                        message,
-                        format!("bee reservations release --agent {agent} --cell {cell_id} --json"),
-                    ));
-                }
-                Err(Fail::Delegate) => {
-                    // Pre-scanned; a mid-command race lands here (header
-                    // residual): report it as a release failure, never a
-                    // rollback of the already-committed cap.
-                    release_failure = Some((
-                        "reservation store shape changed mid-command (unrepresentable natively)".to_string(),
-                        format!("bee reservations release --agent {agent} --cell {cell_id} --json"),
-                    ));
-                }
-            }
-        }
-        let Value::Object(cell_map) = &cell else { return Err(Fail::Delegate) };
-        let mut result = cell_map.clone();
-        result.insert(
-            "released".into(),
-            Value::Array(released.iter().map(|p| Value::String(p.clone())).collect()),
-        );
-        if let Some((error, fix)) = &release_failure {
-            let mut rf = Map::new();
-            rf.insert("error".into(), Value::String(error.clone()));
-            rf.insert("fix".into(), Value::String(fix.clone()));
-            result.insert("release_failed".into(), Value::Object(rf));
-        }
-        let mut lines = vec![cap_text(&cell)];
-        lines.push(match (&release_failure, released.len()) {
-            (Some((error, fix)), _) => {
-                format!("Cap stands, but releasing reservations FAILED ({error}) — run: {fix}")
-            }
-            (None, 0) => "No active reservations to release.".to_string(),
-            (None, n) => format!("Released {n} reservation(s): {}.", released.join(", ")),
-        });
-        lines.push("next: reply [DONE] with the one-line outcome, files touched, and the commit hash.".to_string());
-        Ok(Out::Emit(Value::Object(result), lines.join("\n"), 0))
+        let cell = cap_cell_from_flags(&root, &root, &cap_flags, false)?;
+        let text = cap_text(&cell);
+        Ok(Out::Emit(cell, text, 0))
     })
+}
+
+/// `cells finish` (wf-1) — the FULL worktree door
+/// (`crate::roots::resolve_store_root_worktree`), not the narrow one every
+/// other mutating cells verb still uses: a granted worktree used to be
+/// refused here by `emit_unsupported_root` (`Unsupported::GrantedWorktree`),
+/// which inverted bee-swarming's cap-before-merge contract (a dispatched
+/// worker could never cap the cell it just did; the orchestrator capped
+/// after merge instead). Root split, per the logged decision:
+///   * the cell record and its claim resolve at `StoreRoots::main_root()` —
+///     one ledger, and the claim `finish` validates already lives there;
+///   * the declared test command's cwd is the calling worktree when granted
+///     (`finish_topology`, finish_support.rs) — the changed code is the
+///     evidence;
+///   * reservation/hold release threads `StoreRoots::hold_topology()`
+///     (main_root, holder) instead of the ordinary-only assumption
+///     `release_reservations_for_agent` used to hardcode (holder `"main"`,
+///     ledger at whatever `root` happened to be) — the un-ported piece
+///     roots.rs:91-100 names as the reason cells stayed narrow.
+/// From the MAIN checkout `roots.linked` is `None`, so `finish_topology`
+/// answers `(root, root, Some((root, "main")))` — byte-identical to what the
+/// narrow door produced before this cell.
+fn run_finish(
+    cmd: &'static str,
+    use_json: bool,
+    t0: Instant,
+    cap_flags_owned: CapFlags,
+    deviations_file: Option<String>,
+) -> Option<ExitCode> {
+    let cwd = std::env::current_dir().ok()?;
+    let roots = match resolve_store_root_worktree(&cwd) {
+        RootsWt::Go(r) => r,
+        RootsWt::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, cmd, use_json, t0, &why))
+        }
+        RootsWt::None => return Some(emit_no_root_error(&cwd, cmd, use_json, t0)),
+    };
+    let (cells_root, test_root, topo) = finish_topology(&roots);
+    let drift = check_manifest_drift(&cells_root);
+    let ctx = rsv::Ctx {
+        root: cells_root,
+        cmd,
+        use_json,
+        t0,
+        drift_changed: drift.manifest_changed,
+        drift_hint: drift.hint,
+    };
+    let topo_ref = topo.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
+    let out = finish_cap_and_release(
+        &ctx.root,
+        &test_root,
+        topo_ref,
+        cap_flags_owned,
+        deviations_file.as_deref(),
+    );
+    rsv::finish(&ctx, to_r2(out))
+}
+
+/// `cells finish`'s cap + reservation-release core, split out of
+/// `run_finish` so it is directly testable against explicit roots and
+/// topology — no process cwd mutation, unsafe under parallel `cargo test`
+/// and avoided everywhere else in this crate (reservations/tests.rs's
+/// `reserve_exec`/`release_exec` are the same shape, tested the same way).
+pub(crate) fn finish_cap_and_release(
+    root: &Path,
+    test_root: &Path,
+    topo: Option<(&Path, &str)>,
+    cap_flags_owned: CapFlags,
+    deviations_file: Option<&str>,
+) -> MR<Out> {
+    let mut cap_flags = cap_flags_owned;
+    if let Some(file) = deviations_file {
+        if !file.is_empty() {
+            // `flags['deviations-file'] ? parse : []` — truthy only.
+            cap_flags.deviations = parse_deviations_file(file)?;
+        }
+    }
+    let cell = cap_cell_from_flags(root, test_root, &cap_flags, true)?;
+
+    // cells.finish: release every reservation the claiming agent holds.
+    let agent = match cell.get("trace").and_then(|t| t.get("worker")) {
+        Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+        _ => None,
+    };
+    let cell_id = js_string_or_undefined(cell.get("id"));
+    let mut released: Vec<String> = Vec::new();
+    let mut release_failure: Option<(String, String)> = None;
+    if let Some(agent) = &agent {
+        match release_reservations_for_agent(topo, root, agent, &cell_id) {
+            Ok(outcome) => released = outcome.paths,
+            Err(Fail::Thrown(message)) => {
+                release_failure = Some((
+                    message,
+                    format!("bee reservations release --agent {agent} --cell {cell_id} --json"),
+                ));
+            }
+            Err(Fail::Delegate) => {
+                // Pre-scanned; a mid-command race lands here (header
+                // residual): report it as a release failure, never a
+                // rollback of the already-committed cap.
+                release_failure = Some((
+                    "reservation store shape changed mid-command (unrepresentable natively)".to_string(),
+                    format!("bee reservations release --agent {agent} --cell {cell_id} --json"),
+                ));
+            }
+        }
+    }
+    let Value::Object(cell_map) = &cell else { return Err(Fail::Delegate) };
+    let mut result = cell_map.clone();
+    result.insert(
+        "released".into(),
+        Value::Array(released.iter().map(|p| Value::String(p.clone())).collect()),
+    );
+    if let Some((error, fix)) = &release_failure {
+        let mut rf = Map::new();
+        rf.insert("error".into(), Value::String(error.clone()));
+        rf.insert("fix".into(), Value::String(fix.clone()));
+        result.insert("release_failed".into(), Value::Object(rf));
+    }
+    let mut lines = vec![cap_text(&cell)];
+    lines.push(match (&release_failure, released.len()) {
+        (Some((error, fix)), _) => {
+            format!("Cap stands, but releasing reservations FAILED ({error}) — run: {fix}")
+        }
+        (None, 0) => "No active reservations to release.".to_string(),
+        (None, n) => format!("Released {n} reservation(s): {}.", released.join(", ")),
+    });
+    lines.push("next: reply [DONE] with the one-line outcome, files touched, and the commit hash.".to_string());
+    Ok(Out::Emit(Value::Object(result), lines.join("\n"), 0))
 }
 
 // ── block / drop / unclaim / reopen / tier ─────────────────────────────────

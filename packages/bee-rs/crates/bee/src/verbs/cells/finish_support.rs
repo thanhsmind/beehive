@@ -8,7 +8,7 @@ use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock;
 use crate::registry::check_manifest_drift;
-use crate::roots::{resolve_store_root, Roots};
+use crate::roots::{resolve_store_root, Roots, StoreRoots};
 use crate::state as bstate;
 use crate::textutil::truncate_chars_tail;
 use crate::verbs::reservations as rsv;
@@ -260,6 +260,27 @@ pub(crate) fn commit_trailer_present(cwd: &Path, id: &str) -> bool {
         .any(|body| body.lines().any(|line| js_trim(line) == trailer))
 }
 
+// ─── FULL-door topology (wf-1) ──────────────────────────────────────────────
+// `cells finish`'s own split of `resolve_store_root_worktree`'s
+// `StoreRoots`, per the logged decision: the cell record and its claim
+// resolve at MAIN (one ledger, and the claim being validated already lives
+// there); the declared test command's cwd is the calling worktree when
+// granted (the changed code is the evidence); the hold-release topology is
+// `StoreRoots::hold_topology()` unchanged (roots.rs:541-551). A pure
+// function of `StoreRoots` — no cwd read — so it is exercisable directly
+// against a `resolve_store_root_worktree` fixture, the same shape
+// reservations/tests.rs's `hold_topology_matches_node_for_every_checkout_kind`
+// already uses.
+pub(crate) fn finish_topology(roots: &StoreRoots) -> (PathBuf, PathBuf, Option<(PathBuf, String)>) {
+    let cells_root = roots.main_root();
+    let test_root = match &roots.linked {
+        Some(l) if l.granted() => l.worktree_root.clone(),
+        _ => cells_root.clone(),
+    };
+    let topo = roots.hold_topology();
+    (cells_root, test_root, topo)
+}
+
 // ─── reservations-release subset (finish's release half) ───────────────────
 // Provenance: lib/reservations.mjs release/listReservations + bee.mjs
 // releaseReservationsForAgent, mirrored from verbs/reservations.rs's own
@@ -405,7 +426,21 @@ pub(crate) struct ReleaseOutcome {
 
 /// bee.mjs releaseReservationsForAgent(root, agent, cell) — matched-rows
 /// derivation, local lease release, {cell, session}-scoped ledger release.
-pub(crate) fn release_reservations_for_agent(root: &Path, agent: &str, cell_id: &str) -> MR<ReleaseOutcome> {
+///
+/// `topo` is `StoreRoots::hold_topology()` (wf-1) — `(main_root, holder)`,
+/// `None` for an ungranted linked worktree — replacing the ordinary-only
+/// assumption (ledger at `root`, holder hardcoded `"main"`) this used to
+/// carry unconditionally, matching `verbs/reservations/release.rs`'s own
+/// `release_exec` topology gate: no topology, no lock, no ledger read, the
+/// ledger step skipped entirely rather than silently guarding an empty one.
+/// The local lease release (`control_root(root)`) is unaffected — leases
+/// always live off `root`, independent of the ledger's own home.
+pub(crate) fn release_reservations_for_agent(
+    topo: Option<(&Path, &str)>,
+    root: &Path,
+    agent: &str,
+    cell_id: &str,
+) -> MR<ReleaseOutcome> {
     let now = rsv::now_ms();
     let records = list_path_lease_records(root)?;
     let mut matched: Vec<ResvLite> = Vec::new();
@@ -470,45 +505,49 @@ pub(crate) fn release_reservations_for_agent(root: &Path, agent: &str, cell_id: 
         }
     }
 
-    // xwh-2/gfb-1: ledger release per {cell, session} pair (holder 'main').
+    // xwh-2/gfb-1: ledger release per {cell, session} pair, gated on a
+    // hold-worthy topology (wf-1). `None` — an ungranted linked worktree —
+    // skips the whole ledger step, same as reservations::release_exec.
     let mut holds_released: u64 = 0;
-    for (cell_v, session_v) in &pairs {
-        let mut guard = acquire_named_lock(root, CROSS_WORKTREE_HOLDS_LOCK)?;
-        let outcome = (|| -> MR<u64> {
-            let mut store = read_holds_store(root)?;
-            let released_at = utc_now();
-            let mut count: u64 = 0;
-            if let Some(Value::Array(holds)) = store.get_mut("holds") {
-                for hold in holds.iter_mut() {
-                    let unreleased = matches!(hold.get("released_at"), None | Some(Value::Null));
-                    if !unreleased {
-                        continue;
-                    }
-                    if !matches!(hold.get("holder"), Some(Value::String(s)) if s == "main") {
-                        continue;
-                    }
-                    if let Some(s) = session_v {
-                        if !matches!(hold.get("session"), Some(v) if v == s) {
+    if let Some((main_root, holder)) = topo {
+        for (cell_v, session_v) in &pairs {
+            let mut guard = acquire_named_lock(main_root, CROSS_WORKTREE_HOLDS_LOCK)?;
+            let outcome = (|| -> MR<u64> {
+                let mut store = read_holds_store(main_root)?;
+                let released_at = utc_now();
+                let mut count: u64 = 0;
+                if let Some(Value::Array(holds)) = store.get_mut("holds") {
+                    for hold in holds.iter_mut() {
+                        let unreleased = matches!(hold.get("released_at"), None | Some(Value::Null));
+                        if !unreleased {
                             continue;
                         }
+                        if !matches!(hold.get("holder"), Some(Value::String(s)) if s == holder) {
+                            continue;
+                        }
+                        if let Some(s) = session_v {
+                            if !matches!(hold.get("session"), Some(v) if v == s) {
+                                continue;
+                            }
+                        }
+                        if !matches!(hold.get("cell"), Some(v) if v == cell_v) {
+                            continue;
+                        }
+                        if let Value::Object(m) = hold {
+                            m.insert("released_at".into(), Value::String(released_at.clone()));
+                        }
+                        count += 1;
                     }
-                    if !matches!(hold.get("cell"), Some(v) if v == cell_v) {
-                        continue;
-                    }
-                    if let Value::Object(m) = hold {
-                        m.insert("released_at".into(), Value::String(released_at.clone()));
-                    }
-                    count += 1;
                 }
-            }
-            if count > 0 {
-                write_json_atomic(&holds_ledger_path(root), &store)
-                    .map_err(|e| Fail::Thrown(format!("{e}")))?;
-            }
-            Ok(count)
-        })();
-        guard.release();
-        holds_released += outcome?;
+                if count > 0 {
+                    write_json_atomic(&holds_ledger_path(main_root), &store)
+                        .map_err(|e| Fail::Thrown(format!("{e}")))?;
+                }
+                Ok(count)
+            })();
+            guard.release();
+            holds_released += outcome?;
+        }
     }
 
     let mut paths: Vec<String> = Vec::new();
