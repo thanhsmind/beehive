@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "block-lean",
   "mode": "small",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,7 +10,7 @@
     "review": false
   },
   "summary": "Feature \"block-lean\" started at phase \"planning\" (lane).",
-  "next_action": "Write CONTEXT spec in worktree, dispatch bl-1.",
+  "next_action": "CLOSED in substance - merged to main; parked pending the compounding-complete port (chip filed).",
   "created_at": "2026-08-04T03:03:08.537Z",
   "route": {
     "class": "refactor",
@@ -21,5 +21,21 @@
     "product_files": 2,
     "rationale": "Lean the AGENTS operating block: hook-enforced prohibitions shrink to one-line signposts, situational sections demote to cited references, semantic every-turn rules and canonical homes keep full text. Source packages/bee/AGENTS.block.md + re-rendered AGENTS.md.",
     "updated_at": "2026-08-04T03:03:08.667Z"
+  },
+  "last_scribing_run": {
+    "feature": "block-lean",
+    "date": "2026-08-04",
+    "at": "2026-08-04T03:18:10.004Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "None - doctrine synced in-flight by bl-2."
+  },
+  "last_compounding_run": {
+    "feature": "block-lean",
+    "date": "2026-08-04",
+    "at": "2026-08-04T03:18:10.079Z",
+    "learnings": "docs/history/learnings/20260804-block-lean.md",
+    "next_action": null
   }
 }
