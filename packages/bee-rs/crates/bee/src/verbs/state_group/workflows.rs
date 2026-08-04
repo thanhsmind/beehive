@@ -296,7 +296,7 @@ pub(crate) const ROUTE_CLASS_VALUES: [&str; 7] =
     ["feature", "bugfix", "docs", "refactor", "research", "release", "spike"];
 const ROUTE_LANE_VALUES: [&str; 6] =
     ["docs", "tiny", "small", "spike", "standard", "high-risk"];
-const ROUTE_FLAG_VALUES: [&str; 10] = [
+pub(crate) const ROUTE_FLAG_VALUES: [&str; 10] = [
     "auth",
     "authorization",
     "data-model",
@@ -309,8 +309,116 @@ const ROUTE_FLAG_VALUES: [&str; 10] = [
     "multi-domain",
 ];
 
+/// Hard-gate flags (bee-hive/references/scout-and-ticks.md, re-lane
+/// checkpoint condition 2: "auth · authorization · data loss ·
+/// audit/security · external provider · validation removal · database
+/// migration/schema change"), spelled in `ROUTE_FLAG_VALUES`' own
+/// vocabulary rather than a second one: `data-model` carries both "data
+/// loss" and "database migration/schema change"; `proof-weakening` is the
+/// canonical slug for "validation removal".
+pub(crate) const HARD_GATE_ROUTE_FLAGS: [&str; 6] = [
+    "auth",
+    "authorization",
+    "data-model",
+    "audit-security",
+    "external-systems",
+    "proof-weakening",
+];
+
 pub(crate) const EXAMPLE_ROUTE: &str =
     "bee state route --set --class feature --lane standard --flags multi-domain --files 7 --json";
+
+/// The demotable triage ladder (scout-and-ticks.md, re-lane checkpoint):
+/// `standard` -> `small` -> `tiny`, downward only. `docs`, `spike`, and
+/// `high-risk` are not on this numeric ladder at all — `high-risk` is
+/// handled by its own absolute "never demotes" rule in
+/// `validate_route_lane_transition`, and a move touching `docs`/`spike` is
+/// off-ladder (never classified as a ladder demotion by this rule).
+pub(crate) fn triage_ladder_rank(lane: &str) -> Option<u8> {
+    match lane {
+        "tiny" => Some(0),
+        "small" => Some(1),
+        "standard" => Some(2),
+        _ => None,
+    }
+}
+
+/// D5 (docs/history/hook-teeth/CONTEXT.md) — validates a `route --set`
+/// lane transition against an EXISTING route record. Returns:
+/// - `Ok(Some(stamp))` — the `demoted_at` value the new route record must
+///   carry: either a freshly minted stamp (a demotion just landed) or the
+///   existing one carried forward unchanged (no new demotion this call,
+///   but a prior one must stay remembered — "at most one demotion per
+///   feature EVER", not "once per call").
+/// - `Ok(None)` — no demotion has ever landed for this feature; the new
+///   record carries no `demoted_at`.
+/// - `Err(message)` — the transition is refused; the message names the
+///   specific violated rule.
+///
+/// Same-lane re-records and any upward move are always allowed (scout-
+/// and-ticks.md "Promotion is always available."); only a genuine
+/// downward move on the ladder is subject to the three demotion limits.
+pub(crate) fn validate_route_lane_transition(
+    existing_route: &Map<String, Value>,
+    new_lane: &str,
+    new_flags: &[String],
+) -> Result<Option<String>, String> {
+    let old_lane = match existing_route.get("lane") {
+        Some(Value::String(s)) => s.as_str(),
+        _ => "",
+    };
+    let existing_demoted_at = match existing_route.get("demoted_at") {
+        Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+        _ => None,
+    };
+
+    if old_lane == new_lane {
+        // Same-lane re-record: always allowed, demotion history untouched.
+        return Ok(existing_demoted_at);
+    }
+
+    // Rule: high-risk never demotes — absolute, independent of the
+    // standard/small/tiny ladder and of any other condition below.
+    if old_lane == "high-risk" {
+        return Err(format!(
+            "route --set: refused \u{2014} the feature's route is lane \"high-risk\" and lane \"{new_lane}\" would move it off high-risk; rule violated: high-risk lanes never demote."
+        ));
+    }
+
+    let old_rank = triage_ladder_rank(old_lane);
+    let new_rank = triage_ladder_rank(new_lane);
+    let is_ladder_demotion = matches!((old_rank, new_rank), (Some(o), Some(n)) if n < o);
+
+    if !is_ladder_demotion {
+        // Upward move, off-ladder move (docs/spike involved), or an
+        // equal-rank rename that isn't the same string — none of these
+        // are a ladder demotion; carry the demotion history forward
+        // unchanged.
+        return Ok(existing_demoted_at);
+    }
+
+    // Rule: any hard-gate flag in the NEW --flags set blocks demotion.
+    let hit: Vec<&str> = HARD_GATE_ROUTE_FLAGS
+        .iter()
+        .filter(|f| new_flags.iter().any(|nf| nf == *f))
+        .copied()
+        .collect();
+    if !hit.is_empty() {
+        return Err(format!(
+            "route --set: refused \u{2014} demoting lane \"{old_lane}\" to \"{new_lane}\" carries hard-gate flag(s) {} in --flags; rule violated: a hard-gate flag can never demote.",
+            hit.join(", ")
+        ));
+    }
+
+    // Rule: at most one demotion per feature, ever.
+    if let Some(stamp) = existing_demoted_at {
+        return Err(format!(
+            "route --set: refused \u{2014} demoting lane \"{old_lane}\" to \"{new_lane}\" would be this feature's second demotion (first recorded at {stamp}); rule violated: at most one demotion per feature, ever."
+        ));
+    }
+
+    Ok(Some(now_iso()))
+}
 
 /// `Number(v)` for a flag STRING — the full ToNumber conversion, not
 /// reservations.rs's `js_number_flag` (which is Number.parseInt and would read
@@ -624,7 +732,7 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
                 "route: requires --set (to record a route) or --show (to read it back).".to_string(),
             ));
         }
-        let route_object = match validate_route_set_flags(&flags)? {
+        let mut route_object = match validate_route_set_flags(&flags)? {
             Ok(r) => r,
             Err(message) => return Ok(Out::Thrown(message)),
         };
@@ -652,6 +760,24 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
             return Ok(Out::Thrown(format!(
                 "route --set: refused \u{2014} no active feature to attach a route to (phase \"{phase_disp}\", feature \"{feature_disp}\"). FIX: start a feature first (state start-feature), then record its route."
             )));
+        }
+        // D5 (hook-teeth bh-5, CONTEXT.md): when a route record ALREADY
+        // exists on the target, this --set is a re-lane, not a first-time
+        // record — validate the transition (scout-and-ticks.md, "Re-lane
+        // checkpoint") before it lands. A first-time route --set (no
+        // existing record) is completely untouched by this check.
+        if let Some(Value::Object(existing_route)) = target.record().get("route") {
+            let new_flags: Vec<String> = match route_object.get("flags") {
+                Some(Value::Array(a)) => a.iter().map(js_disp).collect(),
+                _ => Vec::new(),
+            };
+            match validate_route_lane_transition(existing_route, &lane_class, &new_flags) {
+                Ok(Some(stamp)) => {
+                    route_object.insert("demoted_at".into(), json!(stamp));
+                }
+                Ok(None) => {}
+                Err(message) => return Ok(Out::Thrown(message)),
+            }
         }
         let lane_note = target.lane_note();
         let target_lane = target.lane().map(str::to_string);

@@ -1457,3 +1457,176 @@ use std::time::Instant;
         .unwrap();
         assert!(!ok(other_live_work_present(tmp.path())));
     }
+
+    // ── state route --set re-lane transition validation (D5, hook-teeth bh-5) ──
+    //
+    // scout-and-ticks.md, "Re-lane checkpoint": downward moves only travel
+    // the standard->small->tiny ladder, one step or more but always
+    // downward; at most one demotion per feature EVER (a `demoted_at`
+    // stamp on the route object persists it); `high-risk` never demotes;
+    // any hard-gate flag in the NEW --flags set blocks a demotion. Any
+    // upward move or same-lane re-record is always allowed.
+
+    fn route_with(lane: &str) -> Map<String, Value> {
+        obj(&format!(r#"{{"class":"feature","lane":"{lane}","flags":[],"product_files":1}}"#))
+    }
+
+    fn route_with_demoted_at(lane: &str, stamp: &str) -> Map<String, Value> {
+        let mut r = route_with(lane);
+        r.insert("demoted_at".into(), json!(stamp));
+        r
+    }
+
+    #[test]
+    fn triage_ladder_rank_orders_only_the_three_demotable_lanes() {
+        assert!(triage_ladder_rank("tiny") < triage_ladder_rank("small"));
+        assert!(triage_ladder_rank("small") < triage_ladder_rank("standard"));
+        // docs/spike/high-risk are off this numeric ladder entirely — the
+        // high-risk case is an absolute rule of its own, and docs/spike
+        // moves are never classified as a ladder demotion by this rule.
+        for lane in ["docs", "spike", "high-risk", ""] {
+            assert_eq!(triage_ladder_rank(lane), None, "lane {lane}");
+        }
+    }
+
+    #[test]
+    fn a_first_demotion_stamps_demoted_at_and_a_second_ever_refuses() {
+        // standard -> small: within-threshold, zero hard-gate flags, no
+        // prior demotion -> allowed, stamps a fresh demoted_at.
+        let stamp = match validate_route_lane_transition(&route_with("standard"), "small", &[]) {
+            Ok(Some(s)) => s,
+            other => panic!("expected a fresh demoted_at stamp, got {other:?}"),
+        };
+        assert!(!stamp.is_empty());
+
+        // A second demotion attempt on a route that already carries that
+        // stamp -> refused, naming the once-per-feature rule, even though
+        // this is a DIFFERENT step (small -> tiny) on the SAME feature.
+        let existing = route_with_demoted_at("small", &stamp);
+        let message = match validate_route_lane_transition(&existing, "tiny", &[]) {
+            Err(m) => m,
+            Ok(v) => panic!("expected a refusal, got Ok({v:?})"),
+        };
+        assert!(
+            message.contains("at most one demotion per feature, ever"),
+            "message: {message}"
+        );
+        assert!(message.contains(&stamp), "message must cite the first stamp: {message}");
+    }
+
+    #[test]
+    fn multi_step_downward_demotion_is_allowed_as_a_single_demotion() {
+        // "one step or more but always downward" — standard -> tiny
+        // directly is still just ONE demotion, not two.
+        let existing = route_with("standard");
+        match validate_route_lane_transition(&existing, "tiny", &[]) {
+            Ok(Some(_)) => {}
+            other => panic!("expected a stamped single demotion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn hard_gate_flag_in_the_new_flags_blocks_demotion() {
+        let existing = route_with("standard");
+        let flags = vec!["auth".to_string()];
+        let message = match validate_route_lane_transition(&existing, "small", &flags) {
+            Err(m) => m,
+            Ok(v) => panic!("expected a refusal, got Ok({v:?})"),
+        };
+        assert!(
+            message.contains("a hard-gate flag can never demote"),
+            "message: {message}"
+        );
+        assert!(message.contains("auth"), "message: {message}");
+
+        // Reuses validate_route_set_flags's own vocabulary — every entry
+        // in HARD_GATE_ROUTE_FLAGS must be a legal --flags value.
+        for f in HARD_GATE_ROUTE_FLAGS {
+            assert!(ROUTE_FLAG_VALUES.contains(&f), "hard-gate flag {f} not in ROUTE_FLAG_VALUES");
+        }
+
+        // A demotion with a flag OUTSIDE the hard-gate set is untouched.
+        let benign = vec!["multi-domain".to_string()];
+        match validate_route_lane_transition(&existing, "small", &benign) {
+            Ok(Some(_)) => {}
+            other => panic!("expected an allowed demotion, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn high_risk_never_demotes_regardless_of_target_lane_or_flags() {
+        let existing = route_with("high-risk");
+        for target in ["standard", "small", "tiny", "docs", "spike"] {
+            let message = match validate_route_lane_transition(&existing, target, &[]) {
+                Err(m) => m,
+                Ok(v) => panic!("expected a refusal for high-risk -> {target}, got Ok({v:?})"),
+            };
+            assert!(
+                message.contains("high-risk lanes never demote"),
+                "message for {target}: {message}"
+            );
+        }
+    }
+
+    #[test]
+    fn upward_moves_and_off_ladder_moves_are_always_allowed() {
+        // Upward, even across multiple rungs.
+        assert_eq!(
+            ok2(validate_route_lane_transition(&route_with("tiny"), "standard", &[])),
+            None
+        );
+        // Promoting INTO high-risk from anywhere is always allowed.
+        assert_eq!(
+            ok2(validate_route_lane_transition(&route_with("small"), "high-risk", &[])),
+            None
+        );
+        // A move touching docs/spike is off the standard/small/tiny
+        // ladder entirely and is never classified as a ladder demotion.
+        assert_eq!(
+            ok2(validate_route_lane_transition(&route_with("standard"), "docs", &[])),
+            None
+        );
+        assert_eq!(
+            ok2(validate_route_lane_transition(&route_with("docs"), "standard", &[])),
+            None
+        );
+    }
+
+    #[test]
+    fn same_lane_re_record_is_allowed_and_carries_demotion_history_forward() {
+        // No prior demotion -> stays None.
+        assert_eq!(
+            ok2(validate_route_lane_transition(&route_with("standard"), "standard", &[])),
+            None
+        );
+        // A prior demotion's stamp survives an unrelated same-lane
+        // re-record UNCHANGED (never re-stamped, never dropped).
+        let existing = route_with_demoted_at("small", "2020-01-01T00:00:00.000Z");
+        assert_eq!(
+            ok2(validate_route_lane_transition(&existing, "small", &[])),
+            Some("2020-01-01T00:00:00.000Z".to_string())
+        );
+    }
+
+    #[test]
+    fn a_promotion_after_a_demotion_still_carries_the_demotion_history_forward() {
+        // The once-per-feature limit is "ever": a later promotion must not
+        // erase the fact that this feature already spent its one
+        // demotion, so a future re-demotion attempt still refuses.
+        let existing = route_with_demoted_at("small", "2020-01-01T00:00:00.000Z");
+        assert_eq!(
+            ok2(validate_route_lane_transition(&existing, "standard", &[])),
+            Some("2020-01-01T00:00:00.000Z".to_string())
+        );
+    }
+
+    /// `Result<Option<String>, String>` unwrapped for the assert_eq! call
+    /// sites above — panics with the refusal text on an unexpected Err,
+    /// which is exactly what a stray refusal in an "always allowed" case
+    /// should do.
+    fn ok2(r: Result<Option<String>, String>) -> Option<String> {
+        match r {
+            Ok(v) => v,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        }
+    }
