@@ -352,8 +352,8 @@ pub(crate) enum Verb {
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let strs: Vec<&str> = args.iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
-    // STRANGLER ROUTING RULE: exactly these six shapes; any --brief presence
-    // was already served upstream by status_brief; everything else -> None.
+    // ROUTING RULE: exactly these six shapes; any --brief presence was
+    // already served upstream by status_brief; everything else -> None.
     let (verb, lanes_full, use_json) = match strs.as_slice() {
         ["status"] => (Verb::Status, false, false),
         ["status", "--json"] => (Verb::Status, false, true),

@@ -1,35 +1,27 @@
-// bee dev release-manifest — Rust port of scripts/release_manifest.mjs
-// (DIST-01/DIST-03/D-03, decision ed0b2920).
+// bee dev release-manifest (DIST-01/DIST-03/D-03, decision ed0b2920).
 //
 // Enumerates the release-identity file set for the bee distribution and
 // hashes it. `--write` regenerates
 // docs/history/codex-harness-hardening/release-manifest.json, `--check`
-// recomputes and compares (the shape run_verify.mjs runs on every verify),
-// `--selftest` proves the comparison logic actually bites.
+// recomputes and compares (the shape a full verify run checks on every
+// verify), `--selftest` proves the comparison logic actually bites.
 //
-// PROVENANCE: every function names its .mjs source. Two details carry the
-// whole byte-identity of the output file:
+// Two details carry the whole byte-identity of the output file:
 //
-//   1. THE SORT. `records.sort((a, b) => a.path.localeCompare(b.path))` is
-//      ICU collation, not code units. Sorting the real 326-path set by code
-//      unit produces a DIFFERENT file (measured), so devtools::locale_compare
-//      is mandatory here — see its header for the proof. `compareManifests`
-//      mixes the two comparators deliberately: `missing`/`added` use bare
-//      `.sort()` (code units), `changed` uses localeCompare. Both are
-//      reproduced as written.
+//   1. THE SORT. The path sort is ICU collation, not code units. Sorting the
+//      real 326-path set by code unit produces a DIFFERENT file (measured),
+//      so devtools::locale_compare is mandatory here — see its header for
+//      the proof. The manifest comparison mixes the two comparators
+//      deliberately: `missing`/`added` use bare code-unit sort, `changed`
+//      uses locale collation. Both are reproduced as written.
 //   2. THE MODE. `statSync(p).mode & 0o777` — on Windows libuv synthesises
 //      0666 (0444 when FILE_ATTRIBUTE_READONLY), which is what the committed
 //      manifest carries; on Unix it is the real permission bits.
 //
-// STRANGLER ROUTING. Exactly one of --write/--check/--selftest, matched with
-// the .mjs's own `args.includes(...)` semantics (so an extra unrecognised
-// argument is ignored there and here). Failures that are DETERMINISTIC in
-// Node (`throw new Error("release_manifest: …")`, surfaced as
-// `FAIL release_manifest: ${error.message}`) are reproduced byte for byte;
-// failures whose text WAS a V8/libuv message (a corrupt stored manifest, an
-// unreadable file) refuse natively at cutover, in the same
-// `FAIL release_manifest: …` shape and with the same exit code, worded by us.
-// The one surviving None is a path outside the proven collation alphabet.
+// ROUTING. Exactly one of --write/--check/--selftest (an extra unrecognised
+// argument is ignored). Every failure refuses natively in the
+// `FAIL release_manifest: …` shape with a non-zero exit. The one surviving
+// None is a path outside the proven collation alphabet.
 
 use super::{rel_posix, sha256_hex, sort_by_locale};
 use crate::jsjson;
@@ -37,10 +29,10 @@ use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-/// provenance: release_manifest.mjs SCHEMA_VERSION. Bumped to 2 at the R6
-/// cutover: the file gained a second top-level key (`unhashedArtifacts`) and
-/// the `runtime_lib` / `distribution_test` roles left the inventory, so a
-/// stored v1 manifest is not comparable to a v2 build.
+/// Bumped to 2 when the file gained a second top-level key
+/// (`unhashedArtifacts`) and the `runtime_lib` / `distribution_test` roles
+/// left the inventory, so a stored v1 manifest is not comparable to a v2
+/// build.
 const SCHEMA_VERSION: u64 = 2;
 
 /// THE BINARY, and the one thing in the shipped frame that cannot be hashed.
@@ -70,9 +62,8 @@ const UNHASHED_ARTIFACTS: &[(&str, &[&str], &str)] = &[(
 
 /// Repo-relative roots the manifest's inventory covers. Read by
 /// `verbs/cells.rs`'s regen obligation so "what the release manifest covers"
-/// is DERIVED from the manifest builder rather than pasted beside it — the
-/// property the old `.mjs`-source-parsing derivation existed to guarantee, now
-/// obtained by sharing the definition instead of re-reading it (D2).
+/// is DERIVED from the manifest builder rather than pasted beside it, by
+/// sharing the definition instead of re-reading it (D2).
 pub(crate) const INVENTORY_ROOTS: &[&str] = &[
     ".bee/bin/bee",
     ".bee/expertise",
@@ -93,7 +84,6 @@ pub(crate) const INVENTORY_ROOTS: &[&str] = &[
 /// covered root must also list in `files`.
 pub(crate) const MANIFEST_REL: &str = "docs/history/codex-harness-hardening/release-manifest.json";
 
-/// provenance: release_manifest.mjs MANIFEST_PATH.
 fn manifest_path(root: &Path) -> PathBuf {
     root.join("docs")
         .join("history")
@@ -101,16 +91,13 @@ fn manifest_path(root: &Path) -> PathBuf {
         .join("release-manifest.json")
 }
 
-/// A deterministic `throw new Error(...)` from the .mjs (reproduced), versus
-/// a V8/libuv-worded failure (delegated as None before any output).
 enum BuildErr {
     /// `FAIL release_manifest: ${message}` + exit 1.
     Refuse(String),
-    /// Unproven bytes — the probe returns None. CUTOVER: every I/O arm that
-    /// used this became a `Refuse` (see `io_refuse`). What remains is
-    /// `sort_records`, whose subject is `localeCompare` collation over free
-    /// prose — a different delegate class from V8 message text, and the one
-    /// this sweep deliberately left alone.
+    /// Unproven bytes — the probe returns None. Every I/O arm reports through
+    /// `Refuse` (see `io_refuse`); what remains is `sort_records`, whose
+    /// subject is locale collation over free prose — the one case still left
+    /// unproven.
     Nd,
 }
 type R<T> = Result<T, BuildErr>;
@@ -138,8 +125,7 @@ impl Record {
     }
 }
 
-/// provenance: release_manifest.mjs modeOctal —
-/// `(statSync(p).mode & 0o777).toString(8).padStart(3, "0")`.
+/// `(mode & 0o777)` formatted as 3 zero-padded octal digits.
 pub(super) fn mode_octal(meta: &std::fs::Metadata) -> String {
     #[cfg(unix)]
     let bits = {
@@ -152,10 +138,8 @@ pub(super) fn mode_octal(meta: &std::fs::Metadata) -> String {
     format!("{bits:03o}")
 }
 
-/// A filesystem failure, worded by us. Node let the libuv error throw, which
-/// is why every one of these used to be `BuildErr::Nd` (delegate). The error
-/// KIND is named rather than the OS message string, which varies by platform
-/// and locale.
+/// A filesystem failure, worded by us. The error KIND is named rather than
+/// the OS message string, which varies by platform and locale.
 fn io_refuse(action: &str, path: &Path, err: &std::io::Error) -> BuildErr {
     BuildErr::Refuse(format!(
         "release_manifest: cannot {action} {} ({})",
@@ -164,7 +148,6 @@ fn io_refuse(action: &str, path: &Path, err: &std::io::Error) -> BuildErr {
     ))
 }
 
-/// provenance: release_manifest.mjs buildRecord (+ sha256File).
 fn build_record(root: &Path, abs: &Path, role: &str, with_package_path: bool) -> R<Record> {
     let data = std::fs::read(abs).map_err(|e| io_refuse("read", abs, &e))?;
     let meta = std::fs::metadata(abs).map_err(|e| io_refuse("stat", abs, &e))?;
@@ -186,8 +169,8 @@ fn sort_records(records: &mut [Record]) -> R<()> {
     }
 }
 
-/// provenance: release_manifest.mjs enumerateTree — recursive, `packagePath`
-/// set, `excludeTopDirNames` skipping only IMMEDIATE children.
+/// Recursive; `packagePath` set, `exclude_top` skipping only IMMEDIATE
+/// children.
 fn enumerate_tree(root: &Path, dir: &Path, role: &str, exclude_top: &[&str]) -> R<Vec<Record>> {
     if !dir.exists() {
         return Err(BuildErr::Refuse(format!(
@@ -238,8 +221,8 @@ fn walk(
     Ok(())
 }
 
-/// provenance: release_manifest.mjs enumerateFlatDir — files with `ext`
-/// directly inside `dir` (no recursion), no `packagePath`, sorted.
+/// Files with `ext` directly inside `dir` (no recursion), no `packagePath`,
+/// sorted.
 fn enumerate_flat_dir(root: &Path, dir: &Path, role: &str, ext: &str) -> R<Vec<Record>> {
     if !dir.exists() {
         return Err(BuildErr::Refuse(format!(
@@ -260,8 +243,8 @@ fn enumerate_flat_dir(root: &Path, dir: &Path, role: &str, ext: &str) -> R<Vec<R
     Ok(records)
 }
 
-/// THE SHIPPED FRAME (R6 cutover, owner decision). Every root below answers
-/// one question: what does a HOST actually receive when it installs bee?
+/// THE SHIPPED FRAME (owner decision). Every root below answers one
+/// question: what does a HOST actually receive when it installs bee?
 ///
 ///   * the binary            `.bee/bin/bee` — see UNHASHED_ARTIFACTS
 ///   * the prompts           packages/bee/prompts/** (inside the payload tree)
@@ -271,16 +254,15 @@ fn enumerate_flat_dir(root: &Path, dir: &Path, role: &str, ext: &str) -> R<Vec<R
 ///   * the plugin identity   the two plugin.json + marketplace.json
 ///   * the installers        scripts/install.sh / .ps1
 ///
-/// DROPPED at the cutover, with reasons:
-///   * `.bee/bin/lib/*.mjs` (`runtime_lib`, 38 records) — the vendored Node
-///     library. It is deleted; a host receives a binary instead, and the frame
-///     must describe what ships, not what used to.
-///   * `scripts/tests/test_verify_manifest.mjs` + `test_release_tuple.mjs`
-///     (`distribution_test`, 2 records) — deleted with the Node suites. They
-///     were never SHIPPED in the first place; they were the tests OF the
-///     distribution, pinned here so a release could not quietly drop its own
-///     guard. That job now belongs to `cargo test`, which cannot be dropped
-///     without the build noticing.
+/// DROPPED, with reasons:
+///   * the vendored Node library under `.bee/bin/lib/` (`runtime_lib`, 38
+///     records) — it is deleted; a host receives a binary instead, and the
+///     frame must describe what ships, not what used to.
+///   * the Node test suites' own distribution tests (`distribution_test`, 2
+///     records) — deleted with the suites. They were never SHIPPED in the
+///     first place; they were the tests OF the distribution, pinned here so
+///     a release could not quietly drop its own guard. That job now belongs
+///     to `cargo test`, which cannot be dropped without the build noticing.
 ///
 /// `packages/bee/**` and `packages/bee/hooks/**` stay as roots and simply
 /// shrink: after the deletion they carry the prompts, the statusline, the
@@ -364,8 +346,8 @@ fn build_current_records(root: &Path) -> R<Vec<Record>> {
     Ok(records)
 }
 
-/// provenance: release_manifest.mjs writeManifestFile — `{schemaVersion,
-/// files}` as `JSON.stringify(m, null, 2) + "\n"`.
+/// `{schemaVersion, unhashedArtifacts, files}`, pretty-printed with a
+/// trailing newline.
 fn manifest_bytes(records: &[Record]) -> String {
     let mut m = Map::new();
     m.insert("schemaVersion".into(), Value::Number(SCHEMA_VERSION.into()));
@@ -456,9 +438,8 @@ fn fields(v: &Value) -> Fields<'_> {
     }
 }
 
-/// provenance: release_manifest.mjs compareManifests. NOTE the two different
-/// sorts: `missing`/`added` use bare `.sort()` (code units), `changed` uses
-/// `localeCompare`.
+/// NOTE the two different sorts: `missing`/`added` use bare code-unit sort,
+/// `changed` uses locale collation.
 fn compare_manifests(stored: &[Value], current: &[Value]) -> Option<Diff> {
     // `new Map(arr.map(r => [r.path, r]))` — a duplicate path keeps the LAST.
     let index = |arr: &[Value]| -> Vec<(String, Value)> {
@@ -587,8 +568,8 @@ fn read_stored(root: &Path) -> Result<Vec<Value>, Option<ExitCode>> {
             file.display()
         ))));
     };
-    // R6 cutover: a stored manifest from before the frame was redrawn describes
-    // a DIFFERENT inventory. Say so in one line instead of printing forty
+    // A stored manifest from before the frame was redrawn describes a
+    // DIFFERENT inventory. Say so in one line instead of printing forty
     // mismatches that all mean the same thing.
     match parsed.get("schemaVersion").and_then(Value::as_u64) {
         Some(v) if v == SCHEMA_VERSION => {}
@@ -616,8 +597,7 @@ fn read_stored(root: &Path) -> Result<Vec<Value>, Option<ExitCode>> {
     }
 }
 
-/// THE `--check` CONTRACT (restated at the R6 cutover). Two obligations, both
-/// of which must hold:
+/// THE `--check` CONTRACT. Two obligations, both of which must hold:
 ///
 ///   1. HASH PARITY over `files` — every record in the stored manifest is
 ///      present in the current tree with the same sha256/mode/role/packagePath,
@@ -630,9 +610,10 @@ fn read_stored(root: &Path) -> Result<Vec<Value>, Option<ExitCode>> {
 ///      unverified.
 ///
 /// A schemaVersion mismatch is its own refusal (see `read_stored`): a v1
-/// manifest describes an inventory that included `.bee/bin/lib/*.mjs`, and
-/// diffing it against a v2 build would report 40 spurious mismatches instead of
-/// the one real fact — that the file needs regenerating.
+/// manifest describes an inventory that included the vendored library under
+/// `.bee/bin/lib/`, and diffing it against a v2 build would report 40
+/// spurious mismatches instead of the one real fact — that the file needs
+/// regenerating.
 fn run_check(root: &Path) -> Result<ExitCode, Option<ExitCode>> {
     let stored = read_stored(root)?;
     let current = resolve(build_current_records(root))?;
@@ -676,9 +657,9 @@ fn run_check(root: &Path) -> Result<ExitCode, Option<ExitCode>> {
     Ok(ExitCode::FAILURE)
 }
 
-/// provenance: release_manifest.mjs runSelftest — take the REAL manifest as a
-/// baseline, mutate ONE covered file's content in a temp copy (never the real
-/// tree), and assert compareManifests flags exactly that file.
+/// Take the REAL manifest as a baseline, mutate ONE covered file's content in
+/// a temp copy (never the real tree), and assert compare_manifests flags
+/// exactly that file.
 fn run_selftest(root: &Path) -> Result<ExitCode, Option<ExitCode>> {
     let baseline = resolve(build_current_records(root))?;
     if baseline.is_empty() {

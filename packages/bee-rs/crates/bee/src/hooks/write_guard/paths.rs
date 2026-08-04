@@ -151,7 +151,7 @@ pub(crate) fn is_exclusive_path(root: &Path, normalized: &str) -> R<bool> {
     Ok(globs.iter().any(|g| glob_match(&glob_tokens(g), &input)))
 }
 
-// ─── git classification (provenance: guards.mjs ige-2 / gc-2 section) ─────
+// ─── git classification ─────────────────────────────────────────────────
 
 pub(crate) fn git_global_flag_takes_value(t: &str) -> bool {
     matches!(t, "-C" | "-c" | "--git-dir" | "--work-tree" | "--namespace")
@@ -162,7 +162,6 @@ pub(crate) struct GitInvocation {
     pub(crate) rest: Vec<String>,
 }
 
-/// provenance: guards.mjs findGitInvocation.
 pub(crate) fn find_git_invocation(tokens: &[String]) -> Option<GitInvocation> {
     let mut i = 0usize;
     while i < tokens.len() {
@@ -209,7 +208,6 @@ pub(crate) fn find_git_invocation(tokens: &[String]) -> Option<GitInvocation> {
     None
 }
 
-/// provenance: guards.mjs runGitCapture.
 pub(crate) fn run_git_capture(cwd: &str, args: &[&str]) -> Option<Vec<String>> {
     let out = std::process::Command::new("git")
         .args(args)
@@ -232,7 +230,6 @@ pub(crate) fn run_git_capture(cwd: &str, args: &[&str]) -> Option<Vec<String>> {
 
 pub(crate) const GIT_BROAD_PATHSPECS: [&str; 4] = [".", ":", ":/", "./"];
 
-/// provenance: guards.mjs extractExplicitPathspecs.
 pub(crate) fn extract_explicit_pathspecs(rest: &[String]) -> Vec<String> {
     match rest.iter().position(|t| t == "--") {
         None => rest.iter().filter(|t| !t.starts_with('-')).cloned().collect(),
@@ -240,7 +237,6 @@ pub(crate) fn extract_explicit_pathspecs(rest: &[String]) -> Vec<String> {
     }
 }
 
-/// provenance: guards.mjs resolveGitMutationPaths.
 pub(crate) fn resolve_git_mutation_paths(cwd: &str, subcommand: &str, rest: &[String]) -> Option<Vec<String>> {
     let broad = |p: &String| GIT_BROAD_PATHSPECS.contains(&p.as_str()) || p.contains('*');
     if subcommand == "commit" {
@@ -289,7 +285,6 @@ pub(crate) struct TreeVerbClass {
     pub(crate) why: &'static str,
 }
 
-/// provenance: guards.mjs classifyConcurrentTreeVerb.
 pub(crate) fn classify_concurrent_tree_verb(subcommand: Option<&str>, rest: &[String]) -> Option<TreeVerbClass> {
     let sub = subcommand?;
     if sub == "add" {
@@ -358,7 +353,6 @@ pub(crate) fn classify_concurrent_tree_verb(subcommand: Option<&str>, rest: &[St
     None
 }
 
-/// provenance: guards.mjs concurrentTreeRefusal.
 pub(crate) fn concurrent_tree_refusal(verb: &str, why: &str, worker_clause: &str) -> String {
     format!(
         "bee concurrent-worker git guard: `git {verb}` is refused because {worker_clause}. {why} \
@@ -372,7 +366,6 @@ restore / revert across the shared tree while a sibling worker holds work in it 
     )
 }
 
-/// provenance: guards.mjs sessionWorkspaceId.
 pub(crate) fn session_workspace_id(control_root: &str, session_id: &Value) -> R<String> {
     let sid = match session_id {
         Value::String(s) => s.clone(),
@@ -390,7 +383,6 @@ pub(crate) enum WorkerCount {
     Unresolved(&'static str),
 }
 
-/// provenance: guards.mjs resolveLiveWorkerCount.
 pub(crate) fn resolve_live_worker_count(root: &str, control_root: &str, ctx: &JsCtx) -> R<WorkerCount> {
     let own_workspace = ctx.workspace_id.clone().unwrap_or_else(|| "main".to_string());
     if reservation_store_corrupt(root) {
@@ -436,13 +428,11 @@ pub(crate) fn resolve_live_worker_count(root: &str, control_root: &str, ctx: &Js
     Ok(WorkerCount::Resolved(worker_keys.len()))
 }
 
-/// provenance: guards.mjs intakeFixLine / intakeRefusal.
-///
-/// The opt-out used to be spelled `bee config set --key guards.idle_gate`.
-/// `bee config` is one of the verbs the Node deletion left declared but not
-/// built, so the busiest guard in the harness — the first refusal most people
-/// ever see — ended a paragraph of good advice by naming a command that
-/// answers "not built into this binary". It names the file instead.
+/// The opt-out used to be spelled `bee config set --key guards.idle_gate`, but
+/// `bee config` is not a built verb, so the busiest guard in the harness —
+/// the first refusal most people ever see — would have ended a paragraph of
+/// good advice by naming a command that answers "not built into this
+/// binary". It names the file instead.
 pub(crate) fn intake_fix_line() -> String {
     format!(
         "FIX: commit or write bookkeeping directly — {} are exempt from this gate — \

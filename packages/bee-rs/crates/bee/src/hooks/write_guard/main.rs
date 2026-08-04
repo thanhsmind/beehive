@@ -12,7 +12,7 @@ use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-// ─── main orchestration (provenance: bee-write-guard.mjs main()) ───────────
+// ─── main orchestration ─────────────────────────────────────────────────────
 
 pub fn run(argv: &[String], stdin: &str) -> Outcome {
     let argv = argv.to_vec();
@@ -78,10 +78,8 @@ FIX: repair or recreate the Git worktree before retrying; no worktree-local .bee
     let store_root_pb = ctx.store_root.clone().unwrap_or_else(|| root_pb.clone());
     let store_root = store_root_pb.to_string_lossy().into_owned();
     np_check_modelable(&store_root)?;
-    // bee-write-guard.mjs l. 1048, re-keyed at cutover (see the byte-gate note
-    // above): "is bee installed at this store root?" The old answer was a
-    // vendored `.bee/bin/lib/state.mjs`; the answer now is the onboarding
-    // marker, which every install writes and nothing else does.
+    // "Is bee installed at this store root?" — the onboarding marker, which
+    // every install writes and nothing else does.
     if !store_root_pb.join(".bee").join("onboarding.json").is_file() {
         return Ok(emit);
     }
@@ -367,13 +365,11 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
         }
     }
 
-    // Check (d) — CLI-shape validation, NATIVE (hooks/cli_shape.rs). The
-    // vendored validate-args.mjs / command-registry.mjs import side effects are
-    // proven silent by the byte gate, and that same gate proves the host's
-    // registry bytes match the embedded REGISTRY_PAYLOAD this resolves against.
-    // checkCliShape is null unless a bee-CLI-shaped token resolves, and it can
-    // only ASSIGN a denial when none exists yet (`cliDenial && !denial`) — so
-    // short-circuiting on `denial.is_none()` is Node's own semantics.
+    // Check (d) — CLI-shape validation, NATIVE (hooks/cli_shape.rs), resolved
+    // against the embedded REGISTRY_PAYLOAD. check_cli_shape returns None
+    // unless a bee-CLI-shaped token resolves, and it can only ASSIGN a denial
+    // when none exists yet, so short-circuiting on `denial.is_none()` is the
+    // intended precedence.
     if tool_name == "Bash" {
         let command = match tool_input.get("command") {
             Some(Value::String(s)) => s.clone(),

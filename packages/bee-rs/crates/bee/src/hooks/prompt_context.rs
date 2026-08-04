@@ -3,9 +3,9 @@
 // reminder plus the compaction anchor nudge, deduped via the inject cache,
 // and rides the throttled heartbeat + claim/hold lease renewal (D5).
 //
-// STRANGLER SHAPE. The hook runs in two phases:
-//   1. plan() — a READ-ONLY preflight that mirrors every read the .mjs
-//      pipeline performs, in order, and computes every decision (reminder
+// TWO-PHASE SHAPE. The hook runs in two phases:
+//   1. plan() — a READ-ONLY preflight that performs every read the
+//      pipeline needs, in order, and computes every decision (reminder
 //      text/hash, inject decisions, anchor nudge). Inputs it still cannot
 //      serve natively (the linked-worktree grant topology, a non-object inject
 //      cache, a shape-wrong lane record) return Outcome::Delegate BEFORE any

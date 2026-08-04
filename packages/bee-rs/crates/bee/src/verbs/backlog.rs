@@ -472,9 +472,10 @@ fn add_pbi(
     // Pre-lock delegation probe: a deterministic duplicate id must delegate
     // WITHOUT acquiring the lock — acquiring writes an "acquired"
     // contention-telemetry row, and a write before returning None breaks the
-    // strangler contract. The same check re-runs under the lock below for the
-    // (vanishingly rare) racing-writer case. (The fold itself can no longer
-    // fail: an unparseable JSONL line is skipped, not delegated.)
+    // no-output-before-decision contract. The same check re-runs under the
+    // lock below for the (vanishingly rare) racing-writer case. (The fold
+    // itself can no longer fail: an unparseable JSONL line is skipped, not
+    // delegated.)
     {
         let fold = fold_pbis(root);
         if let Some(id) = requested {

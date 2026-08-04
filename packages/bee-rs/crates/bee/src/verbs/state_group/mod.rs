@@ -1,4 +1,4 @@
-// bee state — native port of the `state` verb group (strangler subset).
+// bee state — the `state` verb group.
 //
 // R6 coverage debt "the lane/workflow world" — CLOSED for the record-mutating
 // verbs. Through R3 wave 2 these verbs served natively ONLY in the "C1 world"

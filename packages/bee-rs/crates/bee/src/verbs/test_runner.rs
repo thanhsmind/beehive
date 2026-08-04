@@ -28,17 +28,15 @@
 //     failure line> — fix before capping", exit 1 (record still written).
 //     Undeclared: 4 fixed lines, {green:null, undeclared:true}, exit 0.
 //
-// Strangler routing: only `bee test` and `bee test --json` (bare --json
-// tokens) are served natively. Everything else — other flags, --json=x
-// forms, positionals, non-unicode argv, linked-worktree roots, and win32
-// hosts without a POSIX shell (Node's cmd.exe fallback) — returns None
-// before ANY output and before the drift-cache write.
+// Routing: only `bee test` and `bee test --json` (bare --json tokens) are
+// served natively. Everything else — other flags, --json=x forms,
+// positionals, non-unicode argv, linked-worktree roots, and win32 hosts
+// without a POSIX shell — returns None before ANY output and before the
+// drift-cache write.
 //
-// CUTOVER: corrupt config / drift-cache JSON used to be on that list (Node's
-// warn-with-V8-message paths). `state::read_config_raw` and
-// `registry::check_manifest_drift` warn natively and fall back now, and are
-// infallible — a corrupt config reads as no config and `bee test` reports
-// "undeclared", exactly as Node did after its own warning.
+// `state::read_config_raw` and `registry::check_manifest_drift` warn
+// natively and fall back, and are infallible — a corrupt config reads as no
+// config and `bee test` reports "undeclared" after its own warning.
 //
 // Known divergences (documented, unreachable in practice): a spawn error
 // AFTER the successful shell probe embeds Rust's io error text where Node

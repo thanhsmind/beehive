@@ -30,28 +30,23 @@
 //     readSessionRecords, buildMatrixFromLog, renderMatrixHtml, writeReport,
 //     humanizeMs.
 //
-// CUTOVER (2026-08-01). Present-but-corrupt JSON used to be a strangler bail,
-// decided by a PRE-FLIGHT probe over every file the Stop path could read
-// (state/HANDOFF/inject caches/session record/bound lane/cells/perf sidecar
-// metas), because Node's readJson warning quoted V8's parse sentence. That
-// probe is DELETED — it would now warn about each bad file a second time — and
-// every corruption is handled at its real read, warning once in bee's own
-// words and taking readJson's `null` fallback: state.json reads as
-// defaultState(), HANDOFF.json reads as absent (so the mid-phase "hive door
-// open" warning still fires), a corrupt inject cache falls through to the
-// legacy location and then to `{}` (the nudge re-injects), a corrupt session
-// record reads as no session, a corrupt lane still takes readLane's second
+// Every corruption is handled at its real read, warning once in bee's own
+// words and taking the fallback an absent file would get: state.json reads
+// as default_state(), HANDOFF.json reads as absent (so the mid-phase "hive
+// door open" warning still fires), a corrupt inject cache falls through to
+// the legacy location and then to `{}` (the nudge re-injects), a corrupt
+// session record reads as no session, a corrupt lane still takes its second
 // warn and the LANE_CORRUPT refusal, a corrupt cell is skipped from the
 // claimed list, and a corrupt perf meta is skipped. The hook still exits 0.
 //
 // Warnings are QUEUED, not printed (see queue_corrupt_json_warning): the hook
 // buffers all output so that a run which later delegates has emitted nothing.
 //
-// Strangler bails (Outcome::Delegate), all decided BEFORE any write/output:
+// Delegate bails (Outcome::Delegate), all decided BEFORE any write/output:
 //   - event == "PreCompact": the compaction path (intent anchor re-assert,
-//     compaction record, forced nudges) delegates to Node wholesale.
+//     compaction record, forced nudges) delegates wholesale.
 //   - an inject cache whose parsed content is a non-object, and a truthy
-//     non-object approved_gates (both Node spread/assignment exotica).
+//     non-object approved_gates (both JS spread/assignment exotica).
 // (A corrupt .bee/config.json is native, inside crate::state::read_config_raw;
 // that reader prints immediately rather than queueing, so a bad config plus a
 // non-object inject cache can leak that one line before the delegate.)

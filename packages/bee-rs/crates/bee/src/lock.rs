@@ -1,19 +1,17 @@
-// lock — Rust port of lib/lock.mjs: withStoreLock / acquireStoreLockOnceSync,
-// the cross-process mutual-exclusion primitive for bee's store mutators.
+// lock — the cross-process mutual-exclusion primitive for bee's store
+// mutators.
 //
-// INTEROP-CRITICAL (contract C1): during the strangler campaign Node and
-// Rust processes contend on the SAME lock files, so everything observable is
-// kept byte/semantics-identical — lock path sanitization (unsafe-char
-// substitution + 8-hex sha256 of the ORIGINAL name), holder body shape
-// ({pid, session, ts, token}), the stale-takeover rule (STALE_MS only for a
-// provably-dead holder pid, HARD_STALE_MS absolute ceiling), the two-phase
-// verified takeover (rel180-4's post-rename identity check; rel190-2's
-// pre-rename re-verification), token-matched release, transient-FS retry on
-// the Windows sharing-violation error class, and contention.jsonl telemetry.
+// The on-disk lock format is a stable file-format contract: lock path
+// sanitization (unsafe-char substitution + 8-hex sha256 of the ORIGINAL
+// name), holder body shape ({pid, session, ts, token}), the stale-takeover
+// rule (STALE_MS only for a provably-dead holder pid, HARD_STALE_MS absolute
+// ceiling), the two-phase verified takeover (a post-rename identity check;
+// a pre-rename re-verification), token-matched release, transient-FS retry
+// on the Windows sharing-violation error class, and contention.jsonl
+// telemetry.
 //
-// Rust is sync end-to-end, so the .mjs's sync/async sibling split collapses:
-// `with_store_lock` is the retrying entry point and
-// `acquire_store_lock_once` the single-attempt one, same semantics each.
+// `with_store_lock` is the retrying entry point and `acquire_store_lock_once`
+// the single-attempt one, same semantics each.
 
 #![allow(dead_code)] // consumers arrive with the mutating-verb ports (R3)
 

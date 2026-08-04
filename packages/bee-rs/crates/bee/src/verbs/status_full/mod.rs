@@ -1,48 +1,22 @@
-// status_full — native port of FULL `bee status` (default and --lanes-full,
-// --json and text) and `bee orient` (--json and text).
+// status_full — FULL `bee status` (default and --lanes-full, --json and
+// text) and `bee orient` (--json and text).
 //
-// Provenance: bee.mjs handleStatus/buildStatus/renderStatusText (~874-1206),
-// handleOrient/buildOrient/renderOrientText (~1229-1373), plus exactly the
-// lib functions those consume:
-//   lib/state.mjs        readState/readConfig/readOnboarding/readHandoff/
-//                        bypassLevel/bypassBanner/shipVisibility/
-//                        hasStaleAdvisorKey/validateModelsConfig/
-//                        validateAgentFilesDrift/listLanes/readLane/
-//                        resolveContext/controlRootFor/resolveProductRoot
-//   lib/cells.mjs        listCells/readCell/readyCells/archivedTotals/
-//                        scribingDebt/globalScribingDebt/bestScribingStampMs/
-//                        tierMix/ceilingScarcityWarning
-//   lib/claims.mjs       listSessionRecords/readSession/resolveSessionId/
-//                        heartbeatStale/activeWorkers/readClaim/isClaimActive
-//   lib/reservations.mjs listReservations (over lib/lease-store.mjs listLeases)
-//   lib/decisions.mjs    activeDecisions/datamark (+ tag overlay)
-//   lib/backlog.mjs      readBacklogCounts (fold + legacy table)
-//   lib/reviews.mjs      listReviews/listCandidates/deriveCandidateStatus
-//   lib/recovery.mjs     detectCrashCandidates/scanTranscriptRoots/
-//                        readTranscriptTail/hasCleanEndTrio/lastDurableSettlement
-//   lib/perf.mjs         claudeProjectsRoot/encodeProjectDir/resolveTranscript
-//   lib/capture.mjs      captureQueue/pendingCaptureStubs
-//   lib/worktree-store.mjs readGrants/findGrantedWorktreeForFeature
-//   lib/source-identity.mjs classifySource
-//   lib/fsutil.mjs       hashFile (sha256 of the lossy-utf8 STRING content)
-//
-// Strangler rules honored here:
+// Rules honored here:
 //   - try_native accepts ONLY the six argv shapes below; --brief is handled
 //     upstream by status_brief; anything else -> None before any output.
-//   - Corrupt JSON anywhere on the snapshot path used to be Ex::Bail -> None
-//     BEFORE any output. CUTOVER (2026-08-01): it FAILS OPEN instead, exactly
-//     as `readJson(file, fallback)` did — `rj` buffers one
-//     `bee: could not parse JSON at …` line (our wording in place of V8's)
-//     and hands back the `null` fallback every caller's `!x` / `?? null`
-//     guard already handled. The snapshot, its exit code and its --json
-//     payload are unchanged; a corrupt lane record still emits BOTH lines
-//     Node emitted (readJson's, then readLane's own).
+//   - Corrupt JSON anywhere on the snapshot path FAILS OPEN: `rj` buffers one
+//     `bee: could not parse JSON at …` line and hands back the `null`
+//     fallback every caller's `!x` / `?? null` guard already handles. The
+//     snapshot, its exit code and its --json payload are unchanged; a
+//     corrupt lane record still emits BOTH lines (the generic one, then the
+//     lane-specific one).
 //   - JS-exotic input (truthy non-object approved_gates spread, non-string
-//     git args, ...) -> Ex::Bail as well: the Node re-run owns the edge.
-//   - JS throw sites that Node CATCHES locally (buildReviewBlock /
-//     buildRecoveryBlock / orientWorktreeContext try/catch) are modeled as
-//     Ex::Thrown and caught at the same spots; a Thrown that would escape to
-//     main()'s emitError instead bails to Node, which reproduces the error.
+//     git args, ...) -> Ex::Bail: a live delegation signal, out of scope for
+//     this sweep.
+//   - Throw sites CAUGHT locally (build_review_block / build_recovery_block /
+//     orient_worktree_context try/catch) are modeled as Ex::Thrown and
+//     caught at the same spots; a Thrown that would escape further instead
+//     bails.
 //   - Handler-time stderr warnings are BUFFERED in order and printed only at
 //     emit (before the drift line), so a bail can never leak partial output.
 

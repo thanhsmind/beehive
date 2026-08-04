@@ -1,9 +1,6 @@
-// bee feedback — native port of the feedback verb group (bee.mjs
-// handleFeedbackCount/Digest/Collect/Rank + lib/feedback.mjs's
-// collectFeedback/buildEntry/buildDigest/mergeDigests/clusterEntries/
-// rankClusters/normalizeTitle).
+// bee feedback — the feedback verb group.
 //
-// STILL DELEGATED TO NODE (strangler note):
+// STILL DELEGATED (returns None before any output):
 //   - `feedback collect` / `feedback rank` whenever `dogfood_repos` is a
 //     non-empty configured value: the foreign arm (realpath containment
 //     warnings, corrupt-foreign-digest skips, datamark neutralization, and

@@ -1,43 +1,34 @@
-// bee hook write-guard — Rust port of hooks/bee-write-guard.mjs (+ its
-// tokenize-command.mjs helper), bee's most safety-critical hook. PreToolUse
-// for Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion plus the Codex
-// apply_patch path. Four checks in one guard, first hit wins — see the .mjs
-// header for the (a)-(d) map; every branch below carries a provenance comment
-// naming its .mjs source.
+// bee hook write-guard — bee's most safety-critical hook. PreToolUse for
+// Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion plus the Codex
+// apply_patch path. Four checks in one guard, first hit wins.
 //
-// GUARD PORTING CONTRACT (rust-port.md C2/C5): a decision (allow vs deny)
-// must NEVER flip relative to the .mjs. Every branch whose Rust equivalence
-// cannot be PROVEN returns Outcome::Delegate (the dispatcher re-runs the
-// original Node wrapper with identical stdin). Failing toward Node is always
-// safe; failing open differently than the .mjs never is.
+// Every branch whose Rust equivalence is unproven for the input in front of
+// it returns Outcome::Delegate — see hooks/mod.rs for what that resolves to
+// now (fail open, loudly). Failing toward Delegate is always safe; a native
+// decision that turns out wrong never is, so an unproven shape always
+// delegates rather than guessing.
 //
-// THE VENDORED-LIB BYTE GATE: the .mjs dynamically imports vendored lib
-// modules from <storeRoot>/.bee/bin/lib/*.mjs. This port replicates the
-// CURRENT packages/bee/lib implementations; if the vendored files differ in
-// any byte (mid-upgrade host, tampered fixture, a test whose guards.mjs
-// deliberately throws on import), the native semantics are unproven and the
-// whole run delegates. The import closure of state.mjs + guards.mjs +
-// validate-args.mjs + command-registry.mjs is embedded at compile time and
-// byte-compared at runtime before any native decision is made.
+// The vendored-lib byte gate that used to prove the host's on-disk copy
+// matched what this binary embeds is RETIRED — see
+// hooks/write_guard/jspath.rs's header for why, and for what replaced its
+// activation probe.
 //
-// CHECK (d) IS NATIVE (R6 blocker closed): the CLI-shape schema guard lives in
-// hooks/cli_shape.rs — registry resolution + validate-args semantics + the
-// exact refusal bytes, resolved against the embedded REGISTRY_PAYLOAD that the
-// byte gate above proves matches the host's own command-registry.mjs. It also
-// recognizes the R6a BINARY spelling (`.bee/bin/bee <verb>` / `bee <verb>`)
-// that no `.mjs` regex could see; that is the one deliberate divergence from
-// the .mjs and it only ever ADDS a denial for a call Node left unguarded —
-// see cli_shape.rs's header.
+// CHECK (d) IS NATIVE: the CLI-shape schema guard lives in hooks/cli_shape.rs
+// — registry resolution + validate-args semantics + the exact refusal bytes,
+// resolved against the embedded REGISTRY_PAYLOAD (compiled in, pinned by
+// tests/registry_contracts.rs). It also recognizes the BINARY spelling
+// (`.bee/bin/bee <verb>` / `bee <verb>`) alongside the legacy
+// `bee_<group>.mjs` shape; see cli_shape.rs's header for the one deliberate
+// divergence that widening introduces.
 //
-// CORRUPT JSON IS NATIVE (cutover 2026-08-01): readJson()-level corruption
-// used to delegate because Node's warn quoted V8's parse message. It now warns
-// in bee's own words and takes readJson's `null` fallback — see read_json_g.
-// The warning is queued and flushed with the rest of the buffered output, so
-// the delegate contract below still holds byte-for-byte. A corrupt CONFIG file
-// is native too, inside crate::state::read_config_raw — but that reader prints
-// immediately, so a run that reads a bad config and THEN delegates for one of
-// the reasons below can leak that one line (accepted: the remaining delegates
-// are themselves being retired).
+// CORRUPT JSON IS NATIVE: a read that finds present-but-unparseable JSON
+// warns in bee's own words and takes the same fallback an absent file would
+// — see read_json_g. The warning is queued and flushed with the rest of the
+// buffered output, so the delegate contract below still holds byte-for-byte.
+// A corrupt CONFIG file is native too, inside crate::state::read_config_raw
+// — but that reader prints immediately, so a run that reads a bad config and
+// THEN delegates for one of the reasons below can leak that one line
+// (accepted: the remaining delegates are themselves being retired).
 //
 // DELEGATED BRANCHES (each justified at its site):
 //   - node -e/--eval/-p inline-eval commands (internals-reach regex);
@@ -46,13 +37,12 @@
 //   - a declared guards.memory_root (non-empty string) when a target failed
 //     containment;
 //   - drive-relative (C:foo) / UNC (\\srv\...) target spellings on Windows;
-//   - JS-throw equivalents inside the shared-nested-checkout primitive
-//     (strict-mode session reads, non-ENOENT fs errors) — Node turns those
-//     into a typed deny plus a V8-worded crash log line;
-//   - timestamp strings chrono cannot parse where JS Date.parse might.
+//   - a small set of typed-refusal edges inside the shared-nested-checkout
+//     primitive (strict-mode session reads, non-ENOENT fs errors);
+//   - timestamp strings chrono cannot parse.
 //
 // Output is fully buffered: nothing is written before the native/delegate
-// decision is final, so Delegate always re-runs Node with zero output emitted.
+// decision is final, so a Delegate outcome always carries zero output.
 
 
 
@@ -63,9 +53,9 @@
 
 const HOOK_NAME: &str = "write-guard";
 
-// ─── strangler bail ────────────────────────────────────────────────────────
+// ─── delegate refusal ───────────────────────────────────────────────────────
 
-/// "Needs Node": the branch's Rust equivalence is unproven — delegate.
+/// The branch's Rust equivalence is unproven — delegate.
 ///
 /// pub(crate) since the wcg-3 port: `crate::nested_checkout` reuses this
 /// module's shared-nested-checkout primitives (the guard is the ONE place
@@ -79,11 +69,9 @@ pub(crate) struct Nd;
 pub(crate) type R<T> = Result<T, Nd>;
 
 // ─── tests ─────────────────────────────────────────────────────────────────
-// Mirrors packages/bee/hooks/test_write_guard.mjs's decision table with
-// tempfile fixtures. `copy_lib` used to vendor the embedded `.mjs` closure so
-// the byte gate would pass; with the gate retired it writes the onboarding
-// marker instead — the fixture's job is still "make this look like a repo
-// where bee is installed", only the marker changed.
+// A tempfile-fixture decision table. `copy_lib` writes the onboarding marker
+// that makes a fixture look like "a repo where bee is installed" (the
+// vendored-lib byte gate it used to satisfy is retired).
 
 #[cfg(test)]
 mod tests;

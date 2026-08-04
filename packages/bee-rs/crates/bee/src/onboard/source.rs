@@ -58,19 +58,17 @@ impl Engine {
     ///      parent is the package root.
     ///   2. Walk up from the executable's directory, then from cwd, for the
     ///      MARKER.
-    /// None ⇒ the probe declines the command (strangler routing): without a
-    /// source tree there is nothing authoritative to vendor FROM.
+    /// None ⇒ the probe declines the command: without a source tree there is
+    /// nothing authoritative to vendor FROM.
     ///
-    /// R6 CUTOVER. The marker used to be `packages/bee/scripts/onboard_bee.mjs`
-    /// — the script this module is a port of. It is now the AGENTS block
-    /// template, chosen on the three properties the .mjs also had: it lives in
-    /// `packages/bee` (so finding it proves `templates_dir` resolves), it ships
-    /// in the plugin package (so a marketplace install still locates itself),
-    /// and no HOST repo ever has one — a host receives `.bee/`, never
-    /// `packages/bee/`. A bare `.claude-plugin/plugin.json` was rejected as the
-    /// marker for exactly that last reason: a host repo can carry one, and
-    /// onboarding a host FROM itself is the one answer that must stay
-    /// impossible.
+    /// The marker is the AGENTS block template, chosen on three properties:
+    /// it lives in `packages/bee` (so finding it proves `templates_dir`
+    /// resolves), it ships in the plugin package (so a marketplace install
+    /// still locates itself), and no HOST repo ever has one — a host
+    /// receives `.bee/`, never `packages/bee/`. A bare
+    /// `.claude-plugin/plugin.json` was rejected as the marker for exactly
+    /// that last reason: a host repo can carry one, and onboarding a host
+    /// FROM itself is the one answer that must stay impossible.
     pub fn locate() -> Option<Self> {
         const MARKER: &str = "packages/bee/AGENTS.block.md";
         if let Some(entry) = std::env::var_os("BEE_JS_ENTRY") {

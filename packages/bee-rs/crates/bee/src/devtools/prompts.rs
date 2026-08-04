@@ -1,24 +1,16 @@
 // bee dev render-prompt — the prompt template loader/renderer.
 //
-// PROVENANCE. Originally `packages/bee/lib/prompt-renderer.mjs`'s `loadPrompt`
-// / `render`. There are TWO Rust ports of that one grammar:
+// There are TWO implementations of this one grammar:
 //   * this module (`bee dev render-prompt`), and
-//   * packages/bee-rs/crates/bee/src/verbs/drivers.rs — the FIRST port, landed
+//   * packages/bee-rs/crates/bee/src/verbs/drivers.rs — the FIRST one, landed
 //     with `bee dispatch prepare`.
 //
-// R6 CUTOVER — HOW THE TWO PORTS STAY PINNED. While the .mjs existed, the pin
-// was indirect: each port was byte-embedded against the .mjs, so a change to
-// the original forced both back to the diff. Deleting the .mjs removes that
-// shared authority, and an indirect pin with no authority left is not a pin —
-// it is a test that passes over nothing. The pin is therefore made DIRECT:
-// `grammar_corpus_pins_both_ports` now runs every case through BOTH ports and
-// asserts they produce the same answer, so a divergence is caught by the same
-// test that always claimed to catch it. `drivers.rs::render` and
-// `::normalize_template` were widened to `pub(crate)` for exactly this (the
-// old header noted drivers.rs was off-limits to this port — that was a
-// strangler-campaign rule, and the campaign is over).
+// HOW THE TWO STAY PINNED. `grammar_corpus_pins_both_ports` runs every case
+// through BOTH implementations and asserts they produce the same answer, so a
+// divergence between them is caught directly. `drivers.rs::render` and
+// `::normalize_template` are `pub(crate)` for exactly this.
 //
-// Three pins, post-cutover:
+// Three pins:
 //
 //   1. `grammar_corpus_pins_both_ports` — the shared semantic corpus, run
 //      through this port AND drivers.rs, output compared. This is the pin.
@@ -27,14 +19,11 @@
 //      via the same include_str! paths drivers.rs uses.
 //   3. `real_templates_render_end_to_end` — every real template renders.
 //
-// CLI shape (a new surface — the .mjs is a library, never a script, so there
-// is no Node stdout framing to match):
+// CLI shape:
 //
 //   bee dev render-prompt <name> [--var NAME=VALUE]...
 //
-// stdout is EXACTLY the rendered bytes, no added trailing newline, so a
-// byte-diff against a `node -e "…loadPrompt/render…"` harness is a plain
-// `cmp`.
+// stdout is EXACTLY the rendered bytes, no added trailing newline.
 
 use super::bee_source_root;
 use std::process::ExitCode;
@@ -62,9 +51,7 @@ fn embedded_prompt(name: &str) -> Option<&'static str> {
 
 // ─── loadPrompt ────────────────────────────────────────────────────────────
 
-/// provenance: prompt-renderer.mjs loadPrompt — CRLF normalized to LF and
-/// ONE trailing newline stripped, so a checked-out template renders
-/// byte-identically to the historical join('\n') string builders it replaced.
+/// CRLF normalized to LF and ONE trailing newline stripped.
 fn normalize_template(raw: &str) -> String {
     let lf = raw.replace("\r\n", "\n");
     match lf.strip_suffix('\n') {
@@ -73,18 +60,17 @@ fn normalize_template(raw: &str) -> String {
     }
 }
 
-/// provenance: prompt-renderer.mjs PROMPTS_DIR — resolved RELATIVE TO THE
-/// MODULE, i.e. `packages/bee/prompts/` in a canonical checkout. This dev
-/// tool only ever runs in the source checkout, so that is the only arm; the
-/// vendored `.bee/bin/prompts/` arm belongs to drivers.rs (which serves host
-/// repos) and is deliberately absent here.
+/// Resolved relative to the source checkout, i.e. `packages/bee/prompts/`.
+/// This dev tool only ever runs in the source checkout, so that is the only
+/// arm; the vendored `.bee/bin/prompts/` arm belongs to drivers.rs (which
+/// serves host repos) and is deliberately absent here.
 fn prompts_dir(root: &std::path::Path) -> std::path::PathBuf {
     root.join("packages").join("bee").join("prompts")
 }
 
 // ─── render ────────────────────────────────────────────────────────────────
 
-/// provenance: prompt-renderer.mjs render(template, vars), both passes.
+/// Renders `template` against `vars` in two passes.
 ///
 /// Pass 1 is JS `template.replace(/\n\{\{#if ([A-Za-z0-9_]+)\}\}([\s\S]*?)\n\{\{\/if\}\}/g, cb)`:
 /// the match consumes the newline BEFORE the opening marker and the whole
@@ -288,11 +274,8 @@ mod tests {
     // ── THE pin: the shared grammar corpus, run through BOTH ports ───────
     //
     // Every case below is asserted twice: once against this module's `render`
-    // and once against `verbs::drivers::render`. Before the R6 cutover the two
-    // ports were pinned only INDIRECTLY, each against the `.mjs` they were
-    // derived from; with the `.mjs` deleted that pin had no authority left, so
-    // it is replaced with a direct comparison. A divergence between the two
-    // ports now fails here, naming the case.
+    // and once against `verbs::drivers::render`. A divergence between the two
+    // implementations fails here, naming the case.
     #[test]
     fn grammar_corpus_pins_both_ports() {
         // (template, vars, expected) — expected is Ok(rendered) | Err(refusal).

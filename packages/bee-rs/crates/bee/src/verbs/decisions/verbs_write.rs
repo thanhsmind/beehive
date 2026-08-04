@@ -22,14 +22,9 @@ use std::time::Instant;
 
 // ─── decisions tag (flag form AND --stdin batch) ───────────────────────────
 //
-// CUTOVER (2026-08-01). `--stdin` used to return None here — "let Node do
-// it" — because the strangler contract forbids consuming the pipe before the
-// native-vs-Node decision is made, and that decision could not be made
-// without the pipe's contents. With Node gone the decision does not exist, so
-// stdin is read and validated here, on bee.mjs handleDecisionsTag's own
-// wording. The precedent is verbs/cells.rs run_add/run_update: every
-// remaining delegate trigger is settled BEFORE the read, and nothing after it
-// may answer None.
+// `--stdin` is read and validated here. The precedent is verbs/cells.rs
+// run_add/run_update: every remaining delegate trigger is settled BEFORE the
+// read, and nothing after it may answer None.
 
 pub(crate) fn run_tag(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["target", "tags", "scope", "stdin"]) {
@@ -89,10 +84,9 @@ pub(crate) fn run_tag(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
     finish(&ctx, out)
 }
 
-/// handleDecisionsTag's two stdin refusals, verbatim from bee.mjs:2461. The
-/// `JSON.parse` is modeled with serde — including the lone-surrogate escapes
-/// V8 accepted, which are simply "not valid JSON" here, since no Rust string
-/// can hold them and there is no Node left to hand them to.
+/// The two stdin refusals. `JSON.parse` is modeled with serde — a
+/// lone-surrogate escape is simply "not valid JSON" here, since no Rust
+/// string can hold it.
 pub(crate) fn parse_stdin_batch(text: &str) -> Result<Vec<Value>, String> {
     // No BOM strip: readFileSync(0, 'utf8') hands JSON.parse the raw text, so
     // a leading BOM is a parse error in Node too.
@@ -121,7 +115,6 @@ pub(crate) fn read_stdin_text() -> Result<String, Err2> {
     }
 }
 
-/// bee.mjs tagEventSummary.
 pub(crate) fn tag_event_summary(event: &Value) -> String {
     let scope_suffix = match jget(event, "scope") {
         Some(v) if truthy(&v) => format!(" scope={}", js_disp(&v)),
@@ -137,9 +130,9 @@ pub(crate) fn tag_event_summary(event: &Value) -> String {
     )
 }
 
-/// decisions.mjs decisionTargetCandidates — the active+archive union keyed by
-/// id (a JS `Map`: active entries replace in place, archive entries only land
-/// for ids the active file does not carry), filtered to decide/supersede.
+/// The active+archive union keyed by id (active entries replace in place,
+/// archive entries only land for ids the active file does not carry),
+/// filtered to decide/supersede.
 pub(crate) fn decision_target_candidates(root: &Path) -> Vec<(String, Value)> {
     let active_events = read_jsonl(&decisions_path(root));
     let archived_events = read_jsonl(&decisions_archive_path(root));
@@ -162,7 +155,7 @@ pub(crate) fn decision_target_candidates(root: &Path) -> Vec<(String, Value)> {
     by_id.into_iter().filter(|(_, e)| is_decide_or_supersede(e)).collect()
 }
 
-/// decisions.mjs resolveTagTarget. `Err` carries the thrown message.
+/// `Err` carries the refusal message.
 pub(crate) fn resolve_tag_target(candidates: &[(String, Value)], target: Option<&Value>) -> Result<String, String> {
     // `typeof target === 'string' ? target.trim() : ''`
     let raw = match target {
@@ -202,8 +195,8 @@ pub(crate) fn resolve_tag_target(candidates: &[(String, Value)], target: Option<
     }
 }
 
-/// decisions.mjs normalizeTagEventTags over a RAW JSON value — the batch form,
-/// where `entry.tags` is whatever the payload carried.
+/// The batch form, over a RAW JSON value where `entry.tags` is whatever the
+/// payload carried.
 pub(crate) fn normalize_tag_event_tags_value(tags: Option<&Value>) -> Result<Vec<String>, String> {
     let items = match tags {
         Some(Value::Array(a)) if !a.is_empty() => a,
@@ -226,10 +219,10 @@ pub(crate) fn normalize_tag_event_tags_value(tags: Option<&Value>) -> Result<Vec
     Ok(cleaned)
 }
 
-/// decisions.mjs tagDecisionsBatch. Every event is built BEFORE the lock is
-/// taken (dp-3's lock doctrine) — the critical section is exactly the one
-/// appendJsonlBatch write. `Ok(Err(msg))` is a thrown refusal with zero
-/// writes; `Err(Err2::…)` is a lock refusal or an fs write failure.
+/// Every event is built BEFORE the lock is taken (dp-3's lock doctrine) — the
+/// critical section is exactly the one batch-append write. `Ok(Err(msg))` is
+/// a refusal with zero writes; `Err(Err2::…)` is a lock refusal or an fs
+/// write failure.
 pub(crate) fn tag_decisions_batch(
     root: &Path,
     entries: &[Value],
@@ -297,9 +290,8 @@ pub(crate) fn tag_decisions_batch(
     Ok(Ok(events))
 }
 
-/// bee.mjs handleDecisionsTag's flag form: `tagDecision` is literally
-/// `tagDecisionsBatch(root, [{target, tags, scope}])[0]`, so it runs the same
-/// body over a one-entry batch and emits the single event.
+/// The flag form: runs the same batch body over a one-entry batch and emits
+/// the single event.
 pub(crate) fn do_tag(
     root: &Path,
     target: &str,
@@ -446,7 +438,6 @@ pub(crate) fn partition_archive(events: &[Value], before_ms: f64) -> Ex<(Vec<Val
 }
 
 pub(crate) fn do_archive(root: &Path, before: &str, lock_retries: u32) -> R2<Out> {
-    // archiveDecisions (lib/decisions.mjs).
     let before_str = js_trim(before).to_string();
     if before_str.is_empty() {
         return Ok(Out::Thrown(

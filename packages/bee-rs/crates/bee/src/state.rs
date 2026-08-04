@@ -1,23 +1,14 @@
-// state — Rust port of the state-layer reads `status --brief` needs
-// (state.mjs readState / readConfig / bypassLevel / shipVisibility).
+// state — the state-layer reads `status --brief` needs (read_state /
+// read_config / bypass_level / ship_visibility).
 //
-// CUTOVER (2026-08-01). The strangler rule used to read: any input Node
-// handles via warn-with-V8-message (corrupt JSON) or via JS spread exotica (a
-// truthy non-object approved_gates) makes the native path bail before
-// emitting anything, and the whole command re-runs under Node. Node is gone.
-// Both classes are native now:
+// Every read here is infallible and total:
 //
-//   * corrupt JSON — `fsutil::warn_corrupt_json` says what Node's warning
-//     said, in our words, and the read falls back to defaults exactly as
-//     `readJson(file, null)` did.
+//   * corrupt JSON — `fsutil::warn_corrupt_json` logs a warning and the read
+//     falls back to defaults.
 //   * a non-object `approved_gates` — `spread_gates` (D2,
 //     docs/history/js-parity-cleanup/CONTEXT.md) merges only for the object
 //     shape; every other shape falls back to defaults, so no input shape is
 //     left without an answer.
-//
-// These reads are infallible now — the single-variant bail enum they used to
-// thread was never constructed after the cutover above, so the 2026-08-04
-// cleanup deleted it and the signatures return their values directly.
 
 use crate::fsutil::{read_json, warn_corrupt_json, ReadJson};
 use crate::jsjson;
@@ -131,11 +122,11 @@ pub(crate) fn spread_gates(value: Option<&Value>) -> Map<String, Value> {
 
 // ── config (gate_bypass / ship_visibility slice of readConfig) ─────────────
 
-/// mergeConfigOverlay: overlay wins; plain objects merge recursively; arrays
-/// replace wholesale; scalars replace.
-/// (pub(crate) since the cutover: hooks/compaction.rs's fail-open readConfig
-/// twin needs the SAME merge, and a second copy of it would be a second
-/// answer to "which value wins".)
+/// Overlay wins; plain objects merge recursively; arrays replace wholesale;
+/// scalars replace.
+/// (pub(crate): hooks/compaction.rs's fail-open config-read twin needs the
+/// SAME merge, and a second copy of it would be a second answer to "which
+/// value wins".)
 pub(crate) fn merge_config_overlay(base: &Value, overlay: &Value) -> Value {
     match overlay {
         Value::Array(items) => Value::Array(items.clone()),
@@ -260,9 +251,8 @@ mod tests {
             r#"{"context":false,"shape":true,"execution":false,"review":false,"extra":1}"#);
     }
 
-    /// CUTOVER: this used to assert a bail to Node. Node's readJson warned
-    /// and returned null, and defaultState() took over — so that is what the
-    /// native read does now, warning in our own words on stderr.
+    /// Corrupt state.json warns on stderr and falls back to the default
+    /// state.
     #[test]
     fn corrupt_state_warns_and_falls_back_to_defaults() {
         let tmp = tempfile::tempdir().unwrap();
@@ -354,9 +344,6 @@ mod tests {
         assert_eq!(jsjson::stringify(&merged), r#"{"gate_bypass":"full","o":{"a":1,"b":3}}"#);
     }
 
-    // R5 port of scripts/tests/test_ship_visibility.mjs — the normalizer had
-    // no test at all; only its absent→"off" case was incidentally asserted
-    // from the status renderer.
     #[test]
     fn ship_visibility_passes_the_two_known_values_and_normalizes_the_rest() {
         let cfg = |v: Value| -> Map<String, Value> {

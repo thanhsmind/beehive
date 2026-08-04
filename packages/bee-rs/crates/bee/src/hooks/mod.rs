@@ -1,16 +1,13 @@
-// hooks — `bee hook <name>` subcommands: the native replacements for the
-// former `node .bee/bin/hooks/bee-<name>.mjs` wrapper scripts. hooks.json
-// wiring is the only host-visible change (contract C3); each hook's
-// stdin/stdout/exit contract is unchanged.
+// hooks — `bee hook <name>` subcommands. Each hook's stdin/stdout/exit
+// contract is fixed by hooks.json wiring.
 //
 // stdin is read ONCE here and handed to the hook impl. A hook that meets an
-// edge it cannot decide returns `Outcome::Delegate` — which, since the
-// cutover, no longer means "re-run the .mjs wrapper" (there is none). It means
-// UNDECIDABLE, and `emit_undecidable` below resolves it the only way a hook
-// may: fail OPEN (exit 0, the tool call proceeds) with a VISIBLE diagnostic on
-// stderr. Failing closed on infrastructure would let a hook bug block every
-// tool call in a session; failing open silently would let a guard stop
-// guarding without anyone noticing. Loud and open is the only safe pair.
+// edge it cannot decide returns `Outcome::Delegate`, which means UNDECIDABLE:
+// `emit_undecidable` below resolves it the only way a hook may — fail OPEN
+// (exit 0, the tool call proceeds) with a VISIBLE diagnostic on stderr.
+// Failing closed on infrastructure would let a hook bug block every tool call
+// in a session; failing open silently would let a guard stop guarding
+// without anyone noticing. Loud and open is the only safe pair.
 
 pub mod adapter;
 pub mod chain_nudge;
@@ -47,16 +44,15 @@ fn read_stdin_once() -> Vec<u8> {
     buf
 }
 
-/// CUTOVER: a hook that cannot decide fails OPEN and SAYS SO.
+/// A hook that cannot decide fails OPEN and SAYS SO.
 ///
-/// Before the cutover this spawned the `.mjs` wrapper with the same stdin.
-/// There is no wrapper any more, and the two remaining choices are both worse
-/// if taken silently: a non-zero exit on a PreToolUse hook BLOCKS the tool
-/// call (a guard bug would freeze a whole session), and a silent exit 0 lets a
-/// guard stop guarding with nothing in the transcript to show for it. So:
-/// exit 0, with one line on stderr naming the hook and the payload shape it
-/// could not decide. Same posture the rendered hook commands take when the
-/// binary is missing (`bee: hook binary missing`) — visible fail-open, spec R2.
+/// The two possible choices are both worse if taken silently: a non-zero
+/// exit on a PreToolUse hook BLOCKS the tool call (a guard bug would freeze a
+/// whole session), and a silent exit 0 lets a guard stop guarding with
+/// nothing in the transcript to show for it. So: exit 0, with one line on
+/// stderr naming the hook and the payload shape it could not decide. Same
+/// posture the rendered hook commands take when the binary is missing
+/// (`bee: hook binary missing`) — visible fail-open, spec R2.
 ///
 /// `BEE_HOOK_NO_DELEGATE` stays: it is the test tripwire that proves a hook ran
 /// NATIVE, and it turns this arm into a loud exit 42 that no fixture can

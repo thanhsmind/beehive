@@ -18,16 +18,13 @@
 // which walkSkillTree uses instead). Plan mode emits the same action list and
 // the same JSON payload, key order included.
 //
-// ── strangler routing ─────────────────────────────────────────────────────
+// ── routing ────────────────────────────────────────────────────────────────
 // `try_native` serves `onboard` only when it can locate the bee source
-// checkout that plays the part of the .mjs's own `import.meta.url` geometry
-// (see source::Engine::locate). Without one there is nothing authoritative to
-// vendor FROM, so the probe returns None before any output and the CLI
-// delegate takes the command. `--help`/`-h` also returns None on purpose: the
-// shared `bee --help` surface (verbs::help, already ported) owns every help
-// shape in this CLI, and the engine's own one-line usage banner is only ever
-// reachable through `node packages/bee/scripts/onboard_bee.mjs --help`, which
-// stays available for the whole campaign.
+// checkout (see source::Engine::locate). Without one there is nothing
+// authoritative to vendor FROM, so the probe returns None before any output
+// and the unknown-command refusal reports it. `--help`/`-h` also returns None
+// on purpose: the shared `bee --help` surface (verbs::help) owns every help
+// shape in this CLI.
 //
 // ── DELIBERATE DIVERGENCES from Node (logged C2 exceptions) ───────────────
 //
@@ -481,8 +478,6 @@ fn run_inner(engine: &Engine, args: &Args) -> (ExitCode, Value) {
     }
 }
 
-/// Strangler probe. `Some(code)` only for argv shapes this port serves end to
-/// end; `None` is returned BEFORE any output.
 /// The host directories the `.bee/onboarding.json` managed-hash ledger covers,
 /// for `verbs/cells.rs`'s regen obligation. Re-exported here so the obligation
 /// depends on the onboard MODULE contract rather than reaching into a private

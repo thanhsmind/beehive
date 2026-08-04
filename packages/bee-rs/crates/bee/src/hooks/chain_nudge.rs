@@ -1,38 +1,21 @@
-// bee hook chain-nudge — port of hooks/bee-chain-nudge.mjs (SubagentStop).
-// Advances the bee chain mechanically: when a registered bee worker stops (or
-// the phase is swarming) it nudges the orchestrator; when the phase is
-// reviewing it nudges reviewer synthesis. Otherwise silent. Fail-open: any
-// miss or crash -> exit 0 (crash logged to .bee/logs/hooks.jsonl).
+// bee hook chain-nudge (SubagentStop). Advances the bee chain mechanically:
+// when a registered bee worker stops (or the phase is swarming) it nudges the
+// orchestrator; when the phase is reviewing it nudges reviewer synthesis.
+// Otherwise silent. Fail-open: any miss or crash -> exit 0 (crash logged to
+// .bee/logs/hooks.jsonl).
 //
-// CUTOVER (2026-08-01). Contract C2 once required byte-identical output with
-// Node, so every branch whose stderr would have embedded a V8-specific message
-// (fsutil.mjs readJson's corrupt-JSON console.warn quotes err.message)
-// returned Outcome::Delegate. Node is gone: those branches are now NATIVE and
-// print bee's own sentence via crate::fsutil::warn_corrupt_json (queued until
-// the run is committed to native — see below), with the
-// fail-open SEMANTICS unchanged — readJson's `null` fallback still means
-// "reads as absent", so a corrupt state.json still yields defaultState(), a
-// corrupt session/lane record still reads as "no record" (a corrupt lane still
-// gets readLane's SECOND, deterministic warn on top, exactly as Node did), and
-// a corrupt cell is still skipped, one warning per bad file.
+// A corrupt read never aborts the run — it warns once (queued until the run
+// is committed to native, see below) and falls back to an absent-record
+// reading: a corrupt state.json yields the default state, a corrupt
+// session/lane record reads as "no record" (a corrupt lane also gets its own
+// second, deterministic warn), and a corrupt cell is skipped, one warning per
+// bad file.
 //
-// Still delegating (NOT V8/libuv text, so out of that cutover's scope):
-//   - readState's truthy-non-object `approved_gates`, which spreads exotic
-//     keys (string chars / array indices) in JS.
+// Two shapes still resolve to `Outcome::Delegate` rather than a native
+// answer:
+//   - readState's truthy-non-object `approved_gates` (a JS-spread-exotic
+//     shape this hook does not model).
 //   - resolveProductRoot's warn conditions (non-string / missing directory).
-//
-// Ported lib functions (source file → private fn here):
-//   state.mjs readState/defaultState/coerceLegacyPhase → read_state/default_state
-//   state.mjs resolvePipeline                          → resolve_pipeline_phase
-//   state.mjs controlRootFor/resolveContext core       → control_root_for
-//   state.mjs resolveRootsCore/locateGitRoot/readGitdirFile → resolve_roots_core
-//   state.mjs resolveProductRoot (warn-gate only)      → check_product_root
-//   state.mjs readLane/laneRecordFrom/lanePath/requireLaneFeature → read_lane_record
-//   claims.mjs readSession/sessionPath/requireId       → read_session
-//   cells.mjs scribingDebt/bestScribingStampMs/scribingRunStampMs → scribing_debt
-//   cells.mjs listCells (active scan, feature+status filters, numeric sort) → list_cells_filtered
-//   cells.mjs readScribingLedger + fsutil.mjs readJsonl → read_jsonl
-//   state.mjs hookEnabled → crate::state::hook_enabled (already ported)
 
 use crate::fsutil::{read_json, warn_corrupt_json, ReadJson};
 use crate::hooks::adapter::{emit_hook_output, log_crash, read_hook_context, HookContext};
@@ -44,8 +27,9 @@ use std::process::ExitCode;
 
 const HOOK_NAME: &str = "chain-nudge";
 
-/// The native path cannot reproduce Node's observable bytes for this input —
-/// re-run the .mjs wrapper with the same stdin.
+/// The native path cannot serve this input; the run answers with
+/// `Outcome::Delegate` instead (D6, docs/history/js-parity-cleanup/CONTEXT.md
+/// — the live delegation signal itself is a separate backlog item).
 struct Delegate;
 
 // A run can still end in Delegate AFTER a corrupt file has been read (a bad
@@ -92,7 +76,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     let Some(root) = ctx.root.clone() else {
         return Outcome::Done(ExitCode::SUCCESS);
     };
-    // Vendored-lib presence gate, byte-parity with the .mjs's existsSync check.
+    // Vendored-lib presence gate: no installed harness under this root, so skip.
     if !crate::hooks::adapter::bee_installed(&root) {
         return Outcome::Done(ExitCode::SUCCESS);
     }
@@ -116,13 +100,13 @@ fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
     };
     let session_id = get_session_id(&ctx.payload);
 
-    // resolvePipeline (state.mjs): session record → bound lane → default state.
+    // Resolve phase: session record → bound lane → default state, in that order.
     let phase_raw: Value = match resolve_pipeline_phase(root, session_id.as_deref()) {
         Ok(PipelinePhase::Record(v)) => v,
         Ok(PipelinePhase::FromState) => state.get("phase").cloned().unwrap_or(Value::Null),
         Err(PipelineErr::Delegate) => return Err(Delegate),
         Err(PipelineErr::Crash(msg)) => {
-            // The .mjs's outer catch: logCrash, exit 0, no output.
+            // Fail-open: log the crash and exit 0 with no output.
             log_crash(Some(root), HOOK_NAME, &msg, ctx.source);
             return Ok(());
         }
@@ -160,10 +144,9 @@ conservative), then present Gate 3."
 (bee reservations list --active-only). \
 When the wave is clean, move to the next wave or the next chain step."
         );
-        // Deferred-capture reminder. The .mjs dynamic-imported cells.mjs
-        // inside its own silent try/catch, and a missing vendored module
-        // skipped the reminder without a trace; the module is compiled in now,
-        // so the reminder always runs.
+        // Deferred-capture reminder: scribing_debt is compiled directly into
+        // this binary, so the reminder always runs (nothing can silently
+        // skip it).
         {
             let (count, cells) = scribing_debt(root)?;
             if count > 0 {
@@ -186,7 +169,7 @@ When the wave is clean, move to the next wave or the next chain step."
     Ok(())
 }
 
-// ── payload readers (bee-chain-nudge.mjs getAgentName / getSessionId) ──────
+// ── payload readers ─────────────────────────────────────────────────────
 
 fn get_agent_name(payload: &Map<String, Value>) -> String {
     for key in ["agent_name", "agentName", "agent_nickname", "subagent_type", "agent_type"] {
@@ -206,9 +189,9 @@ fn get_session_id(payload: &Map<String, Value>) -> Option<String> {
     }
 }
 
-/// bee-chain-nudge.mjs workerName(entry) === agentName: the first JS-truthy of
-/// nickname|name|agent|worker is compared strictly — a truthy non-string masks
-/// later keys and can never strict-equal a string agent name.
+/// Matches an entry to `agent`: the first JS-truthy of nickname|name|agent|worker
+/// is compared strictly — a truthy non-string masks later keys and can never
+/// strict-equal a string agent name.
 fn worker_name_matches(entry: &Value, agent: &str) -> bool {
     match entry {
         Value::String(s) => s == agent,
@@ -222,7 +205,7 @@ fn worker_name_matches(entry: &Value, agent: &str) -> bool {
             }
             false // all falsy -> "" — caller guarantees agent != ""
         }
-        _ => false, // arrays/primitives read as "" in the .mjs
+        _ => false, // arrays/primitives carry no name field -> no match
     }
 }
 
@@ -240,8 +223,8 @@ fn truthy(v: &Value) -> bool {
 
 /// JS Date.parse for the shapes bee writes: RFC3339 timestamps
 /// ("2026-07-30T03:35:50.326Z") and date-only "YYYY-MM-DD" (UTC midnight).
-/// Anything else reads as NaN (None) — the .mjs's exotic legacy-parser forms
-/// never appear in bee-authored records.
+/// Anything else reads as None — no other date-parser forms appear in
+/// bee-authored records.
 fn date_parse_ms(v: &Value) -> Option<f64> {
     let Value::String(s) = v else { return None };
     if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
@@ -254,7 +237,7 @@ fn date_parse_ms(v: &Value) -> Option<f64> {
     None
 }
 
-// ── state.mjs readState / defaultState / coerceLegacyPhase ─────────────────
+// ── state read / defaults / legacy-phase coercion ───────────────────────────
 
 fn default_gates() -> Map<String, Value> {
     let mut m = Map::new();
@@ -280,11 +263,11 @@ fn default_state() -> Map<String, Value> {
     m
 }
 
-/// state.mjs readState: `{ ...defaultState(), ...state }`, approved_gates
-/// re-merged, legacy 'validating' phase coerced to 'planning'. A corrupt file
-/// warns and reads as absent (readJson's `null` fallback → defaultState()),
-/// exactly the Missing arm; a truthy non-object approved_gates spreads exotic
-/// keys in JS → Delegate.
+/// Reads state.json merged over the defaults: approved_gates re-merged,
+/// legacy 'validating' phase coerced to 'planning'. A corrupt file warns and
+/// reads as absent, exactly the Missing arm; a truthy non-object
+/// approved_gates is a JS-spread-exotic shape this hook does not model, so it
+/// returns Delegate.
 fn read_state(root: &Path) -> Result<Map<String, Value>, Delegate> {
     let state_file = root.join(".bee").join("state.json");
     let file_state = match read_json(&state_file) {
@@ -323,7 +306,7 @@ fn read_state(root: &Path) -> Result<Map<String, Value>, Delegate> {
     Ok(merged)
 }
 
-// ── state.mjs resolveRootsCore / controlRootFor ────────────────────────────
+// ── root resolution / control-root lookup ───────────────────────────────────
 
 enum RootsCore {
     None,
@@ -335,8 +318,8 @@ fn js_absolute(p: &Path) -> PathBuf {
     std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf())
 }
 
-/// state.mjs readGitdirFile (throwing-resolver flavor, line 825): trim, strip
-/// "gitdir:", backslash-normalize, path.resolve against `base`.
+/// Trim, strip a leading "gitdir:", backslash-normalize, resolve against
+/// `base`.
 fn read_gitdir_file(file: &Path, base: &Path) -> Option<PathBuf> {
     let raw = std::fs::read_to_string(file).ok()?;
     let mut raw = raw.trim();
@@ -350,9 +333,9 @@ fn read_gitdir_file(file: &Path, base: &Path) -> Option<PathBuf> {
     Some(js_absolute(&base.join(sep_fixed)))
 }
 
-/// state.mjs resolveRootsCore: onboarding-marker preference, git-root walk,
-/// linked-worktree bidirectional validation. Err(reason) mirrors the thrown
-/// WorktreeLinkInvalidError's `${reason} (${marker})` message.
+/// Onboarding-marker preference, git-root walk, linked-worktree bidirectional
+/// validation. Err(reason) carries the WorktreeLinkInvalidError message,
+/// formatted as `{reason} ({marker})`.
 fn resolve_roots_core(start: &Path) -> Result<RootsCore, String> {
     let mut nearest = js_absolute(start);
     loop {
@@ -421,14 +404,14 @@ fn resolve_roots_core(start: &Path) -> Result<RootsCore, String> {
 
 enum CtrlErr {
     Delegate,
-    /// A crash the .mjs would logCrash-and-exit-0 on (WorktreeLinkInvalidError).
+    /// A crash that gets logged, then exits 0 (WorktreeLinkInvalidError).
     Crash(String),
 }
 
-/// state.mjs resolveProductRoot's warn conditions, as a delegate gate: unset/
-/// null/"" and existing-dir strings are silent (native path proceeds); a
-/// non-string value or a missing directory would console.warn in Node — both
-/// are rare, so they delegate rather than reproducing the warn text.
+/// resolveProductRoot's warn conditions, as a delegate gate: unset/null/""
+/// and existing-dir strings are silent (native path proceeds); a non-string
+/// value or a missing directory would warn — both are rare, so they delegate
+/// rather than reproducing the warn text.
 fn check_product_root(work_root: &Path) -> Result<(), CtrlErr> {
     let config = crate::state::read_config_raw(work_root);
     match config.get("product_root") {
@@ -445,10 +428,9 @@ fn check_product_root(work_root: &Path) -> Result<(), CtrlErr> {
     }
 }
 
-/// state.mjs controlRootFor(root) = resolveContext(root).controlRoot ?? root.
-/// resolveContext's grants/workspace-id reads are output-silent and unused by
-/// this hook; only the controlRoot value and resolveProductRoot's possible
-/// warn (delegate-gated above) are observable.
+/// The control root for `root`, falling back to `root` itself when there is
+/// none. Only the returned value and the possible product-root warn
+/// (delegate-gated above) are observable.
 fn control_root_for(root: &Path) -> Result<PathBuf, CtrlErr> {
     match resolve_roots_core(root) {
         Err(msg) => Err(CtrlErr::Crash(format!("WorktreeLinkInvalidError: {msg}"))),
@@ -464,7 +446,7 @@ fn control_root_for(root: &Path) -> Result<PathBuf, CtrlErr> {
     }
 }
 
-// ── claims.mjs readSession (fail-open display read) ────────────────────────
+// ── session read (fail-open display read) ───────────────────────────────────
 
 fn well_formed_id(id: &str) -> bool {
     !id.contains('/') && !id.contains('\\') && !id.contains("..")
@@ -472,7 +454,7 @@ fn well_formed_id(id: &str) -> bool {
 
 fn read_session(control_root: &Path, session_id: &str) -> Option<Map<String, Value>> {
     if !well_formed_id(session_id) {
-        return None; // sessionPath's requireId throw reads as "no session"
+        return None; // a malformed id reads as "no session"
     }
     let file = control_root.join(".bee").join("sessions").join(format!("{session_id}.json"));
     let session = match read_json(&file) {
@@ -491,10 +473,10 @@ fn read_session(control_root: &Path, session_id: &str) -> Option<Map<String, Val
     Some(session)
 }
 
-// ── state.mjs readLane / laneRecordFrom (phase + last_scribing_run only) ───
+// ── lane read (phase + last_scribing_run only) ──────────────────────────────
 
-/// Node path.relative for the only shape this hook needs (file under root);
-/// falls back to the absolute path otherwise.
+/// Relative path for the only shape this hook needs (file under root); falls
+/// back to the absolute path otherwise.
 fn path_relative(root: &Path, file: &Path) -> String {
     match file.strip_prefix(root) {
         Ok(rel) => rel
@@ -513,11 +495,11 @@ fn warn_corrupt_lane(root: &Path, file: &Path) {
     )));
 }
 
-/// readLane(root, feature) for a plain string feature whose lane file exists.
+/// Reads the lane record for a plain string feature whose lane file exists.
 /// Returns the merged lane record (defaults + parsed, phase coerced), or None
 /// on the corrupt-shape path (deterministic warn). Corrupt JSON gets BOTH
-/// warns, as in Node: readJson's own line (now bee's wording), then
-/// laneRecordFrom(null) → readLane's corrupt-lane line.
+/// warns: the generic corrupt-JSON line, then the lane-specific corrupt-lane
+/// line.
 fn read_lane_record(
     root: &Path,
     feature: &str,
@@ -560,7 +542,7 @@ fn read_lane_record(
     Some(merged)
 }
 
-// ── state.mjs resolvePipeline (phase consumer view) ────────────────────────
+// ── pipeline-phase resolution (phase consumer view) ─────────────────────────
 
 enum PipelinePhase {
     /// ok:true — the resolved record's phase.
@@ -579,7 +561,7 @@ fn resolve_pipeline_phase(
     session_id: Option<&str>,
 ) -> Result<PipelinePhase, PipelineErr> {
     let defaults = |root: &Path| -> Result<PipelinePhase, PipelineErr> {
-        // defaults(): record = readState(root) — a fresh read, like the .mjs.
+        // Falls back to a fresh state read.
         let record = read_state(root).map_err(|_| PipelineErr::Delegate)?;
         Ok(PipelinePhase::Record(record.get("phase").cloned().unwrap_or(Value::Null)))
     };
@@ -614,9 +596,9 @@ fn resolve_pipeline_phase(
     }
 }
 
-// ── cells.mjs scribingDebt and its readers ─────────────────────────────────
+// ── scribing debt and its readers ───────────────────────────────────────────
 
-/// fsutil.mjs readJsonl: split on \r?\n, skip blank and corrupt lines.
+/// Splits on \r?\n, skips blank and corrupt lines.
 fn read_jsonl(file: &Path) -> Vec<Value> {
     let Ok(bytes) = std::fs::read(file) else { return Vec::new() };
     let text = String::from_utf8_lossy(&bytes);
@@ -697,10 +679,10 @@ fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     (av.len() - i).cmp(&(bv.len() - j)).then_with(|| a.cmp(b))
 }
 
-/// cells.mjs listCells(root, {feature, status}) — active-dir scan only (this
-/// hook never passes includeArchived), sorted by numeric-aware id compare. A
-/// corrupt cell warns and is skipped (readJson null → `if (!cell) continue`),
-/// once per bad file — the rest of the scan is unaffected.
+/// Lists cells matching `feature`/`status` — active-dir scan only (this hook
+/// never looks at the archive), sorted by numeric-aware id compare. A corrupt
+/// cell warns and is skipped, once per bad file — the rest of the scan is
+/// unaffected.
 fn list_cells_filtered(
     root: &Path,
     feature: &Value,
@@ -747,7 +729,7 @@ fn list_cells_filtered(
     cells
 }
 
-/// cells.mjs scribingRunStampMs: Date.parse(run.at || run.date).
+/// Parses whichever of `run.at`/`run.date` is truthy.
 fn scribing_run_stamp_ms(run: Option<&Value>) -> Option<f64> {
     let run = run?;
     if !truthy(run) {
@@ -762,8 +744,8 @@ fn scribing_run_stamp_ms(run: Option<&Value>) -> Option<f64> {
     date_parse_ms(&candidate)
 }
 
-/// cells.mjs bestScribingStampMs(root, feature, {state}): ledger max → lane
-/// stamp → default record's own-feature stamp.
+/// The most recent scribing stamp for `feature`: ledger max → lane stamp →
+/// the state record's own-feature stamp.
 fn best_scribing_stamp_ms(
     root: &Path,
     feature: &Value,
@@ -814,11 +796,10 @@ fn best_scribing_stamp_ms(
     best
 }
 
-/// cells.mjs scribingDebt(root) — no opts (the hook never passes any):
-/// behavior_change cells capped for the active feature since the last
-/// scribing run. Returns (count, ids). The .mjs call site wraps this in a
-/// silent try/catch, but no reachable branch here throws — corrupt JSON warns
-/// and reads as absent, and only readState's exotic-gates case still delegates.
+/// Counts behavior_change cells capped for the active feature since the last
+/// scribing run. Returns (count, ids). No reachable branch here panics —
+/// corrupt JSON warns and reads as absent, and only read_state's
+/// exotic-gates case still delegates.
 fn scribing_debt(root: &Path) -> Result<(usize, Vec<String>), Delegate> {
     let state = read_state(root)?;
     let feature = state.get("feature").cloned().unwrap_or(Value::Null);
