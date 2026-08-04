@@ -27,6 +27,8 @@ use crate::verbs::workflow_store::{
     update_workflow_assuming_lock_with, wf_id, workflows_list_sort, write_lane,
     write_mailbox_handoff, MailboxAdopt,
 };
+use crate::verbs::decisions::{do_log, LogParams};
+use crate::verbs::drivers::{has_capture_deferral_decision, js_join, scribing_debt};
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
@@ -114,6 +116,103 @@ pub(crate) fn go(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Resul
 
 // ─── state set ─────────────────────────────────────────────────────────────
 
+/// The `compounding-complete` scribing-debt door's outcome (chain-integrity
+/// D2 / D1-REVISED, docs/decisions/index.md:1554,1569): entering
+/// "compounding-complete" is refused while `scribingDebt(feature) > 0`. Two
+/// escapes, both loud, either one sufficient: `--waive-scribing-debt` (the
+/// caller logs a decision naming the feature and every waived cell) or an
+/// already-logged `capture-deferral` decision naming the feature — the SAME
+/// escape `bee close` accepts (drivers::has_capture_deferral_decision, reused
+/// verbatim so the two doors can never disagree about what counts as debt).
+pub(crate) enum ScribingDoor {
+    /// No debt stood, or standing debt was already covered by a logged
+    /// `capture-deferral` decision — nothing further to log.
+    Clear,
+    /// Debt stood and was waived via `--waive-scribing-debt` — the caller
+    /// logs a decision naming `ids` AFTER the write succeeds.
+    Waived { ids: Vec<Value> },
+}
+
+/// Reuses drivers::scribing_debt / has_capture_deferral_decision (the exact
+/// counter and reader `bee close`'s own D1 door uses) rather than a second,
+/// independently-drifting copy.
+pub(crate) fn scribing_debt_close_door(
+    root: &Path,
+    feature: &str,
+    waive: bool,
+) -> R2<Result<ScribingDoor, String>> {
+    let debt = scribing_debt(root, feature)?;
+    if debt.count == 0 {
+        return Ok(Ok(ScribingDoor::Clear));
+    }
+    if waive {
+        return Ok(Ok(ScribingDoor::Waived { ids: debt.ids }));
+    }
+    if has_capture_deferral_decision(root, feature)? {
+        return Ok(Ok(ScribingDoor::Clear));
+    }
+    Ok(Err(format!(
+        "set: refusing to enter \"compounding-complete\" for feature \"{feature}\" \u{2014} {} capped behavior_change cell(s) have not been synced to their area spec: {}.\n\"compounding-complete\" asserts that scribing already ran for them. It has not.\nFIX: run bee-capturing to merge the settled behavior, then `bee state scribing-run --feature {feature} ...` to stamp it.\nIf the behavior genuinely belongs in no spec, retry with --waive-scribing-debt \u{2014} it is permitted, but it logs a decision naming every cell you waived; the same escape bee close accepts also works here \u{2014} log a decision tagged capture-deferral naming \"{feature}\" first.",
+        debt.count,
+        js_join(&debt.ids, ", "),
+    )))
+}
+
+/// D4 — the waiver is loud and attributable: logged AFTER the state/lane
+/// write succeeds (so a refused mutation never leaves a decision claiming one
+/// happened; decisions.jsonl sits outside the state/lane lock's scope).
+/// Wording precedent: decision ee519057 in .bee/decisions.jsonl.
+fn log_scribing_debt_waiver(root: &Path, feature: &str, ids: &[Value]) -> R2<()> {
+    let decision = format!(
+        "Closed feature \"{feature}\" with scribing debt WAIVED for {} capped behavior_change cell(s): {}.",
+        ids.len(),
+        js_join(ids, ", "),
+    );
+    let rationale = "Explicitly waived via `state set --phase compounding-complete --waive-scribing-debt`. bee refuses this close by default (chain-integrity D2); the waiver is the sanctioned door, and this record is its price.".to_string();
+    match do_log(
+        root,
+        LogParams {
+            decision,
+            rationale,
+            alternatives: None,
+            scope: "repo".to_string(),
+            source: "agent".to_string(),
+            confidence_raw: None,
+            tags: Some(vec!["scribing".to_string(), "state".to_string()]),
+        },
+        15,
+    )? {
+        Out::Emit(..) => Ok(()),
+        Out::Thrown(_) => Err(Err2::Ex),
+    }
+}
+
+/// compounding-gate D2 — the freshness-waiver twin of the block above: logged
+/// only when `check_phase_transition` actually NEEDED `--waive-compounding`
+/// to pass (never on a naturally fresh transition).
+fn log_compounding_waiver(root: &Path, feature: &str) -> R2<()> {
+    let decision = format!(
+        "Closed feature \"{feature}\" with the compounding-run freshness check WAIVED \u{2014} no fresh recorded `state compounding-run` (matching the last scribing run) was found."
+    );
+    let rationale = "Explicitly waived via `state set --phase compounding-complete --waive-compounding`. bee refuses this close by default (compounding-gate D2); the waiver is the sanctioned door, and this record is its price.".to_string();
+    match do_log(
+        root,
+        LogParams {
+            decision,
+            rationale,
+            alternatives: None,
+            scope: "repo".to_string(),
+            source: "agent".to_string(),
+            confidence_raw: None,
+            tags: Some(vec!["scribing".to_string(), "state".to_string()]),
+        },
+        15,
+    )? {
+        Out::Emit(..) => Ok(()),
+        Out::Thrown(_) => Err(Err2::Ex),
+    }
+}
+
 pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(
         &flags,
@@ -133,8 +232,16 @@ pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         Ok(c) => c,
         Err(code) => return Some(code),
     };
-    let out = (|| -> R2<Out> {
-        let phase_flag = flag_string(&flags, "phase");
+    let out = run_set_body(&ctx.root, &flags);
+    finish(&ctx, out)
+}
+
+/// The mutation body, root-parameterized so it can be exercised directly in
+/// tests without a process CWD (`run_set` above is the only caller in
+/// production; `prelude`'s CWD-resolved root is threaded through as `root`).
+pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
+    (|| -> R2<Out> {
+        let phase_flag = flag_string(flags, "phase");
         if let Some(p) = &phase_flag {
             if !is_known_phase(p) {
                 return Ok(Out::Thrown(format!(
@@ -151,7 +258,7 @@ pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
                     .to_string(),
             ));
         }
-        let (lane_feature, no_lane) = match mutation_lane_selector(&flags, "set") {
+        let (lane_feature, no_lane) = match mutation_lane_selector(flags, "set") {
             Ok(v) => v,
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
@@ -162,25 +269,25 @@ pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
             ));
         }
         let waive = matches!(flags.get("waive-compounding"), Some(FlagV::Present));
+        let waive_scribing_debt =
+            matches!(flags.get("waive-scribing-debt"), Some(FlagV::Present));
 
         // withMutationLock's own pre-lock reads: the fail-open scope peek, then
         // the workflow listing that picks the lock names.
-        let scope = resolve_mutation_lock_scope(&ctx.root, lane_feature.as_deref(), no_lane)?;
-        let workflows = list_workflows(&ctx.root)?;
+        let scope = resolve_mutation_lock_scope(root, lane_feature.as_deref(), no_lane)?;
+        let workflows = list_workflows(root)?;
 
-        // The two scribing-debt delegate triggers (for BOTH the lane and
-        // default branches) are decided here, BEFORE any lock or output, off
-        // a silent peek at the record the strict read will land on.
-        if let Some(peek) = peek_target_record(&ctx.root, &scope, lane_feature.as_deref())?
+        // The remaining delegate trigger (a real --feature swap over unpaid
+        // debt on the default record's CURRENT feature — a different R6 debt,
+        // see mod.rs's own banner) is decided here, BEFORE any lock or
+        // output, off a silent peek at the record the strict read will land
+        // on. The compounding-complete scribing-debt door is fully native
+        // now (below, off the authoritative strict read), so the peek no
+        // longer special-cases it.
+        if let Some(peek) = peek_target_record(root, &scope, lane_feature.as_deref())?
         {
-            if let Some(p) = &phase_flag {
-                let t = check_phase_transition(peek.get("phase"), p, &peek, waive)?;
-                if t.ok && p == "compounding-complete" {
-                    return Err(Err2::Ex); // passing close -> the debt door on Node
-                }
-            }
             if !scope.lane {
-                if let Some(f) = flag_string(&flags, "feature") {
+                if let Some(f) = flag_string(flags, "feature") {
                     let current = peek.get("feature");
                     if current.map(truthy).unwrap_or(false)
                         && !opt_strict_eq(current, Some(&Value::String(f.clone())))
@@ -191,9 +298,9 @@ pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
             }
         }
 
-        let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
+        let locks = acquire_mutation_locks(root, &scope, &workflows)?;
         let mut target =
-            resolve_mutation_target(&ctx.root, lane_feature.as_deref(), "set", no_lane)?;
+            resolve_mutation_target(root, lane_feature.as_deref(), "set", no_lane)?;
         // i54-closeout-7 (D7): a session-AUTO-resolved lane refuses --feature too
         // (the flag-level guard above only ever sees an EXPLICIT --lane).
         if flags.get("feature").is_some() {
@@ -203,18 +310,38 @@ pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
                 )));
             }
         }
+        let mut waived_scribing: Option<Vec<Value>> = None;
+        let mut waived_compounding_feature: Option<String> = None;
         if let Some(p) = &phase_flag {
             let record = target.record();
             let t = check_phase_transition(record.get("phase"), p, record, waive)?;
             if !t.ok {
                 return Ok(Out::Thrown(t.reason));
             }
+            let record_feature = match record.get("feature") {
+                Some(v) if truthy(v) => Some(js_disp(v)),
+                _ => None,
+            };
+            if t.waived_compounding {
+                waived_compounding_feature = record_feature.clone();
+            }
             if p == "compounding-complete" {
-                return Err(Err2::Ex); // race: the strict read now passes the door
+                // chain-integrity D2 / D1-REVISED — the scribing-debt wall,
+                // native now: same counter, same two escapes bee close's own
+                // D1 door accepts (scribing_debt_close_door, above).
+                if let Some(feature) = &record_feature {
+                    match scribing_debt_close_door(root, feature, waive_scribing_debt)? {
+                        Ok(ScribingDoor::Clear) => {}
+                        Ok(ScribingDoor::Waived { ids }) => {
+                            waived_scribing = Some(ids);
+                        }
+                        Err(msg) => return Ok(Out::Thrown(msg)),
+                    }
+                }
             }
         }
         if target.lane().is_none() {
-            if let Some(f) = flag_string(&flags, "feature") {
+            if let Some(f) = flag_string(flags, "feature") {
                 let current = target.record().get("feature");
                 if current.map(truthy).unwrap_or(false)
                     && !opt_strict_eq(current, Some(&Value::String(f.clone())))
@@ -258,33 +385,55 @@ pub(crate) fn run_set(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
                 state.insert("phase".into(), json!(p));
                 changed.push(format!("phase={p}"));
             }
-            if let Some(m) = flag_string(&flags, "mode") {
+            if let Some(m) = flag_string(flags, "mode") {
                 state.insert("mode".into(), json!(m));
                 changed.push(format!("mode={m}"));
             }
-            if let Some(f) = flag_string(&flags, "feature") {
+            if let Some(f) = flag_string(flags, "feature") {
                 state.insert("feature".into(), json!(f));
                 changed.push(format!("feature={f}"));
             }
-            if let Some(n) = flag_string(&flags, "next-action") {
+            if let Some(n) = flag_string(flags, "next-action") {
                 state.insert("next_action".into(), json!(n));
                 changed.push("next_action".to_string());
             }
-            if let Some(s) = flag_string(&flags, "summary") {
+            if let Some(s) = flag_string(flags, "summary") {
                 state.insert("summary".into(), json!(s));
                 changed.push("summary".to_string());
             }
         }
         let record = target.record().clone();
-        write_through_projection(&ctx.root, &target, &record, &[])?;
+        write_through_projection(root, &target, &record, &[])?;
         drop(locks);
+        // D4 — the waiver is loud and attributable: logged AFTER the write
+        // succeeds so a refused mutation never leaves a decision claiming one
+        // happened (decisions.jsonl sits outside the state/lane lock).
+        let mut waiver_note = String::new();
+        if let Some(ids) = &waived_scribing {
+            // record_feature was required truthy to reach ScribingDoor at
+            // all, so the record's (possibly just-mutated) feature is safe
+            // here too — read it back off the record we are about to emit.
+            if let Some(feature) = record.get("feature").filter(|v| truthy(v)).map(js_disp) {
+                log_scribing_debt_waiver(root, &feature, ids)?;
+                waiver_note.push_str(&format!(
+                    " \u{2014} SCRIBING DEBT WAIVED for {} cell(s): {} (decision logged)",
+                    ids.len(),
+                    js_join(ids, ", "),
+                ));
+            }
+        }
+        if let Some(feature) = &waived_compounding_feature {
+            log_compounding_waiver(root, feature)?;
+            waiver_note.push_str(&format!(
+                " \u{2014} COMPOUNDING-RUN FRESHNESS WAIVED for feature \"{feature}\" (decision logged)"
+            ));
+        }
         Ok(Out::Emit(
             Value::Object(record),
-            format!("Updated state: {}.{lane_note}", changed.join(" ")),
+            format!("Updated state: {}.{lane_note}{waiver_note}", changed.join(" ")),
             0,
         ))
-    })();
-    finish(&ctx, out)
+    })()
 }
 
 // ─── state gate ────────────────────────────────────────────────────────────
@@ -511,4 +660,267 @@ pub(crate) fn run_plan_rev_bump(flags: Flags, use_json: bool, t0: Instant) -> Op
         Ok(Out::Emit(Value::Object(result), text, 0))
     })();
     finish(&ctx, out)
+}
+
+// ─── tests: the compounding-complete door (tpp-1) ──────────────────────────
+//
+// The Node delegate markers this cell replaces (`return Err(Err2::Ex)` at
+// what used to be set_gate.rs:179/213) never had a native test — there was
+// nothing native to test. These are red-first for the native door: written
+// against `scribing_debt_close_door` and `run_set_body` before either
+// existed, confirmed red (compile failure — the names did not exist — then a
+// failing assertion once stubbed), now green against the real
+// implementation above.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp_root() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap()
+    }
+
+    fn w(root: &Path, rel: &str, body: &str) {
+        let file = rel.split('/').fold(root.to_path_buf(), |p, s| p.join(s));
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, body).unwrap();
+    }
+
+    fn read_json_file(root: &Path, rel: &str) -> Value {
+        let text = std::fs::read_to_string(root.join(rel)).unwrap();
+        serde_json::from_str(&text).unwrap()
+    }
+
+    fn flags(args: &[&str]) -> Flags {
+        parse_flags(args).expect("well-formed fixture argv").0
+    }
+
+    // ── scribing_debt_close_door — the pure door decision (must-haves 2-4) ──
+
+    #[test]
+    fn debt_door_clears_when_no_debt_stands() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        assert!(matches!(
+            scribing_debt_close_door(root, "demo", false).unwrap(),
+            Ok(ScribingDoor::Clear)
+        ));
+    }
+
+    #[test]
+    fn debt_door_refuses_and_names_every_unscribed_cell() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        w(root, ".bee/cells/demo-5.json", r#"{"id":"demo-5","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-02T00:00:00.000Z"}}"#);
+        let Err(msg) = scribing_debt_close_door(root, "demo", false).unwrap() else {
+            panic!("expected a refusal naming the debt")
+        };
+        assert!(msg.contains("demo-4"), "{msg}");
+        assert!(msg.contains("demo-5"), "{msg}");
+        assert!(msg.contains("2 capped behavior_change cell"), "{msg}");
+        assert!(msg.contains("--waive-scribing-debt"), "{msg}");
+        assert!(msg.contains("capture-deferral"), "{msg}");
+    }
+
+    #[test]
+    fn debt_door_waive_flag_passes_and_reports_every_cell() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        match scribing_debt_close_door(root, "demo", true).unwrap() {
+            Ok(ScribingDoor::Waived { ids }) => assert_eq!(ids, vec![json!("demo-4")]),
+            other => panic!("expected a waived outcome, got a refusal or a clear: {}", other.is_err()),
+        }
+    }
+
+    #[test]
+    fn debt_door_logged_capture_deferral_decision_passes_without_the_flag() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-07-02T12:00:00.000Z\",\"decision\":\"defer capture for demo until next sprint\",\"rationale\":\"r\",\"tags\":[\"capture-deferral\"],\"scope\":\"repo\"}\n",
+        );
+        assert!(matches!(
+            scribing_debt_close_door(root, "demo", false).unwrap(),
+            Ok(ScribingDoor::Clear)
+        ));
+    }
+
+    // ── run_set_body — the door wired into the real verb (must-haves 1,5,6) ─
+
+    fn fresh_default_state(feature: &str) -> String {
+        format!(
+            r#"{{"phase":"compounding","feature":"{feature}","last_scribing_run":{{"feature":"{feature}","at":"2026-07-01T00:00:00.000Z"}},"last_compounding_run":{{"feature":"{feature}","at":"2026-07-01T00:00:01.000Z"}}}}"#
+        )
+    }
+
+    fn fresh_lane_record(feature: &str) -> String {
+        format!(
+            r#"{{"feature":"{feature}","phase":"compounding","last_scribing_run":{{"feature":"{feature}","at":"2026-07-01T00:00:00.000Z"}},"last_compounding_run":{{"feature":"{feature}","at":"2026-07-01T00:00:01.000Z"}}}}"#
+        )
+    }
+
+    /// Must-have 1: a clean compounding record reaches compounding-complete
+    /// and the phase is actually written to disk — not just claimed.
+    #[test]
+    fn a_clean_compounding_record_reaches_compounding_complete_on_disk() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &fresh_default_state("demo"));
+        let out = run_set_body(
+            root,
+            &flags(&["--no-lane", "--phase", "compounding-complete", "--owner", "compounding"]),
+        )
+        .unwrap();
+        assert!(matches!(out, Out::Emit(..)), "expected a clean write");
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["phase"], json!("compounding-complete"));
+    }
+
+    /// Must-have 6: the lane branch reaches the terminal phase the same way
+    /// the default record does — same door, same write-through.
+    #[test]
+    fn the_lane_branch_reaches_compounding_complete_the_same_way() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/lanes/demo.json", &fresh_lane_record("demo"));
+        let out = run_set_body(
+            root,
+            &flags(&["--lane", "demo", "--phase", "compounding-complete", "--owner", "compounding"]),
+        )
+        .unwrap();
+        assert!(matches!(out, Out::Emit(..)), "expected a clean write");
+        let lane = read_json_file(root, ".bee/lanes/demo.json");
+        assert_eq!(lane["phase"], json!("compounding-complete"));
+    }
+
+    /// Must-have 2, wired into the real verb: debt > 0 refuses the whole
+    /// mutation (nothing reaches disk) and names every unscribed cell.
+    #[test]
+    fn debt_over_zero_refuses_the_full_verb_and_never_writes() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &fresh_default_state("demo"));
+        w(root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:02.000Z"}}"#);
+        let out = run_set_body(
+            root,
+            &flags(&["--no-lane", "--phase", "compounding-complete", "--owner", "compounding"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else { panic!("expected a refusal, got a write") };
+        assert!(msg.contains("demo-4"), "{msg}");
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(
+            state["phase"],
+            json!("compounding"),
+            "the refused phase must never reach disk"
+        );
+    }
+
+    /// Must-have 3: `--waive-scribing-debt` passes and logs a decision naming
+    /// the cells.
+    #[test]
+    fn waive_scribing_debt_passes_and_logs_a_decision_naming_the_cells() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &fresh_default_state("demo"));
+        w(root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:02.000Z"}}"#);
+        let out = run_set_body(
+            root,
+            &flags(&[
+                "--no-lane",
+                "--phase",
+                "compounding-complete",
+                "--owner",
+                "compounding",
+                "--waive-scribing-debt",
+            ]),
+        )
+        .unwrap();
+        let Out::Emit(_, text, _) = out else { panic!("expected the waiver to pass") };
+        assert!(text.contains("SCRIBING DEBT WAIVED"), "{text}");
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["phase"], json!("compounding-complete"));
+        let decisions = std::fs::read_to_string(root.join(".bee/decisions.jsonl")).unwrap();
+        assert!(decisions.contains("scribing debt WAIVED"), "{decisions}");
+        assert!(decisions.contains("demo-4"), "{decisions}");
+    }
+
+    /// Must-have 4: an already-logged capture-deferral decision passes
+    /// without the flag, and does not append a redundant waiver decision.
+    #[test]
+    fn a_logged_capture_deferral_decision_passes_without_the_flag() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &fresh_default_state("demo"));
+        w(root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:02.000Z"}}"#);
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-07-02T12:00:00.000Z\",\"decision\":\"defer capture for demo until next sprint\",\"rationale\":\"r\",\"tags\":[\"capture-deferral\"],\"scope\":\"repo\"}\n",
+        );
+        let out = run_set_body(
+            root,
+            &flags(&["--no-lane", "--phase", "compounding-complete", "--owner", "compounding"]),
+        )
+        .unwrap();
+        assert!(
+            matches!(out, Out::Emit(..)),
+            "the deferral decision must lift the wall without the flag"
+        );
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["phase"], json!("compounding-complete"));
+        let decisions = std::fs::read_to_string(root.join(".bee/decisions.jsonl")).unwrap();
+        assert_eq!(decisions.lines().count(), 1, "no redundant waiver decision appended");
+    }
+
+    /// Must-have 5: the freshness half still refuses on its own, and
+    /// `--waive-compounding` still lifts it (and logs its own decision).
+    #[test]
+    fn the_freshness_half_still_refuses_and_waive_compounding_still_lifts_it() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        // Stale: last_compounding_run predates last_scribing_run.
+        w(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"compounding","feature":"demo","last_scribing_run":{"feature":"demo","at":"2026-07-02T00:00:00.000Z"},"last_compounding_run":{"feature":"demo","at":"2026-07-01T00:00:00.000Z"}}"#,
+        );
+        let refused = run_set_body(
+            root,
+            &flags(&["--no-lane", "--phase", "compounding-complete", "--owner", "compounding"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = refused else {
+            panic!("expected the freshness door to refuse")
+        };
+        assert!(msg.contains("no fresh compounding run recorded"), "{msg}");
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["phase"], json!("compounding"));
+
+        let waived = run_set_body(
+            root,
+            &flags(&[
+                "--no-lane",
+                "--phase",
+                "compounding-complete",
+                "--owner",
+                "compounding",
+                "--waive-compounding",
+            ]),
+        )
+        .unwrap();
+        let Out::Emit(_, text, _) = waived else {
+            panic!("expected --waive-compounding to lift the door")
+        };
+        assert!(text.contains("COMPOUNDING-RUN FRESHNESS WAIVED"), "{text}");
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["phase"], json!("compounding-complete"));
+        let decisions = std::fs::read_to_string(root.join(".bee/decisions.jsonl")).unwrap();
+        assert!(decisions.contains("compounding-run freshness check WAIVED"), "{decisions}");
+    }
 }
