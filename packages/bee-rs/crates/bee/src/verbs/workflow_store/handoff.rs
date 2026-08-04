@@ -324,6 +324,47 @@ pub(crate) fn set_or_drop(record: &mut Map<String, Value>, key: &str, value: &Op
     }
 }
 
+// ─── D4: fresh-session-boundary gate on `state handoff adopt` (bh-4) ───────
+
+/// The persisted session-record `source` values that mean "mid-work
+/// continuation, not a fresh boundary" — a resumed or compacted session
+/// never adopts a planned-next handoff (CONTEXT.md D4).
+const HANDOFF_ADOPT_BLOCKED_SOURCES: [&str; 2] = ["resume", "compact"];
+
+/// The fixed prefix `state handoff adopt`'s source-boundary refusal opens
+/// with, pinned so a future reword of the explanation can never silently
+/// drop the check a caller might be matching on.
+pub(crate) const HANDOFF_ADOPT_SOURCE_REFUSAL_PREFIX: &str = "refused — session";
+
+/// D4 — read the calling session's persisted start `source` (stamped by
+/// session-init on every SessionStart, hooks/session_init.rs) and refuse
+/// adoption when it names a mid-work continuation ("resume"/"compact"),
+/// naming the fallback: the handoff stays a pause for the user to see and
+/// decide on, never silently auto-adopted. A session record with no
+/// `source` at all — missing entirely, or an older record written before
+/// this field existed — WARNS to stderr and is treated as adopt-eligible:
+/// "a missing source stays a warning, never a refusal" (D4).
+pub(crate) fn handoff_adopt_source_refusal(root: &Path, session_id: &str) -> Option<String> {
+    let control = crate::hooks::session_init::control_root_for(root);
+    let record = crate::hooks::compaction::read_session_record(&control, session_id);
+    let source = match record.as_ref().and_then(|r| r.get("source")) {
+        Some(Value::String(s)) if !js_trim(s).is_empty() => js_trim(s).to_string(),
+        _ => {
+            eprintln!(
+                "bee: state handoff adopt: session \"{session_id}\" has no recorded start source (older record, or none at all) — proceeding without the fresh-session-boundary check (D4)."
+            );
+            return None;
+        }
+    };
+    if HANDOFF_ADOPT_BLOCKED_SOURCES.contains(&source.as_str()) {
+        Some(format!(
+            "{HANDOFF_ADOPT_SOURCE_REFUSAL_PREFIX} \"{session_id}\" started from source \"{source}\" — not a fresh-session boundary (D4). A resumed or compacted session never adopts a planned-next handoff; present it as a pause and wait for the user instead."
+        ))
+    } else {
+        None
+    }
+}
+
 pub(crate) enum MailboxAdopt {
     Fail { reason: String },
     Ok {
@@ -345,6 +386,12 @@ pub(crate) fn adopt_mailbox_handoff(
     target_role: Option<&str>,
 ) -> Result<MailboxAdopt, Err2> {
     let wf_id_s = require_handoff_workflow_id(workflow_id)?;
+    // D4 (bh-4): checked BEFORE the lock, and before anything is read off the
+    // mailbox — a mid-work session refuses on its own recorded boundary,
+    // never on the shape of the handoff it would have adopted.
+    if let Some(reason) = handoff_adopt_source_refusal(root, session_id) {
+        return Ok(MailboxAdopt::Fail { reason });
+    }
     let role = normalize_target_role(target_role);
     let guard = acquire_named_lock(root, &format!("handoff:{wf_id_s}"))?;
     let out = (|| -> Result<MailboxAdopt, Err2> {
