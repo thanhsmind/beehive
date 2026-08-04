@@ -967,7 +967,7 @@
     },
     {
       "path": "packages/bee/AGENTS.block.md",
-      "sha256": "91a2611c6540f3a8ca073dc25281d2e5d56fa2037e06d91802c10000f39effc1",
+      "sha256": "aa4d7a29adf9af111a5f59756dba097fb74d451be0a97ab69dcee73b07d31a60",
       "mode": "666",
       "role": "package_payload",
       "packagePath": "packages/bee/AGENTS.block.md"
@@ -1037,7 +1037,7 @@
     },
     {
       "path": "packages/bee/statusline/statusline-command.sh",
-      "sha256": "49cec574ddba6fd268ecf8952d5e8fcbc35d82431d48019848dc378cfd2e0421",
+      "sha256": "87c173a6e61aed9aa4d76ab59f0b3f18fdb2a12931fdb37e5ef8910b853a7f1d",
       "mode": "666",
       "role": "package_payload",
       "packagePath": "packages/bee/statusline/statusline-command.sh"
