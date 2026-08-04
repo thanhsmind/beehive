@@ -37,7 +37,7 @@ pub(crate) const CLOSE_TESTS_UNDECLARED_DETAIL: &str = "no commands.test declare
 /// normalizeCommands (verbs/test_runner.rs:184 declared_test_commands).
 /// `None` == JS `null` (undeclared).
 pub(crate) fn declared_test_commands(root: &Path) -> D<Option<Vec<String>>> {
-    let config = read_config_raw(root)?;
+    let config = read_config_raw(root);
     if let Some(Value::Array(items)) = config.get("dogfood_repos") {
         if !items.is_empty() {
             return Err(Delegate); // normalizeDogfoodRepos may warn to stderr
@@ -688,7 +688,7 @@ impl Retirement {
 /// remembering. `.bee/config.json` `cells_archive_on_close: false` opts out —
 /// for a repo whose own tooling reads `.bee/cells/*.json` by path.
 fn archive_on_close_enabled(root: &Path) -> bool {
-    let Ok(config) = read_config_raw(root) else { return true };
+    let config = read_config_raw(root);
     !matches!(config.get("cells_archive_on_close"), Some(Value::Bool(false)))
 }
 

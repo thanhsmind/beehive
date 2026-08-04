@@ -627,7 +627,7 @@ pub(crate) fn run_start_feature(flags: Flags, use_json: bool, t0: Instant) -> Op
         // (2) the write policy (DEFAULT path only — lanes are bee's existing,
         // already-coordinated concurrent mechanism and stay byte-untouched).
         if !lane {
-            let config = crate::state::read_config_raw(&ctx.root).map_err(|_| Err2::Ex)?;
+            let config = crate::state::read_config_raw(&ctx.root);
             match apply_write_policy(
                 &ctx.root,
                 &control_root,

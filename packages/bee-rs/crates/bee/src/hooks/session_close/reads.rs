@@ -74,12 +74,12 @@ pub(crate) fn clear_corrupt_json_warnings() {
 // ─── pre-flight (the two remaining delegate classes) ───────────────────────
 
 /// Returns the merged tracked+overlay config (read_config_raw warns and reads
-/// a corrupt file as absent, so its Err arm is unreachable) after screening the
-/// one non-V8 delegate this hook has left: an inject cache that PARSES to a
+/// a corrupt file as absent, and is infallible) after screening the one
+/// non-V8 delegate this hook has left: an inject cache that PARSES to a
 /// non-object, whose spread/assignment is JS exotica.
 pub(crate) fn preflight(root: &Path) -> Result<Map<String, Value>, ()> {
     let bee = root.join(".bee");
-    let config = read_config_raw(root).map_err(|_| ())?;
+    let config = read_config_raw(root);
     for cache in [bee.join("cache").join("inject-cache.json"), bee.join(".inject-cache.json")] {
         // Deliberately plain read_json: a corrupt cache is NOT screened here
         // (read_inject_cache warns for it), so this probe never double-warns.

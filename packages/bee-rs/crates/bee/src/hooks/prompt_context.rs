@@ -186,18 +186,18 @@ struct Plan {
 /// Ok(None) = hook disabled (native exit 0). Err = delegate.
 fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
     // hookEnabled(root, HOOK_NAME) — state.mjs readConfig over tracked +
-    // overlay; corrupt config is a Node-worded stderr warning → delegate.
-    let config = crate::state::read_config_raw(root).map_err(|_| NeedsNode)?;
+    // overlay; a corrupt config warns natively and reads as absent now.
+    let config = crate::state::read_config_raw(root);
     if matches!(config.get("hooks").and_then(|h| h.get(HOOK_NAME)), Some(Value::Bool(false))) {
         return Ok(None);
     }
 
     // state.mjs controlRootFor(root): resolveContext walks resolveRootsCore
     // and reads config (product_root) at the workspace root — any branch
-    // that would warn (corrupt config, bad product_root) delegates.
+    // that would warn (bad product_root) delegates.
     let control_root = control_root_for_state(root)?;
     if control_root != root {
-        let ctl_config = crate::state::read_config_raw(&control_root).map_err(|_| NeedsNode)?;
+        let ctl_config = crate::state::read_config_raw(&control_root);
         if product_root_would_warn(&control_root, &ctl_config) {
             return Err(NeedsNode);
         }

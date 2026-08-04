@@ -249,7 +249,7 @@ fn normalize_status(cell: &str) -> String {
 /// missing dir, drive-relative absolutes where Node's win32 isAbsolute and
 /// Rust's disagree) delegates.
 fn resolve_product_root(root: &Path) -> Option<PathBuf> {
-    let config = read_config_raw(root).ok()?;
+    let config = read_config_raw(root);
     match config.get("product_root") {
         None | Some(Value::Null) => Some(root.to_path_buf()),
         Some(Value::String(s)) if s.is_empty() => Some(root.to_path_buf()),
@@ -584,7 +584,7 @@ fn preamble(cmd: &str, pre_json: bool, t0: Instant) -> Result<Option<Ctx>, ExitC
         }
         Roots::None => return Err(emit_no_root_error(&cwd, cmd, pre_json, t0)),
     };
-    let Ok(drift) = check_manifest_drift(&root) else { return Ok(None) };
+    let drift = check_manifest_drift(&root);
     Ok(Some(Ctx { root, drift }))
 }
 

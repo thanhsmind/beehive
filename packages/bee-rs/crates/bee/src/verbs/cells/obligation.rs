@@ -242,7 +242,7 @@ pub(crate) struct CommandsSlice {
 }
 
 pub(crate) fn read_commands_slice(root: &Path) -> MR<CommandsSlice> {
-    let config = bstate::read_config_raw(root).map_err(|_| Fail::Delegate)?;
+    let config = bstate::read_config_raw(root);
     let raw = config.get("commands");
     let mut out = CommandsSlice { test: None };
     let Some(Value::Object(raw)) = raw else { return Ok(out) };

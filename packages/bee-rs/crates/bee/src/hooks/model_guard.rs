@@ -87,10 +87,9 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
     let tool_name = tool_name.expect("dispatch tools are string-named");
 
     // hookEnabled over the merged config. read_config_raw warns and treats an
-    // unparseable file as absent (readConfig's readJson fallback), so this can
-    // no longer bail — the `Err` arm is kept only because the signature is
-    // still fallible.
-    let config = read_config_raw(&root).unwrap_or_default();
+    // unparseable file as absent (readConfig's readJson fallback), so a
+    // corrupt config just reads as {} — no fallible arm to handle here.
+    let config = read_config_raw(&root);
     if matches!(config.get("hooks").and_then(|h| h.get(HOOK_NAME)), Some(Value::Bool(false))) {
         return Ok((0, String::new(), String::new()));
     }

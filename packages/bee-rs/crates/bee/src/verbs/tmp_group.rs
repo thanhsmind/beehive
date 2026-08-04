@@ -106,7 +106,7 @@ struct StateLite {
 /// defaults inside crate::state::read_state_brief (converted in its own
 /// file), so `Err(())` is now unreachable for that cause.
 fn read_state_lite(root: &Path) -> Result<StateLite, ()> {
-    let brief = read_state_brief(root).map_err(|_| ())?;
+    let brief = read_state_brief(root);
     Ok(StateLite { phase: brief.phase, feature: brief.feature })
 }
 
@@ -292,8 +292,8 @@ fn count_files(abs: &Path) -> u64 {
 
 /// matchFeature — exact name always; `<feature><sep>...` prefix unless the
 /// sibling is itself live. `Err(())` is now unreachable through the lane read
-/// (a corrupt record reads as absent); the signature is kept because
-/// read_state_brief still carries a Bail-shaped result.
+/// (a corrupt record reads as absent); the fallible signature is kept for the
+/// caller's `?` plumbing.
 fn match_feature(
     root: &Path,
     state: &StateLite,

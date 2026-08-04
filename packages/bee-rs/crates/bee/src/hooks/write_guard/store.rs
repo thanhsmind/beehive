@@ -81,9 +81,10 @@ pub(crate) fn read_state(root: &Path) -> R<Map<String, Value>> {
 /// provenance: state.mjs readConfig (merged tracked+overlay, advisor
 /// stripped). Only raw pass-through keys (guards.*, worktree_first,
 /// product_root, hooks) are consumed by this hook; the normalize* steps in
-/// the .mjs never touch those. Corrupt file → Nd.
+/// the .mjs never touch those. A corrupt file warns natively and reads as
+/// absent — infallible now.
 pub(crate) fn read_config(root: &Path) -> R<Map<String, Value>> {
-    crate::state::read_config_raw(root).map_err(|_| Nd)
+    Ok(crate::state::read_config_raw(root))
 }
 
 /// provenance: state.mjs resolveProductRoot — consulted (via resolveContext)

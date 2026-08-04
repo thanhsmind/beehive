@@ -207,7 +207,7 @@ pub(crate) fn compute_schedule(cells: &[Value]) -> Schedule {
 
 /// gateApproved(readState(root), gate) over the brief state slice.
 pub(crate) fn default_gate_approved(root: &Path, gate: &str) -> MR<bool> {
-    let state = bstate::read_state_brief(root).map_err(|_| Fail::Delegate)?;
+    let state = bstate::read_state_brief(root);
     Ok(matches!(state.gates.get(gate), Some(Value::Bool(true))))
 }
 
@@ -340,7 +340,7 @@ pub(crate) fn claimed_feature_has_route(root: &Path, feature: Option<&Value>) ->
     if let Some(route) = read_lane_route(root, feature_s)? {
         return Ok(route);
     }
-    let state = bstate::read_state_brief(root).map_err(|_| Fail::Delegate)?;
+    let state = bstate::read_state_brief(root);
     if matches!(&state.feature, Value::String(f) if f == feature_s) {
         return Ok(js_truthy(&state.route));
     }

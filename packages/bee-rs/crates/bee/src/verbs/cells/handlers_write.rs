@@ -594,8 +594,8 @@ pub(crate) fn claim_cell_from_flags(
         prescan_claim(&root, &id)?;
         let control = control_root(&root)?;
         delegate_only(list_session_records(&control))?;
-        delegate_only(bstate::read_state_brief(&root).map_err(|_| Fail::Delegate))?;
-        let config = bstate::read_config_raw(&root).map_err(|_| Fail::Delegate)?;
+        bstate::read_state_brief(&root);
+        let config = bstate::read_config_raw(&root);
         let cell_for_policy = read_cell_norm(&root, &id)?;
         if let Some(cell) = &cell_for_policy {
             if !matches!(cell, Value::Object(_)) {

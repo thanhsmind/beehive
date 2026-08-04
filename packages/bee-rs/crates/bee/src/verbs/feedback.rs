@@ -1390,7 +1390,7 @@ fn run_count(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
             return Some(emit_no_root_error(&cwd, "feedback count", parsed.pre_json, t0))
         }
     };
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     let data = collect_counts(&root)?;
     let result = counts_value(&data);
     let text = format!("{}.", summary_line(&data));
@@ -1668,7 +1668,7 @@ fn run_digest(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
             return Some(emit_no_root_error(&cwd, "feedback digest", parsed.pre_json, t0))
         }
     };
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     let digest = build_digest(&root)?;
     let mut out_path = root.clone();
     for part in out_rel.split(['/', '\\']) {
@@ -1700,7 +1700,7 @@ fn run_digest(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
 // — none of which is ported. Any non-empty dogfood_repos delegates.
 
 fn merge_digests(root: &Path) -> Option<Value> {
-    let config = crate::state::read_config_raw(root).ok()?;
+    let config = crate::state::read_config_raw(root);
     match config.get("dogfood_repos") {
         None | Some(Value::Null) => {}
         Some(Value::Array(a)) if a.is_empty() => {}
@@ -1727,7 +1727,7 @@ fn run_collect(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
             return Some(emit_no_root_error(&cwd, "feedback collect", parsed.pre_json, t0))
         }
     };
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     let digest = merge_digests(&root)?;
     // `merged.length` is always 0 on this arm, so the suffix is always empty.
     let text = format!("Merged digest — {}.", digest_summary_line(&digest));
@@ -1981,7 +1981,7 @@ fn run_rank(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
             return Some(emit_no_root_error(&cwd, "feedback rank", parsed.pre_json, t0))
         }
     };
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     let digest = merge_digests(&root)?;
     let ranked = rank_clusters(cluster_entries(&digest));
     let top_word = match ranked.first() {

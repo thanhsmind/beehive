@@ -72,7 +72,7 @@ pub(crate) fn prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<
             return Some(Pre::Emitted(emit_no_root_error(&cwd, cmd, use_json, t0)))
         }
     };
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     Some(Pre::Go(Box::new(Ctx {
         root,
         kind,

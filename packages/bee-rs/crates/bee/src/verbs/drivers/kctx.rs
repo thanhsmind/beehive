@@ -17,7 +17,7 @@
     /// provenance: verbs/knowledge.rs:167 bundle_dir (lib/knowledge.mjs
     /// bundleDir + the delegating slice of resolveProductRoot).
     pub(super) fn bundle_dir(root: &Path) -> Option<PathBuf> {
-        let config = read_config_raw(root).ok()?;
+        let config = read_config_raw(root);
         match config.get("product_root") {
             None | Some(Value::Null) => {}
             Some(Value::String(s)) if s.is_empty() => {}

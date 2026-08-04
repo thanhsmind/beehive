@@ -86,7 +86,7 @@ FIX: repair or recreate the Git worktree before retrying; no worktree-local .bee
         return Ok(emit);
     }
 
-    if !hook_enabled(&store_root_pb, HOOK_NAME).map_err(|_| Nd)? {
+    if !hook_enabled(&store_root_pb, HOOK_NAME) {
         return Ok(emit);
     }
 

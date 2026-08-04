@@ -50,9 +50,6 @@
 
 use crate::roots::LinkedRoots;
 
-use crate::state::Bail;
-
-
 use serde_json::{Map, Value};
 
 use std::cell::RefCell;
@@ -162,19 +159,15 @@ const ORIENT_PHASE_SKILL: [(&str, &str); 5] = [
 
 // ─── error plumbing ────────────────────────────────────────────────────────
 
-/// Bail = delegate to Node before any output. Thrown = a JS exception Node
+/// Bail = delegate to Node before any output — still constructed directly at
+/// JS-exotic input sites (a truthy non-object approved_gates spread; see
+/// lane_record_from / store.rs's own spread). Thrown = a JS exception Node
 /// CATCHES locally (review/recovery/orient-worktree fail-open wrappers); one
 /// escaping to the top level also bails (the Node re-run reproduces it).
 #[derive(Debug)]
 pub(crate) enum Ex {
     Bail,
     Thrown,
-}
-
-impl From<Bail> for Ex {
-    fn from(_: Bail) -> Self {
-        Ex::Bail
-    }
 }
 
 type R<T> = Result<T, Ex>;

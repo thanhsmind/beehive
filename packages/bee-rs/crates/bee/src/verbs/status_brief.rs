@@ -9,11 +9,10 @@
 // Anything else — including a linked-worktree root — returns None before ANY
 // output.
 //
-// CUTOVER: corrupt JSON inputs used to be on that list. `state::read_state_brief`
-// and `read_config_raw` warn natively and fall back to defaults now, so the
-// three `.ok()?` sites in `run` can no longer fire — a corrupt state.json
-// yields the default brief plus a warning on stderr, exactly the pair Node
-// produced.
+// CUTOVER: corrupt JSON inputs used to be on that list. `state::read_state_brief`,
+// `read_config_raw`, and `check_manifest_drift` warn natively, fall back to
+// defaults, and are infallible now — a corrupt state.json yields the default
+// brief plus a warning on stderr, exactly the pair Node produced.
 
 use crate::jsjson;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
@@ -55,9 +54,9 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
         Roots::None => return Some(emit_no_root_error(&cwd, "status", use_json, t0)),
     };
 
-    let drift = check_manifest_drift(&root).ok()?;
-    let state = read_state_brief(&root).ok()?;
-    let config = read_config_raw(&root).ok()?;
+    let drift = check_manifest_drift(&root);
+    let state = read_state_brief(&root);
+    let config = read_config_raw(&root);
 
     // buildStatusBrief's frozen 7-key order.
     let mut result = Map::new();

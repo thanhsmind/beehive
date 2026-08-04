@@ -7,7 +7,7 @@ use super::*;
 use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_worktree, LinkedRoots, RootsWt};
-use crate::state::{bypass_level, read_config_raw, Bail};
+use crate::state::{bypass_level, read_config_raw};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::cell::RefCell;
@@ -386,7 +386,7 @@ pub(crate) fn run(verb: Verb, lanes_full: bool, use_json: bool, t0: Instant) -> 
     let root = roots.root;
     // Drift check first (its cache write is the one permitted pre-bail side
     // effect — Node performs it before routing too).
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
     let mut ctx = Ctx { root, cwd, linked: roots.linked, stderr: RefCell::new(Vec::new()) };
     let (payload, text) = match verb {
         Verb::Status => {

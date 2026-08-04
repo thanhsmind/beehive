@@ -36,10 +36,9 @@
 //
 // CUTOVER: corrupt config / drift-cache JSON used to be on that list (Node's
 // warn-with-V8-message paths). `state::read_config_raw` and
-// `registry::check_manifest_drift` warn natively and fall back now, so the two
-// `.ok()?` sites below can no longer fire — a corrupt config reads as no
-// config and `bee test` reports "undeclared", exactly as Node did after its
-// own warning.
+// `registry::check_manifest_drift` warn natively and fall back now, and are
+// infallible — a corrupt config reads as no config and `bee test` reports
+// "undeclared", exactly as Node did after its own warning.
 //
 // Known divergences (documented, unreachable in practice): a spawn error
 // AFTER the successful shell probe embeds Rust's io error text where Node
@@ -93,7 +92,7 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
 
     // Everything that can still delegate happens BEFORE the drift check: its
     // cache write would otherwise swallow the Node re-run's drift line.
-    let commands = declared_test_commands(&root).ok()?;
+    let commands = declared_test_commands(&root);
     let shell = if commands.is_some() {
         let s = posix_shell()?; // no POSIX sh — Node's cmd.exe fallback owns it
         // Pre-flight the record dir so the post-run writeJsonAtomic (whose
@@ -104,7 +103,7 @@ fn run(use_json: bool, t0: Instant) -> Option<ExitCode> {
         None
     };
 
-    let drift = check_manifest_drift(&root).ok()?;
+    let drift = check_manifest_drift(&root);
 
     // ── handleTest ─────────────────────────────────────────────────────────
     let (result, text, exit_code) = match commands {
@@ -187,9 +186,9 @@ fn emit_error(message: &str, use_json: bool) -> ExitCode {
 
 /// Ordered declared commands, or None when the repo declares no test path
 /// (absent commands.test, empty after normalization, or only the "none"
-/// sentinel). Err bubbles Node-owned shapes (corrupt config JSON).
-fn declared_test_commands(root: &Path) -> Result<Option<Vec<String>>, crate::state::Bail> {
-    let config = read_config_raw(root)?;
+/// sentinel).
+fn declared_test_commands(root: &Path) -> Option<Vec<String>> {
+    let config = read_config_raw(root);
     // normalizeCommands: non-object (or array) commands -> {}.
     let raw_test = config
         .get("commands")
@@ -210,7 +209,7 @@ fn declared_test_commands(root: &Path) -> Result<Option<Vec<String>>, crate::sta
     };
     // declaredTestCommands: drop the no-test sentinel (decision 55b951e1).
     let cleaned: Vec<String> = normalized.into_iter().filter(|c| c != "none").collect();
-    Ok(if cleaned.is_empty() { None } else { Some(cleaned) })
+    if cleaned.is_empty() { None } else { Some(cleaned) }
 }
 
 // ── runner (test-runner.mjs runDeclaredTests) ──────────────────────────────
@@ -433,32 +432,32 @@ mod tests {
         let root = tmp.path();
         // Absent commands.test -> undeclared.
         write_config(root, r#"{"commands":{}}"#);
-        assert!(declared_test_commands(root).ok().unwrap().is_none());
+        assert!(declared_test_commands(root).is_none());
         // String trims; empty/whitespace normalizes away.
         write_config(root, r#"{"commands":{"test":"  npm test  "}}"#);
-        assert_eq!(declared_test_commands(root).ok().unwrap(), Some(vec!["npm test".to_string()]));
+        assert_eq!(declared_test_commands(root), Some(vec!["npm test".to_string()]));
         write_config(root, r#"{"commands":{"test":"   "}}"#);
-        assert!(declared_test_commands(root).ok().unwrap().is_none());
+        assert!(declared_test_commands(root).is_none());
         // Array filters non-strings and empties, keeps order, trims.
         write_config(root, r#"{"commands":{"test":[" a ",1,""," b "]}}"#);
         assert_eq!(
-            declared_test_commands(root).ok().unwrap(),
+            declared_test_commands(root),
             Some(vec!["a".to_string(), "b".to_string()])
         );
         // The "none" sentinel (decision 55b951e1) declares no-test.
         write_config(root, r#"{"commands":{"test":"none"}}"#);
-        assert!(declared_test_commands(root).ok().unwrap().is_none());
+        assert!(declared_test_commands(root).is_none());
         write_config(root, r#"{"commands":{"test":["none"," none "]}}"#);
-        assert!(declared_test_commands(root).ok().unwrap().is_none());
+        assert!(declared_test_commands(root).is_none());
         // Non-object commands -> {} -> undeclared.
         write_config(root, r#"{"commands":["x"]}"#);
-        assert!(declared_test_commands(root).ok().unwrap().is_none());
+        assert!(declared_test_commands(root).is_none());
         // CUTOVER: a corrupt config used to bail to Node. readConfig warned
         // and returned {}, so `bee test` reported "undeclared" — that is what
         // the native read does now, warning on stderr in our own words.
         write_config(root, "{broken");
         assert!(
-            declared_test_commands(root).ok().unwrap().is_none(),
+            declared_test_commands(root).is_none(),
             "a corrupt config reads as no config, and no config is undeclared"
         );
     }

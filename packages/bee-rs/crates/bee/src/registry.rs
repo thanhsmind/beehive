@@ -8,7 +8,6 @@
 // tests/front_door.rs fails loudly when the export step is forgotten.
 
 use crate::fsutil::{read_json, remove_file_if_exists, write_json_atomic, ReadJson};
-use crate::state::Bail;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -40,21 +39,21 @@ const HINT: &str = "Command registry content changed since the last bee call —
 
 /// checkManifestDrift (write path — the doctor-only skipWrite branch stays
 /// with Node until doctor ports). ISO timestamp matches Date.toISOString().
-pub fn check_manifest_drift(root: &Path) -> Result<Drift, Bail> {
+pub fn check_manifest_drift(root: &Path) -> Drift {
     let current = manifest_hash();
     let state_file = cache_hash_path(root);
 
-    let read_prior = |file: &Path| -> Result<Option<Value>, Bail> {
+    let read_prior = |file: &Path| -> Option<Value> {
         match read_json(file) {
-            ReadJson::Missing => Ok(None),
+            ReadJson::Missing => None,
             // CUTOVER: readJson(file, null) warned and returned null, and the
             // caller treated that as "no prior hash recorded" — i.e. exactly
             // the Missing arm. Same fallback, our wording.
             ReadJson::Corrupt => {
                 crate::fsutil::warn_corrupt_json(file);
-                Ok(None)
+                None
             }
-            ReadJson::Parsed(v) => Ok(Some(v)),
+            ReadJson::Parsed(v) => Some(v),
         }
     };
     // readJson(cache, null) || readJson(legacy, null) — null AND falsy parses
@@ -64,9 +63,9 @@ pub fn check_manifest_drift(root: &Path) -> Result<Drift, Bail> {
             || matches!(v, Value::Number(n) if n.as_f64() == Some(0.0))
             || matches!(v, Value::String(s) if s.is_empty())
     };
-    let prior = match read_prior(&state_file)? {
+    let prior = match read_prior(&state_file) {
         Some(v) if !is_falsy(&v) => Some(v),
-        _ => read_prior(&legacy_hash_path(root))?,
+        _ => read_prior(&legacy_hash_path(root)),
     };
     let prior_hash = prior
         .as_ref()
@@ -81,10 +80,10 @@ pub fn check_manifest_drift(root: &Path) -> Result<Drift, Bail> {
         remove_file_if_exists(&legacy_hash_path(root));
     }
 
-    Ok(Drift {
+    Drift {
         manifest_changed: matches!(&prior_hash, Some(h) if h != &current),
         hint: HINT,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -104,7 +103,7 @@ mod tests {
     fn corrupt_hash_cache_reads_as_no_prior_hash_and_reports_no_drift() {
         let tmp = tempfile::tempdir().unwrap();
         write(&cache_hash_path(tmp.path()), "{broken");
-        let drift = check_manifest_drift(tmp.path()).ok().expect("must fail open");
+        let drift = check_manifest_drift(tmp.path());
         assert!(!drift.manifest_changed, "an unreadable cache is not drift");
         // The cache was repaired in place by the best-effort write.
         let repaired = std::fs::read_to_string(cache_hash_path(tmp.path())).unwrap();
@@ -118,7 +117,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write(&cache_hash_path(tmp.path()), "{broken");
         write(&legacy_hash_path(tmp.path()), r#"{"hash":"stale-hash"}"#);
-        let drift = check_manifest_drift(tmp.path()).ok().unwrap();
+        let drift = check_manifest_drift(tmp.path());
         assert!(drift.manifest_changed, "the legacy hash differs — that IS drift");
     }
 

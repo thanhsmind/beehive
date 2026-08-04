@@ -106,12 +106,8 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
 }
 
 fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
-    match hook_enabled(root, HOOK_NAME) {
-        Ok(true) => {}
-        Ok(false) => return Ok(()),
-        // read_config_raw warns and reads a corrupt config as absent, so this
-        // arm is unreachable; kept because the signature is still fallible.
-        Err(_) => return Err(Delegate),
+    if !hook_enabled(root, HOOK_NAME) {
+        return Ok(());
     }
 
     let state = match read_state(root) {
@@ -444,7 +440,7 @@ enum CtrlErr {
 /// non-string value or a missing directory would console.warn in Node — both
 /// are rare, so they delegate rather than reproducing the warn text.
 fn check_product_root(work_root: &Path) -> Result<(), CtrlErr> {
-    let config = crate::state::read_config_raw(work_root).map_err(|_| CtrlErr::Delegate)?;
+    let config = crate::state::read_config_raw(work_root);
     match config.get("product_root") {
         None | Some(Value::Null) => Ok(()),
         Some(Value::String(s)) if s.is_empty() => Ok(()),

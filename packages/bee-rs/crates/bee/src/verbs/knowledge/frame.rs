@@ -46,7 +46,7 @@ pub(crate) fn g_prelude(cmd: &'static str, json: bool, pre_json: bool, t0: Insta
         }
         Roots::None => return Some(GPre::Emitted(emit_no_root_error(&cwd, cmd, pre_json, t0))),
     };
-    let Ok(drift) = check_manifest_drift(&root) else { return None };
+    let drift = check_manifest_drift(&root);
     Some(GPre::Go(GCtx {
         root,
         cmd,
@@ -118,7 +118,7 @@ pub(crate) fn js_str_or_undefined(v: Option<&Value>) -> String {
 /// non-empty product_root (divorce topology, GitHub #14 — Node's warn/path
 /// semantics live there) or a corrupt config file (V8 warning).
 pub(crate) fn bundle_dir(root: &Path) -> Option<PathBuf> {
-    let config = read_config_raw(root).ok()?;
+    let config = read_config_raw(root);
     match config.get("product_root") {
         None | Some(Value::Null) => {}
         Some(Value::String(s)) if s.is_empty() => {}
