@@ -14,9 +14,16 @@
 //      the proof. The manifest comparison mixes the two comparators
 //      deliberately: `missing`/`added` use bare code-unit sort, `changed`
 //      uses locale collation. Both are reproduced as written.
-//   2. THE MODE. `statSync(p).mode & 0o777` — on Windows libuv synthesises
-//      0666 (0444 when FILE_ATTRIBUTE_READONLY), which is what the committed
-//      manifest carries; on Unix it is the real permission bits.
+//   2. THE MODE. The git index, not the filesystem: `100755` records `"755"`,
+//      anything else records `"644"`. It used to be `statSync(p).mode & 0o777`,
+//      which is not a portable fact — Windows libuv synthesises 0666 (0444
+//      when FILE_ATTRIBUTE_READONLY) and never reports the executable bit, so
+//      the manifest could only ever agree with the platform that wrote it:
+//      every one of its 205 records read as drifted on the other. The
+//      executable bit as git records it is the same on every clone, which is
+//      what a distribution proof needs. `observed_mode` is the matching
+//      reader for a checkout with no index (an installed package), and it
+//      answers `None` on Windows rather than guessing.
 //
 // ROUTING. Exactly one of --write/--check/--selftest (an extra unrecognised
 // argument is ignored). Every failure refuses natively in the
@@ -125,7 +132,15 @@ impl Record {
     }
 }
 
-/// `(mode & 0o777)` formatted as 3 zero-padded octal digits.
+/// `(mode & 0o777)` formatted as 3 zero-padded octal digits — the raw stat
+/// bits, kept for same-machine before/after snapshots only.
+///
+/// It is NOT what the manifest records: raw bits are not comparable across
+/// machines (Windows synthesises 0666, or 0444 for FILE_ATTRIBUTE_READONLY,
+/// and never reports the executable bit at all), so a manifest built on one
+/// platform reported every record as drifted on the other. `index_mode` is
+/// the recorded value; `observed_mode` is the only thing a checker may
+/// compare it against.
 pub(super) fn mode_octal(meta: &std::fs::Metadata) -> String {
     #[cfg(unix)]
     let bits = {
@@ -136,6 +151,76 @@ pub(super) fn mode_octal(meta: &std::fs::Metadata) -> String {
     // libuv's uv__stat: FILE_ATTRIBUTE_READONLY -> 0444, otherwise 0666.
     let bits: u32 = if meta.permissions().readonly() { 0o444 } else { 0o666 };
     format!("{bits:03o}")
+}
+
+/// The one permission fact that survives a trip through git, a tarball and a
+/// second operating system: whether the file is executable. `"755"` when it
+/// is, `"644"` when it is not.
+///
+/// On Windows the bit does not exist to be read, so an observer there can
+/// only say "I cannot tell" — `None`. A comparison against `None` is not a
+/// mismatch; it is a check that platform cannot perform.
+pub(super) fn observed_mode(meta: &std::fs::Metadata) -> Option<String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Some(if meta.mode() & 0o111 != 0 { "755".to_string() } else { "644".to_string() })
+    }
+    #[cfg(windows)]
+    {
+        let _ = meta;
+        None
+    }
+}
+
+/// The recorded mode, read from the git index rather than the filesystem —
+/// `100755` is the executable bit as every clone of this repository receives
+/// it, on every platform, whatever the local umask or filesystem did.
+///
+/// Memoized per root: one `git ls-files` per process instead of one per
+/// record. A manifest build is a single pass over a tree nobody is staging
+/// into at the same time, so a cached index cannot go stale inside one.
+fn index_modes(root: &Path) -> std::sync::Arc<std::collections::HashMap<String, String>> {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex, OnceLock};
+    static CACHE: OnceLock<Mutex<HashMap<PathBuf, Arc<HashMap<String, String>>>>> =
+        OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(hit) = cache.lock().unwrap().get(root) {
+        return Arc::clone(hit);
+    }
+    let mut map = HashMap::new();
+    if let Ok(out) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["ls-files", "-s", "-z"])
+        .output()
+    {
+        if out.status.success() {
+            // Each entry is "<mode> <sha> <stage>\t<path>\0".
+            for entry in String::from_utf8_lossy(&out.stdout).split('\0') {
+                let Some((meta, path)) = entry.split_once('\t') else { continue };
+                let Some(mode) = meta.split(' ').next() else { continue };
+                let recorded = if mode == "100755" { "755" } else { "644" };
+                map.insert(path.to_string(), recorded.to_string());
+            }
+        }
+    }
+    let shared = Arc::new(map);
+    cache.lock().unwrap().insert(root.to_path_buf(), Arc::clone(&shared));
+    shared
+}
+
+/// The recorded mode for one file: the git index when the file is tracked,
+/// and the observed executable bit when it is not (an untracked file in an
+/// inventory root is already a drift the caller will report; guessing its
+/// mode is not the interesting failure). Windows, which cannot observe the
+/// bit, records the non-executable default.
+fn index_mode(root: &Path, rel: &str, meta: &std::fs::Metadata) -> String {
+    if let Some(mode) = index_modes(root).get(rel) {
+        return mode.clone();
+    }
+    observed_mode(meta).unwrap_or_else(|| "644".to_string())
 }
 
 /// A filesystem failure, worded by us. The error KIND is named rather than
@@ -154,7 +239,7 @@ fn build_record(root: &Path, abs: &Path, role: &str, with_package_path: bool) ->
     let path = rel_posix(root, abs);
     Ok(Record {
         sha256: sha256_hex(&data),
-        mode: mode_octal(&meta),
+        mode: index_mode(root, &path, &meta),
         role: role.to_string(),
         package_path: if with_package_path { Some(path.clone()) } else { None },
         path,

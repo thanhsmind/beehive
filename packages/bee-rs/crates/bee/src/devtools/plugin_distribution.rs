@@ -17,7 +17,7 @@
 // `RUNNER~1` in TEMP resolves to its long form), and the .mjs would refuse a
 // perfectly ordinary directory there.
 
-use super::release_manifest::mode_octal;
+use super::release_manifest::{mode_octal, observed_mode};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -177,13 +177,16 @@ fn walk_plain_files(root: &Path, relative: &str, out: &mut Vec<WalkedFile>) -> R
 #[derive(Clone)]
 struct FileRecord {
     sha256: String,
-    mode: String,
+    /// The executable bit as this platform can observe it — `None` on
+    /// Windows, where it cannot. An installed package has no git index, so
+    /// this is the only reader available for the manifest's recorded mode.
+    mode: Option<String>,
 }
 
 fn file_record(abs: &Path) -> R<FileRecord> {
     let stat = assert_plain_file(abs, "inventory entry")?;
     let bytes = read_file(abs, "inventory entry")?;
-    Ok(FileRecord { sha256: sha256_bytes(&bytes), mode: mode_octal(&stat) })
+    Ok(FileRecord { sha256: sha256_bytes(&bytes), mode: observed_mode(&stat) })
 }
 
 // ── release manifest inventory ─────────────────────────────────────────────
@@ -432,7 +435,12 @@ fn prove_installed_package(state: &PluginState, expected: &[InventoryRecord]) ->
     let changed: Vec<&str> = expected_map
         .iter()
         .filter(|(k, record)| {
-            actual.get(**k).is_some_and(|v| v.sha256 != record.sha256 || v.mode != record.mode)
+            actual.get(**k).is_some_and(|v| {
+                v.sha256 != record.sha256
+                    // A platform that cannot observe the executable bit does
+                    // not get to call it changed.
+                    || v.mode.as_ref().is_some_and(|m| m != &record.mode)
+            })
         })
         .map(|(k, _)| *k)
         .collect();
