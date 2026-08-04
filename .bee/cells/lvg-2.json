@@ -1,0 +1,37 @@
+{
+  "id": "lvg-2",
+  "feature": "linux-verify-green",
+  "lane": "small",
+  "change_class": "bugfix",
+  "behavior_change": false,
+  "deps": [],
+  "title": "Stop two tests from asserting Windows path shape and readdir order",
+  "action": "knowledge/tests.rs bundle_target_normalization uses a D:\\repo dir that is one opaque component on Linux, so ../knowledge/y.md escapes containment; give it a platform-appropriate dir. decisions/tests.rs supersede sweep indexes files[2] under raw read_dir order; assert the excerpt set order-insensitively.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::knowledge verbs::decisions",
+  "must_haves": {
+    "truths": [
+      "both tests pass on Linux and keep their intent on Windows",
+      "no production code changed"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

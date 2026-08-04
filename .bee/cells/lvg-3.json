@@ -1,0 +1,36 @@
+{
+  "id": "lvg-3",
+  "feature": "linux-verify-green",
+  "lane": "small",
+  "change_class": "bugfix",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Stop CI reporting success over a red suite",
+  "action": "ci.yml pipes cargo test into tee, so the step exit code is tee's and a red suite reported success. Set pipefail for that step, keeping verify-output.log for the issue-filing step.",
+  "verify": "rg -n pipefail .github/workflows/ci.yml",
+  "must_haves": {
+    "truths": [
+      "the verify step fails when cargo test fails",
+      "verify-output.log still written"
+    ]
+  },
+  "files": [
+    ".github/workflows/ci.yml"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "id": "lvg-1",
+  "feature": "linux-verify-green",
+  "lane": "small",
+  "change_class": "bugfix",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Take release-manifest mode from the git index so it is the same on every platform",
+  "action": "Replace the stat-based mode_octal with a git-index derivation (100755 -> 755, anything else -> 644) in devtools/release_manifest.rs, update the header comment documenting the Windows-666 behaviour, and regenerate the committed manifest with bee dev release-manifest --write.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml devtools::release_manifest && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "mode no longer reads filesystem permission bits",
+      "release-manifest --check green on Linux and identical on Windows",
+      "rebuild_reproduces_the_committed_manifest passes with no platform cfg"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
