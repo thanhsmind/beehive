@@ -825,8 +825,7 @@ fn renew_lease_path(ctrl2: &Path, id: &str, ttl: f64, now: &DateTime<Utc>) -> Re
 /// state.mjs's THROWING resolveRoots(process.cwd()), then
 /// worktree-holds.renewHolds(mainRoot, sessionId, {maxAttempts: 1}).
 fn renew_cross_worktree_holds(root: &Path, sid: &str) -> Result<(), String> {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let main_root = match resolve_roots_core(&cwd) {
+    let main_root = match resolve_roots_core(root) {
         Ok(RootsCore::LinkedValid { main_root, .. }) => main_root,
         Ok(_) => root.to_path_buf(),
         Err(msg) => return Err(format!("WorktreeLinkInvalidError: {msg}")),
@@ -1465,8 +1464,9 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        // The test process's cwd is an ordinary checkout, so main_root falls
-        // back to the `root` argument (tmp) — the solo/main no-op branch.
+        // tmp is an ordinary checkout (not a linked worktree), so main_root
+        // falls back to the `root` argument itself — the solo/main no-op
+        // branch. Resolution is hermetic: it reads `root`, never process cwd.
         renew_cross_worktree_holds(tmp.path(), "s1").unwrap();
         let after: Value = serde_json::from_str(
             &std::fs::read_to_string(runtime.join("cross-worktree-holds.json")).unwrap(),
