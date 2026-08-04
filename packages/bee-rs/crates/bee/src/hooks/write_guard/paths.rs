@@ -12,8 +12,11 @@ use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-// ─── exclusive-path globs (provenance: guards.mjs DEFAULT_EXCLUSIVE_PATHS +
-// globToRegExp + isExclusivePath) ──────────────────────────────────────────
+// ─── exclusive-path glob matcher and default deny-list ─────────────────────
+//
+// A narrow glob grammar purpose-built for exclusive-path gating: literal
+// characters, `*` (any run within one path segment), `**` (any run of
+// characters), and `**/` (zero or more whole path segments).
 
 pub(crate) const DEFAULT_EXCLUSIVE_PATHS: [&str; 15] = [
     "**/migrations/**",
@@ -36,11 +39,13 @@ pub(crate) const DEFAULT_EXCLUSIVE_PATHS: [&str; 15] = [
 #[derive(Clone)]
 pub(crate) enum GlobTok {
     Lit(char),
-    Star,          // '*'  -> [^/]*
-    AnyAll,        // '**' (no trailing slash) -> .*
-    AnyDirsPrefix, // '**/' -> (?:.*/)?
+    Star,          // '*' matches a run of non-'/' characters within one path segment
+    AnyAll,        // '**' (no trailing slash) matches any run of characters
+    AnyDirsPrefix, // '**/' matches zero or more whole path segments
 }
 
+/// Tokenizes a glob pattern into the bee exclusive-path grammar above.
+/// Normalizes backslashes to `/` and strips a leading `./`.
 pub(crate) fn glob_tokens(glob: &str) -> Vec<GlobTok> {
     let normalized = {
         let s = glob.replace('\\', "/");
@@ -75,6 +80,10 @@ pub(crate) fn glob_tokens(glob: &str) -> Vec<GlobTok> {
     out
 }
 
+/// Recursive backtracking matcher over the bee exclusive-path grammar.
+/// Tries the shortest match first, growing only on failure — the grammar has
+/// no pathological cases (patterns are short, fixed config strings) so this
+/// stays cheap without memoization.
 pub(crate) fn glob_match(toks: &[GlobTok], input: &[char]) -> bool {
     match toks.first() {
         None => input.is_empty(),
@@ -82,7 +91,7 @@ pub(crate) fn glob_match(toks: &[GlobTok], input: &[char]) -> bool {
             input.first() == Some(c) && glob_match(&toks[1..], &input[1..])
         }
         Some(GlobTok::Star) => {
-            // [^/]* — try consuming 0..n non-slash chars
+            // Consume 0..n characters, stopping at a path separator.
             let mut n = 0usize;
             loop {
                 if glob_match(&toks[1..], &input[n..]) {
@@ -95,21 +104,20 @@ pub(crate) fn glob_match(toks: &[GlobTok], input: &[char]) -> bool {
             }
         }
         Some(GlobTok::AnyAll) => {
-            // .* — any run (regex '.' with no /s flag excludes newline; paths
-            // with newlines are unmatchable there — mirror by excluding '\n')
+            // Consume 0..n characters, no boundary restriction.
             let mut n = 0usize;
             loop {
                 if glob_match(&toks[1..], &input[n..]) {
                     return true;
                 }
-                if n >= input.len() || input[n] == '\n' {
+                if n >= input.len() {
                     return false;
                 }
                 n += 1;
             }
         }
         Some(GlobTok::AnyDirsPrefix) => {
-            // (?:.*/)? — empty, or any run ending at a '/'
+            // Zero whole segments, or any run of characters ending at a '/'.
             if glob_match(&toks[1..], input) {
                 return true;
             }
@@ -117,17 +125,14 @@ pub(crate) fn glob_match(toks: &[GlobTok], input: &[char]) -> bool {
                 if c == '/' && glob_match(&toks[1..], &input[idx + 1..]) {
                     return true;
                 }
-                if c == '\n' {
-                    break;
-                }
             }
             false
         }
     }
 }
 
-/// provenance: guards.mjs isExclusivePath — defaults EXTENDED by
-/// config.guards.exclusive_paths.
+/// True when `normalized` matches an exclusive-path glob: the built-in
+/// defaults, EXTENDED (never replaced) by `config.guards.exclusive_paths`.
 pub(crate) fn is_exclusive_path(root: &Path, normalized: &str) -> R<bool> {
     let config = read_config(root)?;
     let mut globs: Vec<String> = DEFAULT_EXCLUSIVE_PATHS.iter().map(|s| s.to_string()).collect();
