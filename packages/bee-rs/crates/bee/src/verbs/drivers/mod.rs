@@ -62,13 +62,14 @@
 //     flag, `--help` anywhere, non-UTF-8 argv, stray positionals: Node's
 //     validate()/emitError machinery owns those bytes.
 //
-//   * `close --feature <F>` when `.bee/lanes/<F>.json` exists — the
-//     blueprint's lane coverage debt. That record's own `last_scribing_run`
-//     joins scribingDebt's threshold and a corrupt one prints a console.warn;
-//     both are unported. Scoped to the ONE named feature, because readLane
-//     touches exactly that one file: a lane-using repo still closes every
-//     other feature natively. (Workflow records are NOT a guard — nothing on
-//     close's read path consults `.bee/runtime/workflows/`.)
+//   * (CLOSED) `close --feature <F>` when `.bee/lanes/<F>.json` exists no
+//     longer delegates. The lane record's own `last_scribing_run` now joins
+//     scribingDebt's threshold (close.rs `best_scribing_stamp_ms`, reusing
+//     `workflow_store::read_lane_display` — the same fail-open display read
+//     `status`'s own port already uses) and a corrupt one warns, naming the
+//     path, instead of throwing. Workflow records are still NOT part of this
+//     path — nothing close reads (readState / listCells / captureQueue /
+//     readConfig) consults `.bee/runtime/workflows/`.
 //
 //   * Linked-worktree roots (crate::roots -> NeedsNode). This also makes
 //     bee.mjs's `grantedWorktreeContext()` provably `null` on every shape this

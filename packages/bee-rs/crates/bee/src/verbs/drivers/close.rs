@@ -265,11 +265,14 @@ pub(crate) fn date_parse(v: Option<&Value>) -> f64 {
     }
 }
 
-/// provenance: cells.mjs bestScribingStampMs (verbs/status_full.rs:1718),
-/// scoped to `feature`. LANE records are excluded by routing (a repo carrying
-/// `.bee/lanes/*.json` delegates before this runs), so the lane arm is a
-/// provable no-op here.
-pub(crate) fn best_scribing_stamp_ms(root: &Path, feature: &str, state: &Map<String, Value>) -> Option<f64> {
+/// provenance: cells.mjs bestScribingStampMs (also ported at
+/// verbs/status_full/cells.rs:303 for `status`), scoped to `feature`: the
+/// jsonl ledger's max, then the feature's own lane record
+/// (`.bee/lanes/<feature>.json`, via `read_lane_display` — the same
+/// fail-open display read `status`'s port already uses), then
+/// `state.json`'s `last_scribing_run` — the freshest of the three wins, in
+/// that order, matching the status-verb port exactly.
+pub(crate) fn best_scribing_stamp_ms(root: &Path, feature: &str, state: &Map<String, Value>) -> D<Option<f64>> {
     let feature_value = Value::String(feature.to_string());
     let mut best: Option<f64> = None;
     for entry in read_jsonl(&root.join(".bee").join("logs").join("scribing-runs.jsonl")) {
@@ -281,6 +284,17 @@ pub(crate) fn best_scribing_stamp_ms(root: &Path, feature: &str, state: &Map<Str
             best = Some(parsed);
         }
     }
+    // read_lane_display is the fail-open DISPLAY read: absent reads as None,
+    // and a corrupt/mismatched record warns (naming the path) and reads as
+    // None too — it never throws, so a bad lane record never stops close.
+    let lane = crate::verbs::workflow_store::read_lane_display(root, feature).map_err(|_| Delegate)?;
+    if let Some(lane) = lane {
+        if let Some(stamp) = scribing_run_stamp_ms(lane.get("last_scribing_run")) {
+            if best.map(|b| stamp > b).unwrap_or(true) {
+                best = Some(stamp);
+            }
+        }
+    }
     if let Some(lsr) = state.get("last_scribing_run") {
         if truthy(lsr) && strict_eq(vget(lsr, "feature"), Some(&feature_value)) {
             if let Some(stamp) = scribing_run_stamp_ms(Some(lsr)) {
@@ -290,7 +304,7 @@ pub(crate) fn best_scribing_stamp_ms(root: &Path, feature: &str, state: &Map<Str
             }
         }
     }
-    best
+    Ok(best)
 }
 
 /// provenance: fsutil.mjs readJsonl (verbs/status_full.rs:526) — unparseable
@@ -332,7 +346,7 @@ pub(crate) struct DebtSummary {
 /// overrides arm (scribing-integrity si-1), which is the one close uses.
 pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     let state = read_state(root)?;
-    let threshold = best_scribing_stamp_ms(root, feature, &state).unwrap_or(0.0);
+    let threshold = best_scribing_stamp_ms(root, feature, &state)?.unwrap_or(0.0);
     let mut ids = Vec::new();
     for cell in list_cells(root, feature, "capped")? {
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
@@ -763,33 +777,6 @@ fn auto_archive_on_close(root: &Path, feature: &str) -> Retirement {
     }
 }
 
-/// provenance: state.mjs readLane / lanePath / requireLaneFeature — the
-/// DELEGATION slice. The only lane read on close's path is
-/// bestScribingStampMs' `readLane(root, feature)`, which touches exactly ONE
-/// file: `.bee/lanes/<feature>.json`. Absent (or a malformed feature name,
-/// which lanePath throws on and readLane catches as "no lane") it is a
-/// provable no-op, so a lane-using repo still runs close natively for every
-/// feature that has no lane record of its own. When the file IS there, the
-/// lane record's own `last_scribing_run` joins the threshold AND a corrupt
-/// record prints a console.warn with a path.relative-derived string — both
-/// unported (the blueprint's lane/workflow coverage debt), so that ONE
-/// feature delegates.
-///
-/// Workflows are deliberately NOT part of this guard: nothing close reads
-/// (readState / listCells / captureQueue / readConfig) consults
-/// `.bee/runtime/workflows/`, so their presence changes no byte here.
-pub(crate) fn feature_has_lane_record(root: &Path, feature: &str) -> bool {
-    let trimmed = js_trim(feature);
-    if trimmed.is_empty()
-        || trimmed.contains('\\')
-        || trimmed.contains('/')
-        || trimmed.contains("..")
-    {
-        return false; // lanePath throws -> readLane returns null (fail-open)
-    }
-    root.join(".bee").join("lanes").join(format!("{trimmed}.json")).exists()
-}
-
 pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(&flags, &["feature", "dry-run"]) {
         return None;
@@ -815,9 +802,6 @@ pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         }
         Roots::None => return Some(emit_no_root_error(&cwd, "close", use_json, t0)),
     };
-    if feature_has_lane_record(&root, &feature) {
-        return None;
-    }
     let declared = declared_test_commands(&root).ok()?;
     let shell = if !dry_run && declared.is_some() {
         let s = posix_shell()?; // no POSIX sh — Node's cmd.exe fallback owns it

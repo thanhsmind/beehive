@@ -1259,6 +1259,65 @@ use std::time::Instant;
         assert_eq!(scribing_debt(&root, "demo").unwrap().count, 0);
     }
 
+    /// The lane record's own `last_scribing_run` (`.bee/lanes/<feature>.json`)
+    /// now joins the threshold beside the jsonl ledger and `state.json`'s —
+    /// the freshest of the three wins, matching the ledger/lane/state order
+    /// `status`'s own `best_scribing_stamp_ms` (verbs/status_full/cells.rs)
+    /// already uses.
+    #[test]
+    fn a_lane_records_last_scribing_run_raises_the_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(&root, ".bee/cells/c.json", r#"{"id":"c","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        // A lane record naming ANOTHER feature never raises this threshold.
+        w(
+            &root,
+            ".bee/lanes/other.json",
+            r#"{"feature":"other","last_scribing_run":{"feature":"other","at":"2026-07-09T00:00:00.000Z"}}"#,
+        );
+        assert_eq!(scribing_debt(&root, "demo").unwrap().count, 1);
+        // The feature's OWN lane record, stamped BEFORE the cell was capped:
+        // still debt — the lane hasn't caught up to this capture yet.
+        w(
+            &root,
+            ".bee/lanes/demo.json",
+            r#"{"feature":"demo","last_scribing_run":{"feature":"demo","at":"2026-06-01T00:00:00.000Z"}}"#,
+        );
+        assert_eq!(scribing_debt(&root, "demo").unwrap().count, 1);
+        // Stamped AFTER: the cell was capped before the lane's last scribing
+        // run, so it is no longer debt.
+        w(
+            &root,
+            ".bee/lanes/demo.json",
+            r#"{"feature":"demo","last_scribing_run":{"feature":"demo","at":"2026-07-09T00:00:00.000Z"}}"#,
+        );
+        assert_eq!(scribing_debt(&root, "demo").unwrap().count, 0);
+    }
+
+    /// A corrupt/unparseable lane record used to be exactly the shape the
+    /// (now-removed) delegation guard existed for. It must not throw and
+    /// must not stop close: `read_lane_display` warns (naming the path) and
+    /// reads as "no lane", so the feature's threshold simply gets no lane
+    /// contribution and the driver proceeds to completion.
+    #[test]
+    fn a_corrupt_lane_record_warns_and_close_still_runs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":["a"]}}"#);
+        w(&root, ".bee/lanes/demo.json", "{broken");
+        // The scribing-debt read itself must not error.
+        assert_eq!(scribing_debt(&root, "demo").unwrap().count, 0);
+        // The driver still runs to completion (dry-run door report), never a
+        // thrown error and never a refusal.
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, text, code) =
+            close_handler(&root, "demo", true, declared, None).unwrap()
+        else {
+            panic!("a corrupt lane record must not stop close")
+        };
+        assert_eq!(code, 0);
+        assert!(text.contains("door scribing-debt: clear"));
+    }
+
     // ── routing (every delegating shape returns None before any output) ─────
 
     #[test]
@@ -1307,25 +1366,40 @@ use std::time::Instant;
         assert!(try_native(&os(&["dispatch", "prepare", "--runtime", "claude"]), t0).is_none());
     }
 
+    /// CUTOVER: `feature_has_lane_record` used to gate `run_close` — any
+    /// feature carrying `.bee/lanes/<feature>.json` delegated the WHOLE
+    /// command before `close_handler` ever ran. That guard is gone: the
+    /// close driver now runs natively for a lane feature exactly like any
+    /// other, whether the record is present, absent, or belongs to a
+    /// DIFFERENT feature. `close_handler` — the driver itself — is the
+    /// right level to prove this at, since the removed guard sat one layer
+    /// above it (in `run_close`, which resolves the store root off the real
+    /// process cwd and so is not unit-testable without it).
     #[test]
-    fn only_a_feature_with_its_own_lane_record_delegates() {
+    fn a_features_own_lane_record_no_longer_delegates_close() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, "{}");
-        assert!(!feature_has_lane_record(&root, "demo"));
-        // Another feature's lane record never makes THIS feature delegate.
-        w(&root, ".bee/lanes/other.json", "{}");
-        assert!(!feature_has_lane_record(&root, "demo"));
-        w(&root, ".bee/lanes/demo.json", "{}");
-        assert!(feature_has_lane_record(&root, "demo"));
-        assert!(feature_has_lane_record(&root, "  demo  ")); // lanePath trims
-        // A malformed feature name makes readLane fail-open to "no lane".
-        w(&root, ".bee/lanes/x.json", "{}");
-        assert!(!feature_has_lane_record(&root, "a/b"));
-        assert!(!feature_has_lane_record(&root, ".."));
-        assert!(!feature_has_lane_record(&root, "   "));
-        // Workflow records are irrelevant to close.
-        w(&root, ".bee/runtime/workflows/wf-1.json", "{}");
-        assert!(!feature_has_lane_record(&root, "nolane"));
+        let root = repo(&tmp, r#"{"commands":{"test":["a","b"]}}"#);
+        // A DIFFERENT feature's lane record was always irrelevant.
+        w(&root, ".bee/lanes/other.json", r#"{"feature":"other"}"#);
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, without_lane, without_code) =
+            close_handler(&root, "demo", true, declared.clone(), None).unwrap()
+        else {
+            panic!("close_handler must run the driver, not refuse")
+        };
+        // Now "demo" gets its own lane record — the exact shape that used to
+        // delegate the whole command before `close_handler` was reached.
+        w(&root, ".bee/lanes/demo.json", r#"{"feature":"demo","phase":"executing"}"#);
+        let Out::Emit(_, with_lane, with_code) =
+            close_handler(&root, "demo", true, declared, None).unwrap()
+        else {
+            panic!("close still runs — a lane record is not a refusal")
+        };
+        // The dry-run door report is unaffected by the lane record's mere
+        // presence (no scribing debt either way here) — truths #4.
+        assert_eq!(without_lane, with_lane);
+        assert_eq!(without_code, with_code);
+        assert_eq!(with_code, 0);
     }
 
     #[test]

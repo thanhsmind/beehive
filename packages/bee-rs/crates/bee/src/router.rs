@@ -75,7 +75,7 @@ pub const PORTED: &[&str] = &[
     "knowledge check|index|list|context",
     "tmp sweep",
     // R3 wave 3
-    "close (incl. --dry-run; non-lane features)",
+    "close (incl. --dry-run; lane and non-lane features alike)",
     "dispatch prepare (all kinds; --claim still delegated)",
     "worktree list|register|unregister",
     // R4 dev surface
