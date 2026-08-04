@@ -970,49 +970,73 @@ fn a_concurrent_reader_never_sees_empty_or_truncated_state_json() {
     if !native_probe(&fx, &["state", "worker", "add", "--nickname", "probe", "--cell", "probe", "--json"], "state write concurrency") {
         return;
     }
-    std::fs::write(fx.root.join(".bee/state.json"), PRISTINE_STATE).unwrap();
+
+    // The coverage guard below (`count >= MIN_MONITOR_READS`) proves the
+    // monitor actually overlapped the write burst, not just that the torn-read
+    // assertions happened to stay silent. A fixed per-read sleep made that
+    // guard a scheduling accident: under a busy parallel test binary the sleep
+    // stretches well past its nominal duration, so the monitor could fall
+    // short of the threshold even though nothing was wrong. `yield_now`
+    // schedules the monitor as often as the machine allows instead of on a
+    // clock, and a bounded retry absorbs any burst that is still too short —
+    // so a final failure reports genuine starvation, not a scheduling
+    // accident. The torn-read and empty-read assertions are unchanged and
+    // fire immediately, on the first attempt that observes them.
+    const MIN_MONITOR_READS: usize = 20;
+    const MAX_COVERAGE_ATTEMPTS: usize = 5;
 
     let target = fx.root.join(".bee/state.json");
-    let stop = Arc::new(AtomicBool::new(false));
-    let reads = Arc::new(AtomicUsize::new(0));
-    let violations: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-    let monitor = {
-        let (target, stop, reads, violations) =
-            (target.clone(), stop.clone(), reads.clone(), violations.clone());
-        std::thread::spawn(move || {
-            while !stop.load(Ordering::Relaxed) {
-                if let Ok(text) = std::fs::read_to_string(&target) {
-                    reads.fetch_add(1, Ordering::Relaxed);
-                    if text.is_empty() {
-                        violations.lock().unwrap().push("observed an EMPTY read".into());
-                    } else if let Err(e) = serde_json::from_str::<Value>(&text) {
-                        violations.lock().unwrap().push(format!(
-                            "observed a non-parseable read: {e} :: raw={:?}",
-                            &text[..text.len().min(200)]
-                        ));
+    let mut attempt = 0usize;
+    let count = loop {
+        attempt += 1;
+        std::fs::write(&target, PRISTINE_STATE).unwrap();
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let reads = Arc::new(AtomicUsize::new(0));
+        let violations: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let monitor = {
+            let (target, stop, reads, violations) =
+                (target.clone(), stop.clone(), reads.clone(), violations.clone());
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    if let Ok(text) = std::fs::read_to_string(&target) {
+                        reads.fetch_add(1, Ordering::Relaxed);
+                        if text.is_empty() {
+                            violations.lock().unwrap().push("observed an EMPTY read".into());
+                        } else if let Err(e) = serde_json::from_str::<Value>(&text) {
+                            violations.lock().unwrap().push(format!(
+                                "observed a non-parseable read: {e} :: raw={:?}",
+                                &text[..text.len().min(200)]
+                            ));
+                        }
                     }
+                    std::thread::yield_now();
                 }
-                std::thread::sleep(Duration::from_millis(1));
-            }
-        })
+            })
+        };
+
+        let racers = race(&fx, (0..RACERS).map(worker_add_argv).collect(), "state-writer");
+        stop.store(true, Ordering::Relaxed);
+        monitor.join().expect("the monitor thread panicked");
+        assert_all_native(&racers, "state write concurrency");
+
+        let seen = violations.lock().unwrap().clone();
+        assert!(
+            seen.is_empty(),
+            "a concurrent reader observed a torn store while {RACERS} writers hammered it — the \
+             write path is not atomic: {seen:#?}"
+        );
+
+        let count = reads.load(Ordering::Relaxed);
+        if count >= MIN_MONITOR_READS || attempt >= MAX_COVERAGE_ATTEMPTS {
+            break count;
+        }
     };
-
-    let racers = race(&fx, (0..RACERS).map(worker_add_argv).collect(), "state-writer");
-    stop.store(true, Ordering::Relaxed);
-    monitor.join().expect("the monitor thread panicked");
-    assert_all_native(&racers, "state write concurrency");
-
-    let seen = violations.lock().unwrap().clone();
     assert!(
-        seen.is_empty(),
-        "a concurrent reader observed a torn store while {RACERS} writers hammered it — the \
-         write path is not atomic: {seen:#?}"
-    );
-    let count = reads.load(Ordering::Relaxed);
-    assert!(
-        count >= 20,
-        "the monitor completed only {count} reads — too few to have overlapped the write burst, \
-         so a clean result proves nothing"
+        count >= MIN_MONITOR_READS,
+        "the monitor completed only {count} reads on the last of {attempt} attempts — too few \
+         to have overlapped the write burst even with yield_now scheduling, so a clean result \
+         proves nothing"
     );
     let state = read_store(&fx, ".bee/state.json").expect("the final store is parseable JSON");
     assert!(state.is_object(), "the final store must still be a JSON object: {state}");
