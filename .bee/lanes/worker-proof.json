@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "worker-proof",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,6 +10,22 @@
     "review": false
   },
   "summary": "Feature \"worker-proof\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"worker-proof\" (lane).",
-  "created_at": "2026-08-04T10:31:31.142Z"
+  "next_action": "none",
+  "created_at": "2026-08-04T10:31:31.142Z",
+  "last_scribing_run": {
+    "feature": "worker-proof",
+    "date": "2026-08-04",
+    "at": "2026-08-04T10:49:26.254Z",
+    "areas_synced": [
+      "doctrine"
+    ],
+    "next_action": "none"
+  },
+  "last_compounding_run": {
+    "feature": "worker-proof",
+    "date": "2026-08-04",
+    "at": "2026-08-04T10:49:26.259Z",
+    "learnings": "docs/history/learnings/20260804-doctrine-audit.md",
+    "next_action": null
+  }
 }

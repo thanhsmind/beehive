@@ -1,0 +1,105 @@
+---
+date: 2026-08-04
+feature: doctrine-audit
+categories: [doctrine-layer, enforcement, tooling]
+severity: high
+tags: [enforcement-map, advisory-decay, green-washing, delegation, audit-method, platform-parity]
+---
+
+# doctrine-audit — a check that cannot fail, and the four ways bee had one
+
+## What Happened
+
+An audit counted ~400 normative lines across the operating block and the
+skill references, judged ~85% of them unenforced, and proposed three batches.
+Batches A and B had already shipped (`counter-teeth`, `hook-teeth`). This
+session ran the rest, and the interesting result is not the prose diet — it
+is what turned up underneath it.
+
+Five defects landed, in five lanes:
+
+- **`linux-verify-green`** — the Linux suite was red on the 2.1.8 release
+  commit and CI reported success. `ci.yml` piped `cargo test` into `tee`
+  without `pipefail`, so the step exited with tee's status. Three tests had
+  been failing invisibly; the Windows workflow, which does not pipe, was the
+  only honest report. Also: `release-manifest` recorded raw stat mode, which
+  Windows synthesises as 0666 and never carries the executable bit, so the
+  manifest agreed only with the platform that wrote it — all 205 records read
+  as drifted on the other, on both the manifest surface and the
+  installed-package proof. Mode now comes from the git index.
+- **`doctrine-prose-diet`** — duplication removed, two unbuilt specs moved
+  out of references an orchestrator loads on every wave, unenforced craft
+  demoted to named defaults.
+- **`review-p1-teeth`** — "P1 findings always block" was doctrine with
+  nothing behind it. `reviews record` validated the status enum and nothing
+  else, so `approved` landed cleanly beside an open P1.
+- **`execution-agent`** — `PINNED_AGENT_TYPE` mapped the `generation` tier,
+  the tier that implements cells, to `bee-gather`, whose own definition is
+  `Read, Grep, Glob` and "never writes". The guard silently *repaired* every
+  execution dispatch into an agent contractually forbidden to execute.
+- **`worker-proof`** — "cells from `small` up run through dispatched workers,
+  never zero execution workers" was stated in the operating block and read by
+  nothing at cap.
+
+## The Pattern
+
+All five are the same shape at different depths:
+
+1. **The counter with no refusal** — measured, reported, never blocking (what
+   batch A fixed).
+2. **The rule with no reader** — stated in doctrine, no code ever looks
+   (P1 blocking, the worker registry).
+3. **The check whose harness swallows it** — the test runs, goes red, and the
+   exit code is discarded (`| tee` with no `pipefail`).
+4. **The check whose comparand is not portable** — it can only agree with the
+   machine that wrote the baseline (stat mode across platforms).
+5. **The enforcer that contradicts the rule** — the worst one. The guard did
+   not fail to enforce delegation; it enforced it into an agent that could
+   not do the work, and reported the rewrite as a repair. A rule with no
+   enforcement decays. A rule whose enforcement is wrong is *believed*.
+
+## Method Failures Worth Keeping
+
+- **A missing filename is not a missing feature.** Two audit items were
+  reported open because a grep for `handlers_judge*.rs` and a wave-cap search
+  found nothing. Both were built — `validate_judge_verdict` runs at the
+  `judge-record` call site, and the four counter flips had shipped in batch A.
+  Check the call site, never the file listing.
+- **A proxy metric measures the proxy.** The diet's target was ≥40% fewer
+  normative lines, measured by counting must/never/always/only. Rewriting
+  "never ping mid-flight" as "Default: no routine pings" moves that number
+  without changing what a reader does. Real reduction came from two
+  relocations (132 lines of unbuilt worktree protocol, ~20 of an unreachable
+  cli cell path) and from pointing rules at their enforcers. Final: 438 → 377,
+  13.9%. The 40% target was set against an estimate that counted duplicates
+  and unbuilt specs as rules, and chasing it would have meant deleting
+  doctrine the audit itself marked keep.
+- **The audit's own batch order was wrong** because it assumed its groups
+  were unbuilt. Verify state before sequencing work against it.
+
+## Rules That Settled
+
+- A doctrine line that no hook, test, or gate reviewer can catch is stated as
+  a named default — it reads `Default:` and bends with a recorded reason.
+  Boundary rules stay imperative (decision logged 2026-08-04).
+- The release manifest records the executable bit as git carries it, and a
+  platform that cannot observe that bit does not get to call it changed.
+- The `generation` tier carries two rendered agents — `bee-build` writes,
+  `bee-gather` reads — so the guard refuses a generic dispatch there instead
+  of guessing. Extraction and review still repair.
+- A `small`+ cap requires a registered execution worker, or an
+  `--inline-reason` recorded on the cap's own trace.
+
+## Open Gaps
+
+- `state set --phase compounding-complete` returns the Node delegate marker
+  (`set_gate.rs:180,210`), so **no lane or feature can reach the terminal
+  phase** since the Rust cutover. Every lane in this session sits at
+  `compounding` with both runs stamped. Filed P1.
+- `bee close` refuses a lane feature outright (`router.rs:78` covers non-lane
+  features only), so a lane never runs the close driver's test door.
+- A worker cannot run `cells finish` from inside its own worktree — the
+  control plane refuses there — so the orchestrator caps after merge, which
+  inverts cap-before-merge. `bee-build` hit this on its first real dispatch.
+- The concurrency suite goes red only when run inside `bee cells finish`,
+  green standalone. Filed P2, cause unknown.

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "review-p1-teeth",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,6 +10,22 @@
     "review": false
   },
   "summary": "Feature \"review-p1-teeth\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"review-p1-teeth\" (lane).",
-  "created_at": "2026-08-04T10:04:37.283Z"
+  "next_action": "none",
+  "created_at": "2026-08-04T10:04:37.283Z",
+  "last_scribing_run": {
+    "feature": "review-p1-teeth",
+    "date": "2026-08-04",
+    "at": "2026-08-04T10:49:26.198Z",
+    "areas_synced": [
+      "doctrine"
+    ],
+    "next_action": "none"
+  },
+  "last_compounding_run": {
+    "feature": "review-p1-teeth",
+    "date": "2026-08-04",
+    "at": "2026-08-04T10:49:26.203Z",
+    "learnings": "docs/history/learnings/20260804-doctrine-audit.md",
+    "next_action": null
+  }
 }
