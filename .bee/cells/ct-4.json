@@ -1,0 +1,55 @@
+{
+  "id": "ct-4",
+  "feature": "counter-teeth",
+  "lane": "standard",
+  "title": "cells tier refuses ceiling assignments beyond the 40 percent share without a reason",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/counter-teeth/CONTEXT.md",
+    "docs/history/counter-teeth/plan.md"
+  ],
+  "action": "In run_tier (cells/handlers_close.rs:646): assigning tier ceiling when the post-assignment ceiling share of tiered cells would exceed 40 percent refuses, naming the current share and the threshold; a --reason flag overrides and the reason is stored on the cell tier record. Red-first per D6: share computation proven by test before the refusal wires in. Tests: boundary at exactly 40 percent (allowed), just over (refused), reason override persisted on the cell.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "share computation test green before flip",
+      "refusal names share and threshold",
+      "reason flag persists on tier record",
+      "full suite green"
+    ]
+  },
+  "decisions": [
+    "counter-teeth D3",
+    "counter-teeth D6"
+  ],
+  "deps": [
+    "ct-0"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-ct4",
+    "outcome": "cells tier refuses ceiling past 40 percent share, --reason overrides and persists as tier_reason; registry_payload.json gap noted (regen chain retired); worker worktree run: cells 71 passed 0 failed; commit a5e564fa",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T07:11:09.178Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T06:52:28.365Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T07:10:50.504Z"
+  },
+  "tier": "generation"
+}

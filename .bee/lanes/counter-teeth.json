@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature": "counter-teeth",
+  "mode": "standard",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"counter-teeth\" started at phase \"exploring\" (lane).",
+  "next_action": "Execute ct-0 then fan out ct-1..ct-4",
+  "created_at": "2026-08-04T05:14:24.746Z"
+}

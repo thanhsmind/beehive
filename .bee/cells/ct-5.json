@@ -1,0 +1,57 @@
+{
+  "id": "ct-5",
+  "feature": "counter-teeth",
+  "lane": "standard",
+  "title": "cells claim: missing route record denies from the second claim onward",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/counter-teeth/CONTEXT.md",
+    "docs/history/counter-teeth/plan.md"
+  ],
+  "action": "In the claim handler (cells/handlers_write.rs ~694, the existing soft WARNING): keep the stderr warning for the FIRST claim of a feature with no route record; from the second claim onward refuse, naming bee route --set as the remedy. Depends on ct-1 (the remedy must work under worktree grants). Update the existing warn-only tests to the stronger contract in the same cell - replaced, never weakened. Tests: first-claim warn preserved, second-claim refusal, claim after route set green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "first claim still warns, never denies",
+      "second claim without route record refuses naming the remedy",
+      "claim after route set green",
+      "full suite green"
+    ]
+  },
+  "decisions": [
+    "counter-teeth D4",
+    "counter-teeth D5",
+    "counter-teeth D6"
+  ],
+  "deps": [
+    "ct-0",
+    "ct-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-ct5",
+    "outcome": "No-route claims refuse from the second claim per (feature, session); claimed refusal outranks the deny in races (D4 refinement decision 64ad772d); worker worktree runs: cells 75 passed, concurrency 13 passed, full suite green; commits 4a0d1b82+95ec0639",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T07:38:54.610Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T07:11:46.467Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T07:38:35.570Z"
+  },
+  "tier": "generation"
+}

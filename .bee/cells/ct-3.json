@@ -1,0 +1,55 @@
+{
+  "id": "ct-3",
+  "feature": "counter-teeth",
+  "lane": "standard",
+  "title": "bee orient escalates capture-queue from offer to blocker past thresholds",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/counter-teeth/CONTEXT.md",
+    "docs/history/counter-teeth/plan.md"
+  ],
+  "action": "In bee orient (status_full/orient.rs): when pending capture stubs >= 10 OR the oldest pending stub is older than 7 days, the capture-queue line moves from offer to the blockers array. Pending = stub rows without a matching flush row. Constants in code (D2). Red-first per D6. Tests: boundary 9 vs 10 stubs, age boundary, flushed stubs never count.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "pending-count computation test green (stub minus flush)",
+      "boundary tests at 10 stubs and 7 days",
+      "blocker line appears in orient blockers",
+      "full suite green"
+    ]
+  },
+  "decisions": [
+    "counter-teeth D2",
+    "counter-teeth D6"
+  ],
+  "deps": [
+    "ct-0"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-ct3",
+    "outcome": "Capture-queue offer escalates to blocker at >=10 pending stubs or oldest >7 days, reusing capture_queue_summary membership; worker worktree run: status_full 49 passed 0 failed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T07:09:43.840Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57f274d2-5143-44e8-9c67-24d06585f987",
+    "claimed_at": "2026-08-04T06:52:28.232Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T07:09:25.300Z"
+  },
+  "tier": "generation"
+}

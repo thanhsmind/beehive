@@ -300,6 +300,14 @@
     "defect",
     "guard-hardening",
     "test-contract",
-    "block-lean"
+    "block-lean",
+    "js-parity-cleanup",
+    "route",
+    "jp-3",
+    "prose-rule-audit",
+    "batch-a",
+    "jp-6",
+    "counter-teeth",
+    "decision-refinement"
   ]
 }
