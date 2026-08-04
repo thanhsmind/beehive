@@ -639,6 +639,135 @@ use std::time::Instant;
         assert_eq!(p.get("fork_turns"), Some(&json!("none")));
     }
 
+    // ── dp-1: the granted-worktree Location (envelope + prompt) ────────────
+
+    fn dp1_git_ok(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixture");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// main + a REGISTERED `wt-granted` worktree carrying `feature: "demo"`
+    /// — the same real `git worktree add` shape cells/tests.rs's
+    /// `wf_worktree_fixture` uses, kept local rather than imported (that
+    /// module's fixture is private to its own `#[cfg(test)] mod tests`).
+    fn dp1_worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"generation":"sonnet"}}}"#,
+        )
+        .unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        dp1_git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        dp1_git_ok(&main, &["config", "user.email", "a@b.c"]);
+        dp1_git_ok(&main, &["config", "user.name", "t"]);
+        dp1_git_ok(&main, &["add", "-A"]);
+        dp1_git_ok(&main, &["commit", "-qm", "init"]);
+        let granted = tmp.join("wt-granted");
+        dp1_git_ok(&main, &["worktree", "add", "-q", granted.to_str().unwrap(), "-b", "wt/g"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-granted\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(granted.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(
+            granted.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"demo\"}\n",
+        )
+        .unwrap();
+        (main, granted)
+    }
+
+    /// must-have 1 + 2: when `find_granted_worktree_for_feature` resolves a
+    /// granted worktree for the cell's feature, the envelope names both
+    /// roots and the rendered prompt tells the worker where to work and
+    /// that the store is elsewhere.
+    #[test]
+    fn envelope_and_prompt_name_the_granted_worktree_for_the_cells_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        w(
+            &main,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, false)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let granted_s = granted.to_str().unwrap();
+        let main_s = main.to_str().unwrap();
+        assert_eq!(v.get("worktree_root"), Some(&json!(granted_s)));
+        assert_eq!(v.get("control_root"), Some(&json!(main_s)));
+
+        let prompt = v
+            .get("payload")
+            .unwrap()
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(
+            prompt.contains("Location — work here, the store is in the other checkout:"),
+            "{prompt}"
+        );
+        assert!(prompt.contains(&format!("- Work in: {granted_s}")), "{prompt}");
+        assert!(
+            prompt.contains(&format!(
+                "- The bee store (cells, claims, reservations) lives in: {main_s}"
+            )),
+            "{prompt}"
+        );
+    }
+
+    /// must-have 3: a feature with no granted worktree renders
+    /// byte-identically to before this Location block existed — neither
+    /// envelope key appears, and the prompt carries no Location text.
+    #[test]
+    fn envelope_and_prompt_stay_byte_identical_without_a_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, false)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v.get("worktree_root"), None);
+        assert_eq!(v.get("control_root"), None);
+        let prompt = v
+            .get("payload")
+            .unwrap()
+            .get("prompt")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        assert!(!prompt.contains("Location —"), "{prompt}");
+        assert!(!prompt.contains("{{"), "no unrendered marker residue: {prompt}");
+    }
+
     #[test]
     fn absent_probe_record_classifies_budget_only_without_a_subprocess() {
         let tmp = tempfile::tempdir().unwrap();

@@ -1,6 +1,12 @@
 Nickname (reservation identity): {{worker}}
 Assigned cell id: {{cell_id}}
 Feature: {{feature}}
+{{#if worktree_root}}
+
+Location — work here, the store is in the other checkout:
+- Work in: {{worktree_root}}
+- The bee store (cells, claims, reservations) lives in: {{control_root}}
+{{/if}}
 
 Cell (authoritative — do not re-fetch):
 {{cell_json}}
