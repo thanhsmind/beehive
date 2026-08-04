@@ -1260,9 +1260,11 @@ use std::time::Instant;
         for lane in ["small", "spike", "standard", "high-risk"] {
             assert!(is_code_touching_lane(lane, false));
         }
-        assert!(route_worktree_block(None, "standard", true).is_none());
-        assert!(route_worktree_block(Some("f1"), "docs", false).is_none());
-        let block = route_worktree_block(Some("f1"), "standard", true).unwrap();
+        let tmp = tmp_root();
+        let root = tmp.path(); // no grants registry at all -> the ordinary arm
+        assert!(route_worktree_block(root, None, "standard", true).is_none());
+        assert!(route_worktree_block(root, Some("f1"), "docs", false).is_none());
+        let block = route_worktree_block(root, Some("f1"), "standard", true).unwrap();
         assert_eq!(jget(&block, "required"), Some(&json!(true)));
         assert_eq!(
             jget(&block, "command"),
@@ -1271,6 +1273,139 @@ use std::time::Instant;
         assert!(js_disp_opt(jget(&block, "notice")).starts_with(
             "\u{26a0} WORKTREE-FIRST: lane \"standard\" is code-touching and this is the MAIN checkout."
         ));
+    }
+
+    // ── ct-1 (D5): the granted-worktree arm of `route --set` ───────────────
+    //
+    // The retired Node arm: `code_touching && any_granted_worktree` used to
+    // bail the WHOLE verb with `Err2::Ex` before any lock — surfacing as a
+    // misleading "unsupported argument shape" refusal — whenever ANY grant
+    // was `true`, even one for a completely different feature. Ported here:
+    // a foreign grant has zero effect (req. 1); the TARGET feature's own
+    // grant redirects the `worktree` block to "continue at the existing
+    // worktree" (req. 2); no path bails anymore (req. 3).
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixtures");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A real main checkout with two real linked `git worktree add` trees:
+    /// `wt-target`, granted and identified as feature "target-feat", and
+    /// `wt-foreign`, granted and identified as feature "foreign-feat" — so a
+    /// query for "target-feat" hits its own grant while every other feature
+    /// (including "foreign-feat" queried on its own, or any third name) must
+    /// see the grants registry as if it did not carry a matching entry.
+    fn route_worktree_fixture(tmp: &Path) -> PathBuf {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git(&main, &["init", "-q", "-b", "main", "."]);
+        git(&main, &["config", "user.email", "a@b.c"]);
+        git(&main, &["config", "user.name", "t"]);
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        let target = tmp.join("wt-target");
+        let foreign = tmp.join("wt-foreign");
+        git(&main, &["worktree", "add", "-q", target.to_str().unwrap(), "-b", "wt/target-feat"]);
+        git(&main, &["worktree", "add", "-q", foreign.to_str().unwrap(), "-b", "wt/foreign-feat"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-target\": true, \"wt-foreign\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(target.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            target.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"target-feat\"}",
+        )
+        .unwrap();
+        std::fs::create_dir_all(foreign.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            foreign.join(".bee").join("runtime").join("worktree-identity.json"),
+            "{\"feature\":\"foreign-feat\"}",
+        )
+        .unwrap();
+        main
+    }
+
+    /// Requirement 1: a grant for a DIFFERENT feature must not affect the
+    /// call at all — proceed exactly as the no-grant path (the "create a
+    /// worktree" notice), never a decline, and never mention the foreign id.
+    #[test]
+    fn route_worktree_block_ignores_a_foreign_features_grant() {
+        let tmp = tmp_root();
+        let main = route_worktree_fixture(tmp.path());
+        // "other-feat" holds no grant of its own; "wt-foreign" is granted for
+        // an unrelated feature and must be invisible to this call.
+        let block = route_worktree_block(&main, Some("other-feat"), "standard", true)
+            .expect("still a code-touching feature -> still a block");
+        assert_eq!(
+            jget(&block, "command"),
+            Some(&json!("bee worktree new --feature other-feat"))
+        );
+        let notice = js_disp_opt(jget(&block, "notice"));
+        assert!(notice.starts_with(
+            "\u{26a0} WORKTREE-FIRST: lane \"standard\" is code-touching and this is the MAIN checkout."
+        ));
+        assert!(!notice.contains("wt-foreign"), "notice: {notice}");
+    }
+
+    /// Requirement 2: a grant for the TARGET feature routes the `worktree`
+    /// block to the EXISTING granted worktree — "continue there" — instead
+    /// of telling the caller to create a new one.
+    #[test]
+    fn route_worktree_block_names_the_existing_worktree_for_a_granted_feature() {
+        let tmp = tmp_root();
+        let main = route_worktree_fixture(tmp.path());
+        let block = route_worktree_block(&main, Some("target-feat"), "standard", true)
+            .expect("a granted feature is still code-touching -> still a block");
+        assert_ne!(
+            jget(&block, "command"),
+            Some(&json!("bee worktree new --feature target-feat")),
+            "must not tell the caller to create a worktree that already exists"
+        );
+        let notice = js_disp_opt(jget(&block, "notice"));
+        assert!(notice.contains("wt-target"), "notice: {notice}");
+        assert!(
+            notice.to_lowercase().contains("already"),
+            "notice must say the worktree already exists: {notice}"
+        );
+    }
+
+    /// Requirement 3: no path through this arm ever declines (`Err2::Ex`)
+    /// anymore. `route_worktree_block` is exactly what `run_route` calls to
+    /// build the response's `worktree` key, so "always answers `Some` for a
+    /// code-touching lane with a feature" — no matter which grants exist —
+    /// pins the fix at the boundary `run_route` actually consumes. Before
+    /// ct-1 this same shape (ANY grant `true`) made the WHOLE verb decline
+    /// with a misleading "unsupported argument shape" refusal.
+    #[test]
+    fn route_worktree_block_never_declines_under_any_grant_shape() {
+        let tmp = tmp_root();
+        let main = route_worktree_fixture(tmp.path());
+        let bare = tmp_root(); // zero grants at all
+        for (root, feature) in [
+            (bare.path(), "no-grants-anywhere"),
+            (main.as_path(), "other-feat"),   // grants exist, none match
+            (main.as_path(), "foreign-feat"), // matches wt-foreign's OWN grant
+            (main.as_path(), "target-feat"),  // matches wt-target's OWN grant
+        ] {
+            assert!(
+                route_worktree_block(root, Some(feature), "standard", true).is_some(),
+                "feature {feature} must still get a worktree block, never a decline"
+            );
+        }
     }
 
     #[test]

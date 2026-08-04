@@ -279,16 +279,18 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
 // (updateWorkflowAssumingLock, non-self-deadlocking because the workflow lock
 // is already held).
 //
-// ONE branch of `--set` stays with Node, and it is decided BEFORE any lock or
-// write: buildRouteWorktreeBlock's `findGrantedWorktreeForFeature` walk needs
+// CT-1 (counter-teeth D5): the granted-worktree arm is native now.
+// buildRouteWorktreeBlock's `findGrantedWorktreeForFeature` walk needs
 // worktree-store.mjs's bidirectional gitdir resolution, which lives in
-// verbs/status_full.rs and is not reachable from here. The block can only be
-// non-null when the recorded lane is code-touching AND the feature holds no
-// granted worktree — so a repo whose grants registry has ZERO `true` entries
-// can never have one, and the native path serves it exactly. The moment any
-// grant is `true` AND the lane is code-touching, the whole verb returns None
-// before the lock. (`--show`, and every non-code-touching lane, are native in
-// every repo.)
+// verbs/status_full.rs as `find_granted_worktree_for_feature` and IS
+// reachable from here (same crate). There is no longer a pre-lock gate: a
+// grant for a feature OTHER than the one this call routes has zero effect
+// (the walk simply answers None for it, same as no grant existing at all);
+// a grant for THIS call's own feature changes only the `worktree` block's
+// shape — "continue at the existing worktree" instead of "create one" — see
+// `route_worktree_block`. No path through `--set` bails with `Err2::Ex`
+// over grant state anymore; `--show`, `--set`, and every lane are native in
+// every repo.
 
 pub(crate) const ROUTE_CLASS_VALUES: [&str; 7] =
     ["feature", "bugfix", "docs", "refactor", "research", "release", "spike"];
@@ -526,34 +528,48 @@ pub(crate) fn other_live_work_present(root: &Path) -> Ex<bool> {
     Ok(false)
 }
 
-/// `Object.values(readGrants(...)).some((v) => v === true)` — the pre-lock
-/// gate that decides whether findGrantedWorktreeForFeature could possibly
-/// answer non-null (see this section's header).
-pub(crate) fn any_granted_worktree(root: &Path) -> bool {
-    match crate::roots::read_grants(&root.join(".bee")) {
-        Value::Object(m) => m.values().any(|v| matches!(v, Value::Bool(true))),
-        _ => false,
-    }
-}
-
-/// bee.mjs buildRouteWorktreeBlock, for the ordinary-checkout arm the native
-/// path always sits on, with `findGrantedWorktreeForFeature` proven null by
-/// the caller's pre-lock gate.
-pub(crate) fn route_worktree_block(feature: Option<&str>, lane: &str, code_touching: bool) -> Option<Value> {
+/// bee.mjs buildRouteWorktreeBlock, BOTH arms (ct-1 / D5): the ordinary
+/// "create a worktree" notice when `feature` holds no granted worktree of
+/// its OWN, and the granted arm — until now unported — when
+/// `find_granted_worktree_for_feature` answers non-null for THIS feature. A
+/// grant for any OTHER feature is invisible here, exactly like Node's
+/// per-feature walk: it neither changes the block's shape nor blocks the
+/// call.
+pub(crate) fn route_worktree_block(
+    root: &Path,
+    feature: Option<&str>,
+    lane: &str,
+    code_touching: bool,
+) -> Option<Value> {
     let feature = feature?;
     if !code_touching {
         return None;
     }
-    let command = format!("bee worktree new --feature {feature}");
     let mut block = Map::new();
     block.insert("required".into(), Value::Bool(true));
-    block.insert("command".into(), json!(command));
-    block.insert("reason".into(), json!(format!(
-        "lane \"{lane}\" is code-touching and this is the MAIN checkout \u{2014} feature work branches at feature start (worktree-first)"
-    )));
-    block.insert("notice".into(), json!(format!(
-        "\u{26a0} WORKTREE-FIRST: lane \"{lane}\" is code-touching and this is the MAIN checkout. NEXT: run \"{command}\", then open your session at the printed worktree path \u{2014} main stays for integration, docs-lane, and release work; once the worktree is granted, main refuses feature source edits."
-    )));
+    if let Some((id, worktree_root)) =
+        crate::verbs::status_full::find_granted_worktree_for_feature(root, feature)
+    {
+        // The feature already holds a granted worktree — "continue there",
+        // never "create one" (that would collide with WORKTREE_TARGET_EXISTS
+        // the moment the caller tried it).
+        block.insert("command".into(), json!(format!("bee worktree merge --id {id}")));
+        block.insert("reason".into(), json!(format!(
+            "lane \"{lane}\" is code-touching and feature \"{feature}\" already holds a granted worktree (id {id}) \u{2014} continue work there, not in the MAIN checkout."
+        )));
+        block.insert("notice".into(), json!(format!(
+            "\u{26a0} WORKTREE EXISTS: lane \"{lane}\" is code-touching and feature \"{feature}\" already has a granted worktree (id {id}) at {worktree_root}. NEXT: open your session at {worktree_root} \u{2014} main stays for integration, docs-lane, and release work; a granted worktree's feature source edits are refused from here."
+        )));
+    } else {
+        let command = format!("bee worktree new --feature {feature}");
+        block.insert("command".into(), json!(command));
+        block.insert("reason".into(), json!(format!(
+            "lane \"{lane}\" is code-touching and this is the MAIN checkout \u{2014} feature work branches at feature start (worktree-first)"
+        )));
+        block.insert("notice".into(), json!(format!(
+            "\u{26a0} WORKTREE-FIRST: lane \"{lane}\" is code-touching and this is the MAIN checkout. NEXT: run \"{command}\", then open your session at the printed worktree path \u{2014} main stays for integration, docs-lane, and release work; once the worktree is granted, main refuses feature source edits."
+        )));
+    }
     Some(Value::Object(block))
 }
 
@@ -614,15 +630,6 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         };
         let lane_class = js_disp_opt(route_object.get("lane"));
 
-        // ── the pre-lock delegation gate (see this section's header) ───────
-        // otherLiveWorkPresent is only consulted for the tiny lane; probing it
-        // here also front-loads its own delegation triggers.
-        let other_live = if lane_class == "tiny" { other_live_work_present(&ctx.root)? } else { true };
-        let code_touching = is_code_touching_lane(&lane_class, other_live);
-        if code_touching && any_granted_worktree(&ctx.root) {
-            return Err(Err2::Ex);
-        }
-
         let scope = resolve_mutation_lock_scope(&ctx.root, None, false)?;
         let workflows = list_workflows(&ctx.root)?;
         let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
@@ -673,7 +680,7 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
 
         let other_live = if lane_class == "tiny" { other_live_work_present(&ctx.root)? } else { true };
         let code_touching = is_code_touching_lane(&lane_class, other_live);
-        let block = route_worktree_block(routed_feature.as_deref(), &lane_class, code_touching);
+        let block = route_worktree_block(&ctx.root, routed_feature.as_deref(), &lane_class, code_touching);
 
         let flags_len = match route_object.get("flags") {
             Some(Value::Array(a)) => a.len(),
