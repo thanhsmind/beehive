@@ -128,6 +128,60 @@ pub(crate) fn orient_worktree_context(ctx: &mut Ctx, status: &JMap) -> R<Option<
     }
 }
 
+// ─── capture-queue blocker escalation (counter-teeth D2) ───────────────────
+//
+// docs/history/counter-teeth/CONTEXT.md D2: `bee orient` escalates the
+// capture-queue line from an offer into `work.blockers[]` once the queue
+// holds this many pending stubs, OR the oldest pending stub is older than
+// this many days. Constants for this batch; config keys are future work
+// (out of scope per CONTEXT.md's Open questions).
+const CAPTURE_QUEUE_BLOCKER_MIN_PENDING: u64 = 10;
+const CAPTURE_QUEUE_BLOCKER_MAX_AGE_DAYS: f64 = 7.0;
+
+/// The oldest pending stub's `at`, in epoch ms, or NaN when there is none
+/// or it can't be resolved. `cq`'s `ids` array is already sorted
+/// oldest-first by `capture_queue_summary` (records.rs) — this looks the
+/// first id back up in the raw queue purely to read its timestamp; the
+/// membership itself (which ids are "pending" — stub rows minus flush
+/// rows) is computed exactly once, in `capture_queue_summary`, and is
+/// never re-derived here.
+fn capture_queue_oldest_pending_at_ms(ctx: &Ctx, cq: &Value) -> f64 {
+    let Some(Value::Array(ids)) = vget(cq, "ids") else {
+        return f64::NAN;
+    };
+    let Some(oldest_id) = ids.first() else {
+        return f64::NAN;
+    };
+    let events = read_jsonl(&ctx.root.join(".bee").join("capture-queue.jsonl"));
+    events
+        .iter()
+        .find(|e| str_eq(vget(e, "kind"), "stub") && strict_eq(vget(e, "id"), Some(oldest_id)))
+        .map(|e| to_ms(vget(e, "at")))
+        .unwrap_or(f64::NAN)
+}
+
+/// D2's escalation test over `status.capture_queue` (already the
+/// stub-minus-flush pending count/ids from `capture_queue_summary`):
+/// >= CAPTURE_QUEUE_BLOCKER_MIN_PENDING pending stubs, or the oldest
+/// pending stub older than CAPTURE_QUEUE_BLOCKER_MAX_AGE_DAYS days.
+/// Returns the blocker line, or None when the queue stays an offer.
+fn capture_queue_blocker_line(ctx: &Ctx, cq: &Value) -> Option<String> {
+    let count = vget(cq, "count").and_then(|v| v.as_u64()).unwrap_or(0);
+    if count == 0 {
+        return None;
+    }
+    let over_count = count >= CAPTURE_QUEUE_BLOCKER_MIN_PENDING;
+    let oldest_ms = capture_queue_oldest_pending_at_ms(ctx, cq);
+    let over_age = !oldest_ms.is_nan()
+        && now_ms() - oldest_ms > CAPTURE_QUEUE_BLOCKER_MAX_AGE_DAYS * 24.0 * 60.0 * 60.0 * 1000.0;
+    if !over_count && !over_age {
+        return None;
+    }
+    Some(format!(
+        "capture queue: {count} pending stub(s) — run bee-capturing to drain it (decision c2a7bd4f item 2)."
+    ))
+}
+
 /// bee.mjs buildOrient.
 pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     let status = build_status(ctx, false)?;
@@ -172,6 +226,11 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
             "scribing debt: {} behavior_change cell(s) uncaptured",
             tpl(vget(sd.unwrap(), "count"))
         )));
+    }
+    if let Some(cq) = status.get("capture_queue") {
+        if let Some(line) = capture_queue_blocker_line(ctx, cq) {
+            blockers.push(json!(line));
+        }
     }
     if let Some(Value::Array(warnings)) = status.get("staleness_warnings") {
         for warning in warnings {

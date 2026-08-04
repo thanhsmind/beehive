@@ -814,6 +814,127 @@ use crate::version::BEE_VERSION;
         std::fs::write(file, prev).unwrap();
     }
 
+    /// Pairs with `append_capture_stub` — a `flush` row for the id, so the
+    /// stub it targets drops out of `pendingCaptureStubs`' stub-minus-flush
+    /// membership.
+    fn append_capture_flush(root: &Path, id: &str, at: &str) {
+        let file = root.join(".bee").join("capture-queue.jsonl");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        let line = serde_json::to_string(&json!({
+            "kind": "flush", "id": id, "at": at, "into": null,
+        }))
+        .unwrap();
+        let mut prev = std::fs::read_to_string(&file).unwrap_or_default();
+        prev.push_str(&line);
+        prev.push('\n');
+        std::fs::write(file, prev).unwrap();
+    }
+
+    const MS_PER_DAY: f64 = 24.0 * 60.0 * 60.0 * 1000.0;
+
+    /// A minimal orient fixture: onboarding at the running version (no
+    /// drift warning) and an idle, feature-less state, so `work.blockers`
+    /// starts empty and only the capture-queue escalation under test can
+    /// populate it.
+    fn orient_blockers(root: &Path) -> Vec<String> {
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let packet = build_orient(&mut ctx).unwrap();
+        vget(packet.get("work").unwrap(), "blockers")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect()
+    }
+
+    /// counter-teeth D2: "pending" for the capture-queue escalation is
+    /// exactly `capture_queue_summary`'s stub-minus-flush membership — a
+    /// flushed stub feeds neither the count threshold nor the age
+    /// threshold, even when it would otherwise trip both (old AND part of
+    /// a large batch). Proves the escalation reuses that membership
+    /// instead of re-deriving its own.
+    #[test]
+    fn capture_queue_pending_excludes_flushed_stubs_from_blocker_escalation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = now_ms();
+        // Old enough to trip the age threshold on its own — but flushed.
+        let old_at = to_iso(now - 10.0 * MS_PER_DAY);
+        append_capture_stub(root, "old-flushed", &old_at, None);
+        append_capture_flush(root, "old-flushed", &to_iso(now));
+        // A handful of fresh, unflushed stubs — well under the count
+        // threshold on their own.
+        for i in 0..3 {
+            append_capture_stub(root, &format!("fresh-{i}"), &to_iso(now - (i as f64) * 1000.0), None);
+        }
+        assert_eq!(
+            orient_blockers(root),
+            Vec::<String>::new(),
+            "a flushed stub must not feed the count OR the age escalation"
+        );
+    }
+
+    /// D2 boundary: 9 pending fresh stubs stays an offer (status carries
+    /// the count; `work.blockers` stays empty) — one short of the
+    /// CAPTURE_QUEUE_BLOCKER_MIN_PENDING threshold.
+    #[test]
+    fn capture_queue_offer_at_nine_pending_fresh_stubs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = now_ms();
+        for i in 0..9 {
+            append_capture_stub(root, &format!("s{i}"), &to_iso(now - (i as f64) * 1000.0), None);
+        }
+        assert_eq!(orient_blockers(root), Vec::<String>::new());
+    }
+
+    /// D2 boundary: the 10th pending stub crosses
+    /// CAPTURE_QUEUE_BLOCKER_MIN_PENDING and moves the capture-queue line
+    /// into `work.blockers[]`.
+    #[test]
+    fn capture_queue_blocker_at_ten_pending_stubs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = now_ms();
+        for i in 0..10 {
+            append_capture_stub(root, &format!("s{i}"), &to_iso(now - (i as f64) * 1000.0), None);
+        }
+        let blockers = orient_blockers(root);
+        assert_eq!(blockers.len(), 1, "{blockers:?}");
+        assert!(
+            blockers[0].starts_with("capture queue: 10 pending stub(s)"),
+            "{blockers:?}"
+        );
+    }
+
+    /// D2 age boundary: a single pending stub older than
+    /// CAPTURE_QUEUE_BLOCKER_MAX_AGE_DAYS (7) is a blocker on its own,
+    /// nowhere near the count threshold; the same single stub within 7
+    /// days stays an offer.
+    #[test]
+    fn capture_queue_blocker_when_oldest_pending_stub_exceeds_seven_days() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = now_ms();
+
+        // Within the window: no blocker.
+        append_capture_stub(root, "recent", &to_iso(now - 6.0 * MS_PER_DAY), None);
+        assert_eq!(orient_blockers(root), Vec::<String>::new(), "6 days old must stay an offer");
+
+        // A fresh root past the same threshold: blocker.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        append_capture_stub(root2, "stale", &to_iso(now - 8.0 * MS_PER_DAY), None);
+        let blockers = orient_blockers(root2);
+        assert_eq!(blockers.len(), 1, "{blockers:?}");
+        assert!(
+            blockers[0].starts_with("capture queue: 1 pending stub(s)"),
+            "{blockers:?}"
+        );
+    }
+
     /// test_recovery.mjs writeCappedCell.
     fn write_capped_cell(root: &Path, id: &str, feature: &str, capped_at: &str) {
         write(

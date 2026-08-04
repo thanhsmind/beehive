@@ -545,6 +545,100 @@ pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
     })
 }
 
+// ─── D4 (route-record warn-to-deny escalation, docs/history/counter-teeth
+// CONTEXT.md) ────────────────────────────────────────────────────────────
+//
+// D3 gave every claim on a no-route feature the same stderr warning,
+// forever. D4 spends that warning once per (feature, session): the FIRST
+// `cells claim` (or `dispatch prepare --claim`, the other door onto
+// claim_cell_from_flags) a given session makes against a feature with no
+// route record still only warns; that SAME session's second and later ones
+// refuse outright, naming "bee state route --set" as the remedy (D5: safe
+// to flip now that ct-1 ported the granted-worktree arm the remedy needs).
+//
+// Scoped per SESSION, not bare per feature: bee's own swarming model fans
+// a feature's cells out to many concurrently-dispatched worker sessions
+// (AGENTS.md "Work in parallel" — "never zero execution workers"), each
+// claiming its own assigned cell before anyone has had a chance to route.
+// A bare per-feature count would make the SECOND worker's first-ever claim
+// refuse, breaking that fan-out on every routeless feature. Per-session
+// scoping keeps the nag aimed at the one session doing REPEAT claims
+// without ever routing, while every other session's own first claim still
+// only warns — the (session, feature) tuple is the count's real subject.
+//
+// The count has to survive a claim being unclaimed and reclaimed — of the
+// SAME cell, not just a different one — by the SAME session. Neither
+// existing claim-adjacent field can carry that: release_trace() (trace.rs)
+// nulls a cell's own trace.claimed_at back to null on every unclaim, and
+// claim_cell_file (claims.rs) always stamps a brand-new claim file with
+// fence_epoch=1 on the next O_EXCL claim — both are scoped to "is this ONE
+// cell claimed right now", not "how many times has this session claimed
+// into this feature while it stayed routeless". So this is its own small
+// per-(feature, session) counter, persisted beside claims_dir under the
+// control root (msn-18b: control-plane, the same root every claim/session
+// file already resolves through) and bumped ONLY after a claim actually
+// succeeds — a refused claim never advances it, and neither a different
+// feature's nor a different session's counter file is ever touched by this
+// one. A sessionless caller (no --session-id, no BEE_SESSION_ID/
+// CLAUDE_CODE_SESSION_ID) is its own fixed bucket ("none"), so repeated
+// sessionless claims in the same feature still escalate.
+pub(crate) fn no_route_claim_counts_dir(control: &Path) -> PathBuf {
+    control.join(".bee").join("no_route_claims")
+}
+
+/// `<feature>__<session-fingerprint>` — the session half is a truncated
+/// sha256 (never the raw id) so an arbitrary CLAUDE_CODE_SESSION_ID value
+/// can never smuggle path separators or other filesystem-unsafe bytes into
+/// the counter's file name; require_id already guards the feature half.
+fn no_route_claim_key(feature: &str, session: Option<&str>) -> MR<String> {
+    let feature_id = require_id(feature, "feature id")?;
+    let session_part = match session.map(js_trim) {
+        Some(s) if !s.is_empty() => {
+            let mut hasher = Sha256::new();
+            hasher.update(s.as_bytes());
+            format!("{:x}", hasher.finalize())[..16].to_string()
+        }
+        _ => "none".to_string(),
+    };
+    Ok(format!("{feature_id}__{session_part}"))
+}
+
+pub(crate) fn no_route_claim_count_path(
+    control: &Path,
+    feature: &str,
+    session: Option<&str>,
+) -> MR<PathBuf> {
+    Ok(no_route_claim_counts_dir(control).join(format!("{}.json", no_route_claim_key(feature, session)?)))
+}
+
+/// How many cells `session` has already claimed for `feature` while it had
+/// no route record. 0 when the marker file is absent, unreadable, or
+/// malformed — a corrupt counter fails open to "first claim", it never
+/// blocks a claim door on its own bookkeeping.
+pub(crate) fn no_route_claim_count(control: &Path, feature: &str, session: Option<&str>) -> MR<u64> {
+    let file = no_route_claim_count_path(control, feature, session)?;
+    let Ok(text) = std::fs::read_to_string(&file) else { return Ok(0) };
+    let Ok(Value::Object(m)) = serde_json::from_str::<Value>(&text) else { return Ok(0) };
+    Ok(match m.get("count") {
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(0),
+        _ => 0,
+    })
+}
+
+/// Records that `session` just claimed another cell of `feature` with no
+/// route record on file, advancing THIS (feature, session) pair's persisted
+/// count by exactly one.
+pub(crate) fn bump_no_route_claim_count(control: &Path, feature: &str, session: Option<&str>) -> MR<u64> {
+    let next = no_route_claim_count(control, feature, session)? + 1;
+    let file = no_route_claim_count_path(control, feature, session)?;
+    let _ = std::fs::create_dir_all(no_route_claim_counts_dir(control));
+    transient_fs_retry(|| {
+        write_json_atomic(&file, &json!({ "feature": feature, "session": session, "count": next }))
+    })
+    .map_err(|e| Fail::Thrown(format!("{e}")))?;
+    Ok(next)
+}
+
 /// claimCellFromFlags's product — bee.mjs returns `{cell, sessionId}`.
 ///
 /// `policy` has no variant here on purpose: `applyWritePolicy` runs with
@@ -671,6 +765,10 @@ pub(crate) fn claim_cell_from_flags(
         }
 
         // claimCellCrossSession (shared with claim-next — see its own comment).
+        // D4's no-route deny lives INSIDE that call now, checked only once
+        // this caller has actually won the claim door (its own comment
+        // explains why: a racing LOSER must see the typed CLAIMED refusal,
+        // never the no-route one).
         let session = session_id.clone();
         let cell_id = js_trim(&id).to_string();
         let claimed = match claim_cell_cross_session(
@@ -688,10 +786,18 @@ pub(crate) fn claim_cell_from_flags(
             }
         };
         let _ = &cell_id;
-        // explicit-triage D3 soft route warning (stderr, never a refusal).
+        // explicit-triage D3/D4 soft route warning. THIS session's second
+        // no-route claim never reaches here at all — claim_cell_cross_session
+        // already refused it as NO_ROUTE_RECORD above — so anything landing
+        // here with no route on file is guaranteed to be THIS session's
+        // first claim of the feature, and is free to spend its one-time
+        // warning.
         if !claimed_feature_has_route(&root, claimed.get("feature"))? {
+            if let Some(Value::String(feature_name)) = claimed.get("feature") {
+                bump_no_route_claim_count(&control, feature_name, session.as_deref())?;
+            }
             eprint!(
-                "WARNING: cell \"{}\" claimed for feature \"{}\" with no route record — run \"bee state route --set --class <c> --lane <l> --flags <f> --files <n>\" to record the triage (D3, soft enforcement).\n",
+                "WARNING: cell \"{}\" claimed for feature \"{}\" with no route record — run \"bee state route --set --class <c> --lane <l> --flags <f> --files <n>\" to record the triage (D3, soft enforcement; this session's next no-route claim for this feature will be refused — D4).\n",
                 js_string_or_undefined(claimed.get("id")),
                 js_string_or_undefined(claimed.get("feature"))
             );
@@ -756,6 +862,44 @@ pub(crate) fn claim_cell_cross_session(
                 // claim file before surfacing anything.
                 release_claim(control, session, &cell_id)?;
                 return Err(fail);
+            }
+        }
+    }
+    // D4 (route-record warn-to-deny escalation) — checked ONLY here, after
+    // this caller has already won the O_EXCL claim-file race and cleared
+    // the budget door. Ordering is load-bearing: in a real claim race the
+    // loser must see the typed CLAIMED refusal from claim_cell_file above,
+    // never this one — a racing loser is not "continuing to claim without a
+    // route", it never had the cell to begin with. Checked before the
+    // store-lock mutation below so a refusal here never touches cell
+    // status at all.
+    if let Some(Value::Object(cell_map)) = cell_for_budget {
+        let feature_val = cell_map.get("feature").cloned();
+        let has_route = match claimed_feature_has_route(root, feature_val.as_ref()) {
+            Ok(v) => v,
+            Err(fail) => {
+                release_claim(control, session, &cell_id)?;
+                return Err(fail);
+            }
+        };
+        if !has_route {
+            if let Some(Value::String(feature_name)) = &feature_val {
+                let seen = match no_route_claim_count(control, feature_name, session) {
+                    Ok(v) => v,
+                    Err(fail) => {
+                        release_claim(control, session, &cell_id)?;
+                        return Err(fail);
+                    }
+                };
+                if seen >= 1 {
+                    release_claim(control, session, &cell_id)?;
+                    return Ok(CrossClaim::Refused {
+                        code: "NO_ROUTE_RECORD".to_string(),
+                        reason: format!(
+                            "cell \"{cell_id}\" refused — feature \"{feature_name}\" still has no route record, and this session already spent its one-time warning on an earlier claim (D4: warn once per session, then refuse). FIX: bee state route --set --class <c> --lane <l> --flags <f> --files <n> to record the triage, then retry."
+                        ),
+                    });
+                }
             }
         }
     }

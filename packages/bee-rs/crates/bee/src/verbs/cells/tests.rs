@@ -702,6 +702,201 @@ use std::time::Instant;
         assert!(own.is_ok());
     }
 
+    // ── D4: route-record warn-to-deny escalation ────────────────────────────
+    // A lane record with `approved_gates.execution: true` and no "route" key
+    // both authorizes the claim (lane_record_gates) AND reads as "no route"
+    // (read_lane_route: the object matches the feature, `route` is simply
+    // absent — Some(false), not None), the same fixture shape already used
+    // by `resolve_pipeline`'s "good" lane above. Adding a `"route": true` key
+    // flips it to routed.
+    fn lane_no_route(root: &Path, feature: &str) {
+        let dir = lanes_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{feature}.json")),
+            format!(r#"{{"feature":"{feature}","approved_gates":{{"execution":true}}}}"#),
+        )
+        .unwrap();
+    }
+
+    fn lane_with_route(root: &Path, feature: &str) {
+        let dir = lanes_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{feature}.json")),
+            format!(r#"{{"feature":"{feature}","approved_gates":{{"execution":true}},"route":true}}"#),
+        )
+        .unwrap();
+    }
+
+    /// Proves the counter's OWN definition before anything flips on it (D6):
+    /// per (feature, session), monotonic, and neither a different feature
+    /// NOR a different session sharing the same feature ever shares a file.
+    #[test]
+    fn no_route_claim_count_is_per_feature_and_session_and_monotonic() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        assert_eq!(no_route_claim_count(root, "f1", Some("s1")).unwrap(), 0);
+        assert_eq!(bump_no_route_claim_count(root, "f1", Some("s1")).unwrap(), 1);
+        assert_eq!(no_route_claim_count(root, "f1", Some("s1")).unwrap(), 1);
+        // A second feature starts at 0 and stays there — f1's bumps never
+        // touch f2's counter file.
+        assert_eq!(no_route_claim_count(root, "f2", Some("s1")).unwrap(), 0);
+        // A second SESSION of the SAME feature is independent too — bee's
+        // own swarming model fans one feature's cells out to many
+        // concurrently-dispatched sessions, and each gets its own one-time
+        // warning rather than inheriting another session's spent count.
+        assert_eq!(no_route_claim_count(root, "f1", Some("s2")).unwrap(), 0);
+        // A sessionless caller is its own fixed "none" bucket.
+        assert_eq!(no_route_claim_count(root, "f1", None).unwrap(), 0);
+        assert_eq!(bump_no_route_claim_count(root, "f1", None).unwrap(), 1);
+        assert_eq!(no_route_claim_count(root, "f1", None).unwrap(), 1);
+
+        assert_eq!(bump_no_route_claim_count(root, "f1", Some("s1")).unwrap(), 2);
+        assert_eq!(no_route_claim_count(root, "f1", Some("s1")).unwrap(), 2);
+        assert_eq!(no_route_claim_count(root, "f2", Some("s1")).unwrap(), 0, "a different feature's claims never count");
+        assert_eq!(no_route_claim_count(root, "f1", Some("s2")).unwrap(), 0, "a different session's claims never count");
+        assert_eq!(no_route_claim_count(root, "f1", None).unwrap(), 1, "the sessionless bucket is untouched by s1's bumps");
+    }
+
+    /// D4: the first `cells claim` a SESSION makes against a routeless
+    /// feature still only warns (never denies); that SAME session's second
+    /// claim — even of a DIFFERENT cell of the same feature — refuses,
+    /// naming the route remedy, and never mutates the cell or creates a
+    /// claim file. Once the feature is routed, claiming goes through again
+    /// with no refusal at all.
+    #[test]
+    fn claim_warns_once_per_session_then_refuses_until_routed() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_no_route(root, "nr");
+        write_cell_fixture(root, "nr-1", &cell("nr-1", "open", "nr", json!([])));
+        write_cell_fixture(root, "nr-2", &cell("nr-2", "open", "nr", json!([])));
+
+        // First claim for the feature: succeeds and spends sess-1's
+        // one-time warning allowance.
+        let door = claim_cell_from_flags(root, "nr-1", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+        assert_eq!(no_route_claim_count(root, "nr", Some("sess-1")).unwrap(), 1);
+
+        // Second claim by the SAME session — a different cell, feature
+        // still routeless — refuses.
+        let refusal = thrown(claim_cell_from_flags(root, "nr-2", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with(
+                "claim: NO_ROUTE_RECORD — cell \"nr-2\" refused — feature \"nr\" still has no route record"
+            ),
+            "{refusal}"
+        );
+        assert!(refusal.contains("D4"), "{refusal}");
+        assert!(
+            refusal.contains("bee state route --set --class <c> --lane <l> --flags <f> --files <n>"),
+            "{refusal}"
+        );
+        // Refused: no claim file, no cell mutation.
+        assert!(!claims_dir(root).join("nr-2.json").exists());
+        let untouched = read_cell_norm(root, "nr-2").ok().unwrap().unwrap();
+        assert_eq!(untouched["status"], json!("open"));
+        // The refusal itself never advances the count further.
+        assert_eq!(no_route_claim_count(root, "nr", Some("sess-1")).unwrap(), 1);
+
+        // A DIFFERENT session's first claim of the same routeless feature
+        // still only warns — swarming's fan-out (many worker sessions,
+        // one feature) must never be blocked by another session's spent
+        // warning.
+        let door_other = claim_cell_from_flags(root, "nr-2", "w2", Some("sess-2"), None).unwrap();
+        assert_eq!(door_other.cell["status"], json!("claimed"));
+        assert_eq!(no_route_claim_count(root, "nr", Some("sess-2")).unwrap(), 1);
+
+        // Route the feature: sess-1 now claims cleanly again too.
+        lane_with_route(root, "nr");
+        write_cell_fixture(root, "nr-3", &cell("nr-3", "open", "nr", json!([])));
+        let door2 = claim_cell_from_flags(root, "nr-3", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door2.cell["status"], json!("claimed"));
+    }
+
+    /// D4's count must survive unclaim/reclaim of the SAME cell BY THE SAME
+    /// SESSION — neither the cell's own trace.claimed_at (nulled by
+    /// release_trace on unclaim) nor its claim file's fence_epoch (a fresh 1
+    /// on every O_EXCL reclaim) can carry it, so a second claim of the
+    /// identical cell by the identical session must still refuse once that
+    /// session's one-time warning is already spent.
+    #[test]
+    fn claim_refusal_survives_unclaim_and_reclaim_of_the_same_cell() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_no_route(root, "sr");
+        write_cell_fixture(root, "sr-1", &cell("sr-1", "open", "sr", json!([])));
+
+        claim_cell_from_flags(root, "sr-1", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(no_route_claim_count(root, "sr", Some("sess-1")).unwrap(), 1);
+
+        // Unclaim resets the CELL's own status/trace — but not the
+        // (feature, session) persisted claim count.
+        unclaim_cell(root, "sr-1", Some("sess-1"), false).unwrap();
+        let reopened = read_cell_norm(root, "sr-1").ok().unwrap().unwrap();
+        assert_eq!(reopened["status"], json!("open"));
+        assert_eq!(reopened["trace"]["claimed_at"], Value::Null);
+        assert_eq!(
+            no_route_claim_count(root, "sr", Some("sess-1")).unwrap(),
+            1,
+            "unclaim must not reset the (feature, session) count"
+        );
+
+        // Reclaiming the SAME cell by the SAME session is still that
+        // session's second no-route claim — refused.
+        let refusal = thrown(claim_cell_from_flags(root, "sr-1", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with(
+                "claim: NO_ROUTE_RECORD — cell \"sr-1\" refused — feature \"sr\" still has no route record"
+            ),
+            "{refusal}"
+        );
+        let still_open = read_cell_norm(root, "sr-1").ok().unwrap().unwrap();
+        assert_eq!(still_open["status"], json!("open"), "a refused reclaim must not re-claim the cell");
+    }
+
+    /// Concurrency-contract ordering (real-process claim race, tests/
+    /// concurrency.rs): a racing LOSER on an already-claimed cell must see
+    /// the typed CLAIMED refusal, never the no-route deny — even when the
+    /// racing session's own one-time no-route warning is already spent
+    /// (from claiming a DIFFERENT cell earlier). A loser never had the cell
+    /// to "keep claiming without a route" in the first place; D4 only fires
+    /// once this caller would otherwise walk away with it.
+    #[test]
+    fn already_claimed_refusal_outranks_the_no_route_deny() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_no_route(root, "race");
+        write_cell_fixture(root, "race-1", &cell("race-1", "open", "race", json!([])));
+        write_cell_fixture(root, "race-2", &cell("race-2", "open", "race", json!([])));
+
+        // sess-1 claims race-1 cleanly, spending ITS one-time warning.
+        claim_cell_from_flags(root, "race-1", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(no_route_claim_count(root, "race", Some("sess-1")).unwrap(), 1);
+
+        // sess-1 races itself against the SAME already-claimed cell (e.g. a
+        // retried dispatch): CLAIMED outranks NO_ROUTE_RECORD even though
+        // sess-1's count is already spent.
+        let refusal = thrown(claim_cell_from_flags(root, "race-1", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CLAIMED — cell \"race-1\" is already claimed by session \"sess-1\""),
+            "{refusal}"
+        );
+        assert!(!refusal.contains("NO_ROUTE_RECORD"), "{refusal}");
+        // The already-claimed refusal never advances the no-route count.
+        assert_eq!(no_route_claim_count(root, "race", Some("sess-1")).unwrap(), 1);
+
+        // A DIFFERENT session (its own count still 0) also loses the race
+        // for the same already-claimed cell — still CLAIMED, not NO_ROUTE.
+        let refusal2 = thrown(claim_cell_from_flags(root, "race-1", "w2", Some("sess-2"), None));
+        assert!(
+            refusal2.starts_with("claim: CLAIMED — cell \"race-1\" is already claimed by session \"sess-1\""),
+            "{refusal2}"
+        );
+        assert_eq!(no_route_claim_count(root, "race", Some("sess-2")).unwrap(), 0);
+    }
+
     // ── budgets ───────────────────────────────────────────────────────────
     fn attempt(session: &str, acquired: &str, verdict: &str, sig: Option<&str>) -> Value {
         json!({
@@ -2222,4 +2417,125 @@ use std::time::Instant;
         };
         assert_eq!(r.code, "CLAIM_FENCE_STALE");
         assert!(claims_dir(root).join("c-1.json").exists(), "still there — a stale fence never proceeds");
+    }
+
+    // ══ cells tier — ceiling-share budget (D3, decision 0012) ══════════════
+    //
+    // D6 sequencing: these prove the share computation first (exactly-40
+    // allowed, just-over refused) and the refusal/override contract, before
+    // trusting the flip in set_tier to refuse anything for real.
+
+    fn tiered_cell(id: &str, feature: &str, tier: Option<&str>) -> Value {
+        let mut body = cell(id, "open", feature, json!([]));
+        if let Some(t) = tier {
+            body["tier"] = json!(t);
+        }
+        body
+    }
+
+    /// Others: 1 ceiling + 3 non-ceiling (4 tiered). Assigning "ceiling" to
+    /// the target makes 2/5 — exactly the 40% budget — which D3 allows.
+    #[test]
+    fn ceiling_share_of_exactly_40_percent_is_allowed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("extraction")));
+        write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("generation")));
+        write_cell_fixture(root, "o-4", &tiered_cell("o-4", "f", Some("extraction")));
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let cell = set_tier(root, "target", "ceiling", None).expect("exactly 40% must be allowed");
+        assert_eq!(cell["tier"], json!("ceiling"));
+        let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert_eq!(after["tier"], json!("ceiling"), "the write actually landed");
+    }
+
+    /// Others: 2 ceiling + 4 non-ceiling (6 tiered). Assigning "ceiling" to
+    /// the target makes 3/7 (~43%) — strictly over the 40% budget — which
+    /// D3 refuses without an override. The refusal names both the computed
+    /// share and the threshold (message-contract precedent: router.rs).
+    #[test]
+    fn ceiling_share_just_over_40_percent_refuses_naming_share_and_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("extraction")));
+        write_cell_fixture(root, "o-4", &tiered_cell("o-4", "f", Some("extraction")));
+        write_cell_fixture(root, "o-5", &tiered_cell("o-5", "f", Some("generation")));
+        write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let refusal = thrown(set_tier(root, "target", "ceiling", None));
+        assert!(
+            refusal.starts_with("setTier: cell \"target\" refused"),
+            "{refusal}"
+        );
+        assert!(refusal.contains("3/7"), "{refusal}");
+        assert!(refusal.contains("43%"), "names the computed share: {refusal}");
+        assert!(refusal.contains("40%"), "names the threshold: {refusal}");
+        // Refused — the tier on disk never moved.
+        let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert!(after.get("tier").is_none(), "a refused assignment writes nothing");
+    }
+
+    /// The same over-budget shape as above, but with `--reason` supplied:
+    /// the override succeeds and the reason persists on the cell's trace
+    /// (the cell's tier record) as `tier_reason`.
+    #[test]
+    fn reason_override_bypasses_the_refusal_and_persists_on_the_tier_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("extraction")));
+        write_cell_fixture(root, "o-4", &tiered_cell("o-4", "f", Some("extraction")));
+        write_cell_fixture(root, "o-5", &tiered_cell("o-5", "f", Some("generation")));
+        write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let cell = set_tier(root, "target", "ceiling", Some("owner-approved rescue ladder bump"))
+            .expect("a named reason overrides the refusal");
+        assert_eq!(cell["tier"], json!("ceiling"));
+        assert_eq!(cell["trace"]["tier_reason"], json!("owner-approved rescue ladder bump"));
+
+        let after = read_cell_norm(root, "target").ok().unwrap().unwrap();
+        assert_eq!(after["tier"], json!("ceiling"), "the override write actually landed");
+        assert_eq!(after["trace"]["tier_reason"], json!("owner-approved rescue ladder bump"));
+    }
+
+    /// A whitespace-only reason is not an override — D1/D3's "non-blank"
+    /// convention (mirrors the `--reason` required-flag blank check on
+    /// block/drop) — so the over-budget assignment still refuses.
+    #[test]
+    fn a_blank_reason_does_not_override_the_refusal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("extraction")));
+        write_cell_fixture(root, "o-4", &tiered_cell("o-4", "f", Some("extraction")));
+        write_cell_fixture(root, "o-5", &tiered_cell("o-5", "f", Some("generation")));
+        write_cell_fixture(root, "o-6", &tiered_cell("o-6", "f", Some("generation")));
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let refusal = thrown(set_tier(root, "target", "ceiling", Some("   ")));
+        assert!(refusal.starts_with("setTier: cell \"target\" refused"), "{refusal}");
+    }
+
+    /// Any other tier is never budget-checked, however skewed the ceiling
+    /// share already is.
+    #[test]
+    fn assigning_a_non_ceiling_tier_never_checks_the_ceiling_budget() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "o-1", &tiered_cell("o-1", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-2", &tiered_cell("o-2", "f", Some("ceiling")));
+        write_cell_fixture(root, "o-3", &tiered_cell("o-3", "f", Some("ceiling")));
+        write_cell_fixture(root, "target", &tiered_cell("target", "f", None));
+
+        let cell = set_tier(root, "target", "generation", None)
+            .expect("a non-ceiling tier is never budget-checked");
+        assert_eq!(cell["tier"], json!("generation"));
     }
