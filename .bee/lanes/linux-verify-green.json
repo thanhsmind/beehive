@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "linux-verify-green",
   "mode": "small",
-  "phase": "compounding",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": false,
     "shape": true,

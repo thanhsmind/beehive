@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "worker-proof",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": false,
     "shape": true,

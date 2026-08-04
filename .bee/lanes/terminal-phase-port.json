@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "terminal-phase-port",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,6 +10,22 @@
     "review": false
   },
   "summary": "Feature \"terminal-phase-port\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"terminal-phase-port\" (lane).",
-  "created_at": "2026-08-04T10:56:42.627Z"
+  "next_action": "none",
+  "created_at": "2026-08-04T10:56:42.627Z",
+  "last_scribing_run": {
+    "feature": "terminal-phase-port",
+    "date": "2026-08-04",
+    "at": "2026-08-04T11:20:50.690Z",
+    "areas_synced": [
+      "state"
+    ],
+    "next_action": "none"
+  },
+  "last_compounding_run": {
+    "feature": "terminal-phase-port",
+    "date": "2026-08-04",
+    "at": "2026-08-04T11:20:50.695Z",
+    "learnings": "docs/history/learnings/20260804-doctrine-audit.md",
+    "next_action": null
+  }
 }

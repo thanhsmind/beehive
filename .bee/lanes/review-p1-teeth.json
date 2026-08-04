@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "review-p1-teeth",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": false,
     "shape": true,
