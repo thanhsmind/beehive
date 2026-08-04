@@ -1,0 +1,54 @@
+{
+  "id": "gdr-1",
+  "feature": "gate-door-refusal",
+  "lane": "small",
+  "title": "Make the high-risk execution-gate refusal state its own cause",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs"
+  ],
+  "action": "In set_gate.rs the merged/named execution gate approval has two guard arms that fire when the target record's mode is 'high-risk': the silent peek arm (~line 494-500) and the post-lock race arm (~line 507-511). Both currently `return Err(Err2::Ex)`, which the dispatcher renders as `bee: unsupported argument shape`, telling the caller their flags are wrong when the flags are correct. Replace BOTH with a real refusal carrying a message, emitted the same way the other refusals in this handler are (`return Ok(Out::Thrown(msg))`). The message must state: (1) what was refused and that NOTHING was written; (2) the real cause -- a high-risk execution approval requires a fresh advisor consult, and that precondition (requireFreshAdvisorForHighRisk) is unported R6 debt, so the arm currently refuses every high-risk execution approval unconditionally rather than checking advisor_ref; (3) that `bee state advisor-ref record` is declared-but-not-built, so this refusal cannot be satisfied from the CLI today, and the approval therefore has to come from the human or wait on that port. Name the lane/feature in the message. Do NOT change what is refused -- the gate must still refuse; only the honesty of the refusal changes. Keep both arms' behaviour identical to each other.",
+  "must_haves": {
+    "truths": [
+      "The gate still refuses every high-risk execution approval -- this cell changes the message, never the verdict",
+      "Nothing is written on the refusal path, exactly as before"
+    ],
+    "artifacts": [
+      "A test asserting the refusal message names the high-risk cause and is NOT the unsupported-argument-shape kind"
+    ],
+    "prohibitions": [
+      "Do not port requireFreshAdvisorForHighRisk in this cell",
+      "Do not make any high-risk gate approvable",
+      "Do not touch any file other than set_gate.rs and its test module"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "cargo test --release -p bee state_group -- --nocapture, plus a manual probe: `bee state gate --lane <a high-risk lane> --merge --approved true --json` must return a refusal whose text names the advisor precondition and whose kind is not unsupported_argument_shape.",
+  "tier": "generation",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": "Both high-risk execution-gate refusal arms now return Out::Thrown with a message naming the advisor-consult cause instead of the generic Err2::Ex unsupported-argument-shape path",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T23:55:10.125Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "inline_reason": "Dispatched directly with the cell id (not via cells claim/dispatch prepare) after an earlier attempt was BLOCKED on a worktree-binding mismatch; state worker add registered gdr1-worker for gdr-1 but no claim ever stamped the cell's own trace.worker, so the registered-worker check needs this named escape",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T23:54:58.592Z"
+  }
+}

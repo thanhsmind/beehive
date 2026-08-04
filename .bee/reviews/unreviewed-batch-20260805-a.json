@@ -1,0 +1,113 @@
+{
+  "id": "unreviewed-batch-20260805-a",
+  "requested_by": "user",
+  "requested_at": "2026-08-04T17:57:23.727Z",
+  "scope_description": "Batch A of the everything-unreviewed request: the six features closed 2026-07-28/29 after the session-laws-20260728 scope froze — validation-diet (high-risk), derived-check-hardening, tick-contract-inline, budget-fence-removal, lane-plan-unconditional, worker-conformance (high-risk). Contiguous immutable range a6fcf546..b066880d, 50 commits. Batch B (b066880d..HEAD, the R6 Node cutover and everything since) follows separately. Derived and record-only trees are read as evidence, never reviewed as authored source: .bee/cells/, .bee/bin/, the four rendered skill trees (.claude/, .codex-plugin/, .claude-plugin/, .agents/), and docs/history/.",
+  "included": [
+    {
+      "type": "feature",
+      "id": "validation-diet"
+    },
+    {
+      "type": "feature",
+      "id": "derived-check-hardening"
+    },
+    {
+      "type": "feature",
+      "id": "tick-contract-inline"
+    },
+    {
+      "type": "feature",
+      "id": "budget-fence-removal"
+    },
+    {
+      "type": "feature",
+      "id": "lane-plan-unconditional"
+    },
+    {
+      "type": "feature",
+      "id": "worker-conformance"
+    }
+  ],
+  "excluded": [],
+  "baseline": "a6fcf5467786df0edfe41d87b2b13a55e120cf11",
+  "head": "b066880dd8cccc2557d233b6aae289e53d22cd74",
+  "reviewer_manifest": [],
+  "verification_preflight": {
+    "checked_at": "2026-08-04T17:57:23.727Z",
+    "cells_checked": [],
+    "passed": true
+  },
+  "findings": [
+    {
+      "id": "p1-guard-compound-bypass",
+      "severity": "P1",
+      "title": "Every Bash-side write-guard check is bypassed by prefixing a second command",
+      "detail": "The guard classifies only the FIRST git invocation in a command string and never scans the remaining separator-delimited segments. gc-2's concurrent-worker whole-tree denial — added in this range, documented as having no repo-level opt-out — is therefore lifted by any harmless leading command. Confirmed against the binary running in this checkout today, not only against the reviewed revision: `git stash` exits 2 with 'bee concurrent-worker git guard: `git stash` is refused because 2 workers are live'; `git status && git stash` exits 0 with no output. No malice is needed — `git status && git reset --hard` is a natural thing to type, and it is the exact incident class (a whole-tree revert deleting a live worker's edits) the cell cites as its reason to exist.",
+      "anchor": "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs:165-206 (live); packages/bee/lib/guards.mjs:339-361 (reviewed revision)",
+      "reviewer": "security",
+      "verified": "CONFIRMED by orchestrator against .bee/bin/bee hook write-guard, 2026-08-05"
+    },
+    {
+      "id": "p1-guard-shell-wrapper-bypass",
+      "severity": "P1",
+      "title": "A shell wrapper hides the whole command from the write guard",
+      "detail": "The tokenizer merges a quoted span into one token and no consumer knows that sh/bash/eval execute their argument, so the real command never becomes tokens: no target extraction, no separator scan, no git classification. Confirmed on today's binary: `echo x > .bee/state.json` exits 2 ('bee direct-edit guard: \".bee/state.json\" is CLI-owned'), while `sh -c 'echo x > .bee/state.json'`, `bash -c 'git stash'` and `eval 'git stash'` all exit 0. This defeats the CLI-only-state boundary (including hand-editing approved_gates), the reservation conflict check, the secret-shaped-path deny and gc-2 at once. The tokenizer predates this range; what the range shipped is a new safety guard resting on a parser that cannot hold it.",
+      "anchor": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs:206 (live); packages/bee/lib/guards.mjs:1833-1880 (reviewed revision)",
+      "reviewer": "security",
+      "verified": "CONFIRMED by orchestrator against .bee/bin/bee hook write-guard, 2026-08-05"
+    },
+    {
+      "id": "p1-capped-cells-without-verification-evidence",
+      "severity": "P1",
+      "title": "Fifteen capped behavior_change cells carry no recorded verification evidence",
+      "detail": "Two reviewers independently enumerated the cell store at b066880d and agree: cfl-1, gc-1, gc-2, p1-1, p1-3, p2-1, p2-2, vd-12, vo-1, wc-1, wc-2, wc-2c, wc-4, wl-1, wl-2 are capped with behavior_change true and trace.verification_evidence, trace.verify_output and trace.verify_passed all null. Eleven carry a judge verdict anchored at file:line, so their proof was relocated rather than absent. vd-12 (validation-diet, 23 files) has neither: no evidence, no judge, and its declared verify — bee knowledge check plus knowledge index --check — reads only the knowledge bundle, while 16 of its 23 declared files are docs/handbook/**, docs/0*.md and README.md, which that command never opens. Its must-have ('no live doc describes the validating stage as current') is proven by nothing recorded. The reviewer re-ran the sweep and found the work was in fact done — only the proof is missing. The remedy is re-verifying, never a backfill document.",
+      "anchor": ".bee/cells/vd-12.json (and the fourteen siblings named above)",
+      "reviewer": "test-coverage + architecture (independent corroboration)",
+      "verified": "CONFIRMED by two reviewers reading the cell blobs at b066880d"
+    },
+    {
+      "id": "p2-review-preflight-lost-its-evidence-check",
+      "severity": "P2",
+      "title": "The review preflight no longer checks verification evidence after the Rust port",
+      "detail": "At the reviewed revision, reviews.mjs refused to create a review session whose scope contained a capped behavior_change cell with no verification_evidence. That check does not exist in the port: rg verification_evidence over packages/bee-rs/crates/bee/src/verbs/reviews.rs returns nothing. This review session is its own evidence — bee reviews create returned verification_preflight {cells_checked: [], passed: true} over a scope that demonstrably contains fifteen such cells. The old check was also unsatisfiable as written (its stated remedy, cells cap --evidence-stdin, throws on an already-capped cell), so deleting it was defensible; replacing it with nothing was not. A review can now be opened over unproven work with a green preflight.",
+      "anchor": "packages/bee-rs/crates/bee/src/verbs/reviews.rs (check absent); packages/bee/lib/reviews.mjs:193-208 (reviewed revision)",
+      "reviewer": "architecture, extended by orchestrator",
+      "verified": "CONFIRMED by orchestrator: rg over the port, plus this session's own preflight output"
+    },
+    {
+      "id": "p3-skills-spec-still-states-the-deleted-size-law",
+      "severity": "P3",
+      "title": "The live skills spec still states the 200-line body budget that budget-fence-removal abolished",
+      "detail": "docs/04-skills-spec.md:14 reads 'Budgets: SKILL.md < 200 lines; overflow goes to exactly one level of references/', and :3 still says each entry defines a 'body budget' when no entry defines one. Decision 8f63adb4 holds that a size ceiling on instruction text is never a standing law here, and the replacement guard (the instruction-size-law suite) scanned scripts/ only, so the prose law sits outside its reach by construction. No skill body violates it today, so this is latent: the cost is a future author citing line 14 to refuse text the doctrine wants.",
+      "anchor": "docs/04-skills-spec.md:14",
+      "reviewer": "architecture",
+      "verified": "CONFIRMED by orchestrator at HEAD"
+    },
+    {
+      "id": "p3-historical-findings-against-deleted-javascript",
+      "severity": "P3",
+      "title": "Ten findings land on JavaScript that the R6 port deleted after this range",
+      "detail": "Recorded so nothing evaporates, none actionable as written. run_verify --only reports green when some tokens match nothing (the range's own critical pattern, captured but never fixed in the runner); the verify-cache declarations under-declare test_misc and the okf fence, so a local cached green could skip a mirror-parity guard; the E1 impact warning fired on four of five eligible caps naming up to 21 suites; proofUnrecorded armed the close-door on tiny/spike lanes with no visible warning; testCellDebt read top-level behavior_change while capCell wrote the trace form, silencing the missing-test door on four features; the terminal-phase parity gate matched six Set declarations and missed five inline boolean copies; cells.mjs reached into bee's own scripts/ estate by a repo-root path no host repo owns. All of these live in packages/bee/lib/*.mjs, scripts/run_verify.mjs and scripts/tests/*.mjs, deleted at HEAD. The port reads trace.behavior_change (the correct form), so the behavior_change split is fixed; the proof-marker mechanism is gone entirely rather than ported.",
+      "anchor": "packages/bee/lib/, scripts/run_verify.mjs, scripts/tests/ (all deleted at HEAD)",
+      "reviewer": "correctness + architecture + test-coverage",
+      "verified": "CONFIRMED deleted: ls packages/bee/ at HEAD shows no lib/; scripts/ holds only install.sh and install.ps1"
+    },
+    {
+      "id": "p1-high-risk-gate-2-is-unreachable",
+      "severity": "P1",
+      "title": "Gate 2 cannot be approved for any high-risk feature, and the refusal blames the caller's flags",
+      "detail": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs:494-500: when a gate approval carries an execution component (--merge, or --name execution) and the target record's mode is 'high-risk', the handler returns a bare Err(Err2::Ex) with no message, before any lock. It does not consult advisor_ref at all — it refuses every high-risk execution approval unconditionally. The comment names requireFreshAdvisorForHighRisk as 'separate R6 debt', so the precondition was never ported and the unported branch was left as a hard refusal. There is no way out: state advisor-ref record and show are both declared-but-not-built in this binary. The bare Ex renders through the dispatcher as 'bee: unsupported argument shape', which tells the caller their flags are wrong when the flags are correct and the lane is what is refused. Confirmed: bee state gate --lane guard-parser-depth --merge --approved true --json returns kind unsupported_argument_shape on a lane record that exists, is uncorrupt, and reads mode high-risk phase planning; four older high-risk lanes carry execution approved, all stamped before the Rust port. Consequence: high-risk is the lane bee routes every hard-gate flag to — auth, authorization, data loss, audit/security, external provider, validation removal — so the whole class of work bee treats as most dangerous cannot be gated at all, and an agent that reads the refusal at face value will retry flags forever or quietly re-lane downward to get moving.",
+      "anchor": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs:494-500",
+      "reviewer": "orchestrator (found while fixing p1-guard-compound-bypass)",
+      "verified": "CONFIRMED against the binary in this checkout, 2026-08-05"
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "pending",
+    "review": null
+  },
+  "created_at": "2026-08-04T17:57:23.727Z",
+  "updated_at": "2026-08-04T23:26:35.426Z"
+}
