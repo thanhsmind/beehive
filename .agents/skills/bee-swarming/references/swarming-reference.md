@@ -206,7 +206,7 @@ tier system (decision 412e9b3a, `docs/knowledge/areas/verify-pipeline/`, 2026-07
 
 - **Declaration:** `.bee/config.json` `commands.test` is the single place
   a project declares how it is tested (string or array of commands) — the
-  ONE command every door runs. `commands.verify` is retired. Nothing else
+  ONE command every door runs. Nothing else
   declares test obligations.
 - **Runner:** `bee test` runs the declared commands in order and writes
   ONE normalized record, `.bee/logs/test-results.json` — `{ran_at, green,
@@ -243,7 +243,6 @@ tier system (decision 412e9b3a, `docs/knowledge/areas/verify-pipeline/`, 2026-07
 | Subagent type | No per-agent subagent type — the tier is enforced as a read budget + output cap in the worker prompt regardless of what is spawned (documented asymmetry, not parity) |
 
 On both runtimes the integrity rails are identical because they live in the helpers: `bee finish` refuses while the declared tests are red, and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
-
 
 ## Model Tiers — Config-Driven, Runtime-Keyed
 
@@ -434,5 +433,3 @@ one, and never issue `/clear` yourself.
 - conflict resolution by optimism ("they'll probably touch different lines")
 - results collected but state.json / cells not updated
 - session history in a worker prompt
-
-

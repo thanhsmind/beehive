@@ -139,10 +139,10 @@ After compounding: set state `phase: idle`, `feature: null`, `mode: null`, summa
 
 ## Headless Go Mode
 
-`mode:headless` runs stages headlessly **between** gates only. Every gate still stops the pipeline and reports "awaiting Gate N approval" in the terminal report. Headless never self-approves a gate.
+`mode:headless` runs stages headlessly **between** gates only. Every gate still stops the pipeline and reports "awaiting Gate N approval" in the terminal report (`gates-and-delegation.md`, "Headless mode").
 
 ## Gate bypass in go mode (opt-in)
 
-Separate from headless. When `gate_bypass` is on, go mode does not stop at a bypassed Gate 1-2: the agent takes the RECOMMENDATION, records the approval, logs a one-line audit decision, posts a short `⚡ auto-approved Gate N` line, and continues. How far the level reaches — and what still stops — is the table in `gates-and-delegation.md` ("Gate bypass mode"). With bypass off (the default), Gates 1-2 are never self-approved.
+Separate from headless. When `gate_bypass` is on, go mode does not stop at a bypassed Gate 1-2: the agent takes the RECOMMENDATION, records the approval, logs a one-line audit decision, posts a short `⚡ auto-approved Gate N` line, and continues. How far the level reaches — and what still stops, `off` included — is the table in `gates-and-delegation.md` ("Gate bypass mode").
 
 Gate 3 sits outside this entirely: bypass never creates or auto-approves a review session, so go mode reaching DONE never triggers it. If the user later invokes `bee-reviewing`, bypass may auto-approve the merge question only once P1 = 0 and every UAT item passed; any P1 or UAT fail/skip always stops for the human inside that session.
