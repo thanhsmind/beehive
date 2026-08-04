@@ -99,6 +99,11 @@ rule never disappears — only its elaboration moves.
   reduction.
 - **R8.** Prose may not be moved into a reference until the pointer-integrity gate exists to check
   the result (router-cost D5). See `verify-pipeline/skill-reference-pointer-integrity.md`.
+- **R9.** **Enforced-rule signposting.** A rule whose prohibition a hook deterministically enforces —
+  the deny naming its remedy — may shrink in always-loaded prose to a one-line signpost naming the
+  sanctioned path. Semantic every-turn rules (where no enforcement is possible), and any sentence
+  that is the canonical home other documents cite, keep their full text (block-lean L1a-L1d,
+  `docs/history/block-lean/CONTEXT.md`).
 
 ## Edge Cases Settled
 
@@ -140,6 +145,25 @@ rule never disappears — only its elaboration moves.
   mutation harness moved in lockstep: `assertFanOutAnchors` now checks the compressed rule-12 anchor
   set, and the reshaped rule-15-pointer census (the unnumbered line under rule 14) keeps running
   `assertOrderedWaitContract` against `routing-and-contracts.md` plus the `bee-swarming` copies.
+
+- **2026-08-04 — the boundary gained a third axis (block-lean): enforced-rule signposting (R9).**
+  The boundary's first axis was router-vs-operating-block (this document's origin: what the router
+  may drop because the block carries it); prompt-diet added one-rule-one-home across the skills
+  (`doctrine-layer/prompt-writing-standard.md`); block-lean adds *enforcement* as a reason a rule
+  may leave always-loaded prose. Where a hook deterministically denies the prohibited action and
+  the deny message itself names the remedy, the operating block keeps only a one-line signpost to
+  the sanctioned path — the tier-transport, guardrail, and reservation-etiquette paragraphs took
+  this shape, and the block fell 184 → 174 lines (~8.6 KB), a saving paid back on every session of
+  every governed project. The classification was possible only because guard-hardening's audit
+  produced the enforcement map — which rule has a deterministic backstop and which is semantic-only
+  (`doctrine-layer/unenforced-obedience.md`); full text stays for semantic every-turn rules (L1b)
+  and for every canonical-home sentence other documents cite (L1c), per block-lean L1a-L1d
+  (`docs/history/block-lean/CONTEXT.md`). One honest caveat: the two wording guards this document
+  names as enforcing every-turn reachability and pinned strings (`packages/bee/tests/test_misc.mjs`,
+  `scripts/tests/test_gate_bypass_doctrine.mjs`, listed under Pointers) have been dead since the R6
+  cutover — both trees were deleted and the instruction-layer suites were never re-pointed
+  (`plans/cutover-readiness.md` records the gap) — so the L1d not-every-turn classification was
+  applied manually and recorded in the block-lean CONTEXT rather than checked by automation.
 
 ## Open Gaps
 
