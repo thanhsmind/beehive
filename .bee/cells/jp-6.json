@@ -1,0 +1,46 @@
+{
+  "id": "jp-6",
+  "feature": "js-parity-cleanup",
+  "lane": "standard",
+  "change_class": "refactor",
+  "behavior_change": false,
+  "deps": [
+    "jp-1",
+    "jp-5"
+  ],
+  "title": "De-JS the write-guard glob matcher: globset crate if vectors hold, else native re-specification in place",
+  "action": "Locked decision D4 (docs/history/js-parity-cleanup/CONTEXT.md). Hand-rolled matcher at hooks/write_guard/paths.rs:36-127 (GlobTok, glob_tokens, glob_match) with JS provenance comment at paths.rs:15-16 (guards.mjs globToRegExp) and a JS-regex newline quirk at paths.rs:98-99,105,120-122. ONE production caller: is_exclusive_path (paths.rs:131-146) used from hooks/write_guard/checks.rs:332; test vectors at hooks/write_guard/tests.rs:1345 glob_matcher_vectors. STEP 1: evaluate the globset crate against every existing vector plus the DEFAULT_EXCLUSIVE_PATHS patterns (paths.rs:18-34) — write the comparison as a throwaway test run, do NOT commit an artifact for it. STEP 2a (vectors map cleanly): add globset to crates/bee/Cargo.toml, replace glob_tokens/glob_match with a compiled GlobSet, delete the hand-rolled matcher, keep is_exclusive_path as the seam. STEP 2b (any divergence): keep the local matcher but strip the newline quirk and rewrite comments/grammar natively (its narrow star/doublestar grammar is a feature for exclusive-path gating) — record which divergence forced the fallback in the commit body. Either way the guards.mjs provenance framing dies and glob_matcher_vectors stays green (extend it if globset changes edge behavior you decided to accept — that would be a behavior change requiring a logged decision; default is NO behavior change).",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml green from the worktree; glob_matcher_vectors green; no guards.mjs references in write_guard",
+  "must_haves": {
+    "truths": [
+      "glob_matcher_vectors green under the final matcher",
+      "no JS or guards.mjs provenance text remains in hooks/write_guard/paths.rs",
+      "exclusive-path gating behavior unchanged (or a logged decision names the accepted change)"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-jp6",
+    "outcome": "De-JS'd the glob matcher in hooks/write_guard/paths.rs per D4 fallback: stripped the JS-regex newline quirk, rewrote comments/docs natively (no guards.mjs/globToRegExp framing), kept the hand-rolled matcher (no new dep). glob_matcher_vectors green with zero vector edits; worktree cargo test --release green: 1004 passed, 0 failed, 3 ignored.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T06:48:05.517Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "36955346-2280-4dc7-b0a5-b4d8c74c4b39",
+    "claimed_at": "2026-08-04T05:15:20.539Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T06:47:35.248Z"
+  },
+  "tier": "generation"
+}

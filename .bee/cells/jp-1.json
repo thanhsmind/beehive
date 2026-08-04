@@ -1,0 +1,43 @@
+{
+  "id": "jp-1",
+  "feature": "js-parity-cleanup",
+  "lane": "standard",
+  "change_class": "bugfix",
+  "behavior_change": false,
+  "deps": [],
+  "title": "Make renew_cross_worktree_holds hermetic: resolve main root from the root argument, not process cwd",
+  "action": "RED BASE (fix-first): from any linked worktree, `cargo test --release --manifest-path packages/bee-rs/Cargo.toml` fails: hooks::state_sync::tests::renew_cross_worktree_holds_renews_active_session_rows_only panics 'active owned row renews forward' (state_sync.rs:1476). CAUSE: renew_cross_worktree_holds (crates/bee/src/hooks/state_sync.rs:827-833) calls std::env::current_dir() and resolve_roots_core(&cwd); run from a linked worktree that resolves LinkedValid{main_root=REAL main checkout}, so the tmp ledger the test seeded is never touched. The test's own comment (state_sync.rs:1468-1469) admits it assumes an ordinary-checkout cwd. FIX: resolve main_root from the `root` argument the hook already passes (resolve_roots_core(root)) instead of process cwd — production behavior is identical (the hook's root IS the session's worktree/checkout root) and the test's tmp root takes the ordinary-checkout fallback branch deterministically. Check the hook call site(s) of renew_cross_worktree_holds to confirm `root` is the session root before changing; if any caller passes something other than the session root, thread the cwd in as an explicit parameter instead and have the test pass tmp. Suite must then be green when run FROM THE WORKTREE.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml green when run from the js-parity-cleanup worktree root",
+  "must_haves": {
+    "truths": [
+      "renew_cross_worktree_holds no longer reads std::env::current_dir()",
+      "the full suite is green when executed from a linked worktree",
+      "no production call site changed observable behavior (root passed == session root)"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-jp1",
+    "outcome": "Fixed renew_cross_worktree_holds to resolve main_root via resolve_roots_core(root) instead of std::env::current_dir(); full suite green from worktree: cargo test --release --manifest-path packages/bee-rs/Cargo.toml -> all binaries reported test result: ok, target test hooks::state_sync::tests::renew_cross_worktree_holds_renews_active_session_rows_only ... ok",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/state_sync.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T04:12:17.963Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "36955346-2280-4dc7-b0a5-b4d8c74c4b39",
+    "claimed_at": "2026-08-04T04:04:27.434Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T04:11:48.635Z"
+  },
+  "tier": "generation"
+}

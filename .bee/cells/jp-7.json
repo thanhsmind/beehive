@@ -1,0 +1,44 @@
+{
+  "id": "jp-7",
+  "feature": "js-parity-cleanup",
+  "lane": "standard",
+  "change_class": "refactor",
+  "behavior_change": false,
+  "deps": [
+    "jp-2",
+    "jp-3",
+    "jp-4",
+    "jp-5",
+    "jp-6",
+    "jp-8"
+  ],
+  "title": "Sweep the stale Node-oracle claims: Cargo.toml description, bee.mjs references, strangler and CUTOVER headers",
+  "action": "Node tree is deleted (zero .mjs or .cjs files in the repo) but the code still claims otherwise. FIX: (1) crates/bee/Cargo.toml description (Rust port / strangler front door / delegates to node bee.mjs) -> describe what the binary IS now (the bee harness CLI). (2) rg for ANY .mjs reference across crates/bee/src — bee.mjs, guards.mjs, state.mjs, claims.mjs, worktree-holds.mjs and the rest (~40+ in devtools/skill_trees.rs, hooks/cli_shape.rs, verbs/reviews.rs, hooks/write_guard/paths.rs git-classification section provenance lines, others) — for each: if the comment explains CURRENT semantics, rewrite it to state the rule natively without citing the dead file; if it only narrates provenance or history, delete it. (3) CUTOVER headers (hooks/chain_nudge.rs, hooks/state_sync.rs, state.rs remnants after jp-2 and jp-4) — keep the behavioral contract text, drop the Node-is-gone migration narration. (4) strangler mentions in comments. (5) hooks/state_sync test fixture writes lib/worktree-holds.mjs as a vendored-module presence gate — check whether the production presence-gate still checks for a .mjs file that can never exist again; if it does, that gate is dead weight: simplify it and its fixture, keeping the test meaningful. DO NOT touch comments that merely use JS or JSON terminology correctly (e.g. notes explaining WHY a comparator keeps UTF-16 code-unit order, or that a behavior models JS undefined via Option). This cell depends on all prior cells so it sweeps final text, not text about to be deleted.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml green from the worktree; rg for bee.mjs and strangler in crates/bee/src returns zero production-comment hits",
+  "must_haves": {
+    "truths": [
+      "Cargo.toml description no longer claims Node delegation",
+      "zero bee.mjs references left in crates/bee/src except any a locked decision explicitly kept",
+      "vendored-mjs presence gates are either live-justified or removed with their fixtures"
+    ]
+  },
+  "status": "claimed",
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-jp7",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "36955346-2280-4dc7-b0a5-b4d8c74c4b39",
+    "claimed_at": "2026-08-04T06:50:38.489Z"
+  },
+  "tier": "generation"
+}
