@@ -17,10 +17,8 @@ Retrieval triggers, not reading lists. Token budgets by lane:
 
 **Reading order per area (state layer, bundleMode):**
 
-- **With a bundle** — read `docs/knowledge/areas/<area>/` FIRST: its `index.md` names the area's concepts. Then decision index (the area's section of `docs/decisions/index.md`, complete by construction; drill into events via `decisions search --tag/--scope`) → history. `docs/specs/<area>.md` is named for exactly one job — the read-only compatibility surface: a legacy citation resolves through its pointer stub to the concept that owns the anchor now; never read there for current truth.
+- **With a bundle** — read `docs/knowledge/areas/<area>/` FIRST: its `index.md` names the area's concepts. Then decision index (the area's section of `docs/decisions/index.md`, complete by construction; drill into events via `decisions search --tag/--scope`) → history. `docs/specs/<area>.md` is the read-only compatibility surface only ("Note the state layer" below).
 - **With no bundle** — **spec → decision index (the area's section of `docs/decisions/index.md`, complete by construction; drill into events via `decisions search --tag/--scope`) → history**. `docs/specs/reading-map.md` answers "where does X live" before any broad grep.
-
-Do not read `node_modules/`, `dist/`, `build/`, `.git/` internals, `vendor/`, `coverage/` — the scout guard blocks them anyway.
 
 **Orphaned scribing debt:** when `bee status --json` reports a non-zero `scribing_debt.orphaned` count (the preamble already prints one loud line for it), surface it and offer it as fix-first knowledge work with the same one-line offer discipline as the capture-queue flush — e.g. "N cell(s) across M feature(s) never got their scribing sync — close the gap now, or after the current task?" One line, user chooses; orphaned scribing debt is never silently ignored. The repair verb is `bee state scribing-run --feature <feature> --areas "<a,b>" --next-action "<n>"`, which can stamp a non-active feature directly — no need to reactivate it first.
 

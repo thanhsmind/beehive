@@ -150,25 +150,9 @@ single worker — never wave analysis or multi-cell assignment.
    and `.bee/bin/bee reservations list --active-only` before
    assuming a worker is stuck. Do not send routine mid-flight pings;
    interrupt only for explicit user aborts or confirmed deadlocks.
-   For native Codex agents, a completed `wait_agent` call with no completion
-   is an **empty wait** and a timeout signal only. A `wait_agent`
-   timeout/no-completion result is only an empty wait; silence is not
-   failure. Never call `wait_agent` twice consecutively after an empty wait;
-   authority, urgency, and no-chatter instructions create no exception.
-   Before any later bounded wait, perform at least one material task-local
-   action when work remains; that one action satisfies the interval, and
-   exhausting all local work is not required. Only when no material work
-   remains, take exactly one `list_agents` snapshot. Handle any completion
-   that arrives during the interval exactly once, then recompute the
-   relevant live-agent set. Send one concise commentary update naming both
-   the live agent state and the next action. Only after this commentary may
-   a later bounded wait run, and only while the relevant live-agent set is
-   non-empty; zero live agents ends collection without another wait. No-op
-   work, repeated state reads, hidden reasoning, generic commentary, or
-   commentary alone do not qualify. Timeout never licenses interrupt,
-   duplicate dispatch, claim release, or reservation release; every running
-   agent, claim, and reservation stays owned. External process and artifact
-   polling remains outside this native-agent rule and stays governed by the
+   Native Codex empty waits require a progress interval before the next
+   wait: the full ordered rule lives in `bee-hive` → `references/gates-and-delegation.md` ("Native Codex subagent tending").
+   External process and artifact polling stays outside it, under the
    separate executor contract below.
 7. **Goal-check every `[DONE]` yourself — miss reruns, hit ships.** A
    worker's word is never the evidence; the orchestrator
@@ -260,26 +244,6 @@ tier system (decision 412e9b3a, `docs/knowledge/areas/verify-pipeline/`, 2026-07
 
 On both runtimes the integrity rails are identical because they live in the helpers: `bee finish` refuses while the declared tests are red, and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
 
-### Native Codex timeout interval
-
-A `wait_agent` result with no completion is an **empty wait**, not a worker
-failure. A `wait_agent` timeout/no-completion result is only an empty wait;
-silence is not failure. Never call `wait_agent` twice consecutively after an
-empty wait; authority, urgency, and no-chatter instructions create no exception.
-Before any later bounded wait, perform at least one material task-local action
-when work remains; that one action satisfies the interval, and exhausting all
-local work is not required. Only when no material work remains, take exactly one
-`list_agents` snapshot. Handle any completion that arrives during the interval
-exactly once, then recompute the relevant live-agent set. Send one concise
-commentary update naming both the live agent state and the next action. Only
-after this commentary may a later bounded wait run, and only while the relevant
-live-agent set is non-empty; zero live agents ends collection without another
-wait. No-op work, repeated state reads, hidden reasoning, generic commentary, or
-commentary alone do not qualify. The timeout never licenses interrupt, duplicate
-dispatch, claim release, or reservation release: every running agent, claim, and
-reservation stays owned. Do not poll files or scratchpads for harness-managed
-native agents. External process and artifact polling stays governed by External
-Executors below and remains outside this native-agent rule.
 
 ## Model Tiers — Config-Driven, Runtime-Keyed
 

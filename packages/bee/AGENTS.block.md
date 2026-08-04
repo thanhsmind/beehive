@@ -130,10 +130,8 @@ agent's own next move, or the one thing only the user can decide,
 never a menu. Emit one short progress line per visible step, on by
 default — `▸` started, `✓` green, `⚡` auto-approved, `✗` red — and a
 red or refusal line is never silenced, composited, or delayed by any
-switch or bypass level. Ids and counts never lead: the work is the
-subject of every line; a cell id or hash may trail as a handle when
-the reader needs it, and counts appear only as evidence beside a
-claim, never as statistics.
+switch or bypass level. The work is the subject of every line; ids and
+counts trail it, never lead.
 
 **Pre-send check**: reading only the first and last line of the
 message must answer what happened and what's next; then strip every
