@@ -1,0 +1,60 @@
+{
+  "id": "rel-1",
+  "feature": "release-2-1-7",
+  "lane": "small",
+  "title": "Release 2.1.7: bump manifests, rebuild binary, refresh stamps and manifest, tag",
+  "behavior_change": false,
+  "files": [
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
+    ".bee/onboarding.json",
+    ".claude/skills/.bee-skills-version.json",
+    ".agents/skills/.bee-skills-version.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md"
+  ],
+  "action": "Bump version 2.1.6 to 2.1.7 in .claude-plugin/plugin.json and .codex-plugin/plugin.json; cargo build --release; install the fresh binary into .bee/bin; bee onboard --repo-root . --apply to refresh stamps; bee dev release-manifest --write then --check; full suite; commit Release 2.1.7; tag v2.1.7.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "both plugin manifests carry 2.1.7",
+      "binary reports 2.1.7",
+      "release-manifest --check green",
+      "full suite green",
+      "tag v2.1.7 exists on the release commit"
+    ]
+  },
+  "decisions": [
+    "release-2-1-7"
+  ],
+  "regen_obligation_ack": "release cell runs the full regen chain inline (onboard --apply + release-manifest --write) as its core action",
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": "Release 2.1.7 shipped: manifests bumped, binary rebuilt+installed (drift false), stamps refreshed, release-manifest 205 match, parity test green, suite 999/0, commit 47c8e98e tagged v2.1.7.",
+    "files_changed": [
+      ".claude-plugin/plugin.json",
+      ".codex-plugin/plugin.json",
+      ".bee/onboarding.json",
+      ".claude/skills/.bee-skills-version.json",
+      ".agents/skills/.bee-skills-version.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T02:36:31.510Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ce3df9bf-8c5d-4f95-964d-f467a6b5458e",
+    "claimed_at": "2026-08-04T02:31:44.019Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T02:36:12.999Z"
+  }
+}
