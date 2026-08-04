@@ -730,47 +730,61 @@ use std::time::Instant;
     }
 
     /// Proves the counter's OWN definition before anything flips on it (D6):
-    /// per-feature, monotonic, and a different feature's claims never share
-    /// its file.
+    /// per (feature, session), monotonic, and neither a different feature
+    /// NOR a different session sharing the same feature ever shares a file.
     #[test]
-    fn no_route_claim_count_is_per_feature_and_monotonic() {
+    fn no_route_claim_count_is_per_feature_and_session_and_monotonic() {
         let tmp = cn_root();
         let root = tmp.path();
-        assert_eq!(no_route_claim_count(root, "f1").unwrap(), 0);
-        assert_eq!(bump_no_route_claim_count(root, "f1").unwrap(), 1);
-        assert_eq!(no_route_claim_count(root, "f1").unwrap(), 1);
+        assert_eq!(no_route_claim_count(root, "f1", Some("s1")).unwrap(), 0);
+        assert_eq!(bump_no_route_claim_count(root, "f1", Some("s1")).unwrap(), 1);
+        assert_eq!(no_route_claim_count(root, "f1", Some("s1")).unwrap(), 1);
         // A second feature starts at 0 and stays there — f1's bumps never
         // touch f2's counter file.
-        assert_eq!(no_route_claim_count(root, "f2").unwrap(), 0);
-        assert_eq!(bump_no_route_claim_count(root, "f1").unwrap(), 2);
-        assert_eq!(no_route_claim_count(root, "f1").unwrap(), 2);
-        assert_eq!(no_route_claim_count(root, "f2").unwrap(), 0, "a different feature's claims never count");
+        assert_eq!(no_route_claim_count(root, "f2", Some("s1")).unwrap(), 0);
+        // A second SESSION of the SAME feature is independent too — bee's
+        // own swarming model fans one feature's cells out to many
+        // concurrently-dispatched sessions, and each gets its own one-time
+        // warning rather than inheriting another session's spent count.
+        assert_eq!(no_route_claim_count(root, "f1", Some("s2")).unwrap(), 0);
+        // A sessionless caller is its own fixed "none" bucket.
+        assert_eq!(no_route_claim_count(root, "f1", None).unwrap(), 0);
+        assert_eq!(bump_no_route_claim_count(root, "f1", None).unwrap(), 1);
+        assert_eq!(no_route_claim_count(root, "f1", None).unwrap(), 1);
+
+        assert_eq!(bump_no_route_claim_count(root, "f1", Some("s1")).unwrap(), 2);
+        assert_eq!(no_route_claim_count(root, "f1", Some("s1")).unwrap(), 2);
+        assert_eq!(no_route_claim_count(root, "f2", Some("s1")).unwrap(), 0, "a different feature's claims never count");
+        assert_eq!(no_route_claim_count(root, "f1", Some("s2")).unwrap(), 0, "a different session's claims never count");
+        assert_eq!(no_route_claim_count(root, "f1", None).unwrap(), 1, "the sessionless bucket is untouched by s1's bumps");
     }
 
-    /// D4: the first `cells claim` against a routeless feature still only
-    /// warns (never denies); the second — a DIFFERENT cell of the same
-    /// feature — refuses, naming the route remedy, and never mutates the
-    /// cell or creates a claim file. Once the feature is routed, claiming
-    /// goes through again with no refusal at all.
+    /// D4: the first `cells claim` a SESSION makes against a routeless
+    /// feature still only warns (never denies); that SAME session's second
+    /// claim — even of a DIFFERENT cell of the same feature — refuses,
+    /// naming the route remedy, and never mutates the cell or creates a
+    /// claim file. Once the feature is routed, claiming goes through again
+    /// with no refusal at all.
     #[test]
-    fn claim_warns_once_per_feature_then_refuses_until_routed() {
+    fn claim_warns_once_per_session_then_refuses_until_routed() {
         let tmp = cn_root();
         let root = tmp.path();
         lane_no_route(root, "nr");
         write_cell_fixture(root, "nr-1", &cell("nr-1", "open", "nr", json!([])));
         write_cell_fixture(root, "nr-2", &cell("nr-2", "open", "nr", json!([])));
 
-        // First claim for the feature: succeeds and spends the one-time
-        // warning allowance.
+        // First claim for the feature: succeeds and spends sess-1's
+        // one-time warning allowance.
         let door = claim_cell_from_flags(root, "nr-1", "w1", Some("sess-1"), None).unwrap();
         assert_eq!(door.cell["status"], json!("claimed"));
-        assert_eq!(no_route_claim_count(root, "nr").unwrap(), 1);
+        assert_eq!(no_route_claim_count(root, "nr", Some("sess-1")).unwrap(), 1);
 
-        // Second claim — a different cell, feature still routeless — refuses.
+        // Second claim by the SAME session — a different cell, feature
+        // still routeless — refuses.
         let refusal = thrown(claim_cell_from_flags(root, "nr-2", "w1", Some("sess-1"), None));
         assert!(
             refusal.starts_with(
-                "claim: cell \"nr-2\" refused — feature \"nr\" still has no route record"
+                "claim: NO_ROUTE_RECORD — cell \"nr-2\" refused — feature \"nr\" still has no route record"
             ),
             "{refusal}"
         );
@@ -784,19 +798,29 @@ use std::time::Instant;
         let untouched = read_cell_norm(root, "nr-2").ok().unwrap().unwrap();
         assert_eq!(untouched["status"], json!("open"));
         // The refusal itself never advances the count further.
-        assert_eq!(no_route_claim_count(root, "nr").unwrap(), 1);
+        assert_eq!(no_route_claim_count(root, "nr", Some("sess-1")).unwrap(), 1);
 
-        // Route the feature: the same cell now claims cleanly.
+        // A DIFFERENT session's first claim of the same routeless feature
+        // still only warns — swarming's fan-out (many worker sessions,
+        // one feature) must never be blocked by another session's spent
+        // warning.
+        let door_other = claim_cell_from_flags(root, "nr-2", "w2", Some("sess-2"), None).unwrap();
+        assert_eq!(door_other.cell["status"], json!("claimed"));
+        assert_eq!(no_route_claim_count(root, "nr", Some("sess-2")).unwrap(), 1);
+
+        // Route the feature: sess-1 now claims cleanly again too.
         lane_with_route(root, "nr");
-        let door2 = claim_cell_from_flags(root, "nr-2", "w1", Some("sess-1"), None).unwrap();
+        write_cell_fixture(root, "nr-3", &cell("nr-3", "open", "nr", json!([])));
+        let door2 = claim_cell_from_flags(root, "nr-3", "w1", Some("sess-1"), None).unwrap();
         assert_eq!(door2.cell["status"], json!("claimed"));
     }
 
-    /// D4's count must survive unclaim/reclaim of the SAME cell — neither
-    /// the cell's own trace.claimed_at (nulled by release_trace on unclaim)
-    /// nor its claim file's fence_epoch (a fresh 1 on every O_EXCL reclaim)
-    /// can carry it, so a second claim of the identical cell must still
-    /// refuse once the feature's one-time warning is already spent.
+    /// D4's count must survive unclaim/reclaim of the SAME cell BY THE SAME
+    /// SESSION — neither the cell's own trace.claimed_at (nulled by
+    /// release_trace on unclaim) nor its claim file's fence_epoch (a fresh 1
+    /// on every O_EXCL reclaim) can carry it, so a second claim of the
+    /// identical cell by the identical session must still refuse once that
+    /// session's one-time warning is already spent.
     #[test]
     fn claim_refusal_survives_unclaim_and_reclaim_of_the_same_cell() {
         let tmp = cn_root();
@@ -805,31 +829,72 @@ use std::time::Instant;
         write_cell_fixture(root, "sr-1", &cell("sr-1", "open", "sr", json!([])));
 
         claim_cell_from_flags(root, "sr-1", "w1", Some("sess-1"), None).unwrap();
-        assert_eq!(no_route_claim_count(root, "sr").unwrap(), 1);
+        assert_eq!(no_route_claim_count(root, "sr", Some("sess-1")).unwrap(), 1);
 
-        // Unclaim resets the CELL's own status/trace — but not the feature's
-        // persisted claim count.
+        // Unclaim resets the CELL's own status/trace — but not the
+        // (feature, session) persisted claim count.
         unclaim_cell(root, "sr-1", Some("sess-1"), false).unwrap();
         let reopened = read_cell_norm(root, "sr-1").ok().unwrap().unwrap();
         assert_eq!(reopened["status"], json!("open"));
         assert_eq!(reopened["trace"]["claimed_at"], Value::Null);
         assert_eq!(
-            no_route_claim_count(root, "sr").unwrap(),
+            no_route_claim_count(root, "sr", Some("sess-1")).unwrap(),
             1,
-            "unclaim must not reset the feature-level count"
+            "unclaim must not reset the (feature, session) count"
         );
 
-        // Reclaiming the SAME cell is still the feature's second no-route
-        // claim — refused.
+        // Reclaiming the SAME cell by the SAME session is still that
+        // session's second no-route claim — refused.
         let refusal = thrown(claim_cell_from_flags(root, "sr-1", "w1", Some("sess-1"), None));
         assert!(
             refusal.starts_with(
-                "claim: cell \"sr-1\" refused — feature \"sr\" still has no route record"
+                "claim: NO_ROUTE_RECORD — cell \"sr-1\" refused — feature \"sr\" still has no route record"
             ),
             "{refusal}"
         );
         let still_open = read_cell_norm(root, "sr-1").ok().unwrap().unwrap();
         assert_eq!(still_open["status"], json!("open"), "a refused reclaim must not re-claim the cell");
+    }
+
+    /// Concurrency-contract ordering (real-process claim race, tests/
+    /// concurrency.rs): a racing LOSER on an already-claimed cell must see
+    /// the typed CLAIMED refusal, never the no-route deny — even when the
+    /// racing session's own one-time no-route warning is already spent
+    /// (from claiming a DIFFERENT cell earlier). A loser never had the cell
+    /// to "keep claiming without a route" in the first place; D4 only fires
+    /// once this caller would otherwise walk away with it.
+    #[test]
+    fn already_claimed_refusal_outranks_the_no_route_deny() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_no_route(root, "race");
+        write_cell_fixture(root, "race-1", &cell("race-1", "open", "race", json!([])));
+        write_cell_fixture(root, "race-2", &cell("race-2", "open", "race", json!([])));
+
+        // sess-1 claims race-1 cleanly, spending ITS one-time warning.
+        claim_cell_from_flags(root, "race-1", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(no_route_claim_count(root, "race", Some("sess-1")).unwrap(), 1);
+
+        // sess-1 races itself against the SAME already-claimed cell (e.g. a
+        // retried dispatch): CLAIMED outranks NO_ROUTE_RECORD even though
+        // sess-1's count is already spent.
+        let refusal = thrown(claim_cell_from_flags(root, "race-1", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: CLAIMED — cell \"race-1\" is already claimed by session \"sess-1\""),
+            "{refusal}"
+        );
+        assert!(!refusal.contains("NO_ROUTE_RECORD"), "{refusal}");
+        // The already-claimed refusal never advances the no-route count.
+        assert_eq!(no_route_claim_count(root, "race", Some("sess-1")).unwrap(), 1);
+
+        // A DIFFERENT session (its own count still 0) also loses the race
+        // for the same already-claimed cell — still CLAIMED, not NO_ROUTE.
+        let refusal2 = thrown(claim_cell_from_flags(root, "race-1", "w2", Some("sess-2"), None));
+        assert!(
+            refusal2.starts_with("claim: CLAIMED — cell \"race-1\" is already claimed by session \"sess-1\""),
+            "{refusal2}"
+        );
+        assert_eq!(no_route_claim_count(root, "race", Some("sess-2")).unwrap(), 0);
     }
 
     // ── budgets ───────────────────────────────────────────────────────────
