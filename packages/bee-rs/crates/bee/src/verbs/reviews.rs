@@ -1126,6 +1126,11 @@ fn run_record(ctx: &GCtx, flags: &Flags) -> R<Out2> {
                     js_str_or_undefined(payload_map.get("status"))
                 )));
             }
+            if matches!(payload_map.get("status"), Some(Value::String(s)) if s == "approved") {
+                if let Some(msg) = unresolved_p1_refusal(&session, payload_map) {
+                    return Ok(Out2::Thrown(msg));
+                }
+            }
             let mut decision = payload_map.clone();
             normalize_decision_gate_field(&mut decision);
             session.insert("decision".into(), Value::Object(decision));
@@ -1372,6 +1377,65 @@ fn run_status(ctx: &GCtx, flags: &Flags) -> R<Out2> {
         return Err(Delegate);
     }
     Ok(Out2::Emit(summary, text))
+}
+
+/// P1 always blocks merge (AGENTS.md). An `approved` decision is refused
+/// while any P1 finding stands unresolved; a resolution names the finding —
+/// by its `id` when it carries one, else by its index in `findings` — and the
+/// cell that fixed it. `blocked` and `pending` are untouched: recording where
+/// a review stands is never the thing that needs a door.
+fn unresolved_p1_refusal(session: &Map<String, Value>, decision: &Map<String, Value>) -> Option<String> {
+    let findings = match session.get("findings") {
+        Some(Value::Array(a)) => a.as_slice(),
+        _ => &[],
+    };
+    let p1s: Vec<(usize, Option<String>)> = findings
+        .iter()
+        .enumerate()
+        .filter(|(_, f)| matches!(f.get("severity"), Some(Value::String(s)) if s == "P1"))
+        .map(|(i, f)| (i, f.get("id").and_then(Value::as_str).map(str::to_string)))
+        .collect();
+    if p1s.is_empty() {
+        return None;
+    }
+    // A resolution counts only when it names a cell — an empty or blank cell
+    // is an assertion that the work happened somewhere, which is what the
+    // finding already said.
+    let named: Vec<String> = match decision.get("p1_resolutions") {
+        Some(Value::Array(rs)) => rs
+            .iter()
+            .filter(|r| {
+                r.get("cell").and_then(Value::as_str).map(|c| !c.trim().is_empty()).unwrap_or(false)
+            })
+            // A JSON round-trip turns the index 1 into 1.0, so a number is
+            // compared as a number, never as whatever it prints as.
+            .filter_map(|r| match r.get("finding") {
+                Some(Value::String(s)) => Some(s.clone()),
+                Some(v @ Value::Number(_)) => v.as_f64().map(|f| (f as i64).to_string()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    let open: Vec<String> = p1s
+        .iter()
+        .filter(|(i, id)| {
+            !named.contains(&i.to_string())
+                && !id.as_ref().map(|s| named.contains(s)).unwrap_or(false)
+        })
+        .map(|(i, id)| id.clone().unwrap_or_else(|| format!("#{i}")))
+        .collect();
+    if open.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "record: refused — {} P1 finding(s) stand unresolved ({}). P1 always blocks merge. \
+         FIX: land the fix cell for each, then record the decision with p1_resolutions naming \
+         every P1 and the cell that fixed it, e.g. \"p1_resolutions\": [{{\"finding\": {}, \"cell\": \"auth-4\"}}].",
+        open.len(),
+        open.join(", "),
+        p1s[0].0
+    ))
 }
 
 #[cfg(test)]
@@ -1952,6 +2016,50 @@ mod tests {
         assert_ne!(std::fs::read(review_file(root, "rev-1")).unwrap(), before);
     }
 
+    /// P1 always blocks merge (AGENTS.md). Before this check, `approved`
+    /// recorded cleanly beside an open P1 — the status enum was the only
+    /// thing validated, so the strongest finding bee has was advisory.
+    #[test]
+    fn approved_is_refused_while_a_p1_finding_is_unresolved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let ctx = ctx_or_skip!(root, "approved_is_refused_while_a_p1_finding_is_unresolved");
+        seeded_session(root, &ctx);
+
+        emitted(record_with(&ctx, root, "rev-1", "finding", &json!({"severity": "P2"})));
+        // P2 and P3 never block.
+        emitted(record_with(&ctx, root, "rev-1", "decision", &json!({"status": "approved"})));
+
+        emitted(record_with(&ctx, root, "rev-1", "finding", &json!({"severity": "P1"})));
+        let msg = thrown(record_with(&ctx, root, "rev-1", "decision", &json!({"status": "approved"})));
+        assert!(msg.contains("1 P1 finding"), "{msg}");
+
+        // A blocked or pending decision is unaffected — the block is on
+        // claiming the work is mergeable, not on recording where it stands.
+        emitted(record_with(&ctx, root, "rev-1", "decision", &json!({"status": "blocked"})));
+        emitted(record_with(&ctx, root, "rev-1", "decision", &json!({"status": "pending"})));
+
+        // Naming the fixing cell for every P1 clears the door.
+        let (session, _) = emitted(record_with(
+            &ctx,
+            root,
+            "rev-1",
+            "decision",
+            &json!({"status": "approved", "p1_resolutions": [{"finding": 1, "cell": "fix-1"}]}),
+        ));
+        assert_eq!(session["decision"]["status"], "approved");
+
+        // A resolution that names no cell does not count.
+        let msg = thrown(record_with(
+            &ctx,
+            root,
+            "rev-1",
+            "decision",
+            &json!({"status": "approved", "p1_resolutions": [{"finding": 1, "cell": "  "}]}),
+        ));
+        assert!(msg.contains("1 P1 finding"), "{msg}");
+    }
+
     /// Oracle: "recordOnReview: manifest/preflight/decision SET the field;
     /// finding/uat APPEND one entry per call".
     #[test]
@@ -1995,9 +2103,18 @@ mod tests {
             root,
             "rev-1",
             "decision",
-            &json!({"status": "approved", "review": {"approved_by": "user"}}),
+            // The P1 recorded above is resolved by name — approving beside an
+            // open one is its own test.
+            &json!({"status": "approved", "review": {"approved_by": "user"},
+                    "p1_resolutions": [{"finding": 0, "cell": "fix-1"}]}),
         ));
-        assert_eq!(session["decision"], json!({"status": "approved", "review": {"approved_by": "user"}}));
+        // The round-trip stores the index as a JSON number (0.0 on the way
+        // back), which is why the door compares numbers rather than text.
+        assert_eq!(
+            session["decision"],
+            json!({"status": "approved", "review": {"approved_by": "user"},
+                   "p1_resolutions": [{"finding": 0.0, "cell": "fix-1"}]})
+        );
         // The immutable half is still exactly what create froze.
         assert_eq!(session["baseline"], json!("sha-base"));
         assert_eq!(session["head"], json!("sha-head"));
