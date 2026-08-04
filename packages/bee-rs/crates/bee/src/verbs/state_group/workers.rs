@@ -9,6 +9,7 @@ use crate::fsutil::{
 };
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
+use crate::textutil::js_default_sort;
 use crate::verbs::reservations::{
     date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
     js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
@@ -336,8 +337,8 @@ pub(crate) fn run_worker_prune(flags: Flags, use_json: bool, t0: Instant) -> Opt
                 pruned.push(name);
             }
         }
-        js_sort(&mut pruned);
-        js_sort(&mut kept);
+        js_default_sort(&mut pruned);
+        js_default_sort(&mut kept);
         let verb = if dry_run { "Would prune" } else { "Pruned" };
         let text = format!(
             "{verb} {} worker transient(s) from .bee/workers/ (kept {} still-active).",

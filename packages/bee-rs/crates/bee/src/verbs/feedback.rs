@@ -50,6 +50,7 @@ use crate::fsutil::{read_json, ReadJson};
 use crate::jsjson;
 use crate::registry::{check_manifest_drift, Drift};
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
+use crate::textutil::{code_unit_cmp, js_default_sort};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -798,11 +799,7 @@ fn list_in_scope(real_root: &Path, rel: &str) -> Listing {
     // JS `names.sort()` — default comparator, i.e. UTF-16 code-unit order.
     // (Byte order diverges from it above the BMP, which the digest's entry
     // order would then inherit.)
-    names.sort_by(|a, b| {
-        a.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.encode_utf16().collect::<Vec<_>>())
-    });
+    js_default_sort(&mut names);
     Listing::Names(names)
 }
 
@@ -1303,11 +1300,7 @@ fn counts_value(data: &CountsData) -> Value {
         }
     }
     // Object.keys(byKind).sort() — default JS sort, UTF-16 code units.
-    by_kind.sort_by(|a, b| {
-        a.0.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.0.encode_utf16().collect::<Vec<_>>())
-    });
+    by_kind.sort_by(|a, b| code_unit_cmp(&a.0, &b.0));
     let mut by_kind_map = Map::new();
     for (k, n) in by_kind {
         by_kind_map.insert(k, Value::from(n));
@@ -1342,11 +1335,7 @@ fn summary_line(data: &CountsData) -> String {
             None => by_reason.push((key, 1)),
         }
     }
-    by_reason.sort_by(|a, b| {
-        a.0.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.0.encode_utf16().collect::<Vec<_>>())
-    });
+    by_reason.sort_by(|a, b| code_unit_cmp(&a.0, &b.0));
     let summary = if by_reason.is_empty() {
         "none".to_string()
     } else {
@@ -1618,11 +1607,7 @@ fn digest_summary_line(digest: &Value) -> String {
             }
         }
     }
-    by_reason.sort_by(|a, b| {
-        a.0.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.0.encode_utf16().collect::<Vec<_>>())
-    });
+    by_reason.sort_by(|a, b| code_unit_cmp(&a.0, &b.0));
     let summary = if by_reason.is_empty() {
         "none".to_string()
     } else {
@@ -1911,7 +1896,7 @@ fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
         value: Value,
         rank: f64,
         first_seen: String,
-        key_units: Vec<u16>,
+        key: String,
     }
     let mut ranked: Vec<Ranked> = clusters
         .into_iter()
@@ -1924,8 +1909,8 @@ fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
                 if let Some(Value::String(fs)) = e.get("first_seen") {
                     if !fs.is_empty()
                         && (earliest.is_none()
-                            || fs.encode_utf16().collect::<Vec<_>>()
-                                < earliest.as_ref().unwrap().encode_utf16().collect::<Vec<_>>())
+                            || code_unit_cmp(fs, earliest.as_ref().unwrap())
+                                == std::cmp::Ordering::Less)
                     {
                         earliest = Some(fs.clone());
                     }
@@ -1946,7 +1931,7 @@ fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
                 value: Value::Object(m),
                 rank,
                 first_seen: earliest.unwrap_or_default(),
-                key_units: c.key.encode_utf16().collect(),
+                key: c.key,
             }
         })
         .collect();
@@ -1954,13 +1939,8 @@ fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
         b.rank
             .partial_cmp(&a.rank)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| {
-                a.first_seen
-                    .encode_utf16()
-                    .collect::<Vec<_>>()
-                    .cmp(&b.first_seen.encode_utf16().collect::<Vec<_>>())
-            })
-            .then_with(|| a.key_units.cmp(&b.key_units))
+            .then_with(|| code_unit_cmp(&a.first_seen, &b.first_seen))
+            .then_with(|| code_unit_cmp(&a.key, &b.key))
     });
     ranked.into_iter().map(|r| r.value).collect()
 }

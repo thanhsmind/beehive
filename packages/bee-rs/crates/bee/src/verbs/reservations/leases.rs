@@ -9,6 +9,7 @@ use crate::jsjson;
 use crate::lock;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, resolve_store_root_worktree, Roots, RootsWt, StoreRoots};
+use crate::textutil::code_unit_cmp;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Number, Value};
 use sha2::{Digest, Sha256};
@@ -345,15 +346,15 @@ pub(crate) fn rebuild_reservations_projection(root: &Path) -> Ex<usize> {
     // `a.reserved_at !== b.reserved_at ? (a.reserved_at < b.reserved_at ? -1 : 1)
     //  : a.path !== b.path ? (a.path < b.path ? -1 : 1) : 0` — JS string
     // relational comparison is UTF-16 code-unit lexicographic.
-    let mut keyed: Vec<(Vec<u16>, Vec<u16>, Resv)> = Vec::with_capacity(rows.len());
+    let mut keyed: Vec<(String, String, Resv)> = Vec::with_capacity(rows.len());
     for r in rows {
         let Some(Value::String(ra)) = r.reserved_at.clone() else {
             return Err(Exotic);
         };
-        let path_key: Vec<u16> = r.path.encode_utf16().collect();
-        keyed.push((ra.encode_utf16().collect(), path_key, r));
+        let path_key = r.path.clone();
+        keyed.push((ra, path_key, r));
     }
-    keyed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+    keyed.sort_by(|a, b| code_unit_cmp(&a.0, &b.0).then_with(|| code_unit_cmp(&a.1, &b.1)));
     let rows: Vec<Value> = keyed.iter().map(|(_, _, r)| resv_to_value(r)).collect();
     let count = rows.len();
     write_json_atomic(

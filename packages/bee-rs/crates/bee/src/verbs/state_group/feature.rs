@@ -9,6 +9,7 @@ use crate::fsutil::{
 };
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
+use crate::textutil::js_default_sort;
 use crate::verbs::reservations::{
     date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
     js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
@@ -130,7 +131,7 @@ pub(crate) fn run_rebuild_projections(flags: Flags, use_json: bool, t0: Instant)
             .filter(|wf| wf.get("feature").is_some_and(truthy))
             .map(|wf| lane_lock_name(&js_disp_opt(wf.get("feature"))))
             .collect();
-        js_sort(&mut lane_locks); // `.sort()` then `new Set(...)` — sorted, so
+        js_default_sort(&mut lane_locks); // `.sort()` then `new Set(...)` — sorted, so
         lane_locks.dedup(); // duplicates are adjacent and Set order is preserved
         let mut names: Vec<String> = vec!["state".to_string()];
         names.extend(lane_locks);

@@ -41,15 +41,6 @@ pub(crate) fn disp_or_idle(from: Option<&Value>) -> String {
     }
 }
 
-/// JS Array.prototype.sort default comparator (UTF-16 code units).
-pub(crate) fn js_sort(v: &mut [String]) {
-    v.sort_by(|a, b| {
-        a.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.encode_utf16().collect::<Vec<_>>())
-    });
-}
-
 /// splitList (bee.mjs): split on ',', JS-trim, drop empties.
 pub(crate) fn split_list(raw: &str) -> Vec<String> {
     raw.split(',')

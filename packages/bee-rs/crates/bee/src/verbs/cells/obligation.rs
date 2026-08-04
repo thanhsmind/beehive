@@ -10,6 +10,7 @@ use crate::lock;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state as bstate;
+use crate::textutil::js_default_sort;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
@@ -99,7 +100,7 @@ fn derive_manifest_scope() -> (Vec<String>, Vec<String>) {
         .map(|r| (*r).to_string())
         .filter(|r| *r != manifest)
         .collect();
-    js_default_str_sort(&mut roots);
+    js_default_sort(&mut roots);
     (roots, vec![manifest])
 }
 
@@ -109,7 +110,7 @@ fn derive_manifest_scope() -> (Vec<String>, Vec<String>) {
 pub(crate) fn derive_ledger_scope() -> (Vec<String>, Vec<String>) {
     let mut roots: Vec<String> =
         crate::onboard::ledger_covered_roots().into_iter().map(str::to_string).collect();
-    js_default_str_sort(&mut roots);
+    js_default_sort(&mut roots);
     (roots, Vec::new())
 }
 

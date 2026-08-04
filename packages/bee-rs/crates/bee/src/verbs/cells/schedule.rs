@@ -10,6 +10,7 @@ use crate::lock;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state as bstate;
+use crate::textutil::{code_unit_cmp, js_default_sort};
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
@@ -43,7 +44,7 @@ pub(crate) fn compute_schedule(cells: &[Value]) -> Schedule {
             _ => unreachable!(),
         })
         .collect();
-    js_default_str_sort(&mut empty_files);
+    js_default_sort(&mut empty_files);
 
     let status_of = |cell: &Value| -> Option<String> {
         match cell.get("status") {
@@ -83,19 +84,7 @@ pub(crate) fn compute_schedule(cells: &[Value]) -> Schedule {
             }
         }
     }
-    unsatisfiable.sort_by(|a, b| {
-        let cell_cmp = {
-            let au: Vec<u16> = a.0.encode_utf16().collect();
-            let bu: Vec<u16> = b.0.encode_utf16().collect();
-            au.cmp(&bu)
-        };
-        if cell_cmp != Ordering::Equal {
-            return cell_cmp;
-        }
-        let au: Vec<u16> = a.1.encode_utf16().collect();
-        let bu: Vec<u16> = b.1.encode_utf16().collect();
-        au.cmp(&bu)
-    });
+    unsatisfiable.sort_by(|a, b| code_unit_cmp(&a.0, &b.0).then_with(|| code_unit_cmp(&a.1, &b.1)));
 
     // Propagate exclusion.
     let mut changed = true;
@@ -165,7 +154,7 @@ pub(crate) fn compute_schedule(cells: &[Value]) -> Schedule {
                     && remaining.iter().find(|(k, _)| k == id).map(|(_, d)| *d == 0).unwrap_or(false)
             })
             .collect();
-        js_default_str_sort(&mut ready);
+        js_default_sort(&mut ready);
         if ready.is_empty() {
             break;
         }

@@ -8,7 +8,7 @@ use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::read_config_raw;
-use crate::textutil::{char_len, truncate_chars_head};
+use crate::textutil::{char_len, code_unit_cmp, js_default_sort, truncate_chars_head};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{js_trim, keys_known, parse_flags, FlagV, Flags};
 use serde_json::{json, Map, Number, Value};
@@ -149,9 +149,7 @@ pub(crate) fn compare_cell_ids(a: &str, b: &str) -> std::cmp::Ordering {
                         return if nl < nr { Ordering::Less } else { Ordering::Greater };
                     }
                 } else if l != r {
-                    let (lu, ru): (Vec<u16>, Vec<u16>) =
-                        (l.encode_utf16().collect(), r.encode_utf16().collect());
-                    return lu.cmp(&ru);
+                    return code_unit_cmp(l, r);
                 }
             }
         }
@@ -341,14 +339,6 @@ pub(crate) fn read_capped_cell_traces(root: &Path, feature: &str) -> Option<Vec<
     Some(cells)
 }
 
-pub(crate) fn sort_utf16(list: &mut [String]) {
-    list.sort_by(|a, b| {
-        a.encode_utf16()
-            .collect::<Vec<_>>()
-            .cmp(&b.encode_utf16().collect::<Vec<_>>())
-    });
-}
-
 pub(crate) fn str_array(map: &Map<String, Value>, key: &str) -> Vec<String> {
     match map.get(key) {
         Some(Value::Array(a)) => a
@@ -403,7 +393,7 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
         .iter()
         .filter_map(|c| iso_date(c.capped_at.as_ref().map(|s| Value::String(s.clone())).as_ref()))
         .collect();
-    sort_utf16(&mut capped_dates);
+    js_default_sort(&mut capped_dates);
     let timestamp = match capped_dates.last() {
         Some(d) => Some(d.clone()),
         None => iso_date(work_concept.data.get("timestamp")),
@@ -576,7 +566,7 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
             bullets.push(Value::Object(b));
         }
         let mut sorted = subjects.clone();
-        sort_utf16(&mut sorted);
+        js_default_sort(&mut sorted);
         let mut u = Map::new();
         u.insert("area".into(), Value::String(area.clone()));
         u.insert(

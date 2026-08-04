@@ -14,6 +14,7 @@ use crate::fsutil::{
 };
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
+use crate::textutil::js_default_sort;
 use crate::verbs::reservations::{
     date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
     js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
@@ -1183,7 +1184,7 @@ use std::time::Instant;
             .iter()
             .map(|f| lane_lock_name(f))
             .collect();
-        js_sort(&mut lane_locks);
+        js_default_sort(&mut lane_locks);
         lane_locks.dedup();
         assert_eq!(lane_locks, vec!["lane:alpha", "lane:mid", "lane:zeta"]);
     }
