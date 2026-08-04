@@ -299,6 +299,7 @@
     "doctrine-layer",
     "defect",
     "guard-hardening",
-    "test-contract"
+    "test-contract",
+    "block-lean"
   ]
 }

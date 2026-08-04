@@ -1,0 +1,53 @@
+{
+  "id": "bl-2",
+  "feature": "block-lean",
+  "lane": "small",
+  "title": "Sync doctrine and learnings for the lean",
+  "behavior_change": false,
+  "files": [
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+    "docs/history/learnings/20260804-block-lean.md"
+  ],
+  "read_first": [
+    "docs/history/block-lean/CONTEXT.md",
+    "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md"
+  ],
+  "action": "Record the new lean axis (enforced-rule signpost) in the duplication-boundary doctrine doc and author the learnings file, citing the dead wording-guard gap.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "doctrine records the signpost axis with L-id cites",
+      "learnings authored",
+      "knowledge index clean",
+      "suite green"
+    ]
+  },
+  "decisions": [
+    "block-lean L1-L8"
+  ],
+  "deps": [
+    "bl-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-bl2",
+    "outcome": "Doctrine records the enforced-rule-signposting axis with L-id cites and the dead-guard caveat; learnings authored; knowledge index 0 stale.",
+    "files_changed": [
+      "docs/knowledge/areas/doctrine-layer/router-triage-and-the-agents-md-duplication-boundary.md",
+      "docs/history/learnings/20260804-block-lean.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T03:17:45.533Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ce3df9bf-8c5d-4f95-964d-f467a6b5458e",
+    "claimed_at": "2026-08-04T03:14:14.205Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T03:17:25.846Z"
+  }
+}

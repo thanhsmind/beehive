@@ -1,0 +1,58 @@
+{
+  "id": "bl-1",
+  "feature": "block-lean",
+  "lane": "small",
+  "title": "Lean the AGENTS operating block: enforced rules to signposts, full regen inline",
+  "behavior_change": true,
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/block-lean/CONTEXT.md",
+    "packages/bee/AGENTS.block.md",
+    "docs/knowledge/areas/doctrine-layer/unenforced-obedience.md"
+  ],
+  "action": "Lean packages/bee/AGENTS.block.md per the per-section spec in docs/history/block-lean/CONTEXT.md; then regen inline: bee onboard --repo-root . --apply (re-renders AGENTS.md block), bee dev release-manifest --write, full suite green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "every cut rule has a hook backstop or moved behind a resolving pointer",
+      "canonical homes cited by skills keep full text",
+      "pointer_integrity green",
+      "AGENTS.md re-rendered byte-equal to template block",
+      "full suite green"
+    ]
+  },
+  "decisions": [
+    "block-lean L1-L8"
+  ],
+  "regen_obligation_ack": "regen chain runs inline in this cell (onboard --apply + release-manifest --write)",
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-bl1",
+    "outcome": "Block leaned 184->174 lines (8646 bytes): enforced prohibitions to signposts (L2-L4), help paragraph halved (L5); canonical homes verbatim (5/5 present); AGENTS.md re-rendered, manifest rewritten; pointer 10/0, laws 9/0.",
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T03:14:04.431Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ce3df9bf-8c5d-4f95-964d-f467a6b5458e",
+    "claimed_at": "2026-08-04T03:03:41.230Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T03:13:46.157Z"
+  }
+}
