@@ -1,0 +1,55 @@
+{
+  "id": "wf-1",
+  "feature": "worktree-finish",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Let a worker cap its own cell from inside its granted worktree",
+  "action": "cells finish is refused inside a granted worktree by emit_unsupported_root (verbs/mod.rs:114-138), because cells verbs use the NARROW door resolve_store_root (roots.rs:610-631). The refusal is policy, not physics: worktree, status/orient and reservations already read and write the main store from inside a worktree through the FULL door and StoreRoots::hold_topology (roots.rs:541-551). Port cells finish onto that road, per the logged decision: the cell record and its claim resolve at the MAIN store, the declared tests run with cwd in the WORKTREE, and the holds release uses hold_topology's (main_root, git-verified worktree id) pair instead of finish_support.rs holds_ledger_path(root) and CROSS_WORKTREE_HOLDS_LOCK keyed at the resolved root - the un-ported piece roots.rs:91-100 names as the reason cells stayed narrow. Keep every other cells verb refused as it is today. The D6 commit-trailer check already scans the worktree branch (finish_support.rs:226-235) and must keep doing so.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::cells verbs::reservations",
+  "must_haves": {
+    "truths": [
+      "cells finish from a granted worktree caps the cell in the main store",
+      "the declared tests run against the worktree tree, not main",
+      "reservation and hold release names the worktree id as holder and actually releases",
+      "running finish from main is byte-identical to today",
+      "other cells verbs still refuse from a worktree"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/roots.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/emit.rs",
+    "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md"
+  ],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": "bob",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T11:55:54.722Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9f1a5dd3-4503-443a-95df-2a845fc0ad53",
+    "claimed_at": "2026-08-04T11:29:42.417Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T11:55:43.142Z"
+  }
+}
