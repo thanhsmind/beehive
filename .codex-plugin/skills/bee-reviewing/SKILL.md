@@ -103,8 +103,8 @@ closes the review, not any feature; their already-closed state stays untouched.
 - The panel scales to the scope's risk — never reduced by bypass or by
   the originating feature's lane; an unchanged, already-reviewed range
   is never re-dispatched.
-- Merge is never self-approved: headless runs report-only, and the
-  merge question always belongs to the human.
+- Merge is never self-approved: headless runs report-only, and the merge
+  question belongs to the human (AGENTS.md).
 
 ## References
 

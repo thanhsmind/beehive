@@ -23,7 +23,7 @@ one. `bee orient` shows which move the work needs.
 ## Explore (interactive)
 
 The craft is interviewing, not writing. Scout the code lightly, then
-triage the request — effort follows the signal, never a fixed script:
+triage the request — default: effort follows the signal, not a fixed script:
 
 | Request | Signal | Next step |
 |---|---|---|
@@ -31,7 +31,7 @@ triage the request — effort follows the signal, never a fixed script:
 | Partially clear | Hedges ("probably", "I think"); named outcome with unstated states, errors, or consumers | Probe only the gray areas the hedges mark |
 | Vague | "What if we…"; a solution with no named problem; an aside dropped into a longer thread | Full interview — surface the 2–4 unstated product decisions |
 
-Never ask how deep to go — the request's shape already answered. Ask
+Default: do not ask how deep to go — the request's shape already answered. Ask
 only *product* decisions planning would otherwise guess — states, error
 shape, who consumes the output (`references/gray-area-probes.md`);
 implementer-only questions go to planning. Deeper craft — question

@@ -26,11 +26,11 @@ finishes it (`cells finish` — runs the declared tests, caps on green,
 refuses on red with the failing excerpt, and releases the reservations
 in the same verb). Then it returns exactly one status token.
 
-**Parallel by default:** a `small` lane's cells (1-3) fan
+**Default — parallel:** a `small` lane's cells (1-3) fan
 out to concurrent execution workers whenever every cell's *product* file set
-is disjoint — reservations are the proof and the police, 3-4 live workers is
-the cap. Serial is the exception: it requires a named conflict
-recorded in the dispatch note, never assumed as the default. `tiny` stays
+is disjoint — reservations are the proof and the police (the guard denies an
+overlap; the worker count is a default, ~3-4 live). Serial is the exception and
+carries a named conflict in the dispatch note. `tiny` stays
 single-cell by shape, so the concurrency question does not arise; `small`'s
 extra cells scale the WORK and, when disjoint, the concurrency too — never
 concurrency wearing an unrecorded conflict. Two or more live small-lane
@@ -73,8 +73,8 @@ single worker — never wave analysis or multi-cell assignment.
 ## Operating Contract in full
 
 1. **Wave analysis.** Run `.bee/bin/bee cells schedule --json`: the
-   computed waves are the **default** dispatch order — override only with a
-   stated reason recorded in the swarm report. Refuse to dispatch when
+   computed waves are the **default** dispatch order — an override carries a
+   stated reason in the swarm report. Refuse to dispatch when
    diagnostics report cycles. Two ready cells sharing a file means fix the
    reservations or split the cell scope — never "spawn both and be careful";
    the schedule already auto-serializes file overlap into a later wave
@@ -87,9 +87,8 @@ single worker — never wave analysis or multi-cell assignment.
    cell per worker**, then claims it itself — `cells claim-next` or `cells
    claim --id <id> --worker <nickname>` — before spawning; `--session-id` is
    optional and self-derives from `CLAUDE_CODE_SESSION_ID` when omitted.
-   Workers never claim their own cell, never self-select, browse the
-   ready list, or take a second cell — a spawned worker only validates the
-   claim it was handed (`cells show`).
+   A worker validates the claim it was handed (`cells show`) and takes no
+   second cell — the claim guard refuses a worker that tries.
 3. **Spawn with the isolation contract.** Each worker prompt contains: the
    cell id (already claimed under the worker's nickname per step 2), the
    path to `docs/history/<feature>/CONTEXT.md`, and — when the lane has one
@@ -101,9 +100,8 @@ single worker — never wave analysis or multi-cell assignment.
    template below.
    Codex has no per-agent `subagent_type` equivalent — its tier is
    enforced as a read budget + output cap only.
-   NEVER spawn any OTHER plugin's agent type, even when the name matches the
-   role: a same-named agent carries a different contract and makes the run
-   depend on what happens to be installed.
+   Default: bee's own agent types only. A same-named type from another plugin
+   carries a different contract and makes the run depend on what is installed.
 4. **Judge each cell's model tier at dispatch** — you (the orchestrator)
    assess the task in front of you and pick the fitting tier; it is NOT
    fixed by planning (a planning `tier` is at most a hint you may
@@ -117,8 +115,8 @@ single worker — never wave analysis or multi-cell assignment.
      security-sensitive or `high-risk`-lane work, ambiguous specs,
      cross-cutting change: where a wrong call is expensive.
 
-   Record the choice so scarcity stays measurable: `.bee/bin/bee
-   cells tier --id <id> --tier <tier>`. Then resolve with `resolveTier(root,
+   Record the choice so scarcity stays measurable (`cells tier` refuses a
+   ceiling choice over budget): `.bee/bin/bee cells tier --id <id> --tier <tier>`. Then resolve with `resolveTier(root,
    tier, runtime)` — full semantics, tier-marker anchoring, and dispatch
    economics: "Model Tiers — Config-Driven, Runtime-Keyed" below. Keep
    `ceiling` scarce — if `bee_status` flags ceiling scarcity, re-judge
@@ -148,8 +146,8 @@ single worker — never wave analysis or multi-cell assignment.
 6. **Tend** the swarm: collect status tokens, update cells and state, verify
    reservations were released. Silence is not failure — inspect cell status
    and `.bee/bin/bee reservations list --active-only` before
-   assuming a worker is stuck. Do not send routine mid-flight pings;
-   interrupt only for explicit user aborts or confirmed deadlocks.
+   assuming a worker is stuck. Default: no routine mid-flight pings — interrupt
+   for an explicit user abort or a confirmed deadlock.
    Native Codex empty waits require a progress interval before the next
    wait: the full ordered rule lives in `bee-hive` → `references/gates-and-delegation.md` ("Native Codex subagent tending").
    External process and artifact polling stays outside it, under the
@@ -160,9 +158,8 @@ single worker — never wave analysis or multi-cell assignment.
    - **Read the record; re-run only on smell.** Every finish already ran
      the declared tests — `.bee/logs/test-results.json` is the evidence, and
      quoting it satisfies the fresh-output rule. Re-run `bee test` yourself
-     only on a smell — a missing/garbled report, a `[DONE]` with no diff, a
-     `high-risk`/hard-gate cell — orchestrator judgment, never a routine
-     step. Failure on a spot-check → the cell is NOT done: re-dispatch to
+     on a smell — a missing/garbled report, a `[DONE]` with no diff, a
+     `high-risk`/hard-gate cell. Orchestrator judgment, not a routine step. Failure on a spot-check → the cell is NOT done: re-dispatch to
      the same tier with the failing excerpt (a task miss is a rerun, never a
      silent tier escalation — provider errors, not task errors, are what the
      rescue ladder's tier rung is for).
@@ -291,29 +288,10 @@ A configurable tier may name an **external CLI executor** instead of a model —
 
 **Status:** `resolveTier` purpose-scopes cli resolution — a bare/cell-purpose resolve of a cli-shaped tier **refuses** (`{type:'refused', reason:'cli_tier_gather_only'}`); only the explicit `resolveTier(root, slot, runtime, {for:'gather'})` reaches `{type:'cli'}`. Cli cell execution — the reserve/verify/cap/release worker contract described below — is not dispatched today; a cli-shaped tier serves gathers only, through the Delegation contract's cli gather branch (`bee-hive/references/routing-and-contracts.md`), which has no reservation, no cap, and no `result.json` — stdout **is** the digest. This section documents the cell-execution contract for when that path is enabled; until then, do not dispatch a cell to a cli-shaped tier under the protocol below.
 
-**Dispatch protocol** (`resolveTier(root, slot, runtime, {for:'gather'}).type === 'cli'`):
-
-1. **Prompt file, never shell-quoted args:** write the standard worker prompt (Worker Prompt Template below, verbatim — same contract, same status tokens) **plus the cli-dispatch suffix from step 2** to `.bee/workers/<cell-id>.prompt.md`. The external worker starts with ZERO session context — the prompt carries goal, exact paths, constraints, non-goals, and the proof expected (the declared tests green at finish); spec quality decides success. The prompt file **is the contract**, at a stable path: it outlives the process, the worker re-reads it if it loses the thread, and rescue rounds reference it (`re-read .bee/workers/<cell-id>.prompt.md`) instead of re-pasting the spec. If dispatch ever runs in an isolated worktree, surface the same contract as a short block in that workspace's AGENTS.md — the one file external CLIs reliably read first.
-2. **Finish contract — the cli-dispatch suffix**, appended verbatim to the template:
-
-   ```text
-   Cli dispatch extras:
-   - This contract lives at .bee/workers/<CELL_ID>.prompt.md — re-read it if you lose the thread.
-   - Your last FILE act, after capping and releasing but BEFORE returning the
-     final status-token message: write .bee/workers/<CELL_ID>.result.json:
-     { "cell_id": "<CELL_ID>", "outcome": "done|blocked|handoff|noop",
-       "verify_command": "<the declared test command>", "verify_passed": true|false,
-       "files_changed": ["<paths>"], "notes": "<one line>" }
-   ```
-
-   The outcome vocabulary is exactly the four status tokens — `result.json` is the cli **transport** of the same worker contract as the native markdown results, never a second contract. Exiting is not signaling; a worker that only exits has not finished.
-3. **Spawn detached, output to files:** before launching — first dispatch or any resume round — delete any existing `.bee/workers/<cell-id>.result.json`; a stale result must never satisfy a later attempt. Run the configured command as a background process, prompt via stdin, final message to a dedicated file where the CLI supports it (codex: `-o .bee/workers/<cell-id>.result.md`), raw stream to a job log with stderr suppressed — thinking noise bloats the orchestrator's context; re-enable stderr only to debug a failing run. E.g. `<command> -o .bee/workers/<id>.result.md - < .bee/workers/<id>.prompt.md > .bee/workers/<id>.out.log 2>/dev/null`. Keep the launcher's job handle — its exit event is the "process ended" signal step 5 waits on. Record the worker (nickname, cell, `executor: cli`) in `.bee/state.json` as usual.
-4. **Tend by artifact, not by chat:** the external worker runs the same `.bee/bin/bee` binary (reserve → finish) — one self-contained executable, no runtime to install — the cell status and reservations ARE the progress signal. Poll `.bee/bin/bee cells show --id <id>` and read `.bee/workers/<cell-id>.result.json` for the final outcome; never parse the raw JSONL stream. A quiet run is not a dead run — do not kill on silence alone.
-5. **Accept by file, never by exit:** once the process ends, a cli run counts only if `result.json` exists, parses, and carries a valid outcome. Missing, unparseable, or invalid-outcome result = a failed run, routed to rescue (step 7) — never accepted, never silently waited on.
-6. **Trust boundary — never on its word:** an external worker's `done` is never accepted on its word — the orchestrator ALWAYS re-runs the declared tests itself (`bee test`) and runs `bee cells judge --id <id>`. External executors never get the tiny/small spot-check relaxation; every external cell is goal-checked. The result file is a signal, never the evidence. On `standard`/`high-risk` `behavior_change` cells, the same semantic checklist judge from the tier table in `bee-hive/references/gates-and-delegation.md` ("Goal-check judge tier") applies here too — verification, not the on-demand review session.
-7. **Rescue — resume before re-dispatch:** on a goal-check miss or a failed acceptance (step 5), prefer the CLI's session-resume (codex: `codex exec resume --last`, run from the repo dir; resume inherits the original session's sandbox/config — do not re-pass sandbox flags) with a short prompt carrying the diagnostic that applies — the failing verify output for a goal-check miss, or the acceptance failure (missing/unparseable/invalid `result.json`) for a step-5 reject — plus the contract path. It keeps the worker's context and costs far less than a fresh run. **After 2 failed resume rounds, stop ping-ponging:** mark `[BLOCKED]` and climb the normal rescue ladder (a stuck/garbled run is killed and re-dispatched; the tier rung may swap `cli` for a native model tier when the provider itself is failing).
-
-Constraints: the external CLI must be able to edit the repo working tree and run node (the `.bee/bin` contract); grant write access scoped to the repo only (codex: `-s workspace-write`) — never a machine-wide bypass (`--yolo`-style flags) as the house default; the goal-check exists so bee does not have to *trust* the worker, not so it can hand over the machine. Secrets: the external process gets only its own provider's credentials from the user's environment — bee passes none.
+The cell-execution protocol for that path — prompt file, finish contract,
+detached spawn, artifact tending, acceptance, trust boundary, rescue — is
+`docs/history/cli-executors-cell-path.md`. It stays out of this reference
+while `resolveTier` refuses a cli-shaped tier for anything but a gather.
 
 **Transient hygiene:** dispatch transients (`<cell-id>.prompt.md`, `.out*.log`, `.result.md|json`, reviewer/plan-check logs) accumulate in `.bee/workers/` and are never needed after the feature closes. At feature close — after review acceptance, before the closing commit — the orchestrator runs `.bee/bin/bee state worker prune` (`--dry-run` to preview). Keep-rules protect transients of active workers and non-capped cells (re-read immediately before the destructive loop), and files outside the transient suffix set (evidence snapshots, cell payloads, subdirectories) are never touched — but prune is still the orchestrator's feature-close verb, not something to race against an in-flight dispatch round.
 
@@ -358,7 +336,7 @@ Startup (two reads, zero CLI round-trips):
 The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are not a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder. The same-model no-op is the orchestrator's, run at dispatch, never left to the worker. When present, `<TRANSPORT>` states the proven transport verbatim, matching what the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run:
 for a **cli-shaped** advisor, `<the configured command>, evidence bundle on stdin` (External Executors output-capture discipline, above).
 
-Never include session history, other cells, or the orchestrator's reasoning. If a worker needs more than this contract, the cell failed cold-pickup review — route the gap back, do not widen the prompt with transcript.
+Default: no session history, no other cells, no orchestrator reasoning. A worker that needs more than this contract means the cell failed cold-pickup review — route the gap back rather than widen the prompt with transcript.
 
 ## Result Formats (expected back from workers)
 

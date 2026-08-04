@@ -41,7 +41,7 @@ announce what settled, then record it:
   yet implemented — see backlog", never stated as current.
 
 Close every task with a capture line or an explicit "nothing settled"
-(AGENTS.md) — cell, docs write, quick fix alike; smallness is never
+(AGENTS.md) — cell, docs write, quick fix alike; by default smallness is not
 the answer. What deserves a record at all, and at what grain:
 `.bee/expertise/decisions.md`.
 

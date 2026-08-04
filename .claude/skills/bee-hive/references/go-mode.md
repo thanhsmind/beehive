@@ -26,7 +26,7 @@ User: "/go [feature]"
 [GATE 2] ← HARD STOP — approves `shape` AND `execution` together in one call (`bee gate
           --merge`); review the implement plan, or plan.md when no brief was rendered
        ▼
-[STEP 3] bee-planning (prep)  → current-slice cells only — plan.md is frozen, never rewritten
+[STEP 3] bee-planning (prep)  → current-slice cells only — the write guard freezes plan.md once shape is approved
          bee-shaping (Brief refresh) → implement-plan.md Affected Files + Steps re-projected
        ▼
 [STEP 4] bee-swarming (orchestrator + workers × N) — current slice only
@@ -78,7 +78,7 @@ Each gate is one question in the standard CONTEXT / QUESTION / RECOMMENDATION / 
 
 ## Gate Presentations
 
-Templates below are the **human layer** — fill them in the user's language, in the user's terms. Square-bracket content is plain prose, never table dumps or jargon.
+Templates below are the **human layer** — fill them in the user's language, in the user's terms. Square-bracket content is plain prose — default, not table dumps or jargon.
 
 **GATE 1** — after shaping:
 
@@ -128,8 +128,8 @@ After each slice's swarm completes: later approved work remains → return to St
 ## Fallback Paths
 
 - **Spike returns NO** (opt-in by change class — migration, security, external side effect, or no in-repo precedent): STOP before Gate 2. Present "Spike [id] failed: [reason]. Current work is blocked." Options: revise approach / descope the risky part / change mode or boundaries. A workaround that "probably works" is not a path — plausibility is not evidence.
-- **SMALLER PATH check fails:** redraft the shape before presenting Gate 2 — never persist-then-preview.
-- **Review-wave BLOCKER still open after the second pass** (bee-planning's Review Wave): escalate — present both positions to the user, ask "Return to planning with these specific concerns?", never a third pass.
+- **SMALLER PATH check fails:** default is to redraft the shape before presenting Gate 2, rather than persist-then-preview.
+- **Review-wave BLOCKER still open after the second pass** (bee-planning's Review Wave): escalate — present both positions to the user and ask "Return to planning with these specific concerns?". A third pass needs a recorded reason.
 - **Context hits ~65% mid-swarm:** write `.bee/HANDOFF.json`, present "[X] cells capped, [Y] in flight. Resume in a new session." End gracefully.
 - **User rejects at any gate:** identify what feels wrong, return to the owning stage, update the artifact in place, re-present the same gate.
 

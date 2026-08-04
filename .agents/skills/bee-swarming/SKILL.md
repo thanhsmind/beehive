@@ -103,7 +103,7 @@ outputs — when a verb refuses, its message names the fix.
 
 - Never spawn before the execution gate is approved; the orchestrator
   never edits source in a `standard`/`high-risk` wave.
-- One cell per worker; workers never claim, browse, or self-select.
+- One cell per worker; the claim guard refuses a worker that claims, browses, or self-selects.
 - Conflicts are fixed in scope or reservations, never by being careful.
 - Never build on a red base — a red becomes its own fix-first cell.
 

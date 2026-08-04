@@ -62,11 +62,11 @@ It fires on whichever path came first, and a feature that passed through explori
 
 **When all three measure true, demotion is the default, not an option.** Staying in `standard` at that point requires naming which condition actually failed — "it feels standard-sized" is not a condition. The lane that ships is the smallest lane the evidence honestly supports (ceremony must not displace the main task).
 
-**The limits are absolute:**
+**The limits are enforced** — `bee route --set` refuses a transition that breaks any of them, so a checkpoint that violates one never reaches the record:
 
-- **Downward only, along the triage ladder:** `standard` → `small`, and on to `tiny` when the measured touch set is ≤2 product files AND the work is one direct task — both read from the same single evidence pass, never a second checkpoint. A demoted `tiny` keeps `tiny`'s whole contract: one direct task, merged shape+execution gate, one dispatched worker. **`high-risk` never demotes here at all**, and a lane carrying any hard-gate flag can never demote regardless of file count — condition 2 is the floor, not a threshold to get under.
+- **Downward only, along the triage ladder:** `standard` → `small`, and on to `tiny` when the measured touch set is ≤2 product files AND the work is one direct task — both read from the same single evidence pass. A demoted `tiny` keeps `tiny`'s whole contract: one direct task, merged shape+execution gate, one dispatched worker. **`high-risk` never demotes here at all**, and a lane carrying any hard-gate flag can never demote regardless of file count — condition 2 is the floor, not a threshold to get under.
 - **At most once per feature.** Not once per path, not once per slice, not once per lane change.
-- **It uses the scouted touch set.** "Re-counting flags to land under a threshold means you are already in `standard`" is the triage rule's existing prohibition; a checkpoint that re-argues flag counts is that prohibition wearing a new name, and the answer is still `standard`. The checkpoint reads the scout's evidence — it never re-litigates it.
+- **It uses the scouted touch set.** A checkpoint that re-argues flag counts to land under a threshold is the triage rule's existing prohibition wearing a new name, and the answer is still `standard`.
 
 **Log it or it did not happen.** A demotion writes a one-line audit decision naming the evidence counts:
 
@@ -130,15 +130,15 @@ per perceivable pipeline step, on by default, the fixed format `<glyph> <event>:
 <key fact>`, the glyph table, and the only two switches that produce silence (`quiet`,
 which never silences the `✗` line, and `ship_visibility`, which reaches only the two PR
 ticks). A rule that applies every turn cannot live behind an on-demand reference. This
-section is the worked-example catalog for that rule — read it to see the shape of a line,
-never to learn whether ticks are owed.
+section is the worked-example catalog for that rule: it shows the shape of a line, not
+whether a tick is owed.
 
 Two things the catalog does not repeat, and that the rule depends on. Ticks are chat
 output the agent writes as it goes, not an emitter subsystem — nothing to build, nothing
 to poll. And the work-language litmus still applies to every line (`routing-and-contracts.md`,
 "Work language"): no cell ids as the subject, no "capped cell xyz-3" as the whole line; say
 what happened to the work, an id may ride at the end. The litmus governs the WORDS of a
-tick, never whether the tick is owed — a mechanical step is ticked like any other.
+tick, not whether it is owed — a mechanical step is ticked like any other.
 
 **Bypass silences QUESTIONS, never ticks.** Gate auto-approval under bypass (Gate bypass
 mode above) already posts its own `⚡` line and keeps going instead of stopping to ask —
