@@ -164,6 +164,14 @@ and the strongest of them is the one that reports success.
   allowed to fall through to the legacy marker, which would reopen a
   downgrade-bypass path R15 already closed (packages-restructure D1;
   decision e0f3e40e; cell packages-restructure-1).
+- **R30** — The release inventory records each file's executable bit as
+  version control carries it, never the raw permission bits the filesystem
+  reports. Raw filesystem bits are not comparable across machines: one
+  platform synthesizes a fixed value for every file and cannot observe the
+  executable bit at all, so an inventory built on one platform reported
+  every one of its records as drifted when checked on another — on both the
+  inventory surface and the installed-package proof. A checker running where
+  the executable bit cannot be observed does not get to call it changed.
 
 ## Edge Cases Settled
 

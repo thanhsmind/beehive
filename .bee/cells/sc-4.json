@@ -1,0 +1,39 @@
+{
+  "id": "sc-4",
+  "feature": "session-capture",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier",
+  "title": "Record the terminal-phase port and the unverified sync stamp",
+  "action": "docs/knowledge/areas/workflow-state/gates.md narrates the terminal state as if it always worked. Two merges. First: entering the terminal state was unreachable until it was ported - the door had been left delegating to a runtime that no longer existed - and it now carries both halves natively: the learning-capture freshness evidence with its explicit waiver, and the spec-debt threshold of R78, refused while any completed behaviour-changing unit is still missing from the specs, with two loud escapes - an explicit waiver flag, or an already-logged deferral decision naming the feature, the same escape the close door accepts. Second, as an Open Gap next to R20a: recording a knowledge sync checks the phase but never checks that any spec actually changed, so a stamp taken after completion always clears the debt door whether or not anything was written.",
+  "verify": "rg -c 'Open Gap' docs/knowledge/areas/workflow-state/gates.md",
+  "must_haves": {
+    "truths": [
+      "the terminal door states both halves and both escapes",
+      "R78 is extended not restated",
+      "the unverified-stamp gap is recorded as an Open Gap"
+    ]
+  },
+  "files": [
+    "docs/knowledge/areas/workflow-state/gates.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "dropped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "docs lane runs without cells; the route guard cannot be satisfied without a session record"
+  }
+}

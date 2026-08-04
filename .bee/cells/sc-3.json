@@ -1,0 +1,40 @@
+{
+  "id": "sc-3",
+  "feature": "session-capture",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier",
+  "title": "Record the worker-registry cap door and the contradiction it carries",
+  "action": "Two merges. In docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md: completion of a unit in the small lane and larger is refused when the capping record names a worker that is not registered for that unit, and the escape is an explicit inline reason recorded on the unit's own trace. In docs/knowledge/areas/workflow-state/overview.md the Data Dictionary row for active workers currently says the stored array is display-only and that no gate or precondition treats it as truth (multisession-native D6) - the shipped door DOES treat it as a precondition. Record the door as current behaviour and the disagreement as an Open Gap citing the logged decision, never a silent rewrite of D6.",
+  "verify": "rg -c 'inline reason|Open Gap' docs/knowledge/areas/workflow-state/overview.md",
+  "must_haves": {
+    "truths": [
+      "the door is stated as current behaviour",
+      "the contradiction with D6 is an Open Gap, not erased",
+      "business vocabulary outside Pointers"
+    ]
+  },
+  "files": [
+    "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+    "docs/knowledge/areas/workflow-state/overview.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "dropped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "docs lane runs without cells; the route guard cannot be satisfied without a session record"
+  }
+}

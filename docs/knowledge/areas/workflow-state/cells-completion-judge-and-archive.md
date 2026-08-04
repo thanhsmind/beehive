@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["self-correcting-loop D3/D4/D5 with Validating amendments Δ5-Δ6 (behavior-class completion teeth, judge-verdict schema, risk-scaled goal-check judge)", "gh-issue-fixes-172 D-GHF-C (the judge cap-guard: a needs-revision verdict blocks completion absent an audited override)", "565e68d0-327f-404e-b49e-d1c61ba81bfd (unchanged: the goal-check judge is never the user-invoked independent review)", "test-economy D1/D2/D3/D8 (proof-tier by change_class × lane replaces the flat behavior-vs-advisory split; diff_stats-backed test-shape guard at cap; the D8 negative-control floor — amending self-correcting-loop D3's completion door and narrowing decision 0009 / e54878b1 / 8ef2bae6 to the red-first branches only)", "derived-check-hardening E1/E9 (the cap door cross-checks the impact registry and warns, never refuses; the residual ships open and named)", "derived-check-hardening E6 (capCell resolves behavior_change from the top-level field or trace.behavior_change, forward-only)", worker-conformance D1/D10/D12/D14 (per-unit authored evidence stops being a completion precondition — exactly two doors become non-blocking recorded warnings; absence of proof is stamped as a distinct inert marker that arms only the feature-boundary door), "worker-conformance D11 (the feature-level trailing test-coverage door inherits the same treatment: an asserted pass with nothing recorded does not discharge it) + wc-2c (a withdrawn test unit owes no coverage and stands in for none)", worker-conformance D2 as corrected (the highest-risk lane raises the behaviour-bearing classes only — refactor/formatting stay suite-green and a coverage-authoring unit stays targeted-green even there)]
-  sources: ["self-correcting-loop cells scl-1..scl-5 (traces in .bee/cells/, reports docs/history/self-correcting-loop/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — journaled crash-recoverable cell archive; needs-revision reopen clears verify evidence), "test-economy cells te-1/te-2 (proof-tier matrix + diff_stats handler; test-shape guard — new_suite_reason + ratio ceiling; docs/history/test-economy/CONTEXT.md, traces in .bee/cells/, 2026-07-25)", "docs/specs/workflow-state.md#B30", "docs/specs/workflow-state.md#B31", "docs/specs/workflow-state.md#B32", "docs/specs/workflow-state.md#B34", "docs/specs/workflow-state.md#B35", "docs/specs/workflow-state.md#B36", "docs/specs/workflow-state.md#R47", "docs/specs/workflow-state.md#R48", "docs/specs/workflow-state.md#R49", "docs/specs/workflow-state.md#R50", "docs/specs/workflow-state.md#R53", "docs/specs/workflow-state.md#R54", "docs/specs/workflow-state.md#E25", "derived-check-hardening cells dch-1/dch-2/dch-8 (cap-door impact-registry warning, behavior_change resolution, lazy registry import surviving a vendored-lib fixture; traces .bee/cells/dch-{1,2,8}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)", "worker-conformance cells wc-1/wc-2/wc-2c/wc-3/wc-4 (absence-of-proof marker stamped after the refusal chain; both debt doors armed on it with the freshness clock over the union; withdrawn test unit skipped before the count; two doors loosened to recorded warnings; per-door bypass rows — traces .bee/cells/wc-*.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, feature verify green 117 suites 2026-07-29)"]
+  decisions: ["self-correcting-loop D3/D4/D5 with Validating amendments Δ5-Δ6 (behavior-class completion teeth, judge-verdict schema, risk-scaled goal-check judge)", "gh-issue-fixes-172 D-GHF-C (the judge cap-guard: a needs-revision verdict blocks completion absent an audited override)", "565e68d0-327f-404e-b49e-d1c61ba81bfd (unchanged: the goal-check judge is never the user-invoked independent review)", "test-economy D1/D2/D3/D8 (proof-tier by change_class × lane replaces the flat behavior-vs-advisory split; diff_stats-backed test-shape guard at cap; the D8 negative-control floor — amending self-correcting-loop D3's completion door and narrowing decision 0009 / e54878b1 / 8ef2bae6 to the red-first branches only)", "derived-check-hardening E1/E9 (the cap door cross-checks the impact registry and warns, never refuses; the residual ships open and named)", "derived-check-hardening E6 (capCell resolves behavior_change from the top-level field or trace.behavior_change, forward-only)", worker-conformance D1/D10/D12/D14 (per-unit authored evidence stops being a completion precondition — exactly two doors become non-blocking recorded warnings; absence of proof is stamped as a distinct inert marker that arms only the feature-boundary door), "worker-conformance D11 (the feature-level trailing test-coverage door inherits the same treatment: an asserted pass with nothing recorded does not discharge it) + wc-2c (a withdrawn test unit owes no coverage and stands in for none)", worker-conformance D2 as corrected (the highest-risk lane raises the behaviour-bearing classes only — refactor/formatting stay suite-green and a coverage-authoring unit stays targeted-green even there), "worker-proof (the registered-execution-worker completion door for small-lane-or-larger units, escaped by a recorded inline reason; cell wp-1, commit 57738faa, 2026-08-04)"]
+  sources: ["self-correcting-loop cells scl-1..scl-5 (traces in .bee/cells/, reports docs/history/self-correcting-loop/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — journaled crash-recoverable cell archive; needs-revision reopen clears verify evidence), "test-economy cells te-1/te-2 (proof-tier matrix + diff_stats handler; test-shape guard — new_suite_reason + ratio ceiling; docs/history/test-economy/CONTEXT.md, traces in .bee/cells/, 2026-07-25)", "docs/specs/workflow-state.md#B30", "docs/specs/workflow-state.md#B31", "docs/specs/workflow-state.md#B32", "docs/specs/workflow-state.md#B34", "docs/specs/workflow-state.md#B35", "docs/specs/workflow-state.md#B36", "docs/specs/workflow-state.md#R47", "docs/specs/workflow-state.md#R48", "docs/specs/workflow-state.md#R49", "docs/specs/workflow-state.md#R50", "docs/specs/workflow-state.md#R53", "docs/specs/workflow-state.md#R54", "docs/specs/workflow-state.md#E25", "derived-check-hardening cells dch-1/dch-2/dch-8 (cap-door impact-registry warning, behavior_change resolution, lazy registry import surviving a vendored-lib fixture; traces .bee/cells/dch-{1,2,8}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)", "worker-conformance cells wc-1/wc-2/wc-2c/wc-3/wc-4 (absence-of-proof marker stamped after the refusal chain; both debt doors armed on it with the freshness clock over the union; withdrawn test unit skipped before the count; two doors loosened to recorded warnings; per-door bypass rows — traces .bee/cells/wc-*.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, feature verify green 117 suites 2026-07-29)", "worker-proof cell wp-1 (registered-execution-worker cap door + inline-reason escape; trace .bee/cells/wp-1.json, commit 57738faa, 2026-08-04)"]
   authoritative_for: "workflow-state: unit completion teeth, judge verdicts, and the cell archive transaction"
 ---
 
@@ -207,6 +207,23 @@ set counts conservatively as code so an unrecorded diff can never launder real
 behaviour past the debt. What each actor observes: the trailing coverage
 judgement is owed by the FEATURE, not by each slice's units individually
 (worker-conformance D11; wc-2c, found live on this feature's own close-door).
+
+**B44 — Completing a unit in the small lane or larger is refused unless the
+worker its capping record names is registered for that unit, though an
+explicit inline reason escapes the refusal.** Trigger: a unit whose lane is
+`small` or heavier is being completed — the `tiny` lane never reaches this
+door; it may run inline by contract, unchanged. What happens: the door reads
+the worker named on the capping record and checks it against that unit's own
+registered-worker record; when the two do not match, completion is refused,
+naming the unit, the unmatched worker, and the two ways forward — register
+that worker against the unit before capping, or supply an explicit inline
+reason on this same call. The inline reason is never a quiet override: it is
+recorded on the unit's own trace as the escape actually taken, so a later
+reader always sees why the check was bypassed rather than finding a silent
+gap in the record. What each actor observes: a `small`-or-larger unit can no
+longer complete by naming a worker nobody registered for it and leaving no
+trace of why; running the work inline stays permitted, but it is never silent
+again (worker-proof, cell wp-1).
 
 **B31 — A judge verdict is a structured, append-only record with an honest
 independence stamp.** Trigger: a judge examines a unit of work and renders a
@@ -415,6 +432,10 @@ over and proving it again (hardening-1-7-10).
   claimed, and blocked test units are undischarged work and keep refusing. The
   order is the whole guard against withdrawal becoming an escape hatch
   (worker-conformance, wc-2c).
+- R94 — Completing a unit in the `small` lane or larger is refused when the
+  worker its capping record names is not registered for that unit; an
+  explicit inline reason recorded on the unit's own trace is the sanctioned
+  escape, and the `tiny` lane is exempt by contract (worker-proof, wp-1).
 
 ## Edge Cases Settled
 
@@ -447,6 +468,9 @@ over and proving it again (hardening-1-7-10).
   (suppressing *missing*) while also listing it as an offender for not being
   completed. Found live on this feature's own close-door
   (worker-conformance, wc-2c).
+- A `tiny` unit never reaches the registered-worker check (B44) — it is
+  permitted to run inline by contract, exactly as before this door existed
+  (worker-proof, wp-1).
 
 ## Open Gaps
 
@@ -518,3 +542,12 @@ over and proving it again (hardening-1-7-10).
   table rows) and `packages/bee/tests/test_bee_cli.mjs` (end-to-end door rows
   driving real add/claim/verify/cap without hand-writing the marker, plus the
   per-door bypass rows).
+- The registered-worker completion door (B44/R94): `registered_worker_for_cell`
+  and its call site in `cap_cell_from_flags`,
+  `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs` — checks the
+  capping record's `trace.worker` against `state.json`'s `workers[]` entries
+  matching this cell's id (the shape `bee state worker add --nickname <n>
+  --cell <id> --tier <t> --status <s>` writes). The escape is `--inline-reason
+  "<why>"`, recorded as `trace.inline_reason`. Tests:
+  `packages/bee-rs/crates/bee/src/verbs/cells/tests.rs`. Evidence: trace
+  `.bee/cells/wp-1.json`, commit `57738faa`.

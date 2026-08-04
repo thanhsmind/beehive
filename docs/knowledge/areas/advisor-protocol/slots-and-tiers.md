@@ -44,7 +44,15 @@ bee:
   exposes its CLI fallback leg only when its fallback policy is stated
   explicitly (D1) — a bare native leaf or an unconfigured slot never invents a
   fallback command, and every pre-existing slot shape keeps resolving
-  byte-identically.
+  byte-identically. When the dispatched unit's feature runs in its own
+  isolated worktree, the payload additionally names where the work happens
+  and where the shared coordination store lives, and the rendered worker
+  instructions carry both: without them, a worker starting inside an
+  isolated worktree cannot tell where it is, and cannot tell that the
+  record it must validate lives in a different workspace, leaving it to go
+  looking by hand. A dispatch that executes a unit of work always names the
+  write-capable execution worker's own helper identity, never a read-only
+  helper's.
 - **R9 —** **Dispatch records tell the economic truth** (gh22-completion g22-2;
   refined by codex-native-transport D1/D3/D7): every record carries
   logical_tier, requested_model, effective_model, effective_model_status,

@@ -2,13 +2,13 @@
 type: bee.area
 title: Doctrine Layer — helper classes and transports
 description: "The two worker classes the delegation layer names, the read-only capability surface a gathering helper is spawned with, partial-return fan-out, and the gather-only external-command tier."
-timestamp: 2026-07-21
+timestamp: 2026-08-04
 bee:
   id: doctrine-layer-helper-classes-and-transports
   lifecycle: active
   areas: [doctrine-layer]
-  required_context: [areas/doctrine-layer/overview.md, areas/doctrine-layer/delegation-threshold.md]
-  decisions: ["040f8ef0 (read-only analyst spawn + partial-return fan-out, B7/R11)", D1/D2/D3 delegation contract]
+  required_context: [areas/doctrine-layer/overview.md, areas/doctrine-layer/delegation-threshold.md, areas/hook-runtime/dispatch-guard.md]
+  decisions: ["040f8ef0 (read-only analyst spawn + partial-return fan-out, B7/R11)", D1/D2/D3 delegation contract, "f6606f4d (the execution tier renders a second, write-capable identity alongside its I/O-offload one, 2026-08-04)"]
   sources: ["compounding-fanout-hardening (cell cfh-1, 2026-07-17, flushed capture stub d3417cb2)", "advisor-and-orchestration Slice 2A-ii (cells ao-2aii-1/ao-2aii-2, 2026-07-17)", "advisor-and-orchestration Slice 2A-iii (cells ao-2aiii-1/ao-2aiii-2 — dispatch-boundary enforcement + gather-purpose routing prose, 2026-07-17)", "advisor-and-orchestration Slice 5 (cell ao-5-1 — execution-worker class, tiny/small single-worker execution, AO14, 2026-07-17)", "docs/specs/doctrine-layer.md#B7", "docs/specs/doctrine-layer.md#B7a", "docs/specs/doctrine-layer.md#B8", "docs/specs/doctrine-layer.md#R11", "docs/specs/doctrine-layer.md#R12", "docs/specs/doctrine-layer.md#P6", "docs/specs/doctrine-layer.md#P7"]
   authoritative_for: "doctrine-layer: helper classes and transports"
 ---
@@ -52,7 +52,15 @@ are review-class dispatches with no execution authority. The class is defined
 by what the dispatch may *do*, never by which mechanism launched it. The
 orchestrator authors the smallest lanes' completion report itself, from the
 worker's verbatim diff plus the orchestrator's own fresh verification re-run
-(AO14; ao-5-1, 2026-07-17).
+(AO14; ao-5-1, 2026-07-17). The tier that carries the execution worker also
+carries an I/O-offload helper at the same model, since the same unit of work
+can be dispatched to be either read about or done — so naming the tier is no
+longer enough to name the class, and a caller reaching that tier must state
+which one it means. The hook-runtime dispatch guard is where that statement is
+now enforced: a dispatch at that tier that fails to distinguish the two is
+refused rather than guessed, naming both, because guessing had settled on the
+read-only class every time and no dispatch meant to execute had ever been able
+to (hook-runtime dispatch-guard B16a/B18).
 
 **B8 — A helper tier backed by an external command serves gathers only, and its
 output is accepted only between declared markers.** Trigger: a helper tier is
@@ -101,6 +109,9 @@ route to the external path until it earns its own proof (decisions 34398e69,
 
 ## Pointers (implementation)
 
+- B7a's dispatch-time enforcement of the split at the execution tier:
+  [docs/knowledge/areas/hook-runtime/dispatch-guard.md](../hook-runtime/dispatch-guard.md)
+  B16a/B18 (the refuse-vs-repair mechanics live there, not duplicated here).
 - B7/R11's settled case: `skills/bee-capturing/SKILL.md` ("Compound" step 2 —
   delegate the reading to read-only subagents, keep synthesis in the
   orchestrator; the fuller pinning text — runtime read-only agent type,

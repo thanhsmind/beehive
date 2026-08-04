@@ -154,13 +154,28 @@ completed behavior-changing unit is still missing from the specs. The refusal
 names *every* such unit by identity — not a count — and discloses the waiver.
 A refused close is side-effect-free: the phase is left exactly as it was.
 
+**The door itself had gone dark, independent of any feature's real debt
+(terminal-phase-port, cell tpp-1, 2026-08-04).** Both routes into the terminal
+state — the default record's and a lane record's alike — had been left
+delegating to a runtime that no longer existed, since an earlier cutover
+replaced it and never carried this one door along. The write refused every
+time, with an error indistinguishable from a real precondition failure, so no
+feature and no lane could enter the terminal state at all — however clean its
+debt — until the door was rebuilt to run natively, the same day the gap was
+found. The door as it now stands has two halves, both native and both loud:
+the learning-capture freshness evidence described below, and the spec-debt
+threshold R78 already defines.
+
 **The waiver is a door, not a hole.** A feature whose settled behavior genuinely
 belongs in no spec may still be closed, by waiving the debt explicitly. The
 waiver permits the close and simultaneously records a durable decision naming
-every unit whose behavior was left out. Nothing about it is silent, and nothing
-about it is the default. It exists because a guard with no door gets a hole
-punched in it — a fail-close with no sanctioned exit teaches its user to work
-around the guard instead of through it.
+every unit whose behavior was left out. The door also accepts a second,
+equally loud escape: an already-logged deferral decision that already names
+the feature clears the debt without demanding a fresh waiver — the same
+acknowledged gap is never logged twice. Nothing about either escape is silent,
+and nothing about either is the default. It exists because a guard with no
+door gets a hole punched in it — a fail-close with no sanctioned exit teaches
+its user to work around the guard instead of through it.
 
 **Reaching the terminal state also demands recorded learning-capture evidence
 (compounding-gate D1, 2026-07-27).** The knowledge sync proved the specs are
@@ -239,9 +254,11 @@ its knowledge actually landed — the state and the specs can no longer disagree
 - R21a — The terminal state may be entered only from learning capture, and only
   while spec debt is zero. The refusal names every completed behavior-changing
   unit still missing from the specs, by identity, and leaves the phase untouched.
-  A close whose debt is genuinely spec-irrelevant proceeds only through an
-  explicit waiver, which records a durable decision naming every waived unit —
-  never silently, never by default (chain-integrity D2/D4).
+  A close whose debt is genuinely spec-irrelevant proceeds through either of two
+  escapes: an explicit waiver, which records a durable decision naming every
+  waived unit, or an already-logged deferral decision that already names the
+  feature — never silently, never by default (chain-integrity D2/D4;
+  terminal-phase-port, cell tpp-1, 2026-08-04).
 - R22 — Spec debt is advisory everywhere it is displayed and binding only at the
   close. Debt is a signal throughout the work and a wall at the door: blocking on
   it mid-work would fire while the sync is not yet due, and never blocking on it
@@ -315,6 +332,16 @@ its knowledge actually landed — the state and the specs can no longer disagree
   explicitly left out of scope when the ledger fallback shipped: the ledger
   fallback was judged the required fix, and the field-level repair a
   separate, larger change to the workflow-record write path.
+- **Recording a knowledge sync checks only the phase, never whether any spec
+  actually changed.** R20a refuses the recording step unless the feature
+  stands in a phase where execution happened — but once that phase check
+  passes, the recording step stamps the sync regardless of whether a single
+  spec line changed alongside it. The spec-debt door (R21a/R78) therefore
+  measures a timestamp, not the knowledge: any sync stamp taken after work
+  completes clears the door, synced content or not. Found live: ten features
+  were stamped as synced in one day while exactly one concept file had
+  actually changed. Checking that the recorded areas correspond to a real
+  diff is a separate, unshipped change.
 
 ## Pointers (implementation)
 
@@ -362,3 +389,10 @@ its knowledge actually landed — the state and the specs can no longer disagree
   `bestScribingStampMs`, `readScribingLedger` in `packages/bee/lib/cells.mjs`
   (mirrored `.bee/bin/lib/cells.mjs`). Evidence: trace
   `.bee/cells/sss-1.json`, decision `5b2f963d`.
+- Native terminal-state door (R21a, both escapes): the compounding-complete
+  write in `packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs`
+  reuses the same debt counter and deferral-decision reader the separate
+  close driver (`drivers::close`) uses, so the two can never disagree about
+  what counts as debt or what already-logged deferral clears it. Evidence:
+  trace `.bee/cells/tpp-1.json`, commit `7f0381a5`; discovery decision
+  `e6f7dfcb` (2026-08-03), fix decision `c9b5d916` (2026-08-04).

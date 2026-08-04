@@ -1,0 +1,40 @@
+{
+  "id": "sc-1",
+  "feature": "session-capture",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier",
+  "title": "Record the P1 resolution door in the review-sessions concept",
+  "action": "docs/knowledge/areas/workflow-state/review-sessions.md (bee.id workflow-state-review-sessions) says findings and the decision (pending -> blocked | approved) are recorded as the review proceeds, and nothing ties approved to per-P1 evidence. Merge the shipped behaviour: an approved decision is refused while any P1 finding stands unresolved; approving names every P1 - by its id when it has one, else its index in findings - with the cell that fixed it, and a resolution naming no cell does not count. blocked and pending are unaffected. Cross-reference gates.md R25's bypass ladder so the two stay consistent; do not restate it.",
+  "verify": "rg -c 'p1_resolutions' docs/knowledge/areas/workflow-state/review-sessions.md",
+  "must_haves": {
+    "truths": [
+      "business vocabulary only outside Pointers",
+      "the rule states what is refused and what clears it",
+      "no contradiction with the bypass ladder"
+    ]
+  },
+  "files": [
+    "docs/knowledge/areas/workflow-state/review-sessions.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "dropped",
+  "trace": {
+    "worker": "kevin",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8ce76840-0a14-4fc0-919a-6887bb9d38f1",
+    "claimed_at": "2026-08-04T15:20:11.370Z",
+    "dropped_reason": "docs lane runs without cells; the route guard cannot be satisfied without a session record"
+  }
+}

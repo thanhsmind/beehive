@@ -1,0 +1,40 @@
+{
+  "id": "sc-5",
+  "feature": "session-capture",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier",
+  "title": "Record the dispatch payload's location fields and the manifest's portable mode",
+  "action": "Two unrelated files, both pure additions. In docs/knowledge/areas/advisor-protocol/slots-and-tiers.md R8 (dispatch payloads have one source of truth): when the unit's feature has a granted worktree, the payload also names where the work happens and where the coordination store lives, and the rendered worker prompt carries both - a worker in a worktree could otherwise not tell where it was; and a unit-execution dispatch names the agent that writes, not the read-only one. In docs/knowledge/areas/onboarding/release-identity-and-version-parity.md: the release inventory records each file's executable bit as version control carries it, not the raw permission bits the filesystem reports, because those are not comparable across machines - one platform synthesises a fixed value and cannot observe the bit at all, so a manifest written on one platform reported every record as drifted on the other; a checker that cannot observe the bit does not get to call it changed.",
+  "verify": "rg -c 'executable bit' docs/knowledge/areas/onboarding/release-identity-and-version-parity.md",
+  "must_haves": {
+    "truths": [
+      "R8 is extended with the location fields",
+      "the mode rule states why raw bits are not portable",
+      "business vocabulary outside Pointers"
+    ]
+  },
+  "files": [
+    "docs/knowledge/areas/advisor-protocol/slots-and-tiers.md",
+    "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "dropped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "docs lane runs without cells; the route guard cannot be satisfied without a session record"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "id": "sc-2",
+  "feature": "session-capture",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier",
+  "title": "Revise the dispatch guard concept for the two-agent generation tier",
+  "action": "docs/knowledge/areas/hook-runtime/dispatch-guard.md B16a/B18 says a dispatch naming the catch-all generic type is corrected to that tier's pinned type and proceeds, and lists three pinned worker types. That is now wrong for one tier. Revise: the generation tier carries TWO rendered agents - one that writes and executes a unit of work, one that only reads - so a generic dispatch there is refused naming both, while extraction and review keep the repair B16a introduced on 2026-08-03. State why the repair has no unique answer at that tier, and that guessing selected the read-only agent, which made execution dispatch impossible. Historical records are never rewritten - revise the current rule, keep B16a's dated history intact.",
+  "verify": "rg -c 'generation' docs/knowledge/areas/hook-runtime/dispatch-guard.md",
+  "must_haves": {
+    "truths": [
+      "the refuse/repair split is stated per tier",
+      "B16a's dated history survives",
+      "business vocabulary outside Pointers"
+    ]
+  },
+  "files": [
+    "docs/knowledge/areas/hook-runtime/dispatch-guard.md",
+    "docs/knowledge/areas/doctrine-layer/helper-classes-and-transports.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "dropped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "docs lane runs without cells; the route guard cannot be satisfied without a session record"
+  }
+}

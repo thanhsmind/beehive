@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: [565e68d0-327f-404e-b49e-d1c61ba81bfd (independent review is user-invoked; a feature closes truthfully as unreviewed), a83a3613 (a conclusive repository answer outranks an auxiliary launch warning when review coverage is derived)]
-  sources: ["review-on-demand cells review-od-1..3 (traces in .bee/cells/, reports docs/history/review-on-demand/reports/, 2026-07-12)", "codex-sandbox-baseline cell codex-sandbox-baseline-6 (status-first review history derivation, 2026-07-16)", "docs/specs/workflow-state.md#B3", "docs/specs/workflow-state.md#B4", "docs/specs/workflow-state.md#B5", "docs/specs/workflow-state.md#B6", "docs/specs/workflow-state.md#R4", "docs/specs/workflow-state.md#R5", "docs/specs/workflow-state.md#R6", "docs/specs/workflow-state.md#R9", "docs/specs/workflow-state.md#R10", "docs/specs/workflow-state.md#R11", "docs/specs/workflow-state.md#R28", "docs/specs/workflow-state.md#E7", "docs/specs/workflow-state.md#E8", "docs/specs/workflow-state.md#E9", "docs/specs/workflow-state.md#P17"]
+  decisions: [565e68d0-327f-404e-b49e-d1c61ba81bfd (independent review is user-invoked; a feature closes truthfully as unreviewed), a83a3613 (a conclusive repository answer outranks an auxiliary launch warning when review coverage is derived), c18ac30a (an approved review decision is refused while any P1 finding stands unresolved)]
+  sources: ["review-on-demand cells review-od-1..3 (traces in .bee/cells/, reports docs/history/review-on-demand/reports/, 2026-07-12)", "codex-sandbox-baseline cell codex-sandbox-baseline-6 (status-first review history derivation, 2026-07-16)", "review-p1-teeth cell rp1-1 (approval refuses on an unresolved P1; trace .bee/cells/rp1-1.json, decision c18ac30a, 2026-08-04)", "docs/specs/workflow-state.md#B3", "docs/specs/workflow-state.md#B4", "docs/specs/workflow-state.md#B5", "docs/specs/workflow-state.md#B6", "docs/specs/workflow-state.md#R4", "docs/specs/workflow-state.md#R5", "docs/specs/workflow-state.md#R6", "docs/specs/workflow-state.md#R9", "docs/specs/workflow-state.md#R10", "docs/specs/workflow-state.md#R11", "docs/specs/workflow-state.md#R28", "docs/specs/workflow-state.md#E7", "docs/specs/workflow-state.md#E8", "docs/specs/workflow-state.md#E9", "docs/specs/workflow-state.md#P17"]
   authoritative_for: "workflow-state: review sessions, review candidates, and derived review status"
 ---
 
@@ -66,6 +66,20 @@ starting a review by itself. A range already covered by an approved, unchanged
 session is answered "reviewed (covered by that session)" so no second review
 is dispatched for unchanged content.
 
+**B7 — The review approval door: `approved` is refused while a P1 finding
+stands unresolved.** Recording an `approved` decision first checks that
+session's findings for any at P1 severity. If none stand open, the decision
+is recorded as usual. If one or more stand open, the decision is refused —
+the record stays byte-unchanged — and the refusal names every open P1, by
+its id when the finding carries one, else by its position in the findings
+list. A P1 counts as resolved only when the decision names it together with
+the unit of work that fixed it; naming the P1 alone, with no fixing unit
+attached, does not count, because that asserts the fix happened without
+saying where. `blocked` and `pending` decisions pass through this check
+untouched — recording where a review currently stands never needed a door.
+The gate-bypass ladder's highest level is the one sanctioned way to lift
+this door (see the bypass ladder in `gates.md`, R25).
+
 ## Business Rules
 
 - R4 — Full independent review starts only after an explicit user request;
@@ -97,6 +111,14 @@ is dispatched for unchanged content.
   also attaches an auxiliary launch warning. Only an inconclusive answer
   degrades the result to `review stale` with an unresolvable-range note
   (codex-sandbox-baseline-6; decision a83a3613).
+- R29 — Recording an `approved` decision is refused while any P1 finding on
+  that session stands unresolved; the refusal names every open P1 (by id, or
+  by its position in the findings list) and leaves the record untouched. A
+  P1 is resolved only when the decision names it together with the unit of
+  work that fixed it — naming with no fixing unit does not count. `blocked`
+  and `pending` decisions are unaffected. The gate-bypass ladder's highest
+  level is the sole sanctioned door past this check (`gates.md` R25) (rp1-1;
+  decision c18ac30a).
 
 ## Edge Cases Settled
 
@@ -128,3 +150,9 @@ is dispatched for unchanged content.
   e4f51a2, da2e165; traces
   `.bee/cells/review-od-{1,2,3}.json`; acceptance map
   `docs/history/review-on-demand/reports/uat-scenarios.md`.
+- P1 approval door (B7/R29): `unresolved_p1_refusal` in
+  `packages/bee-rs/crates/bee/src/verbs/reviews.rs`, checked only on the
+  `decision`-kind record write when `status == "approved"`. A resolution is
+  carried on `decision.p1_resolutions`, an array of `{finding, cell}` pairs;
+  a pair only counts when `cell` is a non-empty string. Evidence: trace
+  `.bee/cells/rp1-1.json`, decision c18ac30a.
