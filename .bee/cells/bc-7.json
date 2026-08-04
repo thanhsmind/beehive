@@ -1,0 +1,47 @@
+{
+  "id": "bc-7",
+  "feature": "doctrine-prose-diet",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [
+    "bc-6"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "title": "Demote unenforced prose in scout-and-ticks and go-mode",
+  "action": "Same sieve. scout-and-ticks holds the reading-order and tick catalogs; go-mode holds the pipeline narration. Both are almost entirely orchestrator guidance no mechanism checks.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+  "must_haves": {
+    "truths": [
+      "no rule silently vanishes",
+      "defaults are marked as defaults"
+    ]
+  },
+  "files": [
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "skills/bee-hive/references/go-mode.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "skills/bee-hive/references/go-mode.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T09:55:10.157Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T09:54:58.565Z"
+  }
+}

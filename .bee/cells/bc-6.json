@@ -1,0 +1,46 @@
+{
+  "id": "bc-6",
+  "feature": "doctrine-prose-diet",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier",
+  "title": "Demote unenforced prose to named defaults in the swarming reference",
+  "action": "Put each rule through the sieve: enforced by a hook or test -> one line naming the enforcing surface; catchable by a human at a gate -> stays imperative; caught by nobody -> becomes a Default line that bends with a recorded reason, or goes. Do not delete a rule silently - a demoted rule keeps its words and changes its status.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+  "must_haves": {
+    "truths": [
+      "no rule silently vanishes",
+      "every surviving imperative has an enforcer or a gate reviewer",
+      "defaults are marked as defaults"
+    ]
+  },
+  "files": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "docs/history/cli-executors-cell-path.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T09:54:01.799Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T09:53:50.192Z"
+  }
+}

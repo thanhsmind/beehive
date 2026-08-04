@@ -1,0 +1,54 @@
+{
+  "id": "bc-8",
+  "feature": "doctrine-prose-diet",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [
+    "bc-7"
+  ],
+  "title": "Demote unenforced prose in the five lane skills and run the wave-close regen",
+  "action": "Same sieve over bee-swarming, bee-capturing, bee-shaping, bee-planning and bee-reviewing SKILL.md. Then run render-skill-trees, onboard --repo-root . --apply, release-manifest --write, in that order, and report the normative line count before and after across every file the diet touched.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "no rule silently vanishes",
+      "defaults are marked as defaults",
+      "final count reported"
+    ]
+  },
+  "files": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-reviewing/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [
+      "skills/bee-shaping/SKILL.md",
+      "skills/bee-capturing/SKILL.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-reviewing/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T09:56:13.694Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T09:56:02.077Z"
+  }
+}
