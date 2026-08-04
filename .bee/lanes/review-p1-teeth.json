@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature": "review-p1-teeth",
+  "mode": "standard",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"review-p1-teeth\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"review-p1-teeth\" (lane).",
+  "created_at": "2026-08-04T10:04:37.283Z"
+}

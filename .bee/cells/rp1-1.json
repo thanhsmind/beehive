@@ -1,0 +1,38 @@
+{
+  "id": "rp1-1",
+  "feature": "review-p1-teeth",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Refuse an approved review decision while a P1 finding stands unresolved",
+  "action": "In reviews.rs the decision branch validates only the status enum, so approved records cleanly with open P1s. Add: when status is approved, collect findings whose severity is P1; if any exist, require decision.p1_resolutions to be an array naming every one of them (by finding id when present, else its index) with a non-empty cell id, and refuse otherwise - naming the open count and the FIX. Red-first: write the refusal test before the check exists.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::reviews",
+  "must_haves": {
+    "truths": [
+      "approved with an unresolved P1 is refused and names the count",
+      "approved with every P1 resolved to a cell succeeds",
+      "a blocked or pending decision is unaffected",
+      "P2 and P3 never block"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/reviews.rs"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

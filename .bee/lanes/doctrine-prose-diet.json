@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "doctrine-prose-diet",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,6 +10,22 @@
     "review": false
   },
   "summary": "Feature \"doctrine-prose-diet\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"doctrine-prose-diet\" (lane).",
-  "created_at": "2026-08-04T09:29:24.736Z"
+  "next_action": "none",
+  "created_at": "2026-08-04T09:29:24.736Z",
+  "last_scribing_run": {
+    "feature": "doctrine-prose-diet",
+    "date": "2026-08-04",
+    "at": "2026-08-04T10:00:05.912Z",
+    "areas_synced": [
+      "doctrine"
+    ],
+    "next_action": "none"
+  },
+  "last_compounding_run": {
+    "feature": "doctrine-prose-diet",
+    "date": "2026-08-04",
+    "at": "2026-08-04T10:00:10.414Z",
+    "learnings": "docs/history/cli-executors-cell-path.md",
+    "next_action": null
+  }
 }
