@@ -1,0 +1,41 @@
+{
+  "id": "wp-1",
+  "feature": "worker-proof",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Refuse a small-or-larger cap that names no execution worker, unless the inline run is recorded",
+  "action": "AGENTS.md says cells from small up run through dispatched workers and never zero execution workers, but nothing reads the registry at cap. In packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs the lane branch at about line 289 (where small/standard/high-risk already require non-empty files_changed) gains a second check: the capping cell's trace.worker must appear in state.json workers[] with a matching cell id. When it does not, refuse - naming the cell, the worker in the trace, and the two ways forward: dispatch the cell to a registered worker (bee state worker add --nickname N --cell ID --tier T --status running, the shape written by packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs), or re-run finish with a new --inline-reason \"<why>\" flag that records the named deviation in the cell trace as inline_reason. tiny is unaffected: it may run inline by contract. Red-first: write the refusal test and the inline-reason escape test before the check exists, and keep every existing cap test green - several cap cells with no registered worker and will need --inline-reason or a registered one.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::cells",
+  "must_haves": {
+    "truths": [
+      "a small+ cap with no registered worker for that cell is refused",
+      "--inline-reason caps and records the reason in the trace",
+      "a registered worker caps with no flag",
+      "tiny is never checked"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs"
+  ],
+  "decisions": [],
+  "status": "claimed",
+  "trace": {
+    "worker": "kevin",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9f1a5dd3-4503-443a-95df-2a845fc0ad53",
+    "claimed_at": "2026-08-04T10:31:37.883Z"
+  }
+}
