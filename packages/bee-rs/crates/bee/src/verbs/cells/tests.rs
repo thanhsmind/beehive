@@ -897,6 +897,170 @@ use std::time::Instant;
         assert_eq!(no_route_claim_count(root, "race", Some("sess-2")).unwrap(), 0);
     }
 
+    // ── D2: no claim on a red base ──────────────────────────────────────────
+
+    fn write_test_results_fixture(root: &Path, green: bool, commands: &[(&str, bool)]) {
+        let rows: Vec<Value> = commands
+            .iter()
+            .map(|(cmd, passed)| {
+                json!({
+                    "command": cmd,
+                    "exit": if *passed { 0.0 } else { 1.0 },
+                    "duration_ms": 1.0,
+                    "failure_excerpt": if *passed { Value::Null } else { Value::String("boom".into()) },
+                })
+            })
+            .collect();
+        let record = json!({ "ran_at": "2026-01-01T00:00:00.000Z", "green": green, "commands": rows });
+        write_json_atomic(&test_results_path(root), &record).unwrap();
+    }
+
+    /// D7 red-first: proves the pure classifier's four outcomes against the
+    /// EXACT schema finish_support::run_declared_tests writes, before any
+    /// refusal wires onto it — green, red (naming the first failing
+    /// command), missing, and unparseable (valid JSON, wrong shape) all read
+    /// as distinct, and both "cannot know" shapes land on the same Unknown
+    /// arm a claim door treats as a warn-and-proceed.
+    #[test]
+    fn classify_red_base_reads_green_red_missing_and_unparseable() {
+        let tmp = cn_root();
+        let root = tmp.path();
+
+        // Missing: nothing has ever run the declared tests here.
+        assert!(matches!(classify_red_base(root), RedBaseStatus::Unknown));
+
+        // Green: untouched either way.
+        write_test_results_fixture(root, true, &[("cargo test", true)]);
+        assert!(matches!(classify_red_base(root), RedBaseStatus::Green));
+
+        // Red: names the FIRST failing command, not the last.
+        write_test_results_fixture(root, false, &[("cargo build", true), ("cargo test", false)]);
+        match classify_red_base(root) {
+            RedBaseStatus::Red { failing_command } => assert_eq!(failing_command, "cargo test"),
+            _ => panic!("expected Red"),
+        }
+
+        // Unparseable: valid JSON, wrong shape (green not a bool) — cannot
+        // know, same bucket as missing.
+        std::fs::write(test_results_path(root), r#"{"green":"not-a-bool"}"#).unwrap();
+        assert!(matches!(classify_red_base(root), RedBaseStatus::Unknown));
+
+        // Corrupt: not valid JSON at all — cannot know.
+        std::fs::write(test_results_path(root), "{not json").unwrap();
+        assert!(matches!(classify_red_base(root), RedBaseStatus::Unknown));
+    }
+
+    /// The claim door itself: a red base refuses naming the failing command
+    /// and the results path, unless `--fix-first <reason>` escapes it — and
+    /// that reason lands on the WINNING claim's own trace.
+    #[test]
+    fn claim_refuses_on_a_red_base_unless_fix_first_escapes_it() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "rb");
+        write_cell_fixture(root, "rb-1", &cell("rb-1", "open", "rb", json!([])));
+        write_cell_fixture(root, "rb-2", &cell("rb-2", "open", "rb", json!([])));
+        write_test_results_fixture(root, false, &[("cargo test --release", false)]);
+
+        // Red, no --fix-first: refused, pinned prefix, no claim file, no
+        // cell mutation.
+        let refusal = thrown(claim_cell_from_flags(root, "rb-1", "w1", Some("sess-1"), None));
+        assert!(
+            refusal.starts_with("claim: RED_BASE — cell \"rb-1\" refused — the last recorded test run is red"),
+            "{refusal}"
+        );
+        assert!(refusal.contains("cargo test --release"), "{refusal}");
+        assert!(refusal.contains(TEST_RESULTS_RELATIVE), "{refusal}");
+        assert!(refusal.contains("--fix-first"), "{refusal}");
+        assert!(!claims_dir(root).join("rb-1.json").exists());
+        let untouched = read_cell_norm(root, "rb-1").ok().unwrap().unwrap();
+        assert_eq!(untouched["status"], json!("open"));
+
+        // Red + --fix-first: claim succeeds, the reason lands on trace.fix_first.
+        let door = claim_cell_from_flags_ex(
+            root,
+            "rb-2",
+            "w1",
+            Some("sess-1"),
+            None,
+            Some("known flake, fixing next"),
+        )
+        .unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+        assert_eq!(door.cell["trace"]["fix_first"], json!("known flake, fixing next"));
+    }
+
+    /// A green base is untouched: no refusal, and no stray trace.fix_first
+    /// key when the escape was never spent.
+    #[test]
+    fn claim_on_a_green_base_is_untouched() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "gb");
+        write_cell_fixture(root, "gb-1", &cell("gb-1", "open", "gb", json!([])));
+        write_test_results_fixture(root, true, &[("cargo test", true)]);
+
+        let door = claim_cell_from_flags(root, "gb-1", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+        assert!(door.cell["trace"].get("fix_first").is_none());
+    }
+
+    /// A missing results file cannot prove red or green — the claim
+    /// proceeds (the stderr warning is proven separately by the classifier
+    /// test above; this test proves the DOOR takes the same "cannot know"
+    /// arm rather than refusing).
+    #[test]
+    fn claim_on_missing_results_proceeds() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "mb");
+        write_cell_fixture(root, "mb-1", &cell("mb-1", "open", "mb", json!([])));
+        assert!(!test_results_path(root).exists());
+
+        let door = claim_cell_from_flags(root, "mb-1", "w1", Some("sess-1"), None).unwrap();
+        assert_eq!(door.cell["status"], json!("claimed"));
+    }
+
+    /// Ordering (pinned): a racing loser on an already-claimed cell sees
+    /// CLAIMED, never RED_BASE — even when the base is red by the time the
+    /// second claimant arrives.
+    #[test]
+    fn already_claimed_refusal_outranks_the_red_base_deny() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_with_route(root, "rb-race");
+        write_cell_fixture(root, "rb-race-1", &cell("rb-race-1", "open", "rb-race", json!([])));
+
+        claim_cell_from_flags(root, "rb-race-1", "w1", Some("sess-1"), None).unwrap();
+        write_test_results_fixture(root, false, &[("cargo test", false)]);
+
+        let refusal = thrown(claim_cell_from_flags(root, "rb-race-1", "w2", Some("sess-2"), None));
+        assert!(refusal.starts_with("claim: CLAIMED"), "{refusal}");
+        assert!(!refusal.contains("RED_BASE"), "{refusal}");
+    }
+
+    /// Ordering (pinned): D4's no-route deny outranks D2's red-base deny —
+    /// a session that has already spent its one-time no-route warning sees
+    /// NO_ROUTE_RECORD, never RED_BASE, even though the base is also red.
+    #[test]
+    fn no_route_deny_outranks_the_red_base_deny() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        lane_no_route(root, "rb-nr");
+        write_cell_fixture(root, "rb-nr-1", &cell("rb-nr-1", "open", "rb-nr", json!([])));
+        write_cell_fixture(root, "rb-nr-2", &cell("rb-nr-2", "open", "rb-nr", json!([])));
+
+        // First claim (no test-results record yet): spends sess-1's
+        // one-time no-route warning.
+        claim_cell_from_flags(root, "rb-nr-1", "w1", Some("sess-1"), None).unwrap();
+        // Now the base goes red.
+        write_test_results_fixture(root, false, &[("cargo test", false)]);
+
+        let refusal = thrown(claim_cell_from_flags(root, "rb-nr-2", "w1", Some("sess-1"), None));
+        assert!(refusal.starts_with("claim: NO_ROUTE_RECORD"), "{refusal}");
+        assert!(!refusal.contains("RED_BASE"), "{refusal}");
+    }
+
     // ── budgets ───────────────────────────────────────────────────────────
     fn attempt(session: &str, acquired: &str, verdict: &str, sig: Option<&str>) -> Value {
         json!({
@@ -1932,6 +2096,144 @@ use std::time::Instant;
         assert!(read_cell_norm(root, "cyc-b").ok().unwrap().is_none());
     }
 
+    // ── D3: no cells before the gate (docs/history/hook-teeth CONTEXT.md) ──
+    // Oracle: none — new mechanical enforcement. D7's sequencing law: the
+    // resolution primitive (`gated_add_refusal`) is proven on its own FIRST
+    // — lane vs. default precedence, docs-lane exemption, unknown-feature
+    // "no opinion" — before it is exercised through the whole-batch add
+    // report the refusal actually wires into.
+
+    fn write_lane_record(root: &Path, feature: &str, phase: &str, mode: Option<&str>, execution: bool) {
+        let dir = lanes_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = json!({
+            "feature": feature,
+            "phase": phase,
+            "mode": mode,
+            "approved_gates": {"execution": execution},
+        });
+        std::fs::write(dir.join(format!("{feature}.json")), jsjson::stringify_pretty(&body)).unwrap();
+    }
+
+    fn write_default_state(root: &Path, feature: &str, phase: &str, mode: Option<&str>, execution: bool) {
+        let dir = root.join(".bee");
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = json!({
+            "feature": feature,
+            "phase": phase,
+            "mode": mode,
+            "approved_gates": {"execution": execution},
+        });
+        std::fs::write(bstate::state_path(root), jsjson::stringify_pretty(&body)).unwrap();
+    }
+
+    fn addable_for(id: &str, feature: &str) -> Value {
+        let mut c = addable(id);
+        c["feature"] = json!(feature);
+        c
+    }
+
+    #[test]
+    fn gated_add_refusal_resolves_phase_and_gate_lane_beats_default_unknown_no_opinion() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Unknown feature: no lane record, no default state.json at all —
+        // "no opinion", never a guess.
+        assert!(gated_add_refusal(root, "nowhere").unwrap().is_none());
+
+        // Lane record, gated (planning) + unapproved -> refused, naming
+        // both the feature and the merged-gate remedy.
+        write_lane_record(root, "gated-lane", "planning", None, false);
+        let reason = gated_add_refusal(root, "gated-lane").unwrap().unwrap();
+        assert!(reason.contains("gated-lane"), "{reason}");
+        assert!(reason.contains("bee state gate --merge --approved true"), "{reason}");
+
+        // Same lane, execution now approved -> allowed.
+        write_lane_record(root, "gated-lane", "planning", None, true);
+        assert!(gated_add_refusal(root, "gated-lane").unwrap().is_none());
+
+        // swarming is not a gated phase, even with execution false.
+        write_lane_record(root, "swarming-lane", "swarming", None, false);
+        assert!(gated_add_refusal(root, "swarming-lane").unwrap().is_none());
+
+        // exploring is gated too, same as planning.
+        write_lane_record(root, "exploring-lane", "exploring", None, false);
+        assert!(gated_add_refusal(root, "exploring-lane").unwrap().is_some());
+
+        // A docs-lane record (mode "docs") is exempt regardless of phase or
+        // gate.
+        write_lane_record(root, "docs-lane", "planning", Some("docs"), false);
+        assert!(gated_add_refusal(root, "docs-lane").unwrap().is_none());
+
+        // Lane beats default: the lane record's own gated+unapproved state
+        // wins even when the default state.json disagrees (approved) for
+        // the very same feature.
+        write_lane_record(root, "lane-wins", "planning", None, false);
+        write_default_state(root, "lane-wins", "swarming", None, true);
+        assert!(
+            gated_add_refusal(root, "lane-wins").unwrap().is_some(),
+            "the lane record must win over the default pipeline"
+        );
+
+        // No lane record at all: the default state.json is consulted ONLY
+        // when its own feature names this same feature.
+        write_default_state(root, "default-only", "planning", None, false);
+        assert!(gated_add_refusal(root, "default-only").unwrap().is_some());
+        assert!(
+            gated_add_refusal(root, "some-other-feature").unwrap().is_none(),
+            "a default state.json naming a DIFFERENT feature is no opinion"
+        );
+    }
+
+    #[test]
+    fn add_cells_refuses_whole_batch_when_target_feature_is_gated_and_unapproved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        write_lane_record(root, "gate-add", "planning", None, false);
+        let batch = vec![addable_for("ga-1", "gate-add")];
+        let (ok, rows, normalized) = build_add_cells_report(root, &batch).unwrap();
+        assert!(!ok);
+        assert!(!rows[0].ok);
+        assert!(
+            rows[0]
+                .problems
+                .iter()
+                .any(|p| p.contains("gate-add") && p.contains("bee state gate --merge --approved true")),
+            "{:?}",
+            rows[0].problems
+        );
+        assert!(normalized.is_none());
+        assert!(
+            read_cell_norm(root, "ga-1").ok().unwrap().is_none(),
+            "a gated refusal writes nothing"
+        );
+
+        // Execution approved -> allowed.
+        write_lane_record(root, "gate-add", "planning", None, true);
+        let (ok, rows, normalized) = build_add_cells_report(root, &batch).unwrap();
+        assert!(ok, "{:?}", rows.iter().flat_map(|r| r.problems.clone()).collect::<Vec<_>>());
+        assert!(normalized.is_some());
+
+        // swarming phase -> allowed even with execution still false.
+        write_lane_record(root, "gate-add", "swarming", None, false);
+        let (ok, _, _) = build_add_cells_report(root, &batch).unwrap();
+        assert!(ok);
+
+        // Mixed batch: one gated-feature cell alongside one open-feature
+        // cell — the whole batch refuses (nothing written), and only the
+        // gated cell's row names the gated feature.
+        write_lane_record(root, "gate-add", "planning", None, false);
+        let mixed = vec![addable_for("mix-open", "open-feature"), addable_for("mix-gated", "gate-add")];
+        let (ok, rows, normalized) = build_add_cells_report(root, &mixed).unwrap();
+        assert!(!ok);
+        assert!(rows[0].ok && rows[0].problems.is_empty(), "the open feature's own row carries no gate problem");
+        assert!(!rows[1].ok);
+        assert!(rows[1].problems.iter().any(|p| p.contains("gate-add")));
+        assert!(normalized.is_none(), "one gated cell refuses the whole batch");
+    }
+
     // ── verify:"none" (R5): the no-test-repo sentinel ─────────────────────
     // Oracle: lib/cells.mjs assertVerifySentinelAllowed (decision 55b951e1) —
     // the sentinel is accepted only where the repo has declared itself.
@@ -1995,6 +2297,7 @@ use std::time::Instant;
             override_reason: String::new(),
             session_flag: None,
             force_ownership: false,
+            commit_pending: None,
         };
         let cell_body = |id: &str| {
             json!({
@@ -2034,6 +2337,170 @@ use std::time::Instant;
         let after = read_cell_norm(root2, "nt-2").ok().unwrap().unwrap();
         assert_eq!(after.get("status"), Some(&json!("claimed")), "a red run never caps");
         assert!(test_results_path(root2).exists(), "the red run IS recorded");
+    }
+
+    // ══ D6 — the cell commit trailer (docs/history/hook-teeth/CONTEXT.md) ══
+    //
+    // "`cells finish` verifies a commit whose trailer names the finishing
+    // cell id exists on the feature's branch (the granted worktree's HEAD
+    // history, else main's) when `files_changed` is non-empty;
+    // `--commit-pending <reason>` escapes and is stored on the trace. A cell
+    // with no file changes is exempt." D7 red-first: the pure trailer
+    // detector is pinned FIRST, against a real fixture git repo, before the
+    // refusal wiring that reads it.
+
+    fn git_ok(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the D6 fixtures");
+        assert!(
+            out.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A one-commit git repo — the base every D6 fixture builds on. Doubles
+    /// as the cell STORE root in these tests: no worktree grant exists, so
+    /// `commit_trailer_history_root` falls back to exactly this directory's
+    /// own HEAD history, the same directory `write_cell_fixture` writes into.
+    fn commit_history_repo(root: &Path) {
+        std::fs::write(root.join("f.txt"), "x").unwrap();
+        git_ok(root, &["init", "-q", "-b", "main", "."]);
+        git_ok(root, &["config", "user.email", "a@b.c"]);
+        git_ok(root, &["config", "user.name", "t"]);
+        git_ok(root, &["add", "-A"]);
+        git_ok(root, &["commit", "-qm", "init"]);
+    }
+
+    fn commit_with_message(root: &Path, file_content: &str, message: &str) {
+        std::fs::write(root.join("f.txt"), file_content).unwrap();
+        git_ok(root, &["commit", "-qam", message]);
+    }
+
+    #[test]
+    fn commit_trailer_present_matches_an_exact_trailer_line_in_recent_history() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+
+        // Only the init commit exists — no qualifying commit yet.
+        assert!(!commit_trailer_present(root, "bh-6"));
+
+        // A commit whose body MENTIONS the id in prose, but not as the exact
+        // trailer line, still does not satisfy it.
+        commit_with_message(root, "y", "touch up bh-6 handling");
+        assert!(!commit_trailer_present(root, "bh-6"));
+
+        // The real trailer, on its own line in the body.
+        commit_with_message(root, "z", "Do the thing\n\ncell: bh-6");
+        assert!(commit_trailer_present(root, "bh-6"));
+
+        // A DIFFERENT cell id's trailer never matches.
+        assert!(!commit_trailer_present(root, "bh-7"));
+    }
+
+    fn cap_flags_d6(id: &str, files: Vec<&str>, commit_pending: Option<&str>) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: files.into_iter().map(|f| json!(f)).collect(),
+            deviations: Vec::new(),
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: commit_pending.map(str::to_string),
+        }
+    }
+
+    fn cell_body_d6(id: &str) -> Value {
+        json!({
+            "id": id, "feature": "hook-teeth", "title": "t", "action": "a",
+            "verify": "echo ok", "lane": "tiny", "status": "claimed",
+            "deps": [], "files": [], "trace": {},
+        })
+    }
+
+    #[test]
+    fn finish_refuses_a_non_empty_files_cap_with_no_trailer_commit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        write_cell_fixture(root, "bh-6a", &cell_body_d6("bh-6a"));
+
+        let refusal = thrown(cap_cell_from_flags(
+            root,
+            &cap_flags_d6("bh-6a", vec!["a.rs"], None),
+            true, // finish
+        ));
+        assert!(
+            refusal.starts_with("capCell: cell \"bh-6a\" refused — one commit per cell"),
+            "{refusal}"
+        );
+        let after = read_cell_norm(root, "bh-6a").ok().unwrap().unwrap();
+        assert_eq!(after.get("status"), Some(&json!("claimed")), "a missing trailer never caps");
+    }
+
+    #[test]
+    fn finish_caps_once_the_trailer_commit_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        write_cell_fixture(root, "bh-6b", &cell_body_d6("bh-6b"));
+        commit_with_message(root, "y", "Wire the thing\n\ncell: bh-6b");
+
+        let capped =
+            cap_cell_from_flags(root, &cap_flags_d6("bh-6b", vec!["a.rs"], None), true).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn finish_commit_pending_escapes_and_is_recorded_on_the_trace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root); // no trailer commit — the escape is exercised for real
+        write_cell_fixture(root, "bh-6c", &cell_body_d6("bh-6c"));
+
+        let capped = cap_cell_from_flags(
+            root,
+            &cap_flags_d6("bh-6c", vec!["a.rs"], Some("commit lands after cap, batching two")),
+            true,
+        )
+        .unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(
+            capped["trace"]["commit_pending"],
+            json!("commit lands after cap, batching two")
+        );
+    }
+
+    #[test]
+    fn finish_with_empty_files_changed_is_exempt_from_the_trailer_check() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Deliberately NOT a git repo at all — proves the check never even
+        // shells out to git when files_changed is empty.
+        write_cell_fixture(root, "bh-6d", &cell_body_d6("bh-6d"));
+
+        let capped = cap_cell_from_flags(root, &cap_flags_d6("bh-6d", vec![], None), true).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+    }
+
+    #[test]
+    fn cap_without_finish_never_runs_the_trailer_check() {
+        // D6 scopes the check to `cells finish`; plain `cells cap`
+        // (finish == false) must cap a non-empty-files cell even with zero
+        // commit history (not even a git repo here).
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "bh-6e", &cell_body_d6("bh-6e"));
+
+        let capped =
+            cap_cell_from_flags(root, &cap_flags_d6("bh-6e", vec!["a.rs"], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
     }
 
     // ══ adoption + fencing (claims.mjs, msn-12 D4/D9 invariant 10) ═════════

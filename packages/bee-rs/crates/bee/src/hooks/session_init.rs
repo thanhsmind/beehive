@@ -88,7 +88,7 @@ pub fn run(argv: &[String], stdin: &str) -> Outcome {
     let event_source = trimmed(ctx.payload.get("source")).unwrap_or_default();
 
     if let Some(sid) = &session_id {
-        register_acting_session(&ctx, &root, sid);
+        register_acting_session(&ctx, &root, sid, &event_source);
     }
 
     let handoff_outcome = match &session_id {
@@ -374,7 +374,14 @@ pub(crate) fn control_root_for(root: &Path) -> PathBuf {
 /// The whole registration block, FAIL-OPEN end to end (the .mjs's outer
 /// try/catch): every failure logs a crash to .bee/logs/hooks.jsonl and the
 /// preamble still renders.
-fn register_acting_session(ctx: &HookContext, root: &Path, session_id: &str) {
+///
+/// `event_source` (D4, bh-4) is this SessionStart's own `source` — it gets
+/// stamped onto the session record (field `source`) so a later, unrelated
+/// call site (`bee state handoff adopt`, in workflow_store::handoff) can read
+/// back whether the calling session most recently started from a fresh
+/// boundary or from a mid-work resume/compact, without this hook's own
+/// in-memory ADOPT_SOURCES check being in scope there.
+fn register_acting_session(ctx: &HookContext, root: &Path, session_id: &str, event_source: &str) {
     let context = match resolve_context(root) {
         Ok(context) => context,
         Err(message) => {
@@ -400,6 +407,7 @@ fn register_acting_session(ctx: &HookContext, root: &Path, session_id: &str) {
         session_id,
         transcript_path,
         context.workspace_id.as_deref(),
+        event_source,
     ) {
         Err(message) => {
             log_crash(Some(root), HOOK_NAME, &message, ctx.source);
@@ -407,7 +415,7 @@ fn register_acting_session(ctx: &HookContext, root: &Path, session_id: &str) {
         }
         Ok(true) => {}
         Ok(false) => {
-            if let Err(message) = heartbeat_session(&session_root, session_id) {
+            if let Err(message) = heartbeat_session(&session_root, session_id, event_source) {
                 log_crash(Some(root), HOOK_NAME, &message, ctx.source);
                 return;
             }
@@ -447,6 +455,7 @@ fn create_session(
     id: &str,
     transcript_path: Option<&str>,
     workspace_id: Option<&str>,
+    source: &str,
 ) -> Result<bool, String> {
     // requireId(id, 'session id')
     if id.trim().is_empty() {
@@ -471,6 +480,12 @@ fn create_session(
     if let Some(workspace) = workspace_id.map(str::trim).filter(|s| !s.is_empty()) {
         session.insert("workspace_id".into(), Value::String(workspace.to_string()));
     }
+    // D4 (bh-4): the start source, so `bee state handoff adopt` can later
+    // tell a fresh-session boundary from a mid-work resume/compact.
+    let source_trimmed = source.trim();
+    if !source_trimmed.is_empty() {
+        session.insert("source".into(), Value::String(source_trimmed.to_string()));
+    }
 
     let file = dir.join(format!("{session_id}.json"));
     let body = format!("{}\n", crate::jsjson::stringify_pretty(&Value::Object(session)));
@@ -492,7 +507,7 @@ fn create_session(
 /// `sessions` store lock the sweeper holds (15 attempts, 20ms apart, NEVER an
 /// unbounded wait). LOCK_BUSY and SESSION_MISSING are typed RESULTS, not
 /// throws, so both read as Ok here; only a real write failure is an error.
-fn heartbeat_session(control_root: &Path, session_id: &str) -> Result<(), String> {
+fn heartbeat_session(control_root: &Path, session_id: &str, source: &str) -> Result<(), String> {
     const ATTEMPTS: u32 = 15;
     const DELAY_MS: u64 = 20;
     let mut acquired = None;
@@ -521,6 +536,16 @@ fn heartbeat_session(control_root: &Path, session_id: &str) -> Result<(), String
             return Ok(());
         }
         session.insert("last_heartbeat".into(), Value::String(now_iso()));
+        // D4 (bh-4): restamp `source` on every SessionStart, not only at
+        // creation — a session that started fresh and later mid-work-
+        // compacts must be readable as "no longer at a fresh boundary". A
+        // blank/absent source on THIS call never clobbers a previously
+        // known value (same "never write a placeholder" rule create_session
+        // follows).
+        let source_trimmed = source.trim();
+        if !source_trimmed.is_empty() {
+            session.insert("source".into(), Value::String(source_trimmed.to_string()));
+        }
         let file = control_root
             .join(".bee")
             .join("sessions")
@@ -820,6 +845,63 @@ mod tests {
             "",
             "a corrupt anchor is fail-open, never a failed session"
         );
+    }
+
+    // ── D4 source persistence (bh-4): session-init stamps `source` so a
+    // fresh-session-boundary check (workflow_store::handoff) can read it back
+    // later, from a completely different call site (`bee state handoff
+    // adopt`). ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn the_session_record_persists_the_start_source_and_restamps_on_a_later_heartbeat() {
+        let tmp = tempfile::tempdir().unwrap();
+        vendored_repo(tmp.path());
+        let record = tmp.path().join(".bee").join("sessions").join("s1.json");
+
+        let outcome = run(&[], &payload_with(tmp.path(), "startup", Some("s1")));
+        assert!(matches!(outcome, Outcome::Done(_)));
+        let stored: Value = serde_json::from_str(&std::fs::read_to_string(&record).unwrap()).unwrap();
+        assert_eq!(stored["source"], json!("startup"));
+
+        // The SAME session later mid-work-compacts: the record's `source`
+        // restamps to "compact" so a fresh-boundary check downstream sees the
+        // session is no longer at a fresh boundary (D4).
+        let outcome = run(&[], &payload_with(tmp.path(), "compact", Some("s1")));
+        assert!(matches!(outcome, Outcome::Done(_)));
+        let after: Value = serde_json::from_str(&std::fs::read_to_string(&record).unwrap()).unwrap();
+        assert_eq!(after["source"], json!("compact"), "the heartbeat restamps source");
+        assert_eq!(after["started_at"], stored["started_at"], "creation fields never move");
+    }
+
+    #[test]
+    fn a_session_record_omits_source_when_the_payload_carries_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        vendored_repo(tmp.path());
+        let payload = payload_with(tmp.path(), "", Some("s1"));
+        let outcome = run(&[], &payload);
+        assert!(matches!(outcome, Outcome::Done(_)));
+        let record = tmp.path().join(".bee").join("sessions").join("s1.json");
+        let stored: Value = serde_json::from_str(&std::fs::read_to_string(&record).unwrap()).unwrap();
+        assert!(stored.get("source").is_none(), "never write a placeholder source");
+    }
+
+    #[test]
+    fn an_empty_source_heartbeat_leaves_a_previously_stamped_source_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        vendored_repo(tmp.path());
+        let record = tmp.path().join(".bee").join("sessions").join("s1.json");
+        assert!(matches!(
+            run(&[], &payload_with(tmp.path(), "startup", Some("s1"))),
+            Outcome::Done(_)
+        ));
+        // A second call for the same session with no `source` in the payload
+        // must not clobber the known value with blank/absent.
+        assert!(matches!(
+            run(&[], &payload_with(tmp.path(), "", Some("s1"))),
+            Outcome::Done(_)
+        ));
+        let after: Value = serde_json::from_str(&std::fs::read_to_string(&record).unwrap()).unwrap();
+        assert_eq!(after["source"], json!("startup"));
     }
 
     #[test]

@@ -185,6 +185,89 @@ pub(crate) fn first_failure_line(run: &TestsRun) -> Option<String> {
         .map(str::to_string)
 }
 
+// ─── D6 (docs/history/hook-teeth/CONTEXT.md) — the cell commit trailer ────
+//
+// `cells finish` refuses to cap a cell whose files_changed is non-empty
+// unless a commit carrying a `cell: <id>` trailer line exists in the RECENT
+// history of the feature's own branch — bee's one-commit-per-cell rule
+// (AGENTS.md "Care for the session"), made mechanical. `--commit-pending
+// <reason>` escapes it, D2's `--fix-first` convention: the reason lands on
+// the cap's own trace, never silently.
+//
+// Branch resolution matters here in a way it would not for an arbitrary
+// feature: THIS very feature's `cells finish` calls typically run from the
+// MAIN checkout (bee-swarming's worker convention dispatches a worker whose
+// `bee cells finish` call reaches the shared store), while the worker's own
+// commits land on the FEATURE's WORKTREE branch — never on main. Scanning
+// `root`'s own HEAD history in that case would see the wrong branch
+// entirely and refuse every legitimate cap. `find_granted_worktree_for_feature`
+// (verbs/status_full/topology.rs, landed for ct-1's re-lane worktree block —
+// see state_group/workflows.rs's `route_worktree_block`) is exactly the
+// bidirectional gitdir walk that answers "does this feature have a granted
+// worktree, and where is it" without a second implementation of that
+// resolution, so it is reused here rather than re-derived. When no grant
+// exists for the feature (an ordinary same-checkout feature, or one with no
+// worktree split at all), the CURRENT checkout's own HEAD history is the
+// right — and only — thing to scan.
+
+/// The bounded window D6 scans, nearest-to-HEAD first (`git log`'s own
+/// order): `cells finish` cap-checks a cell that was JUST claimed and
+/// worked, so the qualifying commit is always near HEAD. Walking the WHOLE
+/// branch history would cost real time on a long-lived repo for zero added
+/// correctness — the same "bounded window" tradeoff D2's red-base read
+/// (`.bee/logs/test-results.json`, a single record rather than a log) makes
+/// in its own idiom.
+pub(crate) const COMMIT_TRAILER_WINDOW: u32 = 50;
+
+/// `cell: <id>` — the ONE trailer shape D6 recognizes, matched as an exact
+/// (trimmed) whole line inside a commit's FULL message body, never a
+/// substring match: a commit that merely mentions the cell id in prose
+/// ("touch up bh-6 handling") must not satisfy this.
+pub(crate) fn cell_commit_trailer(id: &str) -> String {
+    format!("cell: {id}")
+}
+
+/// The history root D6 scans for `feature`: the granted worktree's HEAD
+/// history when one exists for it, else `fallback_root`'s own HEAD history.
+/// `fallback_root` is the store root `cap_cell_from_flags` already has in
+/// hand — the ordinary-checkout case needs no extra resolution at all.
+pub(crate) fn commit_trailer_history_root(fallback_root: &Path, feature: Option<&str>) -> PathBuf {
+    if let Some(feature) = feature {
+        if let Some((_, worktree_root)) =
+            crate::verbs::status_full::find_granted_worktree_for_feature(fallback_root, feature)
+        {
+            return PathBuf::from(worktree_root);
+        }
+    }
+    fallback_root.to_path_buf()
+}
+
+/// `git log -n <window> --format=%B%x00` over `cwd`'s HEAD. `%B` is the
+/// full, UNWRAPPED message body (never `%s`/`%b`'s subject/body split, which
+/// could fold a trailer line into the subject and hide it from a
+/// line-by-line scan); the `%x00` separator keeps one commit's body from
+/// bleeding into the next when splitting the combined output back apart. A
+/// git that cannot be spawned, a `cwd` with no commits yet, or any other
+/// non-zero exit answers `false` — fail CLOSED, matching this check's own
+/// "unless --commit-pending" contract: an unprovable history is never
+/// silently treated as satisfying the rule, it is proven or escaped.
+///
+/// Shells out through `crate::verbs::worktree::run_git` — the crate's own
+/// `spawnSync('git', argv, {cwd})` pattern (worktree-store.mjs runGit, no
+/// shell involved) — rather than a second ad-hoc git invocation style.
+pub(crate) fn commit_trailer_present(cwd: &Path, id: &str) -> bool {
+    let window = COMMIT_TRAILER_WINDOW.to_string();
+    let out = crate::verbs::worktree::run_git(cwd, &["log", "-n", &window, "--format=%B%x00"]);
+    if out.status != Some(0) {
+        return false;
+    }
+    let trailer = cell_commit_trailer(id);
+    out.stdout
+        .unwrap_or_default()
+        .split('\u{0}')
+        .any(|body| body.lines().any(|line| js_trim(line) == trailer))
+}
+
 // ─── reservations-release subset (finish's release half) ───────────────────
 // Provenance: lib/reservations.mjs release/listReservations + bee.mjs
 // releaseReservationsForAgent, mirrored from verbs/reservations.rs's own

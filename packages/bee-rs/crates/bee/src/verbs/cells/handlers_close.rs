@@ -23,7 +23,7 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 8] = [
+pub(crate) const CAP_FLAGS: [&str; 9] = [
     "id",
     "outcome",
     "files",
@@ -32,6 +32,7 @@ pub(crate) const CAP_FLAGS: [&str; 8] = [
     "override-judge",
     "session-id",
     "force-ownership",
+    "commit-pending",
 ];
 
 /// resolveDeclaredBehaviorChange (E6).
@@ -76,6 +77,10 @@ pub(crate) struct CapFlags {
     pub(crate) override_reason: String,       // trimmed; '' = none
     pub(crate) session_flag: Option<String>,
     pub(crate) force_ownership: bool,
+    /// D6 (hook-teeth CONTEXT.md): `--commit-pending <reason>`, trimmed;
+    /// `None` = not passed. Escapes the commit-trailer check below and is
+    /// recorded on the capped cell's own `trace.commit_pending`.
+    pub(crate) commit_pending: Option<String>,
 }
 
 /// capCellFromFlags — the ONE cap door cap and finish share.
@@ -168,6 +173,34 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 "The red is the work: fix what the failing output names, then re-run bee cells finish --id {id}. Never build on a red base."
             ));
             return Err(Fail::Thrown(lines.join("\n")));
+        }
+    }
+
+    // D6 (hook-teeth CONTEXT.md) — the one-commit-per-cell trailer check.
+    // Runs AFTER the test-green door above (a red run refuses first, same
+    // cell — D7 sequencing) but BEFORE the per-cell lock, reading only
+    // already-fetched state (`existing_map`, `f`), same posture as the
+    // pre-checks above. D6 scopes this to `cells finish` alone — `cells cap`
+    // (finish == false) never runs it, even for a non-empty files_changed.
+    if finish && !f.files_changed.is_empty() {
+        let feature = match existing_map.get("feature") {
+            Some(Value::String(s)) if !s.is_empty() => Some(s.as_str()),
+            _ => None,
+        };
+        // The history root to scan: THIS feature's granted worktree HEAD
+        // history when one exists — necessary because `cells finish` for a
+        // feature commonly runs from the MAIN checkout (bee-swarming's
+        // worker convention) while the worker's own commits land on that
+        // feature's WORKTREE branch, never on main; falling back to `root`
+        // (an ordinary same-checkout feature, or no worktree split at all)
+        // otherwise.
+        let history_root = commit_trailer_history_root(root, feature);
+        if !commit_trailer_present(&history_root, id) && f.commit_pending.is_none() {
+            return Err(Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — one commit per cell: no commit in the last {COMMIT_TRAILER_WINDOW} commit(s) of {} carries the trailer \"{}\". Commit the work with that trailer, then retry \"bee cells finish --id {id}\" — or pass --commit-pending \"<reason>\" to finish anyway (the reason is stored on the cell's own trace.commit_pending).",
+                history_root.display(),
+                cell_commit_trailer(id),
+            )));
         }
     }
 
@@ -273,6 +306,12 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             f.friction.clone().map(Value::String).unwrap_or(Value::Null),
         );
         trace.insert("behavior_change".into(), Value::Bool(bc));
+        // D6: the --commit-pending reason, when passed — recorded so a cold
+        // reader can see WHY this cap escaped the commit-trailer check
+        // without re-deriving it from git history.
+        if let Some(reason) = &f.commit_pending {
+            trace.insert("commit_pending".into(), Value::String(reason.clone()));
+        }
         let outcome_value = match &f.outcome {
             Some(o) if !js_trim(o).is_empty() => Value::String(o.clone()),
             _ => trace.get("outcome").cloned().unwrap_or(Value::Null),
@@ -323,6 +362,11 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
     };
     let session_flag = opt_string_flag(flags, "session-id")?;
     let force_ownership = bool_flag(flags, "force-ownership")?;
+    // D2's --fix-first convention: trimmed; empty/absent = None.
+    let commit_pending = match opt_string_flag(flags, "commit-pending")? {
+        Some(s) if !js_trim(&s).is_empty() => Some(js_trim(&s).to_string()),
+        _ => None,
+    };
     Some(CapFlags {
         id,
         outcome,
@@ -332,6 +376,7 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         override_reason,
         session_flag,
         force_ownership,
+        commit_pending,
     })
 }
 
