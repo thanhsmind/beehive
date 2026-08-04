@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature": "release-2-1-8",
+  "mode": "small",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"release-2-1-8\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"release-2-1-8\" (lane).",
+  "created_at": "2026-08-04T08:39:45.956Z"
+}

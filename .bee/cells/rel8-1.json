@@ -1,0 +1,36 @@
+{
+  "id": "rel8-1",
+  "feature": "release-2-1-8",
+  "lane": "small",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [],
+  "title": "Release 2.1.8: bump version tuple, regen release manifest, tag and push",
+  "action": "Bump 2.1.7 -> 2.1.8 in the five distribution files; regen release-manifest via bee dev release-manifest --write (heals stale statusline sha); path-scoped commit; tag v2.1.8; push main and tag.",
+  "verify": "bee dev release-manifest --check green; cargo suite green; tag v2.1.8 pushed",
+  "must_haves": {
+    "truths": [
+      "version tuple reads 2.1.8 in all five distribution files",
+      "release-manifest --check passes",
+      "origin/main and tag v2.1.8 pushed"
+    ]
+  },
+  "status": "claimed",
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "orchestrator-main",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "36955346-2280-4dc7-b0a5-b4d8c74c4b39",
+    "claimed_at": "2026-08-04T08:40:53.924Z"
+  }
+}
