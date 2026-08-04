@@ -92,10 +92,16 @@ All five are the same shape at different depths:
 
 ## Open Gaps
 
-- `state set --phase compounding-complete` returns the Node delegate marker
-  (`set_gate.rs:180,210`), so **no lane or feature can reach the terminal
-  phase** since the Rust cutover. Every lane in this session sits at
-  `compounding` with both runs stamped. Filed P1.
+- ~~`state set --phase compounding-complete` returns the Node delegate
+  marker~~ — **fixed the same day** (`terminal-phase-port`). The door is
+  native now: the freshness half it already had, plus the scribing-debt half
+  chain-integrity D2 always specified, with two loud escapes — the
+  `--waive-scribing-debt` flag, or a logged `capture-deferral` decision, the
+  same one `bee close` accepts. All six lanes from this session then closed.
+  Worth keeping as the shape: a cutover left a door delegating to a runtime
+  that no longer existed, and the symptom was a generic
+  `unsupported_argument_shape` — the router could not tell "this verb refuses
+  your flags" from "this path was never ported".
 - `bee close` refuses a lane feature outright (`router.rs:78` covers non-lane
   features only), so a lane never runs the close driver's test door.
 - A worker cannot run `cells finish` from inside its own worktree — the
