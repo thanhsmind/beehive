@@ -1,0 +1,62 @@
+{
+  "id": "gh-3",
+  "feature": "guard-hardening",
+  "lane": "high-risk",
+  "title": "grep/find permissions.deny plus the markdown-only-by-necessity record",
+  "behavior_change": false,
+  "files": [
+    ".claude/settings.json",
+    "docs/knowledge/areas/doctrine-layer/unenforced-obedience.md",
+    "docs/knowledge/areas/doctrine-layer/prompt-writing-standard.md",
+    "docs/history/learnings/20260803-guard-hardening.md"
+  ],
+  "read_first": [
+    "docs/history/guard-hardening/CONTEXT.md",
+    "docs/history/guard-hardening/plan.md",
+    ".claude/settings.json",
+    "docs/knowledge/areas/doctrine-layer/unenforced-obedience.md",
+    "docs/knowledge/areas/doctrine-layer/prompt-writing-standard.md"
+  ],
+  "action": "Per guard-hardening E3+E5 (CONTEXT.md) and the plan Constraints. (1) E3: edit .claude/settings.json - inside the existing permissions object (currently {\"defaultMode\": \"bypassPermissions\"}) add \"deny\": [\"Bash(grep:*)\", \"Bash(find:*)\"]. Touch nothing else in the file; valid JSON; note in your report that onboarding preserves this key (onboard/tests.rs test repo_hooks_wires_both_projections_and_preserves_foreign_entries). (2) E5: sync doctrine - in unenforced-obedience.md add (in its own format, citing guard-hardening E5) the record of which boundary rules stay markdown-only by necessity and why: gate self-approval (actor identity unknowable to the CLI), independent-review-never-automatic, claim-only-via-claim-next; note build-on-red is CLI-enforced at bee cells finish and where the newly-enforced rules moved (E1/E2/E3). In prompt-writing-standard.md's deterministic-backstop section add one sentence pointing at the deny entries as the live example (cite guard-hardening E3). Respect both files' formats; citations must resolve (pointer_integrity). (3) Author docs/history/learnings/20260803-guard-hardening.md: what was enforced vs left markdown-only and why, the E1 narrowing story (user asked to drop containment; allowlist met the need), and the settings-preservation proof point. (4) Run the full suite (commands.test) and quote the summary; also run the knowledge index regen check (bee knowledge index --check; regenerate via bee knowledge index if the two parent indexes go stale from your edits).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "settings.json permissions.deny carries the two entries, rest of file untouched",
+      "unenforced-obedience.md records the markdown-only-by-necessity set with E-id cites",
+      "learnings file written",
+      "knowledge index check clean after any regen",
+      "full suite green, summary quoted"
+    ]
+  },
+  "decisions": [
+    "guard-hardening E3",
+    "guard-hardening E5"
+  ],
+  "deps": [
+    "gh-2"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-gh3",
+    "outcome": "E3+E5 landed: permissions.deny [Bash(grep:*), Bash(find:*)] beside preserved defaultMode; unenforced-obedience records the markdown-only-by-necessity set with E-id cites; standard's backstop section points at the live deny example; learnings authored; knowledge index 0 stale in both checkouts.",
+    "files_changed": [
+      ".claude/settings.json",
+      "docs/knowledge/areas/doctrine-layer/unenforced-obedience.md",
+      "docs/knowledge/areas/doctrine-layer/prompt-writing-standard.md",
+      "docs/history/learnings/20260803-guard-hardening.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T02:20:23.428Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ce3df9bf-8c5d-4f95-964d-f467a6b5458e",
+    "claimed_at": "2026-08-03T09:13:53.323Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T02:19:54.403Z"
+  }
+}

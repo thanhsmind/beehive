@@ -1,0 +1,57 @@
+{
+  "id": "gh-1",
+  "feature": "guard-hardening",
+  "lane": "high-risk",
+  "title": "Write-guard containment allowlist for harness memory and scratchpad roots",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+  ],
+  "read_first": [
+    "docs/history/guard-hardening/CONTEXT.md",
+    "docs/history/guard-hardening/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+  ],
+  "action": "Per guard-hardening E1 (CONTEXT.md) and the plan Constraints. Implement the containment allowlist: after the existing canonical resolution of a write target (Edit/Write/MultiEdit AND extracted Bash targets), if the RESOLVED path is under <home>/.claude/projects/ or <system-temp>/claude/, the outside-root containment deny does not fire. Scope strictly: the exemption bypasses ONLY the containment deny - reservation/hold checks, gate-boundary checks, direct-edit denies and secret checks still run where applicable (in practice out-of-root paths do not hit repo-relative checks, but the code order must make that true by construction, not by accident). Fail-closed: if home or temp cannot be resolved, the allowlist contributes nothing and the deny stands. Resolve home and temp the way existing code in this crate does (search for existing home_dir/temp usage - onboard/source.rs has home_dir); on Windows honor the actual system temp (std::env::temp_dir). Find the containment failure emission (write_guard/main.rs around lines 177-228, the could-not-be-canonically-contained message) and thread the allowlist there for both the ordinary-checkout and granted-worktree shapes. Add unit tests beside the existing write_guard test style covering: (1) write to <home>/.claude/projects/x/memory/f.md allowed, (2) write to <temp>/claude/s/scratchpad/f.txt allowed, (3) write to a sibling worktree path still denied, (4) a traversal spelling (repo/../../.claude/projects/...) judged by resolved location - allowed only if resolved into an allowlist root, (5) unrelated out-of-root absolute path still denied, (6) unresolvable home/temp leaves deny intact (simulate via the code's seam, e.g. injectable roots - prefer parameterizing the check function with the roots so tests need no env mutation). Existing tests must pass unmodified; if one must change, STOP and report. Run the write-guard-focused tests plus the full suite (commands.test) and quote both summaries.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "resolved-path allowlist covers home .claude/projects and system-temp claude roots only",
+      "containment deny unchanged for every other out-of-root target",
+      "fail-closed on unresolvable home/temp, proven by a test",
+      "existing write-guard tests pass unmodified",
+      "full suite green, summaries quoted"
+    ]
+  },
+  "decisions": [
+    "guard-hardening E1",
+    "guard-hardening E6"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-gh1",
+    "outcome": "Containment allowlist landed (E1): HarnessRoots (home/.claude/projects + temp/claude), resolution-first, fail-closed, injected roots for tests; exemption erases only the containment deny by code order. write_guard tests 80/0; full suite in worktree 994/1 with the sole red the known environmental worktree-cwd test (chip filed).",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-03T09:06:47.426Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ce3df9bf-8c5d-4f95-964d-f467a6b5458e",
+    "claimed_at": "2026-08-03T08:54:06.420Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-03T09:06:29.051Z"
+  }
+}

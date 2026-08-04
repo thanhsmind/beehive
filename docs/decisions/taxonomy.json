@@ -297,6 +297,8 @@
     "prompt-diet",
     "deviation",
     "doctrine-layer",
-    "defect"
+    "defect",
+    "guard-hardening",
+    "test-contract"
   ]
 }

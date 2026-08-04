@@ -1,0 +1,55 @@
+{
+  "id": "gh-2",
+  "feature": "guard-hardening",
+  "lane": "high-risk",
+  "title": "Extend the CLI-owned direct-edit deny set to cells, lanes and onboarding",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"
+  ],
+  "read_first": [
+    "docs/history/guard-hardening/CONTEXT.md",
+    "docs/history/guard-hardening/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+  ],
+  "action": "Per guard-hardening E2 (CONTEXT.md) and the plan Constraints. Extend direct_edit_verb (write_guard/guards.rs:41-52) so hand-edits via Edit/Write/MultiEdit/Bash-mutation are denied for: .bee/cells/*.json, .bee/lanes/*.json, .bee/onboarding.json - matching style consistent with the existing five enumerated entries (the existing set matches exact relative paths; for cells/lanes use a prefix+extension match in the same function, keep it readable). EXPLICITLY preserved as writable: .bee/config.json and .bee/decisions.jsonl (sanctioned agent surfaces) - do not touch scratch_shape_deny allowances. Check the deny message names the owning CLI verb (cells add/finish, state lanes/start-feature --as-lane, onboard) so the agent hitting it knows the sanctioned path. Add regression tests asserting: deny on a .bee/cells/x.json edit, deny on .bee/lanes/x.json, deny on .bee/onboarding.json, ALLOW preserved on .bee/config.json and .bee/decisions.jsonl. Existing tests must pass unmodified; a required change to one is STOP-and-report. Run the full suite (commands.test) and quote the summary.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "cells, lanes and onboarding.json hand-edits denied with a message naming the owning verb",
+      "config.json and decisions.jsonl remain writable, proven by tests",
+      "existing tests pass unmodified",
+      "full suite green, summary quoted"
+    ]
+  },
+  "decisions": [
+    "guard-hardening E2",
+    "guard-hardening E6"
+  ],
+  "deps": [
+    "gh-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "worker-gh2",
+    "outcome": "E2/E2a landed: direct_edit_verb denies .bee/cells|lanes/*.json and onboarding.json naming owning verbs; config.json and decisions.jsonl allowances proven; three legacy tests flipped per decision E2a; write_guard 84/0, full suite 998/1 (known environmental red only).",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-03T09:13:47.321Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "ce3df9bf-8c5d-4f95-964d-f467a6b5458e",
+    "claimed_at": "2026-08-03T09:06:53.793Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-03T09:13:29.090Z"
+  }
+}
