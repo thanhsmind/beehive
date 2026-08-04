@@ -123,7 +123,7 @@
     },
     {
       "path": ".claude-plugin/plugin.json",
-      "sha256": "7ffa3473d18e321ced562b916a7c6eb52b97f61446f063f623e31b5071e54d55",
+      "sha256": "268b088dc5d088a42ec5ec696397796f397c02df5ce0285c5c4139de223048a2",
       "mode": "666",
       "role": "plugin_manifest",
       "packagePath": ".claude-plugin/plugin.json"
@@ -494,7 +494,7 @@
     },
     {
       "path": ".codex-plugin/plugin.json",
-      "sha256": "5c5e3e2060f9ed77b04a9249966a828cdc71c1c67d13a1eba4a155123febdf01",
+      "sha256": "ba3a550034d4da0755999c5d7cc52ee7d7de7580c400216d54f4db4e780ebbcd",
       "mode": "666",
       "role": "plugin_manifest",
       "packagePath": ".codex-plugin/plugin.json"
@@ -1037,7 +1037,7 @@
     },
     {
       "path": "packages/bee/statusline/statusline-command.sh",
-      "sha256": "87c173a6e61aed9aa4d76ab59f0b3f18fdb2a12931fdb37e5ef8910b853a7f1d",
+      "sha256": "49cec574ddba6fd268ecf8952d5e8fcbc35d82431d48019848dc378cfd2e0421",
       "mode": "666",
       "role": "package_payload",
       "packagePath": "packages/bee/statusline/statusline-command.sh"
