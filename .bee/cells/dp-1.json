@@ -1,0 +1,67 @@
+{
+  "id": "dp-1",
+  "feature": "dispatch-worktree",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Tell a dispatched worker where its worktree is and where the store lives",
+  "action": "dispatch prepare --claim already claims the cell and reserves every cell.files entry under the worker nickname (prepare.rs:782-885) and already inlines the cell JSON into the worker-cell template (prepare.rs:398-426), but neither the envelope nor the template ever names the worktree. A worker dispatched into a granted feature worktree therefore does not know where to work, and does not know its cell and claim live in another checkout - one reported having to read the claim across checkouts by hand. Add it: when find_granted_worktree_for_feature (status_full/topology.rs:198-216) resolves a granted worktree for the cell's feature, the prepare envelope carries worktree_root and control_root, and the worker-cell template gains a Location block naming both - work here, the store is there. When there is no granted worktree the payload and the rendered prompt stay byte-identical to today. The template is include_str! compiled with a disk-vs-embedded byte-match guard (prompt.rs:33,72-89), so packages/bee/prompts/worker-cell.md and .bee/bin/prompts/worker-cell.md must both change and stay identical, and the release manifest must be regenerated.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "the envelope names worktree_root and control_root for a feature with a granted worktree",
+      "the rendered prompt tells the worker where to work and that the store is elsewhere",
+      "a feature with no worktree renders byte-identically to today",
+      "both prompt copies stay byte-identical and the embedded guard passes"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/topology.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prompt.rs"
+  ],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": "mel",
+    "outcome": "granted-worktree location envelope + prompt block, byte-identical without a grant",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee/prompts/worker-cell.md",
+      ".bee/bin/prompts/worker-cell.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T14:03:01.810Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8ce76840-0a14-4fc0-919a-6887bb9d38f1",
+    "claimed_at": "2026-08-04T13:41:23.362Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-04T14:02:07.460Z",
+        "claim_session": "8ce76840-0a14-4fc0-919a-6887bb9d38f1",
+        "claimed_at": "2026-08-04T13:41:23.361Z",
+        "acquired_at": "2026-08-04T13:41:23.361Z",
+        "worker": "mel",
+        "verdict": "tests-red",
+        "failure_signature": "7d990d63bd0e",
+        "note": "uggestion)"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T14:02:50.321Z"
+  }
+}

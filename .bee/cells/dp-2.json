@@ -1,0 +1,50 @@
+{
+  "id": "dp-2",
+  "feature": "dispatch-worktree",
+  "lane": "standard",
+  "change_class": "bugfix",
+  "behavior_change": true,
+  "deps": [
+    "dp-1"
+  ],
+  "title": "Stop dispatch prepare handing a cell to the read-only gather agent",
+  "action": "bee dispatch prepare --runtime claude --kind cell emits subagent_type bee-gather - the agent whose own definition is Read, Grep, Glob and never writes. It is the same defect the model guard carried until the execution-agent lane: the generation tier now has TWO rendered agents, bee-build for a cell execution and bee-gather for a read-only gather, and the payload builder still knows only the old single mapping. A --kind cell dispatch must name bee-build; gather, reviewer and advisor keep the agent they name today. Red-first: pin the payload for each kind.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml verbs::drivers",
+  "must_haves": {
+    "truths": [
+      "kind cell emits subagent_type bee-build",
+      "kind gather still emits bee-gather",
+      "reviewer and advisor are unchanged",
+      "the economics record still names the generation tier"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": "phil",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T14:12:46.163Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "phil-dp2-session",
+    "claimed_at": "2026-08-04T14:06:13.738Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T14:12:34.609Z"
+  }
+}
