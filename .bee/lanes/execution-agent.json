@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature": "execution-agent",
+  "mode": "standard",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"execution-agent\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"execution-agent\" (lane).",
+  "created_at": "2026-08-04T10:17:52.290Z"
+}

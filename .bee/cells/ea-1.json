@@ -1,0 +1,43 @@
+{
+  "id": "ea-1",
+  "feature": "execution-agent",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Render bee-build, the generation-tier execution agent, and stop the guard rewriting execution into a read-only gather",
+  "action": "Add packages/bee/agents/bee-build.md.tmpl (generation tier, write tools, the worker contract in its description) and register it in AGENT_TIER_BY_NAME so onboarding renders .claude/agents/bee-build.md. In model_guard: tier_for_pinned_type accepts bee-build as generation; the general-purpose repair at (0) keeps repairing extraction and review, but a generation dispatch is refused naming both agents and what each is for, since the tier alone cannot distinguish a gather from a cell execution. Red-first on both guard behaviours. Then update the doctrine that names the three agents (swarming-reference step 3 and its runtime table, AGENTS.block) and run render-skill-trees, onboard --repo-root . --apply, release-manifest --write.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "a generation dispatch naming bee-build is allowed",
+      "a generation dispatch naming general-purpose is refused naming both agents",
+      "extraction and review still repair silently",
+      "onboarding renders the new agent file"
+    ]
+  },
+  "files": [
+    "packages/bee/agents/bee-build.md.tmpl",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "packages/bee/AGENTS.block.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
