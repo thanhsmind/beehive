@@ -1,0 +1,44 @@
+{
+  "id": "fm-1",
+  "feature": "flake-monitor",
+  "lane": "standard",
+  "change_class": "test",
+  "behavior_change": false,
+  "deps": [],
+  "title": "Stop the torn-read guard failing on scheduler starvation",
+  "action": "a_concurrent_reader_never_sees_empty_or_truncated_state_json fails about one run in three inside the full 13-test concurrency binary and never fails alone (0.14s, green every time). The failing assertion is its own anti-vacuous guard at concurrency.rs:1012 - count >= 20 monitor reads - not the torn-read invariant, which has never fired. Cause: the monitor thread sleeps a fixed Duration::from_millis(1) per read, and under the parallel run that sleep stretches far past 1ms, so the monitor completes fewer than 20 reads inside a race window that lasts about 0.14s. Make the coverage deterministic without weakening what it proves: drop the fixed sleep for std::thread::yield_now so the monitor is scheduled as often as the machine allows, and if a burst still ends under the threshold, repeat the burst a bounded number of times before failing, so the test reports genuine starvation rather than a scheduling accident. The torn-read assertions stay exactly as they are. Four sightings today, one of them blocking a bee worktree merge.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test concurrency",
+  "must_haves": {
+    "truths": [
+      "ten consecutive runs of the full concurrency binary are green",
+      "the torn-read and empty-read assertions are unchanged",
+      "the coverage guard still fails when the monitor genuinely never overlaps the writers"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/tests/concurrency.rs"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": "jerry",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/concurrency.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T14:48:51.704Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8ce76840-0a14-4fc0-919a-6887bb9d38f1",
+    "claimed_at": "2026-08-04T14:41:59.058Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T14:48:40.215Z"
+  }
+}
