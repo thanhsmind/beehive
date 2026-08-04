@@ -53,7 +53,7 @@
 use crate::fsutil::{ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::lease_store::{self, LeaseErr, LR};
 use crate::lock;
-use crate::verbs::reservations::{jget, js_numberify, js_strict_eq, now_iso, now_ms, truthy};
+use crate::verbs::reservations::{jget, js_numberify, now_iso, now_ms, truthy};
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 
@@ -435,7 +435,15 @@ pub(crate) fn check_processor_lease_epoch(control_root: &Path, expected_epoch: &
         ));
     };
     let epoch_now = jget(&current, "epoch").cloned().unwrap_or(Value::Null);
-    if js_strict_eq(&epoch_now, expected_epoch) {
+    // Two Numbers compare by numeric value, not by serde_json's internal
+    // PosInt/NegInt/Float variant — the presented epoch can be a freshly
+    // computed float while the stored epoch parses back as an integer
+    // literal; they are still the same JSON number.
+    let epoch_matches = match (epoch_now.as_f64(), expected_epoch.as_f64()) {
+        (Some(x), Some(y)) => x == y,
+        _ => &epoch_now == expected_epoch,
+    };
+    if epoch_matches {
         return None;
     }
     let session = jget(&current, "session_id")

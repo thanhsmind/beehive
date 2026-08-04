@@ -9,7 +9,7 @@ use crate::jsjson;
 use crate::lock::{self, AcquireOnce};
 use crate::verbs::reservations::{
     date_parse_val, finish, jget, js_date_parse, js_disp, js_disp_opt, js_is_ws, js_number_flag,
-    js_numberify, js_quote, js_strict_eq, js_trim, keys_known, now_iso, parse_flags,
+    js_numberify, js_quote, js_trim, keys_known, now_iso, parse_flags,
     pseudo_uuid_v4, truthy, v_is_str, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use serde_json::{json, Map, Number, Value};

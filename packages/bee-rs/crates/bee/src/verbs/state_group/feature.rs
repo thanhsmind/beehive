@@ -11,7 +11,7 @@ use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
 use crate::verbs::reservations::{
     date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
-    js_numberify, js_strict_eq, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
+    js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
     Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
@@ -94,7 +94,7 @@ pub(crate) fn rebuild_all_projections(root: &Path) -> R2<Value> {
 /// `wf.status === 'active'` — the filter both the lane-lock peek and
 /// rebuildAllProjections's own lane pass use.
 pub(crate) fn is_active_workflow(wf: &&Map<String, Value>) -> bool {
-    js_strict_eq(wf.get("status").unwrap_or(&Value::Null), &json!("active"))
+    wf.get("status").unwrap_or(&Value::Null) == &json!("active")
 }
 
 /// bee.mjs handleStateRebuildProjections. The ONE seam that holds more than one
@@ -283,8 +283,8 @@ pub(crate) fn check_no_same_feature_claimed_cells(
     let claimed: Vec<String> = cells
         .iter()
         .filter(|c| {
-            js_strict_eq(&cell_field(c, "feature"), &json!(feature))
-                && js_strict_eq(&cell_field(c, "status"), &json!("claimed"))
+            &cell_field(c, "feature") == &json!(feature)
+                && &cell_field(c, "status") == &json!("claimed")
         })
         .map(cell_id_disp)
         .collect();
@@ -303,8 +303,8 @@ pub(crate) fn check_no_live_workflow_for_feature(
     feature: &str,
 ) -> Option<String> {
     let conflict = workflows.iter().find(|wf| {
-        js_strict_eq(&cell_field(wf, "feature"), &json!(feature))
-            && !js_strict_eq(&cell_field(wf, "status"), &json!("closed"))
+        &cell_field(wf, "feature") == &json!(feature)
+            && &cell_field(wf, "status") != &json!("closed")
     })?;
     Some(format!(
         "startFeature: refused — a live workflow already exists for feature \"{feature}\" (workflow {}, phase \"{}\", status \"{}\"). FIX: close or resolve that workflow before starting a new one for the same feature.",
@@ -320,7 +320,7 @@ pub(crate) fn legacy_gates_to_workflow_gates(approved: Option<&Value>) -> Value 
     for name in GATE_NAMES {
         let approved_flag = approved
             .and_then(|g| jget(g, name))
-            .map(|v| js_strict_eq(v, &Value::Bool(true)))
+            .map(|v| v == &Value::Bool(true))
             .unwrap_or(false);
         gates.insert(
             name.to_string(),
@@ -351,8 +351,8 @@ pub(crate) fn ensure_workflow_record_for_feature(
     // Idempotent by FEATURE: a live record is returned untouched, never a
     // second record for one feature and never a silent overwrite.
     let live = list_workflows(control_root)?.into_iter().find(|wf| {
-        js_strict_eq(&cell_field(wf, "feature"), &json!(feature_trimmed))
-            && !js_strict_eq(&cell_field(wf, "status"), &json!("closed"))
+        &cell_field(wf, "feature") == &json!(feature_trimmed)
+            && &cell_field(wf, "status") != &json!("closed")
     });
     if live.is_some() {
         return Ok(());
@@ -389,11 +389,11 @@ pub(crate) fn ensure_workflow_record_for_feature(
 pub(crate) fn close_workflows_for_feature(control_root: &Path, keep: Option<&str>) -> Result<(), Err2> {
     let keep = keep.map(js_trim).filter(|s| !s.is_empty());
     for wf in list_workflows(control_root)? {
-        if js_strict_eq(&cell_field(&wf, "status"), &json!("closed")) {
+        if &cell_field(&wf, "status") == &json!("closed") {
             continue;
         }
         if let Some(keep) = keep {
-            if js_strict_eq(&cell_field(&wf, "feature"), &json!(keep)) {
+            if &cell_field(&wf, "feature") == &json!(keep) {
                 continue;
             }
         }
@@ -418,13 +418,13 @@ pub(crate) fn seed_legacy_workflows(root: &Path, control_root: &Path) -> Result<
     let feature = legacy.get("feature").cloned().unwrap_or(Value::Null);
     let phase = legacy.get("phase").cloned().unwrap_or(Value::Null);
     let gates_live = match legacy.get("approved_gates") {
-        Some(Value::Object(g)) => g.values().any(|v| js_strict_eq(v, &Value::Bool(true))),
-        Some(Value::Array(a)) => a.iter().any(|v| js_strict_eq(v, &Value::Bool(true))),
+        Some(Value::Object(g)) => g.values().any(|v| v == &Value::Bool(true)),
+        Some(Value::Array(a)) => a.iter().any(|v| v == &Value::Bool(true)),
         _ => false,
     };
     let phase_live = truthy(&phase)
-        && !js_strict_eq(&phase, &json!("idle"))
-        && !js_strict_eq(&phase, &json!("compounding-complete"));
+        && &phase != &json!("idle")
+        && &phase != &json!("compounding-complete");
     let legacy_live = truthy(&feature) || phase_live || gates_live;
     if legacy_live && truthy(&feature) {
         ensure_workflow_record_for_feature(
@@ -446,8 +446,8 @@ pub(crate) fn seed_legacy_workflows(root: &Path, control_root: &Path) -> Result<
         }
         let lane_phase = cell_field(&lane, "phase");
         let lane_live = truthy(&lane_phase)
-            && !js_strict_eq(&lane_phase, &json!("idle"))
-            && !js_strict_eq(&lane_phase, &json!("compounding-complete"));
+            && &lane_phase != &json!("idle")
+            && &lane_phase != &json!("compounding-complete");
         if !lane_live {
             continue;
         }
@@ -570,14 +570,14 @@ pub(crate) fn list_claim_holds_for_start(
         }
         let claim_session = jget(&claim, "session").cloned().unwrap_or(Value::Null);
         if let Some(sid) = session_id {
-            if js_strict_eq(&claim_session, &json!(sid)) {
+            if &claim_session == &json!(sid) {
                 continue; // own holds never block
             }
         }
         let claim_cell = jget(&claim, "cell").cloned().unwrap_or(Value::Null);
         let cell = cells
             .iter()
-            .find(|c| js_strict_eq(&cell_field(c, "id"), &claim_cell));
+            .find(|c| &cell_field(c, "id") == &claim_cell);
         let files: Vec<String> = match cell.map(|c| cell_field(c, "files")) {
             Some(Value::Array(a)) => a.iter().map(|f| js_disp_opt(Some(f))).collect(),
             _ => Vec::new(),

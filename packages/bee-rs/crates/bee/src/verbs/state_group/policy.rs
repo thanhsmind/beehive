@@ -11,7 +11,7 @@ use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
 use crate::verbs::reservations::{
     date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
-    js_numberify, js_strict_eq, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
+    js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
     Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
@@ -95,10 +95,7 @@ pub(crate) fn apply_write_policy(
             .iter()
             .filter(|p| {
                 !active.iter().any(|r| {
-                    session_id.is_some_and(|sid| js_strict_eq(
-                        &r.session.clone().unwrap_or(Value::Null),
-                        &json!(sid),
-                    )) && !r.path.ends_with('*')
+                    session_id.is_some_and(|sid| &r.session.clone().unwrap_or(Value::Null) == &json!(sid)) && !r.path.ends_with('*')
                         && paths_overlap(&r.path, p)
                 })
             })
@@ -172,7 +169,7 @@ pub(crate) fn apply_write_policy(
         || config
             .get("guards")
             .and_then(|g| jget(g, "auto_isolate"))
-            .map(|v| js_strict_eq(v, &Value::Bool(true)))
+            .map(|v| v == &Value::Bool(true))
             .unwrap_or(false);
     if !auto_isolate {
         let marker = isolate_notice_marker_path(control_root, session_id);
@@ -283,8 +280,8 @@ pub(crate) fn start_lane(
     let existing = read_lane_strict(root, feature)?;
     if let Some(existing) = &existing {
         let existing_phase = cell_field(existing, "phase");
-        if !js_strict_eq(&existing_phase, &json!("idle"))
-            && !js_strict_eq(&existing_phase, &json!("compounding-complete"))
+        if &existing_phase != &json!("idle")
+            && &existing_phase != &json!("compounding-complete")
         {
             return Ok(Err(format!(
                 "startFeature: refused — lane \"{feature}\" is mid-flight at phase \"{}\", not idle or the terminal alias \"compounding-complete\". FIX: finish or explicitly wind down that lane first, then retry.",
@@ -299,11 +296,11 @@ pub(crate) fn start_lane(
     let nonterminal: Vec<String> = cells
         .iter()
         .filter(|c| {
-            js_strict_eq(&cell_field(c, "feature"), &json!(feature)) && {
+            &cell_field(c, "feature") == &json!(feature) && {
                 let s = cell_field(c, "status");
-                js_strict_eq(&s, &json!("open"))
-                    || js_strict_eq(&s, &json!("claimed"))
-                    || js_strict_eq(&s, &json!("blocked"))
+                &s == &json!("open")
+                    || &s == &json!("claimed")
+                    || &s == &json!("blocked")
             }
         })
         .map(|c| format!("{}({})", cell_id_disp(c), js_disp_opt(c.get("status"))))
@@ -317,7 +314,7 @@ pub(crate) fn start_lane(
 
     // (b) the global handoff blocks a LANE start only when it names this feature.
     if let Some(handoff) = read_handoff(root)? {
-        if js_strict_eq(&jget(&handoff, "feature").cloned().unwrap_or(Value::Null), &json!(feature))
+        if &jget(&handoff, "feature").cloned().unwrap_or(Value::Null) == &json!(feature)
         {
             return Ok(Err(format!(
                 "startFeature: refused — .bee/HANDOFF.json names feature \"{feature}\"; its paused work must resume or close before this lane restarts. FIX: resume the handoff (or explicitly delete HANDOFF.json once its work is truly abandoned), then retry."
@@ -331,8 +328,8 @@ pub(crate) fn start_lane(
         .filter(|w| {
             let Some(cell_id) = &w.cell else { return false };
             cells.iter().any(|c| {
-                js_strict_eq(&cell_field(c, "id"), cell_id)
-                    && js_strict_eq(&cell_field(c, "feature"), &json!(feature))
+                &cell_field(c, "id") == cell_id
+                    && &cell_field(c, "feature") == &json!(feature)
             })
         })
         .map(|w| format!("{}({})", w.session_id, js_disp_opt(w.cell.as_ref())))
@@ -425,8 +422,8 @@ pub(crate) fn start_default(
     let mut state = read_state_strict(root)?;
 
     let current_phase = state.get("phase").cloned().unwrap_or(Value::Null);
-    if !js_strict_eq(&current_phase, &json!("idle"))
-        && !js_strict_eq(&current_phase, &json!("compounding-complete"))
+    if &current_phase != &json!("idle")
+        && &current_phase != &json!("compounding-complete")
     {
         return Ok(Err(format!(
             "startFeature: refused — current phase is \"{}\", not idle or the terminal alias \"compounding-complete\". A prior feature must finish or be explicitly wound down before a new feature starts. FIX: resume/close the current feature through its normal chain, or drop its remaining cells (bee cells drop), then retry.",
@@ -437,7 +434,7 @@ pub(crate) fn start_default(
     // F5: scoped per-feature — a handoff naming a DIFFERENT feature no longer
     // blocks this start.
     if let Some(handoff) = read_handoff(root)? {
-        if js_strict_eq(&jget(&handoff, "feature").cloned().unwrap_or(Value::Null), &json!(feature))
+        if &jget(&handoff, "feature").cloned().unwrap_or(Value::Null) == &json!(feature)
         {
             return Ok(Err(format!(
                 "startFeature: refused — .bee/HANDOFF.json names feature \"{feature}\"; its paused work must resume or close before this feature restarts. FIX: resume the handoff (or explicitly delete HANDOFF.json once its work is truly abandoned), then retry."
@@ -461,7 +458,7 @@ pub(crate) fn start_default(
     let cells = list_all_cells_for_start(root)?;
     let claimed: Vec<String> = cells
         .iter()
-        .filter(|c| js_strict_eq(&cell_field(c, "status"), &json!("claimed")))
+        .filter(|c| &cell_field(c, "status") == &json!("claimed"))
         .map(cell_id_disp)
         .collect();
     if !claimed.is_empty() {
@@ -476,11 +473,11 @@ pub(crate) fn start_default(
         let nonterminal: Vec<String> = cells
             .iter()
             .filter(|c| {
-                js_strict_eq(&cell_field(c, "feature"), &prior_feature) && {
+                &cell_field(c, "feature") == &prior_feature && {
                     let s = cell_field(c, "status");
-                    js_strict_eq(&s, &json!("open"))
-                        || js_strict_eq(&s, &json!("claimed"))
-                        || js_strict_eq(&s, &json!("blocked"))
+                    &s == &json!("open")
+                        || &s == &json!("claimed")
+                        || &s == &json!("blocked")
                 }
             })
             .map(|c| format!("{}({})", cell_id_disp(c), js_disp_opt(c.get("status"))))

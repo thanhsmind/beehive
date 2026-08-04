@@ -125,7 +125,6 @@
 
 
 
-use crate::verbs::reservations::js_strict_eq;
 
 
 
@@ -174,7 +173,7 @@ const EXAMPLE_COMPOUNDING: &str =
 fn opt_strict_eq(a: Option<&Value>, b: Option<&Value>) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(x), Some(y)) => js_strict_eq(x, y),
+        (Some(x), Some(y)) => x == y,
         _ => false,
     }
 }

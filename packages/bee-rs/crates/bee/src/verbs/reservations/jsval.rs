@@ -71,19 +71,6 @@ pub(crate) fn js_quote(s: &str) -> String {
     jsjson::stringify(&Value::String(s.to_string()))
 }
 
-/// JS strict equality (===) over parsed JSON primitives. Objects/arrays are
-/// reference-compared in JS; two independently parsed values are never the
-/// same reference, so `false` is faithful for them here.
-pub(crate) fn js_strict_eq(a: &Value, b: &Value) -> bool {
-    match (a, b) {
-        (Value::Null, Value::Null) => true,
-        (Value::Bool(x), Value::Bool(y)) => x == y,
-        (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
-        (Value::String(x), Value::String(y)) => x == y,
-        _ => false,
-    }
-}
-
 pub(crate) fn v_is_str(v: &Value, s: &str) -> bool {
     matches!(v, Value::String(x) if x == s)
 }

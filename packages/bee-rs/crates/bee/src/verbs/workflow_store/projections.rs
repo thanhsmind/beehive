@@ -8,7 +8,7 @@ use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock::{self, LockGuard, MAX_ATTEMPTS};
 use crate::verbs::reservations::{
-    date_parse_val, jget, js_disp, js_disp_opt, js_strict_eq, js_trim, now_iso, pseudo_uuid_v4,
+    date_parse_val, jget, js_disp, js_disp_opt, js_trim, now_iso, pseudo_uuid_v4,
     truthy, Err2, Ex, Exotic,
 };
 use crate::verbs::state_group::{
@@ -42,7 +42,7 @@ pub(crate) fn workflow_gates_to_approved_gates(gates: Option<&Value>, plan_rev: 
         let rev_effective = match rev {
             None | Some(Value::Null) => true,
             Some(v) => match plan_rev {
-                Some(p) => js_strict_eq(v, p),
+                Some(p) => v == p,
                 None => false, // `rev === undefined` already handled; a real rev never === undefined
             },
         };
@@ -59,10 +59,7 @@ pub(crate) fn pick_newest_active_workflow(
     let mut active: Vec<&Map<String, Value>> = Vec::new();
     for wf in workflows {
         if wf.get("status") == Some(&json!("active"))
-            && !js_strict_eq(
-                wf.get("phase").unwrap_or(&Value::Null),
-                &json!("compounding-complete"),
-            )
+            && wf.get("phase").unwrap_or(&Value::Null) != &json!("compounding-complete")
         {
             active.push(wf);
         }
@@ -169,8 +166,8 @@ pub(crate) fn rebuild_state_projection_reporting(
     }
     // Branch (2) — idle bootstrap (msn-7).
     let phase = current.get("phase").cloned().unwrap_or(Value::Null);
-    let current_is_idle = js_strict_eq(&phase, &json!("idle"))
-        || js_strict_eq(&phase, &json!("compounding-complete"))
+    let current_is_idle = &phase == &json!("idle")
+        || &phase == &json!("compounding-complete")
         || !truthy(&phase);
     if !current_is_idle {
         return Ok(no_op(current));

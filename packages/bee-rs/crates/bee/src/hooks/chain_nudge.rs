@@ -238,16 +238,6 @@ fn truthy(v: &Value) -> bool {
     }
 }
 
-fn js_strict_eq(a: &Value, b: &Value) -> bool {
-    match (a, b) {
-        (Value::String(x), Value::String(y)) => x == y,
-        (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
-        (Value::Bool(x), Value::Bool(y)) => x == y,
-        (Value::Null, Value::Null) => true,
-        _ => false, // two separately-parsed objects are never === in JS
-    }
-}
-
 /// JS Date.parse for the shapes bee writes: RFC3339 timestamps
 /// ("2026-07-30T03:35:50.326Z") and date-only "YYYY-MM-DD" (UTC midnight).
 /// Anything else reads as NaN (None) — the .mjs's exotic legacy-parser forms
@@ -739,7 +729,7 @@ fn list_cells_filtered(
         // JS `if (feature && cell.feature !== feature) continue` — an absent
         // cell.feature (undefined) never strict-equals a truthy filter.
         if truthy(feature)
-            && !js_strict_eq(cell.get("feature").unwrap_or(&Value::Null), feature)
+            && cell.get("feature").unwrap_or(&Value::Null) != feature
         {
             continue;
         }
@@ -792,7 +782,7 @@ fn best_scribing_stamp_ms(
         // JS `if (!entry || entry.feature !== feature) continue` — a truthy
         // `feature` never strict-equals an absent (undefined) field.
         let Value::Object(e) = entry else { continue };
-        if !js_strict_eq(e.get("feature").unwrap_or(&Value::Null), feature) {
+        if e.get("feature").unwrap_or(&Value::Null) != feature {
             continue;
         }
         consider(e.get("ts").and_then(date_parse_ms));
@@ -816,7 +806,7 @@ fn best_scribing_stamp_ms(
                 Value::Object(m) => m.get("feature"),
                 _ => None,
             };
-            if run_feature.is_some() && js_strict_eq(run_feature.unwrap(), feature) {
+            if run_feature.is_some() && run_feature.unwrap() == feature {
                 consider(scribing_run_stamp_ms(Some(run)));
             }
         }

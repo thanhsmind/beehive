@@ -80,7 +80,7 @@
 use crate::fsutil::{ensure_dir, write_json_atomic};
 use crate::jsjson;
 use crate::lock::{self, LockBusy};
-use crate::verbs::reservations::{iso_from_ms, jget, js_strict_eq, js_trim, truthy};
+use crate::verbs::reservations::{iso_from_ms, jget, js_trim, truthy};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -330,6 +330,19 @@ fn compute_expires_at(ttl: f64, now_ms: f64) -> Value {
     }
 }
 
+/// Native `Value` equality, except two Numbers compare by numeric value
+/// (`as_f64`) rather than by serde_json's internal PosInt/NegInt/Float
+/// variant — `epoch` here can arrive as an integer literal parsed from a
+/// stored file or as a float produced by in-memory arithmetic, and those
+/// are the same JSON number even though serde_json's derived `PartialEq`
+/// treats them as different representations.
+fn value_eq(a: &Value, b: &Value) -> bool {
+    match (a.as_f64(), b.as_f64()) {
+        (Some(x), Some(y)) => x == y,
+        _ => a == b,
+    }
+}
+
 /// lease-store.mjs sameLeaseRecord — exact-match acquisition identity, so a
 /// rollback can never delete a file that changed underneath it.
 fn same_lease_record(a: Option<&Value>, b: &Value) -> bool {
@@ -340,7 +353,7 @@ fn same_lease_record(a: Option<&Value>, b: &Value) -> bool {
     for key in ["resource", "session_id", "workflow_id", "epoch", "acquired_at"] {
         match (jget(a, key), jget(b, key)) {
             (None, None) => {}            // undefined === undefined
-            (Some(x), Some(y)) if js_strict_eq(x, y) => {}
+            (Some(x), Some(y)) if value_eq(x, y) => {}
             _ => return false,
         }
     }

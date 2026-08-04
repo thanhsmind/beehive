@@ -341,7 +341,7 @@ pub(crate) fn release_reservations_for_agent(root: &Path, agent: &str, cell_id: 
         let resv = lease_to_resv_lite(rec)?;
         let agent_match = matches!(&resv.agent, Some(Value::String(s)) if s == agent);
         let cell_match =
-            matches!(&resv.cell, Some(v) if rsv::js_strict_eq(v, &Value::String(cell_id.to_string())));
+            matches!(&resv.cell, Some(v) if v == &Value::String(cell_id.to_string()));
         if agent_match && cell_match {
             matched.push(resv);
         }
@@ -378,7 +378,7 @@ pub(crate) fn release_reservations_for_agent(root: &Path, agent: &str, cell_id: 
         }
         let matches_cell = matches!(
             rec.get("workflow_id"),
-            Some(v) if rsv::js_strict_eq(v, &Value::String(cell_id.to_string()))
+            Some(v) if v == &Value::String(cell_id.to_string())
         );
         if !matches_cell {
             continue;
@@ -413,11 +413,11 @@ pub(crate) fn release_reservations_for_agent(root: &Path, agent: &str, cell_id: 
                         continue;
                     }
                     if let Some(s) = session_v {
-                        if !matches!(hold.get("session"), Some(v) if rsv::js_strict_eq(v, s)) {
+                        if !matches!(hold.get("session"), Some(v) if v == s) {
                             continue;
                         }
                     }
-                    if !matches!(hold.get("cell"), Some(v) if rsv::js_strict_eq(v, cell_v)) {
+                    if !matches!(hold.get("cell"), Some(v) if v == cell_v) {
                         continue;
                     }
                     if let Value::Object(m) = hold {

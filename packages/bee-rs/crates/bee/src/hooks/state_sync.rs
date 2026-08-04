@@ -190,16 +190,6 @@ fn truthy(v: &Value) -> bool {
     }
 }
 
-fn js_strict_eq(a: &Value, b: &Value) -> bool {
-    match (a, b) {
-        (Value::String(x), Value::String(y)) => x == y,
-        (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
-        (Value::Bool(x), Value::Bool(y)) => x == y,
-        (Value::Null, Value::Null) => true,
-        _ => false, // two separately-parsed objects are never === in JS
-    }
-}
-
 /// JS Date.parse for the shapes bee writes (RFC3339, or date-only UTC).
 fn date_parse_ms(v: &Value) -> Option<f64> {
     let Value::String(s) = v else { return None };
@@ -1104,7 +1094,7 @@ fn workflow_gates_to_approved(gates: &Value, plan_rev: &Value) -> Value {
         };
         let rev_effective = match rev {
             None | Some(Value::Null) => true,
-            Some(v) => js_strict_eq(v, plan_rev),
+            Some(v) => v == plan_rev,
         };
         approved.insert(name.to_string(), Value::Bool(is_approved && rev_effective));
     }
@@ -1117,10 +1107,7 @@ fn pick_newest_active(workflows: &[Map<String, Value>]) -> Option<&Map<String, V
         .iter()
         .filter(|wf| {
             wf.get("status") == Some(&json!("active"))
-                && !js_strict_eq(
-                    wf.get("phase").unwrap_or(&Value::Null),
-                    &json!("compounding-complete"),
-                )
+                && wf.get("phase").unwrap_or(&Value::Null) != &json!("compounding-complete")
         })
         .collect();
     active.sort_by(|a, b| {
@@ -1174,8 +1161,8 @@ fn rebuild_state_projection(
     if truthy(&feature) {
         // Branch (1) — feature-matched, msn-10.
         let wf = workflows.iter().find(|w| {
-            js_strict_eq(w.get("feature").unwrap_or(&Value::Null), &feature)
-                && !js_strict_eq(w.get("status").unwrap_or(&Value::Null), &json!("closed"))
+            w.get("feature").unwrap_or(&Value::Null) == &feature
+                && w.get("status").unwrap_or(&Value::Null) != &json!("closed")
         });
         let mut next = current;
         if let Some(wf) = wf {

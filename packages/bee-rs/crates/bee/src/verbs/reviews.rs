@@ -73,7 +73,7 @@ use crate::jsjson;
 use crate::verbs::feedback::{random_uuid_v4, read_jsonl, value_js_safe};
 use crate::verbs::knowledge::{g_prelude, js_str_or_undefined, pre_json_scan, GCtx, GPre};
 use crate::verbs::reservations::{
-    js_numberify, js_strict_eq, js_trim, keys_known, now_iso, parse_flags, truthy, FlagV, Flags,
+    js_numberify, js_trim, keys_known, now_iso, parse_flags, truthy, FlagV, Flags,
 };
 use serde_json::{Map, Value};
 use std::cmp::Ordering;
@@ -578,7 +578,7 @@ fn read_stdin_text() -> Result<String, String> {
 fn strict_eq_opt(a: Option<&Value>, b: Option<&Value>) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(x), Some(y)) => js_strict_eq(x, y),
+        (Some(x), Some(y)) => x == y,
         _ => false,
     }
 }
@@ -586,7 +586,7 @@ fn strict_eq_opt(a: Option<&Value>, b: Option<&Value>) -> bool {
 /// SameValueZero over parsed JSON (Set.has): primitives by value, composites
 /// by identity — never equal across independent parses.
 fn same_value_zero(a: &Value, b: &Value) -> bool {
-    js_strict_eq(a, b)
+    a == b
 }
 
 fn session_covers_candidate(session: &Value, candidate: &Value) -> bool {

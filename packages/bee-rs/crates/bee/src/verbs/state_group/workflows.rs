@@ -11,7 +11,7 @@ use crate::jsjson;
 use crate::lock::{self, AcquireOnce, LockGuard};
 use crate::verbs::reservations::{
     date_parse_val, finish, iso_from_ms, jget, js_disp, js_disp_opt,
-    js_numberify, js_strict_eq, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
+    js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
     Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
@@ -136,8 +136,8 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
             let id = flag_string(&flags, "id").unwrap_or_default();
             let records = list_workflows(&ctx.root)?;
             let live = records.iter().find(|r| {
-                js_strict_eq(r.get("id").unwrap_or(&Value::Null), &Value::String(id.clone()))
-                    && !js_strict_eq(r.get("status").unwrap_or(&Value::Null), &json!("closed"))
+                r.get("id").unwrap_or(&Value::Null) == &Value::String(id.clone())
+                    && r.get("status").unwrap_or(&Value::Null) != &json!("closed")
             });
             if live.is_none() {
                 return Ok(Out::Thrown(format!(
@@ -175,13 +175,8 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
             let matches: Vec<String> = records
                 .iter()
                 .filter(|r| {
-                    js_strict_eq(
-                        r.get("feature").unwrap_or(&Value::Null),
-                        &Value::String(feature.clone()),
-                    ) && !js_strict_eq(
-                        r.get("status").unwrap_or(&Value::Null),
-                        &json!("closed"),
-                    )
+                    r.get("feature").unwrap_or(&Value::Null) == &Value::String(feature.clone())
+                        && r.get("status").unwrap_or(&Value::Null) != &json!("closed")
                 })
                 .map(wf_id)
                 .collect();
@@ -227,14 +222,11 @@ pub(crate) fn run_workflows_close(flags: Flags, use_json: bool, t0: Instant) -> 
         let records = list_workflows(&ctx.root)?;
         let mut closed: Vec<Value> = Vec::new();
         for record in &records {
-            if js_strict_eq(record.get("status").unwrap_or(&Value::Null), &json!("closed")) {
+            if record.get("status").unwrap_or(&Value::Null) == &json!("closed") {
                 continue;
             }
             if let Some(keep) = &keep {
-                if js_strict_eq(
-                    record.get("feature").unwrap_or(&Value::Null),
-                    &Value::String(keep.clone()),
-                ) {
+                if record.get("feature").unwrap_or(&Value::Null) == &Value::String(keep.clone()) {
                     continue;
                 }
             }
@@ -516,7 +508,7 @@ pub(crate) fn other_live_work_present(root: &Path) -> Ex<bool> {
             None => read_state_peek(root)?.get("phase").cloned(),
         };
         let live = match phase {
-            Some(p) => truthy(&p) && !js_strict_eq(&p, &json!("idle")) && !js_strict_eq(&p, &json!("compounding-complete")),
+            Some(p) => truthy(&p) && &p != &json!("idle") && &p != &json!("compounding-complete"),
             None => false,
         };
         if live {
@@ -630,8 +622,8 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         let phase = target.record().get("phase").cloned().unwrap_or(Value::Null);
         let feature_set = target.record().get("feature").map(truthy).unwrap_or(false);
         if !feature_set
-            || js_strict_eq(&phase, &json!("idle"))
-            || js_strict_eq(&phase, &json!("compounding-complete"))
+            || &phase == &json!("idle")
+            || &phase == &json!("compounding-complete")
         {
             // `${phase ?? 'idle'}` / `${state.feature ?? 'none'}` — nullish.
             let phase_disp = match target.record().get("phase") {

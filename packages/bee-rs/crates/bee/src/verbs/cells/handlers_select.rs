@@ -194,7 +194,7 @@ pub(crate) fn sweep_reset_cell(
             Some(Value::Object(t)) => nullish(t.get("claim_session")),
             Some(_) => Value::Null, // truthy non-object: .claim_session is undefined
         };
-        if !rsv::js_strict_eq(&current_session, swept_session) {
+        if &current_session != swept_session {
             return Ok(false); // a fresher claim already owns it
         }
         let mut record = record;

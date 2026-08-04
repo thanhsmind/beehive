@@ -44,7 +44,7 @@
 use crate::fsutil::{read_json, ReadJson};
 use crate::state::read_state_brief;
 use crate::verbs::knowledge::{g_prelude, js_bool_flag, pre_json_scan, GPre};
-use crate::verbs::reservations::{js_date_parse, js_strict_eq, js_trim, keys_known, now_ms, parse_flags, FlagV};
+use crate::verbs::reservations::{js_date_parse, js_trim, keys_known, now_ms, parse_flags, FlagV};
 use serde_json::{Map, Value};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -145,10 +145,7 @@ fn read_lane_phase(root: &Path, feature: &str) -> Result<Option<Value>, ()> {
     };
     // laneRecordFrom: object, feature field must strictly equal the trimmed name.
     let record_ok = matches!(&parsed, Value::Object(_))
-        && js_strict_eq(
-            parsed.get("feature").unwrap_or(&Value::Null),
-            &Value::String(trimmed.to_string()),
-        );
+        && parsed.get("feature").unwrap_or(&Value::Null) == &Value::String(trimmed.to_string());
     if !record_ok {
         let rel = format!(
             ".bee{sep}lanes{sep}{trimmed}.json",
@@ -171,7 +168,7 @@ fn read_lane_phase(root: &Path, feature: &str) -> Result<Option<Value>, ()> {
 }
 
 fn is_live_feature(root: &Path, state: &StateLite, name: &str) -> Result<bool, ()> {
-    if js_strict_eq(&state.feature, &Value::String(name.to_string())) && !is_terminal_phase(&state.phase) {
+    if &state.feature == &Value::String(name.to_string()) && !is_terminal_phase(&state.phase) {
         return Ok(true);
     }
     match read_lane_phase(root, name)? {
@@ -181,7 +178,7 @@ fn is_live_feature(root: &Path, state: &StateLite, name: &str) -> Result<bool, (
 }
 
 fn has_record(root: &Path, state: &StateLite, name: &str) -> Result<bool, ()> {
-    if js_strict_eq(&state.feature, &Value::String(name.to_string())) {
+    if &state.feature == &Value::String(name.to_string()) {
         return Ok(true);
     }
     Ok(read_lane_phase(root, name)?.is_some())
