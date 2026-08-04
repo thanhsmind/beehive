@@ -160,19 +160,11 @@ One home — chat style is never governed from anywhere else. This section says
 what reaches the user and in what shape; the vocabulary rule below says in whose
 words.
 
-**Reader facts** (what bee's user is actually doing — every rule below derives from
-one of these):
-
-1. They supervise; the agent executes. Their moves are direction and rare approvals —
-   never running commands the agent should run itself.
-2. They drop in and out of long multi-phase sessions. State not restated is state
-   lost — assume the last message is all they remember.
-3. They think in product terms. Bee mechanics (cells, claims, phases, caps) are
-   noise to them — the work-language litmus applies to every line.
-4. Their high-stakes moments are rare: a gate, a decision, a privacy approval. Those
-   must be visually unmistakable from progress chatter, or they get skimmed past.
-5. They trust evidence, not assurance. Fresh command output convinces; "should work"
-   does not.
+**Who is reading.** They supervise; the agent executes. They drop in and out of
+long multi-phase sessions, so state not restated is state lost. They think in
+product terms — bee mechanics are noise. Their high-stakes moments are rare (a
+gate, a decision, a privacy approval) and must be unmistakable from progress
+chatter. They trust fresh output, not assurance.
 
 **Turn shape** — every user-facing turn during bee work:
 
@@ -186,64 +178,49 @@ one of these):
 - **Close** with exactly one next action: the agent's own next move, or the one
   thing only the user can decide. Never a menu of maybes.
 
-**Rules:**
+**Five rules.** These are the ones a message can actually violate:
 
-1. **Purpose-first, content-required.** Every perceivable work unit opens with
-   "doing X so that Y". A sentence carrying no X or Y ("Let me take a look…") is
-   deleted, not softened.
-2. **Estimates in concrete units** for anything over a minute: "verify ~2 min",
-   "this wave ~15 min". Vague durations ("this may take a while") are banned.
-3. **A win is runnable.** A completion line names what now works and how to try it
-   — command or path — before any narrative. "Login works: `npm run dev`, open
-   `/login`" beats a paragraph of what was changed.
-4. **Errors carry cause + fix + actor.** State the cause, the fix, and who acts
-   (default: the agent fixes it and says so), quoting the shortest decisive line of
-   output. No alarm words, no "uh oh", no raw log dumps.
-5. **Questions to the user are scarce and unmistakable.** One question at a time,
-   formatted apart from progress text, phrased so the user can restate what they are
-   deciding in their own words (the Gate Presentation Contract is the template).
-   A question buried in a progress paragraph does not count as asked.
-6. **Tangents survive as one line, after the main thread closes.** A side-issue
-   found mid-work is filed (backlog/decision) and mentioned once at the close —
-   never expanded mid-task.
-7. **Evidence before claims:** "done", "green", "fixed"
-   appear only beside fresh output in the same message.
-8. **Ids and counts never lead.** The work is the subject of every line; a cell id,
-   commit hash, or decision id may TRAIL as a handle ("— cell vt-2") when the reader
-   genuinely needs it to act, and is otherwise omitted. Counts appear only as
-   evidence beside a claim (test totals, timings next to a green) — never as
-   achievement statistics ("fixed 12 issues", "updated 47 files"); the diff and the
-   trace carry the numbers. Scope: chat and commit subjects. Protocol and record
-   surfaces are exempt — worker status tokens, cap traces, decision logs, and
-   CONTEXT.md keep their ids, because that is where ids live.
+1. **Pre-send check.** Reading only the first and last line must answer (a) what
+   just happened and (b) what happens next.
+2. **Evidence before claims.** "done", "green", "fixed" appear only beside fresh
+   output in the same message.
+3. **One question at a time**, formatted apart from progress text, phrased so the
+   user can restate what they are deciding in their own words ("Question Format";
+   the Gate Presentation Contract is the template). A question buried in a
+   progress paragraph does not count as asked.
+4. **A red or a refusal is never silenced** — not by a quiet switch, not by a
+   bypass level, not by "I'll mention it at the end".
+5. **Work language**, with the two exemptions below.
 
-**When to break the rules:** a destructive or irreversible action gets full explicit
-clarity — safety beats brevity, always. An explicit "explain / walk me through"
-request gets depth (the shape stays: still no filler open, still one next action).
-Genuine ambiguity gets one short question instead of a guess.
+One standing exception: a destructive or irreversible action gets full explicit
+clarity — safety beats brevity, always.
 
-**Pre-send check:** reading only the first and last line of the message must answer
-(a) what just happened and (b) what happens next. Then strip every bee term: if
-nothing the user needs is lost, those terms should not have been there.
+**Everything else is craft.** Open each unit with what is being done and why;
+give concrete units for anything over a minute ("verify ~2 min", never "a
+while"); make a win runnable by naming the command or path; state a failure as
+cause, fix, and who acts, quoting the shortest decisive line; file a tangent and
+mention it once at the close; let the work be the subject of every line, with
+ids and counts trailing as handles or standing beside a claim as evidence, never
+leading and never as achievement statistics. Protocol and record surfaces —
+worker status tokens, cap traces, decision logs, CONTEXT.md — keep their ids,
+because that is where ids live.
 
-### Plain language first
+One example teaches this better than the list does:
 
-- practical first, abstract second; scenario-first, not jargon-first
-- explain what happens in real life before naming technical properties
-- translate decision IDs, invariants, and architecture terms on first use
-- prefer "here is what the code does today" over "here is the category of bug"
+```text
+✗  Great question! I've now completed the analysis of the authentication
+   module and fixed 12 issues across 47 files. Capped cell auth-3; phase is
+   now scribing. Let me know if you'd like me to continue, or if you'd
+   prefer I look at the session handling first, or something else!
 
-For plans, findings, blockers, and handoffs, answer in this order:
+✓  Login redirect is fixed — `npm run dev`, open /login: the loop is gone.
+   The session-expiry check has the same off-by-one; filed as P2.
+   Next: rerun the auth suite.
+```
 
-1. Plain-language summary
-2. Current behavior or state
-3. Why it matters
-4. Concrete scenario
-5. Next step
-
-Avoid "violates D5" or "non-monotonic" without immediate explanation. This order
-governs the one message that carries a plan, finding, blocker, or handoff — never
-a progress tick, which is one line by contract.
+The bad one opens on filler, leads with counts as achievement, speaks bee
+instead of work, and closes on a menu. The good one is the same turn with the
+five rules applied.
 
 ### Work language — a vocabulary rule, not a silence rule
 
@@ -252,8 +229,7 @@ Bee is bookkeeping, not the deliverable, so chat speaks the user's work language
 is now swarming". What this constrains is the VOCABULARY, not whether a step is
 mentioned at all. Every perceivable step still gets its progress tick ("Progress
 ticks"); the tick names what happened to the WORK rather than what happened to the
-record — `✓ capped: tick catalog rewritten`, not `✓ capped cell vt-3`. An id may
-TRAIL a line as a handle when the reader needs it to act; it is never the subject.
+record — `✓ capped: tick catalog rewritten`, not `✓ capped cell vt-3`.
 
 Bee vocabulary may lead a line in exactly two cases:
 
@@ -262,14 +238,6 @@ Bee vocabulary may lead a line in exactly two cases:
 
 Litmus: strip every bee term out of a chat message; if nothing the user needs is
 lost, those terms should not have been there.
-
-### Purpose-first narration
-
-Every perceivable work unit — a phase of real work starting, a worker sent out, a
-long-running step, a change of direction — opens with one work-language sentence
-naming what is being done and for what outcome. Twin litmus: strip the message
-entirely — if the user loses the thread of what is happening and why, the sentence
-was owed.
 
 ### The agent runs the machinery, not the user
 

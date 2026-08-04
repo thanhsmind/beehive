@@ -1,0 +1,46 @@
+{
+  "id": "bc-3",
+  "feature": "doctrine-prose-diet",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [
+    "bc-2"
+  ],
+  "title": "Shrink hook-enforced rules to signposts and run the regen chain",
+  "action": "Rules already enforced by a hook or a test are restated across files: gates belong to the user (6 sites), gate-before-source (4), CLI-only state (4), reservation conflicts (4), red refuses the cap (3), docs/specs read-only (3), the scout read guard (1, self-admittedly redundant), AskUserQuestion schema (harness-enforced). Keep one canonical home each — AGENTS.md for the boundary rules, gates-and-delegation for gate mechanics, scout-and-ticks for the spec fence — and reduce every other site to a single pointer line. Then run the wave-close regen: bee dev render-skill-trees, bee onboard --repo-root . --apply, bee dev release-manifest --write, in that order.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "each enforced rule has exactly one full statement",
+      "every other mention is one line",
+      "rendered projections and the manifest match the sources"
+    ]
+  },
+  "files": [
+    "AGENTS.md",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-reviewing/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

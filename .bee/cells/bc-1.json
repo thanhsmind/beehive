@@ -1,0 +1,58 @@
+{
+  "id": "bc-1",
+  "feature": "doctrine-prose-diet",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier",
+  "title": "Cut the Communication contract to five load-bearing rules plus one worked example",
+  "action": "routing-and-contracts.md lines ~157-346 hold ~30 prose rules no hook can check. Keep five: pre-send check (first+last line answer what happened / what is next), one question per message, a red or refusal line is never silenced, evidence beside fresh output, work-language with its two exemptions. Fold the rest (vague-duration ban, tangent-once, ids-never-lead, purpose-first, the 5-step answer order, plain-language bullets) into one short style paragraph plus one good/bad example pair. Keep the Question Format template and the File Quick Reference. Do not touch headings other files point at without repointing them.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+  "must_haves": {
+    "truths": [
+      "five rules survive as rules",
+      "the cut rules survive as one example, not a list",
+      "every cross-file pointer still resolves"
+    ]
+  },
+  "files": [
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": "orchestrator-main",
+    "outcome": null,
+    "files_changed": [
+      "skills/bee-hive/references/routing-and-contracts.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-04T09:32:50.902Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9f1a5dd3-4503-443a-95df-2a845fc0ad53",
+    "claimed_at": "2026-08-04T09:30:40.271Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-04T09:32:13.873Z",
+        "claim_session": "9f1a5dd3-4503-443a-95df-2a845fc0ad53",
+        "claimed_at": "2026-08-04T09:30:40.271Z",
+        "acquired_at": "2026-08-04T09:30:40.271Z",
+        "worker": "orchestrator-main",
+        "verdict": "tests-red",
+        "failure_signature": "cbe5cfdf7c21",
+        "note": "|"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-04T09:32:39.284Z"
+  }
+}

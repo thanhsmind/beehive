@@ -1,0 +1,43 @@
+{
+  "id": "bc-2",
+  "feature": "doctrine-prose-diet",
+  "lane": "standard",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [
+    "bc-1"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "title": "Give Codex tending and gate bypass one home each, and drop the changelog paragraphs",
+  "action": "The Codex wait_agent tending rules are stated three times: gates-and-delegation.md:165-187 and swarming-reference.md twice (168-189 and 400-421). Keep gates-and-delegation as the single home, compress it to principle plus table, leave one-line pointers in swarming-reference and delete its duplicate block. Bypass semantics: keep the table in gates-and-delegation, cut SKILL.md:52-61 and go-mode.md:144-148 to a pointer each. Delete the changelog narration at gates-and-delegation.md:100 and the retired-commands.verify sentence in :160.",
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity --test instruction_laws",
+  "must_haves": {
+    "truths": [
+      "Codex tending stated once",
+      "bypass table stated once",
+      "no changelog narration left in operating references"
+    ]
+  },
+  "files": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-hive/references/go-mode.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
