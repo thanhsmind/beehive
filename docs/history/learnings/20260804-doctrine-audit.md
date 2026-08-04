@@ -104,8 +104,15 @@ All five are the same shape at different depths:
   your flags" from "this path was never ported".
 - `bee close` refuses a lane feature outright (`router.rs:78` covers non-lane
   features only), so a lane never runs the close driver's test door.
-- A worker cannot run `cells finish` from inside its own worktree — the
-  control plane refuses there — so the orchestrator caps after merge, which
-  inverts cap-before-merge. `bee-build` hit this on its first real dispatch.
+- ~~A worker cannot run `cells finish` from inside its own worktree~~ —
+  **fixed the same day** (`worktree-finish`). The refusal was policy, not
+  physics: `worktree`, `status`/`orient` and `reservations` already span
+  checkouts through the FULL door and `hold_topology()`. `finish` now takes
+  the same road — cell and claim at the main store, declared tests with cwd
+  in the worktree, holds released as `(main_root, worktree-id)` — while every
+  other cells verb stays narrow. Proven by capping its own cell from inside
+  the worktree. The un-ported piece the door was waiting on was one function:
+  cells' holds ledger keyed at the resolved root, which from a worktree would
+  have released nobody's holds while reporting success.
 - The concurrency suite goes red only when run inside `bee cells finish`,
   green standalone. Filed P2, cause unknown.
