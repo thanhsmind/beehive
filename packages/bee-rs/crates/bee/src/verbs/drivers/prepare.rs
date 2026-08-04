@@ -400,6 +400,13 @@ pub(crate) fn prompt_body_for(
     kind: &str,
     cell: Option<&Value>,
     worker: Option<&str>,
+    // `Some((worktree_root, control_root))` only when the cell's feature has
+    // a granted worktree — see `worktree_location` in `prepare_dispatch`,
+    // the ONE resolution this and the envelope both read. `None` (an
+    // unworktreed feature, or a non-cell kind) renders byte-identically to
+    // before this Location block existed: the `{{#if worktree_root}}` marker
+    // strips to nothing when its var is empty.
+    worktree_location: Option<(&str, &str)>,
 ) -> D<Result<String, String>> {
     if kind != "cell" {
         let Some(template) = load_prompt(kind) else { return Err(Delegate) };
@@ -412,6 +419,7 @@ pub(crate) fn prompt_body_for(
     let cell_json = jsjson::stringify_pretty(cell);
     let feature = tpl(vget(cell, "feature"));
     let cell_id = tpl(vget(cell, "id"));
+    let (worktree_root, control_root) = worktree_location.unwrap_or(("", ""));
     Ok(render(
         &template,
         &[
@@ -421,6 +429,8 @@ pub(crate) fn prompt_body_for(
             ("cell_json", &cell_json),
             ("learned_context", &learned),
             ("prior_rounds", &prior),
+            ("worktree_root", worktree_root),
+            ("control_root", control_root),
         ],
     ))
 }
@@ -533,6 +543,24 @@ pub(crate) fn prepare_dispatch(
         cell = Some(loaded);
     }
 
+    // `find_granted_worktree_for_feature` (status_full/topology.rs) resolved
+    // ONCE here feeds both the envelope (below) and the rendered prompt's
+    // Location block (prompt_body_for) — one resolution, two destinations,
+    // never a second lookup that could drift from the first. `root` here is
+    // always the MAIN checkout: a granted worktree's own `dispatch prepare`
+    // call already refused through the narrow door in run_dispatch_prepare
+    // (Roots::Unsupported(GrantedWorktree)) before reaching this function.
+    let worktree_location: Option<(String, String)> = cell
+        .as_ref()
+        .and_then(|c| match vget(c, "feature") {
+            Some(Value::String(s)) if !s.is_empty() => Some(s.clone()),
+            _ => None,
+        })
+        .and_then(|feature| {
+            crate::verbs::status_full::find_granted_worktree_for_feature(root, &feature)
+                .map(|(_id, worktree_root)| (worktree_root, root.to_string_lossy().into_owned()))
+        });
+
     let tier_token = slot_for_kind(kind);
     let models = read_models(root)?;
     let resolved = if kind == "advisor" {
@@ -562,7 +590,13 @@ pub(crate) fn prepare_dispatch(
         r
     };
 
-    let prompt_body = match prompt_body_for(root, kind, cell.as_ref(), resolved_worker.as_deref())? {
+    let prompt_body = match prompt_body_for(
+        root,
+        kind,
+        cell.as_ref(),
+        resolved_worker.as_deref(),
+        worktree_location.as_ref().map(|(w, c)| (w.as_str(), c.as_str())),
+    )? {
         Ok(body) => body,
         Err(msg) => return Ok(Prepared::Thrown(msg)),
     };
@@ -570,7 +604,15 @@ pub(crate) fn prepare_dispatch(
         Resolved::Model { model, .. } => Some(model.clone()),
         _ => None,
     };
-    let pinned_type = pinned_agent_type(tier_token);
+    // The generation tier carries TWO rendered agents — bee-build executes
+    // a cell (reserves, writes, commits, caps), bee-gather reads and
+    // reports (never writes, per .claude/agents/bee-gather.md). tier alone
+    // cannot tell them apart (guard.rs's pinned_agent_type stays a tier-only
+    // lookup, mirrored by hooks/model_guard.rs PINNED_AGENT_TYPE); `kind`
+    // is the one signal that can, and only a --kind cell dispatch is a cell
+    // execution (dp-2).
+    let pinned_type =
+        if kind == "cell" { "bee-build" } else { pinned_agent_type(tier_token) };
 
     let mut tool = String::new();
     let mut payload = Map::new();
@@ -733,6 +775,14 @@ pub(crate) fn prepare_dispatch(
     envelope.insert("payload".into(), Value::Object(payload));
     envelope.insert("dispatch_id".into(), Value::String(dispatch_id));
     envelope.insert("economics".into(), Value::Object(economics));
+    // Present only when the cell's feature has a granted worktree — see
+    // `worktree_location` above. A feature with no worktree split (or a
+    // non-cell dispatch) omits both keys, so the envelope stays
+    // byte-identical to before this Location block existed.
+    if let Some((worktree_root, control_root)) = &worktree_location {
+        envelope.insert("worktree_root".into(), Value::String(worktree_root.clone()));
+        envelope.insert("control_root".into(), Value::String(control_root.clone()));
+    }
     if let Some(t) = extra_transport {
         envelope.insert("transport".into(), Value::String(t.into()));
     }
