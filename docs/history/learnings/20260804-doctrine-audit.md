@@ -121,11 +121,21 @@ All five are the same shape at different depths:
   the worktree. The un-ported piece the door was waiting on was one function:
   cells' holds ledger keyed at the resolved root, which from a worktree would
   have released nobody's holds while reporting success.
-- The concurrency suite goes red only when run under `bee cells finish` or
-  `bee worktree merge`, green standalone and on every retry. Four sightings
-  in one session, once blocking a merge. Filed P2, cause unknown — and it is
-  the worst kind of red, because the honest response to a flaky refusal is
-  indistinguishable from working around a real one.
+- ~~The concurrency suite goes red only under `bee cells finish`~~ — **fixed**
+  (`flake-monitor`). It was never about `finish`: the test fails ~1 run in 3
+  inside the full 13-test binary and never alone. The assertion that fired was
+  the test's OWN anti-vacuous guard — "the monitor completed only N reads, too
+  few to have overlapped the write burst" — not the torn-read invariant, which
+  never fired once. Its monitor thread slept a fixed 1ms per read; under a
+  loaded parallel run that sleep stretches while the race window does not, so
+  the guard starved. Now it yields instead of sleeping and retries the burst a
+  bounded number of times before failing. Ten consecutive runs green, then
+  eight more on main.
+  Two lessons. **A flaky guard is worse than a missing one**: for a day, the
+  honest response to its refusal was indistinguishable from routing around a
+  real red, and it blocked a merge. And **the verb it fails under is rarely
+  the verb at fault** — four sightings were all blamed on `cells finish`
+  because that is where the red was loud.
 - **Teeth bite their own path.** `wp-1` made a `small`+ cap require a
   registered execution worker; `dispatch prepare --claim` claims and reserves
   but never registers one, so bee's own sanctioned dispatch route now fails
