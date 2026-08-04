@@ -767,7 +767,33 @@ use std::time::Instant;
         assert_eq!(event["sweep"]["hit_count"], 3.0);
         let files = event["sweep"]["files"].as_array().unwrap();
         assert_eq!(files.len(), 3);
-        assert_eq!(files[2]["excerpt"], "11111111"); // trimmed excerpt
+        // The sweep walks in readdirSync order (the Node oracle's own order),
+        // which the filesystem chooses — so the three hits are asserted as a
+        // set. `c.txt`'s "  11111111  " proves the excerpt is trimmed.
+        let native = |p: &str| p.replace('/', std::path::MAIN_SEPARATOR_STR);
+        let mut hits: Vec<(String, u64, String)> = files
+            .iter()
+            .map(|f| {
+                (
+                    f["file"].as_str().unwrap().to_string(),
+                    f["line"].as_f64().unwrap() as u64,
+                    f["excerpt"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        hits.sort();
+        assert_eq!(
+            hits,
+            vec![
+                (
+                    native("docs/a.md"),
+                    1,
+                    "cites 11111111-2222-3333-4444-555555555555 here".to_string()
+                ),
+                (native("docs/a.md"), 2, "short 11111111 too".to_string()),
+                (native("docs/sub/c.txt"), 1, "11111111".to_string()),
+            ]
+        );
         assert!(text.starts_with("Superseded 11111111-2222-3333-4444-555555555555 with "));
         assert!(text.contains("Propagation sweep: 3 citation(s) found under docs/**"));
 
@@ -779,19 +805,29 @@ use std::time::Instant;
         // One capture stub per citing line, source "supersede-sweep".
         let queue = read_jsonl(&capture_queue_path(tmp.path()));
         assert_eq!(queue.len(), 3);
-        assert_eq!(queue[0]["kind"], "stub");
-        assert_eq!(queue[0]["source"], "supersede-sweep");
-        assert_eq!(queue[0]["area"], Value::Null);
-        assert_eq!(queue[0]["lane"], Value::Null);
+        for stub in &queue {
+            assert_eq!(stub["kind"], "stub");
+            assert_eq!(stub["source"], "supersede-sweep");
+            assert_eq!(stub["area"], Value::Null);
+            assert_eq!(stub["lane"], Value::Null);
+            assert_eq!(
+                stub["dids"],
+                json!(["11111111-2222-3333-4444-555555555555", event["id"]])
+            );
+            assert!(stub["outcome"]
+                .as_str()
+                .unwrap()
+                .contains("still cites superseded decision 11111111-2222-3333-4444-555555555555 — reconcile against replacement"));
+        }
+        // One stub per citing line — two for a.md, one for c.txt — in
+        // whatever order the walk found them.
+        let mut stub_files: Vec<String> =
+            queue.iter().map(|s| s["files"][0].as_str().unwrap().to_string()).collect();
+        stub_files.sort();
         assert_eq!(
-            queue[0]["dids"],
-            json!(["11111111-2222-3333-4444-555555555555", event["id"]])
+            stub_files,
+            vec![native("docs/a.md"), native("docs/a.md"), native("docs/sub/c.txt")]
         );
-        assert_eq!(queue[0]["files"], json!(["docs\\a.md".replace('\\', std::path::MAIN_SEPARATOR_STR)]));
-        assert!(queue[0]["outcome"]
-            .as_str()
-            .unwrap()
-            .contains("still cites superseded decision 11111111-2222-3333-4444-555555555555 — reconcile against replacement"));
     }
 
     #[test]
