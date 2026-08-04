@@ -419,6 +419,10 @@ use std::time::Instant;
 
     #[test]
     fn pinned_types_match_the_rendered_bee_agents() {
+        // guard.rs's tier-only pinned_agent_type stays a tier lookup — the
+        // generation/cell override lives at the prepare.rs call site
+        // (cell_envelope_names_the_execution_agent_not_the_read_only_gather
+        // below), since prepare.rs is this cell's only declared file.
         assert_eq!(pinned_agent_type("generation"), "bee-gather");
         assert_eq!(pinned_agent_type("extraction"), "bee-extract");
         assert_eq!(pinned_agent_type("review"), "bee-review");
@@ -445,6 +449,35 @@ use std::time::Instant;
         assert!(prompt.starts_with("[bee-tier: generation]\nGather: locate and digest"));
         // The prepare-time record is NOT written on a non-recording pass.
         assert!(!root.join(".bee/logs/dispatch.jsonl").exists());
+    }
+
+    #[test]
+    fn cell_envelope_names_the_execution_agent_not_the_read_only_gather() {
+        // The generation tier carries two rendered agents; a --kind cell
+        // dispatch is the one whose whole job is executing the cell (reserve,
+        // write, commit, cap), so it must name bee-build, never bee-gather
+        // (the read-only agent from bee-gather.md — "Never writes, never
+        // edits"). dp-2.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, false)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Agent")));
+        let p = v.get("payload").unwrap();
+        assert_eq!(p.get("subagent_type"), Some(&json!("bee-build")));
+        assert_eq!(p.get("model"), Some(&json!("sonnet")));
+        // The economics record still names the tier, not the agent, as the
+        // generation-tier model authority (must-have 4).
+        assert_eq!(v.get("economics").and_then(|e| e.get("logical_tier")), Some(&json!("generation")));
     }
 
     #[test]

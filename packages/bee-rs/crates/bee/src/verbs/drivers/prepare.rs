@@ -604,7 +604,15 @@ pub(crate) fn prepare_dispatch(
         Resolved::Model { model, .. } => Some(model.clone()),
         _ => None,
     };
-    let pinned_type = pinned_agent_type(tier_token);
+    // The generation tier carries TWO rendered agents — bee-build executes
+    // a cell (reserves, writes, commits, caps), bee-gather reads and
+    // reports (never writes, per .claude/agents/bee-gather.md). tier alone
+    // cannot tell them apart (guard.rs's pinned_agent_type stays a tier-only
+    // lookup, mirrored by hooks/model_guard.rs PINNED_AGENT_TYPE); `kind`
+    // is the one signal that can, and only a --kind cell dispatch is a cell
+    // execution (dp-2).
+    let pinned_type =
+        if kind == "cell" { "bee-build" } else { pinned_agent_type(tier_token) };
 
     let mut tool = String::new();
     let mut payload = Map::new();
