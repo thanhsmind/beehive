@@ -10,9 +10,10 @@
 //   * corrupt JSON — `fsutil::warn_corrupt_json` says what Node's warning
 //     said, in our words, and the read falls back to defaults exactly as
 //     `readJson(file, null)` did.
-//   * a truthy non-object `approved_gates` — the JS object spread is
-//     reproduced directly (see `spread_gates`), so no input shape is left
-//     without an answer.
+//   * a non-object `approved_gates` — `spread_gates` (D2,
+//     docs/history/js-parity-cleanup/CONTEXT.md) merges only for the object
+//     shape; every other shape falls back to defaults, so no input shape is
+//     left without an answer.
 //
 // These reads are infallible now — the single-variant bail enum they used to
 // thread was never constructed after the cutover above, so the 2026-08-04
@@ -80,10 +81,9 @@ pub fn read_state_brief(root: &Path) -> BriefState {
         state.get(key).cloned().unwrap_or(default)
     };
 
-    // approved_gates: { ...defaults, ...(state.approved_gates || {}) }.
-    // Falsy (null/false/0/"") -> defaults. A truthy non-object spreads an
-    // exotic key set in JS, which `spread_gates` now reproduces instead of
-    // bailing (cutover note at the top of this file).
+    // approved_gates: an object merges its keys over the defaults; every
+    // other shape (missing/null/bool/number/string/array) falls back to the
+    // defaults (D2, docs/history/js-parity-cleanup/CONTEXT.md).
     let gates = spread_gates(state.get("approved_gates"));
 
     // coerceLegacyPhase: 'validating' -> 'planning' (D13).
@@ -105,46 +105,28 @@ pub fn read_state_brief(root: &Path) -> BriefState {
     }
 }
 
-/// `{ ...defaultGates(), ...(value || {}) }` for EVERY JS value, not just the
-/// object case. The spread copies own enumerable properties, so:
-///   * falsy (absent / null / false / 0 / "") — `|| {}` makes it the empty
-///     object: defaults, untouched.
-///   * an object — its keys win over the defaults, in insertion order.
-///   * an array — index keys "0".."n-1" carrying the elements.
-///   * a non-empty string — index keys "0".."n-1" carrying single characters.
-///   * any other truthy primitive (true, a non-zero number) — primitives have
-///     no own enumerable properties, so the spread copies nothing: defaults.
+/// Rust-native gate merge (D2, docs/history/js-parity-cleanup/CONTEXT.md):
+/// `approved_gates` merges over the defaults only when it is a JSON object —
+/// its keys win, in insertion order. EVERY other shape (missing, null, bool,
+/// number, string, array) yields the defaults untouched.
 ///
-/// This used to bail to Node for the last three cases, because the port
-/// refused to guess at JS spread semantics while Node could still answer.
-/// Divergence worth naming: a string is indexed here by Unicode scalar, where
-/// JS indexes by UTF-16 code unit — they differ only for astral characters in
-/// a value that is already nonsense (`approved_gates` holding a string).
-fn spread_gates(value: Option<&Value>) -> Map<String, Value> {
-    let mut merged = default_gates();
+/// This replaces two diverging JS-spread emulations: one that char/index-keyed
+/// strings and arrays, and one that bailed to a Node delegate that no longer
+/// exists. Neither the Rust store nor a legitimate writer ever produces a
+/// non-object `approved_gates`; a hand-corrupted state.json holding one used
+/// to surface char/index-indexed gate keys and now reads as defaults instead
+/// — a deliberate, logged behavior change, not a compatibility gap.
+pub(crate) fn spread_gates(value: Option<&Value>) -> Map<String, Value> {
     match value {
-        None | Some(Value::Null) | Some(Value::Bool(false)) => {}
-        Some(Value::String(s)) if s.is_empty() => {}
-        Some(Value::Number(n)) if n.as_f64() == Some(0.0) => {}
         Some(Value::Object(overlay)) => {
+            let mut merged = default_gates();
             for (k, v) in overlay {
                 merged.insert(k.clone(), v.clone());
             }
+            merged
         }
-        Some(Value::Array(items)) => {
-            for (i, v) in items.iter().enumerate() {
-                merged.insert(i.to_string(), v.clone());
-            }
-        }
-        Some(Value::String(s)) => {
-            for (i, c) in s.chars().enumerate() {
-                merged.insert(i.to_string(), Value::String(c.to_string()));
-            }
-        }
-        // true, or a non-zero number: nothing to copy.
-        Some(_) => {}
+        _ => default_gates(),
     }
-    merged
 }
 
 // ── config (gate_bypass / ship_visibility slice of readConfig) ─────────────
@@ -325,31 +307,29 @@ mod tests {
         assert_eq!(bypass_level(&cfg), "full");
     }
 
-    /// The JS object spread, for every shape `approved_gates` can hold. Each
-    /// expectation is what `node -p 'JSON.stringify({...d, ...(v||{})})'`
-    /// prints. These four truthy non-object cases used to bail to Node.
+    /// D2 (docs/history/js-parity-cleanup/CONTEXT.md): the Rust-native gate
+    /// merge, for every shape `approved_gates` can hold. An object merges its
+    /// keys over the defaults; every other shape — including the array/string
+    /// cases that used to spread to index-keyed JS exotica — falls back to
+    /// the defaults untouched.
     #[test]
-    fn approved_gates_spread_covers_every_js_shape() {
+    fn approved_gates_merge_is_object_or_defaults() {
         let defaults = r#"{"context":false,"shape":false,"execution":false,"review":false}"#;
-        let s = |v: Option<Value>| {
-            jsjson::stringify(&Value::Object(spread_gates(v.as_ref())))
-        };
+        let s = |v: Option<Value>| jsjson::stringify(&Value::Object(spread_gates(v.as_ref())));
         assert_eq!(s(None), defaults);
         assert_eq!(s(Some(json!(null))), defaults);
         assert_eq!(s(Some(json!(false))), defaults);
         assert_eq!(s(Some(json!(0))), defaults);
         assert_eq!(s(Some(json!(""))), defaults);
-        // Primitives carry no own enumerable properties.
         assert_eq!(s(Some(json!(true))), defaults);
         assert_eq!(s(Some(json!(7))), defaults);
-        // Arrays and strings spread to index keys.
+        // Exotic shapes that used to spread to index keys now fall to defaults.
+        assert_eq!(s(Some(json!([true, false]))), defaults);
+        assert_eq!(s(Some(json!("ab"))), defaults);
+        // An object still merges its keys over the defaults.
         assert_eq!(
-            s(Some(json!([true, false]))),
-            r#"{"context":false,"shape":false,"execution":false,"review":false,"0":true,"1":false}"#
-        );
-        assert_eq!(
-            s(Some(json!("ab"))),
-            r#"{"context":false,"shape":false,"execution":false,"review":false,"0":"a","1":"b"}"#
+            s(Some(json!({"context": true}))),
+            r#"{"context":true,"shape":false,"execution":false,"review":false}"#
         );
     }
 
@@ -362,7 +342,7 @@ mod tests {
         assert_eq!(s.phase, json!("executing"));
         assert_eq!(
             jsjson::stringify(&Value::Object(s.gates)),
-            r#"{"context":false,"shape":false,"execution":false,"review":false,"0":"a","1":"b"}"#
+            r#"{"context":false,"shape":false,"execution":false,"review":false}"#
         );
     }
 

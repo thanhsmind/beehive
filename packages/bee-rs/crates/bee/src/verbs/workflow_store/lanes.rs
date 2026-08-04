@@ -70,7 +70,7 @@ pub(crate) fn lane_record_from(feature: &str, parsed: &Value) -> Ex<Option<Map<S
     for (k, v) in obj {
         merged.insert(k.clone(), v.clone());
     }
-    let gates = spread_gates(obj.get("approved_gates"))?;
+    let gates = spread_gates(obj.get("approved_gates"));
     merged.insert("approved_gates".into(), Value::Object(gates));
     coerce_legacy_phase(&mut merged)?;
     Ok(Some(merged))

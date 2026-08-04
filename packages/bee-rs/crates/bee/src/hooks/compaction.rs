@@ -198,11 +198,7 @@ pub(crate) fn read_state_failopen(root: &Path) -> Map<String, Value> {
     for (k, v) in &parsed {
         merged.insert(k.clone(), v.clone());
     }
-    let gates = spread_gates(parsed.get("approved_gates"))
-        .unwrap_or_else(|_| match default_state().remove("approved_gates") {
-            Some(Value::Object(m)) => m,
-            _ => Map::new(),
-        });
+    let gates = spread_gates(parsed.get("approved_gates"));
     merged.insert("approved_gates".into(), Value::Object(gates));
     let _ = coerce_legacy_phase(&mut merged);
     merged

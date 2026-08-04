@@ -117,10 +117,12 @@
 // prune's mid-loop rmSync failure message is reconstructed from the errno
 // class; the scribing-ledger append-failure warning (embeds a Node error
 // message) is not replicated — the append virtually never fails and the
-// verb's own success output is unaffected. STILL delegating and out of this
-// cutover's scope: JS spread exotica (`approved_gates` holding a string or
-// array — see spread_gates), the passing-close / feature-swap / high-risk
-// approval doors, and fs WRITE failures after the preflight.
+// verb's own success output is unaffected. `approved_gates` holding a string
+// or array is CLOSED (D2, docs/history/js-parity-cleanup/CONTEXT.md) —
+// spread_gates merges only the object shape and falls back to defaults for
+// everything else, natively, no delegate. STILL delegating and out of this
+// cutover's scope: the passing-close / feature-swap / high-risk approval
+// doors, and fs WRITE failures after the preflight.
 
 
 
