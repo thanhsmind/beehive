@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "dispatch-worktree",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,6 +10,22 @@
     "review": false
   },
   "summary": "Feature \"dispatch-worktree\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"dispatch-worktree\" (lane).",
-  "created_at": "2026-08-04T13:41:05.353Z"
+  "next_action": "none",
+  "created_at": "2026-08-04T13:41:05.353Z",
+  "last_scribing_run": {
+    "feature": "dispatch-worktree",
+    "date": "2026-08-04",
+    "at": "2026-08-04T14:16:36.316Z",
+    "areas_synced": [
+      "worktree-parallelism"
+    ],
+    "next_action": "none"
+  },
+  "last_compounding_run": {
+    "feature": "dispatch-worktree",
+    "date": "2026-08-04",
+    "at": "2026-08-04T14:16:36.322Z",
+    "learnings": "docs/history/learnings/20260804-doctrine-audit.md",
+    "next_action": null
+  }
 }

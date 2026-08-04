@@ -1,0 +1,36 @@
+{
+  "id": "probe-2",
+  "feature": "dispatch-worktree",
+  "lane": "tiny",
+  "change_class": "formatting",
+  "behavior_change": false,
+  "deps": [],
+  "title": "Probe the prepared payload shape",
+  "action": "Throwaway probe used to read what dispatch prepare emits for a feature that has a granted worktree.",
+  "verify": "true",
+  "must_haves": {
+    "truths": [
+      "nothing - probe only"
+    ]
+  },
+  "files": [
+    "README.md"
+  ],
+  "read_first": [],
+  "decisions": [],
+  "status": "dropped",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "probe complete"
+  }
+}

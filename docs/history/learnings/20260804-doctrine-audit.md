@@ -121,5 +121,23 @@ All five are the same shape at different depths:
   the worktree. The un-ported piece the door was waiting on was one function:
   cells' holds ledger keyed at the resolved root, which from a worktree would
   have released nobody's holds while reporting success.
-- The concurrency suite goes red only when run inside `bee cells finish`,
-  green standalone. Filed P2, cause unknown.
+- The concurrency suite goes red only when run under `bee cells finish` or
+  `bee worktree merge`, green standalone and on every retry. Four sightings
+  in one session, once blocking a merge. Filed P2, cause unknown — and it is
+  the worst kind of red, because the honest response to a flaky refusal is
+  indistinguishable from working around a real one.
+- **Teeth bite their own path.** `wp-1` made a `small`+ cap require a
+  registered execution worker; `dispatch prepare --claim` claims and reserves
+  but never registers one, so bee's own sanctioned dispatch route now fails
+  the door bee added. A guard added at one verb must be walked through every
+  path that reaches it. Filed P1.
+- `dispatch prepare --claim` already did more than the orchestrator was using
+  it for — claim, per-file reservations under the worker's nickname, and the
+  cell JSON inlined into the rendered prompt. Three dispatches were hand-rolled
+  before anyone read what the tool already emitted. What it genuinely lacked
+  was location: neither envelope nor prompt named the worktree or the store
+  root, so a worker in a granted worktree could not tell where it was
+  (`dispatch-worktree`, fixed). It also handed a cell execution to
+  `bee-gather`, the read-only agent — the same defect the model guard carried,
+  surviving in the payload builder because the first fix changed only the
+  guard's map.
