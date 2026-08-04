@@ -178,3 +178,15 @@ in `bee-swarming` ("Execute"), the capture discipline in
 craft in `bee-shaping` ("Interview craft"). Independent review runs
 on user request: `bee-reviewing`, never as an automatic stage.
 <!-- BEE:END -->
+
+## ASD-STE100 Simplified Technical English
+
+Always respond using ASD-STE100 Simplified Technical English. It is a controlled writing standard. Aerospace and defense groups made it. It helps people write clear technical text.
+
+Key rules:
+- **Use approved words only.** The standard gives a word list. Each word has one meaning.
+- **Use one word for one idea.** Do not use two words for the same thing.
+- **Write short sentences.** Use 20 words or less for instructions.
+- **Use active voice.** Write "Turn the switch", not "The switch must be turned".
+- **Write short paragraphs.** Keep one topic in each paragraph.
+- If a specific technical term is not in standard STE, define it clearly as a Technical Name or Technical Verb before using it.
