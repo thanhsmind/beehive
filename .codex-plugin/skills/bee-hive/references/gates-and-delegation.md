@@ -97,8 +97,6 @@ in `references/go-mode.md` ("Headless Go Mode").
 
 Running it yourself is the normal case: `commands.test` answers about *your* tree, it is the same command every other door runs, and it is what CI runs on push and pull_request. Read CI instead (`gh run list`/`gh api` for the base branch, plus any open `verify-red` issue) only when the chain is genuinely long — CI's answer is about the base branch as of its last run, so it is evidence about your tree only while nothing has changed under you. When no command is recorded, `bee status` warns and the capture belongs to exploring or onboarding, never to guesswork.
 
-*(Two rewrites sit behind this paragraph. It first read "check CI **instead of** running it locally", written when the host's chain took minutes and CI ran nightly — it told agents to trust a signal that could predate their change by a day. It then keyed on `commands.verify`, a second repo-wide command since retired: one declared test command now serves the dev loop, the cap door, feature close, and the merge gate.)*
-
 ### Delegation contract (fan-out: decide-altitude vs gather-altitude)
 
 The one orchestration pattern bee runs: the session model (the owner's best model) stays the orchestrator in every phase, and mechanical gather/render/mine steps dispatch down-tier as I/O workers that return digests.
@@ -157,30 +155,27 @@ The judge returns the `judge-verdict/1` schema, recorded via `bee cells judge-re
 
 ### Test scope (one declared command, every door)
 
-Cells run `commands.test` — the project's ONE declared test command — at finish (`bee finish` runs it and records `.bee/logs/test-results.json`; green caps, red refuses with the failing excerpt); `bee close` re-runs the same command for the feature (`bee-swarming/references/swarming-reference.md`, "Tests at finish and close, in full"); and `bee worktree merge` re-runs it against the staged merge as the semantic-conflict gate. CI runs that same command on the project's own cadence (push, nightly, or scheduled — the host workflow decides) and auto-files a `verify-red` issue when red; the release flow dispatches the CI run (`gh workflow run CI --ref main`) right after the tag push, a red result arriving back as the same `verify-red` issue, not a local gate. **`commands.verify` is retired** — a second full-suite command above `test` bought a two-layer split that no reader could keep straight, and every surface disagreed about which door ran which. One command, one contract. A host keeps every door fast by pointing `commands.test` at a suite it is willing to run on every cap. Judges and reviewers verify against the diff and `must_haves`, never by running the suite as part of a verdict.
+Cells run `commands.test` — the project's ONE declared test command — at finish (`bee finish` runs it and records `.bee/logs/test-results.json`; green caps, red refuses with the failing excerpt); `bee close` re-runs the same command for the feature (`bee-swarming/references/swarming-reference.md`, "Tests at finish and close, in full"); and `bee worktree merge` re-runs it against the staged merge as the semantic-conflict gate. CI runs that same command on the project's own cadence (push, nightly, or scheduled — the host workflow decides) and auto-files a `verify-red` issue when red; the release flow dispatches the CI run (`gh workflow run CI --ref main`) right after the tag push, a red result arriving back as the same `verify-red` issue, not a local gate. A host keeps every door fast by pointing `commands.test` at a suite it is willing to run on every cap. Judges and reviewers verify against the diff and `must_haves`, never by running the suite as part of a verdict.
 
 **Suite rent.** A suite is not immortal: every guard suite pays rent by catching real defects. A suite that has not caught one in ~6 months is a demotion candidate — moved out of the local/impacted hot path to the CI/nightly tier by a RECORDED decision (never a silent delete; the suite still runs, just not on every developer loop). `bee-grooming` owns the audit: read the verify logs for which suites have gone red for a real defect (environment reds don't count as rent paid), list the never-fired tenants, and propose demotions. Institutional/meta guards (fences, parity checks, doctrine gates) are the usual tenants — product-behavior suites earn rent more often and mostly stay.
 
 ### Native Codex subagent tending
 
-For every bee-owned native Codex subagent flow, including ordinary delegated
-gathers, a completed `wait_agent` call with no completion is an **empty wait**:
-it is a timeout signal only, never failure. A `wait_agent` timeout/no-completion
-result is only an empty wait; silence is not failure. Never call `wait_agent`
-twice consecutively after an empty wait; authority, urgency, and no-chatter
-instructions create no exception. Before any later bounded wait, perform at
-least one material task-local action when work remains; that one action satisfies
-the interval, and exhausting all local work is not required. Only when no
-material work remains, take exactly one `list_agents` snapshot. Handle any
-completion that arrives during the interval exactly once, then recompute the
-relevant live-agent set. Send one concise commentary update naming both the live
-agent state and the next action. Only after this commentary may a later bounded
-wait run, and only while the relevant live-agent set is non-empty; zero live
-agents ends collection without another wait. No-op work, repeated state reads,
-hidden reasoning, generic commentary, or commentary alone do not qualify.
-Timeout never licenses interrupt, duplicate dispatch, claim release, or
-reservation release; every running agent, claim, and reservation stays owned.
-This refines, rather than replaces, the ban on file/scratchpad polling for
-harness-managed subagents. External process and artifact polling keeps its own
-contract and remains outside this native-agent rule.
+A `wait_agent` that returns no completion is an **empty wait** — a timeout
+signal, never a failure and never permission to act on the agent. Silence buys
+one thing: an interval, which is paid for with real work before waiting again.
+This is the single home for the rule; it refines, never replaces, the ban on
+file/scratchpad polling for harness-managed subagents, and external process or
+artifact polling keeps its own contract.
+
+| After an empty wait | The rule |
+|---|---|
+| Wait again immediately | Never — no exception for authority, urgency, or a no-chatter instruction. |
+| Pay the interval | ≥1 material task-local action while work remains. One is enough; exhausting local work is not required. |
+| What does not count | No-op work, repeated state reads, hidden reasoning, generic commentary, commentary alone. |
+| When no work remains | Exactly one `list_agents` snapshot. |
+| A completion arrives meanwhile | Handle it exactly once, then recompute the live-agent set. |
+| Before the next wait | One concise commentary update naming the live-agent state and the next action. |
+| The next bounded wait | Only after that commentary, and only while the live set is non-empty — zero live agents ends collection. |
+| What a timeout never licenses | Interrupt, duplicate dispatch, claim release, reservation release. Every running agent, claim, and reservation stays owned. |
 

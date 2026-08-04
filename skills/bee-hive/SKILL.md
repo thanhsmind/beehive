@@ -49,16 +49,12 @@ Gates belong to the user (AGENTS.md), in any mode — headless included: `bee ga
 records their answer, presented as a plain-language layer plus the fixed
 question, report linked, never pasted ("Gate Presentation Contract").
 
-The one recorded exception is gate bypass — `.bee/config.json` `gate_bypass`, a level:
-`off` (`false`, default) · `normal` (`true` / `"on"` / `"normal"`; legacy `true` reads as
-`normal`) auto-approves Gates 1-2 for non-hard-gate work, while high-risk/hard-gate,
-secret reads, and Gate 3 UAT/P1 still stop · `full` (`"full"`) lifts the high-risk/
-hard-gate floor; secret reads and a review P1 still stop · `total` (`"total"`) stops for
-nothing, secret reads included. To change it: set the config value (preserve every other
-field; create it if absent), log a one-line audit decision, and state the level's row —
-what auto-approves, what still stops — in the same turn; never silently, and never
-`full`/`total` without the user's explicit instruction. Setting the level never approves a
-gate; bypass is not headless — headless still stops at every gate ("Gate bypass mode").
+The one recorded exception is gate bypass — an opt-in level in `.bee/config.json`
+(`gate_bypass`: `off` · `normal` · `full` · `total`) that the user sets and only the
+user widens. Setting a level never approves a gate, and bypass is not headless —
+headless still stops at every gate. Which gates each level auto-approves, what it
+still stops for, and how to record the change: `gates-and-delegation.md`
+("Gate bypass mode") — the level table is stated there and nowhere else.
 
 ## Onboarding
 
