@@ -202,11 +202,15 @@ use std::process::ExitCode;
         assert_eq!(e.code, 0, "stderr: {}", e.stderr);
     }
 
+    // E2a (guard-hardening): flipped from the pre-E2 allow — cell files are
+    // CLI-owned now, like the rest of the direct-edit table.
     #[test]
-    fn bee_cells_json_passes() {
+    fn bee_cells_json_denied_names_owning_verb() {
         let fx = build_fixture("swarming", true);
         let e = expect_done(edit(".bee/cells/demo-1.json"), &fx.root);
-        assert_eq!(e.code, 0);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee cells add/finish"), "{}", e.stderr);
+        assert!(e.stderr.contains("direct-edit"), "{}", e.stderr);
     }
 
     #[test]
@@ -215,8 +219,59 @@ use std::process::ExitCode;
         let e = expect_done(edit(".bee/state.json"), &fx.root);
         assert_eq!(e.code, 2);
         assert!(e.stderr.contains("bee state"));
+        // E2a: the cells arm flipped to deny (CLI-owned in every phase);
+        // .bee/tmp/ stands in as the still-allowed other bee path.
         let e2 = expect_done(edit(".bee/cells/demo-1.json"), &fx.root);
-        assert_eq!(e2.code, 0);
+        assert_eq!(e2.code, 2, "{}", e2.stderr);
+        assert!(e2.stderr.contains("bee cells add/finish"), "{}", e2.stderr);
+        let e3 = expect_done(edit(".bee/tmp/demo/notes.md"), &fx.root);
+        assert_eq!(e3.code, 0, "{}", e3.stderr);
+    }
+
+    // ── E2 (guard-hardening): cells/lanes/onboarding join the CLI-owned set ─
+
+    #[test]
+    fn direct_edit_lanes_json_denied_names_owning_verbs() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(edit(".bee/lanes/demo.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("direct-edit"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee state start-feature --as-lane"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee state set --lane"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn direct_edit_onboarding_json_denied_names_owning_verb() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(edit(".bee/onboarding.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("direct-edit"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee onboard"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_mutation_of_lanes_json_denied() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("sed -i \"s/planning/swarming/\" .bee/lanes/demo.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee state start-feature --as-lane"), "{}", e.stderr);
+        let e2 = expect_done(bash("cat patch.json >> .bee/cells/demo-1.json"), &fx.root);
+        assert_eq!(e2.code, 2, "{}", e2.stderr);
+        assert!(e2.stderr.contains("bee cells add/finish"), "{}", e2.stderr);
+    }
+
+    #[test]
+    fn config_json_and_decisions_jsonl_stay_hand_writable() {
+        // E2 explicitly preserves the two sanctioned agent surfaces:
+        // gate-bypass config edits and decision log merges.
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(
+            json!({"tool_name":"Write","tool_input":{"file_path":".bee/config.json","content":"{}\n"}}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+        let e2 = expect_done(edit(".bee/decisions.jsonl"), &fx.root);
+        assert_eq!(e2.code, 0, "{}", e2.stderr);
     }
 
     // ── check (d): CLI-shape validation, WIRED through the whole hook ──────
@@ -851,7 +906,16 @@ use std::process::ExitCode;
         deny(".bee/bin/.foo_stress_debug.sh");
         allow(".bee/tmp/th6/.foo_stress_debug.sh");
         allow("docs/history/tree-hygiene/reports/verdict-th6.md");
-        allow(".bee/cells/probe-th-6.json");
+        // E2a: `.bee/cells/*.json` is CLI-owned now — the direct-edit guard
+        // (ordered before scratch-shape in check_write) denies this row, so
+        // it moved out of the scratch allow set. Kept as a deny expectation
+        // (not dropped) to pin the direct-edit-before-scratch ordering.
+        let cells = expect_done(
+            json!({"tool_name":"Write","tool_input":{"file_path":".bee/cells/probe-th-6.json","content":"x\n"}}),
+            &fx.root,
+        );
+        assert_eq!(cells.code, 2, "{}", cells.stderr);
+        assert!(cells.stderr.contains("bee cells add/finish"), "{}", cells.stderr);
         allow(".claude-plugin/skills/bee-swarming/probe-render.json");
         allow("test/fixtures/sample.log");
         deny("results.log");
@@ -1538,4 +1602,170 @@ use std::process::ExitCode;
             !flagged(&no_marker.root, &no_marker.root.join("repo").join("foo.js")),
             "row77: an unmarked symlink mount is not flagged by the primitive"
         );
+    }
+
+    // ── gh-1: harness-owned surface containment allowlist (guard-hardening
+    // E1) — writes whose RESOLVED target sits under <home>/.claude/projects/
+    // or <system-temp>/claude/ are exempt from the outside-root containment
+    // deny, and only that deny. Bases are injected (never env-mutated); the
+    // fixture's fake home/temp are plain tempdirs.
+
+    fn expect_done_with_roots(payload: Value, cwd: &Path, harness: &HarnessRoots) -> Emit {
+        let mut body = match payload {
+            Value::Object(m) => m,
+            _ => panic!("payload must be an object"),
+        };
+        body.insert("cwd".into(), Value::String(cwd.to_string_lossy().into_owned()));
+        let stdin = jsjson::stringify(&Value::Object(body));
+        let ctx = read_hook_context(HOOK_NAME, &[], &stdin);
+        match run_native_with_roots(&ctx, harness) {
+            Ok(e) => e,
+            Err(_) => panic!("expected a native verdict, got Delegate"),
+        }
+    }
+
+    struct HarnessFx {
+        fx: Fx,
+        _home_dir: tempfile::TempDir,
+        _temp_dir: tempfile::TempDir,
+        home: PathBuf,
+        temp: PathBuf,
+        roots: HarnessRoots,
+    }
+
+    fn build_harness_fixture() -> HarnessFx {
+        let fx = build_fixture("swarming", true);
+        let home_dir = tempfile::tempdir().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let home = dunce::canonicalize(home_dir.path()).unwrap();
+        let temp = dunce::canonicalize(temp_dir.path()).unwrap();
+        let roots = HarnessRoots::from_bases(Some(home.clone()), Some(temp.clone()));
+        assert_eq!(roots.roots.len(), 2, "both injected bases must resolve");
+        HarnessFx { fx, _home_dir: home_dir, _temp_dir: temp_dir, home, temp, roots }
+    }
+
+    #[test]
+    fn gh1_harness_memory_write_is_exempt_from_containment() {
+        let hx = build_harness_fixture();
+        let target =
+            hx.home.join(".claude").join("projects").join("x").join("memory").join("f.md");
+        let e = expect_done_with_roots(edit(&target.to_string_lossy()), &hx.fx.root, &hx.roots);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+
+        // The linked-worktree shape threads the same exemption.
+        let lx = build_linked(true);
+        let wt = expect_done_with_roots(edit(&target.to_string_lossy()), &lx.work_root, &hx.roots);
+        assert_eq!(wt.code, 0, "{}", wt.stderr);
+    }
+
+    #[test]
+    fn gh1_harness_scratchpad_write_is_exempt_for_write_and_bash() {
+        let hx = build_harness_fixture();
+        let target = hx.temp.join("claude").join("sess").join("scratchpad").join("f.txt");
+        let w = expect_done_with_roots(
+            json!({"tool_name":"Write","tool_input":{"file_path":target.to_string_lossy(),"content":"x\n"}}),
+            &hx.fx.root,
+            &hx.roots,
+        );
+        assert_eq!(w.code, 0, "{}", w.stderr);
+
+        // Bash-extracted target (forward slashes: the tokenizer treats a bare
+        // backslash as an escape, exactly like the shell it models).
+        let bash_target = target.to_string_lossy().replace('\\', "/");
+        let b = expect_done_with_roots(
+            bash(&format!("printf x > \"{bash_target}\"")),
+            &hx.fx.root,
+            &hx.roots,
+        );
+        assert_eq!(b.code, 0, "{}", b.stderr);
+    }
+
+    #[test]
+    fn gh1_sibling_worktree_target_stays_denied_despite_allowlist() {
+        let lx = build_linked(true);
+        let home_dir = tempfile::tempdir().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+        let roots = HarnessRoots::from_bases(
+            Some(dunce::canonicalize(home_dir.path()).unwrap()),
+            Some(dunce::canonicalize(temp_dir.path()).unwrap()),
+        );
+        let e = expect_done_with_roots(
+            edit(&lx.main_root.join("src").join("main-only.txt").to_string_lossy()),
+            &lx.work_root,
+            &roots,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("could not be canonically contained"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn gh1_traversal_spelling_resolving_into_allowlist_root_is_exempt() {
+        let hx = build_harness_fixture();
+
+        // Absolute spelling with a `..` hop that still RESOLVES under the
+        // memory root — judged by its resolved location (E1).
+        let abs_spelling = format!(
+            "{sep}projects{sep}..{sep}projects{sep}x{sep}esc.md",
+            sep = SEP
+        );
+        let abs_spelling =
+            format!("{}{}", hx.home.join(".claude").to_string_lossy(), abs_spelling);
+        let a = expect_done_with_roots(edit(&abs_spelling), &hx.fx.root, &hx.roots);
+        assert_eq!(a.code, 0, "{}", a.stderr);
+
+        // Relative traversal out of the repo that resolves into the fake home
+        // (both tempdirs share a parent, asserted so a layout change fails
+        // loudly instead of testing nothing).
+        assert_eq!(hx.fx.root.parent(), hx.home.parent(), "fixture layout precondition");
+        let rel_spelling = format!(
+            "..{sep}{home_base}{sep}.claude{sep}projects{sep}x{sep}esc.md",
+            sep = SEP,
+            home_base = hx.home.file_name().unwrap().to_string_lossy()
+        );
+        let r = expect_done_with_roots(edit(&rel_spelling), &hx.fx.root, &hx.roots);
+        assert_eq!(r.code, 0, "{}", r.stderr);
+    }
+
+    #[test]
+    fn gh1_unrelated_out_of_root_target_stays_denied() {
+        let hx = build_harness_fixture();
+        let outside = tempfile::tempdir().unwrap();
+        let target = dunce::canonicalize(outside.path()).unwrap().join("elsewhere.txt");
+        let e = expect_done_with_roots(edit(&target.to_string_lossy()), &hx.fx.root, &hx.roots);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert_eq!(e.stderr, GENERIC_CONTAINMENT_MESSAGE);
+
+        // Bash shape keeps its deny too.
+        let bash_target = target.to_string_lossy().replace('\\', "/");
+        let b = expect_done_with_roots(
+            bash(&format!("printf x > \"{bash_target}\"")),
+            &hx.fx.root,
+            &hx.roots,
+        );
+        assert_eq!(b.code, 2, "{}", b.stderr);
+        assert_eq!(b.stderr, GENERIC_BASH_CONTAINMENT_MESSAGE);
+    }
+
+    #[test]
+    fn gh1_unresolvable_harness_roots_leave_the_deny_intact() {
+        let hx = build_harness_fixture();
+        let target = hx.home.join(".claude").join("projects").join("x").join("f.md");
+
+        // No bases at all → the allowlist contributes nothing.
+        let none = HarnessRoots::from_bases(None, None);
+        assert!(none.roots.is_empty());
+        let e = expect_done_with_roots(edit(&target.to_string_lossy()), &hx.fx.root, &none);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert_eq!(e.stderr, GENERIC_CONTAINMENT_MESSAGE);
+
+        // Empty-path bases are unresolvable, never a wildcard.
+        let empty = HarnessRoots::from_bases(Some(PathBuf::new()), Some(PathBuf::new()));
+        assert!(empty.roots.is_empty());
+        let e2 = expect_done_with_roots(edit(&target.to_string_lossy()), &hx.fx.root, &empty);
+        assert_eq!(e2.code, 2, "{}", e2.stderr);
+
+        // Relative (non-absolute) bases fail closed too.
+        let relative =
+            HarnessRoots::from_bases(Some(PathBuf::from("not-abs")), Some(PathBuf::from("x")));
+        assert!(relative.roots.is_empty());
     }

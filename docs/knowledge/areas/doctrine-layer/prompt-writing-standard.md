@@ -97,7 +97,10 @@ Operations" B5 — doctrine binds the assistant even where no mechanism
 enforces it, and a guard's silence is not an approval); the preference here
 is the complement: where a mechanism *can* enforce the rule, build the
 mechanism, and let the prose shrink to the judgment the mechanism cannot
-carry.
+carry. The live example is guard-hardening E3: this repo's
+`.claude/settings.json` now carries `permissions.deny` entries
+`Bash(grep:*)` and `Bash(find:*)`, turning CLAUDE.md's rg/fd instruction
+from a request into a deterministic refusal at the prefix boundary.
 
 ## Business Rules
 

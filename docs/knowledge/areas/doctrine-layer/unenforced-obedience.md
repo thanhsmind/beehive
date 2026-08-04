@@ -2,14 +2,14 @@
 type: bee.area
 title: Doctrine Layer — unenforced obedience and the human boundary
 description: "The rules with no runtime behind them: obey where no guard covers the action, amend doctrine even when the phase gate is shut, run the machinery yourself, and keep its vocabulary out of the conversation."
-timestamp: 2026-07-29
+timestamp: 2026-08-04
 bee:
   id: doctrine-layer-unenforced-obedience
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: [c2c46488 (an unblocked write is not an approved write), 1689af1b (silent bookkeeping), 4439bd7e (purpose-first narration + intent-carrying dispatch descriptions), tick-contract-inline T6 (a green reachability check is not evidence of obedience; nothing observes agent chat output)]
-  sources: ["terminal-phase-gate (cell tpg-2, 2026-07-13)", "docs/specs/doctrine-layer.md#B5", "docs/specs/doctrine-layer.md#R6", "docs/specs/doctrine-layer.md#R7", "docs/specs/doctrine-layer.md#R8", "docs/specs/doctrine-layer.md#E3", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)"]
+  decisions: [c2c46488 (an unblocked write is not an approved write), 1689af1b (silent bookkeeping), 4439bd7e (purpose-first narration + intent-carrying dispatch descriptions), tick-contract-inline T6 (a green reachability check is not evidence of obedience; nothing observes agent chat output), "guard-hardening E5 + E1/E2/E3 (docs/history/guard-hardening/CONTEXT.md, 2026-08-04 — the markdown-only set is recorded by necessity; three formerly prose-only rules moved to enforcement)"]
+  sources: ["terminal-phase-gate (cell tpg-2, 2026-07-13)", "docs/specs/doctrine-layer.md#B5", "docs/specs/doctrine-layer.md#R6", "docs/specs/doctrine-layer.md#R7", "docs/specs/doctrine-layer.md#R8", "docs/specs/doctrine-layer.md#E3", "tick-contract-inline (cells tci-1/tci-2/tci-3, decisions T1-T7, traces .bee/cells/tci-{1,2,3}.json, reports docs/history/tick-contract-inline/reports/, 2026-07-29)", "guard-hardening (cell gh-3, docs/history/guard-hardening/CONTEXT.md, 2026-08-04)"]
   authoritative_for: "doctrine-layer: unenforced obedience and the human boundary"
 ---
 
@@ -30,6 +30,35 @@ actor observes: nothing — which is the point. A guard's silence is not an
 approval, and a gap in a guard is not a gap in the rules; treating the guard as
 the authority makes the guard's coverage the real protocol and quietly deletes
 every rule it fails to cover (decision c2c46488).
+
+**B5a — What stays markdown-only stays by necessity, and the record names the
+necessity.** The unenforced layer is not a backlog of guards nobody built; a
+rule stays prose-only exactly when no mechanism *can* observe the action it
+governs (guard-hardening E5). The recorded set:
+
+- *Gate self-approval.* Gates are approved by the user, never by the assistant —
+  but actor identity is unknowable to the CLI: the same process writes the same
+  approval whether a human said yes or the assistant invented the yes. No hook
+  can tell them apart, so the rule binds only as B5 obedience.
+- *Independent review is never an automatic stage.* "The user asked for a
+  review" is a fact about the conversation, and nothing mechanical reads the
+  conversation (the same blindness T6 records for obedience itself).
+- *Cross-session work is claimed only via `bee cells claim-next`.* At the file
+  level a browsed-and-taken cell is indistinguishable from a handed one; the
+  difference is intent, which lives where no guard looks.
+
+Not in the set: *never build on a red base* needs no prose home — `bee cells
+finish` runs the declared suite and refuses the cap on red, so the CLI already
+enforces it. And the set shrinks when a mechanism becomes possible: in the same
+feature, three formerly markdown-only rules moved to enforcement — the
+containment deny's harness-owned allowlist judges the resolved write target
+(guard-hardening E1), hand-edits to the CLI-owned stores `.bee/cells/*.json`,
+`.bee/lanes/*.json`, and `.bee/onboarding.json` are refused with the owning
+verb named (E2), and `grep`/`find` invocations are denied by this repo's
+`.claude/settings.json` permissions rather than by CLAUDE.md prose alone (E3).
+Each entry above carries its necessity so that the next audit can re-ask the
+question instead of re-litigating it: a rule still here without a necessity is
+a defect, not a tradition.
 
 ## Business Rules
 

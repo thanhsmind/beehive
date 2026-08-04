@@ -39,6 +39,13 @@ pub(crate) fn first_truthy<'a>(map: &'a Map<String, Value>, keys: &[&str]) -> Op
 }
 
 pub(crate) fn run_native(ctx: &HookContext) -> R<Emit> {
+    run_native_with_roots(ctx, &HarnessRoots::detect())
+}
+
+/// gh-1 (E1): the harness allowlist roots ride in as a parameter so tests can
+/// inject their own bases without env mutation; production always passes
+/// HarnessRoots::detect() via run_native above.
+pub(crate) fn run_native_with_roots(ctx: &HookContext, harness_roots: &HarnessRoots) -> R<Emit> {
     clear_corrupt_json_warnings(); // one queue per evaluation (tests reuse the thread)
     let mut emit = Emit::default();
     let Some(root_pb) = ctx.root.clone() else {
@@ -211,18 +218,36 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                 // memory-root hits are always 0 natively (a declared root
                 // delegates above), so the count equation reduces to:
                 if rel_paths.len() != targets.paths.len() {
-                    let first_failing = cands.iter().find(|c| c.rel.is_none());
-                    let enriched = match first_failing {
-                        Some(c) => describe_cross_worktree_target(
+                    // gh-1 (E1): a wall-failed target whose RESOLVED location
+                    // sits inside a harness-owned surface is exempt from the
+                    // containment deny — and ONLY that deny; an exempt target
+                    // never enters rel_paths, so every check below keeps its
+                    // existing order and reach over in-repo targets.
+                    let mut first_failing: Option<&Cand> = None;
+                    for c in cands.iter().filter(|c| c.rel.is_none()) {
+                        if !harness_allowlisted_target(
+                            harness_roots,
                             &root,
                             &cwd,
                             &Value::String(c.raw.clone()),
-                        )?,
-                        None => None,
-                    };
-                    denial =
-                        Some(enriched.unwrap_or_else(|| GENERIC_BASH_CONTAINMENT_MESSAGE.to_string()));
-                } else if rel_paths.is_empty() && targets.broad_write {
+                        )? {
+                            first_failing = Some(c);
+                            break;
+                        }
+                    }
+                    if let Some(c) = first_failing {
+                        let enriched = describe_cross_worktree_target(
+                            &root,
+                            &cwd,
+                            &Value::String(c.raw.clone()),
+                        )?;
+                        denial = Some(
+                            enriched
+                                .unwrap_or_else(|| GENERIC_BASH_CONTAINMENT_MESSAGE.to_string()),
+                        );
+                    }
+                }
+                if denial.is_none() && rel_paths.is_empty() && targets.broad_write {
                     rel_paths = vec!["**".to_string()];
                 }
             }
@@ -248,6 +273,13 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             } else if memory_root_hit(&store_root_pb)? {
                 // gmr-3 D6: pre-approved short-circuit (unreachable natively —
                 // a declared memory root delegates; kept for shape parity).
+            } else if harness_allowlisted_target(harness_roots, &root, &cwd, &raw_v)? {
+                // gh-1 (E1): the resolved target sits inside a harness-owned
+                // surface (<home>/.claude/projects/ or <system-temp>/claude/)
+                // — the containment deny, and only it, does not fire. The
+                // target stays out of rel_paths, so reservation/hold,
+                // gate-boundary, direct-edit, and secret checks keep their
+                // existing order and reach.
             } else {
                 let enriched = describe_cross_worktree_target(&root, &cwd, &raw_v)?;
                 denial = Some(enriched.unwrap_or_else(|| GENERIC_CONTAINMENT_MESSAGE.to_string()));
