@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.1.7",
+  "bee_version": "2.1.8",
   "managed": {
     "agents_block": "5a472a220565319cfffddeee8dd1367f07e3e803d1f527e418f3c64fe98a61f9",
     "gitignore_block": "094d0da7a327c00a8da3fff3b1b9d3c3584ebf880722b8d08a1a12650170485c",
@@ -44,7 +44,7 @@
     }
   },
   "agents_sync": {
-    "bee_version": "2.1.7",
+    "bee_version": "2.1.8",
     "files": [
       ".claude/agents/bee-extract.md",
       ".claude/agents/bee-gather.md",
