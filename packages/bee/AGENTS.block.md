@@ -90,9 +90,10 @@ context before planning or executing.
   turns where no skill is running. Decide-altitude never delegates:
   gates, synthesis, state writes, and the human conversation stay on
   the session model.
-- Every dispatch carries its tier: bee's rendered agents
-  (`bee-gather`, `bee-extract`, `bee-review`) ARE their tier, and the
-  model-guard hook repairs or refuses the rest; a `model` param or a
+- Every dispatch carries its tier: bee's rendered agents ARE their tier —
+  `bee-build` executes a cell, `bee-gather` reads (both generation),
+  `bee-extract`, `bee-review` — and the model-guard hook repairs or
+  refuses the rest; a `model` param or a
   leading `[bee-tier: <tier>]` marker are the manual spellings. From
   `small` up, cells run through dispatched workers (never zero
   *execution* workers); a tiny cell may run inline. A cli-shaped

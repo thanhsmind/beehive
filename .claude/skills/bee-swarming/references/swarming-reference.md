@@ -99,7 +99,8 @@ single worker — never wave analysis or multi-cell assignment.
    else, never session history, never a literal session id**. Use the
    template below.
    **Spawn the tier-matched pinned type when its rendered agent exists**:
-   `subagent_type: "bee-gather"` for `generation`,
+   `subagent_type: "bee-build"` for a `generation` cell execution and
+   `"bee-gather"` for a `generation` read-only gather,
    `"bee-extract"` for `extraction`, `"bee-review"` for `review` — these are
    bee's own rendered agent definitions (`.claude/agents/bee-*.md`,
    config-sourced at onboarding), never another plugin's type. `ceiling` has
@@ -251,7 +252,7 @@ that acceptance, not on an ordinary wave.
 | Follow-up / rescue | `SendMessage` to the same agent id continues it with context intact; a new `Agent` call starts fresh |
 | Harness assist | `bee-chain-nudge` hook fires on SubagentStop: collect the status, update the cell, check reservations |
 | Isolation guarantee | Fresh context per Agent call; include only the contract fields |
-| Subagent type | `subagent_type: "bee-gather"`/`"bee-extract"`/`"bee-review"` for generation/extraction/review, when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling`, and any tier whose slot is cli-shaped or otherwise unrendered, use the runtime default (`general-purpose`) |
+| Subagent type | `subagent_type: "bee-build"` (generation, executes a cell) or `"bee-gather"` (generation, reads only) · `"bee-extract"` (extraction) · `"bee-review"` (review), when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling`, and any tier whose slot is cli-shaped or otherwise unrendered, use the runtime default (`general-purpose`). The guard repairs a generic type for extraction and review; at generation it refuses, because the tier alone does not say whether the work writes |
 
 On both runtimes the integrity rails are identical because they live in the helpers: `bee finish` refuses while the declared tests are red, and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
 
