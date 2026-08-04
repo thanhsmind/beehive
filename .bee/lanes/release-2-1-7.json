@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "release-2-1-7",
   "mode": "small",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,7 +10,7 @@
     "review": false
   },
   "summary": "Feature \"release-2-1-7\" started at phase \"planning\" (lane).",
-  "next_action": "Execute rel-1 inline (small release, main checkout).",
+  "next_action": "None - release record only, no behavior settled beyond the shipped features already captured.",
   "created_at": "2026-08-04T02:31:23.573Z",
   "route": {
     "class": "release",
@@ -19,5 +19,14 @@
     "product_files": 2,
     "rationale": "Patch release 2.1.7: bump both plugin manifests, rebuild local binary, refresh stamps and release manifest, tag. Main-checkout release work per AGENTS.md.",
     "updated_at": "2026-08-04T02:31:31.685Z"
+  },
+  "last_scribing_run": {
+    "feature": "release-2-1-7",
+    "date": "2026-08-04",
+    "at": "2026-08-04T02:36:38.955Z",
+    "areas_synced": [
+      "onboarding"
+    ],
+    "next_action": "None - release record only, no behavior settled beyond the shipped features already captured."
   }
 }
