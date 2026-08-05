@@ -164,6 +164,7 @@ The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (dec
 | `worktree_first` | code-touching feature work lives in its own worktree and the write guard refuses feature edits made in the main checkout; the exact string `"off"` disables that refusal — see [specs/worktree-first.md](specs/worktree-first.md) | on |
 | `dogfood_repos` | foreign repos whose feedback digest `bee feedback collect`/`rank` (and the [handbook/evolving.md](handbook/evolving.md) loop) fold in — see below | `null` (local digest only) |
 | `product_root` | where the project's PRODUCT docs live (`docs/backlog.md`, `docs/specs/`, the product README) when they are NOT beside `.bee/` — a path relative to the bee root, or absolute. For the "workshop + nested product repo" (repo-divorce) topology where `.bee/` sits one level above the product's own git repo. Unset ⇒ the bee root (every ordinary single-root repo is unaffected). A set-but-missing path warns loudly to stderr rather than silently reading nothing. `.bee/*` runtime state and `docs/history/` (bee's own workshop trail) are never affected — only the product's own docs. | unset ⇒ bee root |
+| `doc_viewer` | opt-in URL prefix for a local doc viewer (e.g. mdview) — `base_url` + `project` join as `<base_url>/p/<project>/<repo-relative-path>`, so the agent gives a clickable URL instead of a bare path — see below | unset ⇒ bare paths |
 
 ### `guards.memory_root` (GH #71) — letting the agent keep its own memory
 
@@ -216,6 +217,36 @@ Every field pulled from a listed repo's digest is **revalidated and datamark-wra
 `mergeDigests` before it is used (decision D2b) — this repo never trusts a foreign digest's bytes as
 written. `null` (the default) means `collect`/`rank` return the local digest only, and
 `corroboration` is 1 for every cluster (see `docs/07-contracts.md`'s evolving contract).
+
+### `doc_viewer` (decision `4205835b`) — clickable doc links in agent prose
+
+Two fields, no template to get wrong:
+
+```jsonc
+{
+  "doc_viewer": {
+    "base_url": "http://10.255.255.254:7700",
+    "project": "beedashboard"
+  }
+}
+```
+
+bee joins them as `<base_url>/p/<project>/<repo-relative-path>` — mdview's own URL layout — and
+reads the result into the session preamble and the compaction capsule, so every doc reference the
+agent writes for the rest of the session is that URL instead of a bare path (e.g.
+`docs/history/<feature>/plan.md`). This is opt-in and scoped to agent prose only: `bee orient`,
+`bee status`, and every other CLI surface keep printing bare paths regardless of the key.
+
+**Unset** is today's behavior, unchanged and silent — every doc reference stays a bare path.
+
+**Half-set is loud, not silent.** `base_url` without `project` (or either one empty, or `doc_viewer`
+set to something that is not an object) produces no URL, plus one stderr line naming the key. A key
+that looks configured but quietly does nothing is worse than one left unset, so bee warns instead of
+staying quiet.
+
+**The one limit.** bee joins the URL; it does not encode it. A repo-relative path that contains a
+space (or another character a URL cannot carry as-is) has to be percent-escaped by whoever writes the
+link — bee will not do it for you.
 
 ## Full sample to copy
 
