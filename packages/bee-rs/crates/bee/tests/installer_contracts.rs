@@ -418,3 +418,96 @@ fn both_installers_onboard_from_the_source_and_vendor_before_applying() {
     let ps_apply = ps1.find("--apply @onboardFlags").expect("install.ps1 no longer applies");
     assert!(ps_copy < ps_apply, "install.ps1 vendors the binary AFTER the apply again");
 }
+
+/// Since rustc 1.95 an rlib holds only a metadata STUB; the full metadata lives
+/// in a sibling .rmeta. Cargo's build pipelining hands a dependent that .rmeta
+/// before the .rlib is finished, and when the two race the build dies with
+/// "only metadata stub found for `rlib` dependency <crate>" trailed by a
+/// cascade — cannot resolve a prelude import, cannot find attribute `derive`,
+/// cannot find macro `write` — that reads as a corrupt toolchain and is not one
+/// (rust-lang/cargo#16790). A user who hits it has no way to know that, and the
+/// installer's own advice was "Fix the build", which is not advice. The
+/// fallback build is a single cold compile that gains almost nothing from
+/// pipelining, so it must not gamble on the race.
+#[test]
+fn both_installers_build_with_pipelining_disabled() {
+    let sh = read("scripts/install.sh");
+    let ps1 = read("scripts/install.ps1");
+
+    assert!(
+        sh.contains("CARGO_BUILD_PIPELINING=false cargo build --release"),
+        "install.sh runs the fallback cargo build with pipelining ON again"
+    );
+    assert!(
+        ps1.contains("$env:CARGO_BUILD_PIPELINING = 'false'"),
+        "install.ps1 runs the fallback cargo build with pipelining ON again"
+    );
+
+    // Set BEFORE the build, not after it — an assignment that trails the
+    // invocation is a comment with syntax.
+    let set = ps1
+        .find("$env:CARGO_BUILD_PIPELINING = 'false'")
+        .expect("checked above");
+    let build = ps1
+        .find("cargo build --release --manifest-path $cargoToml")
+        .expect("install.ps1 no longer builds from source");
+    assert!(set < build, "install.ps1 sets CARGO_BUILD_PIPELINING after the build it guards");
+}
+
+/// Windows PowerShell 5.1 takes its TLS floor from .NET's ServicePointManager,
+/// which on plenty of hosts still resolves to Ssl3|Tls10 — and github.com has
+/// refused everything below TLS 1.2 since 2018. Without this line
+/// Invoke-WebRequest throws, the catch swallows it, and a Windows user with a
+/// published bee-x86_64-pc-windows-msvc.exe waiting for them compiles the whole
+/// crate graph instead. That is the failure this whole download path exists to
+/// remove, reintroduced by omission.
+#[test]
+fn install_ps1_raises_the_tls_floor_before_it_downloads() {
+    let ps1 = read("scripts/install.ps1");
+
+    let floor = ps1
+        .find("[Net.SecurityProtocolType]::Tls12")
+        .expect("install.ps1 no longer raises the TLS floor; PS 5.1 hosts will fall back to a source build");
+    // Anchor on the INVOCATION, not on any mention: the comment explaining this
+    // very workaround names Invoke-WebRequest, and matching that would compare
+    // prose against code and call the ordering wrong.
+    let first_fetch = ps1
+        .find("Invoke-WebRequest -UseBasicParsing")
+        .expect("install.ps1 no longer downloads a published binary");
+    assert!(floor < first_fetch, "install.ps1 raises the TLS floor AFTER its first download");
+
+    // Widened, never narrowed, and only on 5.1: PowerShell 7 starts at
+    // SystemDefault, where a bare assignment would FORBID the TLS 1.3 it would
+    // otherwise negotiate.
+    assert!(
+        ps1.contains("-bor [Net.SecurityProtocolType]::Tls12"),
+        "install.ps1 assigns the TLS floor instead of OR-ing it in — that narrows PS 7"
+    );
+    assert!(
+        ps1.contains("$PSVersionTable.PSVersion.Major -lt 6"),
+        "install.ps1 applies the 5.1 TLS workaround unconditionally"
+    );
+}
+
+/// Every published-binary failure here is non-fatal by design: it logs and lets
+/// the source build take over. That is right, and it was silent — the catch
+/// discarded the exception, so a TLS failure, a proxy, a rate limit and a
+/// genuinely absent release all printed the same reasonless line before minutes
+/// of compiling. The one datum that tells a user what to fix must survive.
+#[test]
+fn install_ps1_names_why_the_published_binary_was_skipped() {
+    let ps1 = read("scripts/install.ps1");
+
+    assert!(
+        ps1.contains("$prebuiltErr = $_.Exception.Message"),
+        "install.ps1 discards the reason the release could not be resolved"
+    );
+    assert!(
+        ps1.contains("could not resolve a published release$why"),
+        "install.ps1 no longer reports WHY it could not resolve a release"
+    );
+    assert!(
+        ps1.contains(r#"no downloadable asset at $prebuiltTag ($($_.Exception.Message))"#),
+        "install.ps1 discards the reason the asset download failed"
+    );
+}

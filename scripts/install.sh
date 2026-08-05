@@ -282,7 +282,14 @@ fi
 if [ -z "$BEE_BIN" ]; then
   command -v cargo >/dev/null 2>&1 || fail "No published binary was usable for this host and cargo is not on PATH. Install rustup (https://rustup.rs), or re-run where a release asset exists."
   log "build    cargo build --release (packages/bee-rs) — first build takes a few minutes"
-  cargo build --release --manifest-path "$BEE_SRC/packages/bee-rs/Cargo.toml" >&2   || fail "cargo build --release failed. Fix the build, then re-run the installer."
+  # PIPELINING OFF, deliberately — same reason as install.ps1. Since rustc 1.95
+  # an rlib carries only a metadata STUB and the full metadata lives in a
+  # sibling .rmeta; cargo's pipelining can hand a dependent that .rmeta before
+  # the .rlib is finished, and the race kills the build with "only metadata stub
+  # found for `rlib` dependency <crate>" plus a cascade that reads as a broken
+  # toolchain and is not one (rust-lang/cargo#16790). A cold one-shot install
+  # build gains almost nothing from pipelining and cannot afford a coin flip.
+  CARGO_BUILD_PIPELINING=false cargo build --release --manifest-path "$BEE_SRC/packages/bee-rs/Cargo.toml" >&2   || fail "cargo build --release failed. Run \`rustup update stable\` first — bee needs a current toolchain. If the errors mention a metadata stub or a missing .rmeta, delete $BEE_SRC/packages/bee-rs/target and re-run."
   BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee"
   [ -x "$BEE_BIN" ] || BEE_BIN="$BEE_SRC/packages/bee-rs/target/release/bee.exe"
   [ -x "$BEE_BIN" ] || fail "cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]"

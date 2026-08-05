@@ -299,7 +299,24 @@ $prebuiltAsset = 'bee-x86_64-pc-windows-msvc.exe'
 $beeBin = $null
 $prebuiltTag = $null
 $prebuiltDir = $null
+$prebuiltErr = $null
 $scriptDirEarly = Split-Path -Parent $PSCommandPath
+
+# Windows PowerShell 5.1 takes its TLS floor from .NET's ServicePointManager,
+# which on plenty of hosts still resolves to Ssl3|Tls10. github.com has refused
+# everything below TLS 1.2 since 2018, so Invoke-WebRequest throws "Could not
+# create SSL/TLS secure channel", the catch below swallows it, and a Windows
+# user who HAS a published .exe waiting for them compiles the whole crate graph
+# instead - the exact cost this download path exists to remove. Widen the
+# floor, never narrow it, and only on 5.1: PowerShell 7 starts at
+# SystemDefault, where assigning Tls12 would forbid the TLS 1.3 it would
+# otherwise negotiate.
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+  try {
+    [Net.ServicePointManager]::SecurityProtocol =
+      [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+  } catch { }
+}
 
 if ($BuildFromSource) {
   Write-Host 'binary   -BuildFromSource given; skipping the published binary'
@@ -323,10 +340,15 @@ if ($BuildFromSource) {
       elseif ($resp.BaseResponse.RequestMessage) { $final = $resp.BaseResponse.RequestMessage.RequestUri.AbsoluteUri }
       if ($final -and $final -match '/releases/tag/(v[^/]+)$') { $prebuiltTag = $Matches[1] }
     }
-  } catch { $prebuiltTag = $null }
+  } catch { $prebuiltTag = $null; $prebuiltErr = $_.Exception.Message }
 
   if (-not $prebuiltTag) {
-    Write-Host 'binary   could not resolve a published release - building from source'
+    # NAME THE REASON. This branch printed one reasonless line and then spent
+    # minutes compiling, so a TLS failure, a proxy, a rate limit and a genuinely
+    # missing release were indistinguishable in the log - the single datum that
+    # tells a user what to fix was the one thing the installer threw away.
+    $why = if ($prebuiltErr) { ": $prebuiltErr" } else { ' (no release tag in the redirect from /releases/latest)' }
+    Write-Host "binary   could not resolve a published release$why - building from source"
   } else {
     try {
       $prebuiltDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName())
@@ -349,7 +371,7 @@ if ($BuildFromSource) {
         Remove-Item -Recurse -Force $prebuiltDir -ErrorAction SilentlyContinue
       }
     } catch {
-      Write-Host "binary   no downloadable asset at $prebuiltTag - building from source"
+      Write-Host "binary   no downloadable asset at $prebuiltTag ($($_.Exception.Message)) - building from source"
       if ($prebuiltDir) { Remove-Item -Recurse -Force $prebuiltDir -ErrorAction SilentlyContinue }
     }
   }
@@ -418,9 +440,31 @@ try {
   if (-not $beeBin) {
     $cargoCmd = Get-Command cargo -ErrorAction SilentlyContinue
     if (-not $cargoCmd) { Fail 'No published binary was usable for this host and cargo is not on PATH. Install rustup (https://rustup.rs), or re-run where a release asset exists.' }
+    # PIPELINING OFF, deliberately. Since rustc 1.95 an rlib carries only a
+    # metadata STUB and the full metadata lives in a sibling .rmeta file.
+    # Cargo's pipelining hands a dependent that .rmeta before the .rlib is
+    # finished, and when the two race the build dies with "only metadata stub
+    # found for `rlib` dependency <crate>" followed by a cascade of nonsense
+    # (cannot resolve a prelude import / cannot find attribute `derive` /
+    # cannot find macro `write`) that reads as a broken toolchain and is not
+    # one - rust-lang/cargo#16790. A cold one-shot install build gains almost
+    # nothing from pipelining and cannot afford a coin flip.
+    $prevPipelining = $env:CARGO_BUILD_PIPELINING
+    $env:CARGO_BUILD_PIPELINING = 'false'
     Write-Host 'build    cargo build --release (packages/bee-rs) - first build takes a few minutes'
-    cargo build --release --manifest-path $cargoToml
-    if ($LASTEXITCODE -ne 0) { Fail 'cargo build --release failed. Fix the build, then re-run the installer.' }
+    try {
+      cargo build --release --manifest-path $cargoToml
+    } finally {
+      if ($null -eq $prevPipelining) { Remove-Item Env:\CARGO_BUILD_PIPELINING -ErrorAction SilentlyContinue }
+      else { $env:CARGO_BUILD_PIPELINING = $prevPipelining }
+    }
+    if ($LASTEXITCODE -ne 0) {
+      Fail ('cargo build --release failed. Run `rustup update stable` first - bee needs a current toolchain. ' +
+            'If the errors mention a metadata stub or a missing .rmeta, delete ' +
+            "$(Join-Path $beeSrc 'packages\bee-rs\target') and re-run. " +
+            'You should not be building at all: a published bee-x86_64-pc-windows-msvc.exe exists for this host, ' +
+            'so report the "binary" line above - it names why the download was skipped.')
+    }
     $beeBin = Join-Path $beeSrc 'packages\bee-rs\target\release\bee.exe'
     if (-not (Test-Path $beeBin)) { $beeBin = Join-Path $beeSrc 'packages\bee-rs\target\release\bee' }
     if (-not (Test-Path $beeBin)) { Fail 'cargo build produced no binary at packages/bee-rs/target/release/bee[.exe]' }
