@@ -744,10 +744,32 @@ use std::time::Instant;
         else {
             panic!("expected an envelope")
         };
-        let granted_s = granted.to_str().unwrap();
-        let main_s = main.to_str().unwrap();
-        assert_eq!(v.get("worktree_root"), Some(&json!(granted_s)));
-        assert_eq!(v.get("control_root"), Some(&json!(main_s)));
+        // Compare paths by IDENTITY, not by spelling. The envelope's roots come
+        // out of the gitdir chain — git's own writing of the path — while the
+        // fixture holds whatever `tempdir()` returned. On a Windows runner those
+        // are the long and 8.3-short forms of one directory
+        // (`runneradmin` vs `RUNNER~1`), so a lexical compare failed for a reason
+        // that has nothing to do with what is being asserted. Same rule, and same
+        // reason, as `roots.rs`'s test-local `norm`.
+        let norm = |p: &str| match dunce::canonicalize(p) {
+            Ok(c) => c.to_string_lossy().into_owned(),
+            Err(_) => p.to_string(),
+        };
+        let envelope_str = |key: &str| v.get(key).and_then(|x| x.as_str()).map(norm);
+        assert_eq!(
+            envelope_str("worktree_root"),
+            Some(norm(granted.to_str().unwrap()))
+        );
+        assert_eq!(
+            envelope_str("control_root"),
+            Some(norm(main.to_str().unwrap()))
+        );
+
+        // The prompt must name the SAME roots the envelope named, in the
+        // envelope's own spelling — asserting it against the fixture's spelling
+        // is what made this test platform-dependent in the first place.
+        let granted_s = v.get("worktree_root").unwrap().as_str().unwrap();
+        let main_s = v.get("control_root").unwrap().as_str().unwrap();
 
         let prompt = v
             .get("payload")
