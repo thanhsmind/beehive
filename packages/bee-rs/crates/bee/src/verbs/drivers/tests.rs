@@ -1217,19 +1217,17 @@ use std::time::Instant;
     /// draft, the area updates and the pattern candidates, and appends ONE
     /// headline line naming the counts and the file.
     ///
-    /// `cells_archive_on_close: false` keeps the fixture's capped cell at
-    /// `.bee/cells/demo-1.json` where `read_capped_cell_traces` looks for
-    /// it — retirement (which this same close call would otherwise trigger
-    /// a few lines above the promote door, moving capped cells into
-    /// `.bee/cells/archive/`) is orthogonal to what this test proves.
+    /// `cells_archive_on_close` is left at its DEFAULT (true) here on
+    /// purpose: `build_promotion` now runs before retirement moves the
+    /// feature's capped cells into `.bee/cells/archive/`, so it still finds
+    /// `.bee/cells/demo-1.json` and the proposal counts below stay
+    /// non-zero even though the same close call retires that cell a few
+    /// lines later.
     #[test]
     fn close_green_promote_ok_writes_the_proposals_file_and_a_headline() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(
-            &tmp,
-            r#"{"commands":{"test":"echo suite-green"},"cells_archive_on_close":false}"#,
-        );
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
         std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
         w(
             &root,
@@ -1257,12 +1255,19 @@ use std::time::Instant;
         };
         assert_eq!(code, 0);
         let lines: Vec<&str> = text.split('\n').collect();
+        // Default archiving retires demo-1 in the same close, so its line
+        // lands ahead of the promote line — build_promotion already ran
+        // (and saw the cell) before this retirement happened.
         assert_eq!(
             lines[3],
-            "Promote proposed for \"demo\": 1 capped cell(s) mined, 0 area bullet(s), 0 pattern candidate(s) — see docs/history/demo/promote-proposals.md."
+            "Retired \"demo\": 1 cell(s) moved out of the active scan (bee cells unarchive --feature demo to reverse)."
         );
         assert_eq!(
             lines[4],
+            "Promote proposed for \"demo\": 1 capped cell(s) mined, 0 area bullet(s), 0 pattern candidate(s) — see docs/history/demo/promote-proposals.md."
+        );
+        assert_eq!(
+            lines[5],
             "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
         );
         let proposals = std::fs::read_to_string(root.join("docs/history/demo/promote-proposals.md")).unwrap();
@@ -1272,6 +1277,10 @@ use std::time::Instant;
         // D38/D5 still hold: promote proposes, close never writes under
         // docs/knowledge/.
         assert!(!root.join("docs/knowledge/work").exists());
+        // Retirement did happen (D2 must see the cells BEFORE this moves
+        // them, not skip the move).
+        assert!(!root.join(".bee/cells/demo-1.json").exists());
+        assert!(root.join(".bee/cells/archive/demo/demo-1.json").exists());
     }
 
     #[test]

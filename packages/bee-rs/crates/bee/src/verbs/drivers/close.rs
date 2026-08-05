@@ -693,6 +693,34 @@ pub(crate) fn close_handler(
     result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
     result.insert("tests".into(), tests_result_value(&run));
 
+    // ── D2: soft promote door — computed BEFORE retirement ─────────────────
+    //
+    // Runs only here — past the tests door (GREEN or undeclared) and past
+    // the scribing-debt refusal above, so a red close or one stopped on
+    // capture debt never reaches it. It must run before the cells are
+    // retired below: `build_promotion` scans `.bee/cells/*.json`, and once
+    // retirement moves the feature's just-capped cells into
+    // `.bee/cells/archive/` that scan would come back empty. `build_promotion`
+    // is read-only, so computing it here has no effect beyond what it can
+    // see. `build_promotion`'s `None` arm means "delegate to Node", and
+    // there is no Node left to delegate to (`rg -l buildContextManifest
+    // --glob '*.mjs'` finds nothing); a `Thrown` is promote's own typed
+    // refusal (most commonly `unknown_work` for a feature with neither a
+    // work-item concept nor a history anchor). Both degrade through the
+    // SAME one-line warning pushed further below (line position unchanged)
+    // and close proceeds unchanged either way — SOFT means proposing the
+    // knowledge a feature earned never blocks finishing it, and D38
+    // (promote proposes, it never writes into docs/knowledge/) stays
+    // untouched by this door.
+    let promote_outcome: Result<Value, String> = match crate::verbs::knowledge::bundle_dir(root) {
+        None => Err("no docs/knowledge/ bundle to mine here".to_string()),
+        Some(dir) => match crate::verbs::knowledge::build_promotion(root, &dir, feature) {
+            None => Err("no docs/knowledge/ bundle to mine here".to_string()),
+            Some(crate::verbs::knowledge::Promo::Thrown(msg)) => Err(msg),
+            Some(crate::verbs::knowledge::Promo::Ok(proposal)) => Ok(proposal),
+        },
+    };
+
     // ── retire the feature's cells ────────────────────────────────────────
     //
     // Close is the lifecycle event that MEANS "this feature is done", and
@@ -732,27 +760,10 @@ pub(crate) fn close_handler(
     }
     result.insert("retired".into(), retired.value());
 
-    // ── D2: soft promote door ────────────────────────────────────────────
-    //
-    // Runs only here — past the tests door (GREEN or undeclared) and past
-    // the scribing-debt refusal above, so a red close or one stopped on
-    // capture debt never reaches it. `build_promotion`'s `None` arm means
-    // "delegate to Node", and there is no Node left to delegate to
-    // (`rg -l buildContextManifest --glob '*.mjs'` finds nothing); a
-    // `Thrown` is promote's own typed refusal (most commonly `unknown_work`
-    // for a feature with neither a work-item concept nor a history anchor).
-    // Both degrade through the SAME one-line warning below and close
-    // proceeds unchanged either way — SOFT means proposing the knowledge a
-    // feature earned never blocks finishing it, and D38 (promote proposes,
-    // it never writes into docs/knowledge/) stays untouched by this door.
-    let promote_outcome: Result<Value, String> = match crate::verbs::knowledge::bundle_dir(root) {
-        None => Err("no docs/knowledge/ bundle to mine here".to_string()),
-        Some(dir) => match crate::verbs::knowledge::build_promotion(root, &dir, feature) {
-            None => Err("no docs/knowledge/ bundle to mine here".to_string()),
-            Some(crate::verbs::knowledge::Promo::Thrown(msg)) => Err(msg),
-            Some(crate::verbs::knowledge::Promo::Ok(proposal)) => Ok(proposal),
-        },
-    };
+    // `promote_outcome` was computed above, before retirement moved the
+    // feature's cells out of `.bee/cells/`, so `build_promotion` still saw
+    // them. Rendering the warning line here keeps its position in the
+    // output unchanged.
     let promote_line = match promote_outcome {
         Ok(proposal) => {
             let proposals_rel = format!("docs/history/{feature}/promote-proposals.md");
