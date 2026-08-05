@@ -5,8 +5,8 @@
   "phase": "swarming",
   "approved_gates": {
     "context": false,
-    "shape": false,
-    "execution": false,
+    "shape": true,
+    "execution": true,
     "review": false
   },
   "summary": "Feature \"guard-parser-depth\" started at phase \"exploring\" (lane).",
@@ -14,5 +14,13 @@
   "created_at": "2026-08-04T23:23:08.511Z",
   "gate_revoked_at": {
     "execution": "2026-08-04T23:28:03.849Z"
+  },
+  "advisor_ref": {
+    "consulted_at": "2026-08-05T01:28:42.775Z",
+    "feature": "guard-parser-depth",
+    "newest_decision_id": "0f02a408-4ceb-4c23-b397-b3001bb6c58e",
+    "plan_sha256": "42c40f66794adb7bf5eb6bf8058179f4b2d4fd2ca33c0ba244df6af70e87bdbd",
+    "advisor": "claude-opus-5-advisor",
+    "digest_head": "Advisor consult for guard-parser-depth re-check: parser fix reviewed, no further concerns.\n"
   }
 }

@@ -1,0 +1,49 @@
+{
+  "id": "agp-1",
+  "feature": "advisor-gate-port",
+  "lane": "high-risk",
+  "title": "Port the advisor-ref anchors and staleness rule, and build the record and show verbs",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/advisor-gate-port/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+  ],
+  "action": "Port two helpers and two verbs from the deleted JS. The originals are recoverable verbatim with `git show b066880d:packages/bee/lib/state.mjs` (advisorRefAnchors at line 2242, advisorRefStale at 2267, ADVISOR_PLAN_ABSENT_SENTINEL = 'absent' at 2233, advisorPlanPath at 2235) and `git show b066880d:packages/bee/bee.mjs` (handleStateAdvisorRefRecord, handleStateAdvisorRefShow). Read them and port faithfully -- do not redesign. ANCHORS: {feature, newest_decision_id (id of the newest ACTIVE decision, null on any error), plan_sha256 (sha256 of docs/history/<feature>/plan.md, or the literal sentinel 'absent' when the file is missing or unreadable)}. STALENESS (AO13, in this order, collecting every reason): a non-object/array/missing ref reads as stale with the single reason 'no advisor_ref recorded'; then feature differs from the record's feature; then newest_decision_id changed; then plan_sha256 changed; then the ref predates the most recent execution-gate revocation (gate_revoked_at.execution, string compare against consulted_at, a missing consulted_at counts as predating). There is NO TTL -- do not add one. VERBS: `state advisor-ref record --advisor <s> --digest-file <path>` stamps the anchors ITSELF (never caller-supplied) and writes advisor_ref = {consulted_at (ISO now), feature, newest_decision_id, plan_sha256, advisor, digest_head (first 500 chars of the digest file)}; it refuses when there is no active feature or the phase is idle/compounding-complete, and refuses with a typed message when the digest file cannot be read. `state advisor-ref show [--lane]` prints the ref with its live staleness verdict, and reads a missing or malformed ref as 'no advisor_ref recorded' rather than crashing. Both honour the standard lane selector (--lane wins, else the session's bound lane, else the default record; --no-lane forces the default). There is no clear verb -- staleness makes an old ref inert. Follow the house skeleton of run_scribing_run / run_compounding_run in state_group/workers.rs: keys_known -> go -> require_flags -> mutation_lane_selector -> resolve_mutation_lock_scope -> list_workflows -> acquire_mutation_locks -> resolve_mutation_target -> door check -> mutate -> write_through_projection -> finish. Finally, remove the `unavailable` block from state.advisor-ref.record and state.advisor-ref.show in the registry payload so they dispatch, and update any test that asserts they are unadvertised (tests/registry_dispatch.rs around line 268 asserts advisor-ref show is absent from group_subverbs).",
+  "must_haves": {
+    "truths": [
+      "A recorded advisor_ref reads as fresh immediately after recording, and stale after any one of the four anchors moves",
+      "The verbs refuse with zero writes when there is no active feature"
+    ],
+    "artifacts": [
+      "Tests for each staleness reason independently, for a malformed ref, for the no-TTL property (a ref does not go stale merely by aging), and for lane targeting"
+    ],
+    "prohibitions": [
+      "Do not touch set_gate.rs in this cell -- the gate wiring is agp-2",
+      "Do not invent a TTL, a clear verb, or caller-supplied anchors"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml; then `bee state advisor-ref show --lane advisor-gate-port` must report no ref recorded, and after a record it must report fresh.",
+  "tier": "generation",
+  "status": "open",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

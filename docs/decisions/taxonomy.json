@@ -316,6 +316,7 @@
     "delegation",
     "agents",
     "decision-memory",
-    "knowledge-layer"
+    "knowledge-layer",
+    "process"
   ]
 }

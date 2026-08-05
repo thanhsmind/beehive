@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "advisor-gate-port",
+  "mode": "high-risk",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"advisor-gate-port\" started at phase \"exploring\" (lane).",
+  "next_action": "Execute agp-1 then agp-2.",
+  "created_at": "2026-08-05T00:45:59.260Z",
+  "advisor_ref": {
+    "consulted_at": "2026-08-05T01:26:29.892Z",
+    "feature": "advisor-gate-port",
+    "newest_decision_id": "cc4b381a-9561-4b95-ae3c-9196a20e3008",
+    "plan_sha256": "absent",
+    "advisor": "claude-opus-5-advisor",
+    "digest_head": "Advisor consult digest for advisor-gate-port (agp-2).\nReviewed the Gate 3 advisor precondition port (requireFreshAdvisorForHighRisk):\nthe staleness rule stays anchor-based (feature/newest-decision/plan-sha256/\nrevocation), no TTL, fail-closed on any read trouble. Approved for merge.\n"
+  }
+}

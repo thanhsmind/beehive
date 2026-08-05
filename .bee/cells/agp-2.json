@@ -1,0 +1,50 @@
+{
+  "id": "agp-2",
+  "feature": "advisor-gate-port",
+  "lane": "high-risk",
+  "title": "Let a fresh advisor consult open the high-risk execution gate",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs"
+  ],
+  "action": "Replace set_gate.rs's two unconditional high-risk refusal arms (the silent-peek arm and the post-lock race arm, both currently calling high_risk_execution_gate_refusal) with the real precondition ported from requireFreshAdvisorForHighRisk (`git show b066880d:packages/bee/bee.mjs`, line 3285). The rule: when the target record's mode is high-risk and an execution component is being APPROVED, compute the staleness verdict of the record's advisor_ref; if stale, refuse with a message naming every staleness reason and the exact remedy command (`bee state advisor-ref record --advisor \"<identity>\" --digest-file <path>`, plus ` --lane <feature>` when the target is a lane); if fresh, ALLOW the approval to proceed. Keep both arms consistent with each other and keep the refusal fail-closed -- any error computing staleness refuses rather than approves. Nothing is written on the refusal path.",
+  "must_haves": {
+    "truths": [
+      "A high-risk execution approval SUCCEEDS when a fresh advisor_ref is present -- this is the whole point of the cell",
+      "It still refuses when the ref is missing or stale, naming which anchor moved",
+      "A non-high-risk record's gate behaviour is byte-for-byte unchanged"
+    ],
+    "artifacts": [
+      "A test approving a high-risk merged gate after recording a fresh ref, and a test for each refusal cause",
+      "A test proving the unapprove path (--approved false) is unaffected"
+    ],
+    "prohibitions": [
+      "Do not weaken the refusal into a warning",
+      "Do not let an error computing staleness read as fresh"
+    ]
+  },
+  "deps": [
+    "agp-1"
+  ],
+  "behavior_change": true,
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml; then live: record a consult on lane advisor-gate-port and confirm `bee state gate --lane advisor-gate-port --merge --approved true` now succeeds, and that it refuses again once a new decision is logged.",
+  "tier": "generation",
+  "status": "open",
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
