@@ -65,8 +65,20 @@
 //     which port retired each, and for the delegation gates that keep the
 //     "nothing after the first write can fall back" property true.
 //
+//   state advisor-ref record / show — HELPERS AND VERBS ARE NATIVE
+//     (advisor_ref.rs, cell agp-1): advisorRefAnchors/advisorRefStale (AO13,
+//     no TTL) and both handlers, ported verbatim from lib/state.mjs /
+//     bee.mjs. NOT YET REACHABLE from `try_native`'s routing table below,
+//     though — that match arm lands with the Gate 3 precondition in agp-2
+//     (set_gate.rs, a separate cell by explicit scope boundary), so the
+//     registry keeps advertising both as `unavailable` until that wiring
+//     lands too. `show` widens the deleted JS's target resolution (explicit
+//     `--lane` only) to the standard selector every other read here already
+//     gives a caller: `--lane` wins, else the session's bound lane, else the
+//     default record; `--no-lane` forces the default.
+//
 // DELEGATED whole verbs (unprovable here, by design):
-//   * state.advisor-ref.*, state.compact-*.
+//   * state.compact-*.
 //
 // Provenance: bee.mjs handleStateSet/handleStateGate/handleStatePlanRevBump/
 // stateWorkerMutate + worker handlers/readPruneKeepSet/keptByPruneKeepSet/
@@ -194,6 +206,7 @@ mod sessions;
 mod workflows;
 mod feature;
 mod policy;
+mod advisor_ref;
 pub(crate) use self::flags::*;
 pub(crate) use self::store::*;
 pub(crate) use self::ledger::*;
@@ -203,3 +216,4 @@ pub(crate) use self::sessions::*;
 pub(crate) use self::workflows::*;
 pub(crate) use self::feature::*;
 pub(crate) use self::policy::*;
+pub(crate) use self::advisor_ref::*;

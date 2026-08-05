@@ -74,7 +74,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         ["rebuild-projections", ..] => ("rebuild-projections", 1),
         ["route", ..] => ("route", 1),
         ["start-feature", ..] => ("start-feature", 1),
-        _ => return None, // advisor-ref/compact-*/unknown → Node
+        ["advisor-ref", "record", ..] => ("advisor-ref.record", 2),
+        ["advisor-ref", "show", ..] => ("advisor-ref.show", 2),
+        _ => return None, // compact-*/unknown → Node
     };
     if leading.len() != consumed {
         return None; // "Unexpected argument" — Node's own refusal path
@@ -103,6 +105,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "rebuild-projections" => run_rebuild_projections(flags, use_json, t0),
         "route" => run_route(flags, use_json, t0),
         "start-feature" => run_start_feature(flags, use_json, t0),
+        "advisor-ref.record" => run_advisor_ref_record(flags, use_json, t0),
+        "advisor-ref.show" => run_advisor_ref_show(flags, use_json, t0),
         _ => None,
     }
 }
@@ -455,19 +459,40 @@ pub(crate) fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<Exit
     finish(&ctx, out)
 }
 
-/// A high-risk record's execution-gate approval always refuses, but the
-/// arm's OWN cause is honest about why: `requireFreshAdvisorForHighRisk`
-/// (advisorRefStale, lib/state.mjs) is unported R6 debt, so neither guard
-/// arm below can check `advisor_ref` for a fresh consult — each refuses
-/// EVERY high-risk execution approval unconditionally instead. Naming that
-/// (and that `bee state advisor-ref record` is declared but not built, so
-/// the refusal cannot be satisfied from the CLI today) keeps the dispatcher
-/// from rendering this as `unsupported argument shape`, which would blame
-/// the caller's flags for a lane-driven refusal.
-fn high_risk_execution_gate_refusal(target_desc: &str) -> String {
-    format!(
-        "gate: refused \u{2014} approving the execution gate for {target_desc} would approve a high-risk record, and nothing was written. A high-risk execution approval requires a fresh advisor consult first; that precondition (requireFreshAdvisorForHighRisk) is unported R6 debt, so this refuses every high-risk execution approval unconditionally instead of checking advisor_ref. `bee state advisor-ref record` is declared but not built, so this refusal cannot be satisfied from the CLI today \u{2014} the approval has to come from a human, or wait on that port."
-    )
+/// requireFreshAdvisorForHighRisk (advisorRefStale, lib/state.mjs, Gate 3
+/// advisor precondition — AO3/AO13): high-risk execution never opens without
+/// a non-stale advisor_ref. `record` is the SELECTED record (M1 — a lane
+/// approval checks the lane's own advisor_ref against the lane's own
+/// plan.md, never the default record's); `lane` is `Some(feature)` only when
+/// the target IS a lane, so the FIX line's `--lane` tail matches the target
+/// exactly. `None` means the record's mode is not high-risk, or the ref is
+/// fresh — either way the approval proceeds. `advisor_ref_stale` never
+/// throws (a missing plan.md or decisions store reads as an anchor mismatch,
+/// never a crash), so this is fail-closed by construction: any read trouble
+/// computing staleness reads as stale, never as fresh.
+fn high_risk_advisor_refusal(
+    root: &Path,
+    record: &Map<String, Value>,
+    lane: Option<&str>,
+) -> Option<String> {
+    if !matches!(record.get("mode"), Some(Value::String(s)) if s == "high-risk") {
+        return None;
+    }
+    let staleness = advisor_ref_stale(root, record.get("advisor_ref"), record);
+    if !staleness.stale {
+        return None;
+    }
+    let lane_tail = match lane {
+        Some(l) => format!(" --lane {l}"),
+        None => String::new(),
+    };
+    Some(format!(
+        "gate: execution approval refused for high-risk work \u{2014} the advisor consult is missing or stale (AO3/AO13). \
+         Reason(s): {}. \
+         FIX: resolve the advisor from config (models.<runtime>.advisor), run it read-only with the evidence bundle on stdin, \
+         then record the consult: bee state advisor-ref record --advisor \"<identity>\" --digest-file <path>{lane_tail}. Nothing is written until a non-stale advisor_ref exists.",
+        staleness.reasons.join("; "),
+    ))
 }
 
 /// The mutation body, root-parameterized so it can be exercised directly in
@@ -513,29 +538,27 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
 
     let scope = resolve_mutation_lock_scope(root, lane_feature.as_deref(), no_lane)?;
     let workflows = list_workflows(root)?;
-    // requireFreshAdvisorForHighRisk (advisorRefStale, lib/state.mjs) is a
-    // separate R6 debt — decided off a silent peek, before any lock.
+    // Gate 3 advisor precondition (AO3/AO13) — decided off a silent peek,
+    // before any lock, so a refusal makes zero mutations.
     if exec_component && approved {
         if let Some(peek) = peek_target_record(root, &scope, lane_feature.as_deref())? {
-            if matches!(peek.get("mode"), Some(Value::String(s)) if s == "high-risk") {
-                let target_desc = match &scope.feature {
-                    Some(f) if scope.lane => format!("lane \"{f}\""),
-                    _ => "default state".to_string(),
-                };
-                return Ok(Out::Thrown(high_risk_execution_gate_refusal(&target_desc)));
+            let lane = match &scope.feature {
+                Some(f) if scope.lane => Some(f.as_str()),
+                _ => None,
+            };
+            if let Some(msg) = high_risk_advisor_refusal(root, &peek, lane) {
+                return Ok(Out::Thrown(msg));
             }
         }
     }
     let locks = acquire_mutation_locks(root, &scope, &workflows)?;
     let mut target = resolve_mutation_target(root, lane_feature.as_deref(), "gate", no_lane)?;
-    if exec_component
-        && approved
-        && matches!(target.record().get("mode"), Some(Value::String(s)) if s == "high-risk")
-    {
-        // race: the peek missed the high-risk mode
-        return Ok(Out::Thrown(high_risk_execution_gate_refusal(
-            &target.selected_record(),
-        )));
+    if exec_component && approved {
+        // race: the peek missed the high-risk mode, or the ref went stale
+        // between the peek and the lock — recompute against the locked read.
+        if let Some(msg) = high_risk_advisor_refusal(root, target.record(), target.lane()) {
+            return Ok(Out::Thrown(msg));
+        }
     }
     let lane_note = target.lane_note();
     // multisession-native-9 D7 / validation-diet D15 — the plan-rev stamp is
@@ -991,5 +1014,247 @@ mod tests {
         // Nothing was written on the refusal path.
         let lane = read_json_file(root, ".bee/lanes/gate-door-refusal.json");
         assert!(lane.get("approved_gates").is_none(), "{lane:?}");
+    }
+
+    // ── run_gate_body — the real Gate 3 precondition (agp-2) ───────────────
+    //
+    // gdr-1 (above) made the high-risk refusal honest about ITS cause; every
+    // approval refused unconditionally because `advisor_ref_stale` did not
+    // exist yet. agp-1 ported that check (advisor_ref.rs); this cell wires it
+    // in, so the refusal above now only fires while the ref is genuinely
+    // missing or stale — a fresh one lets the approval through.
+
+    /// A fresh `advisor_ref` builds the same anchors `advisor_ref_anchors`
+    /// (and `bee state advisor-ref record`) would stamp, so a fixture written
+    /// straight to disk reads exactly as fresh as one recorded through the
+    /// CLI — `advisor_ref.rs`'s own `fresh_ref` test helper follows the same
+    /// pattern for the same reason.
+    fn fresh_advisor_ref(root: &Path, feature: &str) -> Value {
+        let anchors = advisor_ref_anchors(root, &json!(feature));
+        json!({
+            "consulted_at": "2026-01-01T00:00:00.000Z",
+            "feature": anchors["feature"],
+            "newest_decision_id": anchors["newest_decision_id"],
+            "plan_sha256": anchors["plan_sha256"],
+            "advisor": "gpt-5.6-sol",
+            "digest_head": "digest",
+        })
+    }
+
+    /// The whole point of the cell: a high-risk lane's merged (shape +
+    /// execution) approval, refused unconditionally before this cell, now
+    /// SUCCEEDS once a fresh advisor_ref is on the record.
+    #[test]
+    fn high_risk_merged_gate_approval_succeeds_after_a_fresh_advisor_ref_is_recorded() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let advisor_ref = fresh_advisor_ref(root, "gate-door-open");
+        w(
+            root,
+            ".bee/lanes/gate-door-open.json",
+            &format!(
+                r#"{{"feature":"gate-door-open","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+            ),
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "gate-door-open", "--merge", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(_, text, _) = out else {
+            panic!("expected the approval to succeed with a fresh ref, got a refusal")
+        };
+        assert!(text.contains("Gates \"shape\" and \"execution\" set to true"), "{text}");
+        let lane = read_json_file(root, ".bee/lanes/gate-door-open.json");
+        assert_eq!(lane["approved_gates"]["shape"], json!(true));
+        assert_eq!(lane["approved_gates"]["execution"], json!(true));
+    }
+
+    /// Same door, the default (non-lane) record — the peek and the
+    /// post-lock arm both read `.bee/state.json`, never a lane file, and the
+    /// FIX line carries no `--lane` tail since the target is not one.
+    #[test]
+    fn high_risk_execution_gate_approval_on_the_default_record_succeeds_after_a_fresh_ref() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let advisor_ref = fresh_advisor_ref(root, "demo");
+        w(
+            root,
+            ".bee/state.json",
+            &format!(
+                r#"{{"phase":"planning","feature":"demo","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+            ),
+        );
+        let out = run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"]))
+            .unwrap();
+        let Out::Emit(..) = out else { panic!("expected the approval to succeed") };
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["approved_gates"]["execution"], json!(true));
+    }
+
+    /// Refusal cause 1: no advisor_ref recorded at all — default record this
+    /// time, so the FIX line must NOT suggest a `--lane` the caller never
+    /// asked for.
+    #[test]
+    fn high_risk_execution_gate_approval_on_the_default_record_refuses_without_a_ref() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", r#"{"phase":"planning","feature":"demo","mode":"high-risk"}"#);
+        let out = run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"]))
+            .unwrap();
+        let Out::Thrown(msg) = out else { panic!("expected a refusal, got Out::Emit") };
+        assert!(msg.contains("no advisor_ref recorded"), "{msg}");
+        assert!(!msg.contains("--lane"), "default record refusal must not suggest --lane: {msg}");
+        let state = read_json_file(root, ".bee/state.json");
+        assert!(state.get("approved_gates").is_none(), "{state:?}");
+    }
+
+    /// Refusal cause 2: the feature moved since the consult.
+    #[test]
+    fn high_risk_gate_approval_refuses_when_the_feature_changed_since_the_consult() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        // The ref was recorded for a DIFFERENT feature than this lane's own.
+        let advisor_ref = fresh_advisor_ref(root, "some-other-feature");
+        w(
+            root,
+            ".bee/lanes/gate-door-feature.json",
+            &format!(
+                r#"{{"feature":"gate-door-feature","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+            ),
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "gate-door-feature", "--merge", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else { panic!("expected a refusal, got Out::Emit") };
+        assert!(msg.contains("feature changed since the consult"), "{msg}");
+    }
+
+    /// Refusal cause 3: a new decision was logged since the consult.
+    #[test]
+    fn high_risk_gate_approval_refuses_when_a_new_decision_was_logged_since_the_consult() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let advisor_ref = fresh_advisor_ref(root, "gate-door-decision");
+        w(
+            root,
+            ".bee/lanes/gate-door-decision.json",
+            &format!(
+                r#"{{"feature":"gate-door-decision","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+            ),
+        );
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-01-02T00:00:00.000Z\",\"decision\":\"x\",\"rationale\":\"y\"}\n",
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "gate-door-decision", "--merge", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else { panic!("expected a refusal, got Out::Emit") };
+        assert!(msg.contains("a new decision was logged since the consult"), "{msg}");
+    }
+
+    /// Refusal cause 4: plan.md changed since the consult.
+    #[test]
+    fn high_risk_gate_approval_refuses_when_the_plan_changed_since_the_consult() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, "docs/history/gate-door-plan/plan.md", "v1");
+        let advisor_ref = fresh_advisor_ref(root, "gate-door-plan");
+        w(
+            root,
+            ".bee/lanes/gate-door-plan.json",
+            &format!(
+                r#"{{"feature":"gate-door-plan","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref}}}"#
+            ),
+        );
+        // Mutate the plan AFTER the ref captured its hash.
+        w(root, "docs/history/gate-door-plan/plan.md", "v2");
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "gate-door-plan", "--merge", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else { panic!("expected a refusal, got Out::Emit") };
+        assert!(msg.contains("plan.md changed since the consult"), "{msg}");
+    }
+
+    /// Refusal cause 5: the consult predates the most recent execution-gate
+    /// revocation.
+    #[test]
+    fn high_risk_gate_approval_refuses_when_the_ref_predates_a_revocation() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let advisor_ref = fresh_advisor_ref(root, "gate-door-revoked");
+        w(
+            root,
+            ".bee/lanes/gate-door-revoked.json",
+            &format!(
+                r#"{{"feature":"gate-door-revoked","phase":"planning","mode":"high-risk","advisor_ref":{advisor_ref},"gate_revoked_at":{{"execution":"2026-01-02T00:00:00.000Z"}}}}"#
+            ),
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "gate-door-revoked", "--merge", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else { panic!("expected a refusal, got Out::Emit") };
+        assert!(msg.contains("predates the most recent execution-gate revocation"), "{msg}");
+    }
+
+    /// The unapprove path (`--approved false`) is never gated by the advisor
+    /// precondition, even with no advisor_ref at all on a high-risk record —
+    /// `exec_component && approved` is false, so the check never runs.
+    #[test]
+    fn high_risk_gate_unapprove_is_unaffected_by_the_advisor_precondition() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/gate-door-unapprove.json",
+            r#"{"feature":"gate-door-unapprove","phase":"planning","mode":"high-risk","approved_gates":{"shape":true,"execution":true}}"#,
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "gate-door-unapprove", "--merge", "--approved", "false"]),
+        )
+        .unwrap();
+        let Out::Emit(_, text, _) = out else {
+            panic!("expected the unapprove to succeed, got a refusal")
+        };
+        assert!(text.contains("set to false"), "{text}");
+        let lane = read_json_file(root, ".bee/lanes/gate-door-unapprove.json");
+        assert_eq!(lane["approved_gates"]["execution"], json!(false));
+        assert!(lane["gate_revoked_at"]["execution"].is_string(), "{lane:?}");
+    }
+
+    /// A non-high-risk record's gate behaviour is byte-for-byte unchanged —
+    /// no advisor_ref at all, and the approval still goes through clean.
+    #[test]
+    fn non_high_risk_gate_approval_is_unaffected_by_the_advisor_precondition() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/gate-door-safe.json",
+            r#"{"feature":"gate-door-safe","phase":"planning","mode":"safe"}"#,
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "gate-door-safe", "--merge", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(_, text, _) = out else {
+            panic!("expected a clean approval, got a refusal")
+        };
+        assert!(text.contains("Gates \"shape\" and \"execution\" set to true"), "{text}");
+        let lane = read_json_file(root, ".bee/lanes/gate-door-safe.json");
+        assert_eq!(lane["approved_gates"]["execution"], json!(true));
+        assert_eq!(lane["approved_gates"]["shape"], json!(true));
     }
 }

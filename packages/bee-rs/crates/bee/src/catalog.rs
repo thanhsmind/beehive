@@ -267,11 +267,16 @@ mod tests {
     fn group_subverbs_never_offers_an_unavailable_verb() {
         let subs = group_subverbs("state");
         assert!(subs.contains(&"gate".to_string()), "{subs:?}");
-        for dead in ["compact-log", "compact-check", "advisor-ref show"] {
+        for dead in ["compact-log", "compact-check"] {
             assert!(!subs.contains(&dead.to_string()), "{dead} is still advertised: {subs:?}");
         }
         // `bee state compact-log` still RESOLVES — the gap is reported, not
         // hidden.
         assert!(resolve(&["state", "compact-log"]).is_some());
+        // advisor-ref record/show are ported (agp-1/agp-2, no longer a gap) —
+        // both now belong on the advertised list, not the dead one.
+        for live in ["advisor-ref record", "advisor-ref show"] {
+            assert!(subs.contains(&live.to_string()), "{live} is missing: {subs:?}");
+        }
     }
 }
