@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "feature": "knowledge-loop",
+  "mode": "standard",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"knowledge-loop\" started at phase \"exploring\" (lane).",
+  "next_action": "Merge wt/knowledge-loop back to main, then close the feature.",
+  "created_at": "2026-08-05T04:42:15.819Z",
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "multi-domain",
+      "covered-contract-change"
+    ],
+    "product_files": 3,
+    "rationale": "kl-2 worker: knowledge-loop route record (plan.md standard mode, 3 risk flags)",
+    "updated_at": "2026-08-05T05:25:57.326Z"
+  },
+  "last_scribing_run": {
+    "feature": "knowledge-loop",
+    "date": "2026-08-05",
+    "at": "2026-08-05T06:19:47.236Z",
+    "areas_synced": [
+      "okf-profile",
+      "workflow-state",
+      "hook-runtime"
+    ],
+    "next_action": "Merge wt/knowledge-loop back to main, then close the feature."
+  }
+}

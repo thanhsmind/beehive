@@ -1,0 +1,70 @@
+{
+  "id": "kl-4",
+  "feature": "knowledge-loop",
+  "title": "Rank the session preamble's critical patterns by relevance, not recency",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "kl-1"
+  ],
+  "decisions": [
+    "D3"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-loop/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs"
+  ],
+  "action": "Make the session preamble's critical-pattern digest rank by relevance to the bound feature instead of by recency (per D3). bundle_critical_patterns_digest at budget.rs:127-157 currently keeps the last N rows of index.md's Critical patterns section in path order and reverses them, which reads as most-recent only because pattern filenames are date-prefixed. Replace that pick: parse each row's link target into a concept path, resolve the bound feature's anchor with kl-1's resolve_anchor, score the criticals with the same IDF ranker context.rs already uses, and render the top rows by score. Read ONLY the bodies of the concepts those rows name — 78 files, about 165 KB — never collect_concepts, which parses all 186 bundle concepts at about 1.24 MB and would put roughly 1.41 MB of reading on every session start. There is no time budget anywhere under hooks/session_preamble/, so this cell must make its own cost evidence: assert the file count the digest opens. When no feature is bound, or no anchor resolves, or the ranker has nothing to work with, fall back to today's recency pick and SAY SO in the header line — the header must always name which mode produced the rows. A row whose link target resolves to no file on disk is dropped and the dropped count is named in the header, so a stale index.md degrades visibly instead of silently. Keep the digest inside PREAMBLE_BUDGET_BYTES at budget.rs:43; the cap test the_preamble_stays_inside_its_budget_however_big_the_store_gets at hooks/session_preamble/tests.rs:280 must stay green. The current recency behaviour is asserted at tests.rs:434 and :440-441 — update those to the new header wording rather than deleting them, and add the fallback case.",
+  "must_haves": {
+    "truths": [
+      "With a bound feature the three digest rows change when the bound feature changes",
+      "The header line names whether the rows were ranked by relevance or fell back to recency",
+      "With no bound feature the digest falls back to recency and the header says so",
+      "A critical-pattern row whose target file is missing is dropped and counted in the header",
+      "The digest opens only the concept files it ranks, never the whole bundle"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "substantive": "bundle_critical_patterns_digest ranks by relevance with a named fallback; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "budget.rs resolves the anchor through knowledge/anchor.rs",
+      "budget.rs scores through the same IDF ranker context.rs uses"
+    ],
+    "prohibitions": [
+      "collect_concepts is never called from the session preamble path",
+      "The rendered preamble stays within PREAMBLE_BUDGET_BYTES",
+      "No file under docs/knowledge/ is created, moved, or deleted"
+    ]
+  },
+  "trace": {
+    "worker": "kl4-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T06:08:12.071Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc8305c1-98bc-4ccd-bbdb-dc4b7ff173f8",
+    "claimed_at": "2026-08-05T06:04:01.775Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T06:08:00.438Z"
+  }
+}

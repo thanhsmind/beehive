@@ -1,0 +1,82 @@
+{
+  "id": "kl-1",
+  "feature": "knowledge-loop",
+  "title": "Resolve a knowledge anchor from a work item or the feature's history dir",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D5",
+    "D6",
+    "D7",
+    "D8"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-loop/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs"
+  ],
+  "action": "Add a shared anchor resolver in a new knowledge/anchor.rs and make BOTH copies of build_context_manifest use it, in this one cell (per D8 — drivers/tests.rs:881-905 byte-compares only the kctx copy, so moving one copy alone lets them drift with every test green). The resolver returns a work-item arm when a bee.work-item concept's bee.id matches the requested id, which always wins (per D5); otherwise a history arm built from docs/history/<id>/CONTEXT.md and plan.md, whichever exist, both when both do (per D6); otherwise nothing, which each caller renders as today's unknown_work message unchanged, byte for byte, including its D27 tag. The history arm carries the meta text (the slug plus each file's first heading, read from disk — never composed prose, per D10 in docs/knowledge/areas/okf-profile/concept-model-and-authoring.md:55), the body text, the repo-relative paths, and the summed real byte size. In context.rs and kctx.rs: feed the resolver's meta and body to score_critical_relevance in place of meta_text_of plus concept_body; make the anchor the rank-1 manifest entry with its real byte size, because select() at context.rs:243-250 drops any path that is not a bundle concept and metadata() at context.rs:395 joins against docs/knowledge, so a history path would otherwise vanish and rank_one_cost at context.rs:403 would silently reserve against the top critical instead; report zero_signal in the manifest instead of throwing it whenever the anchor is the history arm, keeping the throw for the work-item arm (per D7 — the work concept's tags and bee.areas carry TAG_WEIGHT and AREA_WEIGHT at context.rs:32-34, and a history anchor has neither, so more criticals land at exactly 0.0 for a reason that is an artifact of the anchor kind); and add an anchor object naming its kind and paths to the manifest header at context.rs:461-473, plus one plain-text line naming the anchor (per D1). Leave the bee.plan sibling lookup, the required_context walk, and the decisions read exactly as they are — all three already degrade to empty without panicking under the history arm. Judge the existing coverage first: unknown_work is pinned at verbs/knowledge/tests.rs:312 and :505, the manifest shape at :235, :1120, :1173, :1272 and :1335, and the port parity at drivers/tests.rs:881-905. Author only the gap.",
+  "must_haves": {
+    "truths": [
+      "bee knowledge context --work <slug> returns a ranked manifest for a slug that has no bee.work-item concept but has docs/history/<slug>/CONTEXT.md",
+      "A slug whose docs/history/<slug>/ holds only plan.md also resolves",
+      "A slug with a bee.work-item concept still produces today's manifest and reports the work-item anchor kind",
+      "A slug with neither a work-item concept nor any history file still refuses with the unchanged unknown_work message and exit code",
+      "A history anchor whose text drives most criticals to zero reports zero_signal and exits 0; a work-item anchor in the same state still throws",
+      "The anchor entry carries the real byte size of the files it was built from, never zero"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+        "substantive": "the Anchor type and resolve_anchor, with the work-item arm preferred over the history arm and no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "knowledge/mod.rs declares and re-exports the anchor module",
+      "context.rs build_context_manifest calls resolve_anchor instead of its own work-item find",
+      "drivers/kctx.rs build_context_manifest calls the same resolve_anchor"
+    ],
+    "prohibitions": [
+      "No file under docs/knowledge/ is created, moved, or deleted",
+      "The unknown_work message text and exit code do not change in either copy",
+      "A work-item anchor's manifest stays byte-identical to today's apart from the added anchor field",
+      "No bee.work-item concept is auto-authored"
+    ]
+  },
+  "trace": {
+    "worker": "kl1-worker",
+    "outcome": "Added a shared docs/history/ fallback anchor resolver; both build_context_manifest copies consume it, with the anchor as rank-1 manifest entry, zero_signal reported under a history anchor, and 4 new tests including a cross-port parity check",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T05:22:55.120Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc8305c1-98bc-4ccd-bbdb-dc4b7ff173f8",
+    "claimed_at": "2026-08-05T05:01:48.653Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T05:22:43.423Z"
+  }
+}

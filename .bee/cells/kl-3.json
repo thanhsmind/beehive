@@ -1,0 +1,72 @@
+{
+  "id": "kl-3",
+  "feature": "knowledge-loop",
+  "title": "Propose the knowledge a closing feature earned, without blocking the close",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "kl-2"
+  ],
+  "decisions": [
+    "D2"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/fsutil.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-loop/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/fsutil.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs"
+  ],
+  "action": "Give bee close a SOFT promote door so finishing work proposes the knowledge it earned instead of accumulating it (per D2). On the green path only — after the tests door reports green and after the scribing-debt door passes — call crate::verbs::knowledge::build_promotion in process, exactly as close already calls build_close_report_doors at close.rs:541 and archive_feature_for_close at close.rs:774. Render the proposals to text and write them to docs/history/<feature>/promote-proposals.md, then append ONE headline line to close's output naming the counts and the file. Place the new line after the retirement match block that ends at close.rs:732 and before the final next: line at close.rs:734. fsutil.rs has no text writer — it exposes write_json_atomic at :138 and append_jsonl at :152 only — so add write_text_atomic beside them, following write_json_atomic's atomic temp-then-rename shape, and use it. THE DOOR IS SOFT: it never refuses close and never changes close's exit code. build_promotion returns Option<Promo>; its None arm means delegate to Node and rg -l buildContextManifest --glob '*.mjs' returns nothing, so there is no Node left — map BOTH None and Promo::Thrown to the same single warning line and continue. Nothing is written into docs/knowledge/ by this cell or by the door: D38 (promote proposes, it never writes, docs/knowledge/areas/okf-profile/context-and-promote.md:147) stays intact, and the proposals file lives under docs/history/, which no write guard forbids — docs_history_code_deny at hooks/write_guard/guards.rs:66-82 denies 22 code extensions and .md is not among them, plan_freeze_feature at hooks/write_guard/checks.rs:159-166 matches only plan.md, and the guard is a PreToolUse hook on agent tools, never on bee's own in-process writes.",
+  "must_haves": {
+    "truths": [
+      "A green bee close emits one headline line naming the promote proposal counts and the written file",
+      "The file docs/history/<feature>/promote-proposals.md holds the delivery draft, the area updates and the pattern candidates",
+      "A promote Thrown leaves close's exit code unchanged and emits one warning line",
+      "A promote None leaves close's exit code unchanged and emits the same one warning line",
+      "A red tests door still refuses close before the promote door runs at all"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/fsutil.rs",
+        "substantive": "write_text_atomic, temp-then-rename like write_json_atomic"
+      }
+    ],
+    "key_links": [
+      "close.rs calls crate::verbs::knowledge::build_promotion in process",
+      "close.rs writes the proposals through write_text_atomic"
+    ],
+    "prohibitions": [
+      "close's exit code never changes because of the promote door",
+      "No file under docs/knowledge/ is created, moved, or deleted",
+      "The tests door and the scribing-debt door keep their current refusal behaviour"
+    ]
+  },
+  "trace": {
+    "worker": "kl3-worker",
+    "outcome": "bee close soft-promotes on the green path, writing docs/history/<feature>/promote-proposals.md and adding write_text_atomic",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/fsutil.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T05:47:48.623Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc8305c1-98bc-4ccd-bbdb-dc4b7ff173f8",
+    "claimed_at": "2026-08-05T05:37:38.480Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T05:47:36.885Z"
+  }
+}

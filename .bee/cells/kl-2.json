@@ -1,0 +1,76 @@
+{
+  "id": "kl-2",
+  "feature": "knowledge-loop",
+  "title": "Propose knowledge for a feature that has no work item",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "kl-1"
+  ],
+  "decisions": [
+    "D1",
+    "D5",
+    "D6",
+    "D8"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-loop/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "action": "Make bee knowledge promote resolve a feature slug through the shared resolver kl-1 added, so a feature with no bee.work-item concept can still propose the knowledge it earned (per D1). Replace promote.rs's own work-item find at promote.rs:367-374 with resolve_anchor, keeping its unknown_work message byte for byte, including the (D38) tag, for the case where neither a concept nor any history file exists. Under the history arm: the proposed delivery save path is the canonical docs/knowledge/work/<slug>/delivery.md — a PROPOSAL only, nothing is written, so D5 still holds — and the work_item field in the payload at promote.rs:676 carries the anchor's repo-relative paths instead of a concept path. Add the same anchor object naming kind and paths to the proposal payload at promote.rs:674-685, plus one plain-text line naming the anchor. Empty bee.areas keeps its existing render at promote.rs:714-720 — do not change that text. writes stays [] in every case; promote proposes and never writes (D38, docs/knowledge/areas/okf-profile/context-and-promote.md:147). Second half of this cell, per D8: drivers/prepare.rs:266-279 already passes a cell's feature slug as work and maps ManifestOut::Thrown(_) to None, so today every dispatched worker prompt for a feature with no work item silently ships with no learned-context manifest. It inherits kl-1's fix through kctx, so this cell adds no code there — it adds the TEST that proves it: a dispatched cell whose feature has only docs/history/<slug>/CONTEXT.md now carries a manifest instead of None. Judge existing coverage first: promotion is pinned at verbs/knowledge/tests.rs:402 and its unknown_work at :505. Author only the gap.",
+  "must_haves": {
+    "truths": [
+      "bee knowledge promote --work <slug> proposes off capped cell traces for a feature that has no bee.work-item concept",
+      "The proposal payload names the anchor kind and paths",
+      "Under a history anchor the proposed delivery save path is docs/knowledge/work/<slug>/delivery.md",
+      "A slug with neither a work-item concept nor any history file still refuses with the unchanged unknown_work message and exit code",
+      "A dispatch-prepared cell whose feature has only a history anchor carries a learned-context manifest instead of none"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+        "substantive": "build_promotion resolves through resolve_anchor and emits the anchor field; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "promote.rs calls resolve_anchor from knowledge/anchor.rs",
+      "the dispatch-prepare test exercises drivers/prepare.rs against a history-anchor feature"
+    ],
+    "prohibitions": [
+      "writes stays an empty array in every promote payload",
+      "No file under docs/knowledge/ is created, moved, or deleted",
+      "The unknown_work message text and exit code do not change",
+      "The empty-bee.areas render text at promote.rs:714-720 does not change"
+    ]
+  },
+  "trace": {
+    "worker": "kl2-worker",
+    "outcome": "promote.rs resolves through the shared anchor resolver; history-arm delivery path, anchor field, and text line added; prepare.rs proof test added",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T05:34:56.643Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc8305c1-98bc-4ccd-bbdb-dc4b7ff173f8",
+    "claimed_at": "2026-08-05T05:26:05.196Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T05:34:44.963Z"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "id": "kl-5",
+  "feature": "knowledge-loop",
+  "title": "Let the close door see the cells the closing feature just capped",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "kl-3"
+  ],
+  "decisions": [
+    "D2",
+    "D9"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Move the build_promotion call so it runs BEFORE auto_archive_on_close retires the feature's cells, and keep the headline and warning lines exactly where they are in close's output (per D9). Today the door sits after retirement, so with cells_archive_on_close at its default true a real close moves the just-capped cells into .bee/cells/archive/ before build_promotion scans .bee/cells/*.json — the close's own proposal comes back empty, which satisfies neither D2 nor PBI P67. build_promotion is read-only, so moving the call earlier has no side effect other than what it can see. The door stays soft: no exit-code change, both None and Thrown still degrade to the same one warning line. Change the happy-path test that kl-3 wrote with cells_archive_on_close set to false so it now runs with archiving at its DEFAULT and still asserts non-zero proposal counts — that assertion is the whole point of this cell.",
+  "must_haves": {
+    "truths": [
+      "A green close with cells_archive_on_close at its default emits non-zero promote proposal counts drawn from the cells that close just capped",
+      "The headline and warning lines appear in the same position in close's output as before",
+      "close's exit code is still unaffected by the promote door"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "build_promotion computed before auto_archive_on_close, output lines unmoved"
+      }
+    ],
+    "key_links": [
+      "the happy-path close test runs with default archiving and asserts non-zero counts"
+    ],
+    "prohibitions": [
+      "The retirement behaviour of auto_archive_on_close does not change",
+      "close's exit code never changes because of the promote door",
+      "No file under docs/knowledge/ is created, moved, or deleted"
+    ]
+  },
+  "trace": {
+    "worker": "kl5-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T05:53:48.534Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc8305c1-98bc-4ccd-bbdb-dc4b7ff173f8",
+    "claimed_at": "2026-08-05T05:49:19.432Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T05:53:36.898Z"
+  }
+}
