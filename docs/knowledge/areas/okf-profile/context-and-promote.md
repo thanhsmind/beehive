@@ -190,10 +190,24 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
   those files never creates, moves, or deletes anything under `docs/knowledge/work/`. `unknown_work`
   survives, byte for byte, when neither anchor exists.
 
+- **`promote` reaches retired cells, and takes its areas from the scribing ledger when the work
+  item names none (decision 86d96c9f).** Mining reads `.bee/cells/*.json` AND
+  `.bee/cells/archive/<feature>/*.json`, deduped by cell id with the live copy winning, so a
+  feature whose cells already retired still proposes — before this, every closed feature mined
+  zero cells and therefore proposed nothing. When the resolved work item declares no `bee.areas`
+  — which is every feature reached through the history fallback — the area list comes from that
+  feature's most recent entry in the append-only ledger `.bee/logs/scribing-runs.jsonl`. The
+  payload and the text render both NAME the source as `areas_source`: `{kind: work_item}` or
+  `{kind: scribing_ledger, ts}`. When neither source yields an area, the existing no-areas render
+  stands byte for byte. The area list can come from nowhere else: `bee.authoritative_for` is
+  prose, only 5 of 95 area concepts carry a code path in `bee.sources`, and only 10 of 95 mention
+  `packages/` at all — the bundle is deliberately technology-agnostic, so no file-to-area mapping
+  can be derived from it. The scribing stamp is the one place that mapping is already asserted.
+
 ## Pointers (implementation)
 
 - Proposal builder (B5): `buildPromotion` in the same module, with `readCappedCellTraces` as its
-  read-only view of `.bee/cells/`. Neither function writes; the CLI handler
+  read-only view of `.bee/cells/` and `.bee/cells/archive/<feature>/`. Neither function writes; the CLI handler
   (`handleKnowledgePromote` in `.bee/bin/bee`) only prints what they return.
 - CLI wiring: `.bee/bin/lib/command-registry.mjs` (the `knowledge` group) +
   `.bee/bin/bee` dispatch (`HANDLERS`).
