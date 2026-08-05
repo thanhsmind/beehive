@@ -22,6 +22,14 @@ use crate::verbs::knowledge::{
     parse_frontmatter as verbs_parse_frontmatter, resolve_anchor as verbs_resolve_anchor,
     score_critical_relevance, Anchor as VerbsAnchor, Concept as VerbsConcept, Fm as VerbsFm,
 };
+// D2 (kf-1): the SAME lane-first resolution `state gate`/`state set`/
+// `state route` already read through (explicit id, then the
+// BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID env chain, then single-live-session
+// adoption) — reused here rather than re-derived, because the SessionStart
+// hook's own `session_id` frequently does not (yet) name a session record
+// carrying a `lane` field even when the calling process IS lane-bound by
+// this identical chain.
+use crate::verbs::state_group::session_binding;
 
 /// inject.mjs criticalPatternsDigest — routes on the ONE bundle predicate
 /// (G12), same line cap in both branches.
@@ -298,6 +306,34 @@ pub(crate) fn bundle_critical_patterns_digest(
     }
 }
 
+/// D2 (kf-1): the feature `knowledge_context_lines` reads and the feature
+/// the critical-pattern digest ranks against must be the session's ACTIVE
+/// feature — the bound lane when the session has one, the default record
+/// otherwise — never the default record unconditionally. `pipeline_record`
+/// above already answers this correctly whenever the hook's own
+/// `session_id` names a session record that itself carries a `lane` field;
+/// this only ADDS the fallback for the frequent case where it does not
+/// (yet) at hook-fire time, by falling through to the same lane-first
+/// resolution `state gate`/`state set`/`state route` already read through
+/// (`session_binding`) rather than re-deriving a second notion of "active".
+/// Measured: a live preamble ranked its digest against a feature closed
+/// hours earlier, while three features ran on lane records that same day.
+fn active_record(
+    root: &Path,
+    session_id: Option<&str>,
+    pipeline: &Pipeline,
+    default_record: &JMap,
+) -> JMap {
+    if pipeline.ok && pipeline.source == "lane" {
+        return pipeline.record.clone();
+    }
+    let control_root = control_root_for(root);
+    let (_sid, bound) = session_binding(session_id, &control_root).unwrap_or((None, None));
+    let Some(feature) = bound else { return default_record.clone() };
+    let feature_val = json!(feature);
+    read_lane(&control_root, Some(&feature_val)).unwrap_or_else(|| default_record.clone())
+}
+
 /// inject.mjs `buildSessionPreamble(root, { sessionId, handoffOutcome })`.
 /// Pure: reads state, never writes. Fail-open everywhere — orientation is
 /// never a place to fail a session.
@@ -311,6 +347,10 @@ pub fn build_session_preamble(
     let handoff = read_handoff(root);
     let pipeline = resolve_pipeline(root, session_id);
     let pipeline_record = if pipeline.ok { pipeline.record.clone() } else { state.clone() };
+    // D2 (kf-1): the ACTIVE feature — never the default record
+    // unconditionally — that the knowledge bridge and the digest below both
+    // read.
+    let active = active_record(root, session_id, &pipeline, &pipeline_record);
     // okf-integration-close-f4 D1/D2/D3: the ONE predicate, resolved once and
     // handed to every section that branches on it (G12). Fail-safe direction
     // is the legacy branch — orientation never fails a session.
@@ -457,8 +497,9 @@ pub fn build_session_preamble(
         ));
     }
 
-    // okf-8 (D38): the startup bridge sits ahead of the project map.
-    let knowledge = knowledge_context_lines(root, &pipeline_record);
+    // okf-8 (D38): the startup bridge sits ahead of the project map. D2:
+    // reads the session's active feature, not pipeline_record unconditionally.
+    let knowledge = knowledge_context_lines(root, &active);
     if !knowledge.is_empty() {
         lines.push(String::new());
         lines.extend(knowledge);
@@ -542,9 +583,10 @@ pub fn build_session_preamble(
         ));
     }
 
-    // D3: the digest ranks against the SAME bound feature the header above
-    // already names — never a second, independently-resolved notion of it.
-    let bound_feature = pipeline_record.get("feature").and_then(Value::as_str).filter(|f| !f.is_empty());
+    // D3/D2: the digest ranks against the session's ACTIVE feature (the
+    // same one the knowledge bridge above reads) — never the default
+    // record's feature unconditionally.
+    let bound_feature = active.get("feature").and_then(Value::as_str).filter(|f| !f.is_empty());
     if let Some(digest) = critical_patterns_digest(root, PATTERN_DIGEST_LINES, bundle, bound_feature) {
         lines.push(String::new());
         lines.push("### Critical patterns (digest)".to_string());
