@@ -267,6 +267,132 @@ pub(crate) fn is_separator(t: &str) -> bool {
     matches!(t, "&&" | "||" | ";" | "|" | "&")
 }
 
+// ─── deep tokenizer: sees through sh/bash/dash/zsh/ksh -c and eval wrappers ─
+//
+// `tokenize` folds a quoted span into one token and stops there — it never
+// learns that `sh -c '<payload>'` or `eval '<payload>'` hands that payload to
+// the shell to execute. `tokenize_deep` re-tokenizes and splices in every
+// wrapper payload it finds, so every consumer that reasons over the token
+// list (git classification, bash target extraction, the node inline-eval
+// detector) sees the commands a wrapper hides.
+//
+// A wrapper is either a token whose BASENAME equals sh/bash/dash/zsh/ksh
+// immediately followed by `-c` and one payload token, or the token `eval`
+// followed by its arguments up to the next separator (joined the way a real
+// shell joins eval's argv before re-parsing it). The payload is tokenized
+// and spliced in fenced by `;` on both sides, so a wrapper can never merge
+// two separator-delimited segments into one — `a && sh -c 'b; c' && d`
+// still keeps `a` and `d` as their own segments.
+//
+// Recursion is bounded: a wrapper is only unwrapped `WRAPPER_MAX_DEPTH`
+// levels deep. A wrapper nested past the bound is left as an unexpanded,
+// still-quoted token and `truncated` is set — every consumer treats that as
+// an undecidable payload and fails open (delegates) rather than silently
+// allowing a command it could not fully see through.
+
+pub(crate) const WRAPPER_MAX_DEPTH: usize = 4;
+
+const WRAPPER_SHELL_NAMES: [&str; 5] = ["sh", "bash", "dash", "zsh", "ksh"];
+
+fn wrapper_basename(token: &str) -> String {
+    let normalized = token.replace('\\', "/");
+    normalized.rsplit('/').next().unwrap_or("").to_string()
+}
+
+fn is_wrapper_shell_name(basename: &str) -> bool {
+    WRAPPER_SHELL_NAMES.contains(&basename)
+}
+
+/// True when `tokens` (a single separator-delimited segment or a whole
+/// token list — separators inside are simply skipped) starts a wrapper shape
+/// this module recognizes. Used only to decide whether hitting the depth
+/// bound left something genuinely undecided.
+fn contains_wrapper_shape(tokens: &[String]) -> bool {
+    let mut i = 0usize;
+    while i < tokens.len() {
+        let token = &tokens[i];
+        if is_separator(token) {
+            i += 1;
+            continue;
+        }
+        let base = wrapper_basename(token);
+        if is_wrapper_shell_name(&base)
+            && tokens.get(i + 1).map(String::as_str) == Some("-c")
+            && tokens.get(i + 2).is_some()
+        {
+            return true;
+        }
+        if token == "eval" && tokens.get(i + 1).is_some() && !is_separator(&tokens[i + 1]) {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+pub(crate) struct DeepTokens {
+    pub(crate) tokens: Vec<String>,
+    /// True when a wrapper nested past `WRAPPER_MAX_DEPTH` was left
+    /// unexpanded — the token list may hide a command no consumer can see.
+    pub(crate) truncated: bool,
+}
+
+/// `tokenize`, then expand every `sh`/`bash`/`dash`/`zsh`/`ksh -c` and `eval`
+/// wrapper payload in place and re-scan, bounded at `WRAPPER_MAX_DEPTH`.
+pub(crate) fn tokenize_deep(command: &str) -> DeepTokens {
+    let mut truncated = false;
+    let tokens = expand_wrappers(tokenize(command), 0, &mut truncated);
+    DeepTokens { tokens, truncated }
+}
+
+fn expand_wrappers(tokens: Vec<String>, depth: usize, truncated: &mut bool) -> Vec<String> {
+    if depth >= WRAPPER_MAX_DEPTH {
+        if contains_wrapper_shape(&tokens) {
+            *truncated = true;
+        }
+        return tokens;
+    }
+    let mut out: Vec<String> = Vec::with_capacity(tokens.len());
+    let mut i = 0usize;
+    while i < tokens.len() {
+        let token = &tokens[i];
+        if is_separator(token) {
+            out.push(token.clone());
+            i += 1;
+            continue;
+        }
+        let base = wrapper_basename(token);
+        if is_wrapper_shell_name(&base) && tokens.get(i + 1).map(String::as_str) == Some("-c") {
+            if let Some(payload) = tokens.get(i + 2) {
+                let inner = expand_wrappers(tokenize(payload), depth + 1, truncated);
+                out.push(";".to_string());
+                out.extend(inner);
+                out.push(";".to_string());
+                i += 3;
+                continue;
+            }
+        }
+        if token == "eval" {
+            let mut j = i + 1;
+            while j < tokens.len() && !is_separator(&tokens[j]) {
+                j += 1;
+            }
+            if j > i + 1 {
+                let payload = tokens[i + 1..j].join(" ");
+                let inner = expand_wrappers(tokenize(&payload), depth + 1, truncated);
+                out.push(";".to_string());
+                out.extend(inner);
+                out.push(";".to_string());
+                i = j;
+                continue;
+            }
+        }
+        out.push(token.clone());
+        i += 1;
+    }
+    out
+}
+
 // ─── bash target extraction (provenance: guards.mjs extractBashTargets) ────
 
 pub(crate) struct BashTargets {
@@ -301,9 +427,12 @@ pub(crate) fn has_git_short_flag(tokens: &[String], letter: char) -> bool {
 }
 
 pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
-    let tokens = tokenize(command);
+    let deep = tokenize_deep(command);
+    let tokens = deep.tokens;
     let mut paths: Vec<String> = Vec::new();
-    let mut broad_write = false;
+    // A wrapper nested past the depth bound could hide a redirect we cannot
+    // see — treat it as broad/opaque rather than silently finding no target.
+    let mut broad_write = deep.truncated;
     let add_target = |target: &str, broad: &mut bool, paths: &mut Vec<String>| {
         if target.is_empty() || target == "/dev/null" || target == "NUL" {
             return;

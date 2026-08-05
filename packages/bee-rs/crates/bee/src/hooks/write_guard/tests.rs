@@ -378,6 +378,14 @@ use std::process::ExitCode;
         assert_eq!(e.code, 0);
     }
 
+    #[test]
+    fn wrapper_hidden_node_inline_eval_still_delegates() {
+        // detectors.rs routed through tokenize_deep too: a wrapper must not
+        // hide an inline-eval node call from this detector either.
+        let fx = build_fixture("swarming", true);
+        expect_delegate(bash("sh -c \"node -e 'x'\""), &fx.root);
+    }
+
     // ── AskUserQuestion (ask-guard-autofix D1/D2) ──────────────────────────
 
     #[test]
@@ -1032,6 +1040,149 @@ use std::process::ExitCode;
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
 
+    // ── guard-parser-depth (gpd-1): every git invocation is classified, and
+    // sh/bash/dash/zsh/ksh -c / eval wrappers no longer hide a command from
+    // the guard ────────────────────────────────────────────────────────────
+    //
+    // Live proof this closes, from docs/history/guard-parser-depth/plan.md:
+    //   git stash                            refused
+    //   git status && git stash              USED TO BE allowed — now refused
+    //   sh -c 'echo x > .bee/state.json'     USED TO BE allowed — now refused
+
+    fn sq(s: &str) -> String {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
+
+    /// Wraps `inner` in `levels` nested `bash -c '<payload>'` shells, using
+    /// the standard single-quote-continuation trick so the result re-parses
+    /// correctly however deep it goes.
+    fn wrap_bash_c(levels: usize, inner: &str) -> String {
+        let mut cmd = inner.to_string();
+        for _ in 0..levels {
+            cmd = format!("bash -c {}", sq(&cmd));
+        }
+        cmd
+    }
+
+    #[test]
+    fn compound_git_after_every_separator_still_refuses_the_second_invocation() {
+        // p1-guard-compound-bypass: classifying only the FIRST git
+        // invocation let an allowed leader (`git status`) shadow a denied
+        // trailer (`git stash`) after any of && || ; |.
+        for sep in ["&&", "||", ";", "|"] {
+            let fx = build_git_fixture("idle");
+            let cmd = format!("git status {sep} git stash");
+            let e = expect_done(bash(&cmd), &fx.root);
+            assert_eq!(e.code, 2, "sep {sep:?}: {}", e.stderr);
+            assert!(e.stderr.contains("git stash"), "sep {sep:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn a_leading_refusal_is_not_shadowed_by_a_trailing_allow() {
+        let fx = build_git_fixture("idle");
+        let e = expect_done(bash("git stash && git status"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("git stash"));
+    }
+
+    #[test]
+    fn sh_bash_eval_wrapper_around_a_git_verb_is_now_refused() {
+        // p1-guard-shell-wrapper-bypass, git-verb half.
+        for wrapper in ["sh -c 'git stash'", "bash -c 'git stash'", "eval 'git stash'"] {
+            let fx = build_git_fixture("idle");
+            let e = expect_done(bash(wrapper), &fx.root);
+            assert_eq!(e.code, 2, "wrapper {wrapper:?}: {}", e.stderr);
+            assert!(e.stderr.contains("git stash"), "wrapper {wrapper:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn sh_bash_eval_wrapper_around_a_state_file_redirect_is_now_refused() {
+        // p1-guard-shell-wrapper-bypass, direct-edit-target half.
+        for wrapper in [
+            "sh -c 'echo x > .bee/state.json'",
+            "bash -c 'echo x > .bee/state.json'",
+            "eval 'echo x > .bee/state.json'",
+        ] {
+            let fx = build_fixture("swarming", true);
+            let e = expect_done(bash(wrapper), &fx.root);
+            assert_eq!(e.code, 2, "wrapper {wrapper:?}: {}", e.stderr);
+            assert!(e.stderr.contains("bee state"), "wrapper {wrapper:?}: {}", e.stderr);
+        }
+    }
+
+    #[test]
+    fn nested_wrapper_still_refuses() {
+        let fx = build_git_fixture("idle");
+        let e = expect_done(bash("bash -c 'sh -c \"git stash\"'"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("git stash"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn wrapper_depth_bound_fully_unwraps_four_levels() {
+        let fx = build_git_fixture("idle");
+        let cmd = wrap_bash_c(4, "git stash");
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("git stash"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn wrapper_nested_past_the_depth_bound_never_silently_allows() {
+        // A 5th level cannot be unwrapped (WRAPPER_MAX_DEPTH = 4). Under an
+        // idle-phase gate the broad-write fallback (guards.rs) catches it
+        // outright; the must-not-break contract is that it is NEVER a quiet
+        // allow either way.
+        let idle = build_git_fixture("idle");
+        let cmd = wrap_bash_c(5, "git stash");
+        let e = expect_done(bash(&cmd), &idle.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+
+        // In a phase where the broad-write fallback itself would not deny
+        // (swarming, no reservation on "**"), the undecided payload fails
+        // OPEN rather than being treated as a silent, undiagnosed allow —
+        // checkGitBashCommand delegates, and hooks/mod.rs turns a delegate
+        // into a LOUD fail-open (visible stderr), never a quiet one.
+        let swarming = build_fixture("swarming", true);
+        expect_delegate(bash(&cmd), &swarming.root);
+    }
+
+    #[test]
+    fn echo_of_a_quoted_git_stash_stays_allowed() {
+        // A quoted span is only re-tokenized when it is a WRAPPER's payload
+        // — never merely because it contains shell-looking text.
+        let fx = build_git_fixture("idle");
+        let e = expect_done(bash("echo \"git stash\""), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn git_commit_message_containing_shell_operator_text_stays_allowed() {
+        let fx = build_git_fixture("idle");
+        let e = expect_done(bash("git commit -m \"wip && git stash\""), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn git_dash_capital_c_and_git_dir_flag_still_parse_as_today() {
+        let fx = build_git_fixture("idle");
+        assert_eq!(expect_done(bash("git -C sub status"), &fx.root).code, 0);
+        assert_eq!(expect_done(bash("git --git-dir=.git log"), &fx.root).code, 0);
+    }
+
+    #[test]
+    fn a_path_whose_basename_merely_contains_sh_is_not_a_wrapper() {
+        let fx = build_git_fixture("idle");
+        // If this were (wrongly) treated as a wrapper, the hidden `git
+        // stash` payload would surface and get refused; matching on the
+        // basename EQUALLING a shell name (never a substring) keeps it
+        // allowed, exactly like an ordinary unrecognized command.
+        let e = expect_done(bash("scripts/shell/thing.sh -c 'git stash'"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
     // ── large-read guard (rows 57-64) ──────────────────────────────────────
 
     #[test]
@@ -1305,6 +1456,99 @@ use std::process::ExitCode;
         assert_eq!(tokenize("\"a b"), vec!["a b"]);
     }
 
+    // ── tokenize_deep / find_git_invocations (gpd-1) ────────────────────────
+
+    #[test]
+    fn tokenize_deep_expands_sh_bash_eval_wrappers() {
+        let has_pair = |tokens: &[String], a: &str, b: &str| {
+            tokens.windows(2).any(|w| w[0] == a && w[1] == b)
+        };
+        for wrapper in ["sh -c 'git stash'", "bash -c 'git stash'", "dash -c 'git stash'",
+            "zsh -c 'git stash'", "ksh -c 'git stash'", "eval 'git stash'"]
+        {
+            let deep = tokenize_deep(wrapper);
+            assert!(!deep.truncated, "{wrapper}: {:?}", deep.tokens);
+            assert!(has_pair(&deep.tokens, "git", "stash"), "{wrapper}: {:?}", deep.tokens);
+        }
+        let deep = tokenize_deep("bash -c 'echo x > .bee/state.json'");
+        assert!(deep.tokens.contains(&"echo".to_string()));
+        assert!(deep.tokens.contains(&">".to_string()));
+        assert!(deep.tokens.contains(&".bee/state.json".to_string()));
+    }
+
+    #[test]
+    fn tokenize_deep_never_expands_a_quoted_span_that_is_not_a_wrapper_payload() {
+        assert_eq!(tokenize_deep("echo \"git stash\"").tokens, vec!["echo", "git stash"]);
+        assert_eq!(
+            tokenize_deep("git commit -m \"wip && git stash\"").tokens,
+            vec!["git", "commit", "-m", "wip && git stash"]
+        );
+    }
+
+    #[test]
+    fn tokenize_deep_basename_containing_sh_is_not_a_wrapper() {
+        assert_eq!(
+            tokenize_deep("scripts/shell/thing.sh -c 'git stash'").tokens,
+            vec!["scripts/shell/thing.sh", "-c", "git stash"]
+        );
+    }
+
+    #[test]
+    fn tokenize_deep_fences_the_payload_so_it_cannot_join_two_segments() {
+        // The example from guards.mjs' own doc comment: a wrapper can never
+        // merge the segments on either side of it into one.
+        let deep = tokenize_deep("a && sh -c 'b; c' && d");
+        assert_eq!(deep.tokens, vec!["a", "&&", ";", "b", ";", "c", ";", "&&", "d"]);
+    }
+
+    #[test]
+    fn tokenize_deep_bounds_recursion_and_flags_truncation() {
+        fn sq(s: &str) -> String {
+            format!("'{}'", s.replace('\'', "'\\''"))
+        }
+        fn wrap(levels: usize, inner: &str) -> String {
+            let mut cmd = inner.to_string();
+            for _ in 0..levels {
+                cmd = format!("bash -c {}", sq(&cmd));
+            }
+            cmd
+        }
+        // Four levels fully unwrap: nothing left opaque.
+        let four = tokenize_deep(&wrap(4, "git stash"));
+        assert!(!four.truncated, "{:?}", four.tokens);
+        assert!(
+            four.tokens.windows(2).any(|w| w[0] == "git" && w[1] == "stash"),
+            "{:?}",
+            four.tokens
+        );
+        // A fifth level cannot be unwrapped — left opaque, truncated is set.
+        let five = tokenize_deep(&wrap(5, "git stash"));
+        assert!(five.truncated, "{:?}", five.tokens);
+        assert!(
+            !five.tokens.windows(2).any(|w| w[0] == "git" && w[1] == "stash"),
+            "{:?}",
+            five.tokens
+        );
+    }
+
+    #[test]
+    fn find_git_invocations_returns_every_invocation_in_order() {
+        let tokens = tokenize_deep("git status && git stash").tokens;
+        let invocations = find_git_invocations(&tokens);
+        assert_eq!(invocations.len(), 2);
+        assert_eq!(invocations[0].subcommand.as_deref(), Some("status"));
+        assert_eq!(invocations[1].subcommand.as_deref(), Some("stash"));
+    }
+
+    #[test]
+    fn find_git_invocations_still_skips_global_flag_values() {
+        let tokens = tokenize_deep("git -C sub status && git --git-dir=.git log").tokens;
+        let invocations = find_git_invocations(&tokens);
+        assert_eq!(invocations.len(), 2);
+        assert_eq!(invocations[0].subcommand.as_deref(), Some("status"));
+        assert_eq!(invocations[1].subcommand.as_deref(), Some("log"));
+    }
+
     #[test]
     fn quote_concat_cannot_evade_direct_edit_deny() {
         let fx = build_fixture("swarming", true);
@@ -1388,6 +1632,41 @@ use std::process::ExitCode;
         assert_eq!(t.paths, vec!["f.txt"]);
         let t = extract_bash_targets("node x.mjs > out.log && echo done");
         assert_eq!(t.paths, vec!["out.log"]);
+    }
+
+    #[test]
+    fn extract_bash_targets_sees_through_a_wrapper_redirect() {
+        for wrapper in [
+            "sh -c 'echo x > .bee/state.json'",
+            "bash -c 'echo x > .bee/state.json'",
+            "eval 'echo x > .bee/state.json'",
+        ] {
+            let t = extract_bash_targets(wrapper);
+            assert_eq!(t.paths, vec![".bee/state.json"], "{wrapper}");
+        }
+        // A quoted git verb that is NOT a wrapper payload stays hidden, same
+        // as before this cell — nothing in a plain `echo "..."` argument is
+        // ever re-scanned for a target.
+        let t = extract_bash_targets("echo \"git add .bee/state.json\"");
+        assert!(t.paths.is_empty(), "{:?}", t.paths);
+    }
+
+    #[test]
+    fn extract_bash_targets_treats_a_depth_exceeded_wrapper_as_broad_write() {
+        fn sq(s: &str) -> String {
+            format!("'{}'", s.replace('\'', "'\\''"))
+        }
+        fn wrap(levels: usize, inner: &str) -> String {
+            let mut cmd = inner.to_string();
+            for _ in 0..levels {
+                cmd = format!("bash -c {}", sq(&cmd));
+            }
+            cmd
+        }
+        let within_bound = extract_bash_targets(&wrap(4, "echo x > .bee/state.json"));
+        assert!(!within_bound.broad_write, "{:?}", within_bound.paths);
+        let past_bound = extract_bash_targets(&wrap(5, "echo x > .bee/state.json"));
+        assert!(past_bound.broad_write);
     }
 
     // ── D9 glued/spaced separator matrix ──────────────────────────────────

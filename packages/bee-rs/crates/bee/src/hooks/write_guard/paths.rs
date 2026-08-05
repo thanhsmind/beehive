@@ -162,7 +162,12 @@ pub(crate) struct GitInvocation {
     pub(crate) rest: Vec<String>,
 }
 
-pub(crate) fn find_git_invocation(tokens: &[String]) -> Option<GitInvocation> {
+/// Every git invocation in the token list, in order — not just the first.
+/// `git status && git stash` must classify BOTH invocations; classifying
+/// only the first let a leading allowed command shadow a denied one after
+/// it (the p1-guard-compound-bypass finding).
+pub(crate) fn find_git_invocations(tokens: &[String]) -> Vec<GitInvocation> {
+    let mut out = Vec::new();
     let mut i = 0usize;
     while i < tokens.len() {
         if is_separator(&tokens[i]) {
@@ -197,15 +202,16 @@ pub(crate) fn find_git_invocation(tokens: &[String]) -> Option<GitInvocation> {
             sub_idx = Some(j);
             break;
         }
-        return match (subcommand, sub_idx) {
-            (Some(s), Some(idx)) => Some(GitInvocation {
+        out.push(match (subcommand, sub_idx) {
+            (Some(s), Some(idx)) => GitInvocation {
                 subcommand: Some(s),
                 rest: invocation[idx + 1..].to_vec(),
-            }),
-            _ => Some(GitInvocation { subcommand: None, rest: Vec::new() }),
-        };
+            },
+            _ => GitInvocation { subcommand: None, rest: Vec::new() },
+        });
+        i = end;
     }
-    None
+    out
 }
 
 pub(crate) fn run_git_capture(cwd: &str, args: &[&str]) -> Option<Vec<String>> {

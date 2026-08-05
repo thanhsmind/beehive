@@ -223,7 +223,14 @@ pub(crate) fn check_ask_user_question(tool_input: &Map<String, Value>) -> R<AskR
 /// (-e/--eval/-p or --eval=…) — checkBinLibImportBashCommand's regex scan is
 /// not ported → the caller delegates.
 pub(crate) fn has_node_inline_eval(command: &str) -> bool {
-    let tokens = tokenize(command);
+    let deep = tokenize_deep(command);
+    // A wrapper nested past the depth bound could hide a `node -e` we can't
+    // see — treat it as undecidable rather than silently finding none. The
+    // caller turns `true` into Delegate, never a native allow.
+    if deep.truncated {
+        return true;
+    }
+    let tokens = deep.tokens;
     let mut i = 0usize;
     while i < tokens.len() {
         if is_separator(&tokens[i]) {

@@ -595,16 +595,49 @@ pub(crate) fn check_git_bash_command(
         _ => Value::String("idle".into()),
     };
 
-    let tokens = tokenize(command);
-    let invocation = match find_git_invocation(&tokens) {
-        None => return Ok(None),
-        Some(inv) => inv,
-    };
-    let subcommand = invocation.subcommand.clone();
-    let rest = invocation.rest;
+    let deep = tokenize_deep(command);
+    if deep.truncated {
+        // A wrapper nested past the depth bound could hide a git verb this
+        // scan cannot see — fail open (delegate) rather than silently allow.
+        return Err(Nd);
+    }
 
+    // S2: classify EVERY git invocation in the token list, not just the
+    // first — the first REFUSING invocation wins, so an allowed leading
+    // command (`git status &&`) can no longer shadow a denied one that
+    // follows it (`&& git stash`).
+    for invocation in find_git_invocations(&deep.tokens) {
+        if let Some(wv) = evaluate_git_invocation(
+            root,
+            &topo,
+            &phase,
+            cwd,
+            command,
+            invocation.subcommand.as_deref(),
+            &invocation.rest,
+        )? {
+            return Ok(Some(wv));
+        }
+    }
+    Ok(None)
+}
+
+/// The per-invocation classification body of checkGitBashCommand, run once
+/// per git invocation `check_git_bash_command` finds in the token list.
+/// `Ok(None)` means this ONE invocation does not deny — the caller moves on
+/// to the next invocation, if any.
+#[allow(clippy::too_many_arguments)]
+fn evaluate_git_invocation(
+    root: &str,
+    topo: &Topo,
+    phase: &Value,
+    cwd: &str,
+    command: &str,
+    subcommand: Option<&str>,
+    rest: &[String],
+) -> R<Option<WV>> {
     // gc-2: concurrent-worker whole-tree denial — phase-independent.
-    if let Some(classified) = classify_concurrent_tree_verb(subcommand.as_deref(), &rest) {
+    if let Some(classified) = classify_concurrent_tree_verb(subcommand, rest) {
         match resolve_live_worker_count(root, &topo.control_root, &topo.ctx)? {
             WorkerCount::Unresolved(reason) => {
                 return Ok(Some(WV::Deny(concurrent_tree_refusal(
@@ -628,7 +661,7 @@ pub(crate) fn check_git_bash_command(
         }
     }
 
-    if !is_terminal_phase(&phase) {
+    if !is_terminal_phase(phase) {
         return Ok(None);
     }
 
@@ -645,11 +678,11 @@ pub(crate) fn check_git_bash_command(
         "status", "log", "diff", "show", "rev-parse", "ls-files", "check-ignore", "merge-base",
         "rev-list", "describe", "blame", "cat-file",
     ];
-    if let Some(sub) = &subcommand {
-        if READONLY.contains(&sub.as_str()) {
+    if let Some(sub) = subcommand {
+        if READONLY.contains(&sub) {
             return Ok(None); // { allow: true } — no denial
         }
-        let flag_gated: Option<&[&str]> = match sub.as_str() {
+        let flag_gated: Option<&[&str]> = match sub {
             "branch" | "tag" => Some(&["--list"]),
             "remote" => Some(&["-v", "--verbose"]),
             _ => None,
@@ -661,9 +694,9 @@ pub(crate) fn check_git_bash_command(
         }
     }
 
-    if subcommand.as_deref() == Some("push") {
+    if subcommand == Some("push") {
         return Ok(Some(WV::Deny(intake_refusal(
-            &phase,
+            phase,
             "`git push`",
             "git push is outward-facing and is never exempted from this gate, regardless of what it would push. ",
         ))));
@@ -674,17 +707,17 @@ pub(crate) fn check_git_bash_command(
         "clean", "apply", "cherry-pick", "revert", "rebase",
     ];
     const PATH_RESOLVABLE: [&str; 6] = ["commit", "add", "rm", "mv", "checkout", "restore"];
-    if let Some(sub) = &subcommand {
-        if MUTATING.contains(&sub.as_str()) {
-            let resolved = if PATH_RESOLVABLE.contains(&sub.as_str()) {
-                resolve_git_mutation_paths(cwd, sub, &rest)
+    if let Some(sub) = subcommand {
+        if MUTATING.contains(&sub) {
+            let resolved = if PATH_RESOLVABLE.contains(&sub) {
+                resolve_git_mutation_paths(cwd, sub, rest)
             } else {
                 None
             };
             let paths = match resolved {
                 None => {
                     return Ok(Some(WV::Deny(intake_refusal(
-                        &phase,
+                        phase,
                         &format!(
                             "running `git {}` (its changed paths could not be proved bookkeeping-only)",
                             sub
@@ -700,7 +733,7 @@ pub(crate) fn check_git_bash_command(
                 .find(|p| !under_allowed_prefix(p));
             if let Some(off) = offending {
                 return Ok(Some(WV::Deny(intake_refusal(
-                    &phase,
+                    phase,
                     &format!("running `git {}` — it would change \"{}\"", sub, off),
                     "",
                 ))));
@@ -709,12 +742,12 @@ pub(crate) fn check_git_bash_command(
         }
     }
 
-    let named = match &subcommand {
-        Some(s) => s.clone(),
+    let named = match subcommand {
+        Some(s) => s.to_string(),
         None => js_trim(command).to_string(),
     };
     Ok(Some(WV::Deny(intake_refusal(
-        &phase,
+        phase,
         &format!("running `git {}`", named),
         "This git subcommand is not recognized as read-only or as a modeled bookkeeping-eligible mutation, so it is refused rather than assumed safe. ",
     ))))
