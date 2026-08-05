@@ -475,6 +475,9 @@ use std::time::Instant;
         );
         assert_eq!(areas[0]["bullets"].as_array().unwrap().len(), 1);
         assert_eq!(areas[0]["bullets"][0]["files"], json!(["src/cli/main.rs"]));
+        // The work item's own bee.areas is a non-empty source: the ledger
+        // is never consulted, and the output says so.
+        assert_eq!(p["areas_source"]["kind"], "work_item");
 
         // Pattern candidates: only cells carrying a deviation or a signature.
         let cands = p["pattern_candidates"].as_array().unwrap();
@@ -561,12 +564,122 @@ use std::time::Instant;
         assert!(!kn.join("work").exists());
 
         // Empty bee.areas keeps its existing D19 render, unchanged, and the
-        // text names the anchor on its own line.
+        // text names the anchor on its own line. No scribing-runs.jsonl
+        // exists in this fixture either, so reach two's ledger fallback also
+        // yields nothing — areas_source is null, and the render is untouched.
+        assert_eq!(p["areas_source"], Value::Null);
         let text = promote_text(&p);
         assert!(text.contains(
             "None: the work item declares no bee.areas, so there is no area to sync (D19)."
         ));
         assert!(text.contains("anchor: history — docs/history/hist-1/CONTEXT.md"));
+    }
+
+    /// Reach one: a feature whose cells already retired is no longer
+    /// invisible to promote — `.bee/cells/archive/<feature>/*.json` is mined
+    /// alongside the live store, deduped by id with the live copy winning,
+    /// and each mined cell's trace_path names wherever it actually lives.
+    #[test]
+    fn promotion_mines_archived_cells_and_dedups_the_live_copy() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let kn = root.join("docs").join("knowledge");
+        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::write(
+            kn.join("work").join("w2.md"),
+            "---\ntype: bee.work-item\ntitle: Archived work\ndescription: a retired feature\ntags: []\nbee:\n  id: w2\n  lifecycle: active\n---\n\n# Archived work\n",
+        )
+        .unwrap();
+        let cells = root.join(".bee").join("cells");
+        let archive = cells.join("archive").join("w2");
+        std::fs::create_dir_all(&archive).unwrap();
+        // Archived-only cell: no live copy exists for w2-1 at all.
+        std::fs::write(
+            archive.join("w2-1.json"),
+            r#"{"id":"w2-1","feature":"w2","status":"capped","title":"first","verify":"cargo test","trace":{"outcome":"did the archived thing","capped_at":"2024-06-01T00:00:00.000Z"}}"#,
+        )
+        .unwrap();
+        // w2-2 exists BOTH live and archived, with different outcomes — the
+        // live copy must win, and only once.
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(
+            cells.join("w2-2.json"),
+            r#"{"id":"w2-2","feature":"w2","status":"capped","title":"second","verify":"cargo test","trace":{"outcome":"live version","capped_at":"2024-06-02T00:00:00.000Z"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            archive.join("w2-2.json"),
+            r#"{"id":"w2-2","feature":"w2","status":"capped","title":"second","verify":"cargo test","trace":{"outcome":"stale archived version","capped_at":"2024-06-02T00:00:00.000Z"}}"#,
+        )
+        .unwrap();
+
+        let Some(Promo::Ok(p)) = build_promotion(root, &kn, "w2") else {
+            panic!("expected a proposal");
+        };
+        let cells_out = p["cells"].as_array().unwrap();
+        let ids: Vec<&str> = cells_out.iter().map(|c| c["id"].as_str().unwrap()).collect();
+        // Deduped: w2-2 appears exactly once, not twice.
+        assert_eq!(ids, vec!["w2-1", "w2-2"]);
+        // Archived-only cell names its real archive location.
+        assert_eq!(cells_out[0]["trace_path"], ".bee/cells/archive/w2/w2-1.json");
+        // The live copy wins over the archived duplicate — both the outcome
+        // text and the trace_path prove it came from the live store.
+        assert_eq!(cells_out[1]["outcome"], "live version");
+        assert_eq!(cells_out[1]["trace_path"], ".bee/cells/w2-2.json");
+    }
+
+    /// Reach two: when the resolved work item declares no bee.areas — a
+    /// history anchor never carries one — the feature's most recent
+    /// .bee/logs/scribing-runs.jsonl entry supplies the area list instead,
+    /// and the output names that source (and its timestamp).
+    #[test]
+    fn promotion_derives_areas_from_the_scribing_ledger_when_the_work_item_has_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let kn = root.join("docs").join("knowledge");
+        std::fs::create_dir_all(kn.join("areas")).unwrap();
+        std::fs::write(
+            kn.join("areas").join("widgets.md"),
+            "---\ntype: bee.area\ntitle: Widgets\ndescription: the widgets area\nbee:\n  id: a-widgets\n  lifecycle: active\n  areas: [widgets]\n  sources: [\"src/widgets\"]\n---\n\n# Widgets\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("docs").join("history").join("hist-2")).unwrap();
+        std::fs::write(
+            root.join("docs").join("history").join("hist-2").join("CONTEXT.md"),
+            "# Hist Two Context\n\nBody.\n",
+        )
+        .unwrap();
+        let cells = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(
+            cells.join("hist-2-1.json"),
+            r#"{"id":"hist-2-1","feature":"hist-2","status":"capped","title":"first","verify":"cargo test","trace":{"behavior_change":true,"outcome":"shipped widgets","files_changed":["src/widgets/a.rs"],"capped_at":"2024-06-02T10:00:00.000Z"}}"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("logs").join("scribing-runs.jsonl"),
+            "{\"ts\":\"2024-05-01T00:00:00.000Z\",\"feature\":\"hist-2\",\"areas\":[\"stale\"]}\n\
+             {\"ts\":\"2024-06-03T00:00:00.000Z\",\"feature\":\"hist-2\",\"areas\":[\"widgets\"]}\n",
+        )
+        .unwrap();
+
+        let Some(Promo::Ok(p)) = build_promotion(root, &kn, "hist-2") else {
+            panic!("expected a proposal");
+        };
+        // The MOST RECENT entry wins, not the first or the stale one.
+        assert_eq!(p["areas_source"]["kind"], "scribing_ledger");
+        assert_eq!(p["areas_source"]["ts"], "2024-06-03T00:00:00.000Z");
+        let areas = p["area_updates"].as_array().unwrap();
+        assert_eq!(areas.len(), 1);
+        assert_eq!(areas[0]["area"], "widgets");
+        assert_eq!(areas[0]["bullets"].as_array().unwrap().len(), 1);
+        assert_eq!(p["delivery"]["content"].as_str().unwrap().contains("areas: [widgets]"), true);
+
+        // The text render names the source and the timestamp.
+        let text = promote_text(&p);
+        assert!(text.contains("areas: from the scribing stamp for \"hist-2\""));
+        assert!(text.contains("2024-06-03T00:00:00.000Z"));
     }
 
     // ═══ R5: fixture builders ══════════════════════════════════════════════

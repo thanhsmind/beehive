@@ -11,6 +11,7 @@ use crate::state::read_config_raw;
 use crate::textutil::{char_len, code_unit_cmp, js_default_sort, truncate_chars_head};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{js_trim, keys_known, parse_flags, FlagV, Flags};
+use crate::verbs::state_group::read_scribing_ledger;
 use serde_json::{json, Map, Number, Value};
 use std::collections::HashSet;
 use std::ffi::OsString;
@@ -222,19 +223,19 @@ pub(crate) fn cell_value(c: &CappedCell) -> Value {
     Value::Object(m)
 }
 
-/// readCappedCellTraces(root, feature). None => delegate (an unreadable
-/// entry or a non-UTF-8 name; an unparseable cell is skipped, like Node).
-pub(crate) fn read_capped_cell_traces(root: &Path, feature: &str) -> Option<Vec<CappedCell>> {
-    let dir = root.join(".bee").join("cells");
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Some(Vec::new()); // Node's catch: an absent store yields []
+/// Every `.json` file name directly inside `dir`, sorted. `None` propagates
+/// an unrecoverable read (an unreadable entry or a non-UTF-8 name); an
+/// absent directory is Node's catch — an empty list, not a delegate.
+fn json_file_names(dir: &Path) -> Option<Vec<String>> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Some(Vec::new());
     };
     let mut names: Vec<String> = Vec::new();
     for entry in entries {
         let entry = entry.ok()?;
         let ft = entry.file_type().ok()?;
         if !ft.is_file() {
-            continue; // dirs (incl. archive/) and symlinks are skipped
+            continue; // dirs (incl. a nested archive/<feature>/) and symlinks skipped
         }
         let name = entry.file_name().to_str()?.to_string();
         if name.ends_with(".json") {
@@ -242,97 +243,142 @@ pub(crate) fn read_capped_cell_traces(root: &Path, feature: &str) -> Option<Vec<
         }
     }
     // readdirSync order only decides which cells are seen, never their order
-    // (the result is sorted by compareCellIds below) — but keep it stable.
+    // (the result is sorted by compareCellIds by the caller) — but keep it
+    // stable regardless.
     names.sort();
+    Some(names)
+}
 
-    let mut cells = Vec::new();
-    for name in names {
-        let bytes = std::fs::read(dir.join(&name)).ok()?;
-        let text = String::from_utf8_lossy(&bytes).into_owned();
-        let cell: Value = match serde_json::from_str(&text) {
-            Ok(v) => v,
-            // Node silently skips an unparseable cell. CUTOVER: the
-            // "JSON-looking text serde refuses" sub-case used to delegate
-            // rather than guess which V8 branch ran; there is no other branch
-            // now, so every unparseable cell is skipped, as Node skipped it.
-            Err(_) => continue,
-        };
-        let Value::Object(cell_map) = &cell else { continue };
-        if cell_map.get("feature").and_then(Value::as_str) != Some(feature)
-            || cell_map.get("status").and_then(Value::as_str) != Some("capped")
-        {
-            continue;
-        }
-        let empty = Value::Object(Map::new());
-        let trace = match cell_map.get("trace") {
-            Some(t @ Value::Object(_)) => t,
-            Some(t @ Value::Array(_)) => t, // typeof [] === 'object'
-            _ => &empty,
-        };
-        let deviations: Vec<String> = match trace.get("deviations") {
-            Some(Value::Array(a)) => a
-                .iter()
-                .map(deviation_text)
-                .filter(|t| !t.trim_matches(js_is_space).is_empty())
-                .collect(),
-            _ => Vec::new(),
-        };
-        let mut failure_signatures: Vec<String> = Vec::new();
-        for key in ["attempts", "semantic_judge"] {
-            if let Some(Value::Array(a)) = trace.get(key) {
-                for item in a {
-                    if let Some(Value::String(s)) = item.get("failure_signature") {
-                        if !s.trim_matches(js_is_space).is_empty() {
-                            failure_signatures.push(s.clone());
-                        }
+/// Parses one cell record and, when it names `feature` and status
+/// "capped", mines it — `trace_path` set to `{trace_dir}/<id>.json`,
+/// wherever THIS file actually lives (the live store or a retired
+/// feature's archive subdir). `Some(None)` is Node's silent skip (an
+/// unparseable record, a non-object, or a feature/status mismatch); `None`
+/// propagates an unreadable file, same as before this reach existed.
+fn capped_cell_from_file(
+    path: &Path,
+    name: &str,
+    feature: &str,
+    trace_dir: &str,
+) -> Option<Option<CappedCell>> {
+    let bytes = std::fs::read(path).ok()?;
+    let text = String::from_utf8_lossy(&bytes).into_owned();
+    let cell: Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        // Node silently skips an unparseable cell. CUTOVER: the
+        // "JSON-looking text serde refuses" sub-case used to delegate
+        // rather than guess which V8 branch ran; there is no other branch
+        // now, so every unparseable cell is skipped, as Node skipped it.
+        Err(_) => return Some(None),
+    };
+    let Value::Object(cell_map) = &cell else { return Some(None) };
+    if cell_map.get("feature").and_then(Value::as_str) != Some(feature)
+        || cell_map.get("status").and_then(Value::as_str) != Some("capped")
+    {
+        return Some(None);
+    }
+    let empty = Value::Object(Map::new());
+    let trace = match cell_map.get("trace") {
+        Some(t @ Value::Object(_)) => t,
+        Some(t @ Value::Array(_)) => t, // typeof [] === 'object'
+        _ => &empty,
+    };
+    let deviations: Vec<String> = match trace.get("deviations") {
+        Some(Value::Array(a)) => a
+            .iter()
+            .map(deviation_text)
+            .filter(|t| !t.trim_matches(js_is_space).is_empty())
+            .collect(),
+        _ => Vec::new(),
+    };
+    let mut failure_signatures: Vec<String> = Vec::new();
+    for key in ["attempts", "semantic_judge"] {
+        if let Some(Value::Array(a)) = trace.get(key) {
+            for item in a {
+                if let Some(Value::String(s)) = item.get("failure_signature") {
+                    if !s.trim_matches(js_is_space).is_empty() {
+                        failure_signatures.push(s.clone());
                     }
                 }
             }
         }
-        let id = match cell_map.get("id") {
-            Some(Value::String(s)) => s.clone(),
-            _ => name.trim_end_matches(".json").to_string(),
-        };
-        let cell_title = match cell_map.get("title") {
+    }
+    let id = match cell_map.get("id") {
+        Some(Value::String(s)) => s.clone(),
+        _ => name.trim_end_matches(".json").to_string(),
+    };
+    let cell_title = match cell_map.get("title") {
+        Some(Value::String(s)) => s.clone(),
+        _ => String::new(),
+    };
+    let behavior_change = matches!(trace.get("behavior_change"), Some(Value::Bool(true)))
+        || (trace.get("behavior_change").is_none()
+            && matches!(cell_map.get("behavior_change"), Some(Value::Bool(true))));
+    let outcome = match trace.get("outcome") {
+        Some(Value::String(s)) if !s.trim_matches(js_is_space).is_empty() => s.clone(),
+        _ => cell_title.clone(),
+    };
+    Some(Some(CappedCell {
+        id: id.clone(),
+        title: cell_title,
+        lane: match cell_map.get("lane") {
+            Some(Value::String(s)) => Some(s.clone()),
+            _ => None,
+        },
+        behavior_change,
+        outcome,
+        files_changed: match trace.get("files_changed") {
+            Some(Value::Array(a)) => a
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect(),
+            _ => Vec::new(),
+        },
+        deviations,
+        failure_signatures,
+        verify: match cell_map.get("verify") {
             Some(Value::String(s)) => s.clone(),
             _ => String::new(),
-        };
-        let behavior_change = matches!(trace.get("behavior_change"), Some(Value::Bool(true)))
-            || (trace.get("behavior_change").is_none()
-                && matches!(cell_map.get("behavior_change"), Some(Value::Bool(true))));
-        let outcome = match trace.get("outcome") {
-            Some(Value::String(s)) if !s.trim_matches(js_is_space).is_empty() => s.clone(),
-            _ => cell_title.clone(),
-        };
-        cells.push(CappedCell {
-            id: id.clone(),
-            title: cell_title,
-            lane: match cell_map.get("lane") {
-                Some(Value::String(s)) => Some(s.clone()),
-                _ => None,
-            },
-            behavior_change,
-            outcome,
-            files_changed: match trace.get("files_changed") {
-                Some(Value::Array(a)) => a
-                    .iter()
-                    .filter_map(|v| v.as_str().map(str::to_string))
-                    .collect(),
-                _ => Vec::new(),
-            },
-            deviations,
-            failure_signatures,
-            verify: match cell_map.get("verify") {
-                Some(Value::String(s)) => s.clone(),
-                _ => String::new(),
-            },
-            verify_summary: verify_summary(trace)?,
-            capped_at: match trace.get("capped_at") {
-                Some(Value::String(s)) => Some(s.clone()),
-                _ => None,
-            },
-            trace_path: format!(".bee/cells/{id}.json"),
-        });
+        },
+        verify_summary: verify_summary(trace)?,
+        capped_at: match trace.get("capped_at") {
+            Some(Value::String(s)) => Some(s.clone()),
+            _ => None,
+        },
+        trace_path: format!("{trace_dir}/{id}.json"),
+    }))
+}
+
+/// readCappedCellTraces(root, feature), reach one: mines `.bee/cells/*.json`
+/// (the live store) AND `.bee/cells/archive/<feature>/*.json` (a retired
+/// feature's cells, moved there by close's auto-archive) — a feature whose
+/// cells already retired is no longer invisible to promote. Dedup is by
+/// cell id, the live copy winning: a live record shadows an archived one
+/// carrying the same id, matched or not, so a stale archive copy can never
+/// out-rank the current live record. `None` => delegate (an unreadable
+/// entry or a non-UTF-8 name; an unparseable cell is skipped, like Node).
+pub(crate) fn read_capped_cell_traces(root: &Path, feature: &str) -> Option<Vec<CappedCell>> {
+    let live_dir = root.join(".bee").join("cells");
+    let archive_dir = live_dir.join("archive").join(feature);
+    let archive_trace_dir = format!(".bee/cells/archive/{feature}");
+
+    let mut cells: Vec<CappedCell> = Vec::new();
+    let mut seen_ids: HashSet<String> = HashSet::new();
+
+    for name in json_file_names(&live_dir)? {
+        if let Some(cell) = capped_cell_from_file(&live_dir.join(&name), &name, feature, ".bee/cells")? {
+            seen_ids.insert(cell.id.clone());
+            cells.push(cell);
+        }
+    }
+    for name in json_file_names(&archive_dir)? {
+        if let Some(cell) =
+            capped_cell_from_file(&archive_dir.join(&name), &name, feature, &archive_trace_dir)?
+        {
+            if seen_ids.insert(cell.id.clone()) {
+                cells.push(cell); // live copy already claimed this id above
+            }
+        }
     }
     // Stable sort == JS Array.prototype.sort (spec-guaranteed since ES2019).
     cells.sort_by(|a, b| compare_cell_ids(&a.id, &b.id));
@@ -353,6 +399,48 @@ pub(crate) enum Promo {
     Ok(Value),
     /// A deterministic typed refusal (bee.mjs emitError bytes).
     Thrown(String),
+}
+
+/// Reach two: the `areas` array from `feature`'s MOST RECENT
+/// `.bee/logs/scribing-runs.jsonl` entry — most recent by `ts` (a plain
+/// string compare; the ledger's ISO-8601 stamps sort chronologically as
+/// UTF-16 code units, same as every other ISO-string sort on this path).
+/// Reads through `read_scribing_ledger` (verbs/state_group/ledger.rs)
+/// rather than re-parsing the file, per this reach's own instruction. An
+/// entry naming `feature` but carrying no `areas` (or an empty one) is
+/// skipped, not treated as a match; `None` when no entry for `feature`
+/// carries a non-empty one.
+pub(crate) fn latest_scribing_areas(root: &Path, feature: &str) -> Option<(Vec<String>, String)> {
+    let entries = read_scribing_ledger(root).ok()?;
+    let mut best: Option<(String, Vec<String>)> = None;
+    for entry in entries {
+        if entry.get("feature").and_then(Value::as_str) != Some(feature) {
+            continue;
+        }
+        let Some(ts) = entry.get("ts").and_then(Value::as_str) else { continue };
+        let Value::Object(map) = &entry else { continue };
+        let areas = str_array(map, "areas");
+        if areas.is_empty() {
+            continue;
+        }
+        if best.as_ref().map(|(b, _)| ts > b.as_str()).unwrap_or(true) {
+            best = Some((ts.to_string(), areas));
+        }
+    }
+    best.map(|(ts, areas)| (areas, ts))
+}
+
+/// Where `build_promotion`'s area list came from — named in both the JSON
+/// payload (`areas_source`) and the human render, per this reach's own
+/// instruction: "the output must NAME where the areas came from".
+pub(crate) enum AreasSource {
+    /// The resolved work item's own `bee.areas` — today's only source.
+    WorkItem,
+    /// No `bee.areas`; the feature's most recent scribing-ledger stamp
+    /// named an area list instead. Carries that stamp's `ts`.
+    Scribing(String),
+    /// Neither source yields an area — the D19 no-areas render, unchanged.
+    None,
 }
 
 /// buildPromotion(root, {work}). None => delegate.
@@ -386,6 +474,20 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
     let work_decisions = str_array(&work_bee, "decisions");
     let work_tags = work_concept.map(|c| str_array(&c.data, "tags")).unwrap_or_default();
     let cells = read_capped_cell_traces(root, work_id)?;
+
+    // Reach two: an empty bee.areas — every feature reached through the
+    // history anchor, since a history anchor carries no bee: block at all —
+    // falls to the feature's own most recent scribing-ledger stamp before
+    // giving up. `area_list` replaces `work_areas` at every downstream use;
+    // `areas_source` is what names the choice, in both the JSON and the text.
+    let (area_list, areas_source): (Vec<String>, AreasSource) = if !work_areas.is_empty() {
+        (work_areas.clone(), AreasSource::WorkItem)
+    } else {
+        match latest_scribing_areas(root, work_id) {
+            Some((areas, ts)) => (areas, AreasSource::Scribing(ts)),
+            None => (Vec::new(), AreasSource::None),
+        }
+    };
 
     // ── (a) delivery draft ────────────────────────────────────────────────
     // A history anchor is not a bundle concept and has no directory of its
@@ -438,10 +540,10 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
     let mut delivery_bee = Map::new();
     delivery_bee.insert("id".into(), Value::String(format!("{work_id}-delivery")));
     delivery_bee.insert("lifecycle".into(), Value::String("active".into()));
-    if !work_areas.is_empty() {
+    if !area_list.is_empty() {
         delivery_bee.insert(
             "areas".into(),
-            Value::Array(work_areas.iter().cloned().map(Value::String).collect()),
+            Value::Array(area_list.iter().cloned().map(Value::String).collect()),
         );
     }
     delivery_bee.insert(
@@ -545,7 +647,7 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
 
     // ── (b) area updates ──────────────────────────────────────────────────
     let mut area_updates: Vec<Value> = Vec::new();
-    for area in &work_areas {
+    for area in &area_list {
         let mut subjects: Vec<String> = Vec::new(); // insertion-ordered Set
         for concept in &concepts {
             let bee = bee_of(&concept.data);
@@ -632,10 +734,10 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
         let mut b = Map::new();
         b.insert("id".into(), Value::String(format!("{work_id}-{}-pitfall", c.id)));
         b.insert("lifecycle".into(), Value::String("draft".into()));
-        if !work_areas.is_empty() {
+        if !area_list.is_empty() {
             b.insert(
                 "areas".into(),
-                Value::Array(work_areas.iter().cloned().map(Value::String).collect()),
+                Value::Array(area_list.iter().cloned().map(Value::String).collect()),
             );
         }
         b.insert(
@@ -717,6 +819,16 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
     );
     out.insert("delivery".into(), Value::Object(delivery));
     out.insert("area_updates".into(), Value::Array(area_updates));
+    // Names where area_list came from — reach two's own requirement — read
+    // by promote_text below to render the same fact for a human.
+    out.insert(
+        "areas_source".into(),
+        match &areas_source {
+            AreasSource::WorkItem => json!({ "kind": "work_item" }),
+            AreasSource::Scribing(ts) => json!({ "kind": "scribing_ledger", "ts": ts }),
+            AreasSource::None => Value::Null,
+        },
+    );
     out.insert("pattern_candidates".into(), Value::Array(pattern_candidates));
     out.insert("writes".into(), Value::Array(Vec::new()));
     Some(Promo::Ok(Value::Object(out)))
@@ -758,10 +870,25 @@ pub(crate) fn promote_text(p: &Value) -> String {
     ];
     let area_updates = p["area_updates"].as_array().cloned().unwrap_or_default();
     if area_updates.is_empty() {
+        // Reach two, no source: neither the work item's bee.areas nor the
+        // scribing ledger named an area — this render stays byte-unchanged
+        // from before this reach existed (D19).
         lines.push(
             "None: the work item declares no bee.areas, so there is no area to sync (D19)."
                 .to_string(),
         );
+        lines.push(String::new());
+    } else {
+        // Reach two names the source for a non-empty area list, whichever
+        // one supplied it.
+        lines.push(match p["areas_source"]["kind"].as_str() {
+            Some("scribing_ledger") => format!(
+                "areas: from the scribing stamp for \"{}\" — .bee/logs/scribing-runs.jsonl's most recent entry ({}), the work item declares no bee.areas.",
+                p["work"].as_str().unwrap_or(""),
+                p["areas_source"]["ts"].as_str().unwrap_or("")
+            ),
+            _ => "areas: from the work item's bee.areas.".to_string(),
+        });
         lines.push(String::new());
     }
     for update in &area_updates {
