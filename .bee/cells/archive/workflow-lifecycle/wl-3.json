@@ -32,7 +32,7 @@
     "wl-2"
   ],
   "regen_obligation_ack": "wave-barrier: regen deferred to orchestrator at feature close (parallel-default D2)",
-  "status": "open",
+  "status": "dropped",
   "decisions": [],
   "trace": {
     "worker": null,
@@ -45,6 +45,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": null,
+    "dropped_reason": "Dead as written: it names three deleted JS test files (test_workflow_store.mjs, test_state.mjs, test_bee_cli.mjs). The coverage it wanted is re-stated against the Rust tree as a P2 debt row in .bee/backlog.jsonl."
   }
 }

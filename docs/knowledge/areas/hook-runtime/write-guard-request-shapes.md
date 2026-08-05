@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: Hook Runtime — the request shapes the write guard can read
-description: "How the write guard decides a batch file-change request target by target, how it shape-checks a workflow command against the published catalog, which command forms it still recognises, how it repairs a mechanically fixable question request instead of refusing it, and why an intercepted-but-unreadable request is denied rather than waved through."
-timestamp: 2026-08-03
+description: "How the write guard decides a batch file-change request target by target, how it reads a shell request past its first command and through its wrappers, how it shape-checks a workflow command against the published catalog, which command forms it still recognises, how it repairs a mechanically fixable question request instead of refusing it, and why an intercepted-but-unreadable request is denied rather than waved through."
+timestamp: 2026-08-05
 bee:
   id: hook-runtime-write-guard-request-shapes
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)", "5bd08e53 (ask-guard verdict correction: a repaired question escalates with \"ask\", an advisory reservation notice carries no verdict at all, 2026-08-03)"]
-  sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7"]
+  decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)", "5bd08e53 (ask-guard verdict correction: a repaired question escalates with \"ask\", an advisory reservation notice carries no verdict at all, 2026-08-03)", "761515d4 (guard-parser-depth Gate 2: close the compound-command and shell-wrapper bypasses in one parse every guard consumer shares, depth-bounded with truncation marked — cell gpd-1, 2026-08-05)"]
+  sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7", "guard-parser-depth cell gpd-1 (trace .bee/cells/gpd-1.json, commit 98888896, plan docs/history/guard-parser-depth/plan.md, capped 2026-08-05)"]
   authoritative_for: "hook-runtime: write-guard request-shape recognition and per-target decisions"
 ---
 
@@ -60,6 +60,31 @@ denied with the command, the missing or wrong field, and the corrective shape;
 a well-formed one proceeds untouched. Deep verbs previously escaped this check
 unvalidated (a silent fail-open); they no longer do.
 
+**B3b — A shell request is read past its first command and through its
+wrappers.** The guard no longer judges a shell request by its opening command
+alone. Every command in a compound request — the pieces joined by the
+sequencing, conditional, and pipe separators — is read, so a guarded command
+hidden behind a harmless one is still seen. On top of that, a command handed to
+a shell for interpretation (a shell name invoked with the read-a-command-string
+option, or the built-in evaluate verb) has its payload re-read as commands in
+its own right, recursively, so wrapping a guarded command in a shell no longer
+hides it. Three limits keep the deeper reading from over-reaching:
+- Only a wrapper's own payload is re-read. A quoted span that is merely an
+  argument — a message, a literal string — stays one opaque word, so a
+  guarded verb *named inside* a commit message or an echo is never mistaken
+  for an invocation.
+- A wrapper's payload is fenced. Commands unwrapped from inside a payload can
+  never join with the text on either side of the wrapper to form a command
+  that was never written.
+- The re-reading is depth-bounded. A nesting deeper than the bound stops and
+  marks the reading truncated rather than recursing without end; the marker
+  travels with the reading so a consumer can treat a truncated reading as
+  unproven rather than as clean.
+All three write-guard consumers that reason about a shell request — the
+reservation-target extraction, the guarded-command checks, and the
+request-shape detectors — read through this same deeper parse, so a wrapper
+closes for all of them at once or for none (cell gpd-1, 2026-08-05).
+
 **B23 — Blanket staging reads as a broad write, not as zero targets.** When a
 shell request's targets are extracted for the reservation guard, `git add
 -A`/`--all`/`-u`/`--update` and `git commit -a`/`--all` (combined short
@@ -107,6 +132,11 @@ the question.
 - R3 — An intercepted batch change with unprovable targets is denied, not
   fail-opened (codex-runtime-parity D2, strengthening).
 
+- R3a — Depth of reading is a property of the request, not of a consumer. Every
+  guard decision that reads a shell request reads the same compound-and-wrapper
+  parse; a reading that hit the depth bound is marked truncated and is treated
+  as unproven, never as clean (cell gpd-1, 2026-08-05).
+
 - R14a — The write guard's command-shape recognition accepts both the unified
   dispatcher form (group + verb) and the retired per-command helper form. The
   retired form is a transition affordance for hosts whose vendored tools predate
@@ -134,6 +164,10 @@ the question.
 - A change line with a whitespace-only path counts as unprovable → deny (found
   and pinned during matrix construction).
 
+- A program whose own name merely ends in a shell name's letters is not a
+  wrapper: only a real shell name, invoked with the read-a-command-string
+  option, opens its payload for re-reading (cell gpd-1).
+
 ## Pointers (implementation)
 
 - Batch guard: `packages/bee/hooks/bee-write-guard.mjs` (`extractApplyPatchTargets`).
@@ -141,6 +175,15 @@ the question.
 - CLI-shape guard incl. 3-token verb resolution: `packages/bee/hooks/bee-write-guard.mjs`
   against the `command-registry.mjs` catalog. Evidence: `.bee/cells/du-2.json`,
   `docs/history/dispatcher-unify/`.
+
+- Deep command reading: `tokenize_deep` / `expand_wrappers` /
+  `is_wrapper_shell_name` in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs`, consumed by
+  `find_git_invocations` (`paths.rs`), `checks.rs`, and `detectors.rs`. Tests:
+  `write_guard/tests.rs` (`sh_bash_eval_wrapper_around_a_git_verb_is_now_refused`,
+  `nested_wrapper_still_refuses`, `tokenize_deep_never_expands_a_quoted_span_that_is_not_a_wrapper_payload`,
+  `tokenize_deep_bounds_recursion_and_flags_truncation`). Provenance:
+  `.bee/cells/gpd-1.json`, commit 98888896.
 
 - Question-schema guard + auto-fix: `check_ask_user_question` in
   `packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs`

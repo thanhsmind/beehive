@@ -32,19 +32,26 @@
   "behavior_change": true,
   "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml; then live: record a consult on lane advisor-gate-port and confirm `bee state gate --lane advisor-gate-port --merge --approved true` now succeeds, and that it refuses again once a new decision is logged.",
   "tier": "generation",
-  "status": "open",
+  "status": "capped",
   "decisions": [],
   "trace": {
     "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Shipped in commit 6fefd6ee; set_gate.rs carries the high_risk_advisor_refusal precondition off a fresh advisor consult.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-05T13:26:38.480Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": null,
+    "inline_reason": "Retro-cap of already-shipped work during a stale-lane sweep: the code landed in 6fefd6ee and is pinned by tests; only the record is being made honest.",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T13:26:26.776Z"
   }
 }

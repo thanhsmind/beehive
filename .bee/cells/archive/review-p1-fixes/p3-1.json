@@ -32,7 +32,7 @@
   ],
   "deps": [],
   "regen_obligation_ack": "wave-barrier: regen owned by MAIN at feature close (parallel-default D2)",
-  "status": "open",
+  "status": "dropped",
   "decisions": [],
   "trace": {
     "worker": null,
@@ -48,7 +48,8 @@
     "claim_session": null,
     "claimed_at": null,
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "dropped_reason": "Dead as written: every file it names (packages/bee/bee.mjs, packages/bee/lib/state.mjs, packages/bee/tests/test_bee_cli.mjs) went away with the JS runtime. The live residue — state set --feature now refusing every swap into the deleted Node runtime — is recorded as a P1 finding in .bee/backlog.jsonl."
   },
   "tier": "ceiling"
 }

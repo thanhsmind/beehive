@@ -35,20 +35,30 @@
   "behavior_change": true,
   "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml, plus a live probe with the freshly built binary: `git status && git stash` must now refuse, `sh -c 'echo x > .bee/state.json'` must now refuse, and `echo \"git stash\"` must still pass.",
   "tier": "generation",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Shipped in commit 98888896; tokenize_deep + find_git_invocations wire all three write-guard consumers, pinned by the gpd-1 tests in write_guard/tests.rs.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-05T13:26:56.055Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": null,
+    "inline_reason": "Retro-cap of already-shipped work during a stale-lane sweep: the code landed in 98888896 and is pinned by the gpd-1 tests; only the record is being made honest.",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T13:26:44.291Z"
   }
 }

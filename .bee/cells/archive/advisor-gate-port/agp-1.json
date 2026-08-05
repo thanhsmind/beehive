@@ -30,20 +30,29 @@
   "behavior_change": true,
   "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml; then `bee state advisor-ref show --lane advisor-gate-port` must report no ref recorded, and after a record it must report fresh.",
   "tier": "generation",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Shipped in commit fb94ba8f; advisor_ref.rs carries the anchors, staleness rule, and the record/show verbs.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/advisor_ref.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-05T13:26:22.307Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": null,
+    "inline_reason": "Retro-cap of already-shipped work during a stale-lane sweep: the code landed in fb94ba8f and is pinned by tests; no worker is being dispatched, only the record is being made honest.",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T13:26:10.527Z"
   }
 }
