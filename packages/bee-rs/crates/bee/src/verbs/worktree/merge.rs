@@ -413,7 +413,12 @@ pub(crate) fn perform_cleanup(
 }
 
 /// attachCleanupOutcome — runs cleanup, or attaches the suggested command
-/// (decision D8b: "never prompt").
+/// (decision D8b: "never prompt"). D1/D1a: `cleanup` here is already the
+/// EFFECTIVE decision (default on, `--no-cleanup` or a `false`
+/// `worktree_cleanup_on_merge` opt out, and the ALREADY_UP_TO_DATE caller
+/// hardcodes it false) — so a `false` reaching this function means one of
+/// those opt-outs fired, or nothing was merged, and the suggested command is
+/// simply "run merge again", not "pass `--cleanup`" (a no-op now).
 pub(crate) fn attach_cleanup_outcome(
     result: &mut Map<String, Value>,
     main_root: &Path,
@@ -426,7 +431,7 @@ pub(crate) fn attach_cleanup_outcome(
     if !cleanup {
         result.insert(
             "cleanup_suggested_command".into(),
-            json!(format!("bee worktree merge --id {id} --cleanup --json")),
+            json!(format!("bee worktree merge --id {id} --json")),
         );
         return;
     }

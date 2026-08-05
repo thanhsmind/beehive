@@ -22,12 +22,18 @@ use std::time::Instant;
 
 /// bee.mjs FLAG_ALONE_BOOLEANS — the closed set of flags that are boolean
 /// when they appear alone; every other flag consumes the next token.
+///
+/// `no-cleanup` (worktree-reclaim D1/D1a) is native-only — bee.mjs never
+/// carried it, so it is not a mirrored entry like the rest of this list; it
+/// is added here for the same reason every other bare boolean flag needs an
+/// entry: without one, a bare `--no-cleanup` would swallow the NEXT token as
+/// its value instead of parsing as `true`.
 pub(crate) const FLAG_ALONE_BOOLEANS: &[&str] = &[
     "json", "stdin", "active-only", "dry-run", "write", "as-lane", "no-lane",
     "waive-scribing-debt", "waive-compounding", "html", "string", "cleanup",
-    "force-ownership", "local", "all", "untagged", "check", "with-companion",
-    "lanes-full", "strict", "queue-submit", "show", "isolate", "set", "brief",
-    "all-but-active", "merge", "claim",
+    "no-cleanup", "force-ownership", "local", "all", "untagged", "check",
+    "with-companion", "lanes-full", "strict", "queue-submit", "show",
+    "isolate", "set", "brief", "all-but-active", "merge", "claim",
 ];
 
 #[derive(Clone, PartialEq)]

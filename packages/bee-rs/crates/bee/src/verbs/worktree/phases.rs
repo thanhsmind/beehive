@@ -42,7 +42,6 @@ pub(crate) enum StageOut {
 pub(crate) fn merge_stage(
     main_root: &Path,
     id: &str,
-    cleanup: bool,
     companion_end_command: Option<&str>,
 ) -> MR<StageOut> {
     // `typeof id !== 'string' || !id` is already enforced by run_merge's
@@ -237,13 +236,22 @@ pub(crate) fn merge_stage(
             result.insert("companion".into(), companion);
         }
         // verifySkipped is deliberately FALSE here (see the .mjs comment).
+        //
+        // D1a: cleanup-by-default fires only on a merge that merged
+        // something. This arm merged nothing (`merge_head_file` never
+        // existed — the branch was already fully contained in `base`), so
+        // cleanup is hardcoded FALSE here regardless of the caller's
+        // `cleanup` value — never the passed-through flag/config decision.
+        // Otherwise re-running merge to check status would delete the
+        // worktree, and a tree holding uncommitted gitignored work would
+        // read as clean-and-trivially-merged.
         attach_cleanup_outcome(
             &mut result,
             main_root,
             &worktree_root,
             &branch,
             id,
-            cleanup,
+            false,
             false,
         );
         return Ok(StageOut::Done(MergeAnswer { result, ok: true }));
@@ -424,7 +432,7 @@ pub(crate) fn merge_feature_worktree(
 ) -> MR<MergeAnswer> {
     let mut guard = lock::acquire_store_lock(main_root, WORKTREE_ADMIN_LOCK, lock::MAX_ATTEMPTS)
         .map_err(|b| MErr::Thrown(b.message()))?;
-    let staged = merge_stage(main_root, id, cleanup, companion_end_command);
+    let staged = merge_stage(main_root, id, companion_end_command);
     guard.release();
     let staged = match staged? {
         StageOut::Done(answer) => return Ok(answer),

@@ -309,18 +309,235 @@ use std::time::Instant;
         assert_eq!(out["removed"], Value::Bool(true));
     }
 
-    /// attachCleanupOutcome without the flag NEVER runs anything — it attaches
-    /// the suggestion (decision D8b: "never prompt").
+    /// attachCleanupOutcome's `cleanup=false` branch NEVER runs anything — it
+    /// attaches the suggestion (decision D8b: "never prompt"). D1/D1a: the
+    /// caller now passes the EFFECTIVE decision (`--no-cleanup`, a `false`
+    /// `worktree_cleanup_on_merge`, or the hardcoded ALREADY_UP_TO_DATE
+    /// case), never a raw `--cleanup` flag — this test used to be named for
+    /// the flag's absence; it now covers this branch by its value instead.
+    /// The suggested command drops `--cleanup` (a no-op now): re-running
+    /// merge WITHOUT `--no-cleanup` is what actually cleans up.
     #[test]
-    fn cleanup_without_the_flag_only_suggests() {
+    fn cleanup_false_only_suggests() {
         let tmp = tempfile::tempdir().unwrap();
         let mut result = Map::new();
         attach_cleanup_outcome(&mut result, tmp.path(), tmp.path(), "wt/demo", "wt-demo", false, false);
         assert_eq!(
             result["cleanup_suggested_command"],
-            json!("bee worktree merge --id wt-demo --cleanup --json")
+            json!("bee worktree merge --id wt-demo --json")
         );
         assert!(!result.contains_key("cleanup"));
+    }
+
+    // ── D1/D1a: cleanup by default ──────────────────────────────────────────
+
+    /// `worktree_cleanup_on_merge`'s config half, read the same way
+    /// `archive_on_close_enabled` reads `cells_archive_on_close`
+    /// (close.rs:827) — absent means ON — but unlike that helper, a
+    /// present-but-non-boolean value is REFUSED (`None`), never silently
+    /// read as ON.
+    #[test]
+    fn worktree_cleanup_on_merge_config_matches_archive_on_close_enabled_except_it_validates() {
+        let tmp = tempfile::tempdir().unwrap();
+        // No .bee/config.json at all -> on.
+        assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), Some(true));
+
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"worktree_cleanup_on_merge\": true}",
+        )
+        .unwrap();
+        assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), Some(true));
+
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"worktree_cleanup_on_merge\": false}",
+        )
+        .unwrap();
+        assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), Some(false));
+
+        // A typo'd non-boolean value refuses rather than defaulting to ON —
+        // the divergence from archive_on_close_enabled's own pattern.
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"worktree_cleanup_on_merge\": \"no\"}",
+        )
+        .unwrap();
+        assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), None);
+    }
+
+    /// Truth 1 + truth 3: with no `--no-cleanup` flag and no config, the
+    /// merge cleans up by default; a `false` `worktree_cleanup_on_merge`
+    /// beats the absent flag.
+    #[test]
+    fn resolve_cleanup_on_merge_defaults_on_and_config_off_beats_the_absent_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        // No flags at all (no --no-cleanup), no config -> cleanup runs (D1).
+        assert_eq!(resolve_cleanup_on_merge(tmp.path(), false), Some(true));
+
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"worktree_cleanup_on_merge\": false}",
+        )
+        .unwrap();
+        // The flag was never passed (no_cleanup_flag = false) — config alone
+        // beats the absent flag.
+        assert_eq!(resolve_cleanup_on_merge(tmp.path(), false), Some(false));
+    }
+
+    /// Truth 1, end to end: a merge with no `--no-cleanup` flag and no config
+    /// resolves cleanup ON, and running the merge with that DEFAULT-computed
+    /// value actually removes the worktree directory and deletes its branch
+    /// — the same call shape `run_merge` makes when handed no flags at all.
+    #[test]
+    fn merge_with_no_flags_cleans_up_by_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["commit", "-qam", "work"]);
+
+        // No --no-cleanup flag, no config -> the same value run_merge would
+        // compute for a plain "bee worktree merge --id <id>" invocation.
+        let cleanup = resolve_cleanup_on_merge(&main, false).unwrap();
+        assert!(cleanup, "no flags, no config -> cleanup runs by default (D1)");
+
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(answer.result["cleanup"]["ok"], Value::Bool(true));
+        assert!(!wt.exists(), "the worktree directory is gone");
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", &created.branch])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "the branch is gone"
+        );
+    }
+
+    /// Truth 2: `--no-cleanup` resolves to cleanup=false, and a real merge
+    /// with that value leaves the worktree directory and its branch standing.
+    #[test]
+    fn no_cleanup_flag_resolves_off_and_leaves_the_worktree_and_branch_standing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["commit", "-qam", "work"]);
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        assert!(!cleanup, "--no-cleanup opts this merge out (D1a)");
+
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert!(!answer.result.contains_key("cleanup"));
+        assert_eq!(
+            answer.result["cleanup_suggested_command"],
+            json!(format!("bee worktree merge --id {} --json", created.id))
+        );
+        assert!(wt.exists(), "the worktree directory still stands");
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", &created.branch])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "the branch still stands"
+        );
+    }
+
+    /// Truth 4 (D1a): a non-boolean `--no-cleanup` value is REFUSED outright
+    /// — never ignored, never defaulted to either outcome. This is the CLI
+    /// gate `run_merge` checks BEFORE anything is resolved or mutated
+    /// (`bool_flag_ok(&flags, "no-cleanup")`); a caller that fails it returns
+    /// `None` from `run_merge`, which `main.rs`'s router turns into a
+    /// non-zero "unsupported command shape" exit having removed nothing.
+    #[test]
+    fn no_cleanup_with_a_non_boolean_value_is_refused_not_defaulted() {
+        let (flags, _json) = parse_flags(&["--id", "wt-demo", "--no-cleanup=yes"]).unwrap();
+        assert!(
+            !bool_flag_ok(&flags, "no-cleanup"),
+            "a non-boolean --no-cleanup must refuse outright, not resolve to either outcome"
+        );
+        // The bare/true/false shapes all still validate fine.
+        let (bare, _) = parse_flags(&["--no-cleanup"]).unwrap();
+        assert!(bool_flag_ok(&bare, "no-cleanup"));
+        assert!(bool_flag_true(&bare, "no-cleanup"));
+        let (explicit_false, _) = parse_flags(&["--no-cleanup=false"]).unwrap();
+        assert!(bool_flag_ok(&explicit_false, "no-cleanup"));
+        assert!(!bool_flag_true(&explicit_false, "no-cleanup"));
+    }
+
+    /// Truth 5 (D1a): the ALREADY_UP_TO_DATE arm removes nothing — even when
+    /// called with the default-computed `cleanup = true`, because merging
+    /// nothing is not a real merge. A second worktree merged with zero new
+    /// commits on its branch is the smallest fixture that reaches this arm.
+    #[test]
+    fn already_up_to_date_merge_removes_nothing_even_with_cleanup_on() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        // Nothing new committed on the branch — main already contains it.
+
+        let cleanup = resolve_cleanup_on_merge(&main, false).unwrap();
+        assert!(cleanup, "no flag, no config -> cleanup would run on a REAL merge (D1)");
+
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["code"], json!("ALREADY_UP_TO_DATE"));
+        assert!(
+            !answer.result.contains_key("cleanup"),
+            "D1a: the up-to-date arm never runs cleanup, regardless of the caller's cleanup value"
+        );
+        assert_eq!(
+            answer.result["cleanup_suggested_command"],
+            json!(format!("bee worktree merge --id {} --json", created.id))
+        );
+        assert!(wt.exists(), "the worktree directory is untouched");
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", &created.branch])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "the branch is untouched"
+        );
     }
 
     /// releaseAllForHolder marks every unreleased row for the holder and
