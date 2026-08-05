@@ -2,14 +2,14 @@
 type: bee.area
 title: "Worktree Parallelism — returning: the staged merge, its verify gate, and the integration queue that serializes concurrent merges"
 description: "Why a feature worktree returns through a merge that is staged but never committed until the configured verify passes, why the coordination lock releases around that verify child and re-acquires behind a fence before any commit, how a second concurrent merge against the same main checkout now queues and bounded-waits behind a single processor lease instead of racing the lock, and when post-commit cleanup runs and when it refuses."
-timestamp: 2026-07-25
+timestamp: 2026-08-05
 bee:
   id: worktree-parallelism-returning-and-the-merge-gate
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/entering-creating-and-registering.md]
-  decisions: [worktree-session-routing D8 (worktree merge --id <id> is the return path), D2-REVISED (the merge is a staged transaction — user review P1-2), D8a (dirty is git status --porcelain without --ignored), D8b/D8c (--cleanup is strictly post-commit), I47 (issues-46-53 — cleanup on ALREADY_UP_TO_DATE), "multisession-native D10b (issue #56 3.9 — the worktree-admin lock releases around the verify child and re-acquires behind a four-part fence before any commit)", "multisession-native D8 stage 5 / D9 invariant 12 (issue #56 3.9/mục queue — bee worktree merge requests against the same main checkout serialize through a durable integration queue and a single processor lease instead of racing the coordination lock; a busy processor bounded-waits and a timeout returns a typed, unambiguous not-run result)"]
-  sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-returning-worktree-merge-id-id-d8", "issues-46-53 cell i-2 (GH #47 — the safety property is \"nothing would be lost\", not \"a commit happened\"; --cleanup runs on the no-op and still refuses on conflict and red verify; trace in `.bee/cells/`, 2026-07-23)", "multisession-native cell multisession-native-2 (three-phase lock split around the verify child, four-part fence, WORKTREE_MERGE_FENCE_DRIFT; trace .bee/cells/multisession-native-2.json, commit b8fc926, 2026-07-24)", "multisession-native cell multisession-native-22 (integration-queue.mjs: durable queue + processor lease serializing worktree merge; async verify child (runVerifyChild) replacing spawnSync so a heartbeat can interleave; checkProcessorLease as the P3 fence's first line; trace .bee/cells/multisession-native-22.json, commit 546d532, 2026-07-25)", "multisession-native cell multisession-native-23 (test_msn_invariants.mjs, invariant 7's fresh two-worktree merge-time MERGE_CONFLICT proof chained to the write-time advisory-allow+warning; trace .bee/cells/multisession-native-23.json, commit 06cd209, 2026-07-25)", "docs/history/multisession-native/reports/advisor-digest-slice5.md (conditions A/B/C, verdict proceed-with-conditions)"]
+  decisions: [worktree-session-routing D8 (worktree merge --id <id> is the return path), D2-REVISED (the merge is a staged transaction — user review P1-2), D8a (dirty is git status --porcelain without --ignored), "D8b/D8c (--cleanup ran post-commit only, opt-in, before worktree-reclaim D1 made cleanup the default outcome)", "I47 (issues-46-53 — cleanup on ALREADY_UP_TO_DATE, superseded by worktree-reclaim D1a below)", "multisession-native D10b (issue #56 3.9 — the worktree-admin lock releases around the verify child and re-acquires behind a four-part fence before any commit)", "multisession-native D8 stage 5 / D9 invariant 12 (issue #56 3.9/mục queue — bee worktree merge requests against the same main checkout serialize through a durable integration queue and a single processor lease instead of racing the coordination lock; a busy processor bounded-waits and a timeout returns a typed, unambiguous not-run result)", "worktree-reclaim D1 (cleanup is the default outcome of a merge that merged something, not a favour a caller has to ask for)", "worktree-reclaim D1a (cleanup-by-default fires only on a merge that actually merged something, so the ALREADY_UP_TO_DATE arm removes nothing; a non-boolean --no-cleanup value is refused outright, never silently read either way)"]
+  sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-returning-worktree-merge-id-id-d8", "issues-46-53 cell i-2 (GH #47 — the safety property is \"nothing would be lost\", not \"a commit happened\"; trace in `.bee/cells/`, 2026-07-23)", "multisession-native cell multisession-native-2 (three-phase lock split around the verify child, four-part fence, WORKTREE_MERGE_FENCE_DRIFT; trace .bee/cells/multisession-native-2.json, commit b8fc926, 2026-07-24)", "multisession-native cell multisession-native-22 (integration-queue.mjs: durable queue + processor lease serializing worktree merge; async verify child (runVerifyChild) replacing spawnSync so a heartbeat can interleave; checkProcessorLease as the P3 fence's first line; trace .bee/cells/multisession-native-22.json, commit 546d532, 2026-07-25)", "multisession-native cell multisession-native-23 (test_msn_invariants.mjs, invariant 7's fresh two-worktree merge-time MERGE_CONFLICT proof chained to the write-time advisory-allow+warning; trace .bee/cells/multisession-native-23.json, commit 06cd209, 2026-07-25)", "docs/history/multisession-native/reports/advisor-digest-slice5.md (conditions A/B/C, verdict proceed-with-conditions)", "docs/history/worktree-reclaim/CONTEXT.md and plan.md (D1, D1a, wr-4); commit e9fe0fd8 (cleanup by default, on a real merge only); packages/bee-rs/crates/bee/src/verbs/worktree/{handlers.rs,merge.rs,phases.rs}"]
   authoritative_for: "worktree-parallelism: the return path, the merge verify gate, the integration queue that serializes concurrent merges, and cleanup"
 ---
 
@@ -81,22 +81,34 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   'verify_mutated_tracked_files'` instead of silently treating the tree as equivalent to the
   commit. Recovery for a merge commit that only fails a LATER independent verify: `git revert
   -m 1 <merge-commit>` (documented, not automated).
-- `--cleanup` (D8b/D8c): on green (or skipped) verify it runs unconditionally — worktree remove,
-  then `git branch -d` (never `-D`), then grant removal, in that order. It refuses (typed; the
-  merge result stays ok) when the worktree still holds tracked-modified or untracked files.
-  Skipped-verify cleanup always carries a warning that nothing was checked.
-- **The safety property is "nothing would be lost", not "a commit happened."** Cleanup never runs
-  after a textual conflict or a red verify: on those paths the branch's work is **not integrated**,
-  so removing the worktree would destroy the only copy of it. It **does** run on the
-  already-up-to-date no-op, where no commit is made either — because that outcome means the target
-  already holds everything the branch has, and the dirty-tree refusal above has already proved the
-  worktree carries nothing uncommitted. Reading the rule as "strictly post-commit" conflates the two
-  and made the flag evaporate silently on the no-op: accepted, never acted on, exit zero, no
-  message. A flag the caller passed is either honoured or explained; it is never dropped.
-- The no-op path therefore reports what cleanup did, and a no-op **without** the flag removes
-  nothing and only suggests the command — the flag, not the path, is what removes. The no-op
-  carries no "cleaned up unchecked" warning: that warning means *no verify command is recorded*,
-  which would be a lie where verify was skipped only because nothing was merged.
+- **Cleanup is the default outcome now, not a favour a caller asks for (worktree-reclaim D1).**
+  On a merge that stages and commits something — a clean stage with a green or skipped verify —
+  cleanup runs unconditionally afterward: worktree remove, then `git branch -d` (never `-D`),
+  then grant removal, then workspace-record removal, in that order, through the same shared
+  teardown helper the return path and `worktree unregister` both call (see "one teardown, explicit
+  removal" in `entering-creating-and-registering.md`). It refuses (typed; the merge result stays
+  ok) when the worktree still holds tracked-modified or untracked files. Skipped-verify cleanup
+  always carries a warning that nothing was checked.
+- **Two ways to opt out, one flag that no longer does anything (D1, D1a).** `--no-cleanup` opts a
+  single merge out. `.bee/config.json`'s `worktree_cleanup_on_merge: false` opts a whole repo out
+  (absent, or any non-`false` value, still means on). The old `--cleanup` flag stays accepted, so
+  every script that already passes it keeps working, but it is now a no-op: cleanup was already
+  going to run. A non-boolean value passed to `--no-cleanup` is refused outright, never silently
+  read as "cleanup stays on" — the destructive direction, now that cleanup is the default rather
+  than the opt-in.
+- **The safety property is still "nothing would be lost", not "a commit happened."** Cleanup never
+  runs after a textual conflict or a red verify: on those paths the branch's work is **not
+  integrated**, so removing the worktree would destroy the only copy of it. Every refusal that
+  guarded cleanup under the old opt-in flag still guards it under the new default — nothing about
+  making cleanup automatic loosened what it is willing to remove.
+- **The already-up-to-date no-op removes nothing, on purpose (D1a).** This reverses the flag-era
+  reading, where `--cleanup` on an up-to-date no-op still ran: that arm merges nothing, so there is
+  nothing for cleanup to have integrated, and it now hardcodes cleanup off regardless of the
+  default, the flag, or the config — never the passed-through decision. The no-op reports what
+  would remove it instead: `cleanup_suggested_command` (`bee worktree merge --id <id> --json`
+  again). It carries no "cleaned up unchecked" warning either, because that warning means *no
+  verify command is recorded*, which would be a lie where verify was skipped only because nothing
+  was merged.
 
 ## Concurrent merges serialize through an integration queue, never the lock (multisession-native D8 stage 5, D9 invariant 12, msn-22)
 

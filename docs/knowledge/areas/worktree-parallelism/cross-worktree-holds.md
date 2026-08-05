@@ -2,14 +2,14 @@
 type: bee.area
 title: "Worktree Parallelism — the shared holds ledger that makes an island's writes visible"
 description: "One path-keyed ledger in the main store that mirrors every reservation, acquired under a single lock so two checkouts can never both believe they hold a path, renewed by a live session's heartbeat, read by three taps whose write-time answer now splits by resource — exclusive resources still hard-deny, every other path is advisory — and released by cell rather than by holder."
-timestamp: 2026-07-25
+timestamp: 2026-08-05
 bee:
   id: worktree-parallelism-cross-worktree-holds
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/the-trust-model.md, areas/worktree-parallelism/control-plane-topology.md]
-  decisions: ["cross-worktree-holds D1-D6 (the shared ledger, 2026-07-20)", "hardening-1-7-10 (acquisition is one atomic step; holds renew on heartbeat, 2026-07-21)", "a0ab91b6 (release is scoped by cell, never by holder alone — live incident)", "multisession-native D4 (slice 3, issue #56: a foreign hold on a normal path downgrades to advisory allow+warning at write time; only a built-in-plus-configured exclusive-resource list keeps the old hard deny — docs/history/multisession-native/CONTEXT.md)", "multisession-native D2 (slice 4, msn-21: the write guard resolves topology exactly ONCE per call via resolveContext, replacing the two separate walks — resolveWriteRecord's own call and resolveHoldTopology's own resolveRoots call — this exclusive-resource-list class of deny previously required; the class's own policy stays byte-for-byte unchanged — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)"]
-  sources: [docs/history/worktree-feature-parallelism/, "docs/specs/worktree-parallelism.md#S-cross-worktree-holds-the-shared-ledger-cross-worktree-holds-d1-d6-2026-07-20", "multisession-native cell multisession-native-14 (advisory cross-worktree hold on normal paths; exclusive-resource list; trace .bee/cells/multisession-native-14.json, commit 5bee967, 2026-07-25)", "multisession-native cell multisession-native-21 (guards.mjs checkWrite unified onto one resolveContext resolution feeding this class plus two new classes; trace .bee/cells/multisession-native-21.json, commit 3f56916, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)"]
+  decisions: ["cross-worktree-holds D1-D6 (the shared ledger, 2026-07-20)", "hardening-1-7-10 (acquisition is one atomic step; holds renew on heartbeat, 2026-07-21)", "a0ab91b6 (release is scoped by cell, never by holder alone — live incident)", "multisession-native D4 (slice 3, issue #56: a foreign hold on a normal path downgrades to advisory allow+warning at write time; only a built-in-plus-configured exclusive-resource list keeps the old hard deny — docs/history/multisession-native/CONTEXT.md)", "multisession-native D2 (slice 4, msn-21: the write guard resolves topology exactly ONCE per call via resolveContext, replacing the two separate walks — resolveWriteRecord's own call and resolveHoldTopology's own resolveRoots call — this exclusive-resource-list class of deny previously required; the class's own policy stays byte-for-byte unchanged — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", worktree-reclaim D3 (a teardown either finishes or does not start — the shared teardown helper every worktree-removing path now calls through)]
+  sources: [docs/history/worktree-feature-parallelism/, "docs/specs/worktree-parallelism.md#S-cross-worktree-holds-the-shared-ledger-cross-worktree-holds-d1-d6-2026-07-20", "multisession-native cell multisession-native-14 (advisory cross-worktree hold on normal paths; exclusive-resource list; trace .bee/cells/multisession-native-14.json, commit 5bee967, 2026-07-25)", "multisession-native cell multisession-native-21 (guards.mjs checkWrite unified onto one resolveContext resolution feeding this class plus two new classes; trace .bee/cells/multisession-native-21.json, commit 3f56916, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", commit 430ec952 (lift teardown into one helper); packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs (teardown_worktree)]
   authoritative_for: "worktree-parallelism: the cross-worktree holds ledger, its acquisition, renewal, taps and release"
 ---
 
@@ -93,8 +93,12 @@ shared holds ledger closes that gap at WRITE time:
   `{cell, session}` pairs from the acting agent's own active reservation rows and passes
   the session filter into `releaseHolds` whenever the row carries one; a sessionless
   (legacy) row falls back to the exact cell-only scoping — strictly narrowing, byte-identical
-  for the single-session case. Worktree merge `--cleanup` releases every row for the
-  removed worktree id, best-effort after the grant is removed.
+  for the single-session case. Every teardown of a worktree releases every row for its id,
+  best-effort after the grant is removed — worktree merge cleanup (default now, on a merge
+  that merged something; worktree-reclaim D1), `bee worktree prune`'s removal of a
+  classified-dead worktree, and `bee worktree unregister` all reach this release through the
+  one shared teardown helper (`entering-creating-and-registering.md`, `returning-and-the-
+  merge-gate.md`).
 - **Failure discipline:** missing ledger = empty (byte-identical to pre-ledger behavior);
   unparseable ledger = typed deny (`worktree-holds-unreadable`, mirroring the reservation
   corrupt-store rule); unresolvable topology = fail-open with crash-log. Both runtime files
