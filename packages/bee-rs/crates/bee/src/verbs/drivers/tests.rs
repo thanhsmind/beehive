@@ -993,6 +993,28 @@ use std::time::Instant;
         assert!(learned_context_lines(&root, &cell).unwrap().is_empty());
     }
 
+    /// D8: `bundle_learned_lines` already passes a cell's `feature` slug as
+    /// `work` and maps `ManifestOut::Thrown(_)` to `None` — before this
+    /// feature, a dispatched cell for a slug with no bee.work-item concept
+    /// always hit that `Thrown` arm and fell back to the bare index pointer.
+    /// It now inherits kl-1's resolver through kctx, so a slug whose only
+    /// anchor is a docs/history/<slug>/CONTEXT.md carries that manifest's
+    /// own entries instead of falling back to `None`.
+    #[test]
+    fn dispatch_prepare_carries_a_history_anchor_manifest_instead_of_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(&root, "docs/knowledge/index.md", "# Knowledge\n\n## Critical patterns\n\n- none yet\n");
+        w(&root, "docs/knowledge/patterns/x.md",
+          "---\ntype: bee.pattern\ntitle: X\ndescription: x\nbee:\n  id: p-x\n  lifecycle: active\n---\n\nBody.\n");
+        w(&root, "docs/history/hist-only/CONTEXT.md", "# Hist Only Context\n\nSome learnings.\n");
+        let cell = json!({"id": "c-1", "feature": "hist-only", "lane": "small"});
+        assert_eq!(
+            learned_context_lines(&root, &cell).unwrap(),
+            vec!["- docs/history/hist-only/CONTEXT.md — CONTEXT.md"]
+        );
+    }
+
     #[test]
     fn no_bundle_falls_back_to_the_legacy_critical_patterns_file() {
         let tmp = tempfile::tempdir().unwrap();

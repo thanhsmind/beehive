@@ -506,6 +506,69 @@ use std::time::Instant;
         ));
     }
 
+    /// D1/D38: neither a bee.work-item concept nor a docs/history/<work>/
+    /// file exists — the refusal text and its (D38) tag survive resolve_anchor
+    /// byte for byte, unchanged from before this feature.
+    #[test]
+    fn promotion_unknown_work_message_is_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let kn = root.join("docs").join("knowledge");
+        std::fs::create_dir_all(&kn).unwrap();
+        assert!(matches!(
+            build_promotion(root, &kn, "ghost"),
+            Some(Promo::Thrown(m)) if m == "knowledge promote: unknown_work — no bee.work-item concept in docs/knowledge/ carries bee.id \"ghost\" (D38)."
+        ));
+    }
+
+    /// D1: a feature with no bee.work-item concept but a docs/history/<slug>/
+    /// CONTEXT.md still proposes off its capped cell traces — the anchor
+    /// stands in for the work-item concept the rest of build_promotion reads.
+    #[test]
+    fn promotion_resolves_a_history_anchor_when_no_work_item_concept_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let kn = root.join("docs").join("knowledge");
+        std::fs::create_dir_all(&kn).unwrap();
+        std::fs::create_dir_all(root.join("docs").join("history").join("hist-1")).unwrap();
+        std::fs::write(
+            root.join("docs").join("history").join("hist-1").join("CONTEXT.md"),
+            "# Hist One Context\n\nBody.\n",
+        )
+        .unwrap();
+        let cells = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(
+            cells.join("hist-1-1.json"),
+            r#"{"id":"hist-1-1","feature":"hist-1","status":"capped","title":"first","verify":"cargo test","trace":{"behavior_change":true,"outcome":"did the thing","files_changed":["src/a.rs"],"capped_at":"2024-06-02T10:00:00.000Z"}}"#,
+        )
+        .unwrap();
+
+        let Some(Promo::Ok(p)) = build_promotion(root, &kn, "hist-1") else {
+            panic!("expected a proposal off the history anchor")
+        };
+        assert_eq!(p["writes"], json!([]));
+        assert_eq!(p["anchor"]["kind"], "history");
+        assert_eq!(p["anchor"]["paths"], json!(["docs/history/hist-1/CONTEXT.md"]));
+        assert_eq!(p["work_item"], "docs/history/hist-1/CONTEXT.md");
+        // The canonical proposed save path — a PROPOSAL only; D5 holds, nothing
+        // under docs/knowledge/ is ever created, moved, or deleted here.
+        assert_eq!(p["delivery"]["path"], "work/hist-1/delivery.md");
+        assert_eq!(p["delivery"]["repo_path"], "docs/knowledge/work/hist-1/delivery.md");
+        let ids: Vec<&str> =
+            p["cells"].as_array().unwrap().iter().map(|c| c["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, vec!["hist-1-1"]);
+        assert!(!kn.join("work").exists());
+
+        // Empty bee.areas keeps its existing D19 render, unchanged, and the
+        // text names the anchor on its own line.
+        let text = promote_text(&p);
+        assert!(text.contains(
+            "None: the work item declares no bee.areas, so there is no area to sync (D19)."
+        ));
+        assert!(text.contains("anchor: history — docs/history/hist-1/CONTEXT.md"));
+    }
+
     // ═══ R5: fixture builders ══════════════════════════════════════════════
     //
     // Node oracle: tests/test_knowledge.mjs makeRepo / writeBundleFile /
