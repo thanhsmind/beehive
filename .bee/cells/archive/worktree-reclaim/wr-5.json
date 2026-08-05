@@ -1,0 +1,69 @@
+{
+  "id": "wr-5",
+  "feature": "worktree-reclaim",
+  "lane": "high-risk",
+  "title": "Surface reclaimable worktrees at session start without spending a single git call",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/worktree-reclaim/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "action": "Decisions D4 and D4a. One scan function, called from exactly two places -- the same single-scan discipline unapplied_promote_proposals holds (status_full/mod.rs:219, whose comment says both callers call this ONE scan). Wire it into bee orient's blockers[] (orient.rs:217-255, following the promote-proposal push) and into a preamble block modeled on promote_proposal_lines (render.rs:306), invoked from budget.rs:573 with the same blank-line separator. THE LINE NAMES the count and `bee worktree prune --dry-run`. It does NOT name the reclaimable size, and it runs NO git subprocess -- read_dir and metadata only, the same cost shape as the promote-proposal scan. Count granted ids whose directory exists and whose grant is older than the threshold; show the line only above a threshold, since one stale worktree is not news. TWO CONSTRAINTS THE CELL MUST RESPECT, both measured in this repo: the preamble holds roughly 279 bytes of headroom against PREAMBLE_BUDGET_BYTES = 5120 (budget.rs:61, and budget.rs:50 records 11,390 bytes before the caps and 4,841 after), pinned by the_preamble_stays_inside_its_budget_however_big_the_store_gets (session_preamble/tests.rs:360) -- so keep the block to a heading plus one line; and this repo already lost the session-start git fight once, measured at status_full/records.rs:477 as bee orient 850ms with the git-candidate file versus 280ms with it emptied. There is no subprocess anywhere under hooks/session_preamble/ today; do not be the first.",
+  "must_haves": {
+    "truths": [
+      "The preamble spawns no subprocess and the scan touches no git",
+      "The block appears only above the threshold and stays inside the byte budget",
+      "orient and the preamble read from the same single scan function"
+    ],
+    "artifacts": [
+      "A preamble test pinning the new heading text, beside the existing scribing-debt and promote-proposal pins",
+      "A test that the block is absent below the threshold"
+    ],
+    "prohibitions": [
+      "No git subprocess in the session-start path, for any reason",
+      "No directory-size walk in the session-start path",
+      "Do not duplicate the scan between orient and the preamble"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "verify_owner": "worker",
+  "tier": "generation",
+  "status": "capped",
+  "deps": [
+    "wr-4"
+  ],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wr-5",
+    "outcome": "bee orient and the session preamble now surface a reclaimable-worktree count (grants file + one metadata() call per candidate, no git, no size walk) above a count of one, pointing at bee worktree prune --dry-run",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T11:31:26.268Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8c8b6e72-b378-4f09-ab49-af13eb959835",
+    "claimed_at": "2026-08-05T11:19:35.971Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T11:31:14.398Z"
+  }
+}

@@ -6,16 +6,27 @@ New to the system? Read [overview.md](overview.md) first.
 
 ## Stages (the chain, in order)
 
-| # | Stage | One line | Gate | Page |
-|---|-------|----------|------|------|
-| 0 | **hive** | Bootstrap, route, and keep the gates. Loaded first every session. | presents all three | [stages/hive.md](stages/hive.md) |
-| 1 | **exploring** | Fuzzy request → locked decisions in `CONTEXT.md`. | Gate 1 | [stages/exploring.md](stages/exploring.md) |
-| 2 | **planning** | Locked decisions → lane, smallest honest shape, cells — plus the reality check (SMALLER PATH) and the review wave. | Gate 2 (merged shape+execution) | [stages/planning.md](stages/planning.md) |
-| 3 | **swarming** | Orchestrate bounded workers over cells opened after Gate 2. | — | [stages/swarming.md](stages/swarming.md) |
-| 4 | **executing** | Implement, test, and finish exactly one cell. | — | [stages/executing.md](stages/executing.md) |
-| 5 | **scribing** | Sync durable, tech-agnostic knowledge of every area. | — | [stages/scribing.md](stages/scribing.md) |
-| 6 | **compounding** | Capture learnings + decisions; close the feature. | — | [stages/compounding.md](stages/compounding.md) |
-| R | **reviewing** | On-demand independent review gate over a chosen scope. | Gate 3 | [stages/reviewing.md](stages/reviewing.md) |
+A **stage** is a phase of the machine (what `.bee/state.json` records); a
+**skill** is the instruction set that runs it. The two do not map one-to-one:
+one skill can own several stages, so the skill column below is how you get from
+a stage name to the file you edit.
+
+| # | Stage | Skill (move) | One line | Gate | Page |
+|---|-------|--------------|----------|------|------|
+| 0 | **hive** | `bee-hive` | Bootstrap, route, and keep the gates. Loaded first every session. | presents all three | [stages/hive.md](stages/hive.md) |
+| 1 | **exploring** | `bee-shaping` (Explore · Qualify · Lock · Brief) | Fuzzy request → locked decisions in `CONTEXT.md`. | Gate 1 | [stages/exploring.md](stages/exploring.md) |
+| 2 | **planning** | `bee-planning` | Locked decisions → lane, smallest honest shape, cells — plus the reality check (SMALLER PATH) and the review wave. | Gate 2 (merged shape+execution) | [stages/planning.md](stages/planning.md) |
+| 3 | **swarming** | `bee-swarming` | Orchestrate bounded workers over cells opened after Gate 2. | — | [stages/swarming.md](stages/swarming.md) |
+| 4 | **executing** | `bee-swarming` ("Execute") | Implement, test, and finish exactly one cell. | — | [stages/executing.md](stages/executing.md) |
+| 5 | **scribing** | `bee-capturing` ("Scribe") | Sync durable, tech-agnostic knowledge of every area. | — | [stages/scribing.md](stages/scribing.md) |
+| 6 | **compounding** | `bee-capturing` ("Compound") | Capture learnings + decisions; close the feature. | — | [stages/compounding.md](stages/compounding.md) |
+| R | **reviewing** | `bee-reviewing` | On-demand independent review gate over a chosen scope. | Gate 3 | [stages/reviewing.md](stages/reviewing.md) |
+
+**Capture** is one skill over two stages: `bee-capturing` runs Scribe (stage 5)
+then Compound (stage 6), and there is no separate `bee-scribing` or
+`bee-compounding` skill. The stage names stay because the machine still keys on
+them — `phase: scribing` / `compounding`, `state scribing-run` /
+`compounding-run`, `last_scribing_run` / `last_compounding_run`.
 
 Stages 5–6 are **deferred by design**: a green `bee close` records capture as
 pending and names what remains; they run at the owner's pace, often batching
@@ -44,8 +55,8 @@ the Qualify move of `bee-shaping` (unattended triage of a backlog row),
 | How the lane is routed, the work shaped, cells created; the reality gate | [planning](stages/planning.md) |
 | How workers are dispatched, reserved, and their results judged | [swarming](stages/swarming.md) |
 | How one cell is implemented, tested, finished, committed | [executing](stages/executing.md) |
-| How specs/knowledge stay current after behavior changes | [scribing](stages/scribing.md) |
-| How learnings/critical patterns/decisions are captured; feature close | [compounding](stages/compounding.md) |
+| How specs/knowledge stay current after behavior changes | [scribing](stages/scribing.md) — `bee-capturing` "Scribe" |
+| How learnings/critical patterns/decisions are captured; feature close | [compounding](stages/compounding.md) — `bee-capturing` "Compound" |
 | How an independent review is run, findings graded, merge approved | [reviewing](stages/reviewing.md) |
 | A runtime file's schema (`state.json`, `cells`, `decisions.jsonl`, …) | [register.md](register.md) |
 | The CLI's two surfaces, the flow verbs, the refusal taxonomy | [register.md](register.md#the-cli--how-registers-are-mutated) |

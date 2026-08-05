@@ -1,0 +1,67 @@
+{
+  "id": "wr-2",
+  "feature": "worktree-reclaim",
+  "lane": "high-risk",
+  "title": "Build the fail-closed deadness classifier, every probe keeping on doubt",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/worktree-reclaim/plan.md",
+    "docs/history/worktree-reclaim/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs"
+  ],
+  "action": "Decisions D2, D2a, D2b. A classifier module, NO subcommand in this cell. Given a worktree id it returns dead-with-reason or kept-with-reason. THE GOVERNING RULE: every probe fails CLOSED -- missing, unreadable, or non-zero-exit KEEPS the worktree. The codebase's existing fail-open convention (git.rs:113 documents a spawn failure passing the guard) was written for guards whose failure mode is a retry; deletion has no retry. perform_cleanup already demonstrates the fail-closed shape at merge.rs:286. CONDITIONS, all must hold to call it dead: (1) MERGED -- `git merge-base --is-ancestor <branch> <base>`, exit-code only; status != Some(0) is NOT merged. Never parse a rev-list count: any git failure trims to an empty string that parses to 0, i.e. 'merged', for every worktree at once. The base ref name is recorded NOWHERE (the workspace record stores base_sha, a SHA at creation time, workspace_store.rs:387; worktree-identity.json carries only feature) -- so resolve the base explicitly and REFUSE THE WHOLE RUN if it does not resolve; resolve_base_ref_commit (git.rs:99) already returns None on a bad ref. (2) BRANCH IS REAL -- current_branch(worktree_root) (merge.rs:148) must resolve AND equal the record's branch. None means detached HEAD: keep. Disagreement: keep, and log the disagreement as the keep-reason. This is the condition that stands between prune and permanent commit loss -- detached-HEAD commits have no ref and their only reflog is .git/worktrees/<id>/logs/HEAD, deleted with the directory and immediately gc-eligible. Note also that a re-registered worktree carries branch: null (session_init.rs:436) -- null branch KEEPS. (3) CLEAN -- status --porcelain; non-zero exit keeps. (4) NOTHING PRECIOUS IGNORED -- .bee/HANDOFF.json absent AND .bee/capture-queue.jsonl absent-or-empty; either present keeps, hard. Clean is measured without --ignored by decision D8a (merge.rs:54), so a pause handoff and unpromoted capture stubs are invisible to condition 3 and would be deleted forever. (5) NO INTERRUPTED OPERATION -- none of rebase-merge, rebase-apply, CHERRY_PICK_HEAD, MERGE_HEAD, BISECT_LOG under .git/worktrees/<id>/. (6) NO LIVE SESSION -- read the session records under the MAIN checkout, never the workspace record's ownership fields: all 14 records on this machine carry write_owner_session null and attached_sessions empty, including a worktree with a live session in it, because the only writer hardcodes workspace_id = 'main' (state_group/policy.rs:128). Hold the worktree when any session record names this workspace with a fresh heartbeat OR when a live session's resolved root sits under the worktree root. Define PRUNE_LIVENESS_SECONDS next to the existing HEARTBEAT_STALE_SECONDS = 900.0 and make it HOURS, not 15 minutes -- 15 minutes is a claim-stealing window whose failure costs a retry; a gate answer or a closed laptop lid outlasts it. An unreadable session record counts as LIVE. (7) OLD ENOUGH -- last commit older than the age threshold; an unreadable date keeps. REUSE, do not reinvent: merge-base --is-ancestor already runs at status_full/records.rs:625 and reviews.rs:626; this crate needs its own thin call through worktree/git.rs:79 run_git, not a third implementation of the idea.",
+  "must_haves": {
+    "truths": [
+      "One test per keep-reason: unmerged branch, detached HEAD, branch disagreement, null branch, dirty tree, present HANDOFF.json, non-empty capture-queue.jsonl, interrupted rebase, live session, too young",
+      "A test where the git command fails outright keeps every worktree",
+      "A test where the base ref does not resolve refuses the run rather than classifying anything"
+    ],
+    "artifacts": [
+      "verbs/worktree/prune.rs with the classifier and its reason enum",
+      "PRUNE_LIVENESS_SECONDS defined next to a comment naming why it differs from HEARTBEAT_STALE_SECONDS"
+    ],
+    "prohibitions": [
+      "Never parse a rev-list count for mergedness -- exit codes only",
+      "Never read write_owner_session or attached_sessions as a liveness signal",
+      "Do not add a subcommand in this cell",
+      "No probe may treat a failure, a missing file, or an unparseable value as permission to delete"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "verify_owner": "worker",
+  "tier": "generation",
+  "status": "capped",
+  "deps": [
+    "wr-1"
+  ],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wr-2",
+    "outcome": "Added the fail-closed dead-worktree classifier (classify_worktree, resolve_prune_base) with a keep-on-doubt test per condition; no subcommand wired yet",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T10:40:52.117Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8c8b6e72-b378-4f09-ab49-af13eb959835",
+    "claimed_at": "2026-08-05T10:22:00.877Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T10:40:40.115Z"
+  }
+}

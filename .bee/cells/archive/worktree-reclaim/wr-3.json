@@ -1,0 +1,69 @@
+{
+  "id": "wr-3",
+  "feature": "worktree-reclaim",
+  "lane": "high-risk",
+  "title": "Add bee worktree prune over the classifier, with dry-run and a reason per worktree",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/worktree-reclaim/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+    "packages/bee-rs/crates/bee/tests/registry_dispatch.rs"
+  ],
+  "action": "Decisions D2 and D5. `bee worktree prune [--dry-run] [--older-than-days N] [--json]`, routed in the try_native match at handlers.rs:661, calling wr-2's classifier and wr-1's teardown helper per dead worktree. Output: ONE line per worktree naming the id and its reason, kept or removed. The removal line names the reclaimed size -- this is the one place size is paid for (D4a) -- and the report names `git worktree lock` as the permanent opt-out, which is enforced by git itself: a locked tree makes `git worktree remove -f` die with 'cannot remove a locked working tree'. --dry-run runs the classifier and removes NOTHING. ENUMERATION: read granted ids AND the entries under .bee/runtime/workspaces/, unioned. A grant-driven scan alone never visits a grantless orphan record, and CONTEXT.md promises one prune run clears the 13 orphans that already exist on this machine. REGISTRY PAYLOAD (D5): the declared regen chain -- `node scripts/export_registry_payload.mjs` per tests/registry_contracts.rs:157 -- does not exist here; scripts/ holds only install.sh and install.ps1 and the repo contains zero .mjs/.js/.ts files. So hand-edit generated/registry_payload.json and record that reason in the cell trace. Two mechanics ride along: the payload is a SINGLE 168KB line, so the edit diffs as one changed line; and registry examples are EXECUTED by tests/registry_dispatch.rs:131 inside a scratch dir that is NOT a git repo, and the first example must not print a refusal marker. Model the example on worktree merge's deliberately inert `--id demo-feature-missing`: prune's example must succeed and do nothing outside a git repo. Add --dry-run to the example.",
+  "must_haves": {
+    "truths": [
+      "--dry-run classifies and removes nothing, verified by asserting the directory still exists after the run",
+      "A grantless orphan workspace record is reached and dropped",
+      "The registry example runs green in registry_dispatch.rs's non-git scratch dir"
+    ],
+    "artifacts": [
+      "The worktree.prune entry in generated/registry_payload.json",
+      "A test for the dry-run no-op and a test for the union enumeration"
+    ],
+    "prohibitions": [
+      "Do not make the registry example destructive or dependent on a git repo",
+      "Do not bypass wr-2's classifier with an inline shortcut for any worktree",
+      "Do not touch merge's cleanup default in this cell -- that is wr-4"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "verify_owner": "worker",
+  "tier": "generation",
+  "status": "capped",
+  "deps": [
+    "wr-2"
+  ],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wr-3",
+    "outcome": "Added bee worktree prune over classify_worktree, with dry-run, older-than-days, union enumeration of grants and workspace records, and a hand-edited registry payload entry",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T11:01:24.022Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8c8b6e72-b378-4f09-ab49-af13eb959835",
+    "claimed_at": "2026-08-05T10:41:08.505Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T11:01:12.436Z"
+  }
+}

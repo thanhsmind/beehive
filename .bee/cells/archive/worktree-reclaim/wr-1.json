@@ -1,0 +1,65 @@
+{
+  "id": "wr-1",
+  "feature": "worktree-reclaim",
+  "lane": "high-risk",
+  "title": "Lift one teardown helper out of perform_cleanup and stop unregister orphaning its workspace record",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/worktree-reclaim/plan.md",
+    "docs/history/worktree-reclaim/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs"
+  ],
+  "action": "Decisions D3 and D3a. perform_cleanup performs FIVE removal steps, not four: git worktree remove --force (merge.rs:307), git branch -d (merge.rs:318, NEVER -D), grant drop (merge.rs:334), ws::unregister_workspace (merge.rs:341), release_all_for_holder (merge.rs:342). Lift those side effects into ONE helper. Two hard constraints: (1) directory removal is an EXPLICIT non-default parameter of the helper, and the helper asserts std::env::current_dir() is not inside the root it is about to remove -- that assertion is the guard against a future caller self-deleting; (2) the serde_json Map construction STAYS in perform_cleanup -- move only the side-effect calls. Constraint 2 is what keeps wr-0's key-order pins green; a helper returning a Result funnelled through one uniform formatter collapses the dirty and branch-delete-failed shapes and loses `removed: true` from its middle slot. Then wire run_unregister (registry.rs:218) to the REGISTRY HALF only -- grant, workspace record, holds release -- never the directory. run_unregister defaults --id to the CURRENT worktree when run from inside one (registry.rs:238) and, unlike run_merge (handlers.rs:427), carries no ordinary-checkout refusal, so a directory-capable path there would recreate exactly the self-delete run_merge exists to prevent. Lock nesting is already precedented: unregister_workspace takes its own workspace:<id> lock (workspace_store.rs:415) and already runs nested under WORKTREE_ADMIN_LOCK on the merge path (phases.rs:469).",
+  "must_haves": {
+    "truths": [
+      "bee worktree unregister leaves no .bee/runtime/workspaces/<id>.json behind",
+      "bee worktree unregister run from inside a worktree removes no directory",
+      "wr-0's three pins and tests.rs:217 and tests.rs:228 stay green with no edit to their assertions"
+    ],
+    "artifacts": [
+      "A test that registers then unregisters a worktree and asserts both the grant entry and the workspace record are gone",
+      "A test that the teardown helper refuses to remove a directory containing the current working directory"
+    ],
+    "prohibitions": [
+      "Never git branch -D, anywhere, for any reason",
+      "Do not change any cleanup outcome shape's key order",
+      "Do not give directory removal a default value"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "verify_owner": "worker",
+  "tier": "generation",
+  "status": "capped",
+  "deps": [
+    "wr-0"
+  ],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wr-1",
+    "outcome": "Lifted perform_cleanup's five teardown steps into one teardown_worktree helper with a directory-removal guard; run_unregister now wires to its registry half and no longer orphans workspace records",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T10:21:18.321Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8c8b6e72-b378-4f09-ab49-af13eb959835",
+    "claimed_at": "2026-08-05T10:08:31.877Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T10:21:06.734Z"
+  }
+}

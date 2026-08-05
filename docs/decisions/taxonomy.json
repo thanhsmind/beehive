@@ -321,6 +321,9 @@
     "advisor-protocol",
     "communication",
     "doc-viewer",
-    "data-loss"
+    "data-loss",
+    "worktree-reclaim",
+    "tooling",
+    "friction"
   ]
 }

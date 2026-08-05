@@ -200,15 +200,22 @@ docs/
 
 ```
 bee-hive  ─ route ─▶  exploring  ─[Gate 1]─▶  planning  ─[Gate 2]─▶  swarming
+                     (bee-shaping)          (bee-planning)        (bee-swarming)
                                                                           │
                                                                      executing
                                                                           │
                                                             bee close (green)
                                                                           │
         deferred, at the owner's pace:  scribing  ─▶  compounding
+                                        └──── one skill: bee-capturing ───┘
+                                              ("Scribe")     ("Compound")
                                                                           │
    on user request only:  reviewing  ─[Gate 3]─▶  merge
 ```
+
+Stage names are the machine's phases; skill names are what you invoke. Capture
+is the one place they differ most: **`bee-capturing` runs both** stage 5
+(scribing) and stage 6 (compounding) — no `bee-scribing`, no `bee-compounding`.
 
 - **Gate 1** — "Decisions locked. Approve CONTEXT.md before planning?"
 - **Gate 2** — approves shape and execution together (`bee gate --merge`, folding

@@ -1,0 +1,79 @@
+{
+  "id": "wr-4",
+  "feature": "worktree-reclaim",
+  "lane": "high-risk",
+  "title": "Make merge cleanup the default, on a real merge only",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "docs/config-reference.md",
+    ".bee/config-sample.json"
+  ],
+  "read_first": [
+    "docs/history/worktree-reclaim/plan.md",
+    "docs/history/worktree-reclaim/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Decisions D1 and D1a. Cleanup runs unless --no-cleanup is passed or .bee/config.json sets worktree_cleanup_on_merge: false. Copy the config pattern verbatim from archive_on_close_enabled (close.rs:827): read_config_raw, then absent-or-non-false means ON, only a literal Bool(false) opts out. --cleanup stays ACCEPTED and becomes a no-op, so existing scripts keep working. FOUR THINGS THAT ARE DEFECTS IF SKIPPED: (1) --no-cleanup must join keys_known(&flags, &[\"id\", \"cleanup\", \"queue-wait-ms\"]) at handlers.rs:386 or the entire merge returns None. (2) A non-boolean value on --no-cleanup is REFUSED outright -- not ignored, not delegated. bool_flag_true (handlers.rs:29) maps anything that is not the bare flag or the string 'true' to false, and bool_flag_ok's rejection path returns None which falls through try_native to a runtime that does not exist here. Today a mis-parsed cleanup flag means the favour was not done; after the flip a mis-parsed --no-cleanup means deleted anyway. Same care for the config key: the close.rs pattern reads a typo'd \"no\" string as ON, so validate the value and refuse a non-boolean rather than defaulting it. (3) handlers.rs:475 gates a holds-ledger read on `cleanup` and returns None on a corrupt ledger -- under the flip that fires on EVERY merge and lands on the router's unsupported-shape refusal. Fix the branch so a corrupt ledger degrades gracefully, and fix its comment ('only --cleanup can reach it'), which becomes a lie either way. (4) The ALREADY_UP_TO_DATE arm (phases.rs:240) routes the zero-work merge through the same attach_cleanup_outcome call as the green merge at phases.rs:393 -- it must KEEP today's behavior and remove nothing. Otherwise re-running merge to check status deletes the worktree, and a worktree holding an hour of uncommitted gitignored work reads as clean plus trivially merged. TEXT SURFACES that must move with the behavior or the CLI starts lying: cleanup_suggested_command (merge.rs:368) currently suggests --cleanup, which is backwards once cleanup is the default; the usage line at mod.rs:9; the worktree.merge description in the registry payload, which narrates the opt-in semantics at length (hand-edit per D5); a worktree_cleanup_on_merge row in docs/config-reference.md after the worktree_first row at :164, matching that table's format; and the key in .bee/config-sample.json beside worktree_first. Rename tests.rs:228 cleanup_without_the_flag_only_suggests to what it now tests -- the cleanup=false branch -- do not delete it.",
+  "must_haves": {
+    "truths": [
+      "A merge with no flags cleans up",
+      "--no-cleanup leaves the worktree and branch standing",
+      "worktree_cleanup_on_merge false beats the absent flag",
+      "--no-cleanup=yes exits non-zero having removed nothing",
+      "An already-up-to-date merge removes nothing"
+    ],
+    "artifacts": [
+      "The five tests above",
+      "The worktree_cleanup_on_merge row in docs/config-reference.md and the key in .bee/config-sample.json"
+    ],
+    "prohibitions": [
+      "Do not let cleanup run on the ALREADY_UP_TO_DATE arm",
+      "Do not let a non-boolean flag or config value resolve to clean-up",
+      "Do not remove the --cleanup flag -- it stays accepted as a no-op",
+      "Do not weaken the dirty-tree, conflict, or red-verify refusals"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "verify_owner": "worker",
+  "tier": "generation",
+  "status": "capped",
+  "deps": [
+    "wr-3"
+  ],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wr-4",
+    "outcome": "Cleanup runs by default on a real merge; --no-cleanup and worktree_cleanup_on_merge:false opt out, non-boolean values refuse, ALREADY_UP_TO_DATE removes nothing",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/config-reference.md",
+      ".bee/config-sample.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T11:19:15.699Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8c8b6e72-b378-4f09-ab49-af13eb959835",
+    "claimed_at": "2026-08-05T11:01:39.461Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T11:19:04.051Z"
+  }
+}

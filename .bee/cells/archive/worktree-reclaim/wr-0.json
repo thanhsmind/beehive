@@ -1,0 +1,55 @@
+{
+  "id": "wr-0",
+  "feature": "worktree-reclaim",
+  "lane": "high-risk",
+  "title": "Pin the three unpinned cleanup outcome shapes before anything lifts them",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/worktree-reclaim/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "action": "perform_cleanup (merge.rs:278) builds FIVE outcome shapes with FOUR distinct key orders, by insertion order: check-failed (merge.rs:288) {ok, code, reason}; dirty (merge.rs:296) {ok, code, reason, status}; remove-failed (merge.rs:312) {ok, code, reason}; branch-delete-failed (merge.rs:320) {ok, code, removed, reason} -- note `removed` sits in a MIDDLE slot; success (merge.rs:344) {ok, removed, branch_deleted, [warning]}. Exactly ONE is pinned today: cleanup_check_failure_keeps_nodes_key_order (tests.rs:217), which a bare tempdir reaches because git_status_porcelain fails there. Add key-order pins for the dirty branch, the remove-failed branch, and the branch-delete-failed branch, in the style of the existing pin -- assert the exact ordered key sequence, not just membership, so a later refactor that funnels every refusal through one uniform formatter goes red instead of green. Build each fixture with the smallest real git state that reaches the branch (a tempdir git repo with an untracked file for dirty; for the branch-delete case a worktree whose branch is unmerged so `git branch -d` refuses). If a branch genuinely cannot be reached from a test without mocking, say so in the cell trace and pin what you can reach -- do NOT introduce a mock layer for this.",
+  "must_haves": {
+    "truths": [
+      "Each new test asserts the ordered key sequence of one cleanup outcome shape and fails if two keys swap",
+      "The three new tests pass against completely unmodified source"
+    ],
+    "artifacts": [
+      "Three new tests in verbs/worktree/tests.rs next to cleanup_check_failure_keeps_nodes_key_order"
+    ],
+    "prohibitions": [
+      "Do not modify merge.rs in this cell -- it is a pure test cell",
+      "Do not introduce a mocking layer to reach a branch"
+    ]
+  },
+  "behavior_change": false,
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "verify_owner": "worker",
+  "tier": "generation",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wr-0",
+    "outcome": "Pinned the dirty, remove-failed, and branch-delete-failed perform_cleanup key-order shapes with three new tests",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T10:07:05.023Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8c8b6e72-b378-4f09-ab49-af13eb959835",
+    "claimed_at": "2026-08-05T09:57:22.474Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T10:06:53.348Z"
+  }
+}
