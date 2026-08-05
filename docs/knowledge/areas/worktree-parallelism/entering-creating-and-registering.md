@@ -2,14 +2,14 @@
 type: bee.area
 title: "Worktree Parallelism — entering: creating a feature worktree and registering it"
 description: "The paved road that creates and grants a feature worktree in one move, the adoption command that registers a hand-made one, the fresh lifecycle state a bootstrap writes, a concurrency-aware refusal when the source checkout holds a shared nested checkout without a declared companion mount, and the typed zero-mutation refusals and best-effort rollback that guard all of it."
-timestamp: 2026-08-03
+timestamp: 2026-08-05
 bee:
   id: worktree-parallelism-entering-creating-and-registering
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/the-trust-model.md]
-  decisions: ["worktree-session-routing D7 (worktree new is the paved road for STARTING a feature worktree, GH #21)", worktree-feature-parallelism (register/list/unregister and the bootstrap contract), I46 (issues-46-53 — immutable creation slug), worktree-concurrency-guard D1(a)/D3/D4/D6 (docs/history/worktree-concurrency-guard/CONTEXT.md; supersession 0ccc1cf3)]
-  sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-registering-a-worktree-the-cli", "docs/specs/worktree-parallelism.md#S-entering-worktree-new-feature-slug-d7-gh-21", "issues-46-53 cell i-2 (GH #46 — the creation slug is recorded immutably because the feature name is not; the refusal names the drifted field instead of the branch; trace in .bee/cells/, 2026-07-23)", "worktree-concurrency-guard cell wcg-3 (capped trace and report, 2026-07-24 — worktree-new concurrency-aware refusal)", "worktree-concurrency-guard cell wcg-fix-1 (capped trace and report, 2026-07-26 — acting-session self-exclusion fix, review finding #1)"]
+  decisions: ["worktree-session-routing D7 (worktree new is the paved road for STARTING a feature worktree, GH #21)", worktree-feature-parallelism (register/list/unregister and the bootstrap contract), I46 (issues-46-53 — immutable creation slug), worktree-concurrency-guard D1(a)/D3/D4/D6 (docs/history/worktree-concurrency-guard/CONTEXT.md; supersession 0ccc1cf3), worktree-reclaim D3 (a teardown either finishes or does not start — unregister drops the workspace record in the same call it drops the grant), worktree-reclaim D3a (the shared teardown helper takes directory removal as an explicit parameter; unregister never reaches it)]
+  sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-registering-a-worktree-the-cli", "docs/specs/worktree-parallelism.md#S-entering-worktree-new-feature-slug-d7-gh-21", "issues-46-53 cell i-2 (GH #46 — the creation slug is recorded immutably because the feature name is not; the refusal names the drifted field instead of the branch; trace in .bee/cells/, 2026-07-23)", "worktree-concurrency-guard cell wcg-3 (capped trace and report, 2026-07-24 — worktree-new concurrency-aware refusal)", "worktree-concurrency-guard cell wcg-fix-1 (capped trace and report, 2026-07-26 — acting-session self-exclusion fix, review finding #1)", "docs/history/worktree-reclaim/CONTEXT.md and plan.md (D3, D3a, wr-1); commit 430ec952 (lift teardown into one helper; unregister drops its workspace record); packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs (run_unregister), merge.rs (teardown_worktree)"]
   authoritative_for: "worktree-parallelism: creating, granting and bootstrapping a feature worktree"
 ---
 
@@ -27,7 +27,14 @@ bootstrapped store inside the worktree.
   worktree's own store: copies the main store's onboarding + config, writes a FRESH lifecycle
   state (the named feature, phase idle, all gates unapproved). An independent-feature worktree
   runs its OWN feature, so it inherits none of main's state/gates/log.
-- `worktree list` / `worktree unregister [--id <id>]` — read/remove grants in the main store.
+- `worktree list` / `worktree unregister [--id <id>]` — read the grants in the main store; unregister drops
+  the grant AND the workspace record in the same call (worktree-reclaim D3), never one without the
+  other, through the same shared teardown helper `worktree merge` cleanup and `worktree prune` call
+  — see `returning-and-the-merge-gate.md` and `pruning-dead-worktrees.md`. `unregister` reaches only
+  that registry half: it never removes the worktree's directory or its branch, because it cannot know
+  whether the caller still wants those — a partial teardown that removed a grant but left the
+  workspace record behind was exactly the bug this closes: 13 orphan records with no matching grant,
+  invisible to a grant-driven scan.
 
 ## Entering: `worktree new --feature <slug>` (D7, GH #21)
 

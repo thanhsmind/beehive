@@ -27,6 +27,7 @@
     "cells_archive_on_close": "true (default) lets a green `bee close` retire the feature's capped cells into .bee/cells/archive/<feature>/, out of the path status/orient parse on every call. Set false only if your own tooling reads .bee/cells/*.json by path; reverse with bee cells unarchive --feature <f>.",
     "ship_visibility": "How finished work is surfaced: \"off\" (default) or \"draft-pr\". An unrecognized value normalizes to \"off\" and says so once, by name.",
     "worktree_first": "Code-touching feature work lives in its own worktree; the write guard refuses feature edits made in the main checkout. Set to the exact string \"off\" to disable that refusal for a repo that deliberately works in main.",
+    "worktree_cleanup_on_merge": "true (default) lets `bee worktree merge` remove the worktree directory, delete its branch, and drop its grant automatically on a merge that merged something (opt one merge out with --no-cleanup). Set false to opt the whole repo out; a non-boolean value here is refused, never silently read as either outcome.",
     "doc_viewer": "Opt-in URL prefix for a local doc viewer (e.g. mdview). base_url + project join as <base_url>/p/<project>/<repo-relative-path>, injected into the session preamble and the compaction capsule so agent prose links docs as URLs instead of bare paths. Unset = today's bare paths, silently. A half-set key (one field missing or empty, or a wrong-shaped value) produces no URL plus one stderr line naming the key. bee joins the URL, it does not encode it — a path containing a space needs percent-escaping by whoever writes the link."
   },
   "hooks": {
@@ -80,6 +81,7 @@
   "cells_archive_on_close": true,
   "ship_visibility": "off",
   "worktree_first": "on",
+  "worktree_cleanup_on_merge": true,
   "doc_viewer": {
     "base_url": "http://10.255.255.254:7700",
     "project": "beedashboard"

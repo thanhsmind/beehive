@@ -244,6 +244,18 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
             proposals.len()
         )));
     }
+    // D4 (D4a): a granted worktree `bee worktree merge` never reached and
+    // nobody pruned — same report-only voice as the promote proposal just
+    // above, reading the ONE scan (`reclaimable_worktree_ids`) the session
+    // preamble reads too. No git call, no size walk (D4a): `bee orient`
+    // never pays that cost.
+    let reclaimable = reclaimable_worktree_ids(&ctx.root);
+    if reclaimable.len() > RECLAIMABLE_WORKTREES_SHOWN_FLOOR {
+        blockers.push(json!(format!(
+            "{} worktree(s) reclaimable — merged, clean, and idle past the age threshold: run `bee worktree prune --dry-run` to see what it would remove.",
+            reclaimable.len()
+        )));
+    }
     if let Some(Value::Array(warnings)) = status.get("staleness_warnings") {
         for warning in warnings {
             if let Value::String(w) = warning {

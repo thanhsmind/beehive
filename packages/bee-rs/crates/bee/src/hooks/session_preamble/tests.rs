@@ -347,6 +347,69 @@ use crate::version::BEE_VERSION;
         assert!(!text.contains("Unapplied promote proposal"), "{text}");
     }
 
+    /// D4/D4a: a granted worktree `bee worktree merge` never reached and
+    /// nobody pruned announces itself once the count of reclaimable ids is
+    /// MORE than one — "one stale worktree is not news" (plan.md). The line
+    /// names the count and the command, never the size (D4a), and this test
+    /// never touches git or `.git/worktrees/` — only a grants file and two
+    /// sibling directories aged past the threshold with `filetime`.
+    #[test]
+    fn two_or_more_reclaimable_worktrees_name_the_count_and_the_prune_command() {
+        let outer = tempfile::tempdir().unwrap();
+        let root = outer.path().join("main");
+        write(&root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(&root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write(
+            &root,
+            ".bee/runtime/worktree-grants.json",
+            r#"{"repo--wt--a":true,"repo--wt--b":true}"#,
+        );
+        let old = filetime::FileTime::from_system_time(
+            std::time::SystemTime::now() - std::time::Duration::from_secs(8 * 24 * 60 * 60),
+        );
+        for id in ["repo--wt--a", "repo--wt--b"] {
+            let dir = outer.path().join(id);
+            std::fs::create_dir_all(&dir).unwrap();
+            filetime::set_file_mtime(&dir, old).unwrap();
+        }
+
+        let text = render(&root);
+        assert!(text.contains("### Reclaimable worktree(s): 2"), "{text}");
+        assert!(text.contains("`bee worktree prune --dry-run`"), "{text}");
+    }
+
+    /// The one-worktree case stays silent, and so does a worktree still
+    /// inside the age threshold — both below the "more than one" and "old
+    /// enough" floors this block guards.
+    #[test]
+    fn a_single_reclaimable_worktree_and_a_too_young_one_stay_silent() {
+        let outer = tempfile::tempdir().unwrap();
+        let root = outer.path().join("main");
+        write(&root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(&root, ".bee/state.json", r#"{"phase":"idle"}"#);
+
+        // Only one granted id, aged well past the threshold: below the
+        // "more than one" floor.
+        write(&root, ".bee/runtime/worktree-grants.json", r#"{"repo--wt--a":true}"#);
+        let old = filetime::FileTime::from_system_time(
+            std::time::SystemTime::now() - std::time::Duration::from_secs(8 * 24 * 60 * 60),
+        );
+        let dir_a = outer.path().join("repo--wt--a");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        filetime::set_file_mtime(&dir_a, old).unwrap();
+        assert!(!render(&root).contains("Reclaimable worktree"), "{}", render(&root));
+
+        // Two granted ids, but the second is freshly created — under the age
+        // threshold — so the count of RECLAIMABLE ids is still one.
+        write(
+            &root,
+            ".bee/runtime/worktree-grants.json",
+            r#"{"repo--wt--a":true,"repo--wt--b":true}"#,
+        );
+        std::fs::create_dir_all(outer.path().join("repo--wt--b")).unwrap();
+        assert!(!render(&root).contains("Reclaimable worktree"), "{}", render(&root));
+    }
+
     /// THE BUDGET LAW. The preamble is injected into every session, so a
     /// section that grows with the store spends the reader's context on data
     /// it cannot act on. Measured before the caps, on this repo: 11,390 bytes,

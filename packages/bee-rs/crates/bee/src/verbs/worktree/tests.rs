@@ -222,18 +222,322 @@ use std::time::Instant;
         assert_eq!(out["code"], json!("WORKTREE_MERGE_CLEANUP_CHECK_FAILED"));
     }
 
-    /// attachCleanupOutcome without the flag NEVER runs anything — it attaches
-    /// the suggestion (decision D8b: "never prompt").
+    /// The dirty-tree refusal carries a fourth `status` key after `reason` —
+    /// the smallest real state that reaches it is a git repo with a single
+    /// untracked file, no commit required.
     #[test]
-    fn cleanup_without_the_flag_only_suggests() {
+    fn cleanup_dirty_worktree_keeps_nodes_key_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree_root = tmp.path().join("wt");
+        std::fs::create_dir_all(&worktree_root).unwrap();
+        git_ok(&worktree_root, &["init", "-q", "-b", "main", "."]);
+        git_ok(&worktree_root, &["config", "user.email", "a@b.c"]);
+        git_ok(&worktree_root, &["config", "user.name", "t"]);
+        // An untracked file at a tracked path — `git status --porcelain` is
+        // non-empty; `main_root` is unreached on this branch, so reusing
+        // `worktree_root` for it is fine.
+        std::fs::write(worktree_root.join("f.txt"), "x").unwrap();
+
+        let out = perform_cleanup(&worktree_root, &worktree_root, "wt/demo", "wt-demo", false);
+        assert_eq!(
+            out.keys().collect::<Vec<_>>(),
+            vec!["ok", "code", "reason", "status"]
+        );
+        assert_eq!(out["ok"], Value::Bool(false));
+        assert_eq!(out["code"], json!("WORKTREE_MERGE_CLEANUP_DIRTY"));
+    }
+
+    /// The `git worktree remove` failure shape has the same three keys as the
+    /// check-failed shape but a different `reason` source — reached with a
+    /// clean, standalone git repo standing in for the worktree root (so the
+    /// dirty check passes) and a `main_root` that is deliberately not a git
+    /// repository at all, so `git worktree remove` fails to launch against
+    /// it without ever touching a real worktree relationship.
+    #[test]
+    fn cleanup_remove_failure_keeps_nodes_key_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree_root = tmp.path().join("clean-repo");
+        std::fs::create_dir_all(&worktree_root).unwrap();
+        std::fs::write(worktree_root.join("f.txt"), "x").unwrap();
+        git_ok(&worktree_root, &["init", "-q", "-b", "main", "."]);
+        git_ok(&worktree_root, &["config", "user.email", "a@b.c"]);
+        git_ok(&worktree_root, &["config", "user.name", "t"]);
+        git_ok(&worktree_root, &["add", "-A"]);
+        git_ok(&worktree_root, &["commit", "-qm", "init"]);
+
+        let main_root = tmp.path().join("not-a-repo");
+        std::fs::create_dir_all(&main_root).unwrap();
+
+        let out = perform_cleanup(&main_root, &worktree_root, "wt/demo", "wt-demo", false);
+        assert_eq!(out.keys().collect::<Vec<_>>(), vec!["ok", "code", "reason"]);
+        assert_eq!(out["ok"], Value::Bool(false));
+        assert_eq!(out["code"], json!("WORKTREE_MERGE_CLEANUP_REMOVE_FAILED"));
+    }
+
+    /// The branch-delete failure shape puts `removed: true` in a MIDDLE slot
+    /// (`ok, code, removed, reason`) — no uniform refusal formatter would
+    /// reproduce that. Reached with a real `git worktree add` fixture whose
+    /// branch carries a commit main never merged, so `git branch -d` refuses
+    /// after the worktree directory is already gone.
+    #[test]
+    fn cleanup_branch_delete_failure_keeps_nodes_key_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+
+        // A commit on the branch that main never merges, so `git branch -d`
+        // refuses — the tree is clean again once this is committed.
+        std::fs::write(wt.join("f.txt"), "unmerged").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["commit", "-qam", "unmerged work"]);
+
+        let out = perform_cleanup(&main, &wt, &created.branch, &created.id, false);
+        assert_eq!(
+            out.keys().collect::<Vec<_>>(),
+            vec!["ok", "code", "removed", "reason"]
+        );
+        assert_eq!(out["ok"], Value::Bool(false));
+        assert_eq!(
+            out["code"],
+            json!("WORKTREE_MERGE_CLEANUP_BRANCH_DELETE_FAILED")
+        );
+        assert_eq!(out["removed"], Value::Bool(true));
+    }
+
+    /// attachCleanupOutcome's `cleanup=false` branch NEVER runs anything — it
+    /// attaches the suggestion (decision D8b: "never prompt"). D1/D1a: the
+    /// caller now passes the EFFECTIVE decision (`--no-cleanup`, a `false`
+    /// `worktree_cleanup_on_merge`, or the hardcoded ALREADY_UP_TO_DATE
+    /// case), never a raw `--cleanup` flag — this test used to be named for
+    /// the flag's absence; it now covers this branch by its value instead.
+    /// The suggested command drops `--cleanup` (a no-op now): re-running
+    /// merge WITHOUT `--no-cleanup` is what actually cleans up.
+    #[test]
+    fn cleanup_false_only_suggests() {
         let tmp = tempfile::tempdir().unwrap();
         let mut result = Map::new();
         attach_cleanup_outcome(&mut result, tmp.path(), tmp.path(), "wt/demo", "wt-demo", false, false);
         assert_eq!(
             result["cleanup_suggested_command"],
-            json!("bee worktree merge --id wt-demo --cleanup --json")
+            json!("bee worktree merge --id wt-demo --json")
         );
         assert!(!result.contains_key("cleanup"));
+    }
+
+    // ── D1/D1a: cleanup by default ──────────────────────────────────────────
+
+    /// `worktree_cleanup_on_merge`'s config half, read the same way
+    /// `archive_on_close_enabled` reads `cells_archive_on_close`
+    /// (close.rs:827) — absent means ON — but unlike that helper, a
+    /// present-but-non-boolean value is REFUSED (`None`), never silently
+    /// read as ON.
+    #[test]
+    fn worktree_cleanup_on_merge_config_matches_archive_on_close_enabled_except_it_validates() {
+        let tmp = tempfile::tempdir().unwrap();
+        // No .bee/config.json at all -> on.
+        assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), Some(true));
+
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"worktree_cleanup_on_merge\": true}",
+        )
+        .unwrap();
+        assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), Some(true));
+
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"worktree_cleanup_on_merge\": false}",
+        )
+        .unwrap();
+        assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), Some(false));
+
+        // A typo'd non-boolean value refuses rather than defaulting to ON —
+        // the divergence from archive_on_close_enabled's own pattern.
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"worktree_cleanup_on_merge\": \"no\"}",
+        )
+        .unwrap();
+        assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), None);
+    }
+
+    /// Truth 1 + truth 3: with no `--no-cleanup` flag and no config, the
+    /// merge cleans up by default; a `false` `worktree_cleanup_on_merge`
+    /// beats the absent flag.
+    #[test]
+    fn resolve_cleanup_on_merge_defaults_on_and_config_off_beats_the_absent_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        // No flags at all (no --no-cleanup), no config -> cleanup runs (D1).
+        assert_eq!(resolve_cleanup_on_merge(tmp.path(), false), Some(true));
+
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"worktree_cleanup_on_merge\": false}",
+        )
+        .unwrap();
+        // The flag was never passed (no_cleanup_flag = false) — config alone
+        // beats the absent flag.
+        assert_eq!(resolve_cleanup_on_merge(tmp.path(), false), Some(false));
+    }
+
+    /// Truth 1, end to end: a merge with no `--no-cleanup` flag and no config
+    /// resolves cleanup ON, and running the merge with that DEFAULT-computed
+    /// value actually removes the worktree directory and deletes its branch
+    /// — the same call shape `run_merge` makes when handed no flags at all.
+    #[test]
+    fn merge_with_no_flags_cleans_up_by_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["commit", "-qam", "work"]);
+
+        // No --no-cleanup flag, no config -> the same value run_merge would
+        // compute for a plain "bee worktree merge --id <id>" invocation.
+        let cleanup = resolve_cleanup_on_merge(&main, false).unwrap();
+        assert!(cleanup, "no flags, no config -> cleanup runs by default (D1)");
+
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(answer.result["cleanup"]["ok"], Value::Bool(true));
+        assert!(!wt.exists(), "the worktree directory is gone");
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", &created.branch])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(
+            String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "the branch is gone"
+        );
+    }
+
+    /// Truth 2: `--no-cleanup` resolves to cleanup=false, and a real merge
+    /// with that value leaves the worktree directory and its branch standing.
+    #[test]
+    fn no_cleanup_flag_resolves_off_and_leaves_the_worktree_and_branch_standing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["commit", "-qam", "work"]);
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        assert!(!cleanup, "--no-cleanup opts this merge out (D1a)");
+
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert!(!answer.result.contains_key("cleanup"));
+        assert_eq!(
+            answer.result["cleanup_suggested_command"],
+            json!(format!("bee worktree merge --id {} --json", created.id))
+        );
+        assert!(wt.exists(), "the worktree directory still stands");
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", &created.branch])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "the branch still stands"
+        );
+    }
+
+    /// Truth 4 (D1a): a non-boolean `--no-cleanup` value is REFUSED outright
+    /// — never ignored, never defaulted to either outcome. This is the CLI
+    /// gate `run_merge` checks BEFORE anything is resolved or mutated
+    /// (`bool_flag_ok(&flags, "no-cleanup")`); a caller that fails it returns
+    /// `None` from `run_merge`, which `main.rs`'s router turns into a
+    /// non-zero "unsupported command shape" exit having removed nothing.
+    #[test]
+    fn no_cleanup_with_a_non_boolean_value_is_refused_not_defaulted() {
+        let (flags, _json) = parse_flags(&["--id", "wt-demo", "--no-cleanup=yes"]).unwrap();
+        assert!(
+            !bool_flag_ok(&flags, "no-cleanup"),
+            "a non-boolean --no-cleanup must refuse outright, not resolve to either outcome"
+        );
+        // The bare/true/false shapes all still validate fine.
+        let (bare, _) = parse_flags(&["--no-cleanup"]).unwrap();
+        assert!(bool_flag_ok(&bare, "no-cleanup"));
+        assert!(bool_flag_true(&bare, "no-cleanup"));
+        let (explicit_false, _) = parse_flags(&["--no-cleanup=false"]).unwrap();
+        assert!(bool_flag_ok(&explicit_false, "no-cleanup"));
+        assert!(!bool_flag_true(&explicit_false, "no-cleanup"));
+    }
+
+    /// Truth 5 (D1a): the ALREADY_UP_TO_DATE arm removes nothing — even when
+    /// called with the default-computed `cleanup = true`, because merging
+    /// nothing is not a real merge. A second worktree merged with zero new
+    /// commits on its branch is the smallest fixture that reaches this arm.
+    #[test]
+    fn already_up_to_date_merge_removes_nothing_even_with_cleanup_on() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        // Nothing new committed on the branch — main already contains it.
+
+        let cleanup = resolve_cleanup_on_merge(&main, false).unwrap();
+        assert!(cleanup, "no flag, no config -> cleanup would run on a REAL merge (D1)");
+
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["code"], json!("ALREADY_UP_TO_DATE"));
+        assert!(
+            !answer.result.contains_key("cleanup"),
+            "D1a: the up-to-date arm never runs cleanup, regardless of the caller's cleanup value"
+        );
+        assert_eq!(
+            answer.result["cleanup_suggested_command"],
+            json!(format!("bee worktree merge --id {} --json", created.id))
+        );
+        assert!(wt.exists(), "the worktree directory is untouched");
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", &created.branch])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "the branch is untouched"
+        );
     }
 
     /// releaseAllForHolder marks every unreleased row for the holder and
@@ -269,6 +573,87 @@ use std::time::Instant;
         let before = std::fs::read_to_string(&file).unwrap();
         release_all_for_holder(tmp.path(), "wt-nobody");
         assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+    }
+
+    // ── the lifted teardown helper (D3, D3a) ────────────────────────────────
+
+    /// `run_unregister` wires to `teardown_worktree(.., remove: None)` — the
+    /// registry half alone. A worktree that was registered (grant + workspace
+    /// record, exactly what `run_register` leaves behind) has BOTH gone after
+    /// one call, closing the orphan `unregister` used to leave.
+    #[test]
+    fn teardown_worktree_registry_half_clears_grant_and_workspace_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path().join("main");
+        let main_store_root = main_root.join(".bee");
+        std::fs::create_dir_all(&main_store_root).unwrap();
+
+        let id = "wt-demo";
+        let mut grants = Map::new();
+        grants.insert(id.to_string(), Value::Bool(true));
+        write_grants_file_atomic(&main_store_root, &grants).unwrap();
+
+        ws::register_workspace(
+            &main_root,
+            ws::RegisterSpec {
+                id,
+                kind: "worktree",
+                root: &p(&tmp.path().join("wt")),
+                branch: Some("wt/demo"),
+                base_sha: None,
+            },
+            "2020-01-01T00:00:00.000Z",
+        )
+        .unwrap();
+        let record_file = ws::workspace_path(&main_root, id).unwrap();
+        assert!(record_file.exists(), "the fixture must start with a workspace record");
+
+        assert!(teardown_worktree(&main_root, id, None).is_ok());
+
+        let after = read_grants_strict(&main_store_root).unwrap();
+        assert!(!after.contains_key(id), "the grant entry must be gone");
+        assert!(!record_file.exists(), "the workspace record must be gone");
+    }
+
+    /// `remove: None` never reaches the directory/branch steps at all — the
+    /// registry-only path removes no directory, however it is spelled.
+    #[test]
+    fn teardown_worktree_registry_half_touches_no_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree_root = tmp.path().join("wt");
+        std::fs::create_dir_all(&worktree_root).unwrap();
+        assert!(teardown_worktree(tmp.path(), "wt-demo", None).is_ok());
+        assert!(worktree_root.exists(), "no directory removal was requested");
+    }
+
+    /// The self-delete guard, isolated from the real process cwd: it panics
+    /// when the (injected) current directory sits inside the removal root,
+    /// and passes cleanly when it does not.
+    #[test]
+    fn directory_removal_guard_rejects_its_own_cwd() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree_root = tmp.path().join("wt");
+        let nested = worktree_root.join("nested");
+        std::fs::create_dir_all(&nested).unwrap();
+        let elsewhere = tmp.path().join("elsewhere");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+
+        // Outside the root, and the root itself as cwd: both refused? No —
+        // only "inside or equal to" is unsafe. `worktree_root` itself and
+        // `nested` are both inside (starts_with includes equality); the
+        // sibling directory is not.
+        assert_directory_removal_is_safe(Some(&elsewhere), &worktree_root);
+        assert_directory_removal_is_safe(None, &worktree_root);
+
+        let panicked = std::panic::catch_unwind(|| {
+            assert_directory_removal_is_safe(Some(&nested), &worktree_root);
+        });
+        assert!(panicked.is_err(), "a cwd nested inside the removal root must panic");
+
+        let panicked_at_root = std::panic::catch_unwind(|| {
+            assert_directory_removal_is_safe(Some(&worktree_root), &worktree_root);
+        });
+        assert!(panicked_at_root.is_err(), "cwd equal to the removal root must panic too");
     }
 
     // ── worktree-companion-hook, over REAL `git worktree add` fixtures ─────
@@ -789,4 +1174,463 @@ use std::time::Instant;
         };
         assert!(lock::lock_file_path(root, "worktree-admin").exists());
         guard.release();
+    }
+
+    // ── prune.rs: the fail-closed classifier (wr-2, D2/D2a/D2b) ────────────
+    //
+    // Every keep-reason gets its own test, plus the dead case and the
+    // whole-run refusal. `age_threshold_ms: 0.0` neutralizes condition (7)
+    // everywhere except the test that exercises it directly.
+
+    fn prune_fixture(tmp: &Path) -> (PathBuf, Created) {
+        let main = main_repo(tmp);
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|e| match e {
+                    CErr::Refuse(m) => panic!("refused: {m}"),
+                    CErr::Ex => panic!("delegated"),
+                });
+        (main, created)
+    }
+
+    fn head_sha(root: &Path) -> String {
+        js_trim(&run_git(root, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string()
+    }
+
+    /// A merged, clean, untouched, unlocked, old-enough worktree is the ONLY
+    /// shape that reaches `Verdict::Dead` — every other test below proves one
+    /// way to fall short of it.
+    #[test]
+    fn a_fully_merged_clean_old_untouched_worktree_is_dead() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn an_unmerged_branch_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::write(created.worktree_root.join("f.txt"), "unmerged").unwrap();
+        git_ok(&created.worktree_root, &["config", "user.email", "a@b.c"]);
+        git_ok(&created.worktree_root, &["config", "user.name", "t"]);
+        git_ok(&created.worktree_root, &["commit", "-qam", "unmerged work"]);
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("not provably merged"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_detached_head_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        git_ok(&created.worktree_root, &["checkout", "--detach"]);
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("detached HEAD"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_branch_disagreement_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        git_ok(&created.worktree_root, &["checkout", "-b", "other-branch"]);
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("disagreement"), "{}", verdict.reason());
+    }
+
+    /// A re-registered worktree carries `branch: null` (session_init.rs:436's
+    /// `RegisterSpec { branch: None, .. }`) — no real worktree fixture needed,
+    /// the record alone is the whole test.
+    #[test]
+    fn a_null_branch_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        ws::register_workspace(
+            &main,
+            ws::RegisterSpec { id: "wt-null", kind: "worktree", root: "/nowhere", branch: None, base_sha: None },
+            "2024-01-01T00:00:00.000Z",
+        )
+        .unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: "wt-null",
+            base_commit: "deadbeef",
+            now_ms: 0.0,
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("no branch (null)"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_dirty_tree_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::write(created.worktree_root.join("untracked.txt"), "x").unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(
+            verdict.reason().contains("tracked-modified or untracked"),
+            "{}",
+            verdict.reason()
+        );
+    }
+
+    /// D8a's blind spot, closed: `.bee/HANDOFF.json` is gitignored by
+    /// `main_repo`'s own `.gitignore`, so the porcelain check alone would
+    /// call this tree clean.
+    #[test]
+    fn a_present_handoff_keeps_even_though_the_tree_reads_clean() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::write(created.worktree_root.join(".bee").join("HANDOFF.json"), "{}").unwrap();
+        assert!(
+            !is_tree_dirty(&created.worktree_root).unwrap(),
+            "gitignored, so porcelain alone reads clean"
+        );
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("HANDOFF.json"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_non_empty_capture_queue_keeps_even_though_the_tree_reads_clean() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::write(
+            created.worktree_root.join(".bee").join("capture-queue.jsonl"),
+            "{\"stub\":true}\n",
+        )
+        .unwrap();
+        assert!(
+            !is_tree_dirty(&created.worktree_root).unwrap(),
+            "gitignored, so porcelain alone reads clean"
+        );
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("capture-queue.jsonl"), "{}", verdict.reason());
+    }
+
+    /// An empty capture queue is NOT precious — only a non-empty one is.
+    #[test]
+    fn an_empty_capture_queue_does_not_keep_on_its_own() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::write(created.worktree_root.join(".bee").join("capture-queue.jsonl"), "").unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn an_interrupted_rebase_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        let admin_dir = main.join(".git").join("worktrees").join(&created.id);
+        std::fs::write(admin_dir.join("MERGE_HEAD"), base_commit.clone()).unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("MERGE_HEAD"), "{}", verdict.reason());
+    }
+
+    /// D2b: liveness comes from a session record naming THIS workspace with
+    /// a fresh heartbeat — never `write_owner_session`/`attached_sessions`,
+    /// which the only writer hardcodes to the main workspace
+    /// (state_group/policy.rs:128) and are therefore null/empty here too.
+    #[test]
+    fn a_live_session_naming_this_workspace_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        let now = chrono::Utc::now();
+        let now_ms = now.timestamp_millis() as f64;
+        std::fs::create_dir_all(main.join(".bee").join("sessions")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("sessions").join("sess-live.json"),
+            jsjson::stringify(&json!({
+                "id": "sess-live",
+                "last_heartbeat": now.to_rfc3339(),
+                "workspace_id": created.id,
+            })),
+        )
+        .unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms,
+            liveness_seconds: PRUNE_LIVENESS_SECONDS,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("sess-live"), "{}", verdict.reason());
+    }
+
+    /// An unreadable session record counts as LIVE — this scan cannot rule
+    /// it out, so it keeps rather than silently skipping it the way the
+    /// fail-open `list_session_records` scans elsewhere in this codebase do.
+    #[test]
+    fn an_unreadable_session_record_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::create_dir_all(main.join(".bee").join("sessions")).unwrap();
+        std::fs::write(main.join(".bee").join("sessions").join("corrupt.json"), "{oops").unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: PRUNE_LIVENESS_SECONDS,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(
+            verdict.reason().contains("unreadable session record counts as live"),
+            "{}",
+            verdict.reason()
+        );
+    }
+
+    #[test]
+    fn a_worktree_younger_than_the_age_threshold_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 365.0 * 24.0 * 60.0 * 60.0 * 1000.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(
+            verdict.reason().contains("younger than the age threshold"),
+            "{}",
+            verdict.reason()
+        );
+    }
+
+    /// The bug this whole module exists to retire: a `rev-list --count`
+    /// failure reads as `0`, i.e. "merged", for EVERY worktree at once. Here,
+    /// `main` is not even a git repository, so every git subprocess the
+    /// classifier runs fails outright — and every worktree still keeps.
+    #[test]
+    fn a_git_failure_at_any_probe_keeps_every_worktree_classified_in_the_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("not-a-repo");
+        std::fs::create_dir_all(&main).unwrap();
+        for (id, branch) in [("wt-a", "wt/a"), ("wt-b", "wt/b"), ("wt-c", "wt/c")] {
+            let root = tmp.path().join(id);
+            std::fs::create_dir_all(&root).unwrap();
+            ws::register_workspace(
+                &main,
+                ws::RegisterSpec {
+                    id,
+                    kind: "worktree",
+                    root: &root.to_string_lossy(),
+                    branch: Some(branch),
+                    base_sha: None,
+                },
+                "2024-01-01T00:00:00.000Z",
+            )
+            .unwrap();
+        }
+
+        for id in ["wt-a", "wt-b", "wt-c"] {
+            let verdict = classify_worktree(&PruneCheck {
+                main_root: &main,
+                id,
+                base_commit: "deadbeef",
+                now_ms: 0.0,
+                liveness_seconds: 1.0,
+                age_threshold_ms: 0.0,
+            });
+            assert!(matches!(verdict, Verdict::Kept { .. }), "{id}: {verdict:?}");
+        }
+    }
+
+    #[test]
+    fn a_base_ref_that_does_not_resolve_refuses_the_whole_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let err = resolve_prune_base(&main, "definitely-not-a-ref").unwrap_err();
+        assert!(err.contains("does not resolve"), "{err}");
+        assert!(err.contains("refusing the whole prune run"), "{err}");
+    }
+
+    #[test]
+    fn a_resolvable_base_ref_returns_the_current_sha() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let head = head_sha(&main);
+        let resolved = resolve_prune_base(&main, "main").unwrap();
+        assert_eq!(resolved, head);
+    }
+
+    // ── prune.rs: `run_prune_core` (wr-3, D2/D5) ────────────────────────────
+    //
+    // Runs the testable core directly — never `run_prune`, which resolves
+    // roots off `std::env::current_dir()` and is exercised only through the
+    // built binary (tests/registry_dispatch.rs), the same split every other
+    // `run_*` handler in this module already keeps.
+
+    /// `--dry-run` classifies a worktree that is otherwise fully dead and
+    /// removes NOTHING: the directory, the workspace record and the grant
+    /// all survive the run.
+    #[test]
+    fn dry_run_classifies_a_dead_worktree_and_removes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+
+        let outcome = run_prune_core(&main, true, 0.0).unwrap();
+
+        assert!(outcome.dry_run);
+        assert!(outcome.removed_ids.is_empty(), "{:?}", outcome.removed_ids);
+        assert!(outcome.kept_ids.is_empty(), "{:?}", outcome.kept_ids);
+        assert_eq!(outcome.entries.len(), 1);
+        assert_eq!(outcome.entries[0]["id"], json!(created.id));
+        assert_eq!(outcome.entries[0]["verdict"], json!("dead"));
+        assert_eq!(outcome.entries[0]["removed"], json!(false));
+        assert!(outcome.reclaimed_bytes > 0, "a real worktree directory is not zero bytes");
+        assert!(
+            outcome.lines.iter().any(|l| l.starts_with(&format!("{}: would remove", created.id))),
+            "{:?}",
+            outcome.lines
+        );
+
+        // The three artifacts a real prune would have dropped are all still
+        // there — this is the whole point of `--dry-run`.
+        assert!(created.worktree_root.exists(), "the worktree directory must survive a dry run");
+        assert!(ws::read_workspace(&main, &created.id).is_ok(), "the workspace record must survive a dry run");
+        let grants = read_grants_strict(&main.join(".bee")).unwrap();
+        assert_eq!(grants.get(&created.id), Some(&Value::Bool(true)), "the grant must survive a dry run");
+    }
+
+    /// D2/D5's union enumeration: a grant-driven scan alone never reaches a
+    /// GRANTLESS orphan workspace record — exactly the shape `worktree
+    /// unregister` leaves behind today (D3 closes that gap in `unregister`
+    /// itself; this is the sweep that also clears what already leaked).
+    /// Dropping the grant here reproduces that leak directly, then proves a
+    /// real (non-dry-run) prune reaches the orphan through its workspace
+    /// record and removes it — clearing exactly the CONTEXT.md-promised
+    /// leftovers a grants-only scan would silently skip forever.
+    #[test]
+    fn a_grantless_orphan_workspace_record_is_reached_and_dropped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+
+        // Simulate the exact leak D3/D3a exists to close: the grant is gone,
+        // the workspace record is not.
+        let store = main.join(".bee");
+        let mut grants = read_grants_strict(&store).unwrap();
+        assert_eq!(grants.remove(&created.id), Some(Value::Bool(true)), "fixture must start granted");
+        write_grants_file_atomic(&store, &grants).unwrap();
+        assert_eq!(read_grants_strict(&store).unwrap().get(&created.id), None, "grant must be gone");
+        assert!(ws::read_workspace(&main, &created.id).is_ok(), "the orphan record must still be there");
+
+        let outcome = run_prune_core(&main, false, 0.0).unwrap();
+
+        assert_eq!(outcome.removed_ids, vec![created.id.clone()], "{:?}", outcome.entries);
+        assert!(outcome.kept_ids.is_empty(), "{:?}", outcome.kept_ids);
+        assert!(outcome.reclaimed_bytes > 0);
+        assert!(
+            !created.worktree_root.exists(),
+            "a real (non-dry-run) prune must remove the directory of a reached, dead orphan"
+        );
+        assert!(
+            ws::read_workspace(&main, &created.id).is_err(),
+            "the orphan workspace record must be dropped along with the directory"
+        );
     }

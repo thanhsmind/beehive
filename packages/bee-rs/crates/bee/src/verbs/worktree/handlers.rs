@@ -382,11 +382,46 @@ pub(crate) fn radix_value(digits: &str, radix: u32) -> f64 {
     acc
 }
 
+/// D1/D1a: `worktree_cleanup_on_merge` in `.bee/config.json`, read the same
+/// way `archive_on_close_enabled` reads `cells_archive_on_close`
+/// (close.rs:827) — absent means ON. Unlike that helper, a present-but-non-
+/// boolean value here is REFUSED (`None`) rather than silently read as ON: a
+/// typo'd config value must never resolve to cleanup running unasked, and it
+/// must never resolve to cleanup being silently skipped either.
+pub(crate) fn worktree_cleanup_on_merge_config(main_root: &Path) -> Option<bool> {
+    match crate::state::read_config_raw(main_root).get("worktree_cleanup_on_merge") {
+        None => Some(true),
+        Some(Value::Bool(b)) => Some(*b),
+        Some(_) => None,
+    }
+}
+
+/// D1/D1a: the merge's effective cleanup decision — cleanup runs UNLESS
+/// `--no-cleanup` was passed for this one merge or the repo's config opts
+/// out. `no_cleanup_flag` is already validated boolean-shaped by the caller
+/// (`bool_flag_ok`); `None` here means the CONFIG value was invalid and the
+/// merge must refuse rather than guess.
+pub(crate) fn resolve_cleanup_on_merge(main_root: &Path, no_cleanup_flag: bool) -> Option<bool> {
+    let config_enabled = worktree_cleanup_on_merge_config(main_root)?;
+    Some(!no_cleanup_flag && config_enabled)
+}
+
 pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !crate::verbs::reservations::keys_known(&flags, &["id", "cleanup", "queue-wait-ms"]) {
+    if !crate::verbs::reservations::keys_known(&flags, &["id", "cleanup", "no-cleanup", "queue-wait-ms"]) {
         return None;
     }
+    // `--cleanup` stays accepted and validated (D1) — existing scripts that
+    // pass it keep working — but it no longer drives any behavior below;
+    // cleanup-by-default replaced its old opt-in meaning.
     if !bool_flag_ok(&flags, "cleanup") {
+        return None;
+    }
+    // `--no-cleanup` (D1a): the one-merge opt-out. A non-boolean value is
+    // REFUSED outright here, never ignored and never defaulted to either
+    // outcome — `bool_flag_true` would otherwise read a mis-parsed value as
+    // "cleanup stays on", which is the destructive direction now that
+    // cleanup is the default.
+    if !bool_flag_ok(&flags, "no-cleanup") {
         return None;
     }
     // `--queue-wait-ms`: a registry `type:"number"` flag. validate() runs
@@ -418,7 +453,7 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         Some(FlagV::S(s)) if !s.is_empty() => s.clone(),
         _ => return None,
     };
-    let cleanup = bool_flag_true(&flags, "cleanup");
+    let no_cleanup_flag = bool_flag_true(&flags, "no-cleanup");
 
     let ctx = match prelude("worktree merge", use_json, t0)? {
         Pre::Go(c) => c,
@@ -431,6 +466,12 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         )));
     }
     let main_root = ctx.work_root.clone();
+
+    // D1/D1a: cleanup runs by default; `--no-cleanup` or a `false`
+    // `worktree_cleanup_on_merge` opt out. This is decided before the first
+    // lock, same as every other gate below, and refuses (rather than
+    // guesses) on an invalid config value.
+    let cleanup = resolve_cleanup_on_merge(&main_root, no_cleanup_flag)?;
 
     // ── every delegation gate, decided BEFORE the first lock ──────────────
     // Campaign rule 2: lock.rs appends a `result: "acquired"` row to
@@ -473,14 +514,20 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         return None;
     }
     // performCleanup's releaseAllForHolder reads the holds ledger the same
-    // way; only `--cleanup` can reach it.
+    // way. D1/D1a: cleanup is the default outcome now, so this branch fires
+    // on nearly every merge (`--no-cleanup` or a `false`
+    // `worktree_cleanup_on_merge` are the only ways to skip it) — a corrupt
+    // ledger must therefore degrade gracefully rather than refuse the whole
+    // merge. `release_all_for_holder` itself already treats an unparseable
+    // ledger as empty (best-effort), so this probe matches that: it reads
+    // the bytes but never turns a parse failure into a refusal.
     if cleanup {
         let ledger = main_root
             .join(".bee")
             .join("runtime")
             .join("cross-worktree-holds.json");
         if let Ok(bytes) = std::fs::read(&ledger) {
-            serde_json::from_slice::<Value>(&bytes).ok()?;
+            let _ = serde_json::from_slice::<Value>(&bytes);
         }
     }
 
@@ -664,6 +711,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "unregister" => run_unregister(flags, use_json, t0),
         "new" => run_new(flags, use_json, t0),
         "merge" => run_merge(flags, use_json, t0),
+        "prune" => run_prune(flags, use_json, t0),
         _ => None,
     }
 }

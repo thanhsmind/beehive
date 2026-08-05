@@ -6,7 +6,10 @@
 //   worktree register   --feature F     [--json]
 //   worktree unregister [--id ID]       [--json]
 //   worktree new    --feature F [--base-ref R] [--with-companion] [--json]
-//   worktree merge  --id ID [--cleanup] [--queue-wait-ms N]        [--json]
+//   worktree merge  --id ID [--no-cleanup] [--queue-wait-ms N]      [--json]
+//     (cleanup runs by default now — D1/D1a; `--cleanup` is still accepted,
+//     validated, and a no-op, kept only so existing scripts keep working)
+//   worktree prune  [--dry-run] [--older-than-days N]              [--json]
 //
 // `worktree new` — NATIVE (R6), including the creating path from the MAIN
 // checkout: createFeatureWorktree whole, inside ONE 'worktree-admin' hold —
@@ -195,6 +198,7 @@ mod create;
 mod merge;
 mod phases;
 mod handlers;
+mod prune;
 pub(crate) use self::registry::*;
 pub(crate) use self::git::*;
 pub(crate) use self::companion::*;
@@ -202,3 +206,6 @@ pub(crate) use self::create::*;
 pub(crate) use self::merge::*;
 pub(crate) use self::phases::*;
 pub(crate) use self::handlers::*;
+// `bee worktree prune` (wr-3): `run_prune`, wired into `try_native` at
+// handlers.rs, over `classify_worktree`'s fail-closed verdicts (wr-2).
+pub(crate) use self::prune::*;
