@@ -1494,6 +1494,15 @@ pub fn build_compact_capsule(
         sections.push(block);
     }
 
+    // ── item 10b: the doc-viewer prefix (decision 4205835b) — the same
+    // fact the preamble carries, re-injected so a long session does not
+    // silently revert to bare paths the moment it compacts.
+    if let Some(prefix) = crate::state::doc_viewer_prefix(&read_config_failopen(root)) {
+        sections.push(vec![format!(
+            "- Doc viewer: {prefix} — when you point the user at a doc, give this URL with the repo-relative path appended, never the bare path."
+        )]);
+    }
+
     // ── item 11: the survival count and, when it applies, the D9 advisory.
     // Silent on a repo with no records at all (D15).
     let (compact_index, cell_compact_count) =
@@ -1620,6 +1629,26 @@ mod tests {
         assert!(text.contains("### Standard commands (host project)"), "{text}");
         assert!(text.contains("- test: `npm test`"), "{text}");
         assert!(!text.contains("nope"), "{text}");
+    }
+
+    /// doc-viewer-links (decision 4205835b): the prefix survives a
+    /// compaction, so a long session does not silently revert to bare
+    /// paths — the same fact the preamble carries, re-injected here.
+    #[test]
+    fn the_capsule_carries_the_doc_viewer_prefix_when_configured() {
+        let tmp = tempfile::tempdir().unwrap();
+        repo(tmp.path());
+        assert!(!build_compact_capsule(tmp.path(), Some("s1"), None).contains("Doc viewer"));
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            r#"{"doc_viewer":{"base_url":"http://10.255.255.254:7700","project":"beedashboard"}}"#,
+        )
+        .unwrap();
+        let text = build_compact_capsule(tmp.path(), Some("s1"), None);
+        assert!(
+            text.contains("- Doc viewer: http://10.255.255.254:7700/p/beedashboard"),
+            "{text}"
+        );
     }
 
     #[test]

@@ -133,7 +133,8 @@ behavior changes.
 
 The user hears the work in their own terms, never bee mechanics. Open
 with one line of state; keep narration under five lines; link records
-instead of pasting them; close on exactly ONE next action — the
+instead of pasting them — when `doc_viewer` is configured, give the
+viewer URL, not the bare path; close on exactly ONE next action — the
 agent's own next move, or the one thing only the user can decide,
 never a menu. Emit one short progress line per visible step, on by
 default — `▸` started, `✓` green, `⚡` auto-approved, `✗` red — and a
