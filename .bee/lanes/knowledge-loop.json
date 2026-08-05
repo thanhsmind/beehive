@@ -14,15 +14,14 @@
   "created_at": "2026-08-05T04:42:15.819Z",
   "route": {
     "class": "feature",
-    "lane": "standard",
+    "lane": "small",
     "flags": [
-      "public-contracts",
-      "multi-domain",
       "covered-contract-change"
     ],
-    "product_files": 3,
-    "rationale": "kl-2 worker: knowledge-loop route record (plan.md standard mode, 3 risk flags)",
-    "updated_at": "2026-08-05T05:25:57.326Z"
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-08-05T06:33:49.299Z",
+    "demoted_at": "2026-08-05T06:33:49.301Z"
   },
   "last_scribing_run": {
     "feature": "knowledge-loop",

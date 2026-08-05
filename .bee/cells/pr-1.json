@@ -1,0 +1,68 @@
+{
+  "id": "pr-1",
+  "feature": "promote-reach",
+  "title": "Let promote reach retired cells and read its areas from the scribing ledger",
+  "lane": "small",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "86d96c9f"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs"
+  ],
+  "action": "Give bee knowledge promote two reaches it lacks. FIRST: it mines only .bee/cells/<id>.json today, so every feature whose cells already retired proposes nothing — measured, promote --work okf-foundation returns 0 cells, 0 area bullets, 0 pattern candidates even though that feature has a work item and shipped. Make it mine .bee/cells/archive/<feature>/*.json alongside .bee/cells/*.json, dedup by cell id with the live copy winning, and keep each cell's recorded trace_path pointing at wherever the trace actually is. SECOND: when the resolved work item declares no bee.areas — which is every feature reached through the history anchor — read the area list from the feature's most recent entry in the append-only ledger .bee/logs/scribing-runs.jsonl, whose entries carry {ts, feature, areas}. read_scribing_ledger in verbs/state_group/ledger.rs already reads that file; reuse it rather than re-parsing. The output must NAME where the areas came from: a work item's bee.areas, or the scribing stamp and its timestamp. When neither yields an area, keep the existing render at promote.rs:714-720 unchanged. The area subject matching itself does not change: subjects still come from each area's concept paths and bee.sources, matched by touches_subject. writes stays an empty array in every case — promote proposes and never writes (D38, docs/knowledge/areas/okf-profile/context-and-promote.md:147).",
+  "must_haves": {
+    "truths": [
+      "bee knowledge promote --work okf-foundation mines its retired cells instead of returning zero",
+      "A cell that exists both live and archived is mined once, with the live copy winning",
+      "A feature whose work item declares no bee.areas takes its area list from its most recent scribing-run ledger entry",
+      "The output names whether the areas came from the work item or from the scribing stamp",
+      "A feature with neither a bee.areas list nor a scribing-run entry keeps today's unchanged no-areas render"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+        "substantive": "archive-aware cell mining and scribing-ledger area derivation; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "promote.rs reads the scribing ledger through verbs/state_group/ledger.rs"
+    ],
+    "prohibitions": [
+      "writes stays an empty array in every promote payload",
+      "No file under docs/knowledge/ is created, moved, or deleted",
+      "The unknown_work message text and exit code do not change",
+      "touches_subject and the area subject-collection logic keep their current behaviour"
+    ]
+  },
+  "trace": {
+    "worker": "pr1-worker",
+    "outcome": "knowledge promote mines .bee/cells/archive/<feature>/*.json (dedup, live wins) and falls back to the scribing ledger for areas when the work item declares none, naming the source in both JSON and text",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T06:59:38.055Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc8305c1-98bc-4ccd-bbdb-dc4b7ff173f8",
+    "claimed_at": "2026-08-05T06:43:26.146Z",
+    "verify_command": null,
+    "verified_at": null,
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T06:59:25.640Z"
+  }
+}

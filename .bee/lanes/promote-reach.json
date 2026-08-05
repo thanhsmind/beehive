@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "promote-reach",
+  "mode": "small",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"promote-reach\" started at phase \"exploring\" (lane).",
+  "next_action": "Merge wt/promote-reach, then close the feature.",
+  "created_at": "2026-08-05T06:32:21.769Z",
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "promote reach: archive-aware cell mining + scribing-ledger area derivation",
+    "updated_at": "2026-08-05T06:43:14.809Z"
+  },
+  "last_scribing_run": {
+    "feature": "promote-reach",
+    "date": "2026-08-05",
+    "at": "2026-08-05T07:00:30.067Z",
+    "areas_synced": [
+      "okf-profile"
+    ],
+    "next_action": "Merge wt/promote-reach, then close the feature."
+  }
+}
