@@ -222,6 +222,93 @@ use std::time::Instant;
         assert_eq!(out["code"], json!("WORKTREE_MERGE_CLEANUP_CHECK_FAILED"));
     }
 
+    /// The dirty-tree refusal carries a fourth `status` key after `reason` —
+    /// the smallest real state that reaches it is a git repo with a single
+    /// untracked file, no commit required.
+    #[test]
+    fn cleanup_dirty_worktree_keeps_nodes_key_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree_root = tmp.path().join("wt");
+        std::fs::create_dir_all(&worktree_root).unwrap();
+        git_ok(&worktree_root, &["init", "-q", "-b", "main", "."]);
+        git_ok(&worktree_root, &["config", "user.email", "a@b.c"]);
+        git_ok(&worktree_root, &["config", "user.name", "t"]);
+        // An untracked file at a tracked path — `git status --porcelain` is
+        // non-empty; `main_root` is unreached on this branch, so reusing
+        // `worktree_root` for it is fine.
+        std::fs::write(worktree_root.join("f.txt"), "x").unwrap();
+
+        let out = perform_cleanup(&worktree_root, &worktree_root, "wt/demo", "wt-demo", false);
+        assert_eq!(
+            out.keys().collect::<Vec<_>>(),
+            vec!["ok", "code", "reason", "status"]
+        );
+        assert_eq!(out["ok"], Value::Bool(false));
+        assert_eq!(out["code"], json!("WORKTREE_MERGE_CLEANUP_DIRTY"));
+    }
+
+    /// The `git worktree remove` failure shape has the same three keys as the
+    /// check-failed shape but a different `reason` source — reached with a
+    /// clean, standalone git repo standing in for the worktree root (so the
+    /// dirty check passes) and a `main_root` that is deliberately not a git
+    /// repository at all, so `git worktree remove` fails to launch against
+    /// it without ever touching a real worktree relationship.
+    #[test]
+    fn cleanup_remove_failure_keeps_nodes_key_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree_root = tmp.path().join("clean-repo");
+        std::fs::create_dir_all(&worktree_root).unwrap();
+        std::fs::write(worktree_root.join("f.txt"), "x").unwrap();
+        git_ok(&worktree_root, &["init", "-q", "-b", "main", "."]);
+        git_ok(&worktree_root, &["config", "user.email", "a@b.c"]);
+        git_ok(&worktree_root, &["config", "user.name", "t"]);
+        git_ok(&worktree_root, &["add", "-A"]);
+        git_ok(&worktree_root, &["commit", "-qm", "init"]);
+
+        let main_root = tmp.path().join("not-a-repo");
+        std::fs::create_dir_all(&main_root).unwrap();
+
+        let out = perform_cleanup(&main_root, &worktree_root, "wt/demo", "wt-demo", false);
+        assert_eq!(out.keys().collect::<Vec<_>>(), vec!["ok", "code", "reason"]);
+        assert_eq!(out["ok"], Value::Bool(false));
+        assert_eq!(out["code"], json!("WORKTREE_MERGE_CLEANUP_REMOVE_FAILED"));
+    }
+
+    /// The branch-delete failure shape puts `removed: true` in a MIDDLE slot
+    /// (`ok, code, removed, reason`) — no uniform refusal formatter would
+    /// reproduce that. Reached with a real `git worktree add` fixture whose
+    /// branch carries a commit main never merged, so `git branch -d` refuses
+    /// after the worktree directory is already gone.
+    #[test]
+    fn cleanup_branch_delete_failure_keeps_nodes_key_order() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+
+        // A commit on the branch that main never merges, so `git branch -d`
+        // refuses — the tree is clean again once this is committed.
+        std::fs::write(wt.join("f.txt"), "unmerged").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["commit", "-qam", "unmerged work"]);
+
+        let out = perform_cleanup(&main, &wt, &created.branch, &created.id, false);
+        assert_eq!(
+            out.keys().collect::<Vec<_>>(),
+            vec!["ok", "code", "removed", "reason"]
+        );
+        assert_eq!(out["ok"], Value::Bool(false));
+        assert_eq!(
+            out["code"],
+            json!("WORKTREE_MERGE_CLEANUP_BRANCH_DELETE_FAILED")
+        );
+        assert_eq!(out["removed"], Value::Bool(true));
+    }
+
     /// attachCleanupOutcome without the flag NEVER runs anything — it attaches
     /// the suggestion (decision D8b: "never prompt").
     #[test]
