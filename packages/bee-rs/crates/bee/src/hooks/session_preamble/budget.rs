@@ -6,7 +6,7 @@
 use super::*;
 use crate::fsutil::{read_json, warn_corrupt_json, ReadJson};
 use crate::jsjson;
-use crate::state::{bypass_level, ship_visibility};
+use crate::state::{bypass_level, doc_viewer_prefix, ship_visibility};
 use serde_json::{json, Map, Value};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -300,6 +300,19 @@ pub fn build_session_preamble(
                 "- Never build on red: run the test command above before your first `cells claim`, and treat a red as its own fix-first cell. CI runs the same command on every push and PR.".to_string(),
             );
         }
+    }
+
+    // doc-viewer-links (decision 4205835b): rendered only when the key
+    // resolves — an unset doc_viewer leaves the preamble byte-identical to
+    // today. Placed right after Standard commands, never appended at the
+    // end: the closing trailer's exact bytes are pinned by
+    // session_preamble/tests.rs (`ends_with`).
+    if let Some(prefix) = doc_viewer_prefix(&config) {
+        lines.push(String::new());
+        lines.push("### Doc links".to_string());
+        lines.push(format!(
+            "- Doc viewer: {prefix} — when you point the user at a doc, give this URL with the repo-relative path appended (e.g. {prefix}/docs/history/<feature>/plan.md), never the bare path."
+        ));
     }
 
     // okf-8 (D38): the startup bridge sits ahead of the project map.

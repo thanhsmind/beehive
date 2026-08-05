@@ -157,6 +157,35 @@ use crate::version::BEE_VERSION;
         assert!(!text.contains("- Never build on red:"));
     }
 
+    /// doc-viewer-links (decision 4205835b): the section renders only when
+    /// the key resolves, right after Standard commands, and costs nothing
+    /// otherwise.
+    #[test]
+    fn doc_links_section_renders_only_when_the_prefix_resolves() {
+        let tmp = minimal_repo();
+        assert!(!render(tmp.path()).contains("### Doc links"));
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            r#"{"commands":{"test":"npm test"},"doc_viewer":{"base_url":"http://10.255.255.254:7700","project":"beedashboard"}}"#,
+        );
+        let text = render(tmp.path());
+        assert!(text.contains("### Doc links"), "{text}");
+        assert!(
+            text.contains("- Doc viewer: http://10.255.255.254:7700/p/beedashboard"),
+            "{text}"
+        );
+        // Right after Standard commands, never appended at the end — the
+        // closing trailer's bytes are pinned elsewhere (`ends_with`).
+        let commands_at = text.find("### Standard commands").expect("commands block present");
+        let doc_links_at = text.find("### Doc links").expect("doc links present");
+        assert!(doc_links_at > commands_at, "Doc links must follow Standard commands:\n{text}");
+        // A half-set key stays silent in the preamble too (the warning is
+        // stderr-only, covered on the reader itself in state.rs).
+        write(tmp.path(), ".bee/config.json", r#"{"doc_viewer":{"base_url":"http://host:7700"}}"#);
+        assert!(!render(tmp.path()).contains("### Doc links"));
+    }
+
     #[test]
     fn the_knowledge_context_bridge_is_silent_with_no_active_work() {
         let tmp = minimal_repo();
@@ -258,7 +287,7 @@ use crate::version::BEE_VERSION;
         write(
             root,
             ".bee/config.json",
-            r#"{"gate_bypass":"total","ship_visibility":"draft-pr","commands":{"test":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml","verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"}}"#,
+            r#"{"gate_bypass":"total","ship_visibility":"draft-pr","commands":{"test":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml","verify":"PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"},"doc_viewer":{"base_url":"http://10.255.255.254:7700","project":"beedashboard"}}"#,
         );
         write(
             root,
@@ -333,6 +362,11 @@ use crate::version::BEE_VERSION;
         assert!(text.contains("+52 more capped since"), "{text}");
         assert!(text.contains("### HANDOFF present"), "{text}");
         assert!(text.contains("[…]"), "a clamped field must show that it was clamped:\n{text}");
+        // doc-viewer-links: measured inside the ceiling, not beside it.
+        assert!(
+            text.contains("### Doc links\n- Doc viewer: http://10.255.255.254:7700/p/beedashboard"),
+            "{text}"
+        );
     }
 
     #[test]

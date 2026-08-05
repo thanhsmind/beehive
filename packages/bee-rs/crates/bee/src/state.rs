@@ -220,6 +220,46 @@ pub fn ship_visibility(config: &Map<String, Value>) -> String {
     }
 }
 
+/// docViewerPrefix (decision 4205835b, docs/history/doc-viewer-links/plan.md):
+/// opt-in mdview URL prefix. `doc_viewer.base_url` + `doc_viewer.project`
+/// join as `<base>/p/<project>` — mdview's own URL layout, so an agent that
+/// has this prefix can turn a repo-relative doc path into a link the user
+/// can click instead of a bare path.
+///
+/// Absent key => None, silent: that IS the default, not a mistake. A key
+/// that LOOKS configured but is missing a field, holds an empty field after
+/// trimming, or is the wrong shape => None PLUS one stderr line naming the
+/// key (the same shape `ship_visibility` uses above for an unrecognized
+/// value) — a half-set key that quietly does nothing is the trap worth
+/// warning about.
+pub fn doc_viewer_prefix(config: &Map<String, Value>) -> Option<String> {
+    let obj = match config.get("doc_viewer") {
+        None => return None,
+        Some(Value::Object(m)) => m,
+        Some(_) => return warn_half_set_doc_viewer(),
+    };
+    let (base_url, project) = match (obj.get("base_url"), obj.get("project")) {
+        (Some(Value::String(b)), Some(Value::String(p))) => (b, p),
+        _ => return warn_half_set_doc_viewer(),
+    };
+    // One trailing slash off base_url (a doubled slash is left to the
+    // author to notice); every surrounding slash off project, since a
+    // leading OR trailing one would double up against the joined `/p/`.
+    let base = base_url.strip_suffix('/').unwrap_or(base_url);
+    let project = project.trim_matches('/');
+    if base.is_empty() || project.is_empty() {
+        return warn_half_set_doc_viewer();
+    }
+    Some(format!("{base}/p/{project}"))
+}
+
+fn warn_half_set_doc_viewer() -> Option<String> {
+    eprint!(
+        "config: doc_viewer is set but incomplete in .bee/config.json — base_url and project must both be non-empty strings; doc links disabled.\n"
+    );
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,5 +422,97 @@ mod tests {
         assert_eq!(bypass_level(&mk(json!(false))), "off");
         assert_eq!(bypass_level(&mk(json!("weird"))), "off");
         assert_eq!(bypass_level(&Map::new()), "off");
+    }
+
+    fn doc_viewer_config(v: Value) -> Map<String, Value> {
+        let mut m = Map::new();
+        m.insert("doc_viewer".into(), v);
+        m
+    }
+
+    #[test]
+    fn doc_viewer_prefix_joins_base_url_and_project() {
+        let cfg = doc_viewer_config(json!({"base_url": "http://10.255.255.254:7700", "project": "beedashboard"}));
+        assert_eq!(
+            doc_viewer_prefix(&cfg).as_deref(),
+            Some("http://10.255.255.254:7700/p/beedashboard")
+        );
+    }
+
+    #[test]
+    fn doc_viewer_prefix_trims_one_trailing_slash_off_base_url() {
+        let cfg = doc_viewer_config(json!({"base_url": "http://host:7700/", "project": "p"}));
+        assert_eq!(doc_viewer_prefix(&cfg).as_deref(), Some("http://host:7700/p/p"));
+    }
+
+    #[test]
+    fn doc_viewer_prefix_strips_surrounding_slashes_off_project() {
+        let cfg = doc_viewer_config(json!({"base_url": "http://host:7700", "project": "/beedashboard/"}));
+        assert_eq!(
+            doc_viewer_prefix(&cfg).as_deref(),
+            Some("http://host:7700/p/beedashboard")
+        );
+    }
+
+    /// Absent key: None, and nothing recorded — that IS the default.
+    #[test]
+    fn doc_viewer_prefix_absent_is_silently_none() {
+        assert_eq!(doc_viewer_prefix(&Map::new()), None);
+    }
+
+    /// Half-set (one field only): None, plus a warning — asserted on the
+    /// VALUE half here, same convention as `ship_visibility`'s test above;
+    /// the warning's bytes are pinned wherever the real stderr is asserted.
+    #[test]
+    fn doc_viewer_prefix_half_set_warns_and_returns_none() {
+        let cfg = doc_viewer_config(json!({"base_url": "http://host:7700"}));
+        assert_eq!(doc_viewer_prefix(&cfg), None, "project missing");
+        let cfg = doc_viewer_config(json!({"project": "p"}));
+        assert_eq!(doc_viewer_prefix(&cfg), None, "base_url missing");
+        let cfg = doc_viewer_config(json!({"base_url": 7700, "project": "p"}));
+        assert_eq!(doc_viewer_prefix(&cfg), None, "base_url not a string");
+    }
+
+    #[test]
+    fn doc_viewer_prefix_empty_string_field_warns_and_returns_none() {
+        let cfg = doc_viewer_config(json!({"base_url": "", "project": "p"}));
+        assert_eq!(doc_viewer_prefix(&cfg), None, "empty base_url");
+        let cfg = doc_viewer_config(json!({"base_url": "http://host:7700", "project": ""}));
+        assert_eq!(doc_viewer_prefix(&cfg), None, "empty project");
+        // A base_url that is nothing but a trailing slash trims to empty.
+        let cfg = doc_viewer_config(json!({"base_url": "/", "project": "p"}));
+        assert_eq!(doc_viewer_prefix(&cfg), None, "base_url is only a slash");
+    }
+
+    #[test]
+    fn doc_viewer_prefix_non_object_warns_and_returns_none() {
+        for bad in [json!("http://host:7700"), json!(true), json!([1, 2])] {
+            let cfg = doc_viewer_config(bad.clone());
+            assert_eq!(doc_viewer_prefix(&cfg), None, "non-object doc_viewer: {bad}");
+        }
+    }
+
+    /// config.local.json overlays tracked config.json for doc_viewer, through
+    /// the merged reader — the same overlay-wins contract every other config
+    /// key gets.
+    #[test]
+    fn doc_viewer_prefix_local_overlay_wins_over_tracked_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            r#"{"doc_viewer":{"base_url":"http://tracked:7700","project":"tracked-project"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.path().join(".bee").join("config.local.json"),
+            r#"{"doc_viewer":{"base_url":"http://local:7700","project":"local-project"}}"#,
+        )
+        .unwrap();
+        let cfg = read_config_raw(tmp.path());
+        assert_eq!(
+            doc_viewer_prefix(&cfg).as_deref(),
+            Some("http://local:7700/p/local-project")
+        );
     }
 }
