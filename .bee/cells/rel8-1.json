@@ -15,22 +15,34 @@
       "origin/main and tag v2.1.8 pushed"
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "decisions": [],
   "files": [],
   "read_first": [],
   "trace": {
     "worker": "orchestrator-main",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Release 2.1.8 shipped in commit a5d386e2 and tag v2.1.8; main has since moved to 2.1.11. The cell stayed claimed after the release landed — capped to match reality, no new work done.",
+    "files_changed": [
+      ".agents/skills/.bee-skills-version.json",
+      ".bee/onboarding.json",
+      ".claude-plugin/plugin.json",
+      ".claude/skills/.bee-skills-version.json",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-05T03:42:49.743Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "36955346-2280-4dc7-b0a5-b4d8c74c4b39",
-    "claimed_at": "2026-08-04T08:40:53.924Z"
+    "claimed_at": "2026-08-04T08:40:53.924Z",
+    "inline_reason": "Nothing was executed on this cap. The release it describes landed months of commits ago (a5d386e2, tag v2.1.8) and main is already at 2.1.11; the cap only records a fact git already proves, so dispatching a worker would create work rather than do it.",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T03:42:37.974Z"
   }
 }

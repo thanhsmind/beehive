@@ -1,0 +1,60 @@
+{
+  "id": "dvl-1",
+  "feature": "doc-viewer-links",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Read the doc_viewer key and inject its URL prefix into both session-start surfaces",
+  "action": "Add `pub fn doc_viewer_prefix(config: &Map<String, Value>) -> Option<String>` to packages/bee-rs/crates/bee/src/state.rs, beside bypass_level (:197) and ship_visibility (:209) which take the same argument. It reads config[\"doc_viewer\"] as an object with two string fields, base_url and project: trim one trailing '/' off base_url, strip surrounding '/' off project, return Some(\"<base>/p/<project>\"). Absent key => None, silent (that is the default). Half-set (one field only, either field empty after trim, doc_viewer not an object, a field not a string) => None PLUS one stderr line naming the key, in the same shape ship_visibility uses at state.rs:214 for an unrecognized value. Then render it in the two places a session actually starts. (a) session_preamble/budget.rs: a `### Doc links` section placed IMMEDIATELY AFTER the Standard commands block at :276-303 -- never appended at the end, because session_preamble/tests.rs:49-52 pins the closing trailer (budget.rs:421) with ends_with. The section names the prefix and the rule: append the repo-relative path, link docs as URLs rather than bare paths. Config is already in hand there via read_config_raw_open at budget.rs:207. (b) hooks/compaction.rs: the same single line as an item in the survival capsule, following item 10's pattern at :1485-1495, reading config through read_config_failopen (:124) exactly as compaction.rs:180 already does for bypass_level. Both injectors call the ONE shared fn in state.rs; neither reaches state.rs:157.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "doc_viewer_prefix returns Some(\"http://host:7700/p/slug\") for a well-formed key, with a trailing slash on base_url and surrounding slashes on project both normalized away",
+      "an absent doc_viewer key returns None and writes nothing to stderr; a half-set or wrong-typed one returns None and writes exactly one stderr line naming the key",
+      "config.local.json overrides tracked config.json for doc_viewer, through the existing merge",
+      "with the key set, the session preamble carries a Doc links section right after Standard commands; with it unset the preamble is byte-identical to today",
+      "with the key set, the compaction survival capsule carries the same prefix line, so the prefix survives a compaction",
+      "the preamble budget test's fixture config (tests.rs:258-262) includes doc_viewer, and the whole block still fits PREAMBLE_BUDGET_BYTES (budget.rs:43)"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/state.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/compaction.rs"
+  ],
+  "read_first": [
+    "docs/history/doc-viewer-links/plan.md",
+    "packages/bee-rs/crates/bee/src/state.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/compaction.rs"
+  ],
+  "decisions": [
+    "4205835b"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "dvl1-builder",
+    "outcome": "Added doc_viewer_prefix reader in state.rs and rendered it in the session preamble (Doc links section) and compaction capsule, with unit and render coverage; full cargo test suite green",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/state.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/compaction.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T04:05:59.817Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "af05c329-8dff-43a4-a751-a3d8318f1763",
+    "claimed_at": "2026-08-05T03:58:04.299Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T04:05:47.733Z"
+  }
+}

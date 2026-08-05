@@ -1,0 +1,64 @@
+{
+  "id": "dvl-2",
+  "feature": "doc-viewer-links",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [
+    "dvl-1"
+  ],
+  "title": "Write the doc-link rule into the agent contract and document the key",
+  "action": "Teach the contract and the reference that doc references become viewer URLs when doc_viewer is configured. (1) AGENTS.md :135-136 -- the Communication paragraph that says 'link records instead of pasting them' gains the clause. (2) packages/bee/AGENTS.block.md :128-129 -- THE SAME EDIT, VERBATIM. That block is what onboarding splices into every host project's AGENTS.md (onboard/source.rs:49 -> onboard/merge.rs:23); its managed body is byte-identical to the root file's, and editing only the root withholds the rule from every project that would actually set the key. (3) skills/bee-hive/references/routing-and-contracts.md:200 -- the same rule in the Communication contract's craft paragraph, beside 'make a win runnable by naming the command or path'. (4) Re-render the skill trees IN THIS CELL: devtools/skill_trees.rs:996 byte-compares a fresh render of skills/ against the committed plugin trees, so a skills/ edit without `bee dev render-skill-trees` turns this cell's own verify red. The two self-install copies (.claude/skills/, .agents/skills/, with their sha256 sidecars) are refreshed by the installer rather than that command -- refresh them too and commit all four trees. (5) docs/config-reference.md -- a doc_viewer row in the `## Other keys` table (:154-166) plus a short section: the two fields, the layout, what a half-set key does, and the one limit (a path containing spaces must be percent-escaped by whoever writes the link; bee joins, it does not encode). (6) .bee/config-sample.json -- BOTH shapes the sample carries per key, the annotation string and the live value (ship_visibility shows the pair at :28 and :80). (7) REGEN CHAIN, inside this cell, in this order: bee dev render-skill-trees, then bee onboard --repo-root . --apply, then bee dev release-manifest --write -- packages/bee is a root the release manifest hashes, so touching AGENTS.block.md owes the regen and the refreshed manifest is part of this cell's diff.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "the doc-link rule reads identically in AGENTS.md and packages/bee/AGENTS.block.md, so an onboarded host project receives it",
+      "render_matches_the_committed_trees passes -- all four skill trees committed in step with the skills/ edit",
+      "docs/config-reference.md documents doc_viewer in the Other keys table and in its own section, including half-set behavior and the no-encoding limit",
+      ".bee/config-sample.json carries doc_viewer as both an annotation string and a live value"
+    ]
+  },
+  "files": [
+    "AGENTS.md",
+    "packages/bee/AGENTS.block.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "docs/config-reference.md",
+    ".bee/config-sample.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/doc-viewer-links/plan.md",
+    "AGENTS.md",
+    "packages/bee/AGENTS.block.md",
+    "docs/config-reference.md"
+  ],
+  "decisions": [
+    "4205835b"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "dvl2-builder",
+    "outcome": null,
+    "files_changed": [
+      "AGENTS.md",
+      "packages/bee/AGENTS.block.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "docs/config-reference.md",
+      ".bee/config-sample.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T04:14:51.135Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "af05c329-8dff-43a4-a751-a3d8318f1763",
+    "claimed_at": "2026-08-05T04:06:16.085Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T04:14:39.311Z"
+  }
+}

@@ -317,6 +317,10 @@
     "agents",
     "decision-memory",
     "knowledge-layer",
-    "process"
+    "process",
+    "advisor-protocol",
+    "communication",
+    "doc-viewer",
+    "data-loss"
   ]
 }
