@@ -250,6 +250,7 @@ use crate::version::BEE_VERSION;
             "### Scribing debt:",
             "### Orphaned scribing debt:",
             "### Capture queue:",
+            "### Unapplied promote proposal(s):",
             "### Ceiling-model scarcity:",
             "### Critical patterns (digest)",
             "### Recent decisions",
@@ -296,6 +297,54 @@ use crate::version::BEE_VERSION;
         assert!(text.contains("- 2/3 cells tiered ceiling (> 40%)"), "{text}");
         assert!(text.contains("### Critical patterns (digest)\n- pattern one"), "{text}");
         assert!(text.contains("### Recent decisions\n- «a» (2026-01-01)"), "{text}");
+    }
+
+    /// D3 (kf-2): `bee close` writes docs/history/<feature>/promote-proposals.md
+    /// on every green close and nothing read it back until this line. A
+    /// proposal names its feature, its own count clause, and its path — and
+    /// goes silent the moment a compounding run is recorded at or after the
+    /// file's own mtime, never before.
+    #[test]
+    fn an_unapplied_promote_proposal_is_named_and_a_later_compounding_run_silences_it() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/history/f2/promote-proposals.md",
+            "promote proposal for work item \"f2\" (docs/history/f2/CONTEXT.md) — 3 capped cell(s): a-1, a-2, a-3\nanchor: history — docs/history/f2/CONTEXT.md\n",
+        );
+        let text = render(root);
+        assert!(text.contains("### Unapplied promote proposal(s): 1"), "{text}");
+        assert!(
+            text.contains("- f2 (3 capped cell(s)): docs/history/f2/promote-proposals.md"),
+            "{text}"
+        );
+
+        // A compounding run recorded strictly BEFORE the file's own mtime
+        // never clears it — the proposal still postdates the last sync.
+        write(
+            root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"ts\":\"2020-01-01T00:00:00.000Z\",\"feature\":\"f2\",\"areas\":[]}\n",
+        );
+        assert!(render(root).contains("### Unapplied promote proposal(s): 1"), "{}", render(root));
+
+        // A compounding run AT OR AFTER the file's own mtime silences it.
+        let mtime_ms = std::fs::metadata(root.join("docs/history/f2/promote-proposals.md"))
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        let ts = crate::verbs::status_full::to_iso(mtime_ms + 1000.0);
+        write(
+            root,
+            ".bee/logs/scribing-runs.jsonl",
+            &format!("{{\"ts\":\"{ts}\",\"feature\":\"f2\",\"areas\":[]}}\n"),
+        );
+        let text = render(root);
+        assert!(!text.contains("Unapplied promote proposal"), "{text}");
     }
 
     /// THE BUDGET LAW. The preamble is injected into every session, so a

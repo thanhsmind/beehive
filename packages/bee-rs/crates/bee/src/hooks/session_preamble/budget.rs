@@ -570,6 +570,13 @@ pub fn build_session_preamble(
         );
     }
 
+    // D3 (kf-2): a promote proposal `bee close` wrote and nobody applied.
+    let promote_lines = promote_proposal_lines(root);
+    if !promote_lines.is_empty() {
+        lines.push(String::new());
+        lines.extend(promote_lines);
+    }
+
     // P7: keep the ceiling model scarce.
     if let Some((pct, ceiling, tiered)) = ceiling_scarcity_warning(root) {
         lines.push(String::new());

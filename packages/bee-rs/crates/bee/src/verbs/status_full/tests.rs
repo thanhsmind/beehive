@@ -939,6 +939,46 @@ use crate::version::BEE_VERSION;
         );
     }
 
+    /// D3 (kf-2): `bee orient` names an unapplied promote proposal in
+    /// `work.blockers[]`, same report-only voice as the scribing-debt and
+    /// capture-queue lines just above it — the feature, its own count
+    /// clause, and its file path, never a refusal or an exit-code change.
+    #[test]
+    fn orient_names_an_unapplied_promote_proposal() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/history/f3/promote-proposals.md",
+            "promote proposal for work item \"f3\" (docs/history/f3/CONTEXT.md) — 2 capped cell(s): b-1, b-2\nanchor: history — docs/history/f3/CONTEXT.md\n",
+        );
+        let blockers = orient_blockers(root);
+        assert_eq!(blockers.len(), 1, "{blockers:?}");
+        assert!(
+            blockers[0]
+                == "promote proposal unapplied: 1 feature(s) — f3 (2 capped cell(s), docs/history/f3/promote-proposals.md)",
+            "{blockers:?}"
+        );
+
+        // A compounding run at or after the file's own mtime silences it.
+        let mtime_ms = std::fs::metadata(root.join("docs/history/f3/promote-proposals.md"))
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        write(
+            root,
+            ".bee/logs/scribing-runs.jsonl",
+            &format!(
+                "{{\"ts\":\"{}\",\"feature\":\"f3\",\"areas\":[]}}\n",
+                to_iso(mtime_ms + 1000.0)
+            ),
+        );
+        assert_eq!(orient_blockers(root), Vec::<String>::new());
+    }
+
     /// test_recovery.mjs writeCappedCell.
     fn write_capped_cell(root: &Path, id: &str, feature: &str, capped_at: &str) {
         write(

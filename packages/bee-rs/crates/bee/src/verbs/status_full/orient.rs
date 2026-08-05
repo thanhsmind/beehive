@@ -230,6 +230,20 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
             blockers.push(json!(line));
         }
     }
+    // kf-2 (D3): report-only, same voice as scribing debt / capture queue
+    // just above — never gates a phase or changes an exit code.
+    let proposals = unapplied_promote_proposals(&ctx.root);
+    if !proposals.is_empty() {
+        let named = proposals
+            .iter()
+            .map(|p| format!("{} ({}, {})", p.feature, p.counts, p.path))
+            .collect::<Vec<_>>()
+            .join("; ");
+        blockers.push(json!(format!(
+            "promote proposal unapplied: {} feature(s) — {named}",
+            proposals.len()
+        )));
+    }
     if let Some(Value::Array(warnings)) = status.get("staleness_warnings") {
         for warning in warnings {
             if let Value::String(w) = warning {

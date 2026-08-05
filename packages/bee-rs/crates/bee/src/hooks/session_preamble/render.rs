@@ -293,6 +293,38 @@ pub(crate) fn spec_project_map_lines(root: &Path) -> Vec<String> {
     lines
 }
 
+/// kf-2 (D3): docs/history/<feature>/promote-proposals.md, written by every
+/// green `bee close` and never read back until now. Same report-only shape
+/// as the Scribing debt / Capture queue blocks build_session_preamble
+/// (budget.rs) already renders just above where this is called: a header
+/// naming the count, one line naming the features — truncated the same
+/// "heaviest first, +N more" way Orphaned scribing debt truncates, because
+/// this list grows with docs/history/, not with what a reader can act on in
+/// one sitting. `bee orient` (verbs/status_full/orient.rs) reads the exact
+/// same scan (`unapplied_promote_proposals`), never a second hand-rolled walk
+/// of the same directory.
+pub(crate) fn promote_proposal_lines(root: &Path) -> Vec<String> {
+    let proposals = crate::verbs::status_full::unapplied_promote_proposals(root);
+    if proposals.is_empty() {
+        return Vec::new();
+    }
+    const SHOWN: usize = 3;
+    let shown = std::cmp::min(SHOWN, proposals.len());
+    let named = proposals[..shown]
+        .iter()
+        .map(|p| format!("{} ({}): {}", p.feature, p.counts, p.path))
+        .collect::<Vec<_>>()
+        .join("; ");
+    let more = proposals.len() - shown;
+    let tail = if more > 0 { format!(" +{more} more") } else { String::new() };
+    vec![
+        format!("### Unapplied promote proposal(s): {}", proposals.len()),
+        format!(
+            "- {named}{tail} — never applied to docs/knowledge/ (D3): review the proposal, then apply what belongs or record why not."
+        ),
+    ]
+}
+
 pub(crate) fn bundle_project_map_lines(root: &Path) -> Vec<String> {
     let mut lines = vec![
         "- Knowledge bundle: docs/knowledge/ (index: docs/knowledge/index.md) — read the bundle before the code".to_string(),
