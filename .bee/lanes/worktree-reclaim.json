@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "worktree-reclaim",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -10,7 +10,7 @@
     "review": false
   },
   "summary": "Feature \"worktree-reclaim\" started at phase \"exploring\" (lane).",
-  "next_action": "Close worktree-reclaim, then merge the worktree back into main.",
+  "next_action": "Add the orphan verdict so the 13 stranded workspace records can be dropped.",
   "created_at": "2026-08-05T09:52:33.827Z",
   "route": {
     "class": "feature",
@@ -33,5 +33,12 @@
       "worktree-parallelism"
     ],
     "next_action": "Close worktree-reclaim, then merge the worktree back into main."
+  },
+  "last_compounding_run": {
+    "feature": "worktree-reclaim",
+    "date": "2026-08-05",
+    "at": "2026-08-05T12:46:08.801Z",
+    "learnings": "docs/history/worktree-reclaim/reports/learnings.md",
+    "next_action": "Add the orphan verdict so the 13 stranded workspace records can be dropped."
   }
 }

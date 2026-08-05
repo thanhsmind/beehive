@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "feature": "worktree-orphan-verdict",
+  "mode": "standard",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"worktree-orphan-verdict\" started at phase \"exploring\" (lane).",
+  "next_action": "Close worktree-orphan-verdict, merge, rebuild the binary, run prune.",
+  "created_at": "2026-08-05T12:46:20.487Z",
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change"
+    ],
+    "product_files": 2,
+    "rationale": "One new verdict branch in the existing classifier plus its tests. The orphan case loses nothing by construction: no directory to remove, no branch to delete, no ignored files to lose — the record is the only artifact left.",
+    "updated_at": "2026-08-05T12:46:29.295Z"
+  },
+  "last_scribing_run": {
+    "feature": "worktree-orphan-verdict",
+    "date": "2026-08-05",
+    "at": "2026-08-05T12:59:18.177Z",
+    "areas_synced": [
+      "worktree-parallelism"
+    ],
+    "next_action": "Close worktree-orphan-verdict, merge, rebuild the binary, run prune."
+  }
+}

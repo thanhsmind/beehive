@@ -1,0 +1,61 @@
+{
+  "id": "wov-1",
+  "feature": "worktree-orphan-verdict",
+  "lane": "small",
+  "title": "Give the classifier an orphan verdict for a record whose worktree and branch are both gone",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+    "docs/history/worktree-reclaim/CONTEXT.md",
+    "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+  ],
+  "action": "The shipped classifier keeps every workspace record whose branch no longer exists: `git merge-base --is-ancestor` cannot exit 0 for a missing branch, and D2a's fail-closed rule correctly reads that as not-provably-merged. Verified live -- all 13 orphan records under .bee/runtime/workspaces/ report kept with that reason, forever. Right for a live worktree, wrong for a pure orphan. Add ONE new verdict branch to classify_worktree, evaluated BEFORE the merge test: when the worktree directory does NOT exist AND the record's branch does NOT exist (check with the existing branch_exists helper in worktree/git.rs), the record is the only artifact left -- there is no directory to remove, no commits to strand, no ignored files to lose -- so it is dead with an orphan reason, and no ancestry test is asked or needed. Prune's teardown for this verdict drops the record, the grant and the holds release, and NEVER touches a directory (there is none). Every other case keeps its current verdict unchanged. THE TWO CONDITIONS ARE A CONJUNCTION AND EACH ONE ALONE MUST STILL KEEP: a missing directory with a live branch keeps (the branch may hold unmerged commits); an existing directory with a missing branch keeps (the tree may hold uncommitted or ignored work). Only both-absent reaches the new branch. Make the reason string say plainly that nothing could be lost, so the prune report reads as an explanation rather than an assertion.",
+  "must_haves": {
+    "truths": [
+      "Directory absent AND branch absent yields the orphan verdict with no ancestry probe run",
+      "Directory absent but branch present still keeps",
+      "Directory present but branch absent still keeps",
+      "The orphan teardown removes no directory and deletes no branch"
+    ],
+    "artifacts": [
+      "One test per row above, beside the existing keep-reason tests"
+    ],
+    "prohibitions": [
+      "Do not loosen the merge test or any other keep-condition to reach this case",
+      "Do not let the orphan branch remove a directory or delete a branch",
+      "Do not evaluate the orphan branch when either artifact still exists"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "verify_owner": "worker",
+  "tier": "generation",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wov-1",
+    "outcome": "Added the orphan verdict (directory and branch both gone) to classify_worktree, evaluated before the merge test, with a matching registry-only teardown path and four new tests; updated the pruning-dead-worktrees knowledge doc.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "docs/knowledge/areas/worktree-parallelism/pruning-dead-worktrees.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T12:58:40.529Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8c8b6e72-b378-4f09-ab49-af13eb959835",
+    "claimed_at": "2026-08-05T12:47:24.655Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T12:58:28.506Z"
+  }
+}
