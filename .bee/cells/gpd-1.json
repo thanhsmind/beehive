@@ -1,0 +1,54 @@
+{
+  "id": "gpd-1",
+  "feature": "guard-parser-depth",
+  "lane": "high-risk",
+  "title": "Teach the write guard's parser to see past the first command and through shell wrappers",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs"
+  ],
+  "read_first": [
+    "docs/history/guard-parser-depth/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"
+  ],
+  "action": "Two confirmed P1 bypasses, both in how the token list is built and consumed -- fix them at the shared helpers so every consumer inherits the fix, never at one door. (1) paths.rs find_git_invocation returns at the FIRST token whose basename is git and never scans later separator-delimited segments, so `git status && git stash` is allowed while `git stash` is refused. Turn it into find_git_invocations returning EVERY invocation in the token list; update its one caller in checks.rs (~line 599) to loop, first refusing invocation wins. (2) guards.rs tokenize folds a quoted span into one token and nothing knows sh/bash/eval execute their argument, so `sh -c 'echo x > .bee/state.json'` and `eval 'git stash'` are allowed while the bare forms are refused. Add tokenize_deep: tokenize, then expand wrapper payloads in place and re-scan. A wrapper is a token whose BASENAME equals sh, bash, dash, zsh or ksh followed by -c and a payload token, or the token eval followed by its arguments up to the next separator. Splice the payload's tokens in fenced by `;` so a wrapper can never join two segments. Bound recursion at depth 4. Route the three write-guard consumers through tokenize_deep: guards.rs (~304, bash target extraction), detectors.rs (~226), checks.rs (~598). Leave cli_shape.rs on the plain tokenize -- it parses bee's own argv shape, where a wrapper is not a thing.",
+  "must_haves": {
+    "truths": [
+      "A denied command stays denied when any allowed command is placed before it, after any of && || ; |",
+      "A denied command stays denied when wrapped in sh -c, bash -c or eval, including a state-file redirect and a git verb",
+      "The guard still fails open on an undecidable payload -- this cell must not turn an unparseable command into a silent allow"
+    ],
+    "artifacts": [
+      "Tests for: compound git after each of && || ; | ; sh -c / bash -c / eval wrapping both a git verb and a .bee/state.json redirect; a nested wrapper; the depth-4 bound",
+      "Negative controls proving no over-blocking: `echo \"git stash\"` and `git commit -m \"wip && git stash\"` stay allowed, `git -C sub status` and `git --git-dir=.git log` still parse as today, and a path whose basename merely contains sh (scripts/shell/thing.sh) is not treated as a wrapper"
+    ],
+    "prohibitions": [
+      "Do not fix this in checks.rs alone -- target extraction and the secret-path deny must inherit it too",
+      "Do not change cli_shape.rs",
+      "Do not weaken or delete any existing guard test to make the new behaviour fit"
+    ]
+  },
+  "behavior_change": true,
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml, plus a live probe with the freshly built binary: `git status && git stash` must now refuse, `sh -c 'echo x > .bee/state.json'` must now refuse, and `echo \"git stash\"` must still pass.",
+  "tier": "generation",
+  "status": "open",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
