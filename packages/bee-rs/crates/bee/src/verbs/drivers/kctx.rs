@@ -731,7 +731,7 @@
     };
     let work_concept: Option<&Concept> = match &anchor {
         Anchor::WorkItem(c) => Some(*c),
-        Anchor::History { .. } => None,
+        Anchor::History { .. } | Anchor::Ledger { .. } => None,
     };
 
     let mut ranked: Vec<(String, String)> = Vec::new(); // (rel, reason)
@@ -797,7 +797,7 @@
         .collect();
     let (query_meta, query_body): (String, String) = match &anchor {
         Anchor::WorkItem(c) => (meta_text_of(c), concept_body(dir, &c.path).unwrap_or_default()),
-        Anchor::History { meta, body, .. } => (meta.clone(), body.clone()),
+        Anchor::History { meta, body, .. } | Anchor::Ledger { meta, body, .. } => (meta.clone(), body.clone()),
     };
     let query_tags: HashSet<String> = match work_concept {
         Some(c) => match c.data.get("tags") {
@@ -916,19 +916,37 @@
         est: f64,
         floor: bool,
     }
-    // A history anchor is not a bundle concept: `select()` never carries it
-    // into `ranked` (by_path only holds docs/knowledge/ concepts), and
-    // sizing off `join_rel(dir, ...)` would measure a docs/knowledge/ path
-    // that does not exist. It is sized here directly, off its own real
-    // paths/bytes, and prepended so it lands as entry rank 1 — the same slot
-    // the work item's own bundle file occupies under that arm — so
-    // `rank_one_cost` below reserves budget against the anchor, not the top
-    // critical (D8 discovery).
+    // A history or ledger anchor is not a bundle concept: `select()` never
+    // carries it into `ranked` (by_path only holds docs/knowledge/
+    // concepts), and sizing off `join_rel(dir, ...)` would measure a
+    // docs/knowledge/ path that does not exist. It is sized here directly,
+    // off its own bytes, and prepended so it lands as entry rank 1 — the
+    // same slot the work item's own bundle file occupies under that arm —
+    // so `rank_one_cost` below reserves budget against the anchor, not the
+    // top critical (D8 discovery).
     let mut sized: Vec<Sized> = Vec::new();
-    if let Anchor::History { paths, bytes, .. } = &anchor {
-        let repo_rel = paths.join(" + ");
-        let est = (*bytes as f64 / 4.0).ceil();
-        sized.push(Sized { repo_rel, reason: "history anchor".to_string(), bytes: *bytes, est, floor: false });
+    match &anchor {
+        Anchor::History { paths, bytes, .. } => {
+            let repo_rel = paths.join(" + ");
+            sized.push(Sized {
+                repo_rel,
+                reason: "history anchor".to_string(),
+                bytes: *bytes,
+                est: (*bytes as f64 / 4.0).ceil(),
+                floor: false,
+            });
+        }
+        Anchor::Ledger { paths, bytes, .. } => {
+            let repo_rel = paths.join(" + ");
+            sized.push(Sized {
+                repo_rel,
+                reason: "ledger anchor".to_string(),
+                bytes: *bytes,
+                est: (*bytes as f64 / 4.0).ceil(),
+                floor: false,
+            });
+        }
+        Anchor::WorkItem(_) => {}
     }
     sized.extend(ranked.iter().map(|(rel, reason)| {
         let repo_rel = format!("docs/knowledge/{rel}");

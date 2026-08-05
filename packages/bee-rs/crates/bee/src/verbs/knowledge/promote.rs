@@ -463,7 +463,7 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
     };
     let work_concept: Option<&Concept> = match &anchor {
         Anchor::WorkItem(c) => Some(*c),
-        Anchor::History { .. } => None,
+        Anchor::History { .. } | Anchor::Ledger { .. } => None,
     };
 
     let work_bee = work_concept.map(|c| bee_of(&c.data)).unwrap_or_default();

@@ -575,6 +575,105 @@ use std::time::Instant;
         assert!(text.contains("anchor: history — docs/history/hist-1/CONTEXT.md"));
     }
 
+    /// D34ccf18d: neither a bee.work-item concept nor a docs/history/<slug>/
+    /// file exists, but the feature's most recent .bee/logs/scribing-runs.jsonl
+    /// entry does (a small/tiny-lane feature logs its scoping synthesis as a
+    /// decision instead of a docs/history/ artifact) — the ledger arm resolves
+    /// in its place, and the same reach-two area fallback the history arm
+    /// already exercises still supplies the area list from that same stamp.
+    #[test]
+    fn promotion_resolves_a_ledger_anchor_when_no_work_item_or_history_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let kn = root.join("docs").join("knowledge");
+        std::fs::create_dir_all(&kn).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("logs").join("scribing-runs.jsonl"),
+            "{\"ts\":\"2026-08-05T07:00:30.067Z\",\"feature\":\"led-1\",\"areas\":[\"okf-profile\"]}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("lanes").join("led-1.json"),
+            r#"{"schema_version":"1.0","feature":"led-1","mode":"small","phase":"compounding","approved_gates":{"context":false,"shape":true,"execution":true,"review":false},"summary":"","next_action":"Merge wt/led-1, then close the feature.","created_at":"2026-08-05T06:32:21.769Z","last_scribing_run":{"feature":"led-1","date":"2026-08-05","at":"2026-08-05T07:00:30.067Z","areas_synced":["okf-profile"],"next_action":"Merge wt/led-1, then close the feature."}}"#,
+        )
+        .unwrap();
+        let cells = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(
+            cells.join("led-1-1.json"),
+            r#"{"id":"led-1-1","feature":"led-1","status":"capped","title":"first","verify":"cargo test","trace":{"behavior_change":true,"outcome":"did the ledger thing","files_changed":["src/a.rs"],"capped_at":"2026-08-05T07:00:00.000Z"}}"#,
+        )
+        .unwrap();
+
+        let Some(Promo::Ok(p)) = build_promotion(root, &kn, "led-1") else {
+            panic!("expected a proposal off the ledger anchor")
+        };
+        assert_eq!(p["writes"], json!([]));
+        assert_eq!(p["anchor"]["kind"], "ledger");
+        assert_eq!(
+            p["anchor"]["paths"],
+            json!([".bee/logs/scribing-runs.jsonl", ".bee/lanes/led-1.json"])
+        );
+        assert_eq!(p["work_item"], ".bee/logs/scribing-runs.jsonl + .bee/lanes/led-1.json");
+        assert_eq!(p["delivery"]["path"], "work/led-1/delivery.md");
+        assert_eq!(p["delivery"]["repo_path"], "docs/knowledge/work/led-1/delivery.md");
+        assert!(!kn.join("work").exists());
+
+        // Same reach-two fallback the history arm already exercises: the
+        // ledger anchor carries no bee.areas of its own, so the feature's
+        // own scribing-ledger stamp supplies the area list, named in both
+        // the JSON and the render.
+        assert_eq!(p["areas_source"]["kind"], "scribing_ledger");
+        assert_eq!(p["areas_source"]["ts"], "2026-08-05T07:00:30.067Z");
+        let areas = p["area_updates"].as_array().unwrap();
+        assert_eq!(areas.len(), 1);
+        assert_eq!(areas[0]["area"], "okf-profile");
+        let text = promote_text(&p);
+        assert!(text.contains("anchor: ledger — .bee/logs/scribing-runs.jsonl, .bee/lanes/led-1.json"));
+    }
+
+    /// D34ccf18d keeps its place as the LAST arm: a docs/history/ file for
+    /// the feature wins over its own scribing-ledger entry, and a
+    /// bee.work-item concept wins over both.
+    #[test]
+    fn history_and_work_item_anchors_still_win_over_a_present_ledger_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let kn = root.join("docs").join("knowledge");
+        std::fs::create_dir_all(&kn).unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("logs").join("scribing-runs.jsonl"),
+            "{\"ts\":\"2026-08-05T07:00:30.067Z\",\"feature\":\"prec-1\",\"areas\":[\"okf-profile\"]}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("docs").join("history").join("prec-1")).unwrap();
+        std::fs::write(
+            root.join("docs").join("history").join("prec-1").join("CONTEXT.md"),
+            "# Precedence Context\n\nBody.\n",
+        )
+        .unwrap();
+
+        let Some(Promo::Ok(p)) = build_promotion(root, &kn, "prec-1") else {
+            panic!("expected a proposal off the history anchor, not the ledger")
+        };
+        assert_eq!(p["anchor"]["kind"], "history");
+
+        // A work item, once present, wins over both fallbacks.
+        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::write(
+            kn.join("work").join("prec-1.md"),
+            "---\ntype: bee.work-item\ntitle: Precedence work\ndescription: wins over both fallbacks\ntags: []\nbee:\n  id: prec-1\n  lifecycle: active\n---\n\n# Precedence work\n",
+        )
+        .unwrap();
+        let Some(Promo::Ok(p2)) = build_promotion(root, &kn, "prec-1") else {
+            panic!("expected a proposal off the work item")
+        };
+        assert_eq!(p2["anchor"]["kind"], "work-item");
+    }
+
     /// Reach one: a feature whose cells already retired is no longer
     /// invisible to promote — `.bee/cells/archive/<feature>/*.json` is mined
     /// alongside the live store, deduped by id with the live copy winning,
@@ -1729,6 +1828,53 @@ use std::time::Instant;
         assert_eq!(m["anchor"]["paths"], json!(["docs/knowledge/work/w1/item.md"]));
         assert_eq!(m["entries"][0]["path"], "docs/knowledge/work/w1/item.md");
         assert_eq!(m["entries"][0]["reason"], "work item");
+    }
+
+    /// D34ccf18d: knowledge context also resolves the third and last arm —
+    /// same kind, same rank-1 sizing discipline as the history arm — when
+    /// neither a bee.work-item concept nor a docs/history/<work>/ file
+    /// exists but the feature's most recent scribing-ledger entry does.
+    #[test]
+    fn context_resolves_a_ledger_anchor_when_no_work_item_or_history_exists() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        put(
+            &dir,
+            "patterns/dispatch.md",
+            Cx::new("p-dispatch")
+                .title("Dispatch prompt assembly")
+                .description("how dispatch prompts are assembled")
+                .tags(&["dispatch"])
+                .areas(&["dispatch"])
+                .critical()
+                .body("Dispatch prompts are assembled from templates and rust code."),
+        );
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("logs").join("scribing-runs.jsonl"),
+            "{\"ts\":\"2026-08-05T07:00:30.067Z\",\"feature\":\"led-ctx\",\"areas\":[\"dispatch\"]}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("lanes").join("led-ctx.json"),
+            r#"{"schema_version":"1.0","feature":"led-ctx","mode":"small","phase":"compounding","approved_gates":{"context":false,"shape":true,"execution":true,"review":false},"summary":"","next_action":"Merge wt/led-ctx, then close the feature.","created_at":"2026-08-05T06:32:21.769Z","last_scribing_run":{"feature":"led-ctx","date":"2026-08-05","at":"2026-08-05T07:00:30.067Z","areas_synced":["dispatch"],"next_action":"Merge wt/led-ctx, then close the feature."}}"#,
+        )
+        .unwrap();
+
+        let m = built(&dir, "led-ctx", 20_000.0);
+        assert_eq!(m["anchor"]["kind"], json!("ledger"));
+        assert_eq!(
+            m["anchor"]["paths"],
+            json!([".bee/logs/scribing-runs.jsonl", ".bee/lanes/led-ctx.json"])
+        );
+        let entries = m["entries"].as_array().unwrap();
+        assert_eq!(entries[0]["path"], ".bee/logs/scribing-runs.jsonl + .bee/lanes/led-ctx.json");
+        assert_eq!(entries[0]["reason"], "ledger anchor");
+        assert!(
+            entries[0]["bytes"].as_u64().unwrap() > 0,
+            "the ledger anchor must size off what it was built from, never zero"
+        );
     }
 
     /// D7: a history anchor has no tags/areas, so a sparse-vocabulary bundle

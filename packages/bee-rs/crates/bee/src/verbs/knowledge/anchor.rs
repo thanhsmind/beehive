@@ -1,8 +1,12 @@
 // The shared "--work <id> resolves to no bee.work-item concept" fallback
-// (D1/D5/D6): a bee.work-item concept whose bee.id matches `work` always
-// wins; otherwise docs/history/<work>/CONTEXT.md and/or plan.md, whichever
-// exist, both when both do; otherwise no anchor at all, which every caller
-// renders as today's unknown_work refusal, byte for byte, unchanged.
+// (D1/D5/D6, extended by D34ccf18d): a bee.work-item concept whose bee.id
+// matches `work` always wins; otherwise docs/history/<work>/CONTEXT.md
+// and/or plan.md, whichever exist, both when both do; otherwise `work`'s
+// most recent .bee/logs/scribing-runs.jsonl entry (a small/tiny-lane
+// feature logs its scoping synthesis as a decision instead of a
+// docs/history/ artifact, so the ledger is the one thing still on disk for
+// it); otherwise no anchor at all, which every caller renders as today's
+// unknown_work refusal, byte for byte, unchanged.
 //
 // Consumed identically by knowledge::context's build_context_manifest and
 // its byte-parity port at drivers/kctx.rs (D8) — both copies call the same
@@ -14,6 +18,8 @@
 // concrete type; each port supplies a two-line impl for its own `Concept`.
 
 use super::walk::Concept;
+use crate::verbs::state_group::read_scribing_ledger;
+use crate::verbs::workflow_store::read_lane_display;
 use serde_json::{Map, Value};
 use std::path::Path;
 
@@ -32,6 +38,17 @@ pub(crate) enum Anchor<'a, C: ConceptLike> {
         body: String,
         bytes: u64,
     },
+    /// D34ccf18d: neither a work-item concept nor a docs/history/<work>/
+    /// file exists, but `work`'s most recent .bee/logs/scribing-runs.jsonl
+    /// entry does. `meta`/`body`/`bytes` are built the same way the History
+    /// arm builds them — from what was actually read off disk — so every
+    /// caller below can treat the two arms identically.
+    Ledger {
+        paths: Vec<String>,
+        meta: String,
+        body: String,
+        bytes: u64,
+    },
 }
 
 impl<'a, C: ConceptLike> Anchor<'a, C> {
@@ -39,16 +56,20 @@ impl<'a, C: ConceptLike> Anchor<'a, C> {
         match self {
             Anchor::WorkItem(_) => "work-item",
             Anchor::History { .. } => "history",
+            Anchor::Ledger { .. } => "ledger",
         }
     }
 
     /// Repo-relative paths the anchor was built from — a single-element list
     /// for a work item's own bundle file, one or two docs/history entries
-    /// for the fallback.
+    /// for the history fallback, .bee/logs/scribing-runs.jsonl (plus
+    /// .bee/lanes/<work>.json when it contributed a next_action) for the
+    /// ledger fallback.
     pub(crate) fn paths(&self) -> Vec<String> {
         match self {
             Anchor::WorkItem(c) => vec![format!("docs/knowledge/{}", c.concept_path())],
             Anchor::History { paths, .. } => paths.clone(),
+            Anchor::Ledger { paths, .. } => paths.clone(),
         }
     }
 }
@@ -122,10 +143,83 @@ fn read_history_file(root: &Path, work: &str, name: &str) -> Option<(String, Str
     Some((body, heading, bytes))
 }
 
-/// D5 then D1/D6: a bee.work-item concept whose bee.id matches `work` always
-/// wins; otherwise docs/history/<work>/CONTEXT.md and plan.md, whichever
-/// exist, both when both do; otherwise None — the caller's unknown_work
-/// refusal (D27).
+/// `work`'s most recent .bee/logs/scribing-runs.jsonl entry — most recent by
+/// `ts` (a plain string compare; the ledger's ISO-8601 stamps sort
+/// chronologically as UTF-16 code units, same as every other ISO-string sort
+/// on this path). Reads through `read_scribing_ledger`
+/// (verbs/state_group/ledger.rs) rather than re-parsing the file. Unlike
+/// promote's own `latest_scribing_areas` reach, an entry naming `work` with
+/// no (or an empty) `areas` array still counts — the ledger arm only needs
+/// the entry to exist, not to carry an area list.
+fn latest_ledger_areas(root: &Path, work: &str) -> Option<Vec<String>> {
+    let entries = read_scribing_ledger(root).ok()?;
+    let mut best: Option<(String, Vec<String>)> = None;
+    for entry in &entries {
+        if !matches!(entry.get("feature"), Some(Value::String(f)) if f == work) {
+            continue;
+        }
+        let Some(ts) = entry.get("ts").and_then(Value::as_str) else { continue };
+        let areas: Vec<String> = match entry.get("areas") {
+            Some(Value::Array(items)) => {
+                items.iter().filter_map(Value::as_str).map(str::to_string).collect()
+            }
+            _ => Vec::new(),
+        };
+        if best.as_ref().map(|(b, _)| ts > b.as_str()).unwrap_or(true) {
+            best = Some((ts.to_string(), areas));
+        }
+    }
+    best.map(|(_ts, areas)| areas)
+}
+
+/// `.bee/lanes/<work>.json`'s `last_scribing_run.next_action`, read through
+/// the same fail-open display reader the ledger's own stamp lookup
+/// (`best_scribing_stamp_ms`, verbs/state_group/ledger.rs) uses — a corrupt
+/// or absent lane record simply carries no next_action; this is a read-only
+/// anchor lookup, never a mutation, so it never throws.
+fn ledger_next_action(root: &Path, work: &str) -> Option<String> {
+    let lane = read_lane_display(root, work).ok()??;
+    let next = lane.get("last_scribing_run")?.get("next_action")?.as_str()?;
+    if next.is_empty() { None } else { Some(next.to_string()) }
+}
+
+/// D34ccf18d, the third and last arm: no bee.work-item concept and no
+/// docs/history/<work>/ file, but `work`'s most recent scribing-ledger entry
+/// names it. `meta`/`body` are the stamped area names and the lane record's
+/// recorded next_action, concatenated exactly as read — never composed
+/// prose, the same discipline `meta_text_of`/`first_heading` already hold —
+/// and `bytes` sizes the anchor off that same built text, since (unlike the
+/// history arm) there is no backing file to stat.
+fn read_ledger_anchor(root: &Path, work: &str) -> Option<(Vec<String>, String, String, u64)> {
+    let areas = latest_ledger_areas(root, work)?;
+    let next_action = ledger_next_action(root, work);
+
+    let mut paths = vec![".bee/logs/scribing-runs.jsonl".to_string()];
+    if next_action.is_some() {
+        paths.push(format!(".bee/lanes/{work}.json"));
+    }
+
+    let mut meta_parts = vec![work.to_string()];
+    meta_parts.extend(areas.iter().cloned());
+
+    let mut body_parts: Vec<String> = Vec::new();
+    if !areas.is_empty() {
+        body_parts.push(areas.join(" "));
+    }
+    if let Some(next) = &next_action {
+        body_parts.push(next.clone());
+    }
+    let body = body_parts.join("\n\n");
+    let bytes = body.len() as u64;
+
+    Some((paths, meta_parts.join(" "), body, bytes))
+}
+
+/// D5 then D1/D6, then D34ccf18d: a bee.work-item concept whose bee.id
+/// matches `work` always wins; otherwise docs/history/<work>/CONTEXT.md and
+/// plan.md, whichever exist, both when both do; otherwise `work`'s most
+/// recent .bee/logs/scribing-runs.jsonl entry; otherwise None — the caller's
+/// unknown_work refusal (D27).
 pub(crate) fn resolve_anchor<'a, C: ConceptLike>(concepts: &'a [C], root: &Path, work: &str) -> Option<Anchor<'a, C>> {
     if let Some(c) = concepts.iter().find(|c| matches_work_item(c.concept_data(), work)) {
         return Some(Anchor::WorkItem(c));
@@ -144,17 +238,19 @@ pub(crate) fn resolve_anchor<'a, C: ConceptLike>(concepts: &'a [C], root: &Path,
         bodies.push(body);
         bytes += file_bytes;
     }
-    if paths.is_empty() {
-        return None;
+    if !paths.is_empty() {
+        let mut meta_parts = vec![work.to_string()];
+        meta_parts.extend(headings);
+        return Some(Anchor::History {
+            paths,
+            meta: meta_parts.join(" "),
+            body: bodies.join("\n\n"),
+            bytes,
+        });
     }
-    let mut meta_parts = vec![work.to_string()];
-    meta_parts.extend(headings);
-    Some(Anchor::History {
-        paths,
-        meta: meta_parts.join(" "),
-        body: bodies.join("\n\n"),
-        bytes,
-    })
+
+    let (paths, meta, body, bytes) = read_ledger_anchor(root, work)?;
+    Some(Anchor::Ledger { paths, meta, body, bytes })
 }
 
 impl ConceptLike for Concept {
