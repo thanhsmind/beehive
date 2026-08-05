@@ -1,0 +1,69 @@
+{
+  "id": "kf-1",
+  "feature": "knowledge-in-flow",
+  "title": "Invite every anchorable feature to load its knowledge context",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs"
+  ],
+  "action": "Make the session preamble speak the resolver the release already ships. knowledge_context_lines at render.rs:189 opens its invitation only when a bee.work-item concept exists, so 162 of the 164 features that can now be anchored are never told to run the retrieval command; it also calls collect_concepts at render.rs:197, the 1.24 MB bundle walk cell kl-4 deliberately avoided, to answer one yes-or-no at every session start. Replace that gate with resolve_anchor from verbs/knowledge/anchor.rs (per D1): when ANY arm answers — work item, docs/history, or the scribing stamp — print the runnable bee knowledge context command with the mode's budget plus the existing instruction to read the manifest before touching code, and name which anchor kind answered so the reader knows what the manifest was ranked against. Delete the line that tells the agent to author docs/knowledge/work/<slug>/work-item.md: D5 made that file unnecessary and the line now contradicts the shipped design. When no arm answers, print nothing rather than advice. Second, per D2: the feature these lines use, and the feature the critical-pattern digest ranks against, must be the SESSION'S ACTIVE feature — the bound lane when the session has one, the default record otherwise — never the default record unconditionally. A live preamble was measured ranking its digest against doc-viewer-links, a feature closed hours earlier, while three features ran on lane records that day. Keep the digest inside PREAMBLE_BUDGET_BYTES at budget.rs:43; the cap test at hooks/session_preamble/tests.rs:280 must stay green, and so must every existing digest test.",
+  "must_haves": {
+    "truths": [
+      "A feature whose only anchor is docs/history/<slug>/CONTEXT.md gets the runnable knowledge context command in its preamble",
+      "A feature whose only anchor is its scribing stamp gets the same invitation",
+      "A feature with a work item keeps the invitation it already had",
+      "A feature with no anchor at all gets no knowledge-context block and no advice to author a work item",
+      "The preamble names which anchor kind answered",
+      "With the session bound to a lane, both the invitation and the digest use that lane's feature, not the default record's"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+        "substantive": "knowledge_context_lines resolves through resolve_anchor; the work-item advice line is gone; no collect_concepts call"
+      }
+    ],
+    "key_links": [
+      "render.rs calls resolve_anchor from verbs/knowledge/anchor.rs"
+    ],
+    "prohibitions": [
+      "collect_concepts is never called from the session-preamble path",
+      "The rendered preamble stays within PREAMBLE_BUDGET_BYTES",
+      "No file under docs/knowledge/ is created, moved, or deleted"
+    ]
+  },
+  "trace": {
+    "worker": "kf1-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T08:11:09.726Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "kf1-worker",
+    "claimed_at": "2026-08-05T08:03:34.549Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T08:10:57.900Z"
+  }
+}

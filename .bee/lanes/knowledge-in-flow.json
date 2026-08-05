@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "feature": "knowledge-in-flow",
+  "mode": "standard",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"knowledge-in-flow\" started at phase \"exploring\" (lane).",
+  "next_action": "Merge wt/knowledge-in-flow, release, push.",
+  "created_at": "2026-08-05T07:54:10.355Z",
+  "last_scribing_run": {
+    "feature": "knowledge-in-flow",
+    "date": "2026-08-05",
+    "at": "2026-08-05T08:39:38.140Z",
+    "areas_synced": [
+      "okf-profile",
+      "hook-runtime"
+    ],
+    "next_action": "Merge wt/knowledge-in-flow, release, push."
+  }
+}
