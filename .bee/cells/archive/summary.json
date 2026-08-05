@@ -23,5 +23,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-05T07:30:54.114Z"
+  },
+  "knowledge-in-flow": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-05T08:45:11.115Z"
   }
 }
