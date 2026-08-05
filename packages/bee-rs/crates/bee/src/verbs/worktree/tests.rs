@@ -1502,6 +1502,165 @@ use std::time::Instant;
         );
     }
 
+    // ── prune.rs: the orphan verdict (wov-1) ────────────────────────────────
+    //
+    // Directory gone AND branch gone — the record is the only artifact
+    // left. Evaluated BEFORE the merge test on purpose: a missing branch
+    // can never pass `git merge-base --is-ancestor`, so without this branch
+    // a truly gone worktree would keep forever, misread as "not provably
+    // merged" by a test with no ref left to ask about.
+
+    /// Neither the directory nor the branch survives. If the merge test
+    /// (condition 1) ran first, a nonexistent branch could never pass
+    /// `merge-base --is-ancestor` and the verdict would come back Kept
+    /// ("not provably merged") — reaching Dead here proves the orphan check
+    /// fires first and short-circuits the ancestry probe entirely.
+    #[test]
+    fn neither_directory_nor_branch_existing_is_dead_with_no_ancestry_probe() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let base_commit = head_sha(&main);
+        ws::register_workspace(
+            &main,
+            ws::RegisterSpec {
+                id: "wt-orphan",
+                kind: "worktree",
+                root: &tmp.path().join("nonexistent-wt").to_string_lossy(),
+                branch: Some("ghost-branch-never-created"),
+                base_sha: None,
+            },
+            "2024-01-01T00:00:00.000Z",
+        )
+        .unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: "wt-orphan",
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Dead { orphan: true, .. }), "{verdict:?}");
+        assert!(
+            verdict.reason().contains("the workspace record is the only artifact left"),
+            "{}",
+            verdict.reason()
+        );
+        assert!(
+            !verdict.reason().contains("not provably merged"),
+            "the ancestry probe must never run for a true orphan: {}",
+            verdict.reason()
+        );
+    }
+
+    /// The directory is gone but the branch still exists — the branch may
+    /// carry commits no other ref protects, so this must still keep. It
+    /// keeps today via the existing detached-HEAD condition (`current_branch`
+    /// fails to read a HEAD ref from a directory that is not there), not via
+    /// the new orphan branch, which the conjunction never reaches.
+    #[test]
+    fn a_missing_directory_with_a_live_branch_still_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        assert!(branch_exists(&main, &created.branch), "fixture must start with a real branch");
+        std::fs::remove_dir_all(&created.worktree_root).unwrap();
+        assert!(branch_exists(&main, &created.branch), "removing the directory must not remove the branch");
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(
+            !verdict.reason().contains("the workspace record is the only artifact left"),
+            "a live branch must keep it out of the orphan branch: {}",
+            verdict.reason()
+        );
+    }
+
+    /// The directory still stands but the branch is gone — the tree may
+    /// hold uncommitted or ignored work the branch never saw, so this must
+    /// still keep. It keeps via the existing merge test (a branch that does
+    /// not exist can never pass `merge-base --is-ancestor`), never via the
+    /// new orphan branch, which the conjunction never reaches.
+    #[test]
+    fn a_standing_directory_with_a_missing_branch_still_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let base_commit = head_sha(&main);
+        let wt_dir = tmp.path().join("wt-standing-dir");
+        std::fs::create_dir_all(&wt_dir).unwrap();
+        ws::register_workspace(
+            &main,
+            ws::RegisterSpec {
+                id: "wt-branchless",
+                kind: "worktree",
+                root: &wt_dir.to_string_lossy(),
+                branch: Some("ghost-branch-2"),
+                base_sha: None,
+            },
+            "2024-01-01T00:00:00.000Z",
+        )
+        .unwrap();
+        assert!(!branch_exists(&main, "ghost-branch-2"), "the branch must genuinely not exist");
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: "wt-branchless",
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(
+            !verdict.reason().contains("the workspace record is the only artifact left"),
+            "a standing directory must keep it out of the orphan branch: {}",
+            verdict.reason()
+        );
+    }
+
+    /// The orphan teardown removes no directory and deletes no branch: it
+    /// drops the record (and grant, and holds) through the same
+    /// registry-only `teardown_worktree(.., None)` call `run_unregister`
+    /// already uses. Proven by the run coming back `removed`, never `kept`
+    /// — attempting `git worktree remove --force` on a path that was never a
+    /// working tree, or `git branch -d` on a ref that never existed, would
+    /// both fail and land the id in `kept_ids` instead.
+    #[test]
+    fn the_orphan_teardown_removes_no_directory_and_deletes_no_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        ws::register_workspace(
+            &main,
+            ws::RegisterSpec {
+                id: "wt-orphan-teardown",
+                kind: "worktree",
+                root: &tmp.path().join("nonexistent-wt-2").to_string_lossy(),
+                branch: Some("ghost-branch-teardown"),
+                base_sha: None,
+            },
+            "2024-01-01T00:00:00.000Z",
+        )
+        .unwrap();
+
+        let outcome = run_prune_core(&main, false, 0.0).unwrap();
+
+        assert_eq!(outcome.removed_ids, vec!["wt-orphan-teardown".to_string()], "{:?}", outcome.entries);
+        assert!(outcome.kept_ids.is_empty(), "{:?}", outcome.entries);
+        assert_eq!(outcome.reclaimed_bytes, 0, "there was never a directory to reclaim bytes from");
+        assert!(
+            ws::read_workspace(&main, "wt-orphan-teardown").is_err(),
+            "the orphan workspace record must be dropped"
+        );
+    }
+
     /// The bug this whole module exists to retire: a `rev-list --count`
     /// failure reads as `0`, i.e. "merged", for EVERY worktree at once. Here,
     /// `main` is not even a git repository, so every git subprocess the
