@@ -890,7 +890,8 @@ use std::time::Instant;
             panic!("expected a built manifest")
         };
         const GOLDEN: &str = concat!(
-            r#"{"work":"demo","decisions":["d-1"],"budget":20000,"estimator":"bytes/4","#,
+            r#"{"work":"demo","anchor":{"kind":"work-item","paths":["docs/knowledge/work/demo/work-item.md"]},"#,
+            r#""decisions":["d-1"],"budget":20000,"estimator":"bytes/4","#,
             r#""total_est":240,"entries":["#,
             r#"{"path":"docs/knowledge/work/demo/work-item.md","bytes":232,"est_tokens":58,"reason":"work item"},"#,
             r#"{"path":"docs/knowledge/work/demo/plan.md","bytes":124,"est_tokens":31,"reason":"plan sibling in work/demo/"},"#,
@@ -902,6 +903,47 @@ use std::time::Instant;
             r#""critical_total":2,"zero_signal_count":1}"#,
         );
         assert_eq!(jsjson::stringify(&manifest), GOLDEN);
+    }
+
+    /// D8: a slug with no bee.work-item concept but a docs/history/<slug>/
+    /// CONTEXT.md must resolve to the SAME manifest through both the
+    /// `knowledge` verb's own build_context_manifest and this kctx port —
+    /// proving the two copies share one resolver (anchor.rs) rather than
+    /// merely agreeing by coincidence on this one fixture.
+    #[test]
+    fn learned_context_history_anchor_agrees_across_both_ports() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(&root, "docs/knowledge/patterns/dispatch-prompt.md",
+          "---\ntype: bee.pattern\ntitle: Dispatch prompt assembly\ndescription: how dispatch prompts are assembled\nbee:\n  id: p-dispatch\n  lifecycle: active\n  critical: true\n  areas: [dispatch]\n---\n\nDispatch prompts are assembled from templates and rust code.\n");
+        w(&root, "docs/knowledge/patterns/unrelated.md",
+          "---\ntype: bee.pattern\ntitle: Unrelated pattern\ndescription: about billing invoices\nbee:\n  id: p-billing\n  lifecycle: active\n  critical: true\n  areas: [billing]\n---\n\nBilling invoices and refunds.\n");
+        w(&root, "docs/history/demo-hist/CONTEXT.md",
+          "# Demo History Context\n\nDispatch prompts are assembled from templates using rust code.\n");
+
+        let dir = kctx::bundle_dir(&root).unwrap();
+        let kctx::ManifestOut::Built(kctx_manifest) =
+            kctx::build_context_manifest(&dir, "demo-hist", 20000.0, &kctx::num(20000.0))
+        else {
+            panic!("expected a built manifest from the kctx port")
+        };
+        let crate::verbs::knowledge::ManifestOut::Built(verb_manifest) =
+            crate::verbs::knowledge::build_context_manifest(&dir, "demo-hist", 20000.0, &kctx::num(20000.0))
+        else {
+            panic!("expected a built manifest from the knowledge verb")
+        };
+        assert_eq!(
+            jsjson::stringify(&kctx_manifest),
+            jsjson::stringify(&verb_manifest),
+            "the two ports must resolve the SAME history anchor (D8) — a drift here means only one copy was edited"
+        );
+        assert_eq!(kctx_manifest["anchor"]["kind"], "history");
+        assert_eq!(kctx_manifest["anchor"]["paths"], json!(["docs/history/demo-hist/CONTEXT.md"]));
+        let entries = kctx_manifest["entries"].as_array().unwrap();
+        assert_eq!(entries[0]["path"], "docs/history/demo-hist/CONTEXT.md");
+        assert!(entries[0]["bytes"].as_u64().unwrap() > 0, "the anchor's real byte size must never be zero");
+        assert_eq!(entries[0]["reason"], "history anchor");
+        assert_eq!(kctx_manifest["zero_signal_count"], json!(1), "the unrelated pattern still scores 0 against dispatch vocabulary");
     }
 
     #[test]

@@ -1388,3 +1388,127 @@ use std::time::Instant;
             .collect();
         assert_eq!(scores[0], scores[1], "the fixture must actually tie or the path tie-break proves nothing");
     }
+
+    // ═══ knowledge context: the docs/history/ fallback anchor (D1/D5/D6/D7) ═
+
+    fn write_history(root: &Path, work: &str, name: &str, text: &str) {
+        let file = root.join("docs").join("history").join(work).join(name);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, text).unwrap();
+    }
+
+    /// Node oracle equivalent: D6 — CONTEXT.md alone, plan.md alone, and both
+    /// together all resolve; the anchor is entry rank 1 with its real,
+    /// non-zero byte size, and no bee.work-item concept is required.
+    #[test]
+    fn history_anchor_resolves_from_whichever_of_context_and_plan_exist() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        put(
+            &dir,
+            "patterns/dispatch.md",
+            Cx::new("p-dispatch")
+                .title("Dispatch prompt assembly")
+                .description("how dispatch prompts are assembled")
+                .tags(&["dispatch"])
+                .areas(&["dispatch"])
+                .critical()
+                .body("Dispatch prompts are assembled from templates and rust code."),
+        );
+
+        // CONTEXT.md only.
+        write_history(root, "ctx-only", "CONTEXT.md", "# Ctx Only Context\n\nDispatch prompts assembled from templates in rust.\n");
+        let m = built(&dir, "ctx-only", 20_000.0);
+        assert_eq!(m["anchor"]["kind"], json!("history"));
+        assert_eq!(m["anchor"]["paths"], json!(["docs/history/ctx-only/CONTEXT.md"]));
+        let entries = m["entries"].as_array().unwrap();
+        assert_eq!(entries[0]["path"], "docs/history/ctx-only/CONTEXT.md");
+        assert_eq!(entries[0]["reason"], "history anchor");
+        assert!(entries[0]["bytes"].as_u64().unwrap() > 0, "the anchor must carry its real byte size, never zero");
+
+        // plan.md only.
+        write_history(root, "plan-only", "plan.md", "# Plan Only Context\n\nDispatch prompts assembled from templates in rust.\n");
+        let m = built(&dir, "plan-only", 20_000.0);
+        assert_eq!(m["anchor"]["kind"], json!("history"));
+        assert_eq!(m["anchor"]["paths"], json!(["docs/history/plan-only/plan.md"]));
+        assert!(m["entries"][0]["bytes"].as_u64().unwrap() > 0);
+
+        // Both present — both paths in the anchor, bytes summed over both.
+        write_history(root, "both", "CONTEXT.md", "# Both Context\n\nDispatch prompts assembled from templates in rust.\n");
+        write_history(root, "both", "plan.md", "# Both Plan\n\nMore dispatch prompt template detail.\n");
+        let m = built(&dir, "both", 20_000.0);
+        assert_eq!(m["anchor"]["kind"], json!("history"));
+        assert_eq!(
+            m["anchor"]["paths"],
+            json!(["docs/history/both/CONTEXT.md", "docs/history/both/plan.md"])
+        );
+        let ctx_bytes = std::fs::metadata(root.join("docs/history/both/CONTEXT.md")).unwrap().len();
+        let plan_bytes = std::fs::metadata(root.join("docs/history/both/plan.md")).unwrap().len();
+        assert_eq!(m["entries"][0]["bytes"], json!(ctx_bytes + plan_bytes));
+    }
+
+    /// D5: an existing bee.work-item concept always wins over a present
+    /// docs/history/ fallback, and its manifest keeps today's shape apart
+    /// from the added `anchor` field.
+    #[test]
+    fn work_item_wins_over_a_present_history_anchor() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        put(
+            &dir,
+            "work/w1/item.md",
+            Cx::new("w1").ty("bee.work-item").title("Widget work").description("widgets and gears"),
+        );
+        write_history(root, "w1", "CONTEXT.md", "# Should Not Win\n\nThis must never be the anchor.\n");
+
+        let m = built(&dir, "w1", 20_000.0);
+        assert_eq!(m["anchor"]["kind"], json!("work-item"));
+        assert_eq!(m["anchor"]["paths"], json!(["docs/knowledge/work/w1/item.md"]));
+        assert_eq!(m["entries"][0]["path"], "docs/knowledge/work/w1/item.md");
+        assert_eq!(m["entries"][0]["reason"], "work item");
+    }
+
+    /// D7: a history anchor has no tags/areas, so a sparse-vocabulary bundle
+    /// that would THROW zero_signal under a work-item anchor instead REPORTS
+    /// it under a history anchor and still builds.
+    #[test]
+    fn history_anchor_reports_zero_signal_instead_of_throwing() {
+        let void = |topic: &str, i: usize| {
+            Cx::new(&format!("void-{i}"))
+                .title(&format!("{topic} guidance"))
+                .description(&format!("{topic} guidance notes"))
+                .tags(&["unrelated"])
+                .areas(&["unrelated"])
+                .critical()
+                .body(&format!("{topic} guidance notes, {topic} technique, {topic} maintenance."))
+        };
+        let topics = [
+            "kubernetes ingress",
+            "sourdough hydration",
+            "telescope collimation",
+            "bicycle derailleur",
+            "harpsichord tuning",
+            "glacier moraine",
+            "origami tessellation",
+            "submarine ballast",
+            "volcanic tephra",
+            "lighthouse fresnel",
+            "saffron cultivation",
+            "permafrost drilling",
+        ];
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        for (i, topic) in topics.iter().enumerate() {
+            put(&dir, &format!("patterns/void-{i:02}.md"), void(topic, i));
+        }
+        write_history(root, "quiet-close", "CONTEXT.md", "# Quiet Close\n\nQuarterly payroll withholding reconciliation.\n");
+
+        match build_context_manifest(&dir, "quiet-close", 100_000.0, &json_raw("100000")) {
+            ManifestOut::Built(m) => {
+                assert_eq!(m["anchor"]["kind"], json!("history"));
+                assert_eq!(m["zero_signal_count"], json!(12), "the count is still REPORTED under a history anchor");
+            }
+            ManifestOut::Thrown(msg) => panic!("a history anchor must report zero_signal, never throw it: {msg}"),
+            ManifestOut::NeedsNode => panic!("unexpected delegation"),
+        }
+    }
