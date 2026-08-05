@@ -1,0 +1,42 @@
+{
+  "id": "ws-1",
+  "feature": "windows-shortpath",
+  "lane": "tiny",
+  "title": "Compare dispatch-envelope roots by identity, not by spelling",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "action": "The Windows job has been red since 2.1.9. envelope_and_prompt_name_the_granted_worktree_for_the_cells_feature compared the dispatch envelope's roots (git's writing of the path, long form) against the fixture's tempdir() paths (8.3 short form on a Windows runner): runneradmin vs RUNNER~1. Canonicalize both sides before comparing, and assert the prompt against the envelope's own spelling rather than the fixture's. Same rule and same reason as roots.rs's test-local norm.",
+  "must_haves": {
+    "truths": [
+      "The assertion still proves the envelope names the granted worktree and the main store, not merely that two strings match"
+    ]
+  },
+  "behavior_change": false,
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml; the Windows job must go green.",
+  "tier": "generation",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": "Canonicalized both sides of the envelope root comparison and re-anchored the prompt assertions on the envelope's own spelling.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T03:02:07.919Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "97981cf6-e6d4-4ded-9c76-7ade957e4aaf",
+    "claimed_at": "2026-08-05T03:01:38.127Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T03:01:56.016Z"
+  }
+}
