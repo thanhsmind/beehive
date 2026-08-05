@@ -10,8 +10,18 @@ use crate::state::{bypass_level, doc_viewer_prefix, ship_visibility};
 use serde_json::{json, Map, Value};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use crate::version::BEE_VERSION;
+// D3: the digest ranks by relevance using kl-1's shared anchor resolver and
+// the same IDF ranker context.rs uses — aliased so they never collide with
+// this module's own re-derived Concept/parse_frontmatter/read_file_lossy
+// port above (a deliberately separate, cheaper reading path — see the module
+// banner's "may not edit that file" note).
+use crate::verbs::knowledge::{
+    parse_frontmatter as verbs_parse_frontmatter, resolve_anchor as verbs_resolve_anchor,
+    score_critical_relevance, Anchor as VerbsAnchor, Concept as VerbsConcept, Fm as VerbsFm,
+};
 
 /// inject.mjs criticalPatternsDigest — routes on the ONE bundle predicate
 /// (G12), same line cap in both branches.
@@ -74,9 +84,14 @@ pub(crate) fn strip_row_gloss(row: &str) -> String {
     }
 }
 
-pub(crate) fn critical_patterns_digest(root: &Path, max_lines: usize, bundle: bool) -> Option<Vec<String>> {
+pub(crate) fn critical_patterns_digest(
+    root: &Path,
+    max_lines: usize,
+    bundle: bool,
+    feature: Option<&str>,
+) -> Option<Vec<String>> {
     if bundle {
-        bundle_critical_patterns_digest(root, max_lines)
+        bundle_critical_patterns_digest(root, max_lines, feature)
     } else {
         legacy_critical_patterns_digest(root, max_lines)
     }
@@ -124,36 +139,163 @@ pub(crate) fn rewrite_bundle_links(row: &str) -> String {
     out
 }
 
-pub(crate) fn bundle_critical_patterns_digest(root: &Path, max_lines: usize) -> Option<Vec<String>> {
+/// A bundle index row is `- [Title](target) — gloss`; the target is the raw,
+/// bundle-relative link before `rewrite_bundle_links` prefixes it for
+/// display — the shape the relevance ranker needs to resolve a row to an
+/// on-disk concept file.
+pub(crate) fn link_target(row: &str) -> Option<&str> {
+    let start = row.find("](")? + 2;
+    let end = row[start..].find(')')? + start;
+    Some(&row[start..end])
+}
+
+/// D3 (decision), phase 4: rank `rows` (raw, unrewritten) by relevance to
+/// `work`'s anchor and return the top `keep`, display-formatted, plus how
+/// many rows were dropped (target file missing) and how many concept files
+/// were actually opened to score them — the cost evidence a caller/test can
+/// pin against the whole-bundle count `collect_concepts` would cost.
+///
+/// `Err(reason)` on any of: no anchor for `work`, or no row resolved to a
+/// file — the caller renders today's recency pick instead and names the
+/// reason in the header (must always say which mode produced the rows).
+pub(crate) fn rank_critical_rows(
+    root: &Path,
+    rows: &[String],
+    work: &str,
+    keep: usize,
+) -> Result<(Vec<String>, usize, usize), String> {
+    let dir = bundle_dir(root);
+
+    // Cost discipline: an empty concepts slice means resolve_anchor can only
+    // ever land on the History arm (docs/history/<work>/CONTEXT.md and/or
+    // plan.md) or None — never the WorkItem arm, which would need
+    // collect_concepts to find. That is the deliberate cheaper reading this
+    // digest takes (see the module's "may not edit that file" banner).
+    let empty: &[VerbsConcept] = &[];
+    let anchor = verbs_resolve_anchor(empty, root, work).ok_or_else(|| format!("no anchor for \"{work}\""))?;
+    let VerbsAnchor::History { meta, body, .. } = &anchor else {
+        return Err(format!("no anchor for \"{work}\"")); // unreachable with an empty concepts slice
+    };
+
+    // Parse every row's target into a candidate path, dropping rows whose
+    // file is missing on disk (counted, never silent) and skipping external
+    // links (never a bundle concept, so never "dropped").
+    let mut candidates: Vec<(String, String)> = Vec::new(); // (raw row, bundle-relative path)
+    let mut dropped = 0usize;
+    for row in rows {
+        let Some(target) = link_target(row) else { continue };
+        if target.starts_with('/') || target.starts_with("http:") || target.starts_with("https:") {
+            continue;
+        }
+        if join_rel(&dir, target).is_file() {
+            candidates.push((row.clone(), target.to_string()));
+        } else {
+            dropped += 1;
+        }
+    }
+    if candidates.is_empty() {
+        return Err(format!("no critical row resolved to a file for \"{work}\""));
+    }
+
+    // Read ONLY the candidate concepts' bodies — never collect_concepts,
+    // which would parse every concept in the bundle for data this digest
+    // does not use.
+    let mut concepts: Vec<VerbsConcept> = Vec::with_capacity(candidates.len());
+    for (_, rel) in &candidates {
+        let raw = read_file_lossy(&join_rel(&dir, rel)).unwrap_or_default();
+        let data = match verbs_parse_frontmatter(&raw) {
+            VerbsFm::Parsed { data, .. } => data,
+            _ => Map::new(),
+        };
+        concepts.push(VerbsConcept { path: rel.clone(), data });
+    }
+    let opened = concepts.len();
+    let criticals: Vec<&VerbsConcept> = concepts.iter().collect();
+    // A history anchor carries no tags/areas of its own (context.rs D7) — the
+    // same IDF ranker, the same empty query sets it uses under that arm.
+    let query_tags: HashSet<String> = HashSet::new();
+    let query_areas: HashSet<&str> = HashSet::new();
+    let scores = score_critical_relevance(&dir, &criticals, meta, body, &query_tags, &query_areas)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| format!("the ranker had nothing to score for \"{work}\""))?;
+
+    let score_of = |path: &str| scores.iter().find(|(p, _)| p == path).map(|(_, s)| *s).unwrap_or(0.0);
+    let mut order: Vec<usize> = (0..candidates.len()).collect();
+    order.sort_by(|&a, &b| {
+        score_of(&candidates[b].1)
+            .partial_cmp(&score_of(&candidates[a].1))
+            .unwrap_or(Ordering::Equal)
+            .then_with(|| candidates[a].1.cmp(&candidates[b].1))
+    });
+    let top: Vec<String> = order
+        .into_iter()
+        .take(keep)
+        .map(|i| strip_row_gloss(&rewrite_bundle_links(&candidates[i].0)))
+        .collect();
+    Ok((top, dropped, opened))
+}
+
+fn recency_digest(rows: &[String], keep: usize, reason: &str) -> Vec<String> {
+    let mut recent: Vec<String> = rows[rows.len().saturating_sub(keep)..]
+        .iter()
+        .map(|r| strip_row_gloss(&rewrite_bundle_links(r)))
+        .collect();
+    recent.reverse();
+    let mut out = vec![format!(
+        "- {} critical pattern(s) in the bundle — recency fallback ({reason}), the {} most recent below; full list: docs/knowledge/index.md (\"Critical patterns\").",
+        rows.len(),
+        recent.len()
+    )];
+    out.extend(recent);
+    out
+}
+
+pub(crate) fn bundle_critical_patterns_digest(
+    root: &Path,
+    max_lines: usize,
+    feature: Option<&str>,
+) -> Option<Vec<String>> {
     let text = read_file_lossy(&bundle_dir(root).join("index.md"))?;
     let all: Vec<String> = text
         .split('\n')
         .map(|l| js_trim(l.strip_suffix('\r').unwrap_or(l)).to_string())
         .collect();
     let start = all.iter().position(|l| l == CRITICAL_PATTERNS_HEADING)?;
+    // Raw (unrewritten) rows — the relevance ranker needs the un-prefixed
+    // link target; display rewriting happens once a row is actually chosen.
     let mut rows: Vec<String> = Vec::new();
     for line in all.iter().skip(start + 1) {
         if line.starts_with("## ") {
             break;
         }
         if line.starts_with("- ") {
-            rows.push(rewrite_bundle_links(line));
+            rows.push(line.clone());
         }
     }
     if rows.is_empty() {
         return None;
     }
     let keep = std::cmp::max(1, max_lines.saturating_sub(1));
-    let mut recent: Vec<String> =
-        rows[rows.len().saturating_sub(keep)..].iter().map(|r| strip_row_gloss(r)).collect();
-    recent.reverse();
-    let mut out = vec![format!(
-        "- {} critical pattern(s) in the bundle — the {} most recent below; full list: docs/knowledge/index.md (\"Critical patterns\").",
-        rows.len(),
-        recent.len()
-    )];
-    out.extend(recent);
-    Some(out)
+
+    // D3: rank by relevance to the bound feature's anchor when one is bound,
+    // resolves, and the ranker has something to score; otherwise the recency
+    // pick, with the header always naming which mode produced the rows.
+    let work = feature.map(js_trim).filter(|f| !f.is_empty());
+    let Some(work) = work else {
+        return Some(recency_digest(&rows, keep, "no feature bound"));
+    };
+    match rank_critical_rows(root, &rows, work, keep) {
+        Ok((top, dropped, _opened)) => {
+            let mut out = vec![format!(
+                "- {} critical pattern(s) in the bundle — ranked by relevance to \"{work}\" ({dropped} row(s) dropped: target file missing), the {} most relevant below; full list: docs/knowledge/index.md (\"Critical patterns\").",
+                rows.len(),
+                top.len()
+            )];
+            out.extend(top);
+            Some(out)
+        }
+        Err(reason) => Some(recency_digest(&rows, keep, &reason)),
+    }
 }
 
 /// inject.mjs `buildSessionPreamble(root, { sessionId, handoffOutcome })`.
@@ -400,7 +542,10 @@ pub fn build_session_preamble(
         ));
     }
 
-    if let Some(digest) = critical_patterns_digest(root, PATTERN_DIGEST_LINES, bundle) {
+    // D3: the digest ranks against the SAME bound feature the header above
+    // already names — never a second, independently-resolved notion of it.
+    let bound_feature = pipeline_record.get("feature").and_then(Value::as_str).filter(|f| !f.is_empty());
+    if let Some(digest) = critical_patterns_digest(root, PATTERN_DIGEST_LINES, bundle, bound_feature) {
         lines.push(String::new());
         lines.push("### Critical patterns (digest)".to_string());
         lines.extend(digest);

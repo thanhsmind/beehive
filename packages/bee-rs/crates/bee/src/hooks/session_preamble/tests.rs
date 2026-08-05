@@ -431,7 +431,9 @@ use crate::version::BEE_VERSION;
         // where they live, and it is re-injected every session. The full list
         // is one file read away.
         assert!(
-            text.contains("- 13 critical pattern(s) in the bundle — the 3 most recent below"),
+            text.contains(
+                "- 13 critical pattern(s) in the bundle — recency fallback (no feature bound), the 3 most recent below"
+            ),
             "{text}"
         );
         // Newest-first, and bundle-relative links rewritten; absolute/http untouched.
@@ -439,6 +441,101 @@ use crate::version::BEE_VERSION;
         assert!(text.contains("- [p12](docs/knowledge/areas/a/p12.md)"), "{text}");
         assert!(!text.contains("- [p4]"), "only the 3 most recent rows ride the digest:\n{text}");
         assert!(!text.contains("- [p10]"), "only the 3 most recent rows ride the digest:\n{text}");
+    }
+
+    /// D3: the digest ranks by relevance to the bound feature's anchor
+    /// instead of recency — and the header always names which mode produced
+    /// the rows, so a stale or unbound repo degrades visibly, never silently.
+    #[test]
+    fn the_bundle_digest_ranks_by_relevance_and_the_rows_change_with_the_bound_feature() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/knowledge/patterns/p-auth.md",
+            "---\ntype: bee.pattern\ntitle: Auth pattern\n---\nAuthentication login session token flow.\n",
+        );
+        write(
+            root,
+            "docs/knowledge/patterns/p-billing.md",
+            "---\ntype: bee.pattern\ntitle: Billing pattern\n---\nBilling invoice payment subscription charge.\n",
+        );
+        write(
+            root,
+            "docs/knowledge/index.md",
+            "# Index\n\n## Critical patterns\n- [Auth](patterns/p-auth.md)\n- [Billing](patterns/p-billing.md)\n\n## Next\n",
+        );
+        write(root, "docs/history/f1/CONTEXT.md", "# f1\nAuthentication login session flow work.\n");
+        write(root, "docs/history/f2/CONTEXT.md", "# f2\nBilling invoice payment subscription work.\n");
+
+        let auth = bundle_critical_patterns_digest(root, 2, Some("f1")).unwrap();
+        assert!(auth[0].contains("ranked by relevance to \"f1\""), "{auth:?}");
+        assert!(auth[1].contains("p-auth.md"), "{auth:?}");
+
+        let billing = bundle_critical_patterns_digest(root, 2, Some("f2")).unwrap();
+        assert!(billing[0].contains("ranked by relevance to \"f2\""), "{billing:?}");
+        assert!(billing[1].contains("p-billing.md"), "{billing:?}");
+        assert_ne!(auth[1], billing[1], "the ranked row must change when the bound feature changes");
+
+        // No feature bound -> recency fallback, and the header says so.
+        let none_bound = bundle_critical_patterns_digest(root, 2, None).unwrap();
+        assert!(none_bound[0].contains("recency fallback (no feature bound)"), "{none_bound:?}");
+
+        // A feature with no docs/history/<slug>/ anchor at all -> falls back too.
+        let no_anchor = bundle_critical_patterns_digest(root, 2, Some("ghost")).unwrap();
+        assert!(no_anchor[0].contains("recency fallback (no anchor for \"ghost\")"), "{no_anchor:?}");
+    }
+
+    #[test]
+    fn a_critical_row_missing_from_disk_is_dropped_and_counted_in_the_ranked_header() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/knowledge/patterns/p-real.md",
+            "---\ntype: bee.pattern\n---\nAuthentication login flow.\n",
+        );
+        write(
+            root,
+            "docs/knowledge/index.md",
+            "# Index\n\n## Critical patterns\n- [Real](patterns/p-real.md)\n- [Gone](patterns/p-gone.md)\n\n## Next\n",
+        );
+        write(root, "docs/history/f1/CONTEXT.md", "# f1\nAuthentication login flow work.\n");
+
+        let digest = bundle_critical_patterns_digest(root, 4, Some("f1")).unwrap();
+        assert!(digest[0].contains("1 row(s) dropped: target file missing"), "{digest:?}");
+        assert!(digest.iter().any(|l| l.contains("p-real.md")), "{digest:?}");
+        assert!(!digest.iter().any(|l| l.contains("p-gone.md")), "{digest:?}");
+    }
+
+    /// The cost evidence the cell demands: with 3 rows to rank and 200 OTHER
+    /// bundle concepts sitting right next to them (simulating the rest of a
+    /// real bundle collect_concepts would walk), the ranker opens exactly its
+    /// 3 candidates — never the 203.
+    #[test]
+    fn the_ranker_opens_only_the_critical_rows_it_scores_never_the_whole_bundle() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        for i in 0..3 {
+            write(
+                root,
+                &format!("docs/knowledge/patterns/p{i}.md"),
+                &format!("---\ntype: bee.pattern\n---\nauthentication login body {i}\n"),
+            );
+        }
+        for i in 0..200 {
+            write(root, &format!("docs/knowledge/other/o{i}.md"), "---\ntype: bee.pattern\n---\nnoise\n");
+        }
+        write(root, "docs/history/f1/CONTEXT.md", "# f1\nauthentication login body\n");
+        let rows: Vec<String> = (0..3).map(|i| format!("- [p{i}](patterns/p{i}.md)")).collect();
+
+        let (top, dropped, opened) = rank_critical_rows(root, &rows, "f1", 3).unwrap();
+        assert_eq!(dropped, 0, "{top:?}");
+        assert_eq!(top.len(), 3, "{top:?}");
+        assert_eq!(
+            opened, 3,
+            "the ranker must open exactly its 3 candidates, never the 203-file bundle"
+        );
     }
 
     // ── (3) fail-open on a corrupt store ──────────────────────────────────
