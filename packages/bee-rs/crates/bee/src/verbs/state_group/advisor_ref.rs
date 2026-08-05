@@ -22,18 +22,10 @@
 // `--no-lane`; this port widens it to the standard selector every other read
 // in this file already gives a caller, per this cell's own spec.
 //
-// NOT wired into `try_native`'s routing table yet: that match arm lives in
-// set_gate.rs, out of scope for this cell (agp-1) by explicit instruction —
-// the routing entry lands with the Gate 3 precondition in agp-2. Until then
-// these two verbs are reachable only in-process (this file's own tests), and
-// the registry keeps advertising them as `unavailable` so `--help` and the
-// registry<->dispatcher contract (tests/registry_dispatch.rs) stay honest
-// about what this binary actually serves.
+// Wired into `try_native`'s routing table in set_gate.rs (agp-2), alongside
+// the Gate 3 precondition itself (`high_risk_advisor_refusal`, set_gate.rs)
+// — the registry no longer advertises either verb as `unavailable`.
 #![allow(unused_imports)]
-// `run_advisor_ref_record` / `run_advisor_ref_show` have no caller yet outside
-// this file's own tests (see the note above) — silence the dead-code warning
-// rather than call them from nowhere just to appease the compiler.
-#![allow(dead_code)]
 
 use super::*;
 use crate::fsutil::{
