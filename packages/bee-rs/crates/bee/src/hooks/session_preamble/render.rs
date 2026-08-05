@@ -325,6 +325,26 @@ pub(crate) fn promote_proposal_lines(root: &Path) -> Vec<String> {
     ]
 }
 
+/// D4/D4a: a granted worktree `bee worktree merge`'s cleanup-by-default (D1)
+/// never reached and nobody `bee worktree prune`d. Same single-scan
+/// discipline and report-only shape as the promote-proposal block just
+/// above — `reclaimable_worktree_ids` (status_full/mod.rs) is the ONE scan;
+/// `bee orient` (verbs/status_full/orient.rs) reads it too, never a second
+/// hand-rolled walk. One stale worktree is not news (plan.md), so the block
+/// stays silent at a count of one — just the heading plus one line, never
+/// the size (D4a: that cost belongs to `prune`, where the user asked for
+/// it), and no git call anywhere in this path.
+pub(crate) fn reclaimable_worktree_lines(root: &Path) -> Vec<String> {
+    let ids = crate::verbs::status_full::reclaimable_worktree_ids(root);
+    if ids.len() <= crate::verbs::status_full::RECLAIMABLE_WORKTREES_SHOWN_FLOOR {
+        return Vec::new();
+    }
+    vec![
+        format!("### Reclaimable worktree(s): {}", ids.len()),
+        "- Merged, clean, and idle past the age threshold, never reached by `bee worktree merge` and never `bee worktree prune`d — run `bee worktree prune --dry-run` to see what it would remove.".to_string(),
+    ]
+}
+
 pub(crate) fn bundle_project_map_lines(root: &Path) -> Vec<String> {
     let mut lines = vec![
         "- Knowledge bundle: docs/knowledge/ (index: docs/knowledge/index.md) — read the bundle before the code".to_string(),

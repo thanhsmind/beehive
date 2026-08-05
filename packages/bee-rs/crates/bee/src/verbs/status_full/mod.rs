@@ -97,6 +97,12 @@ const POST_EXECUTION_REVIEW_PHASES: [&str; 3] = ["scribing", "compounding", "com
 /// real drag on every orientation, and one command clears it.
 const ARCHIVABLE_NUDGE_FLOOR: f64 = 5.0;
 
+/// How many reclaimable worktrees it takes before the leak is worth a line
+/// (D4, D4a) — plan.md's own words: "one stale worktree is not news."
+/// `reclaimable_worktree_ids().len()` must exceed this before either surface
+/// shows the block.
+pub(crate) const RECLAIMABLE_WORKTREES_SHOWN_FLOOR: usize = 1;
+
 // bee.mjs ~819-821
 const CONTENTION_TAIL_MAX_BYTES: u64 = 65536;
 
@@ -259,6 +265,51 @@ pub(crate) fn unapplied_promote_proposals(root: &Path) -> Vec<UnappliedPromotePr
         });
     }
     out
+}
+
+// ─── reclaimable worktrees nobody merged or pruned (D4, D4a) ──────────────
+//
+// `bee worktree merge` only reaches the worktree it is called on (D1), and
+// `bee worktree prune` (verbs/worktree/prune.rs) only runs when a user asks
+// for it — so a worktree abandoned outside `merge` sits forever unless
+// something announces it. This is that announcement, kept cheap on purpose:
+// the grants file is one small JSON read (no git, ever) and every candidate
+// gets exactly one `metadata()` call — no `read_dir` walk of the worktree
+// itself, no directory-size sum (that cost is `prune`'s to pay, D4a, once
+// the user actually asks). A grant whose directory is gone already fails the
+// single `metadata()` call, so "directory exists" and "old enough" are one
+// check, not two. `bee orient` (orient.rs) and the session preamble
+// (hooks::session_preamble::render) both call this ONE scan — the same
+// single-scan discipline `unapplied_promote_proposals` holds just above.
+//
+// Age reuses `verbs::worktree::DEFAULT_PRUNE_AGE_DAYS` rather than a second
+// number: a worktree this line calls "reclaimable" is the same one
+// `bee worktree prune --dry-run` — the command the line names — would judge
+// old enough, modulo prune's own further mergedness/liveness/clean-tree
+// checks (which DO need git, and stay entirely inside `prune`, never here).
+pub(crate) fn reclaimable_worktree_ids(root: &Path) -> Vec<String> {
+    let grants_file = root.join(".bee").join("runtime").join("worktree-grants.json");
+    let Ok(bytes) = std::fs::read(&grants_file) else { return Vec::new() };
+    let Ok(Value::Object(grants)) = serde_json::from_slice::<Value>(&bytes) else {
+        return Vec::new();
+    };
+    let Some(worktree_parent) = root.parent() else { return Vec::new() };
+    let threshold = std::time::Duration::from_secs_f64(
+        crate::verbs::worktree::DEFAULT_PRUNE_AGE_DAYS * 24.0 * 60.0 * 60.0,
+    );
+    let now = std::time::SystemTime::now();
+    let mut ids: Vec<String> = grants
+        .iter()
+        .filter(|(_, v)| **v == Value::Bool(true))
+        .filter_map(|(id, _)| {
+            let meta = std::fs::metadata(worktree_parent.join(id)).ok()?;
+            let modified = meta.modified().ok()?;
+            let age = now.duration_since(modified).ok()?;
+            (age >= threshold).then(|| id.clone())
+        })
+        .collect();
+    ids.sort();
+    ids
 }
 
 #[cfg(test)]

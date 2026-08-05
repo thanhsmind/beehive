@@ -577,6 +577,14 @@ pub fn build_session_preamble(
         lines.extend(promote_lines);
     }
 
+    // D4 (D4a): a worktree `bee worktree merge` never reached and nobody
+    // pruned — same blank-line separator as the promote-proposal block above.
+    let reclaimable_lines = reclaimable_worktree_lines(root);
+    if !reclaimable_lines.is_empty() {
+        lines.push(String::new());
+        lines.extend(reclaimable_lines);
+    }
+
     // P7: keep the ceiling model scarce.
     if let Some((pct, ceiling, tiered)) = ceiling_scarcity_warning(root) {
         lines.push(String::new());
