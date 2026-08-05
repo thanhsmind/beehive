@@ -1152,8 +1152,16 @@ use std::time::Instant;
             lines[2],
             "Capture (deferred, decision c8e25271): scribing clear; capture queue clear."
         );
+        // D2 soft promote door: "demo" carries neither a bee.work-item
+        // concept nor a docs/history/demo/ anchor here, so build_promotion
+        // throws unknown_work — which degrades to ONE warning line, not a
+        // refusal, and close still proceeds to its own next: line.
         assert_eq!(
             lines[3],
+            "Promote skipped for \"demo\": knowledge promote: unknown_work — no bee.work-item concept in docs/knowledge/ carries bee.id \"demo\" (D38)."
+        );
+        assert_eq!(
+            lines[4],
             "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
         );
         assert_eq!(result.get("ran_tests"), Some(&json!(true)));
@@ -1167,6 +1175,103 @@ use std::time::Instant;
         )
         .unwrap();
         assert_eq!(record.get("green"), Some(&json!(true)));
+        // A promote Thrown never writes the proposals file (D38 stays intact).
+        assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
+    }
+
+    /// D2: build_promotion's `None` arm ("delegate to Node" — no Node is
+    /// left) degrades through the SAME one warning line a Thrown does, and
+    /// close's exit code is unchanged either way. A configured non-empty
+    /// `product_root` is the one live path left that makes `bundle_dir`
+    /// return `None` (see `bundle_dir`, frame.rs).
+    #[test]
+    fn close_green_promote_none_warns_once_and_writes_nothing() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"commands":{"test":"echo suite-green"},"product_root":"elsewhere"}"#,
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert_eq!(
+            lines[3],
+            "Promote skipped for \"demo\": no docs/knowledge/ bundle to mine here"
+        );
+        assert_eq!(
+            lines[4],
+            "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
+        );
+        assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
+    }
+
+    /// D2 happy path: a green close with a resolvable history anchor
+    /// (docs/history/<feature>/CONTEXT.md, D6) and a capped behavior_change
+    /// cell proposes off it, writes ONE proposals file naming the delivery
+    /// draft, the area updates and the pattern candidates, and appends ONE
+    /// headline line naming the counts and the file.
+    ///
+    /// `cells_archive_on_close: false` keeps the fixture's capped cell at
+    /// `.bee/cells/demo-1.json` where `read_capped_cell_traces` looks for
+    /// it — retirement (which this same close call would otherwise trigger
+    /// a few lines above the promote door, moving capped cells into
+    /// `.bee/cells/archive/`) is orthogonal to what this test proves.
+    #[test]
+    fn close_green_promote_ok_writes_the_proposals_file_and_a_headline() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"commands":{"test":"echo suite-green"},"cells_archive_on_close":false}"#,
+        );
+        std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
+        w(
+            &root,
+            "docs/history/demo/CONTEXT.md",
+            "# Demo Context\n\nBody.\n",
+        );
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","title":"first","verify":"cargo test","trace":{"behavior_change":true,"outcome":"did the thing","files_changed":["src/a.rs"],"capped_at":"2024-06-02T10:00:00.000Z"}}"#,
+        );
+        // Capture already recorded (a scribing run after the cap) — the
+        // scribing-debt door stays clear, so this close reaches the promote
+        // door at all; a debt-blocked close is proven separately.
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2024-06-03T00:00:00.000Z\"}\n",
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert_eq!(
+            lines[3],
+            "Promote proposed for \"demo\": 1 capped cell(s) mined, 0 area bullet(s), 0 pattern candidate(s) — see docs/history/demo/promote-proposals.md."
+        );
+        assert_eq!(
+            lines[4],
+            "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
+        );
+        let proposals = std::fs::read_to_string(root.join("docs/history/demo/promote-proposals.md")).unwrap();
+        assert!(proposals.contains("(a) DELIVERY DRAFT"));
+        assert!(proposals.contains("(b) AREA UPDATES"));
+        assert!(proposals.contains("(c) PATTERN CANDIDATES"));
+        // D38/D5 still hold: promote proposes, close never writes under
+        // docs/knowledge/.
+        assert!(!root.join("docs/knowledge/work").exists());
     }
 
     #[test]
@@ -1210,6 +1315,10 @@ use std::time::Instant;
         // The report-only doors are never blocking, even beside a red.
         assert_eq!(doors[1].get("blocking"), Some(&json!(false)));
         assert_eq!(doors[2].get("blocking"), Some(&json!(false)));
+        // D2: the promote door sits past the tests door — a RED close never
+        // reaches it, so nothing is proposed and nothing is written.
+        assert!(!lines.iter().any(|l| l.starts_with("Promote")));
+        assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
     }
 
     #[test]

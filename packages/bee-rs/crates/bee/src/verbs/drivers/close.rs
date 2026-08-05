@@ -4,7 +4,7 @@
 #![allow(unused_imports)]
 
 use super::*;
-use crate::fsutil::{ensure_dir, read_json, write_json_atomic, ReadJson};
+use crate::fsutil::{ensure_dir, read_json, write_json_atomic, write_text_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state::read_config_raw;
@@ -731,6 +731,59 @@ pub(crate) fn close_handler(
         Retirement::Off => {}
     }
     result.insert("retired".into(), retired.value());
+
+    // ── D2: soft promote door ────────────────────────────────────────────
+    //
+    // Runs only here — past the tests door (GREEN or undeclared) and past
+    // the scribing-debt refusal above, so a red close or one stopped on
+    // capture debt never reaches it. `build_promotion`'s `None` arm means
+    // "delegate to Node", and there is no Node left to delegate to
+    // (`rg -l buildContextManifest --glob '*.mjs'` finds nothing); a
+    // `Thrown` is promote's own typed refusal (most commonly `unknown_work`
+    // for a feature with neither a work-item concept nor a history anchor).
+    // Both degrade through the SAME one-line warning below and close
+    // proceeds unchanged either way — SOFT means proposing the knowledge a
+    // feature earned never blocks finishing it, and D38 (promote proposes,
+    // it never writes into docs/knowledge/) stays untouched by this door.
+    let promote_outcome: Result<Value, String> = match crate::verbs::knowledge::bundle_dir(root) {
+        None => Err("no docs/knowledge/ bundle to mine here".to_string()),
+        Some(dir) => match crate::verbs::knowledge::build_promotion(root, &dir, feature) {
+            None => Err("no docs/knowledge/ bundle to mine here".to_string()),
+            Some(crate::verbs::knowledge::Promo::Thrown(msg)) => Err(msg),
+            Some(crate::verbs::knowledge::Promo::Ok(proposal)) => Ok(proposal),
+        },
+    };
+    let promote_line = match promote_outcome {
+        Ok(proposal) => {
+            let proposals_rel = format!("docs/history/{feature}/promote-proposals.md");
+            let text = crate::verbs::knowledge::promote_text(&proposal);
+            match write_text_atomic(&root.join(&proposals_rel), &text) {
+                Ok(()) => {
+                    let cells_mined = proposal["cells"].as_array().map(Vec::len).unwrap_or(0);
+                    let area_bullets: usize = proposal["area_updates"]
+                        .as_array()
+                        .map(|updates| {
+                            updates
+                                .iter()
+                                .map(|u| u["bullets"].as_array().map(Vec::len).unwrap_or(0))
+                                .sum()
+                        })
+                        .unwrap_or(0);
+                    let pattern_candidates =
+                        proposal["pattern_candidates"].as_array().map(Vec::len).unwrap_or(0);
+                    format!(
+                        "Promote proposed for \"{feature}\": {cells_mined} capped cell(s) mined, {area_bullets} area bullet(s), {pattern_candidates} pattern candidate(s) — see {proposals_rel}."
+                    )
+                }
+                Err(e) => format!(
+                    "Promote proposed for \"{feature}\" but {proposals_rel} could not be written: {e}."
+                ),
+            }
+        }
+        Err(reason) => format!("Promote skipped for \"{feature}\": {reason}"),
+    };
+    lines.push(promote_line);
+
     lines.push(
         "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
             .to_string(),
