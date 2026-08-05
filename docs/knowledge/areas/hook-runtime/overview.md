@@ -2,14 +2,14 @@
 type: bee.area
 title: "Hook Runtime — purpose, lifecycle checkpoints, and the fail-open frame"
 description: "What the lifecycle checkpoints around an assistant guarantee, who observes them, and the two properties that hold for every checkpoint without exception: hostile input never ends a turn, and the guardrails are a safety net rather than the authority."
-timestamp: 2026-07-22
+timestamp: 2026-08-05
 bee:
   id: hook-runtime-overview
   lifecycle: active
   areas: [hook-runtime]
   required_context: []
   decisions: ["codex-runtime-parity D1, D2", "c2c46488 (a closed feature's approvals never license the next write; the guard's silence is never permission)"]
-  sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "docs/specs/hook-runtime.md#B1", "docs/specs/hook-runtime.md#R2", "docs/specs/hook-runtime.md#R13"]
+  sources: ["codex-runtime-parity Safety foundation — cells codex-parity-2, 2b, 3, 4 (traces in .bee/cells/), reports in docs/history/codex-runtime-parity/reports/", "docs/specs/hook-runtime.md#B1", "docs/specs/hook-runtime.md#R2", "docs/specs/hook-runtime.md#R13", "knowledge-loop cell kl-4 (session-start critical-pattern digest ranked by relevance; trace .bee/cells/kl-4.json, commit d74ca11c, 2026-08-05) — cross-referenced, owned by okf-profile/context-and-promote.md"]
   authoritative_for: "hook-runtime: purpose, actors, and the cross-cutting checkpoint frame"
 ---
 
@@ -37,6 +37,15 @@ belt for anything a checkpoint cannot see.
   each lifecycle event: session start, user prompt submitted, before a tool
   runs, after tracked task updates, before context compaction, when a child
   agent starts, when a child agent stops, and when the session stops.
+- **The session-start checkpoint's critical-pattern digest** — how it ranks the
+  bundle's critical patterns by relevance to the bound feature, which files it
+  reads to do so, and how its header names its own ranking mode versus a
+  recency fallback — is owned by
+  [`okf-profile/context-and-promote.md`](../okf-profile/context-and-promote.md)
+  (B8, knowledge-loop D3), the same concept that owns the shared anchor the
+  ranking resolves against. Kept there rather than duplicated here, since that
+  concept already documents the digest's other rules (silence on no bundle,
+  the byte-identical no-migration branch).
 
 ## Data Dictionary
 

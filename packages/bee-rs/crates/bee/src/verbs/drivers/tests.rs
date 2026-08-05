@@ -890,7 +890,8 @@ use std::time::Instant;
             panic!("expected a built manifest")
         };
         const GOLDEN: &str = concat!(
-            r#"{"work":"demo","decisions":["d-1"],"budget":20000,"estimator":"bytes/4","#,
+            r#"{"work":"demo","anchor":{"kind":"work-item","paths":["docs/knowledge/work/demo/work-item.md"]},"#,
+            r#""decisions":["d-1"],"budget":20000,"estimator":"bytes/4","#,
             r#""total_est":240,"entries":["#,
             r#"{"path":"docs/knowledge/work/demo/work-item.md","bytes":232,"est_tokens":58,"reason":"work item"},"#,
             r#"{"path":"docs/knowledge/work/demo/plan.md","bytes":124,"est_tokens":31,"reason":"plan sibling in work/demo/"},"#,
@@ -902,6 +903,47 @@ use std::time::Instant;
             r#""critical_total":2,"zero_signal_count":1}"#,
         );
         assert_eq!(jsjson::stringify(&manifest), GOLDEN);
+    }
+
+    /// D8: a slug with no bee.work-item concept but a docs/history/<slug>/
+    /// CONTEXT.md must resolve to the SAME manifest through both the
+    /// `knowledge` verb's own build_context_manifest and this kctx port —
+    /// proving the two copies share one resolver (anchor.rs) rather than
+    /// merely agreeing by coincidence on this one fixture.
+    #[test]
+    fn learned_context_history_anchor_agrees_across_both_ports() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(&root, "docs/knowledge/patterns/dispatch-prompt.md",
+          "---\ntype: bee.pattern\ntitle: Dispatch prompt assembly\ndescription: how dispatch prompts are assembled\nbee:\n  id: p-dispatch\n  lifecycle: active\n  critical: true\n  areas: [dispatch]\n---\n\nDispatch prompts are assembled from templates and rust code.\n");
+        w(&root, "docs/knowledge/patterns/unrelated.md",
+          "---\ntype: bee.pattern\ntitle: Unrelated pattern\ndescription: about billing invoices\nbee:\n  id: p-billing\n  lifecycle: active\n  critical: true\n  areas: [billing]\n---\n\nBilling invoices and refunds.\n");
+        w(&root, "docs/history/demo-hist/CONTEXT.md",
+          "# Demo History Context\n\nDispatch prompts are assembled from templates using rust code.\n");
+
+        let dir = kctx::bundle_dir(&root).unwrap();
+        let kctx::ManifestOut::Built(kctx_manifest) =
+            kctx::build_context_manifest(&dir, "demo-hist", 20000.0, &kctx::num(20000.0))
+        else {
+            panic!("expected a built manifest from the kctx port")
+        };
+        let crate::verbs::knowledge::ManifestOut::Built(verb_manifest) =
+            crate::verbs::knowledge::build_context_manifest(&dir, "demo-hist", 20000.0, &kctx::num(20000.0))
+        else {
+            panic!("expected a built manifest from the knowledge verb")
+        };
+        assert_eq!(
+            jsjson::stringify(&kctx_manifest),
+            jsjson::stringify(&verb_manifest),
+            "the two ports must resolve the SAME history anchor (D8) — a drift here means only one copy was edited"
+        );
+        assert_eq!(kctx_manifest["anchor"]["kind"], "history");
+        assert_eq!(kctx_manifest["anchor"]["paths"], json!(["docs/history/demo-hist/CONTEXT.md"]));
+        let entries = kctx_manifest["entries"].as_array().unwrap();
+        assert_eq!(entries[0]["path"], "docs/history/demo-hist/CONTEXT.md");
+        assert!(entries[0]["bytes"].as_u64().unwrap() > 0, "the anchor's real byte size must never be zero");
+        assert_eq!(entries[0]["reason"], "history anchor");
+        assert_eq!(kctx_manifest["zero_signal_count"], json!(1), "the unrelated pattern still scores 0 against dispatch vocabulary");
     }
 
     #[test]
@@ -949,6 +991,28 @@ use std::time::Instant;
         let cell =
             json!({"id": "c-1", "feature": "nope", "read_first": ["docs/knowledge/index.md"]});
         assert!(learned_context_lines(&root, &cell).unwrap().is_empty());
+    }
+
+    /// D8: `bundle_learned_lines` already passes a cell's `feature` slug as
+    /// `work` and maps `ManifestOut::Thrown(_)` to `None` — before this
+    /// feature, a dispatched cell for a slug with no bee.work-item concept
+    /// always hit that `Thrown` arm and fell back to the bare index pointer.
+    /// It now inherits kl-1's resolver through kctx, so a slug whose only
+    /// anchor is a docs/history/<slug>/CONTEXT.md carries that manifest's
+    /// own entries instead of falling back to `None`.
+    #[test]
+    fn dispatch_prepare_carries_a_history_anchor_manifest_instead_of_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(&root, "docs/knowledge/index.md", "# Knowledge\n\n## Critical patterns\n\n- none yet\n");
+        w(&root, "docs/knowledge/patterns/x.md",
+          "---\ntype: bee.pattern\ntitle: X\ndescription: x\nbee:\n  id: p-x\n  lifecycle: active\n---\n\nBody.\n");
+        w(&root, "docs/history/hist-only/CONTEXT.md", "# Hist Only Context\n\nSome learnings.\n");
+        let cell = json!({"id": "c-1", "feature": "hist-only", "lane": "small"});
+        assert_eq!(
+            learned_context_lines(&root, &cell).unwrap(),
+            vec!["- docs/history/hist-only/CONTEXT.md — CONTEXT.md"]
+        );
     }
 
     #[test]
@@ -1088,8 +1152,16 @@ use std::time::Instant;
             lines[2],
             "Capture (deferred, decision c8e25271): scribing clear; capture queue clear."
         );
+        // D2 soft promote door: "demo" carries neither a bee.work-item
+        // concept nor a docs/history/demo/ anchor here, so build_promotion
+        // throws unknown_work — which degrades to ONE warning line, not a
+        // refusal, and close still proceeds to its own next: line.
         assert_eq!(
             lines[3],
+            "Promote skipped for \"demo\": knowledge promote: unknown_work — no bee.work-item concept in docs/knowledge/ carries bee.id \"demo\" (D38)."
+        );
+        assert_eq!(
+            lines[4],
             "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
         );
         assert_eq!(result.get("ran_tests"), Some(&json!(true)));
@@ -1103,6 +1175,112 @@ use std::time::Instant;
         )
         .unwrap();
         assert_eq!(record.get("green"), Some(&json!(true)));
+        // A promote Thrown never writes the proposals file (D38 stays intact).
+        assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
+    }
+
+    /// D2: build_promotion's `None` arm ("delegate to Node" — no Node is
+    /// left) degrades through the SAME one warning line a Thrown does, and
+    /// close's exit code is unchanged either way. A configured non-empty
+    /// `product_root` is the one live path left that makes `bundle_dir`
+    /// return `None` (see `bundle_dir`, frame.rs).
+    #[test]
+    fn close_green_promote_none_warns_once_and_writes_nothing() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"commands":{"test":"echo suite-green"},"product_root":"elsewhere"}"#,
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert_eq!(
+            lines[3],
+            "Promote skipped for \"demo\": no docs/knowledge/ bundle to mine here"
+        );
+        assert_eq!(
+            lines[4],
+            "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
+        );
+        assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
+    }
+
+    /// D2 happy path: a green close with a resolvable history anchor
+    /// (docs/history/<feature>/CONTEXT.md, D6) and a capped behavior_change
+    /// cell proposes off it, writes ONE proposals file naming the delivery
+    /// draft, the area updates and the pattern candidates, and appends ONE
+    /// headline line naming the counts and the file.
+    ///
+    /// `cells_archive_on_close` is left at its DEFAULT (true) here on
+    /// purpose: `build_promotion` now runs before retirement moves the
+    /// feature's capped cells into `.bee/cells/archive/`, so it still finds
+    /// `.bee/cells/demo-1.json` and the proposal counts below stay
+    /// non-zero even though the same close call retires that cell a few
+    /// lines later.
+    #[test]
+    fn close_green_promote_ok_writes_the_proposals_file_and_a_headline() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
+        w(
+            &root,
+            "docs/history/demo/CONTEXT.md",
+            "# Demo Context\n\nBody.\n",
+        );
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","title":"first","verify":"cargo test","trace":{"behavior_change":true,"outcome":"did the thing","files_changed":["src/a.rs"],"capped_at":"2024-06-02T10:00:00.000Z"}}"#,
+        );
+        // Capture already recorded (a scribing run after the cap) — the
+        // scribing-debt door stays clear, so this close reaches the promote
+        // door at all; a debt-blocked close is proven separately.
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2024-06-03T00:00:00.000Z\"}\n",
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        let lines: Vec<&str> = text.split('\n').collect();
+        // Default archiving retires demo-1 in the same close, so its line
+        // lands ahead of the promote line — build_promotion already ran
+        // (and saw the cell) before this retirement happened.
+        assert_eq!(
+            lines[3],
+            "Retired \"demo\": 1 cell(s) moved out of the active scan (bee cells unarchive --feature demo to reverse)."
+        );
+        assert_eq!(
+            lines[4],
+            "Promote proposed for \"demo\": 1 capped cell(s) mined, 0 area bullet(s), 0 pattern candidate(s) — see docs/history/demo/promote-proposals.md."
+        );
+        assert_eq!(
+            lines[5],
+            "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
+        );
+        let proposals = std::fs::read_to_string(root.join("docs/history/demo/promote-proposals.md")).unwrap();
+        assert!(proposals.contains("(a) DELIVERY DRAFT"));
+        assert!(proposals.contains("(b) AREA UPDATES"));
+        assert!(proposals.contains("(c) PATTERN CANDIDATES"));
+        // D38/D5 still hold: promote proposes, close never writes under
+        // docs/knowledge/.
+        assert!(!root.join("docs/knowledge/work").exists());
+        // Retirement did happen (D2 must see the cells BEFORE this moves
+        // them, not skip the move).
+        assert!(!root.join(".bee/cells/demo-1.json").exists());
+        assert!(root.join(".bee/cells/archive/demo/demo-1.json").exists());
     }
 
     #[test]
@@ -1146,6 +1324,10 @@ use std::time::Instant;
         // The report-only doors are never blocking, even beside a red.
         assert_eq!(doors[1].get("blocking"), Some(&json!(false)));
         assert_eq!(doors[2].get("blocking"), Some(&json!(false)));
+        // D2: the promote door sits past the tests door — a RED close never
+        // reaches it, so nothing is proposed and nothing is written.
+        assert!(!lines.iter().any(|l| l.starts_with("Promote")));
+        assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
     }
 
     #[test]

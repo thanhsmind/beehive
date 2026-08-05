@@ -117,7 +117,10 @@ pub(crate) fn to_fixed6(x: f64) -> f64 {
 pub(crate) fn score_critical_relevance(
     dir: &Path,
     criticals: &[&Concept],
-    work: &Concept,
+    query_meta: &str,
+    query_body: &str,
+    query_tags: &HashSet<String>,
+    query_areas: &HashSet<&str>,
 ) -> Option<Vec<(String, f64)>> {
     let stops = stopwords();
     let mut fields: Vec<(Vec<String>, Vec<String>)> = Vec::new();
@@ -136,25 +139,9 @@ pub(crate) fn score_critical_relevance(
     let population = criticals.len();
     let idf = |token: &str| ((population as f64 + 1.0) / (*df.get(token).unwrap_or(&0) as f64 + 1.0)).ln() + 1.0;
 
-    let query: HashSet<String> = relevance_tokens(
-        &format!("{} {}", meta_text_of(work), concept_body(dir, &work.path)?),
-        &stops,
-    )
-    .into_iter()
-    .collect();
-    let work_bee = bee_of(&work.data);
-    let work_tags: HashSet<String> = match work.data.get("tags") {
-        Some(Value::Array(items)) => items
-            .iter()
-            .filter_map(|v| v.as_str())
-            .map(|s| s.to_lowercase())
-            .collect(),
-        _ => HashSet::new(),
-    };
-    let work_areas: HashSet<&str> = match work_bee.get("areas") {
-        Some(Value::Array(items)) => items.iter().filter_map(|v| v.as_str()).collect(),
-        _ => HashSet::new(),
-    };
+    let query: HashSet<String> = relevance_tokens(&format!("{query_meta} {query_body}"), &stops)
+        .into_iter()
+        .collect();
 
     let coverage = |set: &[String]| -> f64 {
         let mut hit = 0.0f64;
@@ -179,14 +166,14 @@ pub(crate) fn score_critical_relevance(
         let tags = match concept.data.get("tags") {
             Some(Value::Array(items)) => items
                 .iter()
-                .filter(|v| matches!(v, Value::String(s) if work_tags.contains(&s.to_lowercase())))
+                .filter(|v| matches!(v, Value::String(s) if query_tags.contains(&s.to_lowercase())))
                 .count(),
             _ => 0,
         };
         let areas = match bee.get("areas") {
             Some(Value::Array(items)) => items
                 .iter()
-                .filter(|v| matches!(v, Value::String(s) if work_areas.contains(s.as_str())))
+                .filter(|v| matches!(v, Value::String(s) if query_areas.contains(s.as_str())))
                 .count(),
             _ => 0,
         };
@@ -226,14 +213,18 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
 
     let Some(concepts) = collect_concepts(dir) else { return ManifestOut::NeedsNode };
 
-    let work_concept = concepts.iter().find(|c| {
-        matches!(c.data.get("type"), Some(Value::String(t)) if t == "bee.work-item")
-            && matches!(bee_of(&c.data).get("id"), Some(Value::String(id)) if id == work_id)
-    });
-    let Some(work_concept) = work_concept else {
+    // D5 then D1/D6: a bee.work-item concept whose bee.id matches always
+    // wins; otherwise docs/history/<work_id>/CONTEXT.md and/or plan.md,
+    // whichever exist; otherwise no anchor at all — unknown_work, unchanged.
+    let root = dir.parent().and_then(Path::parent).unwrap_or(dir);
+    let Some(anchor) = resolve_anchor(&concepts, root, work_id) else {
         return ManifestOut::Thrown(format!(
             "knowledge context: unknown_work — no bee.work-item concept in docs/knowledge/ carries bee.id \"{work_id}\" (D27)."
         ));
+    };
+    let work_concept: Option<&Concept> = match &anchor {
+        Anchor::WorkItem(c) => Some(*c),
+        Anchor::History { .. } => None,
     };
 
     let mut ranked: Vec<(String, String)> = Vec::new(); // (rel, reason)
@@ -249,16 +240,21 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         true
     };
 
-    // (1) the work item
-    select(&work_concept.path, "work item".to_string(), &mut ranked, &mut selected);
+    // (1) the work item — a history anchor is not a bundle concept; it is
+    // sized and ranked as entry rank 1 directly, below (D6/D8).
+    if let Some(wc) = work_concept {
+        select(&wc.path, "work item".to_string(), &mut ranked, &mut selected);
+    }
 
     // (2) the plan sibling in the same work/<id>/ directory
-    let work_dir = dir_of(&work_concept.path).to_string();
-    let plan = concepts.iter().find(|c| {
-        matches!(c.data.get("type"), Some(Value::String(t)) if t == "bee.plan") && dir_of(&c.path) == work_dir
-    });
-    if let Some(plan) = plan {
-        select(&plan.path, format!("plan sibling in {work_dir}/"), &mut ranked, &mut selected);
+    if let Some(wc) = work_concept {
+        let work_dir = dir_of(&wc.path).to_string();
+        let plan = concepts.iter().find(|c| {
+            matches!(c.data.get("type"), Some(Value::String(t)) if t == "bee.plan") && dir_of(&c.path) == work_dir
+        });
+        if let Some(plan) = plan {
+            select(&plan.path, format!("plan sibling in {work_dir}/"), &mut ranked, &mut selected);
+        }
     }
 
     // (3) required_context, transitive, BFS depth order, cycles deduped silently
@@ -292,14 +288,38 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         .iter()
         .filter(|c| matches!(bee_of(&c.data).get("critical"), Some(Value::Bool(true))))
         .collect();
-    let Some(relevance) = score_critical_relevance(dir, &criticals, work_concept) else {
+    let (query_meta, query_body): (String, String) = match &anchor {
+        Anchor::WorkItem(c) => (meta_text_of(c), concept_body(dir, &c.path).unwrap_or_default()),
+        Anchor::History { meta, body, .. } => (meta.clone(), body.clone()),
+    };
+    let query_tags: HashSet<String> = match work_concept {
+        Some(c) => match c.data.get("tags") {
+            Some(Value::Array(items)) => {
+                items.iter().filter_map(|v| v.as_str()).map(|s| s.to_lowercase()).collect()
+            }
+            _ => HashSet::new(),
+        },
+        None => HashSet::new(),
+    };
+    let query_bee = work_concept.map(|c| bee_of(&c.data)).unwrap_or_default();
+    let query_areas: HashSet<&str> = match query_bee.get("areas") {
+        Some(Value::Array(items)) => items.iter().filter_map(|v| v.as_str()).collect(),
+        _ => HashSet::new(),
+    };
+    let Some(relevance) = score_critical_relevance(dir, &criticals, &query_meta, &query_body, &query_tags, &query_areas)
+    else {
         return ManifestOut::NeedsNode;
     };
     let score_of = |path: &str| -> f64 {
         relevance.iter().find(|(p, _)| p == path).map(|(_, s)| *s).unwrap_or(0.0)
     };
     let zero_signal_count = criticals.iter().filter(|c| score_of(&c.path) == 0.0).count();
-    if criticals.len() >= ZERO_SIGNAL_MIN_POPULATION
+    // D7: a history anchor carries no tags/areas of its own, so more
+    // criticals land at exactly 0.0 as an artifact of the anchor kind, not a
+    // signal about the bundle — report it in the manifest (zero_signal_count,
+    // below), never refuse, under that arm. The work-item arm keeps refusing.
+    if work_concept.is_some()
+        && criticals.len() >= ZERO_SIGNAL_MIN_POPULATION
         && (zero_signal_count as f64) > criticals.len() as f64 * ZERO_SIGNAL_MAX_RATIO
     {
         return ManifestOut::Thrown(format!(
@@ -356,9 +376,10 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         kept += 1;
     }
 
-    // (5) decisions whose areas overlap the work item's areas
-    let work_bee_map = bee_of(&work_concept.data);
-    let work_areas: Vec<&str> = match work_bee_map.get("areas") {
+    // (5) decisions whose areas overlap the work item's areas — a history
+    // anchor has no bee.areas of its own, so this stays empty under it.
+    let decision_bee = work_concept.map(|wc| bee_of(&wc.data)).unwrap_or_default();
+    let work_areas: Vec<&str> = match decision_bee.get("areas") {
         Some(Value::Array(items)) => items.iter().filter_map(|v| v.as_str()).collect(),
         _ => Vec::new(),
     };
@@ -388,16 +409,27 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         est: f64,
         floor: bool,
     }
-    let sized: Vec<Sized> = ranked
-        .iter()
-        .map(|(rel, reason)| {
-            let repo_rel = format!("docs/knowledge/{rel}");
-            let bytes = std::fs::metadata(join_rel(dir, rel)).map(|m| m.len()).unwrap_or(0);
-            let est = (bytes as f64 / 4.0).ceil();
-            let floor = floor_paths.contains(&repo_rel);
-            Sized { repo_rel, reason: reason.clone(), bytes, est, floor }
-        })
-        .collect();
+    // A history anchor is not a bundle concept: `select()` never carries it
+    // into `ranked` (by_path only holds docs/knowledge/ concepts), and
+    // sizing off `join_rel(dir, ...)` would measure a docs/knowledge/ path
+    // that does not exist. It is sized here directly, off its own real
+    // paths/bytes, and prepended so it lands as entry rank 1 — the same slot
+    // the work item's own bundle file occupies under that arm — so
+    // `rank_one_cost` below reserves budget against the anchor, not the top
+    // critical (D8 discovery).
+    let mut sized: Vec<Sized> = Vec::new();
+    if let Anchor::History { paths, bytes, .. } = &anchor {
+        let repo_rel = paths.join(" + ");
+        let est = (*bytes as f64 / 4.0).ceil();
+        sized.push(Sized { repo_rel, reason: "history anchor".to_string(), bytes: *bytes, est, floor: false });
+    }
+    sized.extend(ranked.iter().map(|(rel, reason)| {
+        let repo_rel = format!("docs/knowledge/{rel}");
+        let bytes = std::fs::metadata(join_rel(dir, rel)).map(|m| m.len()).unwrap_or(0);
+        let est = (bytes as f64 / 4.0).ceil();
+        let floor = floor_paths.contains(&repo_rel);
+        Sized { repo_rel, reason: reason.clone(), bytes, est, floor }
+    }));
 
     let floor_cost: f64 = sized.iter().filter(|s| s.floor).map(|s| s.est).sum();
     let rank_one_cost = sized.first().map(|s| s.est).unwrap_or(0.0);
@@ -433,9 +465,12 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         entries.push(Value::Object(m));
     }
 
-    let decisions: Vec<Value> = match bee_of(&work_concept.data).get("decisions") {
-        Some(Value::Array(items)) => items.iter().filter(|v| v.is_string()).cloned().collect(),
-        _ => Vec::new(),
+    let decisions: Vec<Value> = match work_concept.map(|wc| bee_of(&wc.data)) {
+        Some(bee) => match bee.get("decisions") {
+            Some(Value::Array(items)) => items.iter().filter(|v| v.is_string()).cloned().collect(),
+            _ => Vec::new(),
+        },
+        None => Vec::new(),
     };
 
     // CONSERVATION (G11)
@@ -460,6 +495,12 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
 
     let mut manifest = Map::new();
     manifest.insert("work".into(), Value::String(work_id.to_string()));
+    manifest.insert("anchor".into(), {
+        let mut m = Map::new();
+        m.insert("kind".into(), Value::String(anchor.kind().to_string()));
+        m.insert("paths".into(), Value::Array(anchor.paths().into_iter().map(Value::String).collect()));
+        Value::Object(m)
+    });
     manifest.insert("decisions".into(), Value::Array(decisions));
     manifest.insert("budget".into(), num(budget));
     manifest.insert("estimator".into(), Value::String(CONTEXT_ESTIMATOR.to_string()));

@@ -148,6 +148,23 @@ pub fn write_json_atomic(file: &Path, value: &Value) -> std::io::Result<()> {
     result
 }
 
+/// The text sibling of [`write_json_atomic`]: no JSON encoding, no shape —
+/// write the caller's exact bytes to a unique tmp in the same directory,
+/// then rename over `file`. Same atomic temp-then-rename shape, same
+/// failure handling: on error the tmp is removed best-effort and the
+/// original error propagates.
+pub fn write_text_atomic(file: &Path, content: &str) -> std::io::Result<()> {
+    if let Some(dir) = file.parent() {
+        ensure_dir(dir)?;
+    }
+    let tmp = tmp_path_for(file);
+    let result = std::fs::write(&tmp, content).and_then(|()| std::fs::rename(&tmp, file));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
 /// appendJsonl: compact stringify + "\n", appended (creating parents).
 pub fn append_jsonl(file: &Path, value: &Value) -> std::io::Result<()> {
     if let Some(dir) = file.parent() {
@@ -181,6 +198,26 @@ mod tests {
             .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
             .collect();
         assert!(leftovers.is_empty());
+    }
+
+    #[test]
+    fn write_text_atomic_writes_the_exact_bytes_given() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("nested").join("promote-proposals.md");
+        write_text_atomic(&file, "# Title\n\nsome body, unquoted, unreformatted\n").unwrap();
+        let content = std::fs::read_to_string(&file).unwrap();
+        assert_eq!(content, "# Title\n\nsome body, unquoted, unreformatted\n");
+        // No tmp leftovers, same as write_json_atomic.
+        let leftovers: Vec<_> = std::fs::read_dir(file.parent().unwrap())
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty());
+
+        // Overwrite: the second write replaces the first, atomically.
+        write_text_atomic(&file, "replaced\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "replaced\n");
     }
 
     // R5 port of the non-race half of scripts/tests/test_state_write_concurrency.mjs.

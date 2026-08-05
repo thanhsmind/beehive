@@ -364,26 +364,38 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
         ));
     }
     let concepts = collect_concepts(dir)?;
-    let Some(work_concept) = concepts.iter().find(|c| {
-        c.data.get("type").and_then(Value::as_str) == Some("bee.work-item")
-            && bee_of(&c.data).get("id").and_then(Value::as_str) == Some(work_id)
-    }) else {
+    // D5 then D1/D6: a bee.work-item concept whose bee.id matches always
+    // wins; otherwise docs/history/<work_id>/CONTEXT.md and/or plan.md,
+    // whichever exist; otherwise no anchor at all — unknown_work, unchanged
+    // byte for byte (D38), same shared resolver context.rs and kctx.rs use.
+    let Some(anchor) = resolve_anchor(&concepts, root, work_id) else {
         return Some(Promo::Thrown(format!(
             "knowledge promote: unknown_work — no bee.work-item concept in docs/knowledge/ carries bee.id \"{work_id}\" (D38)."
         )));
     };
+    let work_concept: Option<&Concept> = match &anchor {
+        Anchor::WorkItem(c) => Some(*c),
+        Anchor::History { .. } => None,
+    };
 
-    let work_bee = bee_of(&work_concept.data);
+    let work_bee = work_concept.map(|c| bee_of(&c.data)).unwrap_or_default();
     let work_areas: Vec<String> = str_array(&work_bee, "areas")
         .into_iter()
         .filter(|a| !a.is_empty())
         .collect();
     let work_decisions = str_array(&work_bee, "decisions");
-    let work_tags = str_array(&work_concept.data, "tags");
+    let work_tags = work_concept.map(|c| str_array(&c.data, "tags")).unwrap_or_default();
     let cells = read_capped_cell_traces(root, work_id)?;
 
     // ── (a) delivery draft ────────────────────────────────────────────────
-    let work_dir = dir_of(&work_concept.path);
+    // A history anchor is not a bundle concept and has no directory of its
+    // own to save beside — the proposed save path is the canonical
+    // docs/knowledge/work/<slug>/delivery.md (a PROPOSAL; nothing is
+    // written, so D5 holds).
+    let work_dir = match work_concept {
+        Some(wc) => dir_of(&wc.path).to_string(),
+        None => format!("work/{work_id}"),
+    };
     let delivery_path = if work_dir.is_empty() {
         "delivery.md".to_string()
     } else {
@@ -396,10 +408,10 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
     js_default_sort(&mut capped_dates);
     let timestamp = match capped_dates.last() {
         Some(d) => Some(d.clone()),
-        None => iso_date(work_concept.data.get("timestamp")),
+        None => work_concept.and_then(|wc| iso_date(wc.data.get("timestamp"))),
     };
     let deviation_count: usize = cells.iter().map(|c| c.deviations.len()).sum();
-    let work_title = match work_concept.data.get("title") {
+    let work_title = match work_concept.and_then(|wc| wc.data.get("title")) {
         Some(Value::String(s)) if !s.is_empty() => s.clone(),
         _ => work_id.to_string(),
     };
@@ -434,7 +446,10 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
     }
     delivery_bee.insert(
         "required_context".into(),
-        Value::Array(vec![Value::String(work_concept.path.clone())]),
+        Value::Array(match work_concept {
+            Some(wc) => vec![Value::String(wc.path.clone())],
+            None => anchor.paths().into_iter().map(Value::String).collect(),
+        }),
     );
     if !work_decisions.is_empty() {
         delivery_bee.insert(
@@ -442,7 +457,10 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
             Value::Array(work_decisions.iter().cloned().map(Value::String).collect()),
         );
     }
-    let mut sources = vec![Value::String(format!("docs/knowledge/{}", work_concept.path))];
+    let mut sources: Vec<Value> = match work_concept {
+        Some(wc) => vec![Value::String(format!("docs/knowledge/{}", wc.path))],
+        None => anchor.paths().into_iter().map(Value::String).collect(),
+    };
     sources.extend(cells.iter().map(|c| Value::String(c.trace_path.clone())));
     delivery_bee.insert("sources".into(), Value::Array(sources));
     if let Some(lane) = work_bee.get("lane").and_then(Value::as_str).filter(|s| !s.is_empty()) {
@@ -506,10 +524,13 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
     body.extend([String::new(), "## Deviations".into(), String::new()]);
     body.extend(deviation_lines);
     body.extend([String::new(), "## Provenance".into(), String::new()]);
+    let provenance_subject = match work_concept {
+        Some(wc) => format!("the work item `docs/knowledge/{}`", wc.path),
+        None => format!("the anchor `{}`", anchor.paths().join("`, `")),
+    };
     body.push(format!(
-        "Proposed by `bee knowledge promote --work {work_id}` from {} capped cell trace(s) in `.bee/cells/` and the work item `docs/knowledge/{}`. Every line above is copied from a trace or from the work item; nothing here is curated truth until a human or agent accepts it.",
-        cells.len(),
-        work_concept.path
+        "Proposed by `bee knowledge promote --work {work_id}` from {} capped cell trace(s) in `.bee/cells/` and {provenance_subject}. Every line above is copied from a trace or from the work item; nothing here is curated truth until a human or agent accepts it.",
+        cells.len()
     ));
     body.push(String::new());
     let delivery_content = format!("{}\n{}", emit_frontmatter(&delivery_data).ok()?, body.join("\n"));
@@ -671,9 +692,25 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
         pattern_candidates.push(Value::Object(cand));
     }
 
+    // work_item carries the concept path under a work-item anchor, unchanged;
+    // under a history anchor there is no concept, so it carries the anchor's
+    // own repo-relative path(s) instead (D1).
+    let work_item_value = match work_concept {
+        Some(wc) => wc.path.clone(),
+        None => anchor.paths().join(" + "),
+    };
     let mut out = Map::new();
     out.insert("work".into(), Value::String(work_id.to_string()));
-    out.insert("work_item".into(), Value::String(work_concept.path.clone()));
+    out.insert("work_item".into(), Value::String(work_item_value));
+    out.insert("anchor".into(), {
+        let mut m = Map::new();
+        m.insert("kind".into(), Value::String(anchor.kind().to_string()));
+        m.insert(
+            "paths".into(),
+            Value::Array(anchor.paths().into_iter().map(Value::String).collect()),
+        );
+        Value::Object(m)
+    });
     out.insert(
         "cells".into(),
         Value::Array(cells.iter().map(cell_value).collect()),
@@ -699,8 +736,17 @@ pub(crate) fn promote_text(p: &Value) -> String {
         cells.len(),
         if cells.is_empty() { String::new() } else { format!(": {}", ids.join(", ")) }
     );
+    let anchor_paths: Vec<String> = p["anchor"]["paths"]
+        .as_array()
+        .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+        .unwrap_or_default();
     let mut lines = vec![
         head,
+        format!(
+            "anchor: {} — {}",
+            p["anchor"]["kind"].as_str().unwrap_or(""),
+            anchor_paths.join(", ")
+        ),
         "PROPOSAL ONLY — nothing was written. Applying any section below is a human or agent decision.".to_string(),
         String::new(),
         format!("(a) DELIVERY DRAFT — save as {}", p["delivery"]["repo_path"].as_str().unwrap_or("")),

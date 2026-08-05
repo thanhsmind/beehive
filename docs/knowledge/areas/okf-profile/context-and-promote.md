@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Bee OKF Profile — the context consumer, the promote proposer, and the session preamble"
-description: "The budget-aware manifest a work item's curated context is returned as, the measured relevance ranking that cuts critical patterns without losing one, the propose-never-write loop closer, and the preamble that makes the bundle load-bearing — every section of which resolves through the one bundle predicate."
-timestamp: 2026-07-24
+description: "The budget-aware manifest a work item's curated context is returned as, the measured relevance ranking that cuts critical patterns without losing one, the propose-never-write loop closer, the shared anchor resolver that lets both verbs work from a docs/history/ fallback when no work-item concept exists, and the preamble that makes the bundle load-bearing — every section of which resolves through the one bundle predicate, including the critical-patterns digest's own relevance ranking."
+timestamp: 2026-08-05
 bee:
   id: okf-profile-context-and-promote
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3, i54-closeout D3]
-  sources: ["okf-foundation cell okf-9 (`bee knowledge promote` — the propose-never-write loop closer, B5; trace in `.bee/cells/`, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B5", "docs/specs/okf-profile.md#B6", "docs/specs/okf-profile.md#B6b", "docs/specs/okf-profile.md#B7", "docs/specs/okf-profile.md#P2", "docs/specs/okf-profile.md#P3", "okf-integration-close-f4 cell f4-3 (the preamble stops printing the retired model — bundle-routed digest and project map, both no-bundle branches proven byte-identical; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`, "i54-closeout cell i54-closeout-3 (knowledge context --lane budget presets; trace in .bee/cells/, 2026-07-24)"]
+  decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3, i54-closeout D3, "knowledge-loop D1/D5/D6/D7/D8 (one shared anchor resolver; a history CONTEXT.md/plan.md fallback when no work-item concept matches; zero_signal reported not thrown under it; the fallback reaches context, promote, kctx and dispatch prepare)"]
+  sources: ["okf-foundation cell okf-9 (`bee knowledge promote` — the propose-never-write loop closer, B5; trace in `.bee/cells/`, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B5", "docs/specs/okf-profile.md#B6", "docs/specs/okf-profile.md#B6b", "docs/specs/okf-profile.md#B7", "docs/specs/okf-profile.md#P2", "docs/specs/okf-profile.md#P3", "okf-integration-close-f4 cell f4-3 (the preamble stops printing the retired model — bundle-routed digest and project map, both no-bundle branches proven byte-identical; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`, "i54-closeout cell i54-closeout-3 (knowledge context --lane budget presets; trace in .bee/cells/, 2026-07-24)", "knowledge-loop cell kl-1 (anchor.rs + context.rs/kctx.rs fallback, D5/D6/D7/D8; commit 1b2a8253, 2026-08-05)", "knowledge-loop cell kl-2 (promote.rs consumes the resolver; dispatch-prepare manifest proof; commit e6f99a7a, 2026-08-05)", CONTEXT.md `docs/history/knowledge-loop/CONTEXT.md`]
   authoritative_for: "okf-profile: the context consumer, the promote proposer, and the session preamble"
 ---
 
@@ -21,6 +21,16 @@ work earned and never writes it — plus the session preamble that makes the bun
 rather than optional.
 
 ## Behaviors & Operations
+
+**B9 — `context` and `promote` resolve their anchor through one shared resolver, and a work-item concept always wins (D1, D5, D6, D8).** Both verbs used to duplicate their own `--work` resolution — separately tagged `D27` in `context` and `D38` in `promote`, already drifted from each other — plus a third verbatim port copy in `drivers/kctx.rs`. All three now call one function, `resolve_anchor` in `verbs/knowledge/anchor.rs`:
+
+- A `bee.work-item` concept whose `bee.id` matches the given work argument ALWAYS wins (D5). An existing work item is never displaced by the fallback below, and the two work items that already resolve this way today keep resolving exactly as they did before this feature.
+- When no work-item concept matches, the anchor is the feature's own history directory: `docs/history/<id>/CONTEXT.md` and `docs/history/<id>/plan.md`, whichever of the two exist on disk — both together when both do (D1, D6). The resolver only reads; no work-item file is ever auto-created, and nothing under `docs/knowledge/work/` is created, moved, or deleted by either verb (D5).
+- When neither a matching work-item concept nor any history file exists, both verbs keep the refusal they always had: a typed `unknown_work` error, byte for byte, still carrying its historical `(D27)` tag in `context` and `(D38)` tag in `promote` — the resolver changed how the anchor is found, never the shape of "found nothing."
+
+Both verbs name what they resolved. The `--json` payload for each carries an `anchor` object (`kind`: `"work-item"` or `"history"`, `paths`: the file or files behind it), and the plain-text output states the same in one line, so a caller can always tell which anchor answered the call and not only that one did.
+
+`bee dispatch prepare` consumes the same resolver through the port copy in `drivers/kctx.rs` (D8): a dispatched worker prompt for a feature whose only anchor is its history directory now carries a learned-context manifest, where before the swallowed `unknown_work` refusal left it with none.
 
 **B5 — `promote` proposes; it never writes (D38).** `bee knowledge promote --work <id>` resolves
 the work item by `bee.id` (the same resolution `context` performs — an unresolvable id exits 1 with
@@ -39,6 +49,12 @@ writes}`, and **`writes` is always `[]`** — the machine-readable form of the c
 touches `.bee/*.json(l)`, and never touches anything else. Deciding to save a proposal — and
 editing it into curated prose first — is a human or agent decision.
 
+Under a history anchor (B9), the proposed delivery save path in section (a) is still the canonical
+`docs/knowledge/work/<id>/delivery.md` — the draft names where a human or agent would save it, never
+where `promote` itself writes. `writes` stays `[]` on every anchor kind, always: D38 is unchanged by
+the fallback. An empty `bee.areas` list (no work-item concept means none to read) keeps the existing
+"None: the work item declares no bee.areas…" render for section (b).
+
 **B6 — `context` returns a manifest, never content (D27).** `bee knowledge context --work <id>
 --budget <tokens>` resolves the work item by `bee.id`, walks its `bee.required_context`
 **transitively** with a cycle guard that dedupes silently (a cycle is never an error), adds every
@@ -53,6 +69,10 @@ overshooting entry ends the manifest, and it plus every lower-ranked entry is na
 so the output always means "the highest-ranked context that fits". The estimator is `bytes/4` and
 the output **names itself as an estimate** — bee vendors no tokenizer (D12), so the number is never
 dressed up as a token count. An unresolvable id exits 1 with a typed `unknown_work` error.
+
+Under a history anchor (B9), the anchor itself takes the work item's rank-1 slot, sized from the
+real byte count of the history files behind it — `bee.plan` sibling and `required_context` steps are
+simply empty and skipped, never panicking on a path the bundle does not own.
 
 **B6b — critical patterns are ranked by relevance, cut, floored and conserved (G5/G11).** D27's
 original "include every critical pattern" rule was written when three patterns existed. At 49 it
@@ -88,7 +108,12 @@ Three properties make the cut safe to trust:
   **fails** with a typed `zero_signal` error. A ranking where most items tie at zero is a path sort
   wearing a relevance label, and shipping it green is the defect — the guard exists so a future
   signal cannot rot into one silently. Below that population the count is reported but not enforced:
-  a two-concept bundle is not a ranking problem.
+  a two-concept bundle is not a ranking problem. Under a history anchor (B9, D7), this guard
+  **reports instead of failing**: `score_critical_relevance` also weights the work concept's own
+  `tags` and `bee.areas` (`TAG_WEIGHT`/`AREA_WEIGHT`), fields a history anchor has none of, so more
+  criticals land at exactly 0.0 for a reason that is an artifact of the anchor kind rather than a
+  real relevance failure. The population-size floor above still governs whether the count is
+  enforced at all. A work-item anchor still throws exactly as it always has.
 
 Ties break by path, so the order is total and two runs over the same bundle are byte-identical.
 
@@ -125,11 +150,17 @@ and handed to each:
   bundle holds — the number of areas and concepts, derived from the single inventory walk, never a
   second directory scan and never a hand-maintained list. The compatibility surface is named for
   what it is, never as "specced areas" to read before the code.
-- **The critical-patterns digest** is built from the bundle's own generated index. It states the
-  **total** number of critical patterns, lists the **most recent** ones, and names the full index.
-  Most-recent is load-bearing: the index rows sit in date order, so taking the first N would surface
-  the oldest lessons forever and never a recent one. The digest deliberately does **not** rank —
-  ranking needs a work item to rank against (B1-B6), and a preamble has none.
+- **The critical-patterns digest ranks by relevance to the bound feature, not by recency
+  (knowledge-loop D3, cell kl-4).** The "a preamble has no work item to rank against" limit above no
+  longer holds: the digest resolves the bound feature's own anchor through the same shared resolver
+  (B9) and scores the bundle's critical rows with `context.rs`'s own IDF ranker (B6b) — reading
+  **only** the concept bodies the index's `## Critical patterns` rows name, never `collect_concepts`,
+  which would put roughly 1.41 MB of parsing (264 files) on every session start against today's one
+  file, 22,692 bytes. A row whose link target resolves to no file on disk is dropped, and the dropped
+  count is named in the header, so a stale `index.md` degrades visibly instead of silently. The
+  header always states which mode produced the rows below it: ranked by relevance to the named
+  feature, or a recency fallback with its own reason — no feature bound, no anchor resolved, or
+  nothing left to score — so a reader never mistakes one for the other.
 - **The scribing-debt nudge** names the resolved target, bundle or compatibility surface, rather
   than hardcoding one.
 
@@ -153,6 +184,11 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
 - `promote` invents nothing: every proposed line is copied from a capped cell trace or from the
   work item concept (D10). A cell that was never capped, and a cell belonging to another feature,
   are never mined.
+- **A work-item concept always outranks the history fallback, and the fallback never authors a
+  file (D1, D5, D6).** `resolve_anchor` (B9) picks a matching `bee.work-item` concept first, every
+  time; only its absence opens the `docs/history/<id>/CONTEXT.md` / `plan.md` fallback, and reading
+  those files never creates, moves, or deletes anything under `docs/knowledge/work/`. `unknown_work`
+  survives, byte for byte, when neither anchor exists.
 
 ## Pointers (implementation)
 
@@ -161,3 +197,12 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
   (`handleKnowledgePromote` in `.bee/bin/bee`) only prints what they return.
 - CLI wiring: `.bee/bin/lib/command-registry.mjs` (the `knowledge` group) +
   `.bee/bin/bee` dispatch (`HANDLERS`).
+- Shared anchor resolver (B9): `resolve_anchor` in
+  `packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs`; consumed by `context.rs`, `promote.rs`,
+  and the port copy in `drivers/kctx.rs` (reached by `bee dispatch prepare` via `drivers/prepare.rs`).
+  Evidence: trace `.bee/cells/kl-1.json`, commit `1b2a8253`; trace `.bee/cells/kl-2.json`, commit
+  `e6f99a7a`.
+- Digest relevance ranking (B8, D3): `bundle_critical_patterns_digest` in
+  `packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs`, reusing
+  `score_critical_relevance` from `verbs/knowledge/context.rs` against the B9 anchor. Evidence:
+  trace `.bee/cells/kl-4.json`, commit `d74ca11c`.
