@@ -31,7 +31,7 @@ use std::cell::RefCell;
 
 
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 
 
@@ -183,6 +183,82 @@ impl Ctx {
     fn granted_worktree(&self) -> Option<&LinkedRoots> {
         self.linked.as_ref().filter(|l| l.granted())
     }
+}
+
+// ─── promote proposals nobody has applied (D3, kf-2) ───────────────────────
+//
+// `bee close` writes docs/history/<feature>/promote-proposals.md on every
+// green close (kl-3); nothing has ever read it back. A proposal counts as
+// APPLIED once its feature carries a recorded compounding run — the SAME
+// best-scribing-stamp reading `scribing_debt` already takes here (ledger,
+// then lane, then state; latest wins) — at or after the proposal file's own
+// mtime; otherwise it is open work. `bee orient` (orient.rs) and the session
+// preamble (hooks::session_preamble::render) both call this ONE scan —
+// neither re-parses docs/history/ its own way.
+
+pub(crate) struct UnappliedPromoteProposal {
+    pub(crate) feature: String,
+    pub(crate) counts: String,
+    pub(crate) path: String,
+}
+
+/// The proposal file's own opening line already carries its count
+/// (`… — N capped cell(s): id, id, …`, promote.rs's `promote_text`) — lift
+/// just the count clause; the id list belongs to the file, not a one-line
+/// surface.
+fn promote_proposal_counts(text: &str) -> String {
+    let first_line = text.lines().next().unwrap_or("");
+    let Some(idx) = first_line.rfind(" — ") else { return "unknown count".to_string() };
+    let after = &first_line[idx + " — ".len()..];
+    match after.find(':') {
+        Some(cut) => after[..cut].trim().to_string(),
+        None => after.trim().to_string(),
+    }
+}
+
+pub(crate) fn unapplied_promote_proposals(root: &Path) -> Vec<UnappliedPromoteProposal> {
+    let history_dir = root.join("docs").join("history");
+    let Ok(rd) = std::fs::read_dir(&history_dir) else { return Vec::new() };
+    let mut features: Vec<String> = rd
+        .flatten()
+        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    features.sort();
+
+    // Read once, reused across every feature — the ledger/state helpers
+    // already used by `scribing_debt` (cells.rs) and its preamble twin
+    // (hooks::session_preamble::store), never re-derived a third way.
+    let state = crate::hooks::session_preamble::read_state(root);
+    let ledger = crate::hooks::session_preamble::read_scribing_ledger(root);
+
+    let mut out = Vec::new();
+    for feature in features {
+        let file = history_dir.join(&feature).join("promote-proposals.md");
+        let Ok(meta) = std::fs::metadata(&file) else { continue };
+        let Ok(modified) = meta.modified() else { continue };
+        let mtime_ms = modified
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as f64)
+            .unwrap_or(0.0);
+        let feature_value = Value::String(feature.clone());
+        let threshold = crate::hooks::session_preamble::best_scribing_stamp_ms(
+            root,
+            &feature_value,
+            &ledger,
+            &state,
+        );
+        if threshold.map(|t| t >= mtime_ms).unwrap_or(false) {
+            continue; // a compounding run at or after the proposal — applied
+        }
+        let text = std::fs::read_to_string(&file).unwrap_or_default();
+        out.push(UnappliedPromoteProposal {
+            counts: promote_proposal_counts(&text),
+            path: format!("docs/history/{feature}/promote-proposals.md"),
+            feature,
+        });
+    }
+    out
 }
 
 #[cfg(test)]

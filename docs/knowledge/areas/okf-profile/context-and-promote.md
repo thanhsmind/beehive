@@ -205,6 +205,19 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
   `packages/` at all — the bundle is deliberately technology-agnostic, so no file-to-area mapping
   can be derived from it. The scribing stamp is the one place that mapping is already asserted.
 
+- **The session preamble invites retrieval for every anchorable feature, and names an unapplied
+  proposal as open work (D1, D2, D3 of knowledge-in-flow).** The preamble's knowledge block used
+  to open only when a `bee.work-item` concept existed, so 162 of the 164 features the resolver can
+  now anchor were never told the retrieval command existed, and it printed advice to author the
+  very file D5 made unnecessary. It now resolves through the same three-arm resolver, prints the
+  runnable `bee knowledge context` command whenever ANY arm answers, names which arm answered, and
+  prints nothing at all when none does. Both that block and the critical-pattern digest anchor on
+  the SESSION'S ACTIVE feature — the bound lane when there is one — never the default record
+  unconditionally; a live preamble was measured ranking against a feature closed hours earlier.
+  Separately, `bee orient` and the preamble both name every `docs/history/<slug>/promote-proposals.md`
+  that no compounding run has yet answered, with its feature and counts. That surfacing is a
+  REPORT: it refuses nothing, blocks nothing, and changes no exit code.
+
 ## Pointers (implementation)
 
 - Proposal builder (B5): `buildPromotion` in the same module, with `readCappedCellTraces` as its

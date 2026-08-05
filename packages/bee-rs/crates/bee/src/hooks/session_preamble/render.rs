@@ -184,8 +184,39 @@ pub fn handoff_block_lines(handoff: &Value, outcome: Option<&HandoffOutcome>) ->
     lines
 }
 
-/// inject.mjs knowledgeContextLines (okf-8, D38) — the startup bridge.
-/// Silence beats a nag: no active feature emits nothing at all.
+/// A work item's one canonical location — the same path the retired advice
+/// line below named — read as ONE candidate file, never a bundle walk: the
+/// cheaper reading `rank_critical_rows` (budget.rs) already takes for the
+/// same reason (kl-4 deliberately avoided the 1.24 MB collect_concepts cost
+/// just to answer a yes/no). A missing or unparsed candidate reads as an
+/// empty-data row — resolve_anchor's WorkItem arm simply will not match it,
+/// the same "unreadable file, keep the row" direction collect_concepts
+/// itself takes.
+fn work_item_candidate(root: &Path, feature: &str) -> Vec<Concept> {
+    let rel = format!("work/{feature}/work-item.md");
+    let path = join_rel(&bundle_dir(root), &rel);
+    let data = read_file_lossy(&path).and_then(|text| parse_frontmatter(&text)).unwrap_or_default();
+    vec![Concept { path: rel, data }]
+}
+
+impl crate::verbs::knowledge::ConceptLike for Concept {
+    fn concept_path(&self) -> &str {
+        &self.path
+    }
+    fn concept_data(&self) -> &Map<String, Value> {
+        &self.data
+    }
+}
+
+/// inject.mjs knowledgeContextLines (okf-8, D38), replaced under D1
+/// (kf-1): the gate is now `resolve_anchor` (verbs/knowledge/anchor.rs) —
+/// the SAME arbiter `bee knowledge context` itself answers to — instead of
+/// a hand-rolled "does a bee.work-item concept exist" check that silently
+/// excluded the 162 of 164 anchorable features whose only anchor is
+/// docs/history or a scribing stamp. Silence beats a nag: no anchor at all
+/// emits nothing — never advice to author a work-item file (D5 made that
+/// file optional; the old line now contradicted the shipped design and is
+/// deleted outright, not replaced).
 pub(crate) fn knowledge_context_lines(root: &Path, record: &JMap) -> Vec<String> {
     let feature = match record.get("feature") {
         Some(Value::String(s)) => js_trim(s).to_string(),
@@ -194,27 +225,20 @@ pub(crate) fn knowledge_context_lines(root: &Path, record: &JMap) -> Vec<String>
     if feature.is_empty() || is_no_work_phase(record) {
         return Vec::new();
     }
-    let has_work_item = collect_concepts(root).iter().any(|concept| {
-        if !matches!(concept.data.get("type"), Some(Value::String(t)) if t == "bee.work-item") {
-            return false;
-        }
-        let bee = match concept.data.get("bee") {
-            Some(Value::Object(m)) => m.clone(),
-            _ => JMap::new(),
-        };
-        strict_eq(bee.get("id"), Some(&json!(feature.clone())))
-    });
-    if !has_work_item {
-        return vec![format!(
-            "- No knowledge work item for \"{feature}\" — offer to author docs/knowledge/work/{feature}/work-item.md (template: docs/knowledge/areas/okf-profile/concept-model-and-authoring.md, Templates) so the next session starts from curated context."
-        )];
-    }
+    let candidates = work_item_candidate(root, &feature);
+    let Some(anchor) = crate::verbs::knowledge::resolve_anchor(&candidates, root, &feature) else {
+        return Vec::new();
+    };
     let budget = knowledge_context_budget_for_mode(record.get("mode"));
     vec![
         "### Knowledge context — load it before code".to_string(),
         // CUTOVER wording divergence: inject.mjs:260 spelled this
-        // `node .bee/bin/bee.mjs knowledge context …`.
-        format!("- `.bee/bin/bee knowledge context --work {feature} --budget {budget}`"),
+        // `node .bee/bin/bee.mjs knowledge context …`. The anchor kind is
+        // named so the reader knows what the manifest was ranked against.
+        format!(
+            "- `.bee/bin/bee knowledge context --work {feature} --budget {budget}` (anchor: {})",
+            anchor.kind()
+        ),
         "- Run it and read the manifest's files before touching code — that manifest is this feature's curated context, and it replaces scanning docs/history.".to_string(),
     ]
 }
@@ -267,6 +291,38 @@ pub(crate) fn spec_project_map_lines(root: &Path) -> Vec<String> {
         "- Specced areas: {area_count} (docs/specs/ — read the spec before the code)"
     ));
     lines
+}
+
+/// kf-2 (D3): docs/history/<feature>/promote-proposals.md, written by every
+/// green `bee close` and never read back until now. Same report-only shape
+/// as the Scribing debt / Capture queue blocks build_session_preamble
+/// (budget.rs) already renders just above where this is called: a header
+/// naming the count, one line naming the features — truncated the same
+/// "heaviest first, +N more" way Orphaned scribing debt truncates, because
+/// this list grows with docs/history/, not with what a reader can act on in
+/// one sitting. `bee orient` (verbs/status_full/orient.rs) reads the exact
+/// same scan (`unapplied_promote_proposals`), never a second hand-rolled walk
+/// of the same directory.
+pub(crate) fn promote_proposal_lines(root: &Path) -> Vec<String> {
+    let proposals = crate::verbs::status_full::unapplied_promote_proposals(root);
+    if proposals.is_empty() {
+        return Vec::new();
+    }
+    const SHOWN: usize = 3;
+    let shown = std::cmp::min(SHOWN, proposals.len());
+    let named = proposals[..shown]
+        .iter()
+        .map(|p| format!("{} ({}): {}", p.feature, p.counts, p.path))
+        .collect::<Vec<_>>()
+        .join("; ");
+    let more = proposals.len() - shown;
+    let tail = if more > 0 { format!(" +{more} more") } else { String::new() };
+    vec![
+        format!("### Unapplied promote proposal(s): {}", proposals.len()),
+        format!(
+            "- {named}{tail} — never applied to docs/knowledge/ (D3): review the proposal, then apply what belongs or record why not."
+        ),
+    ]
 }
 
 pub(crate) fn bundle_project_map_lines(root: &Path) -> Vec<String> {

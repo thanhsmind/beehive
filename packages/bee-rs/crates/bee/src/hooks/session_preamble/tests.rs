@@ -91,7 +91,7 @@ use crate::version::BEE_VERSION;
         let text = render(root);
         assert!(!text.contains(".mjs"), "an .mjs spelling survived:\n{text}");
         assert!(
-            text.contains("- `.bee/bin/bee knowledge context --work f1 --budget 20000`"),
+            text.contains("- `.bee/bin/bee knowledge context --work f1 --budget 20000` (anchor: work-item)"),
             "knowledge-context command missing or misspelled:\n{text}"
         );
     }
@@ -186,18 +186,49 @@ use crate::version::BEE_VERSION;
         assert!(!render(tmp.path()).contains("### Doc links"));
     }
 
+    /// D1 (kf-1): resolve_anchor is the ONE gate, so a feature anchored by
+    /// docs/history or its scribing stamp gets the exact same invitation a
+    /// work item already got — the anchor kind is named so the reader knows
+    /// what the manifest was ranked against — and a feature with no anchor
+    /// at all gets silence, never the retired "author a work-item file"
+    /// advice (D5 made that file optional; the line contradicted it).
     #[test]
-    fn the_knowledge_context_bridge_is_silent_with_no_active_work() {
+    fn the_knowledge_context_bridge_invites_every_anchor_kind_and_stays_silent_with_none() {
         let tmp = minimal_repo();
         write(tmp.path(), "docs/knowledge/areas/a/c.md", "---\ntype: bee.area\n---\nx\n");
         // idle: nothing at all, even with a bundle present.
         assert!(!render(tmp.path()).contains("### Knowledge context"));
-        // An active feature with NO work item gets exactly one offer line.
+
+        // An active feature with NO anchor at all: silence, no advice line.
         write(tmp.path(), ".bee/state.json", r#"{"phase":"swarming","feature":"f9"}"#);
         let text = render(tmp.path());
-        assert!(text.contains("- No knowledge work item for \"f9\" —"), "{text}");
         assert!(!text.contains("### Knowledge context"), "{text}");
-        // With a work item it becomes the three-line pointer, budget by mode.
+        assert!(!text.contains("work-item.md"), "{text}");
+        assert!(!text.contains("No knowledge work item"), "{text}");
+
+        // Anchored ONLY by docs/history/<slug>/CONTEXT.md -> invited, named "history".
+        write(tmp.path(), "docs/history/f9/CONTEXT.md", "# f9\nsome context\n");
+        let text = render(tmp.path());
+        assert!(text.contains("### Knowledge context — load it before code"), "{text}");
+        assert!(
+            text.contains("- `.bee/bin/bee knowledge context --work f9 --budget 20000` (anchor: history)"),
+            "{text}"
+        );
+
+        // Anchored ONLY by the scribing ledger stamp -> invited, named "ledger".
+        std::fs::remove_file(tmp.path().join("docs/history/f9/CONTEXT.md")).unwrap();
+        write(
+            tmp.path(),
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"ts\":\"2026-08-05T07:00:30.067Z\",\"feature\":\"f9\",\"areas\":[\"a\"]}\n",
+        );
+        let text = render(tmp.path());
+        assert!(
+            text.contains("- `.bee/bin/bee knowledge context --work f9 --budget 20000` (anchor: ledger)"),
+            "{text}"
+        );
+
+        // With a work item it keeps the invitation, named "work-item", budget by mode.
         write(
             tmp.path(),
             "docs/knowledge/work/f9/work-item.md",
@@ -206,7 +237,7 @@ use crate::version::BEE_VERSION;
         write(tmp.path(), ".bee/state.json", r#"{"phase":"swarming","feature":"f9","mode":"tiny"}"#);
         let text = render(tmp.path());
         assert!(
-            text.contains("- `.bee/bin/bee knowledge context --work f9 --budget 8000`"),
+            text.contains("- `.bee/bin/bee knowledge context --work f9 --budget 8000` (anchor: work-item)"),
             "{text}"
         );
     }
@@ -219,6 +250,7 @@ use crate::version::BEE_VERSION;
             "### Scribing debt:",
             "### Orphaned scribing debt:",
             "### Capture queue:",
+            "### Unapplied promote proposal(s):",
             "### Ceiling-model scarcity:",
             "### Critical patterns (digest)",
             "### Recent decisions",
@@ -265,6 +297,54 @@ use crate::version::BEE_VERSION;
         assert!(text.contains("- 2/3 cells tiered ceiling (> 40%)"), "{text}");
         assert!(text.contains("### Critical patterns (digest)\n- pattern one"), "{text}");
         assert!(text.contains("### Recent decisions\n- «a» (2026-01-01)"), "{text}");
+    }
+
+    /// D3 (kf-2): `bee close` writes docs/history/<feature>/promote-proposals.md
+    /// on every green close and nothing read it back until this line. A
+    /// proposal names its feature, its own count clause, and its path — and
+    /// goes silent the moment a compounding run is recorded at or after the
+    /// file's own mtime, never before.
+    #[test]
+    fn an_unapplied_promote_proposal_is_named_and_a_later_compounding_run_silences_it() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/history/f2/promote-proposals.md",
+            "promote proposal for work item \"f2\" (docs/history/f2/CONTEXT.md) — 3 capped cell(s): a-1, a-2, a-3\nanchor: history — docs/history/f2/CONTEXT.md\n",
+        );
+        let text = render(root);
+        assert!(text.contains("### Unapplied promote proposal(s): 1"), "{text}");
+        assert!(
+            text.contains("- f2 (3 capped cell(s)): docs/history/f2/promote-proposals.md"),
+            "{text}"
+        );
+
+        // A compounding run recorded strictly BEFORE the file's own mtime
+        // never clears it — the proposal still postdates the last sync.
+        write(
+            root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"ts\":\"2020-01-01T00:00:00.000Z\",\"feature\":\"f2\",\"areas\":[]}\n",
+        );
+        assert!(render(root).contains("### Unapplied promote proposal(s): 1"), "{}", render(root));
+
+        // A compounding run AT OR AFTER the file's own mtime silences it.
+        let mtime_ms = std::fs::metadata(root.join("docs/history/f2/promote-proposals.md"))
+            .unwrap()
+            .modified()
+            .unwrap()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64;
+        let ts = crate::verbs::status_full::to_iso(mtime_ms + 1000.0);
+        write(
+            root,
+            ".bee/logs/scribing-runs.jsonl",
+            &format!("{{\"ts\":\"{ts}\",\"feature\":\"f2\",\"areas\":[]}}\n"),
+        );
+        let text = render(root);
+        assert!(!text.contains("Unapplied promote proposal"), "{text}");
     }
 
     /// THE BUDGET LAW. The preamble is injected into every session, so a
@@ -736,4 +816,70 @@ use crate::version::BEE_VERSION;
         let text = build_session_preamble(root, Some("s2"), None);
         assert!(text.contains("- Phase: idle | Mode: none | Feature: none"), "{text}");
         assert!(!text.contains("other active lane(s)"), "{text}");
+    }
+
+    /// The session id `session_binding`'s own resolver will actually look
+    /// for: its env chain (BEE_SESSION_ID / CLAUDE_CODE_SESSION_ID) outranks
+    /// single-live-session adoption, and a real test runner may already
+    /// export one of those — so a hard-coded fixture id would be invisible
+    /// to the code under test. Ask the resolver instead (same pattern
+    /// `verbs/state_group/tests.rs::fixture_session_id` already uses).
+    fn fixture_session_id(root: &Path) -> String {
+        crate::verbs::state_group::resolve_session_id_no_flag(root)
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "sess-1".to_string())
+    }
+
+    /// D2 (kf-1): the knowledge bridge and the critical-pattern digest must
+    /// read the SESSION's active feature — the bound lane when the session
+    /// has one — even when the SessionStart hook's own `session_id` (here:
+    /// None) never named the session record that carries the binding. The
+    /// fallback resolves through the exact chain `state gate`/`state set`/
+    /// `state route` already read through (`session_binding`), the same
+    /// shape the measured bug had: the default record still named a feature
+    /// closed hours earlier while the calling session was actively lane-bound.
+    #[test]
+    fn an_unbound_hook_session_id_still_finds_the_process_bound_lane_over_the_default_record() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(root, ".bee/state.json", r#"{"phase":"compounding-complete","feature":"stale-closed"}"#);
+        let sid = fixture_session_id(root);
+        write(
+            root,
+            &format!(".bee/sessions/{sid}.json"),
+            &format!(r#"{{"id":"{sid}","lane":"f-active"}}"#),
+        );
+        write(
+            root,
+            ".bee/lanes/f-active.json",
+            r#"{"feature":"f-active","phase":"swarming","mode":"standard"}"#,
+        );
+        write(root, "docs/history/f-active/CONTEXT.md", "# f-active\nactive work\n");
+        write(
+            root,
+            "docs/knowledge/index.md",
+            "## Critical patterns\n- [p1](areas/x/p1.md)\n\n## Next\n",
+        );
+        write(root, "docs/knowledge/areas/x/p1.md", "---\ntype: bee.pattern\n---\nsome pattern text\n");
+
+        // No session_id given to the hook (the common cold-start shape) —
+        // resolution must still land on the process-bound lane, not the
+        // default record's stale feature.
+        // The header line still names the DEFAULT record's own phase/feature
+        // (untouched by D2 — only the knowledge bridge and the digest below
+        // read the session's active feature).
+        let text = build_session_preamble(root, None, None);
+        assert!(text.contains("Feature: stale-closed"), "{text}");
+        let knowledge_at = text.find("### Knowledge context").expect("knowledge block present:\n{text}");
+        assert!(
+            text[knowledge_at..].contains(
+                "- `.bee/bin/bee knowledge context --work f-active --budget 20000` (anchor: history)"
+            ),
+            "{text}"
+        );
+        assert!(!text[knowledge_at..].contains("stale-closed"), "{text}");
+        let digest_at = text.find("### Critical patterns (digest)").expect("digest present:\n{text}");
+        assert!(text[digest_at..].contains("\"f-active\""), "{text}");
+        assert!(!text[digest_at..].contains("stale-closed"), "{text}");
     }
