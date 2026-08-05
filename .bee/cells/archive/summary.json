@@ -3,5 +3,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-04T13:16:34.384Z"
+  },
+  "doc-viewer-links": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-05T04:19:58.402Z"
   }
 }
