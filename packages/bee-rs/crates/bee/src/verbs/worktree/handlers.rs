@@ -664,6 +664,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "unregister" => run_unregister(flags, use_json, t0),
         "new" => run_new(flags, use_json, t0),
         "merge" => run_merge(flags, use_json, t0),
+        "prune" => run_prune(flags, use_json, t0),
         _ => None,
     }
 }

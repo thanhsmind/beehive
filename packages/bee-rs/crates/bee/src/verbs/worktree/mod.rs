@@ -7,6 +7,7 @@
 //   worktree unregister [--id ID]       [--json]
 //   worktree new    --feature F [--base-ref R] [--with-companion] [--json]
 //   worktree merge  --id ID [--cleanup] [--queue-wait-ms N]        [--json]
+//   worktree prune  [--dry-run] [--older-than-days N]              [--json]
 //
 // `worktree new` — NATIVE (R6), including the creating path from the MAIN
 // checkout: createFeatureWorktree whole, inside ONE 'worktree-admin' hold —
@@ -203,7 +204,6 @@ pub(crate) use self::create::*;
 pub(crate) use self::merge::*;
 pub(crate) use self::phases::*;
 pub(crate) use self::handlers::*;
-// No production caller until wr-3 wires `bee worktree prune` — read only by
-// this module's own tests until then.
-#[allow(unused_imports)]
+// `bee worktree prune` (wr-3): `run_prune`, wired into `try_native` at
+// handlers.rs, over `classify_worktree`'s fail-closed verdicts (wr-2).
 pub(crate) use self::prune::*;

@@ -1341,3 +1341,79 @@ use std::time::Instant;
         let resolved = resolve_prune_base(&main, "main").unwrap();
         assert_eq!(resolved, head);
     }
+
+    // ── prune.rs: `run_prune_core` (wr-3, D2/D5) ────────────────────────────
+    //
+    // Runs the testable core directly — never `run_prune`, which resolves
+    // roots off `std::env::current_dir()` and is exercised only through the
+    // built binary (tests/registry_dispatch.rs), the same split every other
+    // `run_*` handler in this module already keeps.
+
+    /// `--dry-run` classifies a worktree that is otherwise fully dead and
+    /// removes NOTHING: the directory, the workspace record and the grant
+    /// all survive the run.
+    #[test]
+    fn dry_run_classifies_a_dead_worktree_and_removes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+
+        let outcome = run_prune_core(&main, true, 0.0).unwrap();
+
+        assert!(outcome.dry_run);
+        assert!(outcome.removed_ids.is_empty(), "{:?}", outcome.removed_ids);
+        assert!(outcome.kept_ids.is_empty(), "{:?}", outcome.kept_ids);
+        assert_eq!(outcome.entries.len(), 1);
+        assert_eq!(outcome.entries[0]["id"], json!(created.id));
+        assert_eq!(outcome.entries[0]["verdict"], json!("dead"));
+        assert_eq!(outcome.entries[0]["removed"], json!(false));
+        assert!(outcome.reclaimed_bytes > 0, "a real worktree directory is not zero bytes");
+        assert!(
+            outcome.lines.iter().any(|l| l.starts_with(&format!("{}: would remove", created.id))),
+            "{:?}",
+            outcome.lines
+        );
+
+        // The three artifacts a real prune would have dropped are all still
+        // there — this is the whole point of `--dry-run`.
+        assert!(created.worktree_root.exists(), "the worktree directory must survive a dry run");
+        assert!(ws::read_workspace(&main, &created.id).is_ok(), "the workspace record must survive a dry run");
+        let grants = read_grants_strict(&main.join(".bee")).unwrap();
+        assert_eq!(grants.get(&created.id), Some(&Value::Bool(true)), "the grant must survive a dry run");
+    }
+
+    /// D2/D5's union enumeration: a grant-driven scan alone never reaches a
+    /// GRANTLESS orphan workspace record — exactly the shape `worktree
+    /// unregister` leaves behind today (D3 closes that gap in `unregister`
+    /// itself; this is the sweep that also clears what already leaked).
+    /// Dropping the grant here reproduces that leak directly, then proves a
+    /// real (non-dry-run) prune reaches the orphan through its workspace
+    /// record and removes it — clearing exactly the CONTEXT.md-promised
+    /// leftovers a grants-only scan would silently skip forever.
+    #[test]
+    fn a_grantless_orphan_workspace_record_is_reached_and_dropped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+
+        // Simulate the exact leak D3/D3a exists to close: the grant is gone,
+        // the workspace record is not.
+        let store = main.join(".bee");
+        let mut grants = read_grants_strict(&store).unwrap();
+        assert_eq!(grants.remove(&created.id), Some(Value::Bool(true)), "fixture must start granted");
+        write_grants_file_atomic(&store, &grants).unwrap();
+        assert_eq!(read_grants_strict(&store).unwrap().get(&created.id), None, "grant must be gone");
+        assert!(ws::read_workspace(&main, &created.id).is_ok(), "the orphan record must still be there");
+
+        let outcome = run_prune_core(&main, false, 0.0).unwrap();
+
+        assert_eq!(outcome.removed_ids, vec![created.id.clone()], "{:?}", outcome.entries);
+        assert!(outcome.kept_ids.is_empty(), "{:?}", outcome.kept_ids);
+        assert!(outcome.reclaimed_bytes > 0);
+        assert!(
+            !created.worktree_root.exists(),
+            "a real (non-dry-run) prune must remove the directory of a reached, dead orphan"
+        );
+        assert!(
+            ws::read_workspace(&main, &created.id).is_err(),
+            "the orphan workspace record must be dropped along with the directory"
+        );
+    }

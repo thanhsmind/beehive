@@ -12,18 +12,24 @@
 // demonstrates the fail-closed shape for a single dirty check; this module
 // is that shape carried through all seven conditions.
 //
-// No production caller lands until wr-3 wires `bee worktree prune` at
-// handlers.rs — same shape as workspace_store.rs's own
-// `#![allow(dead_code)]` while it waited for start-feature.
+// wr-3 wires the subcommand (`run_prune`, below) into `handlers.rs`'s
+// `try_native`, calling `classify_worktree` per enumerated id and wr-1's
+// `teardown_worktree` for each dead one. Nothing here bypasses the
+// classifier: `run_prune_core` reads a `Verdict` for every id and only ever
+// removes the ones that came back `Dead`.
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
 use super::*;
 use crate::jsjson;
-use crate::verbs::reservations::js_trim;
+use crate::lock;
+use crate::verbs::reservations::{js_trim, FlagV, Flags};
 use crate::verbs::workspace_store as ws;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+use std::time::Instant;
 
 /// Hours, not `HEARTBEAT_STALE_SECONDS`' 15 minutes (claims.rs, leases.rs,
 /// write_guard/store.rs, status_full/mod.rs — all `900.0`). That window
@@ -395,4 +401,327 @@ pub(crate) fn classify_worktree(check: &PruneCheck<'_>) -> Verdict {
             p(&worktree_root)
         ),
     }
+}
+
+// ─── `bee worktree prune` (wr-3, D2/D5) ────────────────────────────────────
+
+/// Days, not the classifier's own `PRUNE_LIVENESS_SECONDS` (six hours) — a
+/// merged, clean, session-free worktree can still be one its owner means to
+/// come back to tomorrow. A week gives real headroom past the liveness
+/// window while still catching CONTEXT.md's leak (worktrees idle for
+/// months, not hours). `--older-than-days` overrides it per run; no config
+/// key backs it (this cell touches no config file).
+pub(crate) const DEFAULT_PRUNE_AGE_DAYS: f64 = 7.0;
+
+const MS_PER_DAY: f64 = 24.0 * 60.0 * 60.0 * 1000.0;
+
+/// The permanent, git-enforced opt-out (D2/D5): `teardown_worktree`'s own
+/// first step, `git worktree remove --force`, dies outright on a locked
+/// tree, so naming it once is the whole promise — prune needs no lock
+/// bookkeeping of its own to honour it.
+const PRUNE_LOCK_HINT: &str = "Lock a worktree to opt it out of prune permanently: \"git worktree lock <path>\" — \"git worktree remove --force\" refuses on a locked tree.";
+
+fn dir_size_bytes(path: &Path) -> u64 {
+    let Ok(md) = std::fs::symlink_metadata(path) else { return 0 };
+    if md.file_type().is_symlink() {
+        return 0;
+    }
+    if !md.is_dir() {
+        return md.len();
+    }
+    let Ok(entries) = std::fs::read_dir(path) else { return 0 };
+    entries.flatten().map(|e| dir_size_bytes(&e.path())).sum()
+}
+
+/// Base-2, one decimal place past bytes — CONTEXT.md's own "4.5 GB" shape.
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut value = bytes as f64;
+    let mut unit = 0usize;
+    while value >= 1024.0 && unit + 1 < UNITS.len() {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+/// Grants **union** workspace records (CONTEXT.md's out-of-scope line,
+/// closed here): `worktree unregister` drops the grant but — until D3/D3a —
+/// never the record, so 13 orphan `.bee/runtime/workspaces/*.json` files
+/// stayed behind with an empty grants file. A grant-only scan never reaches
+/// one. Every `type: "worktree"` record enters the run even with no
+/// matching grant; `"main"`'s own record never does.
+fn enumerate_worktree_ids(main_root: &Path) -> Result<BTreeSet<String>, String> {
+    let main_store_root = main_root.join(".bee");
+    let grants = read_grants_strict(&main_store_root).ok_or_else(|| {
+        format!(
+            "the worktree grants registry at {} does not parse as JSON — refusing rather than guess which ids are granted.",
+            p(&grants_file(&main_store_root))
+        )
+    })?;
+    let mut ids: BTreeSet<String> = grants
+        .iter()
+        .filter(|(_, v)| **v == Value::Bool(true))
+        .map(|(k, _)| k.clone())
+        .collect();
+    let (workspaces, _skipped) = ws::list_workspaces(main_root).unwrap_or_else(|_| (vec![], vec![]));
+    for record in workspaces {
+        if record.get("type") != Some(&Value::String("worktree".to_string())) {
+            continue;
+        }
+        if let Some(Value::String(id)) = record.get("id") {
+            ids.insert(id.clone());
+        }
+    }
+    Ok(ids)
+}
+
+/// The `root`/`branch` pair a DEAD verdict's removal needs, re-read fresh
+/// rather than threaded out of `classify_worktree` — the classifier's job is
+/// an answer, not a side channel. A record that has gone missing or lost
+/// either field BETWEEN classification and this read is a race, not a
+/// removal: `None` here keeps the worktree for this run rather than
+/// guessing where it lives.
+fn dead_worktree_target(main_root: &Path, id: &str) -> Option<(PathBuf, String)> {
+    let record = ws::read_workspace(main_root, id).ok()?;
+    let root = match record.get("root") {
+        Some(Value::String(s)) if !s.is_empty() => PathBuf::from(s),
+        _ => return None,
+    };
+    let branch = match record.get("branch") {
+        Some(Value::String(s)) if !s.is_empty() => s.clone(),
+        _ => return None,
+    };
+    Some((root, branch))
+}
+
+/// The whole run's answer: `run_prune`'s flag-parsing/emission wrapper reads
+/// this to build both the JSON result and the text report; a test reads it
+/// directly, with no CLI dispatch or `std::env::current_dir()` in the way.
+pub(crate) struct PruneOutcome {
+    pub(crate) base_ref: String,
+    pub(crate) base_commit: String,
+    pub(crate) dry_run: bool,
+    pub(crate) age_threshold_days: f64,
+    pub(crate) entries: Vec<Value>,
+    pub(crate) removed_ids: Vec<String>,
+    pub(crate) kept_ids: Vec<String>,
+    pub(crate) reclaimed_bytes: u64,
+    pub(crate) lines: Vec<String>,
+}
+
+/// The whole prune run, minus argv parsing and emission (`run_prune` below
+/// wraps this). `main_root` is the caller's own already-resolved ordinary
+/// checkout; this function runs no root resolution of its own, so a test can
+/// hand it any tempdir main root without touching the process's real cwd.
+pub(crate) fn run_prune_core(
+    main_root: &Path,
+    dry_run: bool,
+    age_threshold_days: f64,
+) -> Result<PruneOutcome, String> {
+    // The base ref: the MAIN checkout's own current branch — the ref every
+    // merged `wt/*` branch is measured against (CONTEXT.md's own evidence:
+    // "every wt/* branch measured ahead=0 against main"). Prune carries no
+    // `--base-ref` flag (plan.md's signature is dry-run/older-than-days/json
+    // only) and no config key names one either, so a detached main HEAD
+    // refuses the whole run rather than guessing a ref (D2a's own shape:
+    // a base ref that does not resolve refuses outright).
+    let base_ref = current_branch(main_root).ok_or_else(|| {
+        format!(
+            "{} is on a detached HEAD — prune needs a named branch to measure mergedness against; checkout a branch there and retry.",
+            p(main_root)
+        )
+    })?;
+    let base_commit = resolve_prune_base(main_root, &base_ref)?;
+    let ids = enumerate_worktree_ids(main_root)?;
+
+    let now_ms = crate::verbs::reservations::now_ms();
+    let age_threshold_ms = age_threshold_days * MS_PER_DAY;
+
+    let mut entries = Vec::new();
+    let mut lines = Vec::new();
+    let mut removed_ids = Vec::new();
+    let mut kept_ids = Vec::new();
+    let mut reclaimed_bytes: u64 = 0;
+
+    for id in &ids {
+        let verdict = classify_worktree(&PruneCheck {
+            main_root,
+            id,
+            base_commit: &base_commit,
+            now_ms,
+            liveness_seconds: PRUNE_LIVENESS_SECONDS,
+            age_threshold_ms,
+        });
+
+        match verdict {
+            Verdict::Kept { reason } => {
+                kept_ids.push(id.clone());
+                lines.push(format!("{id}: kept — {reason}"));
+                entries.push(json!({"id": id, "verdict": "kept", "removed": false, "reason": reason}));
+            }
+            Verdict::Dead { reason } => {
+                let Some((worktree_root, branch)) = dead_worktree_target(main_root, id) else {
+                    // Lost between classification and removal — a race, not
+                    // a reason to guess; keep for this run.
+                    kept_ids.push(id.clone());
+                    let kept_reason = format!(
+                        "was classified dead ({reason}) but its workspace record could not be re-read for removal — keeping rather than guessing."
+                    );
+                    lines.push(format!("{id}: kept — {kept_reason}"));
+                    entries.push(json!({"id": id, "verdict": "kept", "removed": false, "reason": kept_reason}));
+                    continue;
+                };
+                let size = dir_size_bytes(&worktree_root);
+
+                if dry_run {
+                    // `--dry-run` classifies and removes NOTHING: no lock, no
+                    // git mutation, no registry write — the size below is
+                    // reclaimABLE, never reclaimed.
+                    reclaimed_bytes += size;
+                    lines.push(format!("{id}: would remove, {} reclaimable — {reason}", format_bytes(size)));
+                    entries.push(json!({
+                        "id": id, "verdict": "dead", "removed": false,
+                        "reclaimable_bytes": size, "reason": reason,
+                    }));
+                    continue;
+                }
+
+                let mut guard = match lock::acquire_store_lock(main_root, WORKTREE_ADMIN_LOCK, lock::MAX_ATTEMPTS) {
+                    Ok(g) => g,
+                    Err(busy) => {
+                        kept_ids.push(id.clone());
+                        let kept_reason = format!(
+                            "was classified dead ({reason}) but the worktree-admin lock is busy ({}) — kept this run, retry.",
+                            busy.message()
+                        );
+                        lines.push(format!("{id}: kept — {kept_reason}"));
+                        entries.push(json!({"id": id, "verdict": "kept", "removed": false, "reason": kept_reason}));
+                        continue;
+                    }
+                };
+                let teardown = teardown_worktree(main_root, id, Some((&worktree_root, &branch)));
+                guard.release();
+
+                match teardown {
+                    Ok(()) => {
+                        removed_ids.push(id.clone());
+                        reclaimed_bytes += size;
+                        lines.push(format!("{id}: removed, reclaimed {} — {reason}", format_bytes(size)));
+                        entries.push(json!({
+                            "id": id, "verdict": "dead", "removed": true,
+                            "reclaimed_bytes": size, "reason": reason,
+                        }));
+                    }
+                    Err(TeardownFailure::RemoveFailed(why)) => {
+                        kept_ids.push(id.clone());
+                        let kept_reason =
+                            format!("was dead ({reason}) but \"git worktree remove --force\" failed: {why}");
+                        lines.push(format!("{id}: kept — {kept_reason}"));
+                        entries.push(json!({"id": id, "verdict": "kept", "removed": false, "reason": kept_reason}));
+                    }
+                    Err(TeardownFailure::BranchDeleteFailed(why)) => {
+                        // The directory (and its reflog) is already gone —
+                        // this is a removal with a caveat, not a keep.
+                        removed_ids.push(id.clone());
+                        reclaimed_bytes += size;
+                        lines.push(format!(
+                            "{id}: removed (directory only — \"git branch -d\" failed: {why}), reclaimed {} — {reason}",
+                            format_bytes(size)
+                        ));
+                        entries.push(json!({
+                            "id": id, "verdict": "dead", "removed": true, "branch_deleted": false,
+                            "reclaimed_bytes": size, "reason": reason,
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
+    if ids.is_empty() {
+        lines.push("No granted or recorded worktrees to classify.".to_string());
+    }
+    lines.push(PRUNE_LOCK_HINT.to_string());
+
+    Ok(PruneOutcome {
+        base_ref,
+        base_commit,
+        dry_run,
+        age_threshold_days,
+        entries,
+        removed_ids,
+        kept_ids,
+        reclaimed_bytes,
+        lines,
+    })
+}
+
+/// `bee worktree prune [--dry-run] [--older-than-days N] [--json]` — the
+/// subcommand over `classify_worktree` (wr-2), routed at `handlers.rs`'s
+/// `try_native`. Every dead-or-kept decision is `run_prune_core`'s; this
+/// wrapper only parses argv and renders the answer.
+pub(crate) fn run_prune(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !crate::verbs::reservations::keys_known(&flags, &["dry-run", "older-than-days"]) {
+        return None;
+    }
+    if !bool_flag_ok(&flags, "dry-run") {
+        return None;
+    }
+    let dry_run = bool_flag_true(&flags, "dry-run");
+
+    let mut age_threshold_days = DEFAULT_PRUNE_AGE_DAYS;
+    match flags.get("older-than-days") {
+        None => {}
+        Some(FlagV::Present) => return None, // a bare flag is not a number
+        Some(FlagV::S(raw)) => {
+            if js_trim(raw).is_empty() {
+                return None;
+            }
+            let n = js_string_to_number(raw);
+            if !n.is_finite() || n < 0.0 {
+                return None; // a non-finite or negative age makes no sense; refuse rather than guess
+            }
+            age_threshold_days = n;
+        }
+    }
+
+    let ctx = match prelude("worktree prune", use_json, t0)? {
+        Pre::Go(c) => c,
+        Pre::Emitted(code) => return Some(code),
+    };
+    if ctx.kind != "ordinary" {
+        return Some(ctx.fail(&format!(
+            "\"bee worktree prune\" must be run from the MAIN checkout, not a \"{}\" checkout — it enumerates and removes OTHER worktrees, and a linked worktree cannot prune itself.",
+            ctx.kind
+        )));
+    }
+    let main_root = ctx.work_root.clone();
+
+    let outcome = match run_prune_core(&main_root, dry_run, age_threshold_days) {
+        Ok(o) => o,
+        Err(message) => return Some(ctx.fail(&message)),
+    };
+
+    let mut result = Map::new();
+    result.insert("main_root".into(), json!(p(&main_root)));
+    result.insert("base_ref".into(), json!(outcome.base_ref));
+    result.insert("base_commit".into(), json!(outcome.base_commit));
+    result.insert("dry_run".into(), json!(outcome.dry_run));
+    result.insert("age_threshold_days".into(), json!(outcome.age_threshold_days));
+    result.insert("worktrees".into(), Value::Array(outcome.entries.clone()));
+    result.insert("removed".into(), json!(outcome.removed_ids));
+    result.insert("kept".into(), json!(outcome.kept_ids));
+    if dry_run {
+        result.insert("reclaimable_bytes".into(), json!(outcome.reclaimed_bytes));
+    } else {
+        result.insert("reclaimed_bytes".into(), json!(outcome.reclaimed_bytes));
+    }
+
+    let text = outcome.lines.join("\n");
+    Some(ctx.emit(&Value::Object(result), &text))
 }
