@@ -248,26 +248,18 @@ pub(crate) fn run_unregister(flags: Flags, use_json: bool, t0: Instant) -> Optio
     };
 
     // Pre-checked before the lock: an unparseable registry delegates.
-    let existing = read_grants_strict(&main_store_root)?;
+    read_grants_strict(&main_store_root)?;
 
     let mut guard = match lock::acquire_store_lock(&main_root, WORKTREE_ADMIN_LOCK, lock::MAX_ATTEMPTS) {
         Ok(g) => g,
         Err(busy) => return Some(ctx.fail(&busy.message())),
     };
-    // removeGrantCore: a no-op (no write at all) when the id was never there.
-    let write_result = if existing.contains_key(&id) {
-        let mut next = existing.clone();
-        next.remove(&id);
-        write_grants_file_atomic(&main_store_root, &next).err()
-    } else {
-        None
-    };
+    // The registry half of the shared teardown helper (D3, D3a): grant,
+    // workspace record, holds release — never the directory. `remove: None`
+    // is the whole reason `unregister` cannot self-delete a worktree: the
+    // directory-removal parameter is `perform_cleanup`'s alone to pass.
+    let _ = teardown_worktree(&main_root, &id, None);
     guard.release();
-    if write_result.is_some() {
-        // An fs error here is a V8-worded throw in Node; nothing was emitted
-        // yet, and the failed write left the registry untouched.
-        return None;
-    }
 
     let mut result = Map::new();
     result.insert("ok".into(), Value::Bool(true));

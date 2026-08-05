@@ -358,6 +358,87 @@ use std::time::Instant;
         assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
     }
 
+    // ── the lifted teardown helper (D3, D3a) ────────────────────────────────
+
+    /// `run_unregister` wires to `teardown_worktree(.., remove: None)` — the
+    /// registry half alone. A worktree that was registered (grant + workspace
+    /// record, exactly what `run_register` leaves behind) has BOTH gone after
+    /// one call, closing the orphan `unregister` used to leave.
+    #[test]
+    fn teardown_worktree_registry_half_clears_grant_and_workspace_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path().join("main");
+        let main_store_root = main_root.join(".bee");
+        std::fs::create_dir_all(&main_store_root).unwrap();
+
+        let id = "wt-demo";
+        let mut grants = Map::new();
+        grants.insert(id.to_string(), Value::Bool(true));
+        write_grants_file_atomic(&main_store_root, &grants).unwrap();
+
+        ws::register_workspace(
+            &main_root,
+            ws::RegisterSpec {
+                id,
+                kind: "worktree",
+                root: &p(&tmp.path().join("wt")),
+                branch: Some("wt/demo"),
+                base_sha: None,
+            },
+            "2020-01-01T00:00:00.000Z",
+        )
+        .unwrap();
+        let record_file = ws::workspace_path(&main_root, id).unwrap();
+        assert!(record_file.exists(), "the fixture must start with a workspace record");
+
+        assert!(teardown_worktree(&main_root, id, None).is_ok());
+
+        let after = read_grants_strict(&main_store_root).unwrap();
+        assert!(!after.contains_key(id), "the grant entry must be gone");
+        assert!(!record_file.exists(), "the workspace record must be gone");
+    }
+
+    /// `remove: None` never reaches the directory/branch steps at all — the
+    /// registry-only path removes no directory, however it is spelled.
+    #[test]
+    fn teardown_worktree_registry_half_touches_no_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree_root = tmp.path().join("wt");
+        std::fs::create_dir_all(&worktree_root).unwrap();
+        assert!(teardown_worktree(tmp.path(), "wt-demo", None).is_ok());
+        assert!(worktree_root.exists(), "no directory removal was requested");
+    }
+
+    /// The self-delete guard, isolated from the real process cwd: it panics
+    /// when the (injected) current directory sits inside the removal root,
+    /// and passes cleanly when it does not.
+    #[test]
+    fn directory_removal_guard_rejects_its_own_cwd() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree_root = tmp.path().join("wt");
+        let nested = worktree_root.join("nested");
+        std::fs::create_dir_all(&nested).unwrap();
+        let elsewhere = tmp.path().join("elsewhere");
+        std::fs::create_dir_all(&elsewhere).unwrap();
+
+        // Outside the root, and the root itself as cwd: both refused? No —
+        // only "inside or equal to" is unsafe. `worktree_root` itself and
+        // `nested` are both inside (starts_with includes equality); the
+        // sibling directory is not.
+        assert_directory_removal_is_safe(Some(&elsewhere), &worktree_root);
+        assert_directory_removal_is_safe(None, &worktree_root);
+
+        let panicked = std::panic::catch_unwind(|| {
+            assert_directory_removal_is_safe(Some(&nested), &worktree_root);
+        });
+        assert!(panicked.is_err(), "a cwd nested inside the removal root must panic");
+
+        let panicked_at_root = std::panic::catch_unwind(|| {
+            assert_directory_removal_is_safe(Some(&worktree_root), &worktree_root);
+        });
+        assert!(panicked_at_root.is_err(), "cwd equal to the removal root must panic too");
+    }
+
     // ── worktree-companion-hook, over REAL `git worktree add` fixtures ─────
     //
     // The mount is a real symlink and win32 denies symlink creation without

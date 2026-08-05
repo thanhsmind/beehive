@@ -271,10 +271,87 @@ pub(crate) fn release_all_for_holder(main_root: &Path, id: &str) {
     guard.release();
 }
 
-/// performCleanup (decision D8b): re-check freshness, `git worktree remove
-/// --force`, `git branch -d` (NEVER -D), then the three best-effort ledger
-/// drops. Never throws — every outcome is the `{ok, code?}` object folded into
-/// the merge result's `.cleanup` field, in Node's exact key order.
+/// The self-delete guard `teardown_worktree` runs before ever removing a
+/// directory: `worktree_root` must never be `cwd`, nor an ancestor of it.
+/// Pulled out as a pure predicate over an injected `cwd` so it is testable
+/// without touching the real process directory — the one production call
+/// site always supplies `std::env::current_dir()`.
+pub(crate) fn assert_directory_removal_is_safe(cwd: Option<&Path>, worktree_root: &Path) {
+    if let Some(cwd) = cwd {
+        assert!(
+            !cwd.starts_with(worktree_root),
+            "teardown_worktree: refusing to remove {} — it contains the current directory ({})",
+            p(worktree_root),
+            p(cwd)
+        );
+    }
+}
+
+/// The two ways `teardown_worktree`'s directory half can refuse. Only
+/// produced when `remove` is `Some` — the registry-only call `run_unregister`
+/// makes never reaches either arm.
+pub(crate) enum TeardownFailure {
+    /// `git worktree remove --force` failed; nothing else ran.
+    RemoveFailed(String),
+    /// The directory is gone but `git branch -d` (NEVER -D) refused; the
+    /// registry half below did not run.
+    BranchDeleteFailed(String),
+}
+
+/// The five removal steps `performCleanup` used to run inline, lifted into
+/// one shared helper (decisions D3, D3a): `git worktree remove --force`,
+/// `git branch -d`, grant drop, `ws::unregister_workspace`,
+/// `release_all_for_holder`.
+///
+/// `remove` is the explicit, non-default directory-removal parameter —
+/// `Some((worktree_root, branch))` runs the directory and branch steps first
+/// and only falls through to the registry half (grant, workspace record,
+/// holds) on success; `None` reaches the registry half alone, which is how
+/// `run_unregister` wires in without ever touching a directory.
+pub(crate) fn teardown_worktree(
+    main_root: &Path,
+    id: &str,
+    remove: Option<(&Path, &str)>,
+) -> Result<(), TeardownFailure> {
+    if let Some((worktree_root, branch)) = remove {
+        assert_directory_removal_is_safe(std::env::current_dir().ok().as_deref(), worktree_root);
+
+        let worktree_root_s = p(worktree_root);
+        let remove_result = run_git(
+            main_root,
+            &["worktree", "remove", "--force", "--", &worktree_root_s],
+        );
+        if remove_result.status != Some(0) {
+            return Err(TeardownFailure::RemoveFailed(remove_result.fail_text()));
+        }
+
+        let branch_delete = run_git(main_root, &["branch", "-d", "--", branch]);
+        if branch_delete.status != Some(0) {
+            return Err(TeardownFailure::BranchDeleteFailed(branch_delete.fail_text()));
+        }
+    }
+
+    // The three best-effort ledger drops, in Node's order. Each is wrapped in
+    // its own `try/catch` there, so every failure — including the ones this
+    // port would otherwise call Exotic — is swallowed, not delegated.
+    let main_store_root = main_root.join(".bee");
+    if let Some(existing) = read_grants_strict(&main_store_root) {
+        if existing.contains_key(id) {
+            let mut next = existing;
+            next.remove(id);
+            let _ = write_grants_file_atomic(&main_store_root, &next);
+        }
+    }
+    let _ = ws::unregister_workspace(main_root, id);
+    release_all_for_holder(main_root, id);
+    Ok(())
+}
+
+/// performCleanup (decision D8b): re-check freshness, then run the shared
+/// teardown with directory removal on. Never throws — every outcome is the
+/// `{ok, code?}` object folded into the merge result's `.cleanup` field, in
+/// Node's exact key order. The `Map` construction stays here; only the
+/// side-effect calls moved into `teardown_worktree`.
 pub(crate) fn perform_cleanup(
     main_root: &Path,
     worktree_root: &Path,
@@ -303,43 +380,25 @@ pub(crate) fn perform_cleanup(
         return out;
     }
 
-    let worktree_root_s = p(worktree_root);
-    let remove_result = run_git(
-        main_root,
-        &["worktree", "remove", "--force", "--", &worktree_root_s],
-    );
-    if remove_result.status != Some(0) {
-        out.insert("ok".into(), Value::Bool(false));
-        out.insert("code".into(), json!("WORKTREE_MERGE_CLEANUP_REMOVE_FAILED"));
-        out.insert("reason".into(), Value::String(remove_result.fail_text()));
-        return out;
-    }
-
-    let branch_delete = run_git(main_root, &["branch", "-d", "--", branch]);
-    if branch_delete.status != Some(0) {
-        out.insert("ok".into(), Value::Bool(false));
-        out.insert(
-            "code".into(),
-            json!("WORKTREE_MERGE_CLEANUP_BRANCH_DELETE_FAILED"),
-        );
-        out.insert("removed".into(), Value::Bool(true));
-        out.insert("reason".into(), Value::String(branch_delete.fail_text()));
-        return out;
-    }
-
-    // The three best-effort ledger drops, in Node's order. Each is wrapped in
-    // its own `try/catch` there, so every failure — including the ones this
-    // port would otherwise call Exotic — is swallowed, not delegated.
-    let main_store_root = main_root.join(".bee");
-    if let Some(existing) = read_grants_strict(&main_store_root) {
-        if existing.contains_key(id) {
-            let mut next = existing;
-            next.remove(id);
-            let _ = write_grants_file_atomic(&main_store_root, &next);
+    if let Err(failure) = teardown_worktree(main_root, id, Some((worktree_root, branch))) {
+        match failure {
+            TeardownFailure::RemoveFailed(reason) => {
+                out.insert("ok".into(), Value::Bool(false));
+                out.insert("code".into(), json!("WORKTREE_MERGE_CLEANUP_REMOVE_FAILED"));
+                out.insert("reason".into(), Value::String(reason));
+            }
+            TeardownFailure::BranchDeleteFailed(reason) => {
+                out.insert("ok".into(), Value::Bool(false));
+                out.insert(
+                    "code".into(),
+                    json!("WORKTREE_MERGE_CLEANUP_BRANCH_DELETE_FAILED"),
+                );
+                out.insert("removed".into(), Value::Bool(true));
+                out.insert("reason".into(), Value::String(reason));
+            }
         }
+        return out;
     }
-    let _ = ws::unregister_workspace(main_root, id);
-    release_all_for_holder(main_root, id);
 
     out.insert("ok".into(), Value::Bool(true));
     out.insert("removed".into(), Value::Bool(true));
