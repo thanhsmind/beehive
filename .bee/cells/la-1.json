@@ -1,0 +1,72 @@
+{
+  "id": "la-1",
+  "feature": "ledger-anchor",
+  "title": "Anchor a feature on its scribing stamp when it has no history dir",
+  "lane": "small",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "34ccf18d"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs"
+  ],
+  "action": "Give resolve_anchor a third and last arm so a feature with no docs/history dir is still reachable. Lanes small and tiny deliberately produce no docs/history/<slug>/ artifacts — a small-lane feature logs its scoping synthesis as a decision instead — so those features refuse unknown_work today; promote-reach's own close proved it. Resolution order becomes: a matching bee.work-item concept, then the docs/history/<slug>/ files, then the feature's most recent entry in .bee/logs/scribing-runs.jsonl, then unknown_work. Build the ledger arm's meta and body from the slug, the stamped area names, and the recorded next_action — all read from disk, never composed prose. Reuse read_scribing_ledger in verbs/state_group/ledger.rs rather than re-parsing the file. Name the new kind as ledger wherever the anchor kind is reported, in context, promote and the kctx port. Everywhere else the ledger arm behaves exactly like the history arm: zero_signal is reported rather than thrown, the anchor is the rank-1 manifest entry sized from what it was built from, and promote's areas_source names the same stamp it already names today. Keep unknown_work, byte for byte and with the same exit code, for a feature with none of the three.",
+  "must_haves": {
+    "truths": [
+      "bee knowledge promote --work promote-reach resolves through its scribing stamp instead of refusing unknown_work",
+      "bee knowledge context --work promote-reach returns a manifest naming the ledger anchor kind",
+      "A feature with a docs/history dir still resolves through it, never through the ledger",
+      "A feature with a work item still resolves through it, ahead of both",
+      "A feature with none of the three still refuses with the unchanged unknown_work message and exit code"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+        "substantive": "a third ledger arm behind the work-item and history arms; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "anchor.rs reads the ledger through verbs/state_group/ledger.rs"
+    ],
+    "prohibitions": [
+      "The work-item and history arms keep their current precedence and behaviour",
+      "writes stays an empty array in every promote payload",
+      "No file under docs/knowledge/ is created, moved, or deleted",
+      "The unknown_work message text and exit code do not change"
+    ]
+  },
+  "trace": {
+    "worker": "la1-worker",
+    "outcome": "resolve_anchor gains a third ledger arm reached when no work-item or docs/history anchor exists; both demos resolve promote-reach through it",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-05T07:28:01.268Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc8305c1-98bc-4ccd-bbdb-dc4b7ff173f8",
+    "claimed_at": "2026-08-05T07:22:16.748Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-05T07:27:49.356Z"
+  }
+}
