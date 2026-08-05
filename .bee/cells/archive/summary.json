@@ -8,5 +8,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-05T04:19:58.402Z"
+  },
+  "knowledge-loop": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-08-05T06:21:42.469Z"
   }
 }
