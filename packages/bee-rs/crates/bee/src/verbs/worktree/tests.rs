@@ -958,3 +958,386 @@ use std::time::Instant;
         assert!(lock::lock_file_path(root, "worktree-admin").exists());
         guard.release();
     }
+
+    // ── prune.rs: the fail-closed classifier (wr-2, D2/D2a/D2b) ────────────
+    //
+    // Every keep-reason gets its own test, plus the dead case and the
+    // whole-run refusal. `age_threshold_ms: 0.0` neutralizes condition (7)
+    // everywhere except the test that exercises it directly.
+
+    fn prune_fixture(tmp: &Path) -> (PathBuf, Created) {
+        let main = main_repo(tmp);
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|e| match e {
+                    CErr::Refuse(m) => panic!("refused: {m}"),
+                    CErr::Ex => panic!("delegated"),
+                });
+        (main, created)
+    }
+
+    fn head_sha(root: &Path) -> String {
+        js_trim(&run_git(root, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string()
+    }
+
+    /// A merged, clean, untouched, unlocked, old-enough worktree is the ONLY
+    /// shape that reaches `Verdict::Dead` — every other test below proves one
+    /// way to fall short of it.
+    #[test]
+    fn a_fully_merged_clean_old_untouched_worktree_is_dead() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn an_unmerged_branch_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::write(created.worktree_root.join("f.txt"), "unmerged").unwrap();
+        git_ok(&created.worktree_root, &["config", "user.email", "a@b.c"]);
+        git_ok(&created.worktree_root, &["config", "user.name", "t"]);
+        git_ok(&created.worktree_root, &["commit", "-qam", "unmerged work"]);
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("not provably merged"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_detached_head_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        git_ok(&created.worktree_root, &["checkout", "--detach"]);
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("detached HEAD"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_branch_disagreement_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        git_ok(&created.worktree_root, &["checkout", "-b", "other-branch"]);
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("disagreement"), "{}", verdict.reason());
+    }
+
+    /// A re-registered worktree carries `branch: null` (session_init.rs:436's
+    /// `RegisterSpec { branch: None, .. }`) — no real worktree fixture needed,
+    /// the record alone is the whole test.
+    #[test]
+    fn a_null_branch_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        ws::register_workspace(
+            &main,
+            ws::RegisterSpec { id: "wt-null", kind: "worktree", root: "/nowhere", branch: None, base_sha: None },
+            "2024-01-01T00:00:00.000Z",
+        )
+        .unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: "wt-null",
+            base_commit: "deadbeef",
+            now_ms: 0.0,
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("no branch (null)"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_dirty_tree_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::write(created.worktree_root.join("untracked.txt"), "x").unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(
+            verdict.reason().contains("tracked-modified or untracked"),
+            "{}",
+            verdict.reason()
+        );
+    }
+
+    /// D8a's blind spot, closed: `.bee/HANDOFF.json` is gitignored by
+    /// `main_repo`'s own `.gitignore`, so the porcelain check alone would
+    /// call this tree clean.
+    #[test]
+    fn a_present_handoff_keeps_even_though_the_tree_reads_clean() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::write(created.worktree_root.join(".bee").join("HANDOFF.json"), "{}").unwrap();
+        assert!(
+            !is_tree_dirty(&created.worktree_root).unwrap(),
+            "gitignored, so porcelain alone reads clean"
+        );
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("HANDOFF.json"), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn a_non_empty_capture_queue_keeps_even_though_the_tree_reads_clean() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::write(
+            created.worktree_root.join(".bee").join("capture-queue.jsonl"),
+            "{\"stub\":true}\n",
+        )
+        .unwrap();
+        assert!(
+            !is_tree_dirty(&created.worktree_root).unwrap(),
+            "gitignored, so porcelain alone reads clean"
+        );
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("capture-queue.jsonl"), "{}", verdict.reason());
+    }
+
+    /// An empty capture queue is NOT precious — only a non-empty one is.
+    #[test]
+    fn an_empty_capture_queue_does_not_keep_on_its_own() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::write(created.worktree_root.join(".bee").join("capture-queue.jsonl"), "").unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(verdict.is_dead(), "{}", verdict.reason());
+    }
+
+    #[test]
+    fn an_interrupted_rebase_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        let admin_dir = main.join(".git").join("worktrees").join(&created.id);
+        std::fs::write(admin_dir.join("MERGE_HEAD"), base_commit.clone()).unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("MERGE_HEAD"), "{}", verdict.reason());
+    }
+
+    /// D2b: liveness comes from a session record naming THIS workspace with
+    /// a fresh heartbeat — never `write_owner_session`/`attached_sessions`,
+    /// which the only writer hardcodes to the main workspace
+    /// (state_group/policy.rs:128) and are therefore null/empty here too.
+    #[test]
+    fn a_live_session_naming_this_workspace_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        let now = chrono::Utc::now();
+        let now_ms = now.timestamp_millis() as f64;
+        std::fs::create_dir_all(main.join(".bee").join("sessions")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("sessions").join("sess-live.json"),
+            jsjson::stringify(&json!({
+                "id": "sess-live",
+                "last_heartbeat": now.to_rfc3339(),
+                "workspace_id": created.id,
+            })),
+        )
+        .unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms,
+            liveness_seconds: PRUNE_LIVENESS_SECONDS,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(verdict.reason().contains("sess-live"), "{}", verdict.reason());
+    }
+
+    /// An unreadable session record counts as LIVE — this scan cannot rule
+    /// it out, so it keeps rather than silently skipping it the way the
+    /// fail-open `list_session_records` scans elsewhere in this codebase do.
+    #[test]
+    fn an_unreadable_session_record_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+        std::fs::create_dir_all(main.join(".bee").join("sessions")).unwrap();
+        std::fs::write(main.join(".bee").join("sessions").join("corrupt.json"), "{oops").unwrap();
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: PRUNE_LIVENESS_SECONDS,
+            age_threshold_ms: 0.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(
+            verdict.reason().contains("unreadable session record counts as live"),
+            "{}",
+            verdict.reason()
+        );
+    }
+
+    #[test]
+    fn a_worktree_younger_than_the_age_threshold_keeps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let base_commit = head_sha(&main);
+
+        let verdict = classify_worktree(&PruneCheck {
+            main_root: &main,
+            id: &created.id,
+            base_commit: &base_commit,
+            now_ms: crate::verbs::reservations::now_ms(),
+            liveness_seconds: 1.0,
+            age_threshold_ms: 365.0 * 24.0 * 60.0 * 60.0 * 1000.0,
+        });
+        assert!(matches!(verdict, Verdict::Kept { .. }), "{verdict:?}");
+        assert!(
+            verdict.reason().contains("younger than the age threshold"),
+            "{}",
+            verdict.reason()
+        );
+    }
+
+    /// The bug this whole module exists to retire: a `rev-list --count`
+    /// failure reads as `0`, i.e. "merged", for EVERY worktree at once. Here,
+    /// `main` is not even a git repository, so every git subprocess the
+    /// classifier runs fails outright — and every worktree still keeps.
+    #[test]
+    fn a_git_failure_at_any_probe_keeps_every_worktree_classified_in_the_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("not-a-repo");
+        std::fs::create_dir_all(&main).unwrap();
+        for (id, branch) in [("wt-a", "wt/a"), ("wt-b", "wt/b"), ("wt-c", "wt/c")] {
+            let root = tmp.path().join(id);
+            std::fs::create_dir_all(&root).unwrap();
+            ws::register_workspace(
+                &main,
+                ws::RegisterSpec {
+                    id,
+                    kind: "worktree",
+                    root: &root.to_string_lossy(),
+                    branch: Some(branch),
+                    base_sha: None,
+                },
+                "2024-01-01T00:00:00.000Z",
+            )
+            .unwrap();
+        }
+
+        for id in ["wt-a", "wt-b", "wt-c"] {
+            let verdict = classify_worktree(&PruneCheck {
+                main_root: &main,
+                id,
+                base_commit: "deadbeef",
+                now_ms: 0.0,
+                liveness_seconds: 1.0,
+                age_threshold_ms: 0.0,
+            });
+            assert!(matches!(verdict, Verdict::Kept { .. }), "{id}: {verdict:?}");
+        }
+    }
+
+    #[test]
+    fn a_base_ref_that_does_not_resolve_refuses_the_whole_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let err = resolve_prune_base(&main, "definitely-not-a-ref").unwrap_err();
+        assert!(err.contains("does not resolve"), "{err}");
+        assert!(err.contains("refusing the whole prune run"), "{err}");
+    }
+
+    #[test]
+    fn a_resolvable_base_ref_returns_the_current_sha() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let head = head_sha(&main);
+        let resolved = resolve_prune_base(&main, "main").unwrap();
+        assert_eq!(resolved, head);
+    }

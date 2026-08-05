@@ -195,6 +195,7 @@ mod create;
 mod merge;
 mod phases;
 mod handlers;
+mod prune;
 pub(crate) use self::registry::*;
 pub(crate) use self::git::*;
 pub(crate) use self::companion::*;
@@ -202,3 +203,7 @@ pub(crate) use self::create::*;
 pub(crate) use self::merge::*;
 pub(crate) use self::phases::*;
 pub(crate) use self::handlers::*;
+// No production caller until wr-3 wires `bee worktree prune` — read only by
+// this module's own tests until then.
+#[allow(unused_imports)]
+pub(crate) use self::prune::*;
