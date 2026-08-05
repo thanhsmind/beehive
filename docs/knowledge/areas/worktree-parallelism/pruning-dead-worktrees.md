@@ -76,7 +76,37 @@ moment, try again" — here, the failure mode is permanent, so every probe fails
 
 Only when every one of these eight clears does a worktree count as dead. Reaching the end of the
 list with no keep-reason found is the *only* way to answer dead — there is no separate "looks
-safe enough" shortcut.
+safe enough" shortcut, with one deliberate exception: the orphan verdict below, which answers
+dead a different way because there is nothing left in either artifact to ask the eight conditions
+about.
+
+## The orphan verdict: when the record is the only thing left (wov-1)
+
+A worktree whose directory is gone AND whose branch is gone is not "unmerged" — it is not
+anything: there is no tree to check for cleanliness, no branch for `merge-base --is-ancestor` to
+even name, no admin dir to hold an interrupted operation. Condition 1 (merged into base) would
+misread this shape forever: `git merge-base --is-ancestor` can never exit `0` for a branch that
+does not exist, so a plain "not provably merged" keep would hold onto a bare workspace record
+until the end of time, never confirming and never releasing it.
+
+`classify_worktree` checks this conjunction — directory absent (`worktree_root.exists()` is
+false) AND branch absent (`branch_exists`, `worktree/git.rs`) — BEFORE condition 1 runs, and
+answers dead immediately when both hold, with no ancestry probe asked or needed: the workspace
+record is the only artifact left, so there is no directory to remove, no commits to strand, and
+no ignored files to lose. Either artifact alone still keeps, through the ordinary path below it:
+
+- directory gone, branch still real — falls through to condition 2 (detached HEAD), since reading
+  `HEAD` from a directory that is not there fails the same way a detached HEAD does; the branch
+  may carry commits no other ref protects, so this keeps.
+- directory still standing, branch gone — falls through to condition 1 itself, which reads a
+  branch that does not exist the same way it reads a real divergence: not provably merged, so this
+  keeps; the tree may hold uncommitted or ignored work the branch never saw.
+
+`run_prune_core`'s removal step reads `Verdict::Dead`'s own `orphan` flag to skip `git worktree
+remove`/`git branch -d` entirely for this verdict — running either against a target that was
+never there would fail and the record would come back *kept*, not removed. It drops straight to
+the registry-only teardown (`teardown_worktree(.., None)`, `merge.rs`) that `run_unregister`
+already uses: the grant, the workspace record, and the holds all release; nothing git-shaped runs.
 
 ## Pointers (implementation)
 

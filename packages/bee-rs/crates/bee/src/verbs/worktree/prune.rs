@@ -46,9 +46,15 @@ const INTERRUPTED_OP_MARKERS: [&str; 5] =
 
 /// One line naming why a worktree was judged dead or kept. `prune`'s
 /// one-line-per-worktree report (wr-3) reads `reason()` directly.
+///
+/// `Dead.orphan` marks the one Dead shape that never had a directory or a
+/// branch to remove in the first place (the orphan verdict, below) — the
+/// removal step in `run_prune_core` reads this flag to skip `git worktree
+/// remove`/`git branch -d` entirely rather than run them against artifacts
+/// that were never there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Verdict {
-    Dead { reason: String },
+    Dead { reason: String, orphan: bool },
     Kept { reason: String },
 }
 
@@ -58,7 +64,7 @@ impl Verdict {
     }
     pub(crate) fn reason(&self) -> &str {
         match self {
-            Verdict::Dead { reason } | Verdict::Kept { reason } => reason,
+            Verdict::Dead { reason, .. } | Verdict::Kept { reason } => reason,
         }
     }
 }
@@ -327,6 +333,31 @@ pub(crate) fn classify_worktree(check: &PruneCheck<'_>) -> Verdict {
         }
     };
 
+    // (0a) orphan: no directory AND no branch. Evaluated BEFORE the merge
+    // test (1) on purpose — `git merge-base --is-ancestor` can never exit 0
+    // for a branch that does not exist, so condition (1) alone would keep a
+    // record like this FOREVER, misreading a real absence as "not provably
+    // merged" and asking an ancestry question that has no answer. The two
+    // conditions are a conjunction, each checked on its own: a missing
+    // directory with a branch that still exists keeps below at (1) or (2) —
+    // the branch may carry commits no ref elsewhere protects; a standing
+    // directory with a branch that is gone keeps below at (1) — the tree may
+    // hold uncommitted or ignored work the branch never saw. Only when
+    // NEITHER artifact remains does this fire: the workspace record is the
+    // only thing left, so there is no directory to remove, no commits to
+    // strand, and no ignored files to lose. `run_prune_core`'s removal step
+    // reads `Verdict::Dead.orphan` to skip `git worktree remove`/`git branch
+    // -d` entirely for this verdict — neither target exists to run them on.
+    if !worktree_root.exists() && !branch_exists(check.main_root, &branch) {
+        return Verdict::Dead {
+            reason: format!(
+                "neither {} nor branch {branch} exists — the workspace record is the only artifact left, so nothing could be lost by dropping it.",
+                p(&worktree_root)
+            ),
+            orphan: true,
+        };
+    }
+
     // (1) merged into base.
     if !branch_is_merged(check.main_root, &branch, check.base_commit) {
         return kept(format!(
@@ -400,6 +431,7 @@ pub(crate) fn classify_worktree(check: &PruneCheck<'_>) -> Verdict {
             "{branch} is merged into the resolved base, {} is clean with nothing precious ignored, no interrupted operation, no live session, and old enough.",
             p(&worktree_root)
         ),
+        orphan: false,
     }
 }
 
@@ -564,7 +596,46 @@ pub(crate) fn run_prune_core(
                 lines.push(format!("{id}: kept — {reason}"));
                 entries.push(json!({"id": id, "verdict": "kept", "removed": false, "reason": reason}));
             }
-            Verdict::Dead { reason } => {
+            Verdict::Dead { reason, orphan: true } => {
+                // Neither a directory nor a branch exists — nothing for
+                // `git worktree remove` or `git branch -d` to run against.
+                // Skip both and drop straight to the registry-only teardown
+                // `run_unregister` already uses (`teardown_worktree(..,
+                // None)`, registry.rs) — it runs no git mutation, so it
+                // cannot fail the way the directory/branch removal below can.
+                if dry_run {
+                    lines.push(format!("{id}: would remove, 0 B reclaimable — {reason}"));
+                    entries.push(json!({
+                        "id": id, "verdict": "dead", "removed": false,
+                        "reclaimable_bytes": 0, "reason": reason,
+                    }));
+                    continue;
+                }
+                let mut guard = match lock::acquire_store_lock(main_root, WORKTREE_ADMIN_LOCK, lock::MAX_ATTEMPTS) {
+                    Ok(g) => g,
+                    Err(busy) => {
+                        kept_ids.push(id.clone());
+                        let kept_reason = format!(
+                            "was classified dead ({reason}) but the worktree-admin lock is busy ({}) — kept this run, retry.",
+                            busy.message()
+                        );
+                        lines.push(format!("{id}: kept — {kept_reason}"));
+                        entries.push(json!({"id": id, "verdict": "kept", "removed": false, "reason": kept_reason}));
+                        continue;
+                    }
+                };
+                let _ = teardown_worktree(main_root, id, None);
+                guard.release();
+                removed_ids.push(id.clone());
+                lines.push(format!(
+                    "{id}: removed (record only — no directory or branch existed), reclaimed 0 B — {reason}"
+                ));
+                entries.push(json!({
+                    "id": id, "verdict": "dead", "removed": true,
+                    "reclaimed_bytes": 0, "reason": reason,
+                }));
+            }
+            Verdict::Dead { reason, orphan: false } => {
                 let Some((worktree_root, branch)) = dead_worktree_target(main_root, id) else {
                     // Lost between classification and removal — a race, not
                     // a reason to guess; keep for this run.
