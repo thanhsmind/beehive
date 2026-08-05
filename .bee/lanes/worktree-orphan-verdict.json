@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "worktree-orphan-verdict",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,7 +10,7 @@
     "review": false
   },
   "summary": "Feature \"worktree-orphan-verdict\" started at phase \"exploring\" (lane).",
-  "next_action": "Close worktree-orphan-verdict, merge, rebuild the binary, run prune.",
+  "next_action": "Nothing pending — the reclaim loop is closed end to end.",
   "created_at": "2026-08-05T12:46:20.487Z",
   "route": {
     "class": "feature",
@@ -31,5 +31,12 @@
       "worktree-parallelism"
     ],
     "next_action": "Close worktree-orphan-verdict, merge, rebuild the binary, run prune."
+  },
+  "last_compounding_run": {
+    "feature": "worktree-orphan-verdict",
+    "date": "2026-08-05",
+    "at": "2026-08-05T13:01:08.792Z",
+    "learnings": "docs/history/worktree-reclaim/reports/learnings.md",
+    "next_action": "Nothing pending — the reclaim loop is closed end to end."
   }
 }
