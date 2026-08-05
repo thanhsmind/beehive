@@ -646,6 +646,17 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
     delivery.insert("content".into(), Value::String(delivery_content));
 
     // ── (b) area updates ──────────────────────────────────────────────────
+    //
+    // Decision b032be35: a work-item area list keeps the original per-file
+    // `touches_subject` match against each area concept's own path plus its
+    // recorded `bee.sources`. A scribing-ledger area list carries no such
+    // per-file evidence — a ledger stamp asserts that THIS feature's work
+    // synced the stamped areas, not which file touched which area — so every
+    // capped `behavior_change` cell of the feature is attributed to every
+    // stamped area instead of filtered by file. `feature_grain` decides which
+    // rule this whole promotion uses; `areas_source` is one value for the
+    // entire proposal (never mixed per area), same as the JSON payload.
+    let feature_grain = matches!(areas_source, AreasSource::Scribing(_));
     let mut area_updates: Vec<Value> = Vec::new();
     for area in &area_list {
         let mut subjects: Vec<String> = Vec::new(); // insertion-ordered Set
@@ -669,22 +680,25 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
             if !c.behavior_change {
                 continue;
             }
-            let touched: Vec<String> = c
-                .files_changed
-                .iter()
-                .filter(|file| subjects.iter().any(|s| touches_subject(file, s)))
-                .cloned()
-                .collect();
-            if touched.is_empty() {
+            let files: Vec<String> = if feature_grain {
+                // Feature-grain attribution: the stamp already asserts this
+                // area was synced; cite every file the cell changed rather
+                // than filtering by subject.
+                c.files_changed.clone()
+            } else {
+                c.files_changed
+                    .iter()
+                    .filter(|file| subjects.iter().any(|s| touches_subject(file, s)))
+                    .cloned()
+                    .collect()
+            };
+            if !feature_grain && files.is_empty() {
                 continue;
             }
             let mut b = Map::new();
             b.insert("cell".into(), Value::String(c.id.clone()));
             b.insert("text".into(), Value::String(one_line(&c.outcome, 0)));
-            b.insert(
-                "files".into(),
-                Value::Array(touched.into_iter().map(Value::String).collect()),
-            );
+            b.insert("files".into(), Value::Array(files.into_iter().map(Value::String).collect()));
             b.insert("trace".into(), Value::String(c.trace_path.clone()));
             bullets.push(Value::Object(b));
         }
@@ -891,24 +905,42 @@ pub(crate) fn promote_text(p: &Value) -> String {
         });
         lines.push(String::new());
     }
+    // b032be35: a scribing-ledger area list attributes every bullet at the
+    // feature grain (the stamp's own claim, restated), not per touched file —
+    // the render must say so, so a reader can tell the two apart at a glance.
+    let feature_grain = p["areas_source"]["kind"].as_str() == Some("scribing_ledger");
     for update in &area_updates {
         lines.push(format!("area {}:", update["area"].as_str().unwrap_or("")));
         let bullets = update["bullets"].as_array().cloned().unwrap_or_default();
         if bullets.is_empty() {
-            lines.push("  (no capped behavior_change cell touched this area's subjects)".into());
+            lines.push(if feature_grain {
+                "  (no capped behavior_change cell exists for this feature)".to_string()
+            } else {
+                "  (no capped behavior_change cell touched this area's subjects)".to_string()
+            });
         }
         for b in &bullets {
             let files: Vec<String> = b["files"]
                 .as_array()
                 .map(|a| a.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect())
                 .unwrap_or_default();
-            lines.push(format!(
-                "  - [{}] {} — touched {} (trace {})",
-                b["cell"].as_str().unwrap_or(""),
-                b["text"].as_str().unwrap_or(""),
-                files.join(", "),
-                b["trace"].as_str().unwrap_or("")
-            ));
+            lines.push(if feature_grain {
+                format!(
+                    "  - [{}] {} — feature-wide sync per the scribing stamp, {} file(s) changed (trace {})",
+                    b["cell"].as_str().unwrap_or(""),
+                    b["text"].as_str().unwrap_or(""),
+                    files.len(),
+                    b["trace"].as_str().unwrap_or("")
+                )
+            } else {
+                format!(
+                    "  - [{}] {} — touched {} (trace {})",
+                    b["cell"].as_str().unwrap_or(""),
+                    b["text"].as_str().unwrap_or(""),
+                    files.join(", "),
+                    b["trace"].as_str().unwrap_or("")
+                )
+            });
         }
         lines.push(String::new());
     }

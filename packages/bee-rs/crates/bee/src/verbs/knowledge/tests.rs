@@ -682,6 +682,93 @@ use std::time::Instant;
         assert!(text.contains("2024-06-03T00:00:00.000Z"));
     }
 
+    /// Decision b032be35: a scribing-ledger area list carries no per-file
+    /// evidence — the area concepts' `bee.sources` are prose citations and
+    /// doc anchors, never code paths in practice, so `touches_subject`
+    /// structurally never matches and every area stayed at 0 bullets. When
+    /// `areas_source.kind == "scribing_ledger"`, every capped
+    /// `behavior_change` cell of the feature is attributed to EVERY stamped
+    /// area instead — the stamp already asserts that this feature's work
+    /// synced these areas. A cell with `behavior_change: false` is still
+    /// excluded, and each bullet's `files` cites the cell's full
+    /// `files_changed`, unfiltered by subject.
+    #[test]
+    fn promotion_attributes_every_capped_cell_to_every_scribing_ledger_area() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let kn = root.join("docs").join("knowledge");
+        std::fs::create_dir_all(kn.join("areas")).unwrap();
+        // bee.sources is a prose citation, not a code path — it will never
+        // match any file under touches_subject, reproducing the real defect.
+        std::fs::write(
+            kn.join("areas").join("widgets.md"),
+            "---\ntype: bee.area\ntitle: Widgets\ndescription: the widgets area\nbee:\n  id: a-widgets\n  lifecycle: active\n  areas: [widgets]\n  sources: [\"docs/specs/widgets.md#B5\"]\n---\n\n# Widgets\n",
+        )
+        .unwrap();
+        std::fs::write(
+            kn.join("areas").join("gizmos.md"),
+            "---\ntype: bee.area\ntitle: Gizmos\ndescription: the gizmos area\nbee:\n  id: a-gizmos\n  lifecycle: active\n  areas: [gizmos]\n  sources: [\"See the gizmos spec\"]\n---\n\n# Gizmos\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("docs").join("history").join("hist-3")).unwrap();
+        std::fs::write(
+            root.join("docs").join("history").join("hist-3").join("CONTEXT.md"),
+            "# Hist Three Context\n\nBody.\n",
+        )
+        .unwrap();
+        let cells = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(
+            cells.join("hist-3-1.json"),
+            r#"{"id":"hist-3-1","feature":"hist-3","status":"capped","title":"first","verify":"cargo test","trace":{"behavior_change":true,"outcome":"shipped the first change","files_changed":["src/a.rs"],"capped_at":"2024-06-02T10:00:00.000Z"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            cells.join("hist-3-2.json"),
+            r#"{"id":"hist-3-2","feature":"hist-3","status":"capped","title":"second","verify":"cargo test","trace":{"behavior_change":true,"outcome":"shipped the second change","files_changed":["src/b.rs"],"capped_at":"2024-06-03T00:00:00.000Z"}}"#,
+        )
+        .unwrap();
+        // Not a behavior_change cell — must stay excluded from every area.
+        std::fs::write(
+            cells.join("hist-3-3.json"),
+            r#"{"id":"hist-3-3","feature":"hist-3","status":"capped","title":"third","verify":"cargo test","trace":{"behavior_change":false,"outcome":"housekeeping only","files_changed":["src/c.rs"],"capped_at":"2024-06-04T00:00:00.000Z"}}"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("logs").join("scribing-runs.jsonl"),
+            "{\"ts\":\"2024-06-05T00:00:00.000Z\",\"feature\":\"hist-3\",\"areas\":[\"widgets\",\"gizmos\"]}\n",
+        )
+        .unwrap();
+
+        let Some(Promo::Ok(p)) = build_promotion(root, &kn, "hist-3") else {
+            panic!("expected a proposal");
+        };
+        assert_eq!(p["areas_source"]["kind"], "scribing_ledger");
+        let areas = p["area_updates"].as_array().unwrap();
+        assert_eq!(areas.len(), 2);
+        for area in areas {
+            let bullets = area["bullets"].as_array().unwrap();
+            // Every capped behavior_change cell reaches every stamped area —
+            // not the 0 bullets the file-based match produced before the fix.
+            assert_eq!(bullets.len(), 2);
+            let ids: Vec<&str> = bullets.iter().map(|b| b["cell"].as_str().unwrap()).collect();
+            assert_eq!(ids, vec!["hist-3-1", "hist-3-2"]);
+            // The excluded, non-behavior_change cell never appears.
+            assert!(!ids.contains(&"hist-3-3"));
+            // Unfiltered by subject: the full files_changed list is cited.
+            assert_eq!(bullets[0]["files"], json!(["src/a.rs"]));
+            assert_eq!(bullets[1]["files"], json!(["src/b.rs"]));
+        }
+
+        // The render distinguishes this feature-grain attribution from the
+        // per-file "touched ..." wording the work-item source still uses.
+        let text = promote_text(&p);
+        assert!(text.contains("feature-wide sync per the scribing stamp"));
+        assert!(!text.contains("(no capped behavior_change cell touched this area's subjects)"));
+        assert!(!text.contains(" — touched "));
+    }
+
     // ═══ R5: fixture builders ══════════════════════════════════════════════
     //
     // Node oracle: tests/test_knowledge.mjs makeRepo / writeBundleFile /
