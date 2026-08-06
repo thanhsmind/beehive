@@ -673,6 +673,17 @@ pub(crate) fn route_worktree_block(
     Some(Value::Object(block))
 }
 
+/// rti-1: a route carries the feature it was recorded for (`validate_route_
+/// set_flags`'s caller stamps it in). An EXISTING route only counts as
+/// THIS feature's own triage history — and so only gates a re-lane through
+/// `validate_route_lane_transition` — when its stamped feature matches the
+/// one this `--set` is for. A route stamped for a different feature, or one
+/// pre-dating this fix that carries no "feature" field at all, is treated
+/// as no route: the new `--set` is a first-time record, never a demotion.
+pub(crate) fn route_belongs_to_feature(existing_route: &Map<String, Value>, feature: &Value) -> bool {
+    existing_route.get("feature") == Some(feature)
+}
+
 pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["set", "show", "class", "lane", "flags", "files", "rationale"]) {
         return None;
@@ -753,22 +764,33 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
                 "route --set: refused \u{2014} no active feature to attach a route to (phase \"{phase_disp}\", feature \"{feature_disp}\"). FIX: start a feature first (state start-feature), then record its route."
             )));
         }
+        // rti-1: a route now carries the feature it was recorded for, so a
+        // route left over from a PRIOR feature (start_default no longer
+        // carries one forward, see policy.rs's start_default) is never
+        // mistaken for this feature's own triage.
+        let route_owner_feature = target.record().get("feature").cloned().unwrap_or(Value::Null);
+        route_object.insert("feature".into(), route_owner_feature.clone());
         // D5 (hook-teeth bh-5, CONTEXT.md): when a route record ALREADY
         // exists on the target, this --set is a re-lane, not a first-time
         // record — validate the transition (scout-and-ticks.md, "Re-lane
         // checkpoint") before it lands. A first-time route --set (no
-        // existing record) is completely untouched by this check.
+        // existing record) is completely untouched by this check — and
+        // (rti-1) so is a route recorded for a DIFFERENT feature, or one
+        // pre-dating this fix that carries no "feature" field at all: either
+        // one is treated as no route, never as this feature's own history.
         if let Some(Value::Object(existing_route)) = target.record().get("route") {
-            let new_flags: Vec<String> = match route_object.get("flags") {
-                Some(Value::Array(a)) => a.iter().map(js_disp).collect(),
-                _ => Vec::new(),
-            };
-            match validate_route_lane_transition(existing_route, &lane_class, &new_flags) {
-                Ok(Some(stamp)) => {
-                    route_object.insert("demoted_at".into(), json!(stamp));
+            if route_belongs_to_feature(existing_route, &route_owner_feature) {
+                let new_flags: Vec<String> = match route_object.get("flags") {
+                    Some(Value::Array(a)) => a.iter().map(js_disp).collect(),
+                    _ => Vec::new(),
+                };
+                match validate_route_lane_transition(existing_route, &lane_class, &new_flags) {
+                    Ok(Some(stamp)) => {
+                        route_object.insert("demoted_at".into(), json!(stamp));
+                    }
+                    Ok(None) => {}
+                    Err(message) => return Ok(Out::Thrown(message)),
                 }
-                Ok(None) => {}
-                Err(message) => return Ok(Out::Thrown(message)),
             }
         }
         let lane_note = target.lane_note();
