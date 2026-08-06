@@ -208,5 +208,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-06T10:45:25.725Z"
+  },
+  "cli-surface-in-context": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-06T12:47:25.272Z"
   }
 }
