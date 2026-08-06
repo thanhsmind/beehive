@@ -186,7 +186,10 @@ pub fn nearest(leading: &[&str], limit: usize) -> Vec<String> {
 }
 
 /// Plain Levenshtein, two-row. Small inputs; no need for anything cleverer.
-fn distance(a: &str, b: &str) -> usize {
+/// `pub(crate)` so `router::nearest_flag` can score one entry's flags with
+/// the same routine `nearest` uses over the whole registry — one
+/// implementation, not two copies of the same algorithm.
+pub(crate) fn distance(a: &str, b: &str) -> usize {
     let a: Vec<char> = a.chars().collect();
     let b: Vec<char> = b.chars().collect();
     let mut prev: Vec<usize> = (0..=b.len()).collect();
