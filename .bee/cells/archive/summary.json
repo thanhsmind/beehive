@@ -188,5 +188,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-06T07:08:23.590Z"
+  },
+  "cli-help-shape-guard": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T09:25:23.351Z"
   }
 }
