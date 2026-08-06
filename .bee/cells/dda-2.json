@@ -1,0 +1,78 @@
+{
+  "id": "dda-2",
+  "feature": "debt-door-archive",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [
+    "dda-1"
+  ],
+  "title": "Give the three reporting counters the same sight, then pin all four with a parity test",
+  "action": "Three more scribing-debt counters walk the cell store themselves and share dda-1's blind spot: verbs/status_full/cells.rs:341 scribing_debt + :370 global_scribing_debt (feeding bee status's per-feature debt and the global orphan sweep via build.rs:277-278, through cells.rs:156 list_cells); hooks/chain_nudge.rs:803 scribing_debt (through :686 list_cells_filtered); hooks/session_preamble/store.rs:111 scribing_debt + :137 global_scribing_debt (feeding the session-start debt line via budget.rs:513,530, through store.rs:25 list_cells). Each skips directory entries at cells.rs:162-164, chain_nudge.rs:695-696 and store.rs:30-31 respectively. Make all three archive-aware the same way dda-1 made the door counter — hot cells plus .bee/cells/archive/<feature>/, live copy wins on a duplicate id — leaving each layer's own list helper otherwise intact, and leaving every NON-debt caller of those helpers (cells list, backlog, reviews, compaction attribution, prompt-context) active-only. The global/orphan sweeps must gain the same sight, since an orphaned feature's cells are exactly the ones most likely to be archived. Then write the parity test the whole feature exists for: one fixture holding a hot capped behavior_change cell, an archived one, and one id present in both places, asserted to yield the SAME count and the SAME ids from all four counters (drivers::scribing_debt, status_full's, chain_nudge's, session_preamble's). Precedent for a parity suite over hand-copied logic: derived-check-hardening E5.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee status's per-feature debt and its global orphaned sweep count archived cells, with live-copy-wins dedup",
+      "The chain-nudge hook line and the session-preamble debt line count them too",
+      "One parity test proves all four counters return identical count and ids over a fixture mixing hot, archived and duplicated cells",
+      "Non-debt callers of the touched list helpers are unchanged: no listing, backlog, reviews, compaction or prompt-context surface grows archived rows",
+      "This repo surfaces no newly-alarming debt after the change (measured before it: 0 features, 0 cells); a contradiction is reported in the outcome, never silenced"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+        "substantive": "both scribing_debt and global_scribing_debt read hot + archived cells; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs",
+        "substantive": "both debt counters read hot + archived cells"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/chain_nudge.rs",
+        "substantive": "the hook's own scribing_debt reads hot + archived cells"
+      }
+    ],
+    "key_links": [
+      "the parity test drives all four counters over one fixture",
+      "each layer keeps its own list helper; only the debt path gains the archive"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+    "packages/bee-rs/crates/bee/src/hooks/chain_nudge.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+    "docs/history/debt-door-archive/plan.md"
+  ],
+  "decisions": [
+    "derived-check-hardening E5 (hand-copied logic is pinned by a parity suite rather than refactored into one derivation)"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "exec-dda-2",
+    "outcome": "Made status_full/chain_nudge/session_preamble scribing-debt counters (and both global orphan sweeps) archive-aware like dda-1's door; added a parity test over hot+archived+duplicate cells proving all four counters and both global sweeps agree; live repo shows 0 newly-surfaced debt from archived features (21-cell orphan count is pre-existing hot-store debt, unrelated).",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+      "packages/bee-rs/crates/bee/src/hooks/chain_nudge.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T03:01:49.458Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bb2df452-734c-4dc1-80a8-0578a8027e18",
+    "claimed_at": "2026-08-06T02:49:18.519Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T03:01:37.893Z"
+  }
+}

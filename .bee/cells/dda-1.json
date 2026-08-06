@@ -1,0 +1,71 @@
+{
+  "id": "dda-1",
+  "feature": "debt-door-archive",
+  "lane": "standard",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Make the doors' scribing-debt counter see archived cells",
+  "action": "drivers::scribing_debt (packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:347) enumerates through guard.rs:175 list_cells, which `continue`s on every directory entry (guard.rs:181-182) and so never opens .bee/cells/archive/<feature>/*.json. Because `bee close` archives a feature's cells on a green close, the count is structurally zero from that moment on and a clear door is indistinguishable from a paid debt (measured: doc-viewer-links closed with 'door scribing-debt: clear' while both of its behavior_change cells were uncaptured). Make the debt enumeration archive-aware: read the feature's hot cells AND .bee/cells/archive/<feature>/*.json, deduplicating by cell id with the LIVE copy winning — the exact pattern verbs/knowledge/promote.rs:353-376 already uses and verbs/knowledge/tests.rs:682 already pins. Do it without changing the generic guard.rs list_cells contract that other callers rely on: either add an archive-aware variant beside it or take an explicit include_archived argument that only the debt counter passes true (no other caller changes behavior). The threshold logic (best_scribing_stamp_ms, close.rs:275) is untouched — an archived cell is counted exactly when its capped_at is newer than the feature's best stamp, same as a hot one.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A capped behavior_change cell living only under .bee/cells/archive/<feature>/ counts as debt when its capped_at is newer than the feature's best scribing stamp",
+      "bee close's door detail, scribing_debt_close_door and scribing_debt_swap_door all report that same debt, because all three read this one counter",
+      "A cell id present in BOTH the hot dir and the archive is counted once, with the live copy's own trace deciding",
+      "An archived cell older than the feature's best stamp stays uncounted",
+      "bee cells list, bee cells ready and every other guard.rs list_cells caller keep their active-only behavior"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "scribing_debt enumerates hot + archived cells with live-copy-wins dedup; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "substantive": "tests plant cells directly under .bee/cells/archive/<feature>/ and assert the door counts them"
+      }
+    ],
+    "key_links": [
+      "close.rs scribing_debt reads the archive the way knowledge/promote.rs:353-376 already does",
+      "set_gate.rs's two doors keep calling drivers::scribing_debt rather than a second copy"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+    "docs/history/debt-door-archive/plan.md"
+  ],
+  "decisions": [
+    "chain-integrity D2 (the close boundary is the ONE place scribing debt is a wall instead of a signal)",
+    "scribing-integrity D1 (the swap is the second wall, same counter)"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "exec-dda-1",
+    "outcome": "scribing_debt now walks .bee/cells/archive/<feature>/ with live-copy-wins dedup, so an archived behavior_change cell still counts against the door",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T02:48:55.300Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bb2df452-734c-4dc1-80a8-0578a8027e18",
+    "claimed_at": "2026-08-06T02:43:17.348Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T02:48:43.682Z"
+  }
+}
