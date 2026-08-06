@@ -52,7 +52,15 @@ bee:
   record it must validate lives in a different workspace, leaving it to go
   looking by hand. A dispatch that executes a unit of work always names the
   write-capable execution worker's own helper identity, never a read-only
-  helper's.
+  helper's. The payload's own short label names the WORK, not the transport:
+  a dispatch that executes a unit of work carries that unit's identifier and
+  its recorded one-line title, cut to stay readable in a list; only a unit
+  with no usable title falls back to the bare purpose-and-model form, and no
+  label ever renders a dangling separator. The label matters because it is
+  the only text a watching human sees per running helper — a label that is
+  just a model name is the failure this rule exists to prevent, and the other
+  dispatch purposes keep the short form because their subject is the
+  caller's to state, not the record's to know.
 - **R9 —** **Dispatch records tell the economic truth** (gh22-completion g22-2;
   refined by codex-native-transport D1/D3/D7): every record carries
   logical_tier, requested_model, effective_model, effective_model_status,
@@ -108,6 +116,13 @@ bee:
   in-family calls only).
 
 ## Pointers (implementation)
+
+- **P2a —** Payload label (R8): the `description` build in `prepare_dispatch`'s
+  Agent arm, `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`, with
+  `DESCRIPTION_TITLE_MAX` in the same file. Test:
+  `a_cell_dispatch_description_says_what_the_work_is` (`drivers/tests.rs`),
+  which also pins `gather (sonnet)` unchanged. Provenance: cell `ddi-1`,
+  commit 537b9e85.
 
 - **P3 —** Read-only validation: `validateModelsConfig` (advice-class token
   blocklist) + `validateAgentFilesDrift`, same lib; suite

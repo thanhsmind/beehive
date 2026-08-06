@@ -1,0 +1,48 @@
+{
+  "id": "ddi-1",
+  "feature": "dispatch-description-intent",
+  "lane": "tiny",
+  "title": "Give a cell dispatch a description that says what the work is",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "action": "In prepare_dispatch's Agent payload branch (prepare.rs, the `_ =>` arm around line 698), replace the description `format!(\"{kind} ({model})\")` for kind == \"cell\" with '<cell-id>: <title> (<model>)', reading id and title from the `cell` value already loaded in this function. One-line and truncate the title with the existing jsprim one_line helper (cap around 60 chars so the agent-list row stays readable). Keep today's exact bytes as the fallback for every other kind, and for a cell whose record carries no non-empty title — never render a dangling colon. Tests: a cell with a title renders the id, the title and the model; a cell with no title (and one with an empty/whitespace title) renders exactly today's string; a very long title is truncated; and the gather/reviewer/advisor kinds keep their current description byte-for-byte (the existing assertion on \"gather (sonnet)\" at drivers/tests.rs:446 must still pass unchanged).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers",
+  "must_haves": {
+    "truths": [
+      "A cell dispatch description names the cell id, its title and the model",
+      "A titleless cell renders exactly today's string, with no dangling separator",
+      "gather, reviewer and advisor descriptions are unchanged",
+      "The full declared test suite is green"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "dispatch-name",
+    "outcome": "the kind=cell Agent description is built from the cell's own title, with today's bytes as the titleless fallback",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T10:44:12.790Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f91db0c1-e1fd-4a58-aa14-5c13fd8fbec1",
+    "claimed_at": "2026-08-06T10:40:59.014Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T10:44:01.029Z"
+  }
+}
