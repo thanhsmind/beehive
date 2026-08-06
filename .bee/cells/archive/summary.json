@@ -78,5 +78,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-06T03:45:50.878Z"
+  },
+  "ci-preamble-session-fixture": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T04:24:41.530Z"
   }
 }
