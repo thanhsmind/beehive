@@ -65,6 +65,22 @@ impl HarnessRoots {
             if let Some(r) = canonical_allowlist_root(&base) {
                 roots.push(r);
             }
+            // On unix the temp dir is SHARED, so the harness names its
+            // scratchpad root per user: `<temp>/claude-<uid>`. `<temp>/claude`
+            // alone missed it — `is_under_root` compares whole segments, and
+            // `/tmp/claude-1000` is not under `/tmp/claude` — so a plain
+            // scratchpad write was denied for the containment reason. The uid
+            // is the CALLING user's, never a `claude-*` prefix match: another
+            // user's scratchpad stays outside the exemption. Windows needs no
+            // suffix — its temp dir is already per-user.
+            #[cfg(unix)]
+            {
+                let uid = unsafe { libc::getuid() };
+                let base = t.join(format!("claude-{uid}")).to_string_lossy().into_owned();
+                if let Some(r) = canonical_allowlist_root(&base) {
+                    roots.push(r);
+                }
+            }
         }
         HarnessRoots { roots }
     }

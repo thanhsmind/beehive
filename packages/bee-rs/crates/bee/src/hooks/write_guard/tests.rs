@@ -1935,7 +1935,9 @@ use std::process::ExitCode;
         let home = dunce::canonicalize(home_dir.path()).unwrap();
         let temp = dunce::canonicalize(temp_dir.path()).unwrap();
         let roots = HarnessRoots::from_bases(Some(home.clone()), Some(temp.clone()));
-        assert_eq!(roots.roots.len(), 2, "both injected bases must resolve");
+        // Memory + `<temp>/claude`, plus the uid-suffixed scratchpad root on unix.
+        let expected = if cfg!(unix) { 3 } else { 2 };
+        assert_eq!(roots.roots.len(), expected, "every injected base must resolve");
         HarnessFx { fx, _home_dir: home_dir, _temp_dir: temp_dir, home, temp, roots }
     }
 
@@ -1973,6 +1975,42 @@ use std::process::ExitCode;
             &hx.roots,
         );
         assert_eq!(b.code, 0, "{}", b.stderr);
+    }
+
+    /// Measured 2026-08-06: the harness scratchpad here is `/tmp/claude-1000`,
+    /// while the allowlist only knew `/tmp/claude` — so the E1 exemption missed
+    /// the very surface it was written for, and a scratchpad write was denied
+    /// mid-session. The exemption is one uid-scoped path, never a `claude-*`
+    /// prefix: a sibling uid's scratchpad stays outside it.
+    #[cfg(unix)]
+    #[test]
+    fn gh1_the_uid_suffixed_scratchpad_is_exempt_and_a_sibling_uid_is_not() {
+        let hx = build_harness_fixture();
+        let uid = unsafe { libc::getuid() };
+        let mine = hx.temp.join(format!("claude-{uid}")).join("sess").join("scratchpad").join("f.txt");
+        let w = expect_done_with_roots(
+            json!({"tool_name":"Write","tool_input":{"file_path":mine.to_string_lossy(),"content":"x\n"}}),
+            &hx.fx.root,
+            &hx.roots,
+        );
+        assert_eq!(w.code, 0, "{}", w.stderr);
+
+        let b = expect_done_with_roots(
+            bash(&format!("printf x > \"{}\"", mine.to_string_lossy().replace('\\', "/"))),
+            &hx.fx.root,
+            &hx.roots,
+        );
+        assert_eq!(b.code, 0, "{}", b.stderr);
+
+        let theirs = hx
+            .temp
+            .join(format!("claude-{}", uid.wrapping_add(1)))
+            .join("sess")
+            .join("scratchpad")
+            .join("f.txt");
+        let d = expect_done_with_roots(edit(&theirs.to_string_lossy()), &hx.fx.root, &hx.roots);
+        assert_eq!(d.code, 2, "{}", d.stderr);
+        assert!(d.stderr.contains("could not be canonically contained"), "{}", d.stderr);
     }
 
     #[test]
