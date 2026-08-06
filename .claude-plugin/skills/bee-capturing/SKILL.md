@@ -86,24 +86,37 @@ runs it.
 1. Flush the capture queue: `bee capture list`, then oldest-first give
    each stub its full spec merge and `bee capture flush --id <id>
    --into <spec>`. A stub is never dropped or summarized away.
-2. From the feature's artifacts — CONTEXT.md, plan, cell traces,
+2. When `docs/history/<feature>/promote-proposals.md` exists it is the
+   FIRST input, not a second opinion: the close already mined that
+   feature's capped traces into a delivery draft, per-area candidate
+   bullets, and pattern candidates. Review it, never apply it as
+   written. Check every bullet against the bundle (already stated? and
+   is it filed under the concept that actually owns it — the area tag
+   comes from the work item and is routinely over-broad or wrong) and
+   against the shipped source (does the code it describes still exist,
+   or did a later port retire it?). Merge what survives; give what does
+   not a recorded reason. Either way the loop closes with `bee state
+   scribing-run --feature <feature>` — that stamp is the receipt the
+   unapplied-proposal reminder reads, and "reviewed, nothing worth
+   keeping" is a legitimate result that still owes it.
+3. From the feature's artifacts — CONTEXT.md, plan, cell traces,
    worker reports, review findings — write one dated learnings file
    (`references/promotion.md` ("Harvest Discipline", "Learnings File
    Template")); read the touched areas' existing entries first, so the
    harvest extends the layer instead of restating it. Delegate
    the reading to read-only subagents; keep synthesis here. Thin
    evidence means a thin file, never an invented finding.
-3. Promote a learning only when it clears all three bars:
+4. Promote a learning only when it clears all three bars:
    multi-feature relevance, meaningful waste prevented, generalizable.
    Prefer an executable check over prose
    (`references/promotion.md` ("Promotion Decision Tree")).
-4. Log the decisions future planning must honor; supersede outdated
+5. Log the decisions future planning must honor; supersede outdated
    ones, never edit them. File unresolved friction with
    `bee backlog add` so grooming can hunt it later.
-5. Housekeeping, warn-never-block: refresh the feedback digest and
+6. Housekeeping, warn-never-block: refresh the feedback digest and
    sweep the feature scratch — a failure here is a one-line warning,
    never a delay or reversal of the close.
-6. Commit the close's own output as one commit, then record the close
+7. Commit the close's own output as one commit, then record the close
    in state and register the head as a review candidate
    (`bee reviews candidate add`). The feature is truthfully unreviewed
    until a user-invoked review covers it.

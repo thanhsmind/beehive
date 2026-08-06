@@ -1,0 +1,44 @@
+{
+  "id": "crp-1",
+  "feature": "capture-reads-proposals",
+  "lane": "tiny",
+  "title": "bee-capturing: make the promote proposal the first input of a compounding run",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-capturing/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-capturing/SKILL.md"
+  ],
+  "action": "Add a numbered step to the Compound section stating: when docs/history/<feature>/promote-proposals.md exists it is the first input, reviewed and never applied blindly; every bullet is checked against the bundle (already stated? stated under the wrong owner?) and against the shipped source (does the code still exist?); the area tag comes from the work item's bee.areas and is routinely wrong; what survives is merged, what does not gets a recorded reason; and bee state scribing-run is the receipt that closes the loop either way, including a reviewed-and-declined proposal. Renumber the following steps. Then run the regen chain in this cell: bee dev render-skill-trees, bee onboard --repo-root . --apply, bee dev release-manifest --write.",
+  "verify": "bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "The step names the file by path so a cold agent can find it",
+      "Review-then-merge is stated as the rule, never apply-as-written",
+      "The scribing-run stamp is named as the receipt, and a declined proposal still takes it",
+      "The regen chain ran in this cell and the manifest check is clean"
+    ]
+  },
+  "decisions": [
+    "07dce495"
+  ],
+  "deps": [],
+  "tier": "generation",
+  "status": "claimed",
+  "trace": {
+    "worker": "capture-doctrine",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "855e0412-4c35-42e9-bac5-c49d6bbf282a",
+    "claimed_at": "2026-08-06T07:30:04.454Z"
+  }
+}
