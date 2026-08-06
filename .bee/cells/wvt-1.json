@@ -1,0 +1,62 @@
+{
+  "id": "wvt-1",
+  "feature": "workflow-verb-tests",
+  "lane": "small",
+  "change_class": "test",
+  "behavior_change": false,
+  "deps": [],
+  "title": "Cover the three workflow-lifecycle verbs that no test has ever driven",
+  "action": "run_start_feature (verbs/state_group/policy.rs:554), run_workflows_list and run_workflows_close (verbs/state_group/workflows.rs:38 and :106) have ZERO test call sites — grep finds only their definitions and their router dispatch entries. Everything below them is unit-tested (ensure_workflow_record_for_feature idempotence, close_workflows_for_feature keep-only-named, seed_legacy_workflows gating, create_workflow refusals in workflow_store/tests.rs), so the untested layer is exactly the one that assembles those seams into a command: flag parsing, target resolution, the refusal wording, the emitted payload, and the exit code. Write that coverage. Drive the real verb surface — either the run_* entry points directly (the way state_group/tests.rs drives run_set_body) or the built binary through an integration test under crates/bee/tests/ (the cells_archive_sweep.rs pattern) — whichever actually reaches them; do not test a private helper and call it verb coverage. Cover, at minimum: a clean start-feature creates the feature's workflow record and leaves the record readable by workflows list; start-feature's guarded refusals fail closed with zero mutations (a non-terminal prior phase, an active reservation, a claimed cell, a nonterminal cell of the prior feature, a live workflow for the target feature); workflows list reports every record with its status and phase; workflows close closes the named feature's records and leaves others alone; and close's --all-but-active guard refuses or spares the active feature exactly as resolve_active_feature_for_workflows_close decides (its helper already has a unit test at state_group/tests.rs:1070 — the gap is the verb around it). Where a refusal is asserted, assert the message names the blocker and that nothing reached disk.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Each of run_start_feature, run_workflows_list and run_workflows_close is reached by at least one test through its real entry point",
+      "A clean start-feature is proven to create the workflow record, and each guarded refusal is proven to fail closed with zero mutations",
+      "workflows close is proven to close the named feature's records and to leave every other record untouched",
+      "The --all-but-active path is exercised through the verb, not only through its helper",
+      "No production behavior changes in this cell — it is test-only; if a test exposes a real defect, report it in the outcome instead of quietly fixing it"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "substantive": "new tests driving the three verbs, or a note in the outcome saying they live in crates/bee/tests/ instead and why"
+      }
+    ],
+    "key_links": [
+      "the tests reach run_start_feature / run_workflows_list / run_workflows_close themselves",
+      "the seam-level unit tests below them stay untouched"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs"
+  ],
+  "decisions": [
+    "A verb with zero test call sites is untested however well its seams are covered (finding logged 2026-08-05 during the stale-lane sweep)"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "exec-wvt-1",
+    "outcome": "Added packages/bee-rs/crates/bee/tests/workflow_verbs.rs: 16 integration tests driving run_start_feature, run_workflows_list and run_workflows_close through the built binary (no run_x_body split exists for this trio, so an in-process unit test would assert on nothing) — clean start-feature + listing, all five start-feature guarded refusals with zero-mutation proof, workflows list mixed status/phase, close by --feature/--id/--all-but-active each leaving other records untouched, and both close modes refusing rather than degrading to \"all\" when the active feature is unresolvable. state_group/tests.rs untouched (test-only, no production change; no defect found).",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T03:43:38.675Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bb2df452-734c-4dc1-80a8-0578a8027e18",
+    "claimed_at": "2026-08-06T03:31:32.138Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T03:43:26.766Z"
+  }
+}
