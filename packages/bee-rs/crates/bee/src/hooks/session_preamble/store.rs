@@ -9,7 +9,7 @@ use crate::jsjson;
 use crate::state::{bypass_level, ship_visibility};
 use serde_json::{json, Map, Value};
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use crate::version::BEE_VERSION;
 
@@ -51,6 +51,70 @@ pub(crate) fn list_cells(root: &Path, feature: Option<&Value>, status: Option<&s
     cells.sort_by(|a, b| {
         locale_cmp(&tpl(a.get("id")), &tpl(b.get("id")), true)
     });
+    cells
+}
+
+/// Archive-aware sibling of `list_cells`, for debt-door-archive dda-2: `bee
+/// close` archives a feature's cells on a green close
+/// (`.bee/cells/archive/<feature>/*.json`), so a debt counter that only
+/// walks the live store the way `list_cells` does goes structurally silent
+/// the moment its own feature closes. This reads the live store (exactly as
+/// `list_cells` does) THEN every archived `.json` under
+/// `.bee/cells/archive/<feature>/` (a truthy `feature` filter) or under
+/// every `.bee/cells/archive/*/` subdirectory (no filter — the global orphan
+/// sweep needs every feature's archive slot), deduplicating by id with the
+/// LIVE copy winning on a duplicate — the same live-copy-wins pattern
+/// `verbs/drivers/guard.rs:218 list_cells_including_archive` already uses
+/// for `bee close`'s own door. `list_cells` itself is untouched and stays
+/// active-only. Only `scribing_debt` and `global_scribing_debt` below call
+/// this variant.
+pub(crate) fn list_cells_including_archive(
+    root: &Path,
+    feature: Option<&Value>,
+    status: Option<&str>,
+) -> Vec<JMap> {
+    let mut cells = list_cells(root, feature, status);
+    let mut seen_ids: HashSet<String> = cells.iter().map(|c| tpl(c.get("id"))).collect();
+    let archive_root = root.join(".bee").join("cells").join("archive");
+    let feature_dirs: Vec<PathBuf> = match feature.filter(|f| truthy(f)) {
+        Some(f) => vec![archive_root.join(jsjson::js_to_string(f))],
+        None => {
+            let Ok(rd) = std::fs::read_dir(&archive_root) else { return cells };
+            rd.filter_map(|e| e.ok())
+                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                .map(|e| e.path())
+                .collect()
+        }
+    };
+    for dir in feature_dirs {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        for entry in rd.filter_map(|e| e.ok()) {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.ends_with(".json") {
+                continue;
+            }
+            let Some(cell) = read_json_object(&entry.path()) else { continue };
+            if let Some(f) = feature.filter(|f| truthy(f)) {
+                if !strict_eq(cell.get("feature"), Some(f)) {
+                    continue;
+                }
+            }
+            if let Some(s) = status {
+                if !str_eq(cell.get("status"), s) {
+                    continue;
+                }
+            }
+            let id = tpl(cell.get("id"));
+            if !seen_ids.insert(id) {
+                continue; // the live copy above already claimed this id
+            }
+            cells.push(cell);
+        }
+    }
+    cells.sort_by(|a, b| locale_cmp(&tpl(a.get("id")), &tpl(b.get("id")), true));
     cells
 }
 
@@ -117,7 +181,9 @@ pub(crate) fn scribing_debt(root: &Path) -> (usize, Vec<Value>) {
     let ledger = read_scribing_ledger(root);
     let threshold = best_scribing_stamp_ms(root, &feature, &ledger, &state).unwrap_or(0.0);
     let mut ids = Vec::new();
-    for cell in list_cells(root, Some(&feature), Some("capped")) {
+    // dda-2: archive-aware, so a feature that just closed (and got archived)
+    // still shows its unpaid debt instead of going structurally silent.
+    for cell in list_cells_including_archive(root, Some(&feature), Some("capped")) {
         let trace = match cell.get("trace") {
             Some(v) if truthy(v) => v.clone(),
             _ => json!({}),
@@ -135,7 +201,9 @@ pub(crate) fn scribing_debt(root: &Path) -> (usize, Vec<Value>) {
 
 /// cells.mjs globalScribingDebt — the orphan sweep across every feature.
 pub(crate) fn global_scribing_debt(root: &Path) -> (usize, Vec<(String, Vec<Value>)>) {
-    let cells: Vec<JMap> = list_cells(root, None, Some("capped"))
+    // dda-2: archive-aware. An orphaned feature's cells are exactly the ones
+    // most likely to have been archived already, so the sweep must see them.
+    let cells: Vec<JMap> = list_cells_including_archive(root, None, Some("capped"))
         .into_iter()
         .filter(|cell| {
             let trace = match cell.get("trace") {

@@ -2371,3 +2371,128 @@ use crate::version::BEE_VERSION;
         crate::fsutil::write_json_atomic(&git_cache_path(&root), &bad).unwrap();
         assert_eq!(review_counts(&root)["reviewed"], json!(1));
     }
+
+    // ── debt-door-archive dda-2: the parity test the feature exists for ────
+    //
+    // Four independent copies of "walk the store, count unpaid
+    // behavior_change debt" live in this tree (drivers::scribing_debt behind
+    // `bee close`'s door, this module's own scribing_debt/global_scribing_debt
+    // behind `bee status`, hooks::chain_nudge::scribing_debt behind the
+    // chain-nudge hook line, and hooks::session_preamble::scribing_debt/
+    // global_scribing_debt behind the session-start line). dda-1 made the
+    // first archive-aware; dda-2 made the rest. This fixture is the one
+    // place all four are driven together, over the exact shape the whole
+    // feature is about: a hot cell, an archived cell, and one id that exists
+    // in BOTH places (live-copy-wins dedup must still count it once).
+
+    /// A single feature with a hot capped `behavior_change` cell, an
+    /// archived one, and a duplicate id present in both the hot store and
+    /// the archive slot.
+    fn parity_fixture(base: &Path) -> (PathBuf, &'static str) {
+        let root = base.join("repo");
+        let feature = "parity-feat";
+        std::fs::create_dir_all(root.join(".bee/cells/archive").join(feature)).unwrap();
+        std::fs::create_dir_all(root.join(".bee/logs")).unwrap();
+        std::fs::write(
+            root.join(".bee/onboarding.json"),
+            format!(r#"{{"bee_version":"{BEE_VERSION}","completed":true}}"#),
+        )
+        .unwrap();
+        std::fs::write(
+            root.join(".bee/state.json"),
+            format!(r#"{{"phase":"executing","feature":"{feature}","gates":{{}}}}"#),
+        )
+        .unwrap();
+        let cell = |rel: &str, id: &str| {
+            std::fs::write(
+                root.join(rel),
+                format!(
+                    r#"{{"id":"{id}","feature":"{feature}","status":"capped","title":"t",
+                    "trace":{{"behavior_change":true,"capped_at":"2024-01-01T00:00:00Z"}}}}"#
+                ),
+            )
+            .unwrap();
+        };
+        // Hot only.
+        cell(".bee/cells/hot-1.json", "hot-1");
+        // Archived only — the case `list_cells`'s active-only scan cannot see.
+        cell(&format!(".bee/cells/archive/{feature}/arch-1.json"), "arch-1");
+        // Present in BOTH: the live copy must win and the id must count once.
+        cell(".bee/cells/dup-1.json", "dup-1");
+        cell(&format!(".bee/cells/archive/{feature}/dup-1.json"), "dup-1");
+        (root, feature)
+    }
+
+    #[test]
+    fn the_four_scribing_debt_counters_agree_over_hot_archived_and_duplicate_cells() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, feature) = parity_fixture(tmp.path());
+        let want_count = 3usize;
+        let want_ids = |ids: Vec<String>| {
+            let mut ids = ids;
+            ids.sort();
+            assert_eq!(ids, vec!["arch-1", "dup-1", "hot-1"], "ids: {ids:?}");
+        };
+
+        // 1. `bee close`'s door (verbs::drivers::scribing_debt, dda-1).
+        let close_debt = crate::verbs::drivers::scribing_debt(&root, feature).unwrap();
+        assert_eq!(close_debt.count, want_count, "drivers::scribing_debt");
+        want_ids(close_debt.ids.iter().map(|v| jsjson::js_to_string(v)).collect());
+
+        // 2. `bee status`'s per-feature debt (this module).
+        let mut ctx = ctx_for(&root);
+        let status_debt = scribing_debt(&mut ctx).unwrap();
+        assert_eq!(status_debt["count"], json!(want_count), "status_full::scribing_debt");
+        want_ids(
+            status_debt["cells"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(jsjson::js_to_string)
+                .collect(),
+        );
+
+        // 3. the chain-nudge hook line (hooks::chain_nudge::scribing_debt).
+        let (chain_count, chain_ids) = crate::hooks::chain_nudge::scribing_debt(&root).unwrap();
+        assert_eq!(chain_count, want_count, "chain_nudge::scribing_debt");
+        want_ids(chain_ids);
+
+        // 4. the session-start debt line (hooks::session_preamble).
+        let (preamble_count, preamble_ids) = crate::hooks::session_preamble::scribing_debt(&root);
+        assert_eq!(preamble_count, want_count, "session_preamble::scribing_debt");
+        want_ids(preamble_ids.iter().map(jsjson::js_to_string).collect());
+    }
+
+    /// The global/orphan sweeps (`bee status`'s and the session-preamble
+    /// hook's) must see the same archived+duplicated cells as their
+    /// per-feature siblings above — an orphaned feature's cells are exactly
+    /// the ones most likely to already be archived.
+    #[test]
+    fn the_two_global_orphan_sweeps_agree_over_hot_archived_and_duplicate_cells() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, feature) = parity_fixture(tmp.path());
+
+        let mut ctx = ctx_for(&root);
+        let status_global = global_scribing_debt(&mut ctx).unwrap();
+        assert_eq!(status_global["count"], json!(3), "status_full::global_scribing_debt");
+        let status_ids: Vec<String> = status_global["features"][0]["cells"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(jsjson::js_to_string)
+            .collect();
+        let mut status_ids_sorted = status_ids.clone();
+        status_ids_sorted.sort();
+        assert_eq!(status_ids_sorted, vec!["arch-1", "dup-1", "hot-1"]);
+        assert_eq!(status_global["features"][0]["feature"], json!(feature));
+
+        let (preamble_count, preamble_features) =
+            crate::hooks::session_preamble::global_scribing_debt(&root);
+        assert_eq!(preamble_count, 3, "session_preamble::global_scribing_debt");
+        assert_eq!(preamble_features.len(), 1);
+        assert_eq!(preamble_features[0].0, feature);
+        let mut preamble_ids: Vec<String> =
+            preamble_features[0].1.iter().map(jsjson::js_to_string).collect();
+        preamble_ids.sort();
+        assert_eq!(preamble_ids, vec!["arch-1", "dup-1", "hot-1"]);
+    }

@@ -30,7 +30,12 @@ const HOOK_NAME: &str = "chain-nudge";
 /// The native path cannot serve this input; the run answers with
 /// `Outcome::Delegate` instead (D6, docs/history/js-parity-cleanup/CONTEXT.md
 /// — the live delegation signal itself is a separate backlog item).
-struct Delegate;
+///
+/// pub(crate) (not the default private) so `scribing_debt`'s `Result` error
+/// type is nameable from the debt-door-archive dda-2 parity test; `Debug` is
+/// derived only so that test can `.unwrap()` the `Result`.
+#[derive(Debug)]
+pub(crate) struct Delegate;
 
 // A run can still end in Delegate AFTER a corrupt file has been read (a bad
 // product_root or an exotic approved_gates is only discovered later), and a
@@ -729,6 +734,68 @@ fn list_cells_filtered(
     cells
 }
 
+/// Archive-aware sibling of `list_cells_filtered`, for debt-door-archive
+/// dda-2: `bee close` archives a feature's cells on a green close
+/// (`.bee/cells/archive/<feature>/*.json`), so a debt counter that only
+/// walks the live store the way `list_cells_filtered` does goes
+/// structurally silent the moment its own feature closes. This reads the
+/// live store (exactly as `list_cells_filtered` does) THEN every archived
+/// `.json` directly under `.bee/cells/archive/<feature>/`, deduplicating by
+/// id with the LIVE copy winning on a duplicate — the same live-copy-wins
+/// pattern `verbs/drivers/guard.rs:218 list_cells_including_archive`
+/// already uses for `bee close`'s door. `list_cells_filtered` itself is
+/// untouched and stays active-only. Only `scribing_debt` below calls this
+/// variant; `feature` here is always the already-truthy state feature (this
+/// hook has no global/cross-feature sweep).
+fn list_cells_filtered_including_archive(
+    root: &Path,
+    feature: &Value,
+    status: &str,
+) -> Vec<Map<String, Value>> {
+    let mut cells = list_cells_filtered(root, feature, status);
+    let mut seen_ids: std::collections::HashSet<String> =
+        cells.iter().map(|c| js_string_or_undefined(c.get("id"))).collect();
+    let feature_str = crate::jsjson::js_to_string(feature);
+    let archive_dir = root.join(".bee").join("cells").join("archive").join(&feature_str);
+    let Ok(rd) = std::fs::read_dir(&archive_dir) else { return cells };
+    for entry in rd.flatten() {
+        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.ends_with(".json") {
+            continue;
+        }
+        let cell = match read_json(&entry.path()) {
+            ReadJson::Missing => continue,
+            ReadJson::Corrupt => {
+                queue_corrupt_json(&entry.path());
+                continue;
+            }
+            ReadJson::Parsed(Value::Object(m)) => m,
+            ReadJson::Parsed(_) => continue, // `typeof cell === 'object'` fails only for primitives; null is falsy
+        };
+        if truthy(feature) && cell.get("feature").unwrap_or(&Value::Null) != feature {
+            continue;
+        }
+        if !matches!(cell.get("status"), Some(Value::String(s)) if s == status) {
+            continue;
+        }
+        let id = js_string_or_undefined(cell.get("id"));
+        if !seen_ids.insert(id) {
+            continue; // the live copy above already claimed this id
+        }
+        cells.push(cell);
+    }
+    cells.sort_by(|a, b| {
+        natural_cmp(
+            &js_string_or_undefined(a.get("id")),
+            &js_string_or_undefined(b.get("id")),
+        )
+    });
+    cells
+}
+
 /// Parses whichever of `run.at`/`run.date` is truthy.
 fn scribing_run_stamp_ms(run: Option<&Value>) -> Option<f64> {
     let run = run?;
@@ -800,14 +867,19 @@ fn best_scribing_stamp_ms(
 /// scribing run. Returns (count, ids). No reachable branch here panics —
 /// corrupt JSON warns and reads as absent, and only read_state's
 /// exotic-gates case still delegates.
-fn scribing_debt(root: &Path) -> Result<(usize, Vec<String>), Delegate> {
+///
+/// pub(crate) (not the default private) only so the debt-door-archive dda-2
+/// parity test can reach it alongside the other three counters.
+pub(crate) fn scribing_debt(root: &Path) -> Result<(usize, Vec<String>), Delegate> {
     let state = read_state(root)?;
     let feature = state.get("feature").cloned().unwrap_or(Value::Null);
     if !truthy(&feature) {
         return Ok((0, Vec::new()));
     }
     let threshold = best_scribing_stamp_ms(root, &feature, &state).unwrap_or(0.0);
-    let cells = list_cells_filtered(root, &feature, "capped");
+    // dda-2: archive-aware, so a feature that just closed (and got archived)
+    // still shows its unpaid debt instead of going structurally silent.
+    let cells = list_cells_filtered_including_archive(root, &feature, "capped");
     let mut ids = Vec::new();
     for cell in &cells {
         let trace = match cell.get("trace") {
