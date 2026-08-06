@@ -2,14 +2,14 @@
 type: bee.area
 title: "Bee OKF Profile — the context consumer, the promote proposer, and the session preamble"
 description: "The budget-aware manifest a work item's curated context is returned as, the measured relevance ranking that cuts critical patterns without losing one, the propose-never-write loop closer, the shared anchor resolver that lets both verbs work from a docs/history/ fallback when no work-item concept exists, and the preamble that makes the bundle load-bearing — every section of which resolves through the one bundle predicate, including the critical-patterns digest's own relevance ranking."
-timestamp: 2026-08-05
+timestamp: 2026-08-06
 bee:
   id: okf-profile-context-and-promote
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3, i54-closeout D3, "knowledge-loop D1/D5/D6/D7/D8 (one shared anchor resolver; a history CONTEXT.md/plan.md fallback when no work-item concept matches; zero_signal reported not thrown under it; the fallback reaches context, promote, kctx and dispatch prepare)"]
-  sources: ["okf-foundation cell okf-9 (`bee knowledge promote` — the propose-never-write loop closer, B5; trace in `.bee/cells/`, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B5", "docs/specs/okf-profile.md#B6", "docs/specs/okf-profile.md#B6b", "docs/specs/okf-profile.md#B7", "docs/specs/okf-profile.md#P2", "docs/specs/okf-profile.md#P3", "okf-integration-close-f4 cell f4-3 (the preamble stops printing the retired model — bundle-routed digest and project map, both no-bundle branches proven byte-identical; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`, "i54-closeout cell i54-closeout-3 (knowledge context --lane budget presets; trace in .bee/cells/, 2026-07-24)", "knowledge-loop cell kl-1 (anchor.rs + context.rs/kctx.rs fallback, D5/D6/D7/D8; commit 1b2a8253, 2026-08-05)", "knowledge-loop cell kl-2 (promote.rs consumes the resolver; dispatch-prepare manifest proof; commit e6f99a7a, 2026-08-05)", CONTEXT.md `docs/history/knowledge-loop/CONTEXT.md`]
+  decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3, i54-closeout D3, "knowledge-loop D1/D5/D6/D7/D8 (one shared anchor resolver; a history CONTEXT.md/plan.md fallback when no work-item concept matches; zero_signal reported not thrown under it; the fallback reaches context, promote, kctx and dispatch prepare)", "07dce495 (capture-reads-proposals: review-then-merge a promote proposal, never apply it as written; the area tag and the code it describes are both verified first, and the scribing stamp is owed even when nothing is kept)"]
+  sources: ["okf-foundation cell okf-9 (`bee knowledge promote` — the propose-never-write loop closer, B5; trace in `.bee/cells/`, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B5", "docs/specs/okf-profile.md#B6", "docs/specs/okf-profile.md#B6b", "docs/specs/okf-profile.md#B7", "docs/specs/okf-profile.md#P2", "docs/specs/okf-profile.md#P3", "okf-integration-close-f4 cell f4-3 (the preamble stops printing the retired model — bundle-routed digest and project map, both no-bundle branches proven byte-identical; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`, "i54-closeout cell i54-closeout-3 (knowledge context --lane budget presets; trace in .bee/cells/, 2026-07-24)", "knowledge-loop cell kl-1 (anchor.rs + context.rs/kctx.rs fallback, D5/D6/D7/D8; commit 1b2a8253, 2026-08-05)", "knowledge-loop cell kl-2 (promote.rs consumes the resolver; dispatch-prepare manifest proof; commit e6f99a7a, 2026-08-05)", CONTEXT.md `docs/history/knowledge-loop/CONTEXT.md`, "capture-reads-proposals cell crp-1 (the capture doctrine names the proposal as the first input of a compounding run and the scribing stamp as its receipt; skills/bee-capturing/SKILL.md, 2026-08-06)"]
   authoritative_for: "okf-profile: the context consumer, the promote proposer, and the session preamble"
 ---
 
@@ -217,6 +217,18 @@ session either: an unreadable predicate resolves to the legacy branch rather tha
   Separately, `bee orient` and the preamble both name every `docs/history/<slug>/promote-proposals.md`
   that no compounding run has yet answered, with its feature and counts. That surfacing is a
   REPORT: it refuses nothing, blocks nothing, and changes no exit code.
+
+- **The step that answers a proposal is doctrine now, not folklore (capture-reads-proposals,
+  cell crp-1, 2026-08-06).** The loop had three of its four parts built and nothing telling a
+  worker the third one existed: a proposal is mined automatically at close, and a scribing stamp
+  at or after the proposal's own timestamp is what retires the reminder — but no instruction text
+  anywhere named the file, so a compounding run mined the raw traces again from scratch. The
+  capture doctrine now names it as the FIRST input of a compounding run, with two guards that come
+  from answering fifteen open proposals by hand: the area a proposal names comes from the work
+  item and is routinely over-broad or simply wrong (one named an area that does not exist in the
+  bundle), and a proposal can faithfully describe code that a later port has since retired. So the
+  rule is review-then-merge, never apply-as-written, and the stamp is owed either way — including
+  when the honest answer is that nothing in the proposal was worth keeping.
 
 ## Pointers (implementation)
 

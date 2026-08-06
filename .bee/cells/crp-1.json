@@ -26,19 +26,23 @@
   ],
   "deps": [],
   "tier": "generation",
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "capture-doctrine",
     "outcome": null,
     "files_changed": [],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-06T07:31:02.070Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "855e0412-4c35-42e9-bac5-c49d6bbf282a",
-    "claimed_at": "2026-08-06T07:30:04.454Z"
+    "claimed_at": "2026-08-06T07:30:04.454Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T07:30:50.095Z"
   }
 }
