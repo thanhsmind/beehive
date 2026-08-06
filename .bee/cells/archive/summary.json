@@ -68,5 +68,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-06T03:04:32.001Z"
+  },
+  "route-identity": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T03:22:34.939Z"
   }
 }
