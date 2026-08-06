@@ -262,6 +262,55 @@ mod tests {
         assert!(subs.contains(&"context".to_string()), "{subs:?}");
     }
 
+    /// A vocabulary ratchet, not a rename. A caller who has learned that
+    /// `--worker` names the acting agent on one command should not have to
+    /// relearn `--agent` for the same concept on the next — a new spelling
+    /// for an existing idea makes that caller's knowledge useless one
+    /// command later. This test pins the number of DISTINCT flag names
+    /// declared across the whole registry so growth is a decision, not a
+    /// side effect: adding a command that reuses an existing flag name
+    /// costs nothing here; adding one that invents a new name for an old
+    /// idea must bump `PINNED_FLAG_COUNT` on purpose, with a reason in the
+    /// commit. It renames nothing today — renaming the 143 already-shipped
+    /// names would break every existing caller, which this cell does not
+    /// take on — it only stops the count from climbing unnoticed.
+    #[test]
+    fn distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision() {
+        const PINNED_FLAG_COUNT: usize = 143;
+
+        let names: std::collections::BTreeSet<&str> =
+            entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
+
+        assert_eq!(
+            names.len(),
+            PINNED_FLAG_COUNT,
+            "distinct flag-name count changed from {PINNED_FLAG_COUNT} to {}. A new \
+             spelling for an existing concept makes a caller's knowledge of one verb \
+             useless on the next command, so growing this vocabulary is a decision to \
+             take on purpose: first check whether an existing flag name already means \
+             what the new one means and reuse it; only if none does, bump \
+             PINNED_FLAG_COUNT above and say why in the commit.",
+            names.len()
+        );
+
+        // The worst-known divergence, named so this test documents it rather
+        // than leaving it to be rediscovered: the acting agent is spelled
+        // two different ways for the same concept. Neither is renamed here.
+        let (claim, _) = resolve(&["cells", "claim"]).expect("cells.claim is in the registry");
+        assert!(
+            claim.properties.contains_key("worker"),
+            "cells claim no longer declares --worker: {:?}",
+            claim.properties.keys().collect::<Vec<_>>()
+        );
+        let (reserve, _) =
+            resolve(&["reservations", "reserve"]).expect("reservations.reserve is in the registry");
+        assert!(
+            reserve.properties.contains_key("agent"),
+            "reservations reserve no longer declares --agent: {:?}",
+            reserve.properties.keys().collect::<Vec<_>>()
+        );
+    }
+
     /// A refusal must not hand the caller another dead end.
     #[test]
     fn group_subverbs_never_offers_an_unavailable_verb() {
