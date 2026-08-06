@@ -83,5 +83,110 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-06T04:24:41.530Z"
+  },
+  "block-lean": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.542Z"
+  },
+  "counter-teeth": {
+    "capped": 6,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.546Z"
+  },
+  "dispatch-worktree": {
+    "capped": 2,
+    "dropped": 2,
+    "archived_at": "2026-08-06T07:08:23.556Z"
+  },
+  "doctrine-prose-diet": {
+    "capped": 8,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.559Z"
+  },
+  "exec-speed": {
+    "capped": 12,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.562Z"
+  },
+  "execution-agent": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.566Z"
+  },
+  "flake-monitor": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.569Z"
+  },
+  "gate-door-refusal": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.571Z"
+  },
+  "guard-hardening": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.573Z"
+  },
+  "hook-teeth": {
+    "capped": 6,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.575Z"
+  },
+  "js-parity-cleanup": {
+    "capped": 9,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.577Z"
+  },
+  "linux-verify-green": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.579Z"
+  },
+  "prompt-diet": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.581Z"
+  },
+  "release-2-1-7": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.582Z"
+  },
+  "release-2-1-8": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.584Z"
+  },
+  "review-p1-teeth": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.585Z"
+  },
+  "session-capture": {
+    "capped": 0,
+    "dropped": 5,
+    "archived_at": "2026-08-06T07:08:23.586Z"
+  },
+  "terminal-phase-port": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.587Z"
+  },
+  "windows-shortpath": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.588Z"
+  },
+  "worker-proof": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.589Z"
+  },
+  "worktree-finish": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T07:08:23.590Z"
   }
 }
