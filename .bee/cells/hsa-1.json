@@ -1,0 +1,51 @@
+{
+  "id": "hsa-1",
+  "feature": "harness-scratchpad-allowlist",
+  "lane": "tiny",
+  "title": "Match the harness scratchpad root the harness actually creates",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "action": "In HarnessRoots::from_bases (hook_local.rs, the temp branch), keep the existing <temp>/claude root and, under cfg(unix) only, push a SECOND temp root named <temp>/claude-<uid>, where uid is libc::getuid() (libc is already a unix dependency of this crate). Both go through canonical_allowlist_root exactly as today, so an unresolvable base still contributes nothing and the deny still stands fail-closed. Windows is unchanged: %TEMP% is already per-user, so the single root is correct there. Then fix and extend the tests in write_guard/tests.rs: build_harness_fixture asserts roots.len() == 2, which is now 3 on unix — make that assertion cfg-aware rather than deleting it, and add one test proving (a) a write under <temp>/claude-<getuid()>/... is exempt for both Write and Bash, the same pair gh1_harness_scratchpad_write_is_exempt_for_write_and_bash covers, and (b) a write under <temp>/claude-<other-uid>/... is STILL denied with \"could not be canonically contained\" — the exemption is one uid-scoped path, never a claude-* prefix match.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard",
+  "must_haves": {
+    "truths": [
+      "A write under <temp>/claude-<getuid()> is exempt from the containment deny on unix",
+      "A write under <temp>/claude-<a different uid> is still denied",
+      "The existing <temp>/claude root and the home memory root keep working",
+      "Windows behaviour is unchanged — one temp root",
+      "The full declared test suite is green"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "scratchpad-root",
+    "outcome": "HarnessRoots::from_bases adds <temp>/claude-<getuid()> on unix, so the E1 scratchpad exemption matches the root the harness creates",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T09:55:54.066Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f91db0c1-e1fd-4a58-aa14-5c13fd8fbec1",
+    "claimed_at": "2026-08-06T09:54:07.714Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T09:55:42.359Z"
+  }
+}

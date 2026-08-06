@@ -176,6 +176,18 @@ checks, and does not depend on the workflow's phase.
   to the feature named in the path, resolved lane-record-first with a
   mismatched default treated as silence (hook-teeth D1, cell bh-1, 2026-08-04).
 
+- R27 — The two harness-owned surfaces exempt from the outside-the-worktree
+  refusal — the agent's memory root and its scratchpad — are matched at the
+  name the harness actually creates, not an idealized one. On a shared
+  temporary area the scratchpad root carries the calling user's account
+  identifier, and containment compares whole path segments, so a root written
+  without that identifier matches nothing: the exemption silently misses the
+  only surface it exists for and an ordinary scratchpad write is refused for
+  being outside the tree. The exemption stays scoped to the calling user's own
+  root — never a prefix match that would sweep in a neighbour's — and a
+  per-user temporary area needs no identifier at all (cell hsa-1, measured
+  2026-08-06).
+
 ## Pointers (implementation)
 
 - Always-writable set: `GATE_ALLOWED_PREFIXES` in
@@ -189,6 +201,15 @@ checks, and does not depend on the workflow's phase.
   `packages/bee/lib/guards.mjs`; the translation itself
   (`LEGACY_PHASE_COERCIONS`) lives in `packages/bee/lib/state.mjs`, applied at
   read time so every consumer of the state/lane record sees it automatically.
+
+- Harness allowlist (R27): `HarnessRoots::from_bases` in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs` — the memory
+  root `<home>/.claude/projects/`, `<temp>/claude`, and on unix
+  `<temp>/claude-<libc::getuid()>`; consulted only at the containment failure
+  sites via `harness_allowlisted_target`. Tests:
+  `gh1_the_uid_suffixed_scratchpad_is_exempt_and_a_sibling_uid_is_not`,
+  `gh1_harness_scratchpad_write_is_exempt_for_write_and_bash` in
+  `write_guard/tests.rs`. Provenance: cell `hsa-1`, commit 2857bc8d.
 
 - Plan-document freeze (B27/R26): `plan_freeze_feature` and
   `plan_freeze_shape_approved` in
