@@ -162,6 +162,37 @@ pub(crate) fn scribing_debt_close_door(
     )))
 }
 
+/// scribing-integrity D1 — the second scribing-debt wall: a real --feature
+/// swap on the default record while the OUTGOING feature carries unpaid
+/// debt is refused the same way a close would be. Reuses
+/// drivers::scribing_debt / has_capture_deferral_decision (the exact
+/// counter and reader `bee close`'s own D1 door and
+/// scribing_debt_close_door above both use) rather than a second,
+/// independently-drifting copy. Lanes never reach here: --feature is
+/// already refused alongside --lane (and against a session-auto-resolved
+/// lane) before this runs.
+pub(crate) fn scribing_debt_swap_door(
+    root: &Path,
+    outgoing_feature: &str,
+    waive: bool,
+) -> R2<Result<ScribingDoor, String>> {
+    let debt = scribing_debt(root, outgoing_feature)?;
+    if debt.count == 0 {
+        return Ok(Ok(ScribingDoor::Clear));
+    }
+    if waive {
+        return Ok(Ok(ScribingDoor::Waived { ids: debt.ids }));
+    }
+    if has_capture_deferral_decision(root, outgoing_feature)? {
+        return Ok(Ok(ScribingDoor::Clear));
+    }
+    Ok(Err(format!(
+        "set: refusing to swap away from feature \"{outgoing_feature}\" \u{2014} {} capped behavior_change cell(s) have not been synced to their area spec: {}.\nSetting --feature abandons \"{outgoing_feature}\" without ever reaching its close \u{2014} the scribing debt would go silent, with no session left to hit the compounding-complete wall for it.\nFIX: run bee-capturing to merge the settled behavior into its area spec, then `bee state scribing-run --feature {outgoing_feature} ...` to stamp it.\nIf the behavior genuinely belongs in no spec, retry with --waive-scribing-debt \u{2014} it is permitted, but it logs a decision naming every cell you waived; the same escape bee close accepts also works here \u{2014} log a decision tagged capture-deferral naming \"{outgoing_feature}\" first.",
+        debt.count,
+        js_join(&debt.ids, ", "),
+    )))
+}
+
 /// D4 — the waiver is loud and attributable: logged AFTER the state/lane
 /// write succeeds (so a refused mutation never leaves a decision claiming one
 /// happened; decisions.jsonl sits outside the state/lane lock's scope).
@@ -173,6 +204,35 @@ fn log_scribing_debt_waiver(root: &Path, feature: &str, ids: &[Value]) -> R2<()>
         js_join(ids, ", "),
     );
     let rationale = "Explicitly waived via `state set --phase compounding-complete --waive-scribing-debt`. bee refuses this close by default (chain-integrity D2); the waiver is the sanctioned door, and this record is its price.".to_string();
+    match do_log(
+        root,
+        LogParams {
+            decision,
+            rationale,
+            alternatives: None,
+            scope: "repo".to_string(),
+            source: "agent".to_string(),
+            confidence_raw: None,
+            tags: Some(vec!["scribing".to_string(), "state".to_string()]),
+        },
+        15,
+    )? {
+        Out::Emit(..) => Ok(()),
+        Out::Thrown(_) => Err(Err2::Ex),
+    }
+}
+
+/// scribing-integrity D1 — the swap-waiver twin of log_scribing_debt_waiver
+/// above: same logged-after-write discipline, same tags, its own decision
+/// text naming the ABANDONED feature (there is no "closed feature" here —
+/// the record just moved on to a different one).
+fn log_scribing_debt_swap_waiver(root: &Path, outgoing_feature: &str, ids: &[Value]) -> R2<()> {
+    let decision = format!(
+        "Swapped away from feature \"{outgoing_feature}\" with scribing debt WAIVED for {} capped behavior_change cell(s): {}.",
+        ids.len(),
+        js_join(ids, ", "),
+    );
+    let rationale = "Explicitly waived via `state set --feature <new> --waive-scribing-debt`. bee refuses a feature swap over unpaid debt by default (scribing-integrity D1); the waiver is the sanctioned door, and this record is its price.".to_string();
     match do_log(
         root,
         LogParams {
@@ -281,27 +341,6 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
         let scope = resolve_mutation_lock_scope(root, lane_feature.as_deref(), no_lane)?;
         let workflows = list_workflows(root)?;
 
-        // The remaining delegate trigger (a real --feature swap over unpaid
-        // debt on the default record's CURRENT feature — a different R6 debt,
-        // see mod.rs's own banner) is decided here, BEFORE any lock or
-        // output, off a silent peek at the record the strict read will land
-        // on. The compounding-complete scribing-debt door is fully native
-        // now (below, off the authoritative strict read), so the peek no
-        // longer special-cases it.
-        if let Some(peek) = peek_target_record(root, &scope, lane_feature.as_deref())?
-        {
-            if !scope.lane {
-                if let Some(f) = flag_string(flags, "feature") {
-                    let current = peek.get("feature");
-                    if current.map(truthy).unwrap_or(false)
-                        && !opt_strict_eq(current, Some(&Value::String(f.clone())))
-                    {
-                        return Err(Err2::Ex); // feature swap -> the debt door on Node
-                    }
-                }
-            }
-        }
-
         let locks = acquire_mutation_locks(root, &scope, &workflows)?;
         let mut target =
             resolve_mutation_target(root, lane_feature.as_deref(), "set", no_lane)?;
@@ -316,6 +355,7 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
         }
         let mut waived_scribing: Option<Vec<Value>> = None;
         let mut waived_compounding_feature: Option<String> = None;
+        let mut waived_swap: Option<(String, Vec<Value>)> = None;
         if let Some(p) = &phase_flag {
             let record = target.record();
             let t = check_phase_transition(record.get("phase"), p, record, waive)?;
@@ -344,13 +384,27 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
                 }
             }
         }
+        // scribing-integrity D1 — the second scribing-debt wall: a real
+        // --feature swap on the default record while the CURRENT feature
+        // carries unpaid debt has the same effect as closing it silently
+        // (the abandoned feature's cells never get their sync, and no
+        // session is left to hit the compounding-complete wall for it).
+        // Lanes never reach here: --feature is already refused alongside
+        // --lane (and against a session-auto-resolved lane) above.
         if target.lane().is_none() {
             if let Some(f) = flag_string(flags, "feature") {
                 let current = target.record().get("feature");
                 if current.map(truthy).unwrap_or(false)
                     && !opt_strict_eq(current, Some(&Value::String(f.clone())))
                 {
-                    return Err(Err2::Ex);
+                    let outgoing = js_disp(current.unwrap());
+                    match scribing_debt_swap_door(root, &outgoing, waive_scribing_debt)? {
+                        Ok(ScribingDoor::Clear) => {}
+                        Ok(ScribingDoor::Waived { ids }) => {
+                            waived_swap = Some((outgoing, ids));
+                        }
+                        Err(msg) => return Ok(Out::Thrown(msg)),
+                    }
                 }
             }
         }
@@ -430,6 +484,14 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
             log_compounding_waiver(root, feature)?;
             waiver_note.push_str(&format!(
                 " \u{2014} COMPOUNDING-RUN FRESHNESS WAIVED for feature \"{feature}\" (decision logged)"
+            ));
+        }
+        if let Some((outgoing_feature, ids)) = &waived_swap {
+            log_scribing_debt_swap_waiver(root, outgoing_feature, ids)?;
+            waiver_note.push_str(&format!(
+                " \u{2014} SCRIBING DEBT WAIVED for {} cell(s): {} (decision logged)",
+                ids.len(),
+                js_join(ids, ", "),
             ));
         }
         Ok(Out::Emit(
@@ -1256,5 +1318,206 @@ mod tests {
         let lane = read_json_file(root, ".bee/lanes/gate-door-safe.json");
         assert_eq!(lane["approved_gates"]["execution"], json!(true));
         assert_eq!(lane["approved_gates"]["shape"], json!(true));
+    }
+
+    // ── run_set_body — the feature-swap scribing-debt door (fsd-1) ─────────
+    //
+    // scribing-integrity D1: a real `--feature` swap on the default record
+    // abandons the CURRENT feature without ever reaching its close, so it is
+    // refused the same way `--phase compounding-complete` is above — same
+    // counter (drivers::scribing_debt), same two escapes, its own message
+    // and its own after-write decision naming the ABANDONED feature.
+
+    fn idle_state_at(phase: &str, feature: &str) -> String {
+        format!(r#"{{"phase":"{phase}","feature":"{feature}"}}"#)
+    }
+
+    /// Exotic carries no Debug impl — a local expect keeps `Result`
+    /// unwrapping panics readable without editing it (tests.rs's own `ok`
+    /// follows the same reasoning).
+    fn ok_ex<T, E>(r: Result<T, E>) -> T {
+        match r {
+            Ok(v) => v,
+            Err(_) => panic!("unexpected error result"),
+        }
+    }
+
+    fn write_session(root: &Path, id: &str, lane: Option<&str>) {
+        std::fs::create_dir_all(sessions_dir(root)).unwrap();
+        let body = match lane {
+            Some(l) => format!(r#"{{"id":"{id}","last_heartbeat":"{}","lane":"{l}"}}"#, now_iso()),
+            None => format!(r#"{{"id":"{id}","last_heartbeat":"{}"}}"#, now_iso()),
+        };
+        std::fs::write(sessions_dir(root).join(format!("{id}.json")), body).unwrap();
+    }
+
+    fn fixture_session_id(root: &Path) -> String {
+        ok_ex(resolve_session_id_no_flag(root)).unwrap_or_else(|| "sess-1".to_string())
+    }
+
+    /// A swap over unpaid debt on the outgoing feature refuses the whole
+    /// mutation, names the outgoing feature and every unscribed cell id, and
+    /// nothing reaches disk.
+    #[test]
+    fn feature_swap_over_unpaid_debt_refuses_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &idle_state_at("swarming", "outgoing"));
+        w(root, ".bee/cells/o-1.json", r#"{"id":"o-1","feature":"outgoing","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        let out = run_set_body(
+            root,
+            &flags(&["--no-lane", "--feature", "incoming", "--owner", "swarming"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else { panic!("expected a refusal, got a write") };
+        assert!(msg.contains("refusing to swap away from feature \"outgoing\""), "{msg}");
+        assert!(msg.contains("o-1"), "{msg}");
+        assert!(msg.contains("abandons \"outgoing\""), "{msg}");
+        assert!(msg.contains("--waive-scribing-debt"), "{msg}");
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["feature"], json!("outgoing"), "the refused swap must never reach disk");
+        assert!(!root.join(".bee/decisions.jsonl").exists(), "a refusal logs nothing");
+    }
+
+    /// Three shapes that are NOT a debt-bearing swap at all: no debt on the
+    /// outgoing feature, no current feature to abandon, and a same-value
+    /// `--feature` (never a swap in the first place) — all three succeed
+    /// even with standing debt in the third case.
+    #[test]
+    fn feature_swap_non_refusal_shapes_all_succeed() {
+        // No debt on the outgoing feature.
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &idle_state_at("swarming", "outgoing"));
+        let out = run_set_body(
+            root,
+            &flags(&["--no-lane", "--feature", "incoming", "--owner", "swarming"]),
+        )
+        .unwrap();
+        assert!(matches!(out, Out::Emit(..)), "a debt-free swap must succeed");
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["feature"], json!("incoming"));
+
+        // No current feature — nothing was abandoned, even with debt sitting
+        // under a DIFFERENT feature name.
+        let tmp2 = tmp_root();
+        let root2 = tmp2.path();
+        w(root2, ".bee/state.json", r#"{"phase":"idle","feature":null}"#);
+        w(root2, ".bee/cells/x-1.json", r#"{"id":"x-1","feature":"incoming","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        let out2 = run_set_body(
+            root2,
+            &flags(&["--no-lane", "--feature", "incoming", "--owner", "idle"]),
+        )
+        .unwrap();
+        assert!(matches!(out2, Out::Emit(..)), "no current feature means nothing was abandoned");
+
+        // Same-value --feature is not a swap at all — standing debt on
+        // "outgoing" never even gets asked.
+        let tmp3 = tmp_root();
+        let root3 = tmp3.path();
+        w(root3, ".bee/state.json", &idle_state_at("swarming", "outgoing"));
+        w(root3, ".bee/cells/o-1.json", r#"{"id":"o-1","feature":"outgoing","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        let out3 = run_set_body(
+            root3,
+            &flags(&["--no-lane", "--feature", "outgoing", "--owner", "swarming"]),
+        )
+        .unwrap();
+        assert!(matches!(out3, Out::Emit(..)), "a same-value --feature is not a swap");
+    }
+
+    /// `--waive-scribing-debt` lets the swap through, logs a decision AFTER
+    /// the write naming the ABANDONED feature and every waived cell, and the
+    /// emitted text carries the waiver suffix.
+    #[test]
+    fn feature_swap_waive_scribing_debt_passes_and_logs_the_abandoned_feature_after_write() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &idle_state_at("swarming", "outgoing"));
+        w(root, ".bee/cells/o-1.json", r#"{"id":"o-1","feature":"outgoing","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        let out = run_set_body(
+            root,
+            &flags(&[
+                "--no-lane",
+                "--feature",
+                "incoming",
+                "--owner",
+                "swarming",
+                "--waive-scribing-debt",
+            ]),
+        )
+        .unwrap();
+        let Out::Emit(_, text, _) = out else { panic!("expected the waiver to pass") };
+        assert!(text.contains("SCRIBING DEBT WAIVED"), "{text}");
+        assert!(text.contains("o-1"), "{text}");
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["feature"], json!("incoming"));
+        let decisions = std::fs::read_to_string(root.join(".bee/decisions.jsonl")).unwrap();
+        assert!(decisions.contains("Swapped away from feature"), "{decisions}");
+        assert!(decisions.contains("outgoing"), "{decisions}");
+        assert!(decisions.contains("scribing debt WAIVED"), "{decisions}");
+        assert!(decisions.contains("o-1"), "{decisions}");
+    }
+
+    /// The capture-deferral escape is the SAME reader `bee close`'s own door
+    /// uses (drivers::has_capture_deferral_decision) — a decision already
+    /// logged naming the outgoing feature clears the swap without the flag.
+    #[test]
+    fn feature_swap_logged_capture_deferral_decision_passes_without_the_flag() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &idle_state_at("swarming", "outgoing"));
+        w(root, ".bee/cells/o-1.json", r#"{"id":"o-1","feature":"outgoing","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-07-02T12:00:00.000Z\",\"decision\":\"defer capture for outgoing until next sprint\",\"rationale\":\"r\",\"tags\":[\"capture-deferral\"],\"scope\":\"repo\"}\n",
+        );
+        let out = run_set_body(
+            root,
+            &flags(&["--no-lane", "--feature", "incoming", "--owner", "swarming"]),
+        )
+        .unwrap();
+        assert!(
+            matches!(out, Out::Emit(..)),
+            "the deferral decision must lift the wall without the flag"
+        );
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["feature"], json!("incoming"));
+        let decisions = std::fs::read_to_string(root.join(".bee/decisions.jsonl")).unwrap();
+        assert_eq!(decisions.lines().count(), 1, "no redundant waiver decision appended");
+    }
+
+    /// Regression: the lane paths keep today's refusals — `--feature`
+    /// combined with an explicit `--lane` never even reaches the swap door.
+    #[test]
+    fn feature_swap_still_refuses_with_an_explicit_lane() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let out = run_set_body(
+            root,
+            &flags(&["--lane", "some-lane", "--feature", "incoming", "--owner", "swarming"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else { panic!("expected a refusal, got a write") };
+        assert!(msg.contains("--feature cannot be combined with --lane"), "{msg}");
+    }
+
+    /// Regression: `--feature` against a session-AUTO-resolved lane (no
+    /// explicit `--lane` on the argv) still refuses too.
+    #[test]
+    fn feature_swap_still_refuses_against_a_session_auto_resolved_lane() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/bound-lane.json",
+            r#"{"feature":"bound-lane","phase":"swarming"}"#,
+        );
+        let sid = fixture_session_id(root);
+        write_session(root, &sid, Some("bound-lane"));
+        let out = run_set_body(root, &flags(&["--feature", "incoming", "--owner", "swarming"]))
+            .unwrap();
+        let Out::Thrown(msg) = out else { panic!("expected a refusal, got a write") };
+        assert!(msg.contains("--feature cannot target lane \"bound-lane\""), "{msg}");
     }
 }

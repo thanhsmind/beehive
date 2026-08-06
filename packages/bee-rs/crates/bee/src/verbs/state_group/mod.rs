@@ -26,9 +26,8 @@
 //       Still delegated INSIDE these verbs (each is a different R6 debt, not
 //       this one): a PASSING `--phase compounding-complete` close (its
 //       scribing-debt door + waiver decision-logging live in cells.mjs /
-//       decisions.mjs — default AND lane branches), a real --feature swap
-//       (same door), and a high-risk execution/merge approval
-//       (advisorRefStale, lib/state.mjs).
+//       decisions.mjs — default AND lane branches), and a high-risk
+//       execution/merge approval (advisorRefStale, lib/state.mjs).
 //   state worker add / update / remove / clear / prune — always native for
 //     known flag shapes (they never consult lanes/sessions/workflows).
 //   state lanes / session list / session bind / session unbind — native.
