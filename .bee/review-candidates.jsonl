@@ -90,3 +90,4 @@
 {"id":"c5bdfcce-ed0d-4cf2-9b70-c90150f366a9","type":"candidate","date":"2026-08-06T09:25:41.128Z","feature":"cli-help-shape-guard","head":"a3fcaa104af6430d8f3c422220c679fed1d2d417","mode":"tiny","baseline":null,"cells":[]}
 {"id":"d6eeba51-43dd-4006-899d-1bcd4bc37773","type":"candidate","date":"2026-08-06T09:57:39.319Z","feature":"harness-scratchpad-allowlist","head":"d748256ae6960e0ff2862f2cf8e5585365e15ebd","mode":"tiny","baseline":null,"cells":[]}
 {"id":"2809e5de-43e3-4fce-86ae-1f5c24bf213b","type":"candidate","date":"2026-08-06T10:19:24.308Z","feature":"windows-shell-doctrine","head":"8c205558c30838c2e8eda46ca270b18b9866c45b","mode":"small","baseline":null,"cells":[]}
+{"id":"cfdb81ba-f1b4-4b7c-bfe3-4508aaf71e63","type":"candidate","date":"2026-08-06T10:45:31.564Z","feature":"dispatch-description-intent","head":"a75f1c48a733331a16329823a521d17415a869ec","mode":"tiny","baseline":null,"cells":[]}
