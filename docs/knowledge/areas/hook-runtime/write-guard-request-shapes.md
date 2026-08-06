@@ -60,6 +60,16 @@ denied with the command, the missing or wrong field, and the corrective shape;
 a well-formed one proceeds untouched. Deep verbs previously escaped this check
 unvalidated (a silent fail-open); they no longer do.
 
+**B3c — Asking a command for its own help is never shape-checked.** A request
+that asks a workflow command to explain itself passes the shape check
+untouched, whatever parameters that command requires. Help is how a caller
+learns the shape, so the check that teaches the shape may not stand in front of
+it — and the denial text itself points the caller at the command's help, which
+would otherwise be denied in turn. The exemption is read from the request as
+the catalog parses it, not from the raw words: a help word that a preceding
+parameter consumes as its own value is a value, not a help request, and the
+shape check still applies in full.
+
 **B3b — A shell request is read past its first command and through its
 wrappers.** The guard no longer judges a shell request by its opening command
 alone. Every command in a compound request — the pieces joined by the
@@ -212,6 +222,13 @@ is an open gap named below rather than a working path.
 - CLI-shape guard incl. 3-token verb resolution: `packages/bee/hooks/bee-write-guard.mjs`
   against the `command-registry.mjs` catalog. Evidence: `.bee/cells/du-2.json`,
   `docs/history/dispatcher-unify/`.
+
+- Help exemption: `check_cli_shape` in
+  `packages/bee-rs/crates/bee/src/hooks/cli_shape.rs` breaks out of the segment
+  when `parse_cli_flags` produced a `help` key, before `validate`. No registry
+  entry declares a `help` property, so the key can only be a help request.
+  Test: `asking_a_subcommand_for_its_help_reaches_the_help_surface`
+  (same file). Provenance: cell `chsg-1`, commit 8dd2e846.
 
 - Deep command reading: `tokenize_deep` / `expand_wrappers` /
   `is_wrapper_shell_name` in

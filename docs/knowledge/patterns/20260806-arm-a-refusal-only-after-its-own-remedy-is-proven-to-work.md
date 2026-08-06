@@ -7,9 +7,9 @@ timestamp: 2026-08-06
 bee:
   id: pattern-20260806-arm-a-refusal-only-after-its-own-remedy-is-proven-to-work
   lifecycle: active
-  areas: [workflow-state, worktree-parallelism]
+  areas: [workflow-state, worktree-parallelism, hook-runtime]
   decisions: ["counter-teeth D5 (the remedy command was broken for code-touching lanes under any worktree grant, so the route granted-arm fix becomes a prerequisite cell landing before the deny)", counter-teeth D6 (a test proving the counter computes correctly lands before the flip to refusal; no flip ships with a known false positive), 3baa41f6 (counter-teeth proceeds without a route record — the very verb it needed was the one that was broken)]
-  sources: ["counter-teeth cell ct-1 (granted-worktree arm ported natively; trace .bee/cells/ct-1.json, commit f6398f8e, 2026-08-04 — state_group 48 passed, 0 failed)", "counter-teeth cell ct-5 (the route-less claim deny landed only after ct-1; trace .bee/cells/ct-5.json, commits 4a0d1b82 and 95ec0639, 2026-08-04)", docs/history/counter-teeth/CONTEXT.md, "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:638-674 (the ported granted-worktree branch)"]
+  sources: ["counter-teeth cell ct-1 (granted-worktree arm ported natively; trace .bee/cells/ct-1.json, commit f6398f8e, 2026-08-04 — state_group 48 passed, 0 failed)", "counter-teeth cell ct-5 (the route-less claim deny landed only after ct-1; trace .bee/cells/ct-5.json, commits 4a0d1b82 and 95ec0639, 2026-08-04)", docs/history/counter-teeth/CONTEXT.md, "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:638-674 (the ported granted-worktree branch)", "cli-help-shape-guard cell chsg-1 (the CLI-shape guard denied the very `--help` its own Correction line named; trace .bee/cells/chsg-1.json, commit 8dd2e846, 2026-08-06 — full suite 1325 passed, 0 failed)"]
   polarity: practice
   critical: false
 ---
@@ -48,3 +48,11 @@ reason.
 - Suspect a remedy that only ever runs in the happy environment. The route verb
   worked fine from the main checkout; it failed exactly in the multi-worktree
   configuration the refusal would have been most common in.
+- The worst case is a remedy the guard blocks itself. bee's CLI-shape guard
+  denied a command for missing required parameters and closed with "see
+  `<that command> --help --json`" — which the same guard denied, for the same
+  missing parameters. The way out pointed back at the door. Whenever a refusal
+  names an explanatory surface, that surface must sit in FRONT of the check,
+  exempt from it: help teaches the shape, so the shape check may never gate
+  help (cell `chsg-1`, 2026-08-06 — reported from a Windows host after an agent
+  spent several turns trying to disable the wrong config key instead).
