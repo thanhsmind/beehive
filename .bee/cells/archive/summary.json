@@ -63,5 +63,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-06T02:36:43.981Z"
+  },
+  "debt-door-archive": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-06T03:04:32.001Z"
   }
 }
