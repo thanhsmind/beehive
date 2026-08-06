@@ -1,0 +1,54 @@
+{
+  "id": "fsd-1",
+  "feature": "feature-swap-door",
+  "lane": "small",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Restore the feature-swap scribing-debt door natively",
+  "action": "In packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs, make `bee state set --feature <other>` ask the outgoing feature's scribing-debt question itself instead of handing the swap to a runtime that no longer exists (today: main.rs turns the None into emit_unsupported_shape, so EVERY real feature swap exits non-zero). (1) DELETE the pre-lock peek at ~284-303 whose whole body is `return Err(Err2::Ex); // feature swap -> the debt door on Node`, and drop peek_target_record if nothing else calls it. (2) At the post-lock site ~347-356, replace the second `return Err(Err2::Ex)` with a native door: it runs only when target.lane().is_none(), --feature is present, the record's current feature is truthy, and the new value differs (opt_strict_eq, as today). Add `scribing_debt_swap_door(root, outgoing_feature, waive) -> R2<Result<ScribingDoor, String>>` next to scribing_debt_close_door (:143) — same drivers::scribing_debt counter, same two escapes (--waive-scribing-debt, then has_capture_deferral_decision naming the OUTGOING feature), different message. Recovered wording, bee.mjs at 5c62cad021cd4cb0c44eca35d299d32faf9a19f2^:3215 (featureSwapGuardScribingDebt): 'set: refusing to swap away from feature \"<f>\" — N capped behavior_change cell(s) have not been synced to <state layer>: <ids>.' / 'Setting --feature abandons \"<f>\" without ever reaching its close — the scribing debt would go silent, with no session left to hit the compounding-complete wall for it.' / 'FIX: run bee-capturing to merge the settled behavior into its area spec, then `bee state scribing-run --feature <f> ...` to stamp it.' / the --waive-scribing-debt line, matching scribing_debt_close_door's own phrasing for the deferral escape. (3) Carry the outcome in its own binding — the close door's waived_scribing cannot be reused, because after the write the record's feature field holds the NEW feature while this waiver must name the ABANDONED one. Log it after the write beside log_scribing_debt_waiver (:169), with the recovered decision text from bee.mjs:3143-3154 ('Swapped away from feature \"<f>\" with scribing debt WAIVED for N capped behavior_change cell(s): <ids>. Their settled behavior is NOT in <state layer>.'), same scope/source/tags, and append the same ' — SCRIBING DEBT WAIVED for N cell(s): <ids> (decision logged)' suffix to the emitted text. (4) Update the banner in state_group/mod.rs (~26-31) so it no longer lists the feature swap among the shapes still delegated to Node.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": [
+    "A swap over unpaid debt refuses, exits non-zero, names the outgoing feature and every cell id, and writes nothing — the record's feature is unchanged afterwards.",
+    "A swap with no debt succeeds, as does a swap from a record with no current feature (nothing was abandoned) and a --feature equal to the current value (not a swap at all).",
+    "--waive-scribing-debt lets the swap through, logs a decision naming the ABANDONED feature and every waived cell AFTER the write, and the emitted text carries the waiver suffix.",
+    "The debt count comes from drivers::scribing_debt — the same counter bee close uses — never a second copy, and the capture-deferral escape is the same reader.",
+    "The lane paths keep today's refusals: --feature with --lane, and --feature against a session-auto-resolved lane.",
+    "New tests drive run_set end to end for all five cases above; the declared suite is green at cap."
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "decisions": [
+    "412e9b3a (test-simple: the featureVerifyDebt and testCellDebt swap doors are DELETED — scribing debt is the only question this door asks)",
+    "scribing-integrity D1 (the swap is the second scribing-debt wall, same waiver, waiver logged)"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "exec-fsd-1",
+    "outcome": "Ported the feature-swap scribing-debt door natively (scribing_debt_swap_door), replacing both Node-delegate returns; 7 new tests cover refusal, the three non-swap shapes, the waiver, the capture-deferral escape, and the two lane-path regressions.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T02:33:04.878Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bb2df452-734c-4dc1-80a8-0578a8027e18",
+    "claimed_at": "2026-08-05T13:58:49.612Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T02:32:53.180Z"
+  }
+}
