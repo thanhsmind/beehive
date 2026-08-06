@@ -480,6 +480,59 @@ use std::time::Instant;
         assert_eq!(v.get("economics").and_then(|e| e.get("logical_tier")), Some(&json!("generation")));
     }
 
+    /// Measured from a live agent list: every row read `bee-build  Execute
+    /// bbp-6` — an id and nothing else. prepare's own description was
+    /// `cell (sonnet)`, which work-visibility D2 names a red flag, so nobody
+    /// used it. The row now says what the work IS.
+    #[test]
+    fn a_cell_dispatch_description_says_what_the_work_is() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        let mut cell = |id: &str, title: &str| {
+            w(
+                &root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f","title":{},"status":"claimed","trace":{{"worker":"w"}}}}"#,
+                    json!(title)
+                ),
+            );
+        };
+
+        cell("c-1", "cap the test scrubber");
+        let d = |id: &str| {
+            let Prepared::Value(v) =
+                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, false)
+                    .unwrap()
+            else {
+                panic!("expected an envelope")
+            };
+            v.get("payload").unwrap().get("description").unwrap().as_str().unwrap().to_string()
+        };
+        assert_eq!(d("c-1"), "c-1: cap the test scrubber (sonnet)");
+
+        // A whitespace title is no title: today's bytes, never `c-2:  (…)`.
+        cell("c-2", "   ");
+        assert_eq!(d("c-2"), "cell (sonnet)");
+        w(
+            &root,
+            ".bee/cells/c-3.json",
+            r#"{"id":"c-3","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        assert_eq!(d("c-3"), "cell (sonnet)");
+
+        // Long titles are cut, so the row still reads at a glance.
+        cell("c-4", &"word ".repeat(40));
+        let long = d("c-4");
+        assert!(long.starts_with("c-4: word word"), "{long}");
+        assert!(long.ends_with(" (sonnet)"), "{long}");
+        assert!(long.len() < 90, "{long}");
+
+        // A newline in the title never breaks the one-line row.
+        cell("c-5", "first line\nsecond line");
+        assert_eq!(d("c-5"), "c-5: first line second line (sonnet)");
+    }
+
     #[test]
     fn recording_pass_appends_exactly_one_prepare_line() {
         let tmp = tempfile::tempdir().unwrap();

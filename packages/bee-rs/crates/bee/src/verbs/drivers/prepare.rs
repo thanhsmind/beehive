@@ -97,6 +97,10 @@ pub(crate) const PRIOR_ROUNDS_MAX_EVENT_LINES: usize = 12;
 /// provenance: dispatch-prepare.mjs LEARNED_CONTEXT_MAX_LINES.
 pub(crate) const LEARNED_CONTEXT_MAX_LINES: usize = 8;
 
+/// How much of a cell's title the Agent-list row carries. Long enough to say
+/// what the work is, short enough that the row still reads at a glance.
+pub(crate) const DESCRIPTION_TITLE_MAX: usize = 60;
+
 /// provenance: dispatch-prepare.mjs priorRoundEventLines — the machine-
 /// assembled digest of the cell record's own trace history, chronological
 /// (ISO strings compare lexicographically; timeless events sink to the end in
@@ -700,14 +704,26 @@ pub(crate) fn prepare_dispatch(
                 "prompt".into(),
                 Value::String(format!("[bee-tier: {tier_token}]\n{prompt_body}")),
             );
-            payload.insert(
-                "description".into(),
-                Value::String(format!(
-                    "{kind} ({})",
-                    // `requestedModel || tierToken`
-                    requested_model.clone().filter(|m| !m.is_empty()).unwrap_or_else(|| tier_token.to_string())
-                )),
-            );
+            // `requestedModel || tierToken`
+            let model_tag = requested_model
+                .clone()
+                .filter(|m| !m.is_empty())
+                .unwrap_or_else(|| tier_token.to_string());
+            // A description that is only a model name is a red flag
+            // (work-visibility D2) — and it was the one prepare emitted, so
+            // orchestrators wrote their own bare `Execute <id>` instead and
+            // the agent list read as a column of ids. The cell is already
+            // loaded here for the prompt; its title is what the row is FOR.
+            // Every other kind keeps its bytes: their purpose is the
+            // caller's to state, not this record's to know.
+            let subject = cell
+                .as_ref()
+                .filter(|_| kind == "cell")
+                .map(|c| (tpl(vget(c, "id")), one_line(vget(c, "title"), DESCRIPTION_TITLE_MAX)))
+                .filter(|(_, title)| !title.trim().is_empty())
+                .map(|(id, title)| format!("{id}: {title}"))
+                .unwrap_or_else(|| kind.to_string());
+            payload.insert("description".into(), Value::String(format!("{subject} ({model_tag})")));
             if let Resolved::Model { model, .. } = &resolved {
                 payload.insert("model".into(), Value::String(model.clone()));
             }
