@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["lane-ceremony-v3 D1/D2/D9 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19 — plan document frozen at shape approval, slice-in-units)", self-correcting-loop D3 with Validating amendment Δ4 (change classification and the advisory verification standard), "regen-obligation-derived D1/D2 (derived regen obligation refuses at authoring, recorded escape hatch; roots derived from the tools, never hard-coded — 2026-07-23)", "8ef2bae6 (cli-ergonomics D2 — whole-batch exhaustive refusal + --dry-run preview, 2026-07-24)", "worker-conformance D4/D5/D6 (the trailing test unit stays unconditional but its first mandated step is a coverage judgement, not authoring; test shape below the highest-risk lane is the happy-path/edge-cases/error-paths triad and the twelve-dimension checklist applies only to high-risk/hard-gate work; no numeric per-group test cap is added — 2026-07-29)", "worker-conformance D13 (the doctrine-vs-machine disagreement over batching the trailing test unit at high risk is recorded as an open gap, not fixed — the close-door predicate was deliberately left unchanged)", "hook-teeth D3/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — no units before the gate: authoring into an ungated feature refuses the whole batch, documentation-lane work exempt)"]
-  sources: [cells-update-verb cell cuv-1 (2026-07-12), dispatcher-unify cells-batch-add suite rows (v0.1.27), "post-advisor-hardening cell pah-2 (cells add/update manifest-lint advisory, 2026-07-18)", "lane-ceremony-v3 cells lcv3-1..lcv3-5 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19)", "worker-conformance cells wc-3/wc-6/wc-7 (coverage-judgement-first trailing test unit, triad test shape, ten doctrine overstatements corrected against the live predicates; traces .bee/cells/wc-{3,6,7}.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "regen-obligation-derived cell ro-1 (12 suite rows + mutation red, commit e4ae329, 2026-07-23)", "docs/specs/workflow-state.md#B7", "docs/specs/workflow-state.md#B10", "docs/specs/workflow-state.md#B25", "docs/specs/workflow-state.md#B29", "docs/specs/workflow-state.md#R46", "docs/specs/workflow-state.md#E14", "docs/specs/workflow-state.md#P9", "docs/specs/workflow-state.md#P12", "hook-teeth cell bh-3 (gated authoring refuses the whole batch, lane record beats the default, docs lane exempt; trace .bee/cells/bh-3.json, 2026-08-04 — cells slice 83 passed)"]
+  decisions: ["lane-ceremony-v3 D1/D2/D9 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19 — plan document frozen at shape approval, slice-in-units)", self-correcting-loop D3 with Validating amendment Δ4 (change classification and the advisory verification standard), "regen-obligation-derived D1/D2 (derived regen obligation refuses at authoring, recorded escape hatch; roots derived from the tools, never hard-coded — 2026-07-23)", "8ef2bae6 (cli-ergonomics D2 — whole-batch exhaustive refusal + --dry-run preview, 2026-07-24)", "worker-conformance D4/D5/D6 (the trailing test unit stays unconditional but its first mandated step is a coverage judgement, not authoring; test shape below the highest-risk lane is the happy-path/edge-cases/error-paths triad and the twelve-dimension checklist applies only to high-risk/hard-gate work; no numeric per-group test cap is added — 2026-07-29)", "worker-conformance D13 (the doctrine-vs-machine disagreement over batching the trailing test unit at high risk is recorded as an open gap, not fixed — the close-door predicate was deliberately left unchanged)", "hook-teeth D3/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — no units before the gate: authoring into an ungated feature refuses the whole batch, documentation-lane work exempt)", "counter-teeth D3/D6 (docs/history/counter-teeth/CONTEXT.md, 2026-08-04 — the ceiling tier's 40% share becomes a refusal with a recorded-reason escape; decision 0012's threshold value unchanged)"]
+  sources: [cells-update-verb cell cuv-1 (2026-07-12), dispatcher-unify cells-batch-add suite rows (v0.1.27), "post-advisor-hardening cell pah-2 (cells add/update manifest-lint advisory, 2026-07-18)", "lane-ceremony-v3 cells lcv3-1..lcv3-5 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19)", "worker-conformance cells wc-3/wc-6/wc-7 (coverage-judgement-first trailing test unit, triad test shape, ten doctrine overstatements corrected against the live predicates; traces .bee/cells/wc-{3,6,7}.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "regen-obligation-derived cell ro-1 (12 suite rows + mutation red, commit e4ae329, 2026-07-23)", "docs/specs/workflow-state.md#B7", "docs/specs/workflow-state.md#B10", "docs/specs/workflow-state.md#B25", "docs/specs/workflow-state.md#B29", "docs/specs/workflow-state.md#R46", "docs/specs/workflow-state.md#E14", "docs/specs/workflow-state.md#P9", "docs/specs/workflow-state.md#P12", "hook-teeth cell bh-3 (gated authoring refuses the whole batch, lane record beats the default, docs lane exempt; trace .bee/cells/bh-3.json, 2026-08-04 — cells slice 83 passed)", "counter-teeth cell ct-4 (ceiling-share refusal with the --reason override persisted as trace.tier_reason; trace .bee/cells/ct-4.json, commit a5e564fa, 2026-08-04 — cells 71 passed, 0 failed)"]
   authoritative_for: "workflow-state: unit-of-work authoring, plan revision, and the frozen plan document"
 ---
 
@@ -140,6 +140,21 @@ repository stays open. What each actor observes: units cannot be smuggled in
 ahead of the gate, while documentation-lane work is exempt outright, because
 that lane never gates on execution in the first place.
 
+**B51 — The most expensive worker tier is a budget, and the budget refuses
+(counter-teeth D3, 2026-08-04).** Trigger: assigning a unit the highest-cost
+tier. What happens: the share that assignment would produce is computed across
+the same feature's tiered units — the ceiling count over every unit carrying any
+tier, with untiered units excluded from both sides — and the check reads the
+share *after* the assignment, not before it. Above two fifths, the assignment is
+refused, and the refusal states the counts, the resulting share, and the budget
+it crossed. Only the highest tier is budgeted; assigning any cheaper tier is
+never checked. Its one escape is a stated reason, which is persisted on the
+unit's own trace, so an over-budget assignment is always readable afterwards as
+a decision somebody made rather than a drift nobody noticed. What each actor
+observes: the cost ceiling that used to be an advisory number in a decision
+record now holds by itself, and the exceptions to it are named rather than
+silent.
+
 ## Business Rules
 
 - R46 — A unit's change classification is set explicitly or derived only from
@@ -178,6 +193,12 @@ that lane never gates on execution in the first place.
   planning, without its execution approval, refuses the whole batch and never
   part of it; the documentation lane is exempt, and a feature no record names is
   not refused (hook-teeth D3, cell bh-3, 2026-08-04).
+
+- R102 — Assigning the highest worker tier refuses once the resulting share of
+  the feature's tiered units would pass two fifths; the share counts tiered units
+  only and is measured after the assignment, cheaper tiers are never budgeted,
+  and the sole escape is a stated reason persisted on the unit's trace
+  (counter-teeth D3, cell ct-4, 2026-08-04).
 
 ## Edge Cases Settled
 
@@ -231,6 +252,15 @@ that lane never gates on execution in the first place.
   `scripts/release_manifest.mjs` and `scripts/ledger_parity.mjs`. Evidence:
   12 suite rows in `packages/bee/tests/test_bee_cli.mjs` +
   mutation red, commit e4ae329 (cell ro-1, 2026-07-23).
+- Ceiling-tier budget refusal (B51/R102): `set_tier` and `ceiling_share_after`
+  with `CEILING_SHARE_REFUSAL_MAX` (0.4) in
+  `packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:860-940` —
+  the share is `ceiling / (extraction + generation + ceiling)` over
+  `list_cells(root, feature, None)`, with the assigned cell removed and re-added
+  under its new tier before the comparison. The escape is `--reason <text>`,
+  persisted as `trace.tier_reason` (`handlers_close.rs:932-935`). Red-first per
+  counter-teeth D6. Evidence: trace `.bee/cells/ct-4.json`, commit a5e564fa
+  (cells 71 passed, 0 failed, 2026-08-04).
 - Gated authoring refusal (B46/R98): `gated_add_refusal` in
   `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:115-156` — the
   gated phases are exactly `exploring` and `planning`, and a resolved record

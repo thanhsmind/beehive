@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/worktree-parallelism/control-plane-topology.md]
-  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)", "multisession-native D6 (active workers derived from live-heartbeat sessions + lane/workflow binding + claims, never the stored workers array; advisor condition C3 — startFeature excludes the calling session's own heartbeat)", "multisession-native D2/D3 (slice 4: session creation re-roots onto controlRoot; a session's own record carries workspace_id, auto-looked-up and stamped onto its claims too — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "worker-conformance D11/D12 (R82's feature-boundary door arms on two markers — proof relocated and proof never recorded — with the freshness clock running over the union of both; cells wc-1/wc-2, docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "132362c7 (route-identity: a route carries the feature it was triaged for, a feature start drops the previous one's route, and the never-demote rule is scoped to one feature's own history — cell rti-1, 2026-08-06)", "hook-teeth D5/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — re-lane transitions are validated where the route is recorded, and each refusal names the rule it broke)"]
-  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "multisession-native cell multisession-native-8 (activeWorkers derivation, trace .bee/cells/multisession-native-8.json, commit c435add, 2026-07-25)", "multisession-native cell multisession-native-10 (default-path mutation now also routes through its workflow record; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25)", "multisession-native cell multisession-native-19 (createSession/claimCellFile stamp workspace_id; bee-session-init.mjs re-roots onto resolveContext.controlRoot and lazily auto-registers the workspace; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "route-identity cell rti-1 (start_default drops the carried route, route --set stamps its feature, run_route gates the demote check by it; commit 68beab21, capped 2026-08-06)", "hook-teeth cell bh-5 (re-lane validation: downward once, highest-risk never, mandatory-ceremony flags block, promotion free; trace .bee/cells/bh-5.json, commit 95fe412d, 2026-08-04 — state_group 56 passed)"]
+  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)", "multisession-native D6 (active workers derived from live-heartbeat sessions + lane/workflow binding + claims, never the stored workers array; advisor condition C3 — startFeature excludes the calling session's own heartbeat)", "multisession-native D2/D3 (slice 4: session creation re-roots onto controlRoot; a session's own record carries workspace_id, auto-looked-up and stamped onto its claims too — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "worker-conformance D11/D12 (R82's feature-boundary door arms on two markers — proof relocated and proof never recorded — with the freshness clock running over the union of both; cells wc-1/wc-2, docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "132362c7 (route-identity: a route carries the feature it was triaged for, a feature start drops the previous one's route, and the never-demote rule is scoped to one feature's own history — cell rti-1, 2026-08-06)", "hook-teeth D5/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — re-lane transitions are validated where the route is recorded, and each refusal names the rule it broke)", "counter-teeth D4 with refinement 64ad772d (docs/history/counter-teeth/CONTEXT.md, 2026-08-04 — the route-less claim warning escalates to a refusal from a session's second claim; the counter is scoped per feature and session, and the contention refusal outranks it)"]
+  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "multisession-native cell multisession-native-8 (activeWorkers derivation, trace .bee/cells/multisession-native-8.json, commit c435add, 2026-07-25)", "multisession-native cell multisession-native-10 (default-path mutation now also routes through its workflow record; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25)", "multisession-native cell multisession-native-19 (createSession/claimCellFile stamp workspace_id; bee-session-init.mjs re-roots onto resolveContext.controlRoot and lazily auto-registers the workspace; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "route-identity cell rti-1 (start_default drops the carried route, route --set stamps its feature, run_route gates the demote check by it; commit 68beab21, capped 2026-08-06)", "hook-teeth cell bh-5 (re-lane validation: downward once, highest-risk never, mandatory-ceremony flags block, promotion free; trace .bee/cells/bh-5.json, commit 95fe412d, 2026-08-04 — state_group 56 passed)", "counter-teeth cell ct-5 (per-(feature, session) no-route claim counter; warn once then refuse, contention refusal outranks it; trace .bee/cells/ct-5.json, commits 4a0d1b82 and 95ec0639, 2026-08-04 — cells 75 passed, concurrency 13 passed, full suite green)"]
   authoritative_for: "workflow-state: session identity, per-feature lanes, and heartbeat/lease renewal"
 ---
 
@@ -256,6 +256,23 @@ actor observes: ceremony a feature earned cannot be shed quietly one step at a
 time, while raising ceremony on discovered risk stays free at every moment. The
 history this rule reads is one feature's own (decision 132362c7).
 
+**B52 — An untriaged feature costs each session exactly one warning, then
+refuses (counter-teeth D4, 2026-08-04).** Trigger: claiming a unit of a feature
+that carries no route record. What happens: the first such claim by a given
+session still succeeds and still warns, naming the recording verb as the remedy
+and stating plainly that this session's next route-less claim will be refused.
+From that session's second claim onward the claim is refused, with the same
+remedy named. The count is kept per session *and* per feature, and it advances
+only when a claim actually succeeds — a refused claim never spends the warning.
+Why the scope is not per feature alone: a swarm fans several sessions out across
+one feature, and a bare per-feature count would refuse every worker but the
+first for a fault none of them can fix from where they stand. What each actor
+observes: a session that forgot to triage learns once, cheaply, and is stopped
+the second time; a race for the same unit still reports the contention first —
+the already-claimed refusal outranks this one, so the loser of a real race is
+told it lost, never that the feature is untriaged (D4 refinement, decision
+64ad772d).
+
 ## Business Rules
 
 - R38 — A session's identity is always self-resolved at the moment of the
@@ -427,9 +444,10 @@ history this rule reads is one feature's own (decision 132362c7).
   The record lives on the feature's workflow record, appears in the runtime
   status report and as one session-preamble line, and a re-lane demotion
   rewrites the same record in place (one route per feature, never a second).
-  Claiming a cell of a route-less feature warns once — a safety net, never a
-  refusal. Counting without recording is the guess this rule kills
-  (explicit-triage D1–D4).
+  Claiming a cell of a route-less feature warns once per session and refuses
+  from that session's next claim onward — the safety net grew teeth (B52/R103).
+  Counting without recording is the guess this rule kills (explicit-triage
+  D1–D4; the warn-then-refuse escalation is counter-teeth D4, 2026-08-04).
 - R80a — **A route belongs to the feature it was triaged for, and a feature
   starts with none.** The record now carries the feature it was recorded for,
   and starting a feature drops whatever route the previous one left behind —
@@ -461,6 +479,10 @@ history this rule reads is one feature's own (decision 132362c7).
   value resolves to off with a one-line warning, never a failure
   (ship-visibility-config sv-1, spec #81 P1).
 
+- R103 — A route-less feature costs each session one warning per feature and
+  refuses every claim after it; the counter advances only on a successful claim,
+  and the already-claimed contention refusal always outranks it (counter-teeth
+  D4 with refinement 64ad772d, cell ct-5, 2026-08-04).
 - R99 — Lane demotion is validated at record time: highest-risk work never
   demotes, a mandatory-ceremony flag on the new classification blocks demotion,
   a feature demotes at most once ever (stamped at the first), and same-lane
@@ -518,6 +540,17 @@ history this rule reads is one feature's own (decision 132362c7).
   `.bee/cells/multisession-native-19.json`, commit 09e1ed0. Full workspace
   registry and write-policy mechanics:
   `areas/worktree-parallelism/control-plane-topology.md`.
+- Route-less claim escalation (B52/R103): the per-(feature, session) counter at
+  `.bee/no_route_claims/<feature>__<session-fingerprint>.json` under the control
+  root — `no_route_claim_key`, `no_route_claim_count_path` and
+  `bump_no_route_claim_count` in
+  `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:723-815`,
+  bumped only after a successful claim (`handlers_write.rs:990`); the refusal is
+  code `NO_ROUTE_RECORD` at `handlers_write.rs:1107-1113`, ordered after the
+  already-claimed refusal (`handlers_write.rs:1059-1064`) so a race loser sees
+  the contention refusal instead. Evidence: trace `.bee/cells/ct-5.json`,
+  commits 4a0d1b82 and 95ec0639 (cells 75 passed, concurrency 13 passed, full
+  suite green, 2026-08-04).
 - Re-lane transition validation (B48/R99): `validate_route_lane_transition`
   with `triage_ladder_rank` (`tiny` 0 < `small` 1 < `standard` 2; `docs`,
   `spike` and `high-risk` are off-ladder) and `HARD_GATE_ROUTE_FLAGS` (`auth`,
