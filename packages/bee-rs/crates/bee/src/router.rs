@@ -403,38 +403,9 @@ fn classify(shown: &[String]) -> (&'static str, serde_json::Value, String) {
         );
     }
 
-    // Named, built, required flags all present. Two situations look the same
-    // from here: a `--flag` the schema does not declare at all (the caller
-    // can fix it by spelling one of the accepted flags), or a declared flag
-    // refused for its VALUE — an out-of-enum string, a target that does not
-    // exist. Only the first has a flag name to offer, so name every unknown
-    // flag when there is one; the out-of-enum case keeps today's wording,
-    // which is accurate exactly there. Honors cli-ergonomics D1 (8ef2bae6):
-    // every problem named in one message.
-    let unknown = unknown_flags(entry, shown);
-    if !unknown.is_empty() {
-        let named = unknown
-            .iter()
-            .map(|f| match nearest_flag(entry, f) {
-                Some(sug) => format!("--{f} (did you mean --{sug}?)"),
-                None => format!("--{f}"),
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        let word = if unknown.len() == 1 { "flag" } else { "flags" };
-        return (
-            "unsupported_argument_shape",
-            serde_json::Value::String(entry.name.clone()),
-            format!(
-                "bee: unsupported argument shape for `{}`: `bee {attempted}` names unknown {word} \
-                 {named}. FIX: `{} --help` for every accepted flag and its type.",
-                entry.invoke, entry.invoke
-            ),
-        );
-    }
-
-    // No unknown flag name — the verb declined the argv for a reason of its
-    // own (an out-of-enum value, a target that does not exist).
+    // Named, built, required flags all present — the verb declined the argv
+    // for a reason of its own (an unknown flag, an out-of-enum value, a state
+    // it does not handle). Say that, rather than implying the verb is absent.
     (
         "unsupported_argument_shape",
         serde_json::Value::String(entry.name.clone()),
@@ -445,65 +416,6 @@ fn classify(shown: &[String]) -> (&'static str, serde_json::Value, String) {
             entry.invoke, entry.invoke
         ),
     )
-}
-
-/// The `--flag` names actually typed, in order, values stripped: `--lane
-/// standard` and `--lane=standard` both yield `"lane"`. A bare `--` or an
-/// empty flag name (never produced by a real shell, but cheap to guard) is
-/// dropped rather than reported as an unknown flag with no name to show.
-fn argv_flags(argv: &[String]) -> Vec<&str> {
-    argv.iter()
-        .filter(|a| a.starts_with("--"))
-        .map(|a| a.trim_start_matches('-').split('=').next().unwrap_or(""))
-        .filter(|f| !f.is_empty())
-        .collect()
-}
-
-/// Typed flags the entry's own schema does not declare — the `unsupported_
-/// argument_shape` branch's one actionable fact. `--json` is never special-
-/// cased: it is a real declared property on almost every entry, so an entry
-/// that lacks it is answered honestly rather than silently excused.
-fn unknown_flags<'a>(entry: &crate::catalog::Entry, argv: &'a [String]) -> Vec<&'a str> {
-    argv_flags(argv).into_iter().filter(|f| !entry.properties.contains_key(*f)).collect()
-}
-
-/// The entry's own nearest declared flag spelling, when one is close enough
-/// to be worth printing. Same cutoff shape as `catalog::nearest` — allow
-/// roughly half the typed length in edits — but computed against this one
-/// entry's flags rather than the whole registry.
-///
-/// This duplicates `catalog::distance`'s Levenshtein rather than calling it:
-/// that function is private to its module and the module itself is reserved
-/// by a sibling cell (csc-3, the vocabulary-ratchet test) for the length of
-/// this wave, so widening its visibility here is not this cell's file to
-/// touch. The algorithm is intentionally identical, not reinvented.
-fn nearest_flag(entry: &crate::catalog::Entry, flag: &str) -> Option<String> {
-    let cutoff = 1 + flag.chars().count() / 2;
-    entry
-        .properties
-        .keys()
-        .map(|k| (flag_distance(flag, k), k))
-        .filter(|(d, _)| *d <= cutoff)
-        .min_by_key(|(d, k)| (*d, (*k).clone()))
-        .map(|(_, k)| k.clone())
-}
-
-/// Plain Levenshtein, two-row — the same shape as `catalog::distance`. See
-/// `nearest_flag` for why this is a deliberate duplicate, not a fresh design.
-fn flag_distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    let mut cur = vec![0usize; b.len() + 1];
-    for (i, ca) in a.iter().enumerate() {
-        cur[0] = i + 1;
-        for (j, cb) in b.iter().enumerate() {
-            let cost = usize::from(ca != cb);
-            cur[j + 1] = (prev[j] + cost).min(prev[j + 1] + 1).min(cur[j] + 1);
-        }
-        std::mem::swap(&mut prev, &mut cur);
-    }
-    prev[b.len()]
 }
 
 /// Nothing in the registry spells the leading tokens. Two useful answers: when
@@ -675,45 +587,6 @@ mod tests {
             assert_eq!(entry.invoke, format!("bee {name}"));
             assert!(entry.unavailable.is_none(), "{name} must be callable");
         }
-    }
-
-    /// The regression this cell exists for: `state route --lane-value` used
-    /// to be answered with "an optional flag, a flag value, or a target that
-    /// does not exist" — true, but not which one. It now names the flag and,
-    /// since `--lane` is one edit away, offers the spelling that was meant.
-    #[test]
-    fn an_unknown_flag_is_named_with_its_nearest_spelling() {
-        let (kind, msg) = classify_argv(&["state", "route", "--lane-value", "standard"]);
-        assert_eq!(kind, "unsupported_argument_shape");
-        assert!(msg.contains("--lane-value"), "{msg}");
-        assert!(msg.contains("(did you mean --lane?)"), "{msg}");
-    }
-
-    /// D1 (8ef2bae6): every problem named in one message, not just the first.
-    #[test]
-    fn two_unknown_flags_are_both_named() {
-        let (kind, msg) =
-            classify_argv(&["state", "route", "--lane-value", "standard", "--klass", "feature"]);
-        assert_eq!(kind, "unsupported_argument_shape");
-        assert!(msg.contains("--lane-value"), "{msg}");
-        assert!(msg.contains("--klass"), "{msg}");
-    }
-
-    /// When every typed flag IS declared, the refusal is about a value or a
-    /// target, not a name — today's wording already says that accurately, so
-    /// it must not change.
-    #[test]
-    fn a_call_with_only_declared_flags_keeps_todays_wording() {
-        let (kind, msg) =
-            classify_argv(&["capture", "flush", "--id", "nope", "--into", "docs/specs/x.md"]);
-        assert_eq!(kind, "unsupported_argument_shape");
-        assert!(
-            msg.contains(
-                "Its required arguments are all present, so what it refused is an optional \
-                 flag, a flag value, or a target that does not exist."
-            ),
-            "{msg}"
-        );
     }
 
     /// The black-box suites detect "the front door refused" by these five

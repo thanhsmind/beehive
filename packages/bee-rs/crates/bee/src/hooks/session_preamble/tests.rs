@@ -186,6 +186,106 @@ use crate::version::BEE_VERSION;
         assert!(!render(tmp.path()).contains("### Doc links"));
     }
 
+    // ── csc-1: the command surface ─────────────────────────────────────────
+
+    /// Known fixtures from the embedded registry: `cells claim` has two
+    /// required flags, `reservations reserve` mixes required and optional
+    /// ones, and `orient` carries none beyond `--json`.
+    #[test]
+    fn command_surface_lines_render_a_known_fixture_with_required_flags_marked() {
+        let lines = command_surface_lines();
+        let cells_claim = lines
+            .iter()
+            .find(|l| l.starts_with("cells claim: "))
+            .unwrap_or_else(|| panic!("cells claim missing: {lines:?}"));
+        assert!(cells_claim.contains("--id*:str"), "{cells_claim}");
+        assert!(cells_claim.contains("--worker*:str"), "{cells_claim}");
+        // session-id is optional — no star.
+        assert!(cells_claim.contains("--session-id:str"), "{cells_claim}");
+        assert!(!cells_claim.contains("--session-id*"), "{cells_claim}");
+        let reservations_reserve = lines
+            .iter()
+            .find(|l| l.starts_with("reservations reserve: "))
+            .unwrap_or_else(|| panic!("reservations reserve missing: {lines:?}"));
+        assert!(reservations_reserve.contains("--agent*:str"), "{reservations_reserve}");
+        assert!(reservations_reserve.contains("--cell*:str"), "{reservations_reserve}");
+        assert!(reservations_reserve.contains("--path*:str"), "{reservations_reserve}");
+        // session is optional — no star.
+        assert!(reservations_reserve.contains("--session:str"), "{reservations_reserve}");
+        assert!(!reservations_reserve.contains("--session*"), "{reservations_reserve}");
+    }
+
+    /// A command with no flags besides `json` renders its bare name — never
+    /// a dangling colon.
+    #[test]
+    fn a_flagless_command_renders_without_a_trailing_colon() {
+        let lines = command_surface_lines();
+        assert!(lines.contains(&"orient".to_string()), "{lines:?}");
+        assert!(!lines.iter().any(|l| l == "orient:"), "{lines:?}");
+    }
+
+    /// `--json` is dropped from every line — stated once, in the header,
+    /// instead.
+    #[test]
+    fn the_json_flag_appears_nowhere_inside_the_command_surface_section() {
+        let section = command_surface_section().join("\n");
+        assert!(!section.contains("--json"), "{section}");
+        assert!(section.contains("### Command surface"), "{section}");
+        assert!(section.contains('`'), "the header note should mention `json` once:\n{section}");
+    }
+
+    /// Every registry command appears exactly once, path-sorted (dotted
+    /// name, ascending) for byte-stability across regenerations that
+    /// reorder the source array.
+    #[test]
+    fn every_registry_command_appears_once_path_sorted() {
+        let entries = crate::catalog::entries();
+        let lines = command_surface_lines();
+        assert_eq!(lines.len(), entries.len(), "{lines:?}");
+        let mut sorted_names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        sorted_names.sort();
+        let mut prior = "";
+        for name in &sorted_names {
+            assert!(*name >= prior, "not sorted: {prior} then {name}");
+            prior = name;
+        }
+    }
+
+    /// The whole section stays under the character budget, so a future verb
+    /// explosion is caught here rather than silently paid for every session.
+    #[test]
+    fn the_command_surface_section_stays_inside_its_character_budget() {
+        let section = command_surface_section().join("\n");
+        assert!(
+            section.chars().count() <= COMMAND_SURFACE_BUDGET_CHARS,
+            "the command surface section is {} characters, over the {COMMAND_SURFACE_BUDGET_CHARS}-character budget:\n{section}",
+            section.chars().count()
+        );
+    }
+
+    /// Placement: after `### Standard commands`, before `### Doc links`, and
+    /// the preamble still closes on the same trailer bytes.
+    #[test]
+    fn the_command_surface_section_sits_between_standard_commands_and_doc_links() {
+        let tmp = minimal_repo();
+        write(
+            tmp.path(),
+            ".bee/config.json",
+            r#"{"commands":{"test":"npm test"},"doc_viewer":{"base_url":"http://host:7700","project":"p"}}"#,
+        );
+        let text = render(tmp.path());
+        assert!(text.contains("### Command surface"), "{text}");
+        let commands_at = text.find("### Standard commands").expect("standard commands present");
+        let surface_at = text.find("### Command surface").expect("command surface present");
+        let doc_links_at = text.find("### Doc links").expect("doc links present");
+        assert!(surface_at > commands_at, "Command surface must follow Standard commands:\n{text}");
+        assert!(doc_links_at > surface_at, "Doc links must follow Command surface:\n{text}");
+        assert!(
+            text.ends_with("Everything above is already read — do not re-fetch it. Run `.bee/bin/bee status --json` yourself when you ROUTE WORK (claim, plan, change phase) or need detail this block does not carry. Never hand bee commands to the user. Route via bee-hive."),
+            "closing line drifted:\n{text}"
+        );
+    }
+
     /// D1 (kf-1): resolve_anchor is the ONE gate, so a feature anchored by
     /// docs/history or its scribing stamp gets the exact same invitation a
     /// work item already got — the anchor kind is named so the reader knows

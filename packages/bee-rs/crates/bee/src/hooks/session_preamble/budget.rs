@@ -48,6 +48,10 @@ use crate::verbs::state_group::session_binding;
 // the whole block against a deliberately pathological store.
 /// Every section switched on at once, over a pathological store, must fit
 /// here. Measured: 11,390 bytes before the caps on this repo, 4,841 after.
+/// csc-1 then added the `### Command surface` section — fixed-size (bounded
+/// on its own by `COMMAND_SURFACE_BUDGET_CHARS`, never by the store) rather
+/// than store-shaped, but always on, so the ceiling below rose with it: the
+/// same pathological fixture now measures ~12,666 bytes.
 ///
 /// NOT the law decision `8f63adb4` (budget-fence-removal D1) abolished. That
 /// one forbids a standing size ceiling on bee's AUTHORED INSTRUCTION TEXT —
@@ -58,7 +62,7 @@ use crate::verbs::state_group::session_binding;
 /// out of scope and explicitly kept. Nobody edits prose to satisfy it; it
 /// bounds how much of the STORE the renderer is allowed to paste.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(crate) const PREAMBLE_BUDGET_BYTES: usize = 5120;
+pub(crate) const PREAMBLE_BUDGET_BYTES: usize = 14336;
 
 pub(crate) const ORPHAN_FEATURES_SHOWN: usize = 3;
 
@@ -70,6 +74,89 @@ pub(crate) const PATTERN_DIGEST_LINES: usize = 4;
 pub(crate) const DECISION_CHARS: usize = 160;
 
 pub(crate) const HANDOFF_ACTION_CHARS: usize = 400;
+
+// ── command surface (csc-1) ─────────────────────────────────────────────────
+//
+// `bee --help` prints one line of prose per command and no flags at all;
+// the flags live behind one `bee <cmd> --help --json` call per command,
+// across 142 of them. Every guessed-flag failure measured for this feature
+// was a wrong NAME, never a misunderstood meaning — an agent that knows a
+// flag exists can look up what it does, but one that does not know it
+// exists invents a plausible spelling and is refused. This puts the flag
+// NAMES in context, once, cheaply: name + required marker + declared type,
+// never a description (that shape prices at ~3.6x this one and was priced
+// and declined — see docs/history/cli-surface-in-context/plan.md).
+//
+// Built from the EMBEDDED registry (`catalog::entries()`, itself parsed
+// from `registry::REGISTRY_PAYLOAD`) — never a checked-in copy, which would
+// drift the moment a verb changes.
+
+/// The section renders one line per registry command (142 today) plus a
+/// two-line header; this bounds it so a future verb explosion is caught
+/// here rather than silently paid for on every session.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) const COMMAND_SURFACE_BUDGET_CHARS: usize = 9000;
+
+/// First three letters of a JSON-schema type name: "string" -> "str",
+/// "boolean" -> "boo", "number" -> "num", "array" -> "arr". The registry has
+/// never declared a type shorter than three characters.
+fn type_abbrev(schema_type: &str) -> String {
+    schema_type.chars().take(3).collect()
+}
+
+/// One line per registry command, path-sorted (dotted name, ascending) for
+/// byte-stability across regenerations that reorder the source array:
+/// `<command name>: --<flag>*:<type-abbrev> ...`, `*` marking a required
+/// flag. `json` is dropped from every line (see `command_surface_header_note`)
+/// so a command with no other flags renders its bare name, never a dangling
+/// colon.
+pub(crate) fn command_surface_lines() -> Vec<String> {
+    let mut entries: Vec<&crate::catalog::Entry> = crate::catalog::entries().iter().collect();
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+    entries
+        .into_iter()
+        .map(|e| {
+            let name = e.name.replace('.', " ");
+            let flags: Vec<String> = e
+                .properties
+                .iter()
+                .filter(|(k, _)| k.as_str() != "json")
+                .map(|(k, v)| {
+                    let required = e.required.iter().any(|r| r == k);
+                    let star = if required { "*" } else { "" };
+                    let t = v.get("type").and_then(Value::as_str).unwrap_or("value");
+                    format!("--{k}{star}:{}", type_abbrev(t))
+                })
+                .collect();
+            if flags.is_empty() {
+                name
+            } else {
+                format!("{name}: {}", flags.join(" "))
+            }
+        })
+        .collect()
+}
+
+/// Stated once, in the header, so the 130-of-142 per-command lines that take
+/// it never repeat it. The count is read from the registry itself so it
+/// never drifts from what `command_surface_lines` actually omitted.
+pub(crate) fn command_surface_header_note() -> String {
+    let entries = crate::catalog::entries();
+    let total = entries.len();
+    let with_json = entries.iter().filter(|e| e.properties.contains_key("json")).count();
+    format!(
+        "Nearly every command also takes a `json` flag ({with_json} of {total}) for machine-readable output — omitted from every line below."
+    )
+}
+
+/// `### Command surface` heading + header note + the per-command lines,
+/// assembled once so `build_session_preamble` and the budget test read the
+/// identical bytes.
+pub(crate) fn command_surface_section() -> Vec<String> {
+    let mut lines = vec!["### Command surface".to_string(), command_surface_header_note()];
+    lines.extend(command_surface_lines());
+    lines
+}
 
 /// Truncate on a CHARACTER boundary (never mid-UTF-8) and say so, so a reader
 /// never mistakes a cut for the end of the text.
@@ -483,6 +570,14 @@ pub fn build_session_preamble(
             );
         }
     }
+
+    // csc-1: the whole command surface, always on — unlike Standard
+    // commands above it never depends on host-project config. Placed right
+    // after Standard commands and before Doc links, never appended at the
+    // end: the closing trailer's exact bytes are pinned by
+    // session_preamble/tests.rs (`ends_with`).
+    lines.push(String::new());
+    lines.extend(command_surface_section());
 
     // doc-viewer-links (decision 4205835b): rendered only when the key
     // resolves — an unset doc_viewer leaves the preamble byte-identical to
