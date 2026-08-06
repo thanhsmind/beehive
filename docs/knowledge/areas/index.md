@@ -15,7 +15,7 @@ never a generation timestamp or any other wall-clock value.
 - [decision-memory/](decision-memory/index.md) — 2 concept(s)
 - [doctrine-layer/](doctrine-layer/index.md) — 11 concept(s)
 - [feedback-digest/](feedback-digest/index.md) — 4 concept(s)
-- [hook-runtime/](hook-runtime/index.md) — 19 concept(s)
+- [hook-runtime/](hook-runtime/index.md) — 20 concept(s)
 - [okf-profile/](okf-profile/index.md) — 7 concept(s)
 - [onboarding/](onboarding/index.md) — 9 concept(s)
 - [performance-log/](performance-log/index.md) — 4 concept(s)

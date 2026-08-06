@@ -1,0 +1,48 @@
+{
+  "id": "csc-3",
+  "feature": "cli-surface-in-context",
+  "lane": "standard",
+  "title": "Stop the flag vocabulary from diverging further",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "docs/history/cli-surface-in-context/plan.md"
+  ],
+  "action": "Add a ratchet test over the embedded registry pinning the count of DISTINCT flag names across every command (143 at the time of writing — measure it, never trust this number). The failure message must state the point rather than the arithmetic: a new spelling for an existing concept is what makes a caller's knowledge of one verb useless on the next, so introducing one is a decision to take deliberately, and the fix is either to reuse the existing name or to bump this pin on purpose. Also assert the current worst divergences by name so the test documents them: the acting agent is --worker in cells.claim but --agent in reservations.reserve. This cell renames NOTHING — 143 renames is a breaking change the feature does not take on; it stops the divergence from growing.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml catalog",
+  "must_haves": {
+    "truths": [
+      "The distinct flag-name count is pinned against the embedded registry",
+      "The failure message tells a future author what the pin is for",
+      "No flag is renamed by this cell",
+      "The full declared test suite is green"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "csc-3",
+    "outcome": "Pinned the distinct flag-name count (143) as a vocabulary ratchet, naming the worker/agent divergence; no renames",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T12:28:08.770Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f91db0c1-e1fd-4a58-aa14-5c13fd8fbec1",
+    "claimed_at": "2026-08-06T12:24:30.136Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T12:27:57.070Z"
+  }
+}

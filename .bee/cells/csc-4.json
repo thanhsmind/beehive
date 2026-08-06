@@ -1,0 +1,50 @@
+{
+  "id": "csc-4",
+  "feature": "cli-surface-in-context",
+  "lane": "tiny",
+  "title": "Collapse the edit-distance copy the wave's reservations forced",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "action": "Cell csc-2 added `flag_distance` to router.rs — a second Levenshtein beside `catalog::distance` — and recorded WHY in a doc comment on `nearest_flag`: catalog.rs was reserved by sibling cell csc-3 for that wave, so widening the private helper's visibility was not csc-2's file to touch. Both reservations are released now. Make `catalog::distance` pub(crate), delete `flag_distance` from router.rs, point `nearest_flag` at the shared helper, and remove the deviation note from the doc comment (keep any sentence that explains what nearest_flag is FOR — only the 'why there are two copies' clause goes). Confirm no third copy of the same routine exists before finishing. The refusal bytes must not move: csc-2's three router tests, including the nearest-spelling suggestion for `state route --lane-value`, all still pass unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml router catalog",
+  "must_haves": {
+    "truths": [
+      "Exactly one Levenshtein implementation remains in the crate",
+      "The refusal messages csc-2 shipped are byte-identical",
+      "The doc comment no longer claims a duplication that is gone",
+      "The full declared test suite is green"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "csc-4",
+    "outcome": "Made catalog::distance pub(crate); router.rs's nearest_flag already called it directly via a tangled sibling commit, so only catalog.rs needed a change",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T12:39:23.202Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f91db0c1-e1fd-4a58-aa14-5c13fd8fbec1",
+    "claimed_at": "2026-08-06T12:33:57.399Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T12:39:11.350Z"
+  }
+}

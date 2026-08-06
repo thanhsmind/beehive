@@ -13,8 +13,8 @@ never a generation timestamp or any other wall-clock value.
 
 ## Sections
 
-- [areas/](areas/index.md) — 99 concept(s)
-- [patterns/](patterns/index.md) — 99 concept(s)
+- [areas/](areas/index.md) — 100 concept(s)
+- [patterns/](patterns/index.md) — 100 concept(s)
 - [work/](work/index.md) — 4 concept(s)
 
 ## Critical patterns
@@ -102,3 +102,4 @@ never a generation timestamp or any other wall-clock value.
 - [A read placed after a cleanup always sees an empty store](patterns/20260805-a-read-placed-after-a-cleanup-always-sees-an-empty-store.md) — A read-only step sequenced after a cleanup step sees whatever the cleanup left behind — a soft promote door placed after cell archival on close always scanned an emptied store, and the happy-path test only passed because it disabled the archiving the real path always runs.
 - [An invitation keyed on the old precondition survives the machinery that removed it](patterns/20260805-an-invitation-keyed-on-the-old-precondition-survives-the-machinery-that-removed-it.md) — Widening what a resolver accepts does not widen the invitation built on the resolver's old precondition unless every caller of that precondition is re-checked — the session preamble kept gating its knowledge-context invitation on has_work_item after the resolver stopped requiring one.
 - [Source that ships without reinstalling the binary the hooks call is inert](patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md) — A green test suite and a merged branch describe the source tree; when every hook and command invocation actually runs a built binary outside version control, neither implies the running system reflects the merge until the binary is reinstalled.
+- [A guard on the shared index does not stop a path-scoped commit naming someone else's file](patterns/20260806-a-guard-on-the-shared-index-does-not-stop-a-path-scoped-commit-naming-someone-elses-file.md) — The escape a guard recommends inherits the guard's job: the concurrent-worker git guard closes the staging path that swept siblings' work into the wrong commit, then allows a path-scoped commit to name any path, including a file another live worker is still editing.
