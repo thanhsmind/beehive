@@ -1435,6 +1435,106 @@ use std::time::Instant;
         assert_eq!(scribing_debt(&root, "demo").unwrap().count, 0);
     }
 
+    // ── debt-door-archive dda-1: the archive walk ────────────────────────────
+
+    /// `bee close` archives a feature's cells on a green close
+    /// (`.bee/cells/archive/<feature>/*.json`). A behavior_change cell that
+    /// lives ONLY there — never in the live `.bee/cells/` dir — must still
+    /// count as debt when its `capped_at` is newer than the feature's best
+    /// scribing stamp: this is the exact live scenario measured against
+    /// `doc-viewer-links` (closed with "door scribing-debt: clear" while both
+    /// of its behavior_change cells were uncaptured).
+    #[test]
+    fn scribing_debt_counts_a_cell_that_lives_only_in_the_archive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(
+            &root,
+            ".bee/cells/archive/demo/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#,
+        );
+        let debt = scribing_debt(&root, "demo").unwrap();
+        assert_eq!(debt.count, 1, "an archived-only cell must still count as debt");
+        assert_eq!(debt.ids, vec![json!("demo-1")]);
+
+        // A scribing run recorded AFTER the archived cell's cap still clears
+        // it — an archived cell is counted by the same threshold rule as a
+        // hot one, not a separate one.
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2026-07-02T00:00:00.000Z\"}\n",
+        );
+        assert_eq!(scribing_debt(&root, "demo").unwrap().count, 0);
+    }
+
+    /// An archived cell OLDER than the feature's best scribing stamp stays
+    /// uncounted — the archive walk adds visibility, it never lowers the bar.
+    #[test]
+    fn scribing_debt_leaves_an_archived_cell_older_than_the_threshold_uncounted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(
+            &root,
+            ".bee/cells/archive/demo/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#,
+        );
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2026-07-02T00:00:00.000Z\"}\n",
+        );
+        assert_eq!(scribing_debt(&root, "demo").unwrap().count, 0);
+    }
+
+    /// A cell id present in BOTH the hot dir and the archive counts ONCE, and
+    /// the LIVE copy's own trace decides — not the archived copy's. Mirrors
+    /// `verbs/knowledge/promote.rs:353-376`'s live-copy-wins dedup, pinned
+    /// there by `verbs/knowledge/tests.rs:682`.
+    #[test]
+    fn scribing_debt_dedupes_by_id_with_the_live_copy_winning() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        // The archived copy is stale (old capped_at, would clear on its own).
+        w(
+            &root,
+            ".bee/cells/archive/demo/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-01-01T00:00:00.000Z"}}"#,
+        );
+        // The live copy shares the id but carries a fresh trace: it must be
+        // the one scribing_debt actually reads, so it counts.
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#,
+        );
+        let debt = scribing_debt(&root, "demo").unwrap();
+        assert_eq!(debt.count, 1, "a duplicate id must be counted once, not twice");
+        assert_eq!(debt.ids, vec![json!("demo-1")]);
+    }
+
+    /// `bee close`'s own door, `scribing_debt_close_door` and
+    /// `scribing_debt_swap_door` (state_group/set_gate.rs) all call
+    /// `drivers::scribing_debt` — there is one counter, so proving the door
+    /// text here proves all three see the archived cell.
+    #[test]
+    fn close_door_reports_debt_for_a_behavior_change_cell_that_is_already_archived() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(
+            &root,
+            ".bee/cells/archive/demo/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#,
+        );
+        let doors = build_close_report_doors(&root, "demo").unwrap();
+        let scribing = doors.iter().find(|d| d.door == "scribing-debt").unwrap();
+        assert!(scribing.blocking, "an archived-only debt cell must still block close");
+        assert_eq!(
+            scribing.detail,
+            "pending — 1 behavior_change cell(s) uncaptured (demo-1); run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"demo\" to defer it"
+        );
+    }
+
     // ── D1: the refusal itself (red, green-after-capture, green-with-deferral) ─
 
     fn declare_echo_test(tmp: &tempfile::TempDir) -> PathBuf {
