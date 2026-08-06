@@ -2,15 +2,15 @@
 type: bee.area
 title: "Worktree Parallelism — pruning: bee worktree prune and the fail-closed dead-worktree classifier"
 description: "Why a worktree that never crossed the merge return path needs its own reclaim path, the eight independent conditions every one of which must hold before a worktree is judged dead, why every condition keeps rather than guesses on any doubt, and why liveness reads live session records instead of the workspace record's own ownership fields."
-timestamp: 2026-08-05
+timestamp: 2026-08-06
 bee:
   id: worktree-parallelism-pruning-dead-worktrees
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/returning-and-the-merge-gate.md]
   decisions: [worktree-reclaim D2 (bee worktree prune sweeps what merge never saw), "worktree-reclaim D2a (every classifier probe fails closed; a base ref that does not resolve refuses the whole run rather than guessing at mergedness; three keep-conditions added on review — branch identity/detached HEAD, no interrupted operation, no precious gitignored state)", "worktree-reclaim D2b (liveness comes from session records, not the workspace record's own ownership fields, which are never written for a worktree)", "worktree-reclaim D3/D3a (prune's removal reuses the same shared teardown helper as merge cleanup and unregister — see returning-and-the-merge-gate.md and entering-creating-and-registering.md)"]
-  sources: ["docs/history/worktree-reclaim/CONTEXT.md and plan.md (D2, D2a, D2b, wr-2, wr-3)", commit 396b8cb7 (the fail-closed dead-worktree classifier) and commit f290c08d (bee worktree prune), packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs]
-  authoritative_for: "worktree-parallelism: bee worktree prune and the fail-closed dead-worktree classifier"
+  sources: ["docs/history/worktree-reclaim/CONTEXT.md and plan.md (D2, D2a, D2b, wr-2, wr-3)", commit 396b8cb7 (the fail-closed dead-worktree classifier) and commit f290c08d (bee worktree prune), packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs, worktree-reclaim cell wr-5 (the reclaimable count surfaced at orientation and in the session preamble above a floor of one; docs/history/worktree-reclaim/promote-proposals.md)]
+  authoritative_for: "worktree-parallelism: bee worktree prune, the fail-closed dead-worktree classifier, and the reclaimable-count surfacing"
 ---
 
 # Worktree Parallelism — Pruning: `bee worktree prune`
@@ -108,8 +108,36 @@ never there would fail and the record would come back *kept*, not removed. It dr
 the registry-only teardown (`teardown_worktree(.., None)`, `merge.rs`) that `run_unregister`
 already uses: the grant, the workspace record, and the holds all release; nothing git-shaped runs.
 
+## Nobody runs a verb they never hear about (wr-5)
+
+A reclaim path that has to be remembered is a reclaim path that does not run.
+Orientation therefore names the count itself: when more than one worktree is
+reclaimable — merged, clean, and idle past the age threshold — both the
+orientation report and the session-start briefing carry one line stating how
+many there are and naming the dry run as the way to see what would go. It is a
+report and nothing more: it refuses nothing, blocks nothing, and never removes
+anything.
+
+The floor is deliberate. At zero the line would be noise; at exactly one it
+would be nagging about a single stale directory that costs nothing to leave.
+The line appears from two upward, where the count itself is the signal that the
+reclaim path has stopped being used at all. The count is cheap by
+construction — the grant registry plus one metadata check per candidate, with no
+repository command and no directory walk — so orientation pays for it on every
+call without noticing.
+
 ## Pointers (implementation)
 
+- Reclaimable-count surfacing (wr-5): `reclaimable_worktree_ids` and the shared
+  floor constant `RECLAIMABLE_WORKTREES_SHOWN_FLOOR` (1) in
+  `packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs:104`; the orientation
+  blocker line at `verbs/status_full/orient.rs:252-258` and the preamble section
+  at `hooks/session_preamble/render.rs:337-346`, wired in
+  `session_preamble/budget.rs:581-585`. Both read the one scan and share the one
+  floor, so the two surfaces cannot disagree. Tests:
+  `session_preamble/tests.rs:357` (two or more name the count and the command)
+  and `tests.rs:385` (a single reclaimable worktree, and a too-young one, stay
+  silent).
 - The classifier: `classify_worktree`, `PruneCheck`, `Verdict` in
   `packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs`. Evidence: commit 396b8cb7.
 - The subcommand: `run_prune` / `run_prune_core` in the same file, wired at

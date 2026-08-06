@@ -325,6 +325,7 @@
     "worktree-reclaim",
     "tooling",
     "friction",
-    "worktree-orphan-verdict"
+    "worktree-orphan-verdict",
+    "verify-pipeline"
   ]
 }

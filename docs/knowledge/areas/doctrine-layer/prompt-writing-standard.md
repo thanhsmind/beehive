@@ -1,6 +1,6 @@
 ---
 type: bee.area
-title: "Doctrine Layer — the prompt-writing standard"
+title: Doctrine Layer — the prompt-writing standard
 description: "The standard every edit to bee's instruction text is judged by: the four-question line filter, add-on-failure, one rule one home, verifiable-imperative style, the deterministic-backstop preference, and the standing record that no size ceiling exists or may be introduced."
 tags: [doctrine-layer, instruction-text, context-budget]
 timestamp: 2026-08-03
@@ -9,8 +9,8 @@ bee:
   lifecycle: active
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
-  decisions: ["prompt-diet D1-D7 (docs/history/prompt-diet/CONTEXT.md, 2026-08-03)", "8f63adb4 + budget-fence-removal D1/D6 (a size ceiling on instruction text is never a standing rule)"]
-  sources: ["docs/history/prompt-diet/CONTEXT.md", "Lulla et al., arXiv 2601.20404", "Gloaguen et al. (ETH SRI), arXiv 2602.11988", "Khatri, arXiv 2607.27250", "Chatlatanagulchai et al. (NAIST), arXiv 2511.12884"]
+  decisions: ["prompt-diet D1-D7 (docs/history/prompt-diet/CONTEXT.md, 2026-08-03)", 8f63adb4 + budget-fence-removal D1/D6 (a size ceiling on instruction text is never a standing rule)]
+  sources: [docs/history/prompt-diet/CONTEXT.md, "Lulla et al., arXiv 2601.20404", "Gloaguen et al. (ETH SRI), arXiv 2602.11988", "Khatri, arXiv 2607.27250", "Chatlatanagulchai et al. (NAIST), arXiv 2511.12884"]
   authoritative_for: "doctrine-layer: the prompt-writing standard"
 ---
 

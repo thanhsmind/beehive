@@ -3,14 +3,26 @@ type: bee.area
 title: Verify Pipeline — suite-result cache
 description: "The local content-hash cache that skips a suite whose green result is already proven for the exact bytes of its dependency closure — why red is never cached, why CI never uses it, and how it degrades open on corruption."
 tags: [verify-pipeline, performance]
-timestamp: 2026-07-28
+timestamp: 2026-08-06
 bee:
   id: verify-pipeline-suite-result-cache
   lifecycle: active
   areas: [verify-pipeline]
   required_context: [areas/verify-pipeline/suite-topology-and-discovery.md]
-  decisions: [test-batching-finish merged-gate audit, "spec #80 P7"]
+  decisions: [test-batching-finish merged-gate audit, "spec #80 P7", review-p1-fixes p1-1/p2-2 (the cache was reworked twice — a leaking fixture and an opt-in declaration table — before the runtime it lived in was retired; 2026-08-04), "962a6490 (the retired runtime's performance work is recorded, never merged into the specs as current behavior)"]
+  sources: ["verified 2026-08-06: no suite-result cache exists in the shipped runtime; the test verb reads commands.test from .bee/config.json and runs every declared command sequentially, writing .bee/logs/test-results.json on each call", review-p1-fixes cells p1-1/p2-2 (docs/history/review-p1-fixes/promote-proposals.md — the last two reworks of the retired cache)]
 ---
+
+> **Retired (2026-08-06).** Everything below describes a subsystem of the
+> runtime that has been replaced. That runtime is gone, and with it the whole
+> cache: no result caching of any kind ships today. The project declares its
+> tests once, and the test verb runs every declared command, in order, on every
+> call, writing the results record each time — there is no closure hash, no
+> declaration table, no environment switch that disables caching, because there
+> is nothing to disable. This page is kept as the historical record of how the
+> cache worked and why it was shaped that way; it is not a description of
+> current behavior. The live behavior is one line: run what the project
+> declares, every time.
 
 ## Purpose
 
