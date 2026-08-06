@@ -1,0 +1,47 @@
+{
+  "id": "chsg-1",
+  "feature": "cli-help-shape-guard",
+  "lane": "tiny",
+  "title": "Let --help reach a subcommand's help surface past the CLI-shape guard",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+  ],
+  "action": "In check_cli_shape (cli_shape.rs, the loop body around line 604), after parse_cli_flags produced `parsed` and BEFORE the validate() call, break out of the segment when `parsed.get(\"help\").is_some()`. Rationale to carry in a short comment: --help is never a schema parameter in the registry (no \"help\" property exists in generated/registry_payload.json), so a parsed `help` key can only have come from the user asking for help; the CLI's own help surface answers it, and required-parameter validation must not stand in front of it. Test the PARSED key, not a raw token scan, so `--help` swallowed as another flag's value does not disarm the guard. Then add one #[test] to the module's test section next to a_segment_whose_shape_is_ambiguous_fails_open: allow(\"node .bee/bin/bee.mjs config set --help\"), allow(\"node .bee/bin/bee.mjs config set --help --json\"), and a deny(\"node .bee/bin/bee.mjs config set --key --help\") asserting the reason still names config.set and the missing --value (there --help is consumed as --key's value, so no help key is parsed and the guard must still fire).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml cli_shape",
+  "must_haves": {
+    "truths": [
+      "`bee config set --help` and `bee config set --help --json` are allowed by the guard",
+      "A missing-required-parameter denial still fires when no --help was parsed",
+      "--help consumed as another flag's value does not disarm the guard",
+      "The full declared test suite is green"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "help-guard",
+    "outcome": "check_cli_shape breaks out before validating when a help key was parsed, so bee <group> <cmd> --help reaches the CLI help surface",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T09:22:45.616Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f91db0c1-e1fd-4a58-aa14-5c13fd8fbec1",
+    "claimed_at": "2026-08-06T09:20:04.644Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T09:22:33.166Z"
+  }
+}
