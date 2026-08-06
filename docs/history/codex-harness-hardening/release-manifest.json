@@ -973,6 +973,13 @@
       "packagePath": "packages/bee/AGENTS.block.md"
     },
     {
+      "path": "packages/bee/AGENTS.windows.md",
+      "sha256": "6b022b9210583050da3217d9a52f51846f50b264eaced4cafebb77a0648a8ca6",
+      "mode": "644",
+      "role": "package_payload",
+      "packagePath": "packages/bee/AGENTS.windows.md"
+    },
+    {
       "path": "packages/bee/agents/bee-build.md.tmpl",
       "sha256": "03899e5a6d10b94d69c8a4478c57612838f33cdfdee599cc0f31d93bb2e99e13",
       "mode": "644",

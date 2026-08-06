@@ -20,9 +20,41 @@ use super::util::{read_text_if_exists, trim_trailing_ws};
 use std::path::Path;
 
 /// renderAgentsBlock (l. 2077).
-pub fn render_agents_block(agents_block_template: &Path) -> String {
-    let body = read_text_if_exists(agents_block_template);
-    format!("{MARKER_START}\n{}\n{MARKER_END}\n", trim_trailing_ws(&body))
+///
+/// `windows_template` is `Some` only when the resolved host shell is
+/// PowerShell (`host_shell_is_powershell`); its body is appended INSIDE the
+/// same managed block, so the shell doctrine is replaced and removed by the
+/// same splice as the rest. `None` renders byte-identically to the
+/// single-template form.
+pub fn render_agents_block(agents_block_template: &Path, windows_template: Option<&Path>) -> String {
+    let body_text = read_text_if_exists(agents_block_template);
+    let body = trim_trailing_ws(&body_text);
+    let extra_text = windows_template.map(read_text_if_exists).unwrap_or_default();
+    let extra = match trim_trailing_ws(&extra_text) {
+        s if s.trim().is_empty() => String::new(),
+        s => format!("\n\n{s}"),
+    };
+    format!("{MARKER_START}\n{body}{extra}\n{MARKER_END}\n")
+}
+
+/// Does this repository's agent doctrine describe a PowerShell host?
+///
+/// The repository decides before the machine does: `.bee/config.json`'s
+/// `host_shell` — `"powershell"` or `"posix"` — is a property of the PROJECT,
+/// recorded once, so a Linux teammate running onboarding on a Windows project
+/// does not strip the section that the next Windows run puts back. Absent or
+/// unrecognised, the running host answers, which is what makes the key
+/// optional: no project has to set anything.
+pub fn host_shell_is_powershell(repo_root: &Path) -> bool {
+    let text = read_text_if_exists(&repo_root.join(".bee").join("config.json"));
+    let declared = serde_json::from_str::<serde_json::Value>(&text)
+        .ok()
+        .and_then(|v| v.get("host_shell").and_then(|s| s.as_str()).map(str::to_string));
+    match declared.as_deref().map(str::trim) {
+        Some("powershell") => true,
+        Some("posix") => false,
+        _ => cfg!(windows),
+    }
 }
 
 /// renderGitignoreBlock (l. 2082).
@@ -169,6 +201,7 @@ pub fn claude_md_imports_agents(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     const BLOCK: &str = "<!-- BEE:START -->\nbody\n<!-- BEE:END -->\n";
 
@@ -192,6 +225,73 @@ mod tests {
     fn agents_append_inserts_a_blank_line_even_without_a_trailing_newline() {
         let m = merge_agents_content("no newline", BLOCK);
         assert!(m.text.starts_with("no newline\n\n<!-- BEE:START -->"));
+    }
+
+    fn write_file(dir: &Path, name: &str, body: &str) -> PathBuf {
+        let p = dir.join(name);
+        std::fs::write(&p, body).unwrap();
+        p
+    }
+
+    fn write_config(dir: &Path, body: &str) {
+        std::fs::create_dir_all(dir.join(".bee")).unwrap();
+        std::fs::write(dir.join(".bee").join("config.json"), body).unwrap();
+    }
+
+    #[test]
+    fn a_posix_host_renders_exactly_what_the_single_template_form_rendered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let block = write_file(tmp.path(), "AGENTS.block.md", "body\n");
+        let windows = write_file(tmp.path(), "AGENTS.windows.md", "## Environment\n\nshell talk\n");
+        assert_eq!(render_agents_block(&block, None), BLOCK);
+        // Naming the template is not enough — only the resolver may pass Some.
+        assert_ne!(render_agents_block(&block, Some(&windows)), BLOCK);
+    }
+
+    #[test]
+    fn a_powershell_host_carries_the_shell_section_inside_the_same_markers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let block = write_file(tmp.path(), "AGENTS.block.md", "body\n");
+        let windows = write_file(tmp.path(), "AGENTS.windows.md", "## Environment\n\nshell talk\n");
+        let rendered = render_agents_block(&block, Some(&windows));
+        assert_eq!(
+            rendered,
+            "<!-- BEE:START -->\nbody\n\n## Environment\n\nshell talk\n<!-- BEE:END -->\n"
+        );
+        // The whole thing is still ONE managed block, so the same splice that
+        // adds the section removes it again when the host changes.
+        let doc = format!("head\n{rendered}tail\n");
+        assert_eq!(extract_agents_block(&doc).as_deref(), Some(rendered.as_str()));
+        assert_eq!(merge_agents_content(&doc, BLOCK).text, format!("head\n{BLOCK}tail\n"));
+    }
+
+    #[test]
+    fn an_empty_or_missing_windows_template_adds_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let block = write_file(tmp.path(), "AGENTS.block.md", "body\n");
+        let blank = write_file(tmp.path(), "blank.md", "  \n\n");
+        assert_eq!(render_agents_block(&block, Some(&blank)), BLOCK);
+        assert_eq!(render_agents_block(&block, Some(&tmp.path().join("absent.md"))), BLOCK);
+    }
+
+    #[test]
+    fn the_repository_decides_the_host_shell_before_the_machine_does() {
+        let tmp = tempfile::tempdir().unwrap();
+        // No config at all: the running host answers.
+        assert_eq!(host_shell_is_powershell(tmp.path()), cfg!(windows));
+
+        write_config(tmp.path(), r#"{"host_shell":"powershell"}"#);
+        assert!(host_shell_is_powershell(tmp.path()));
+
+        write_config(tmp.path(), r#"{"host_shell":"posix"}"#);
+        assert!(!host_shell_is_powershell(tmp.path()));
+
+        // An unrecognised value, a wrong type, and unparseable JSON all fall
+        // back to the host — this key never refuses onboarding.
+        for body in [r#"{"host_shell":"fish"}"#, r#"{"host_shell":7}"#, "{ not json", "{}"] {
+            write_config(tmp.path(), body);
+            assert_eq!(host_shell_is_powershell(tmp.path()), cfg!(windows), "{body}");
+        }
     }
 
     #[test]

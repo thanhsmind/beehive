@@ -15,8 +15,8 @@ use super::agents::compute_agent_file_plan;
 use super::hooks_wiring as hw;
 use super::merge::{
     agents_block_present, claude_md_imports_agents, extract_agents_block,
-    extract_gitignore_block, gitignore_block_present, normalize_gitignore_for_compare,
-    render_agents_block, render_gitignore_block,
+    extract_gitignore_block, gitignore_block_present, host_shell_is_powershell,
+    normalize_gitignore_for_compare, render_agents_block, render_gitignore_block,
 };
 use super::migration::{detect_worktree_migration, WorktreeMigration};
 use super::notices::has_prose_outside_block;
@@ -349,7 +349,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         };
     }
     let bee_version = release_identity.version.clone();
-    let rendered_block = render_agents_block(&engine.agents_block_template);
+    let rendered_block = render_agents_block(
+        &engine.agents_block_template,
+        host_shell_is_powershell(repo_root).then_some(engine.agents_windows_template.as_path()),
+    );
     let rendered_gitignore_block = render_gitignore_block();
 
     // 1. AGENTS.md BEE block
