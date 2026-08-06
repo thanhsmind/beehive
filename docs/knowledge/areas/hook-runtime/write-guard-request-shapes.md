@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)", "5bd08e53 (ask-guard verdict correction: a repaired question escalates with \"ask\", an advisory reservation notice carries no verdict at all, 2026-08-03)", "761515d4 (guard-parser-depth Gate 2: close the compound-command and shell-wrapper bypasses in one parse every guard consumer shares, depth-bounded with truncation marked — cell gpd-1, 2026-08-05)"]
-  sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7", "guard-parser-depth cell gpd-1 (trace .bee/cells/gpd-1.json, commit 98888896, plan docs/history/guard-parser-depth/plan.md, capped 2026-08-05)"]
+  decisions: ["codex-runtime-parity D1, D2", "bbc6bcea (shim-retire D3: dual command-shape recognition, retired form transitional)", "ask-guard-autofix D1/D2 (fixable question violations repaired + announced, deny wins, 2026-07-23)", "d4182ff1 (blanket-staging-guard: git add -A/-u and git commit -a count as broad writes, 2026-07-26)", "5bd08e53 (ask-guard verdict correction: a repaired question escalates with \"ask\", an advisory reservation notice carries no verdict at all, 2026-08-03)", "761515d4 (guard-parser-depth Gate 2: close the compound-command and shell-wrapper bypasses in one parse every guard consumer shares, depth-bounded with truncation marked — cell gpd-1, 2026-08-05)", "js-parity-cleanup D3 as corrected by jp-9 (docs/history/js-parity-cleanup/CONTEXT.md, 2026-08-04 — display caps count characters, but the question-heading limit keeps the platform validator's own counting unit; judge finding bc2e2d44)"]
+  sources: ["codex-runtime-parity repo-fallback capture 2026-07-12 — cells codex-parity-6a, 6b", "dispatcher-unify du-2 (2026-07-12, flushed capture stub 9e68432b)", "shim-retire D3 transition guard (cell shim-retire-3, 2026-07-14)", "ask-guard-autofix cell ag-1 (2026-07-23, commit 52dad26)", "blanket-staging-guard cell bsg-1 (2026-07-26, commit b240110)", "docs/specs/hook-runtime.md#B3", "docs/specs/hook-runtime.md#B3a", "docs/specs/hook-runtime.md#R3", "docs/specs/hook-runtime.md#R14a", "docs/specs/hook-runtime.md#E1", "docs/specs/hook-runtime.md#P6", "docs/specs/hook-runtime.md#P7", "guard-parser-depth cell gpd-1 (trace .bee/cells/gpd-1.json, commit 98888896, plan docs/history/guard-parser-depth/plan.md, capped 2026-08-05)", "js-parity-cleanup cell jp-9 (heading guard restored to the platform's counting unit, the ASCII-only repair and its fall-through named; trace .bee/cells/jp-9.json, 2026-08-04 — full suite 1006 passed, 0 failed)"]
   authoritative_for: "hook-runtime: write-guard request-shape recognition and per-target decisions"
 ---
 
@@ -102,7 +102,7 @@ is mechanical, refused when it is not.** When the runtime announces the
 ask-the-human tool, the guard shape-checks the request before the platform's
 own opaque validation can reject it. Trigger: any question request. What
 happens: a violation whose repair is deterministic and meaning-preserving — a
-chip-label heading over the 12-character limit — is FIXED, not refused: the
+chip-label heading over the 12-unit limit (B28) — is FIXED, not refused: the
 heading is rewritten (first 11 characters, right-trimmed, plus an ellipsis) on
 a copy of the request, and the question proceeds with the rewritten input; the
 platform is told, in the approval itself, exactly what was changed, and the
@@ -126,6 +126,24 @@ escalation verdict carries the rewritten request with it, and forces the prompt
 even where the permission mode would otherwise skip it. Observed and fixed
 2026-08-03: a 13-character heading tripped the repair, and the human never saw
 the question.
+
+**B28 — The heading limit is counted the way the platform counts it, and the
+repair runs only where it is provably safe (js-parity-cleanup D3 as corrected by
+jp-9, 2026-08-04).** Trigger: shape-checking a question's chip-label heading.
+What happens: the length is measured in the platform's own unit — the unit its
+external validator uses, in which a character outside the basic range counts as
+two — because a guard that measures a limit differently from the validator it
+exists to satisfy will wave through exactly the requests that validator then
+rejects. Every other length cap in this runtime counts characters instead; this
+one is deliberately the exception, and it says so where it is written. The
+repair is narrower than the check: a heading that is plain ASCII is rewritten
+and the question proceeds, while a heading carrying any character outside that
+range is not rewritten at all — truncating a paired character in the middle is
+not a meaning-preserving repair, and our agreement with the platform on where
+such a pair may be cut has never been proven. What each actor observes: an
+over-long ASCII heading is repaired and announced exactly as B22 describes; an
+over-long non-ASCII heading falls through to the guard's unported branch, which
+is an open gap named below rather than a working path.
 
 ## Business Rules
 
@@ -159,6 +177,13 @@ the question.
   advisory buys the guarded call more permission than it had, and on the
   ask-the-human tool it destroys the answer outright (2026-08-03).
 
+- R27 — The chip-label heading limit is measured in the platform validator's own
+  counting unit, not in characters — the one deliberate exception to this
+  runtime's char-based length caps — and the automatic repair is restricted to
+  plain-ASCII headings, because no truncation of a paired character has been
+  proven to match the platform's own (js-parity-cleanup D3 as corrected by jp-9,
+  2026-08-04).
+
 ## Edge Cases Settled
 
 - A change line with a whitespace-only path counts as unprovable → deny (found
@@ -167,6 +192,18 @@ the question.
 - A program whose own name merely ends in a shell name's letters is not a
   wrapper: only a real shell name, invoked with the read-a-command-string
   option, opens its payload for re-reading (cell gpd-1).
+
+## Open Gaps
+
+- An over-long heading containing any non-ASCII character reaches a branch that
+  hands the request off to a runtime that no longer exists, so nothing repairs
+  it and nothing refuses it in this guard's own terms. The safe half is
+  correct — such a heading is never truncated blindly — but the fall-through is
+  a dead delegation signal, not a decision. Closing it means either proving a
+  paired-character truncation matches the platform's, or turning the branch into
+  an explicit refusal that tells the asker to shorten the heading itself
+  (js-parity-cleanup D6 scoped the live delegation signals out and filed them;
+  this is one of them).
 
 ## Pointers (implementation)
 
@@ -194,3 +231,12 @@ the question.
   `additionalContext` only, no verdict. Tests: `write_guard/tests.rs`
   (`ask_long_header_is_auto_fixed`, `intent_reservation_allows_with_warning`).
   Provenance: `.bee/cells/ag-1.json`, commit 52dad26 (Node original).
+- Heading counting unit and the ASCII-only repair (B28/R27):
+  `textutil::utf16_len` (`packages/bee-rs/crates/bee/src/textutil.rs:51`) called
+  at `hooks/write_guard/detectors.rs:159` — the crate's only caller of that
+  helper, with the reason written beside the call; the repair's ASCII guard and
+  the delegation fall-through are at `detectors.rs:201-207`, the rewrite itself
+  at `detectors.rs:207-215`. Full text-measurement rule:
+  `areas/rust-runtime/text-measurement-and-the-two-counting-units.md`. Evidence:
+  trace `.bee/cells/jp-9.json` (full suite 1006 passed, 0 failed, 2026-08-04);
+  the finding that produced it is judge decision bc2e2d44.

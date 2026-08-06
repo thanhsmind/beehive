@@ -20,7 +20,7 @@ never a generation timestamp or any other wall-clock value.
 - [onboarding/](onboarding/index.md) — 9 concept(s)
 - [performance-log/](performance-log/index.md) — 4 concept(s)
 - [product-backlog/](product-backlog/index.md) — 1 concept(s)
-- [rust-runtime/](rust-runtime/index.md) — 5 concept(s)
+- [rust-runtime/](rust-runtime/index.md) — 6 concept(s)
 - [verify-pipeline/](verify-pipeline/index.md) — 4 concept(s)
 - [workflow-state/](workflow-state/index.md) — 17 concept(s)
 - [worktree-parallelism/](worktree-parallelism/index.md) — 10 concept(s)
