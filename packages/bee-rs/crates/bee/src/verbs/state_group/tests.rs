@@ -1631,3 +1631,133 @@ use std::time::Instant;
             Err(m) => panic!("unexpected refusal: {m}"),
         }
     }
+
+    // ── route identity (rti-1): a route belongs to a feature ───────────────
+
+    #[test]
+    fn route_belongs_to_feature_only_when_the_stamp_matches() {
+        let mut stamped = route_with("standard");
+        stamped.insert("feature".into(), json!("feat-a"));
+        assert!(route_belongs_to_feature(&stamped, &json!("feat-a")));
+        assert!(!route_belongs_to_feature(&stamped, &json!("feat-b")));
+        // A pre-fix route carries no "feature" field at all — never a match.
+        assert!(!route_belongs_to_feature(&route_with("standard"), &json!("feat-a")));
+    }
+
+    /// start_default (policy.rs) is the ONLY place a stale route used to
+    /// ride from one feature's record into the next feature's — the lane
+    /// path (start_lane) always builds a fresh Map and never had this bug.
+    #[test]
+    fn start_default_drops_a_route_carried_over_from_the_prior_feature() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"compounding-complete","feature":"old-feat","mode":"standard",
+                "approved_gates":{"context":true,"shape":true,"execution":true,"review":true},
+                "summary":"s","next_action":"n",
+                "route":{"class":"feature","lane":"high-risk","flags":[],"product_files":7,
+                         "rationale":null,"updated_at":"2020-01-01T00:00:00.000Z","feature":"old-feat"}}"#,
+        );
+        let record = match ok(start_default(root, "new-feat", Some("standard"), "shaping", &[])) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        // The new feature's record carries no route at all — not even a
+        // null placeholder — exactly the state claimed_feature_has_route /
+        // cells claim's no-route warning is built to detect.
+        assert!(!record.contains_key("route"), "route survived: {:?}", record.get("route"));
+        assert_eq!(record.get("feature"), Some(&json!("new-feat")));
+
+        // The write actually landed — read it back through the same door
+        // route --set / --show uses.
+        let target = ok(resolve_mutation_target(root, None, "route", true));
+        assert!(target.record().get("route").is_none());
+    }
+
+    /// Drives start_default and the real route --set functions (validate_
+    /// route_set_flags, route_belongs_to_feature, validate_route_lane_
+    /// transition) end to end against the on-disk record, the same sequence
+    /// run_route itself follows (run_route's own CLI entry is cwd-rooted and
+    /// untestable in-process; this exercises every function it calls).
+    #[test]
+    fn route_set_end_to_end_stamps_the_feature_and_gates_the_demote_check_by_it() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+
+        // A freshly started feature carries no route — the first --set is
+        // accepted whatever lane it names, even the top of the ladder.
+        ok(start_default(root, "feat-a", Some("standard"), "shaping", &[]));
+        let target = ok(resolve_mutation_target(root, None, "route", true));
+        assert!(target.record().get("route").is_none());
+
+        let hi = route_flags(&[("class", "feature"), ("lane", "high-risk"), ("flags", ""), ("files", "7")]);
+        let mut route1 = match ok(validate_route_set_flags(&hi)) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        let feature_a = target.record().get("feature").cloned().unwrap();
+        route1.insert("feature".into(), feature_a.clone());
+        let mut record = target.record().clone();
+        record.insert("route".into(), Value::Object(route1));
+        ok(write_state(root, &record));
+
+        // Re-lane the SAME feature downward: still refused, unchanged from
+        // before this fix — the never-demote / demoted_at history stay a
+        // strictly same-feature concern.
+        let target2 = ok(resolve_mutation_target(root, None, "route", true));
+        let existing = match target2.record().get("route") {
+            Some(Value::Object(m)) => m.clone(),
+            other => panic!("expected the recorded route, got {other:?}"),
+        };
+        assert!(route_belongs_to_feature(&existing, &feature_a));
+        let message = match validate_route_lane_transition(&existing, "small", &[]) {
+            Err(m) => m,
+            Ok(v) => panic!("expected a refusal, got Ok({v:?})"),
+        };
+        assert!(message.contains("high-risk lanes never demote"), "message: {message}");
+
+        // Swap features: start_default drops feat-a's route entirely, so
+        // feat-b starts untriaged rather than inheriting feat-a's lane.
+        let mut terminal = ok(read_state_strict(root));
+        terminal.insert("phase".into(), json!("compounding-complete"));
+        ok(write_state(root, &terminal));
+        ok(start_default(root, "feat-b", Some("standard"), "shaping", &[]));
+        let target3 = ok(resolve_mutation_target(root, None, "route", true));
+        assert!(target3.record().get("route").is_none());
+        let feature_b = target3.record().get("feature").cloned().unwrap();
+        assert_ne!(feature_a, feature_b);
+
+        // Defense in depth: even if a route DID land on feat-b's record —
+        // carrying feat-a's identity, or a pre-fix route with no "feature"
+        // field at all — it is never mistaken for feat-b's own triage
+        // history: no demote refusal, the --set overwrites it cleanly.
+        for foreign in [existing.clone(), route_with("high-risk")] {
+            assert!(!route_belongs_to_feature(&foreign, &feature_b));
+            let mut record = target3.record().clone();
+            record.insert("route".into(), Value::Object(foreign));
+            ok(write_state(root, &record));
+
+            let target4 = ok(resolve_mutation_target(root, None, "route", true));
+            let stale = match target4.record().get("route") {
+                Some(Value::Object(m)) => m.clone(),
+                other => panic!("expected the stale route, got {other:?}"),
+            };
+            assert!(!route_belongs_to_feature(&stale, &feature_b));
+
+            // A first-time set for feat-b at ANY lane — including a
+            // demotion relative to the stale route's own lane — is
+            // accepted: run_route never even calls validate_route_lane_
+            // transition when the feature doesn't match, so nothing here
+            // could refuse.
+            let tiny = route_flags(&[("class", "bugfix"), ("lane", "tiny"), ("flags", ""), ("files", "1")]);
+            let mut route_b = match ok(validate_route_set_flags(&tiny)) {
+                Ok(r) => r,
+                Err(m) => panic!("unexpected refusal: {m}"),
+            };
+            route_b.insert("feature".into(), feature_b.clone());
+            let mut record = target4.record().clone();
+            record.insert("route".into(), Value::Object(route_b));
+            ok(write_state(root, &record));
+        }
+    }

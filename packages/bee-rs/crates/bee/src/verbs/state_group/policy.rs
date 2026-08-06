@@ -512,6 +512,13 @@ pub(crate) fn start_default(
         "next_action".into(),
         json!(format!("Continue bee-{phase} for \"{feature}\".")),
     );
+    // rti-1: a freshly started feature has not been triaged yet, so it
+    // carries no route — whatever the PRIOR feature's record held is
+    // dropped here rather than riding along untouched. This is exactly the
+    // state `cells claim`'s no-route warning (claimed_feature_has_route)
+    // exists to detect; the lane path (start_lane) never had this bug
+    // because it always builds a fresh record.
+    state.remove("route");
     write_state(root, &state)?;
     Ok(Ok(state))
 }
