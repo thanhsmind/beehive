@@ -202,6 +202,55 @@ pub(crate) fn list_cells(root: &Path, feature: &str, status: &str) -> D<Vec<Valu
     Ok(cells)
 }
 
+/// Archive-aware sibling of `list_cells` above, for debt-door-archive dda-1:
+/// `bee close` archives a feature's cells on a green close
+/// (`.bee/cells/archive/<feature>/*.json`), so a debt counter that only
+/// walks the live store the way `list_cells` does goes structurally silent
+/// the moment its own feature closes. This reads the live store (exactly as
+/// `list_cells` does) THEN every file directly under
+/// `.bee/cells/archive/<feature>/`, deduplicating by id with the LIVE copy
+/// winning on a duplicate — the exact live-copy-wins pattern
+/// `verbs/knowledge/promote.rs:353-376` (`read_capped_cell_traces`) already
+/// uses and `verbs/knowledge/tests.rs:682` already pins. `list_cells` itself
+/// is untouched and stays active-only: every other caller (`bee cells list`,
+/// `bee cells ready`, …) keeps its current behavior. Only
+/// `close::scribing_debt` calls this variant.
+pub(crate) fn list_cells_including_archive(root: &Path, feature: &str, status: &str) -> D<Vec<Value>> {
+    let mut cells = list_cells(root, feature, status)?;
+    let mut seen_ids: HashSet<String> = cells.iter().map(|c| tpl(vget(c, "id"))).collect();
+    let archive_dir = cells_dir(root).join(ARCHIVE_DIR_NAME).join(feature);
+    let Ok(entries) = std::fs::read_dir(&archive_dir) else {
+        return Ok(cells);
+    };
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            continue; // a stray nested dir under the feature's archive slot
+        }
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if !name.ends_with(".json") {
+            continue;
+        }
+        let Some(cell) = rj(&entry.path())? else { continue };
+        if !matches!(cell, Value::Object(_) | Value::Array(_)) {
+            continue; // `typeof cell !== 'object'`
+        }
+        if !matches!(vget(&cell, "feature"), Some(Value::String(f)) if f == feature) {
+            continue;
+        }
+        if !matches!(vget(&cell, "status"), Some(Value::String(s)) if s == status) {
+            continue;
+        }
+        let id = tpl(vget(&cell, "id"));
+        if !seen_ids.insert(id) {
+            continue; // the live copy above already claimed this id
+        }
+        cells.push(cell);
+    }
+    cells.sort_by(|a, b| locale_cmp(&tpl(vget(a, "id")), &tpl(vget(b, "id")), true));
+    Ok(cells)
+}
+
 // ─── String.prototype.localeCompare('en', {numeric:true}) ──────────────────
 //
 // VERBATIM LIFT of verbs/status_full.rs:429-503 (char_class_key + locale_cmp),

@@ -344,11 +344,17 @@ pub(crate) struct DebtSummary {
 
 /// provenance: cells.mjs scribingDebt(root, {feature}) — the feature-scoped
 /// overrides arm (scribing-integrity si-1), which is the one close uses.
+///
+/// debt-door-archive dda-1: reads `list_cells_including_archive` (guard.rs),
+/// not the plain active-only `list_cells`, so a behavior_change cell that
+/// `bee close`'s own auto-archive already moved to
+/// `.bee/cells/archive/<feature>/` still counts against the threshold below
+/// — a clear door can no longer be a side effect of archiving the debt away.
 pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     let state = read_state(root)?;
     let threshold = best_scribing_stamp_ms(root, feature, &state)?.unwrap_or(0.0);
     let mut ids = Vec::new();
-    for cell in list_cells(root, feature, "capped")? {
+    for cell in list_cells_including_archive(root, feature, "capped")? {
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
         if !matches!(vget(&trace, "behavior_change"), Some(Value::Bool(true))) {
             continue;
