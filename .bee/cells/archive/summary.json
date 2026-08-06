@@ -193,5 +193,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-06T09:25:23.351Z"
+  },
+  "harness-scratchpad-allowlist": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-06T09:57:24.133Z"
   }
 }
