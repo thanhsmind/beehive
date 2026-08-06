@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Hook Runtime — governed paths, the always-writable set, and the intake gate"
-description: "Which write targets escape the active feature's gate routing and which never do, why the always-writable set only ever shrinks, why a finished feature's leftover approvals are not what decides whether the next source write is allowed, how many phases require that approval today, why a phase value the workflow does not recognize is now refused instead of silently allowed, and how a value left by a retired phase is translated rather than left to trip that refusal."
-timestamp: 2026-07-28
+description: "Which write targets escape the active feature's gate routing and which never do, why the always-writable set only ever shrinks, why a finished feature's leftover approvals are not what decides whether the next source write is allowed, how many phases require that approval today, why a phase value the workflow does not recognize is now refused instead of silently allowed, how a value left by a retired phase is translated rather than left to trip that refusal, and why an approved plan document stops accepting direct edits until a revision is stamped."
+timestamp: 2026-08-06
 bee:
   id: hook-runtime-governed-paths-and-the-intake-gate
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)"]
-  sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)"]
+  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "hook-teeth D1/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — the approved plan document is frozen by the write guard itself, resolved lane-record-first; every flip lands red-first)"]
+  sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)", "hook-teeth cell bh-1 (trace .bee/cells/bh-1.json, 2026-08-04 — plan-document freeze deny, feature resolved from the path, lane-aware gate state; write_guard slice 93 passed)"]
   authoritative_for: "hook-runtime: which write targets are governed and which are always writable"
 ---
 
@@ -111,6 +111,23 @@ refusal and find every write blocked. What actors observe: an existing
 repository resumes exactly where it left off, still gated the same as it
 always was, never bricked and never silently ungated.
 
+**B27 — An approved plan document is frozen by the guard itself, not by
+convention (hook-teeth D1, 2026-08-04).** Trigger: any write whose target is a
+feature's plan document — the guard recognises exactly that one filename under
+that one feature-history location, and derives the feature's name from the path
+itself, so no caller has to declare which feature it is editing. Any other
+document in that folder, including the locked-decisions document, and any
+deeper path never reach this check. What blocks it: the shape approval recorded
+for that same feature. The guard reads the feature's own lane record first and
+takes its shape gate as final; only when no lane record exists does it fall back
+to the default record, and only when that record names the same feature — a
+record about some other feature is no opinion, never approval. What each actor
+observes: before shape approval the plan document is an ordinary writable
+document; after it, a direct edit is denied and the denial names the two ways
+forward — stamp a plan revision, which reopens the document, or withdraw the
+shape approval and redraft. The check fires ahead of record resolution and hold
+checks, and does not depend on the workflow's phase.
+
 ## Business Rules
 
 - R11 — The write guard's always-writable set no longer includes the
@@ -153,6 +170,12 @@ always was, never bricked and never silently ungated.
   locked out of progressing nor left with its writes silently ungated
   (validation-diet D13).
 
+- R26 — A feature's plan document accepts direct edits only while its shape gate
+  is unapproved; afterwards the only sanctioned paths are stamping a plan
+  revision or withdrawing the approval, and the gate that decides this belongs
+  to the feature named in the path, resolved lane-record-first with a
+  mismatched default treated as silence (hook-teeth D1, cell bh-1, 2026-08-04).
+
 ## Pointers (implementation)
 
 - Always-writable set: `GATE_ALLOWED_PREFIXES` in
@@ -166,6 +189,16 @@ always was, never bricked and never silently ungated.
   `packages/bee/lib/guards.mjs`; the translation itself
   (`LEGACY_PHASE_COERCIONS`) lives in `packages/bee/lib/state.mjs`, applied at
   read time so every consumer of the state/lane record sees it automatically.
+
+- Plan-document freeze (B27/R26): `plan_freeze_feature` and
+  `plan_freeze_shape_approved` in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs:159-206`, fired
+  from `check_write` at `checks.rs:333-343` ahead of `resolve_write_record` and
+  the hold checks. Lane precedence mirrors `resolve_write_record`'s own. The
+  deny text names `bee state plan-rev bump --lane <feature>` as the reopen.
+  Red-first per hook-teeth D7: the path-resolution tests landed failing before
+  the deny wired in. Evidence: trace `.bee/cells/bh-1.json` (write_guard slice
+  93 passed, 0 failed, 2026-08-04).
 
 ## Open Gaps
 

@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Workflow State — working sessions, self-derived identity, lanes, and the renewing heartbeat"
-description: "Who the acting session is (resolved from its own environment, never handed down), how a feature gets its own pipeline lane that every reader resolves through, how a live session's heartbeat renews itself and carries its claims and holds forward with it, how lane binding now shares the same store lock as the heartbeat so the two writers of one session record can never lose each other's update, and how active workers are always a computed join of live sessions and claims rather than a stored array."
+description: "Who the acting session is (resolved from its own environment, never handed down), how a feature gets its own pipeline lane that every reader resolves through, how a live session's heartbeat renews itself and carries its claims and holds forward with it, how lane binding now shares the same store lock as the heartbeat so the two writers of one session record can never lose each other's update, how active workers are always a computed join of live sessions and claims rather than a stored array, and which lane changes a recorded route will accept."
 timestamp: 2026-08-06
 bee:
   id: workflow-state-sessions-lanes-and-identity
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/worktree-parallelism/control-plane-topology.md]
-  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)", "multisession-native D6 (active workers derived from live-heartbeat sessions + lane/workflow binding + claims, never the stored workers array; advisor condition C3 — startFeature excludes the calling session's own heartbeat)", "multisession-native D2/D3 (slice 4: session creation re-roots onto controlRoot; a session's own record carries workspace_id, auto-looked-up and stamped onto its claims too — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "worker-conformance D11/D12 (R82's feature-boundary door arms on two markers — proof relocated and proof never recorded — with the freshness clock running over the union of both; cells wc-1/wc-2, docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "132362c7 (route-identity: a route carries the feature it was triaged for, a feature start drops the previous one's route, and the never-demote rule is scoped to one feature's own history — cell rti-1, 2026-08-06)"]
-  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "multisession-native cell multisession-native-8 (activeWorkers derivation, trace .bee/cells/multisession-native-8.json, commit c435add, 2026-07-25)", "multisession-native cell multisession-native-10 (default-path mutation now also routes through its workflow record; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25)", "multisession-native cell multisession-native-19 (createSession/claimCellFile stamp workspace_id; bee-session-init.mjs re-roots onto resolveContext.controlRoot and lazily auto-registers the workspace; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "route-identity cell rti-1 (start_default drops the carried route, route --set stamps its feature, run_route gates the demote check by it; commit 68beab21, capped 2026-08-06)"]
+  decisions: [multi-session-hardening D3/D5 with Δ1-Δ6 amendments (session self-derivation; throttled heartbeat and lease renewal), "fresh-session-handoff D2 (a lane never borrows the default pipeline's authority)", "hardening-1-7-10 (the durable single-fresh-session identity fallback, audited, at library and CLI levels)", i54-closeout D7, "multisession-native D10a (issue #56 3.8 — bindSessionLane/unbindSessionLane serialize under the same sessions store lock heartbeatSession already uses, closing the lost-update race between them)", "multisession-native D6 (active workers derived from live-heartbeat sessions + lane/workflow binding + claims, never the stored workers array; advisor condition C3 — startFeature excludes the calling session's own heartbeat)", "multisession-native D2/D3 (slice 4: session creation re-roots onto controlRoot; a session's own record carries workspace_id, auto-looked-up and stamped onto its claims too — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "worker-conformance D11/D12 (R82's feature-boundary door arms on two markers — proof relocated and proof never recorded — with the freshness clock running over the union of both; cells wc-1/wc-2, docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "132362c7 (route-identity: a route carries the feature it was triaged for, a feature start drops the previous one's route, and the never-demote rule is scoped to one feature's own history — cell rti-1, 2026-08-06)", "hook-teeth D5/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — re-lane transitions are validated where the route is recorded, and each refusal names the rule it broke)"]
+  sources: ["fresh-session-handoff cells fsh-3/fsh-4 (lane store, resolvePipeline, lane-mode startFeature; validation-s2, 2026-07-13)", "multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21), "docs/specs/workflow-state.md#B12", "docs/specs/workflow-state.md#B13", "docs/specs/workflow-state.md#B22", "docs/specs/workflow-state.md#B24", "docs/specs/workflow-state.md#R38", "docs/specs/workflow-state.md#R55", "docs/specs/workflow-state.md#E22", "docs/specs/workflow-state.md#P14", "i54-closeout cell i54-closeout-7 (resolveMutationTarget lane auto-resolve for state-write verbs; trace in .bee/cells/, 2026-07-24)", "multisession-native cell multisession-native-1 (trace .bee/cells/multisession-native-1.json, commit c794eda, 2026-07-24)", "multisession-native cell multisession-native-8 (activeWorkers derivation, trace .bee/cells/multisession-native-8.json, commit c435add, 2026-07-25)", "multisession-native cell multisession-native-10 (default-path mutation now also routes through its workflow record; trace .bee/cells/multisession-native-10.json, commit e7f365a, 2026-07-25)", "multisession-native cell multisession-native-19 (createSession/claimCellFile stamp workspace_id; bee-session-init.mjs re-roots onto resolveContext.controlRoot and lazily auto-registers the workspace; trace .bee/cells/multisession-native-19.json, commit 09e1ed0, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "route-identity cell rti-1 (start_default drops the carried route, route --set stamps its feature, run_route gates the demote check by it; commit 68beab21, capped 2026-08-06)", "hook-teeth cell bh-5 (re-lane validation: downward once, highest-risk never, mandatory-ceremony flags block, promotion free; trace .bee/cells/bh-5.json, commit 95fe412d, 2026-08-04 — state_group 56 passed)"]
   authoritative_for: "workflow-state: session identity, per-feature lanes, and heartbeat/lease renewal"
 ---
 
@@ -239,6 +239,23 @@ refusal that says which step was skipped and how to perform it, and the record i
 untouched. The human sees a feature that cannot be reported as finished until
 its knowledge actually landed — the state and the specs can no longer disagree.
 
+**B48 — Re-laning a feature is validated where the route is recorded, and each
+refusal names the rule it broke (hook-teeth D5, 2026-08-04).** Trigger:
+recording a route for a feature that already carries one, under a different
+lane. What happens: four rules are checked in turn, and any violation refuses
+with that rule stated in its own words. Work classified highest-risk never
+leaves that lane, whatever the new lane would be. Demotion down the ceremony
+ladder — the ordered run from the smallest lane, through the middle one, to the
+standard one — is allowed at most once in a feature's whole life, and the first
+demotion's moment is stamped so a second is recognisable. A demotion is refused
+outright when the new classification carries any flag that makes ceremony
+mandatory. Re-recording the same lane, promoting upward, and any move touching a
+lane that sits off that ladder are always allowed, and an allowed same-lane
+re-record carries the existing demotion history forward untouched. What each
+actor observes: ceremony a feature earned cannot be shed quietly one step at a
+time, while raising ceremony on discovered risk stays free at every moment. The
+history this rule reads is one feature's own (decision 132362c7).
+
 ## Business Rules
 
 - R38 — A session's identity is always self-resolved at the moment of the
@@ -444,6 +461,12 @@ its knowledge actually landed — the state and the specs can no longer disagree
   value resolves to off with a one-line warning, never a failure
   (ship-visibility-config sv-1, spec #81 P1).
 
+- R99 — Lane demotion is validated at record time: highest-risk work never
+  demotes, a mandatory-ceremony flag on the new classification blocks demotion,
+  a feature demotes at most once ever (stamped at the first), and same-lane
+  re-records, promotions, and off-ladder moves are always allowed (hook-teeth
+  D5, cell bh-5, 2026-08-04).
+
 ## Edge Cases Settled
 
 - A single-user workspace with no session identity anywhere in the
@@ -495,3 +518,14 @@ its knowledge actually landed — the state and the specs can no longer disagree
   `.bee/cells/multisession-native-19.json`, commit 09e1ed0. Full workspace
   registry and write-policy mechanics:
   `areas/worktree-parallelism/control-plane-topology.md`.
+- Re-lane transition validation (B48/R99): `validate_route_lane_transition`
+  with `triage_ladder_rank` (`tiny` 0 < `small` 1 < `standard` 2; `docs`,
+  `spike` and `high-risk` are off-ladder) and `HARD_GATE_ROUTE_FLAGS` (`auth`,
+  `authorization`, `data-model`, `audit-security`, `external-systems`,
+  `proof-weakening`) in
+  `packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs:311-413`; the
+  once-ever bound is carried by the route record's `demoted_at` stamp, minted
+  on an allowed demotion and preserved otherwise (`workflows.rs:405-412`).
+  Red-first per hook-teeth D7: the classification tests landed against a stub
+  before the refusals wired in. Evidence: trace `.bee/cells/bh-5.json`, commit
+  95fe412d (state_group 56 passed, 2026-08-04).

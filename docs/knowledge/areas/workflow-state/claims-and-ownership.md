@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Workflow State — atomic claims, typed refusals, and who may mutate a claimed unit"
-description: "The single-winner claim primitive every claim path shares, the typed refusal a loser receives instead of a crash, the gate under which a live claim is adopted or reclaimed, the fencing token that refuses a stale mutation once a claim has been adopted, and the ownership check — with its audited rescue door — that guards every mutation of a claimed unit."
-timestamp: 2026-07-25
+description: "The single-winner claim primitive every claim path shares, the typed refusal a loser receives instead of a crash, the gate under which a live claim is adopted or reclaimed, the fencing token that refuses a stale mutation once a claim has been adopted, and the ownership check — with its audited rescue door — that guards every mutation of a claimed unit, and the red-base door that refuses a claim onto a failing project."
+timestamp: 2026-08-06
 bee:
   id: workflow-state-claims-and-ownership
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["multi-session-hardening D1/D4 with Δ2/Δ5 amendments (docs/history/multi-session-hardening/CONTEXT.md; audit 12f54e88, locked 17a624dc)", fresh-session-handoff D1/D3 (atomic exclusive creation; gate-protected adoption and reclaim), "multisession-native D4/D9 invariant 10 (slice 3: claims stamp and bump a fence_epoch on adoption; renew/release may present it and refuse typed CLAIM_FENCE_STALE when stale — docs/history/multisession-native/CONTEXT.md)"]
-  sources: ["multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", "fresh-session-handoff S1 cells fsh-1/fsh-2 (race proofs on Linux/WSL2 and Windows, 2026-07-13)", "critical pattern 20260710 — never release another agent's holdings on a stall signal alone", "docs/specs/workflow-state.md#B11", "docs/specs/workflow-state.md#B23", "docs/specs/workflow-state.md#R17", "docs/specs/workflow-state.md#R18", "docs/specs/workflow-state.md#R36", "docs/specs/workflow-state.md#R39", "docs/specs/workflow-state.md#R40", "docs/specs/workflow-state.md#E19", "docs/specs/workflow-state.md#E20", "docs/specs/workflow-state.md#E21", "docs/specs/workflow-state.md#P13", "docs/specs/workflow-state.md#P18", "multisession-native cell multisession-native-12 (fence_epoch on claims; trace .bee/cells/multisession-native-12.json, commit 8c002a1, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice3.md condition F)"]
+  decisions: ["multi-session-hardening D1/D4 with Δ2/Δ5 amendments (docs/history/multi-session-hardening/CONTEXT.md; audit 12f54e88, locked 17a624dc)", fresh-session-handoff D1/D3 (atomic exclusive creation; gate-protected adoption and reclaim), "multisession-native D4/D9 invariant 10 (slice 3: claims stamp and bump a fence_epoch on adoption; renew/release may present it and refuse typed CLAIM_FENCE_STALE when stale — docs/history/multisession-native/CONTEXT.md)", "hook-teeth D2/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — never claim onto a red base; the sole escape is a declared fix-first reason kept on the claim's own trace)"]
+  sources: ["multi-session-hardening cells msh-1..7 (traces in .bee/cells/, reports docs/history/multi-session-hardening/reports/, 2026-07-19)", "fresh-session-handoff S1 cells fsh-1/fsh-2 (race proofs on Linux/WSL2 and Windows, 2026-07-13)", "critical pattern 20260710 — never release another agent's holdings on a stall signal alone", "docs/specs/workflow-state.md#B11", "docs/specs/workflow-state.md#B23", "docs/specs/workflow-state.md#R17", "docs/specs/workflow-state.md#R18", "docs/specs/workflow-state.md#R36", "docs/specs/workflow-state.md#R39", "docs/specs/workflow-state.md#R40", "docs/specs/workflow-state.md#E19", "docs/specs/workflow-state.md#E20", "docs/specs/workflow-state.md#E21", "docs/specs/workflow-state.md#P13", "docs/specs/workflow-state.md#P18", "multisession-native cell multisession-native-12 (fence_epoch on claims; trace .bee/cells/multisession-native-12.json, commit 8c002a1, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice3.md condition F)", "hook-teeth cell bh-2 (red-base claim refusal with the fix-first escape persisted on the trace; trace .bee/cells/bh-2.json, commit 7ef3a1f7, 2026-08-04 — cells slice 81 passed)"]
   authoritative_for: "workflow-state: claim exclusivity, typed contention refusals, claim fencing, and claimed-unit ownership"
 ---
 
@@ -99,6 +99,20 @@ else's takeover, gets a clear typed refusal instead of silently clobbering
 the new owner's state; every caller that never presents an epoch sees no
 behavior change at all.
 
+**B45 — Claiming work onto a red base is refused unless the claim declares
+itself the fix (hook-teeth D2, 2026-08-04).** Trigger: claiming a unit of work
+while the project's most recently recorded test run is red. What happens: the
+claim is refused, naming the command that failed and the record it read. The
+refusal has exactly one escape — the claimant states a fix-first reason, which
+is persisted onto the winning claim's own trace, so a deliberate base repair
+stays distinguishable afterwards from a claim that walked past the red. What
+each actor observes: an agent arriving at a red base is told to fix it before
+building on it; an agent that IS the fix says so once and proceeds with that
+statement on the record. When no test-run record exists, or it is not in a
+recognised shape, nothing is refused: the claim proceeds and the missing
+evidence is warned about, because an absent record is ignorance, never proof of
+red.
+
 ## Business Rules
 
 - R17 — Concurrent ownership is decided by atomic exclusive creation, never by
@@ -130,6 +144,11 @@ behavior change at all.
   `CLAIM_FENCE_STALE` when it is behind the claim's current `fence_epoch`,
   record untouched; omitted, both stay byte-unchanged from before fencing
   existed (multisession-native D4/D9 invariant 10).
+
+- R96 — A red last-recorded test run refuses every new claim; the sole escape is
+  a declared fix-first reason, stored on the claim's own trace, and an absent or
+  unreadable test record warns rather than refuses (hook-teeth D2, cell bh-2,
+  2026-08-04).
 
 ## Edge Cases Settled
 
@@ -199,3 +218,12 @@ behavior change at all.
   trace `.bee/cells/multisession-native-12.json`, commit 8c002a1; advisor
   digest `docs/history/multisession-native/reports/advisor-digest-slice3.md`
   condition F.
+- Red-base claim refusal (B45/R96): `classify_red_base` and `red_base_refusal`
+  in `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:665-720`,
+  reading the test-results record at `.bee/logs/test-results.json` written by
+  `finish_support::tests_record_value`; the escape flag is `--fix-first
+  "<reason>"`, persisted as `trace.fix_first` at
+  `handlers_write.rs:1205-1206`. An unrecognised or missing record classifies
+  as unknown and warns. Red-first per hook-teeth D7: the classification test
+  landed before the refusal wired in. Evidence: trace `.bee/cells/bh-2.json`,
+  commit 7ef3a1f7 (cells slice 81 passed, 2026-08-04).

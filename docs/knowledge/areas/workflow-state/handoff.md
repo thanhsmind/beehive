@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Workflow State — the two-kind handoff, its per-workflow mailbox, and pulling the next approved unit"
-description: "How a finished task hands itself to a fresh session through a guarded planned-next record adopted only at a real fresh-session boundary, how that record now lives in a per-workflow mailbox scoped by target role so one workflow pausing never blocks another, how the legacy single HANDOFF.json file survives only as a projection with exactly one sanctioned writer set enforced by a grep audit, and how a session out of work pulls its next unit without ever widening the authority a human granted."
-timestamp: 2026-07-25
+description: "How a finished task hands itself to a fresh session through a guarded planned-next record adopted only at a real fresh-session boundary, how that record now lives in a per-workflow mailbox scoped by target role so one workflow pausing never blocks another, how the legacy single HANDOFF.json file survives only as a projection with exactly one sanctioned writer set enforced by a grep audit, how a session out of work pulls its next unit without ever widening the authority a human granted, and how a session's own recorded start manner is what the fresh-boundary rule is now decided on."
+timestamp: 2026-08-06
 bee:
   id: workflow-state-handoff
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: [fresh-session-handoff D1-D4 (docs/history/fresh-session-handoff/CONTEXT.md — auto-resume authority exists only at the fresh-session boundary; the puller never widens authority), no-clear-stop D1 (planned-next is written only at real session exit; the orchestrator never stops mid-flow to offer /clear), "multisession-native D5 (slice 3, issue #56 3.7/mục 10: per-workflow handoff mailboxes replace the single-file HANDOFF.json as the durable record; the legacy file becomes a projection of the newest open mailbox record — docs/history/multisession-native/CONTEXT.md)", "multisession-native D5 amendment (msn-24, advisor-digest-slice5 condition E: rebuildHandoffProjection is reclassified as the sole sanctioned writer of the legacy .bee/HANDOFF.json for any repo with a live workflow record; writeHandoff/adoptHandoff are retained one more release as the C1 no-workflow-records fallback with dated deprecation notes naming the removal condition; a grep-audit test enforces the exact production writer set)"]
-  sources: ["fresh-session-handoff S1 cells fsh-1/fsh-2 (traces in .bee/cells/, reports docs/history/fresh-session-handoff/reports/, 2026-07-13)", fresh-session-handoff validation-s4 C10/C11 (docs/history/fresh-session-handoff/reports/validation-s4.md), "GH #20 live-owner lane guard (trace .bee/cells/cnlg-1.json)", "docs/specs/workflow-state.md#B15", "docs/specs/workflow-state.md#B16", "docs/specs/workflow-state.md#R19", "docs/specs/workflow-state.md#R20", "docs/specs/workflow-state.md#R21", "docs/specs/workflow-state.md#P16", "multisession-native cell multisession-native-15 (per-workflow handoff mailboxes; trace .bee/cells/multisession-native-15.json, commit 60d0419, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice3.md condition G)", "multisession-native cell multisession-native-24 (rebuildHandoffProjection reclassified as sole sanctioned writer; writeHandoff/adoptHandoff dated deprecation notes; grep-audit test in test_state.mjs enforcing the exact writer set; trace .bee/cells/multisession-native-24.json, commit cee2d5f, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice5.md condition E)"]
+  decisions: [fresh-session-handoff D1-D4 (docs/history/fresh-session-handoff/CONTEXT.md — auto-resume authority exists only at the fresh-session boundary; the puller never widens authority), no-clear-stop D1 (planned-next is written only at real session exit; the orchestrator never stops mid-flow to offer /clear), "multisession-native D5 (slice 3, issue #56 3.7/mục 10: per-workflow handoff mailboxes replace the single-file HANDOFF.json as the durable record; the legacy file becomes a projection of the newest open mailbox record — docs/history/multisession-native/CONTEXT.md)", "multisession-native D5 amendment (msn-24, advisor-digest-slice5 condition E: rebuildHandoffProjection is reclassified as the sole sanctioned writer of the legacy .bee/HANDOFF.json for any repo with a live workflow record; writeHandoff/adoptHandoff are retained one more release as the C1 no-workflow-records fallback with dated deprecation notes naming the removal condition; a grep-audit test enforces the exact production writer set)", "hook-teeth D4/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — a session persists its start manner and adoption is refused for a resumed or compaction-recovered session)"]
+  sources: ["fresh-session-handoff S1 cells fsh-1/fsh-2 (traces in .bee/cells/, reports docs/history/fresh-session-handoff/reports/, 2026-07-13)", fresh-session-handoff validation-s4 C10/C11 (docs/history/fresh-session-handoff/reports/validation-s4.md), "GH #20 live-owner lane guard (trace .bee/cells/cnlg-1.json)", "docs/specs/workflow-state.md#B15", "docs/specs/workflow-state.md#B16", "docs/specs/workflow-state.md#R19", "docs/specs/workflow-state.md#R20", "docs/specs/workflow-state.md#R21", "docs/specs/workflow-state.md#P16", "multisession-native cell multisession-native-15 (per-workflow handoff mailboxes; trace .bee/cells/multisession-native-15.json, commit 60d0419, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice3.md condition G)", "multisession-native cell multisession-native-24 (rebuildHandoffProjection reclassified as sole sanctioned writer; writeHandoff/adoptHandoff dated deprecation notes; grep-audit test in test_state.mjs enforcing the exact writer set; trace .bee/cells/multisession-native-24.json, commit cee2d5f, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice5.md condition E)", "hook-teeth cell bh-4 (session records persist their start source, restamped on renewal; adoption refuses on resume and compaction with the pause fallback named, a missing source warns and proceeds; trace .bee/cells/bh-4.json, 2026-08-04 — workflow_store 38 and session_init 17 green)"]
   authoritative_for: "workflow-state: the two-kind session handoff, its per-workflow mailbox, the legacy projection's sanctioned writer set, and the cross-lane work puller"
 ---
 
@@ -153,6 +153,21 @@ exactly three functions, never a stray direct write; a repo with live workflow
 records sees the projection stay current automatically, and a repo with none keeps
 using the untouched pre-mailbox path.
 
+**B47 — A session records how it started, and that record is what the
+fresh-boundary rule is decided on (hook-teeth D4, 2026-08-04).** Trigger:
+creating a session record, and every later liveness renewal on it. What happens:
+the session stores the manner of its own start — started up, cleared, resumed,
+or recovered from memory compaction — and each renewal restamps it, so a session
+that began fresh and later compacted mid-work is readable as no longer standing
+at a fresh boundary; a renewal carrying no value never erases a value already
+known. What it decides: adopting a planned-next handoff is refused outright for
+a resumed or a compaction-recovered session, before any lock is taken and
+before the mailbox is read at all, and the refusal names the fallback — present
+the record as a pause and wait for the user. What each actor observes: R20's
+fresh-session-only rule no longer rests on a session's own account of itself; a
+record predating this field, or one that never captured a start manner, warns
+and proceeds rather than refusing, so missing history is never punished.
+
 ## Business Rules
 
 - R19 — A planned-next handoff's preconditions live in its verb, never in
@@ -181,6 +196,12 @@ using the untouched pre-mailbox path.
   carries a dated deprecation note naming its removal condition
   (multisession-native D5 amendment, msn-24, advisor-digest-slice5 condition
   E).
+
+- R97 — Handoff adoption is decided on the session's own recorded start manner:
+  a resumed or compaction-recovered session refuses before any lock or mailbox
+  read, an unrecorded start manner warns and proceeds, and every liveness
+  renewal restamps the value so a mid-work compaction becomes visible
+  (hook-teeth D4, cell bh-4, 2026-08-04).
 
 ## Pointers (implementation)
 
@@ -216,3 +237,13 @@ using the untouched pre-mailbox path.
   `.bee/cells/multisession-native-24.json`, commit cee2d5f; advisor digest
   `docs/history/multisession-native/reports/advisor-digest-slice5.md`
   condition E.
+- Recorded start manner and the adoption door (B47/R97): the `source` field on
+  the session record, written by `create_session`
+  (`packages/bee-rs/crates/bee/src/hooks/session_init.rs:483-488`, only when
+  non-empty) and restamped by `heartbeat_session` (`session_init.rs:539-548`);
+  `HANDOFF_ADOPT_BLOCKED_SOURCES` (`resume`, `compact`) and
+  `handoff_adopt_source_refusal` in
+  `verbs/workflow_store/handoff.rs:332-366`, checked ahead of
+  `adopt_mailbox_handoff` (`handoff.rs:388-393`). A missing field warns at
+  `handoff.rs:350-357`. Evidence: trace `.bee/cells/bh-4.json` (workflow_store
+  38, session_init 17, all green, 2026-08-04).

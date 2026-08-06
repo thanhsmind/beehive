@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Workflow State — authoring a unit of work, revising its plan, and the frozen plan document"
-description: "How a slice of work units is created all-or-nothing, which of a unit's plan fields may be revised afterwards and which are frozen audit, how a unit's change is classified at authoring, how a scope-derived regeneration obligation refuses authoring without it, and why the approved plan document stops changing the moment its gate is granted."
-timestamp: 2026-07-29
+description: "How a slice of work units is created all-or-nothing, which of a unit's plan fields may be revised afterwards and which are frozen audit, how a unit's change is classified at authoring, how a scope-derived regeneration obligation refuses authoring without it, why the approved plan document stops changing the moment its gate is granted, and why a feature still deciding its shape cannot have units authored into it at all."
+timestamp: 2026-08-06
 bee:
   id: workflow-state-cells-authoring-and-revision
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["lane-ceremony-v3 D1/D2/D9 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19 — plan document frozen at shape approval, slice-in-units)", self-correcting-loop D3 with Validating amendment Δ4 (change classification and the advisory verification standard), "regen-obligation-derived D1/D2 (derived regen obligation refuses at authoring, recorded escape hatch; roots derived from the tools, never hard-coded — 2026-07-23)", "8ef2bae6 (cli-ergonomics D2 — whole-batch exhaustive refusal + --dry-run preview, 2026-07-24)", "worker-conformance D4/D5/D6 (the trailing test unit stays unconditional but its first mandated step is a coverage judgement, not authoring; test shape below the highest-risk lane is the happy-path/edge-cases/error-paths triad and the twelve-dimension checklist applies only to high-risk/hard-gate work; no numeric per-group test cap is added — 2026-07-29)", "worker-conformance D13 (the doctrine-vs-machine disagreement over batching the trailing test unit at high risk is recorded as an open gap, not fixed — the close-door predicate was deliberately left unchanged)"]
-  sources: [cells-update-verb cell cuv-1 (2026-07-12), dispatcher-unify cells-batch-add suite rows (v0.1.27), "post-advisor-hardening cell pah-2 (cells add/update manifest-lint advisory, 2026-07-18)", "lane-ceremony-v3 cells lcv3-1..lcv3-5 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19)", "worker-conformance cells wc-3/wc-6/wc-7 (coverage-judgement-first trailing test unit, triad test shape, ten doctrine overstatements corrected against the live predicates; traces .bee/cells/wc-{3,6,7}.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "regen-obligation-derived cell ro-1 (12 suite rows + mutation red, commit e4ae329, 2026-07-23)", "docs/specs/workflow-state.md#B7", "docs/specs/workflow-state.md#B10", "docs/specs/workflow-state.md#B25", "docs/specs/workflow-state.md#B29", "docs/specs/workflow-state.md#R46", "docs/specs/workflow-state.md#E14", "docs/specs/workflow-state.md#P9", "docs/specs/workflow-state.md#P12"]
+  decisions: ["lane-ceremony-v3 D1/D2/D9 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19 — plan document frozen at shape approval, slice-in-units)", self-correcting-loop D3 with Validating amendment Δ4 (change classification and the advisory verification standard), "regen-obligation-derived D1/D2 (derived regen obligation refuses at authoring, recorded escape hatch; roots derived from the tools, never hard-coded — 2026-07-23)", "8ef2bae6 (cli-ergonomics D2 — whole-batch exhaustive refusal + --dry-run preview, 2026-07-24)", "worker-conformance D4/D5/D6 (the trailing test unit stays unconditional but its first mandated step is a coverage judgement, not authoring; test shape below the highest-risk lane is the happy-path/edge-cases/error-paths triad and the twelve-dimension checklist applies only to high-risk/hard-gate work; no numeric per-group test cap is added — 2026-07-29)", "worker-conformance D13 (the doctrine-vs-machine disagreement over batching the trailing test unit at high risk is recorded as an open gap, not fixed — the close-door predicate was deliberately left unchanged)", "hook-teeth D3/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — no units before the gate: authoring into an ungated feature refuses the whole batch, documentation-lane work exempt)"]
+  sources: [cells-update-verb cell cuv-1 (2026-07-12), dispatcher-unify cells-batch-add suite rows (v0.1.27), "post-advisor-hardening cell pah-2 (cells add/update manifest-lint advisory, 2026-07-18)", "lane-ceremony-v3 cells lcv3-1..lcv3-5 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19)", "worker-conformance cells wc-3/wc-6/wc-7 (coverage-judgement-first trailing test unit, triad test shape, ten doctrine overstatements corrected against the live predicates; traces .bee/cells/wc-{3,6,7}.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "regen-obligation-derived cell ro-1 (12 suite rows + mutation red, commit e4ae329, 2026-07-23)", "docs/specs/workflow-state.md#B7", "docs/specs/workflow-state.md#B10", "docs/specs/workflow-state.md#B25", "docs/specs/workflow-state.md#B29", "docs/specs/workflow-state.md#R46", "docs/specs/workflow-state.md#E14", "docs/specs/workflow-state.md#P9", "docs/specs/workflow-state.md#P12", "hook-teeth cell bh-3 (gated authoring refuses the whole batch, lane record beats the default, docs lane exempt; trace .bee/cells/bh-3.json, 2026-08-04 — cells slice 83 passed)"]
   authoritative_for: "workflow-state: unit-of-work authoring, plan revision, and the frozen plan document"
 ---
 
@@ -126,6 +126,20 @@ unchanged by this and still demands the unit complete on recorded proof
 (worker-conformance D4; the door itself is
 areas/workflow-state/cells-completion-judge-and-archive.md B43).
 
+**B46 — No units may be authored for a feature that is still deciding its shape
+(hook-teeth D3, 2026-08-04).** Trigger: creating a slice of units for a feature
+whose workflow still sits in one of the two phases that precede approval — still
+exploring, or still planning — and whose execution approval has not been
+granted. What happens: the whole batch is refused, exactly as a duplicate
+identifier or a dependency cycle refuses it (B10), and the refusal names the
+merged shape-and-execution approval as the way forward; nothing is written.
+Which record decides: the feature's own lane record when it exists, otherwise
+the default record, and only when that record names the same feature — a feature
+neither record knows is never refused, so the first authoring in a fresh
+repository stays open. What each actor observes: units cannot be smuggled in
+ahead of the gate, while documentation-lane work is exempt outright, because
+that lane never gates on execution in the first place.
+
 ## Business Rules
 
 - R46 — A unit's change classification is set explicitly or derived only from
@@ -159,6 +173,11 @@ areas/workflow-state/cells-completion-judge-and-archive.md B43).
   412e9b3a, docs/specs/test-simple.md; the triad shape and duplication
   judgment survive as craft in `.bee/expertise/tests.md`, enforced by
   review.)* (worker-conformance D5/D6).
+
+- R98 — Authoring units into a feature that is still exploring or still
+  planning, without its execution approval, refuses the whole batch and never
+  part of it; the documentation lane is exempt, and a feature no record names is
+  not refused (hook-teeth D3, cell bh-3, 2026-08-04).
 
 ## Edge Cases Settled
 
@@ -212,3 +231,11 @@ areas/workflow-state/cells-completion-judge-and-archive.md B43).
   `scripts/release_manifest.mjs` and `scripts/ledger_parity.mjs`. Evidence:
   12 suite rows in `packages/bee/tests/test_bee_cli.mjs` +
   mutation red, commit e4ae329 (cell ro-1, 2026-07-23).
+- Gated authoring refusal (B46/R98): `gated_add_refusal` in
+  `packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:115-156` — the
+  gated phases are exactly `exploring` and `planning`, and a resolved record
+  whose `mode` is `docs` is exempt. The refusal folds into
+  `build_add_cells_report`'s per-row problems (`handlers_write.rs:179-197`), so
+  one gated row fails the batch and nothing is written. Lane precedence mirrors
+  `plan_freeze_shape_approved`'s. Evidence: trace `.bee/cells/bh-3.json` (cells
+  slice 83 passed, 2026-08-04).
