@@ -32,6 +32,26 @@ switch, not an omission. Existing content outside the managed line is never
 replaced without consent. What the human observes: a freshly onboarded project
 "just works" in a new session without manually wiring instructions.
 
+**Carry the shell doctrine a PowerShell host needs (every run).** Trigger:
+onboarding a project whose resolved host shell is PowerShell. What blocks it:
+nothing. What changes: an Environment section is rendered INSIDE the managed
+instruction block — never as separate prose — stating which commands belong to
+which shell (the user's own terminal is PowerShell; the agent's own shell tool,
+and anything the user runs through the session's command prefix, is the POSIX
+one), the PowerShell default for anything handed to the user, and the three
+platform facts that break silently: path separator form inside a POSIX-tool
+command, line endings, and executable-bit semantics on the platform's file
+system. What the human observes: a freshly onboarded Windows project stops
+receiving commands its own terminal cannot run.
+
+The **project** decides that shell before the machine does: a recorded setting
+in the project's own configuration wins, and only when it is absent or
+unrecognised does the running host answer. Detection alone would churn — a
+teammate on the other platform strips the section that the next run puts back —
+and an unrecognised value falls back rather than refusing, so the setting is
+always optional. Because the section lives inside the managed block, the same
+splice that adds it removes it again when the answer changes.
+
 **Retire superseded helper scripts (every run).** Trigger: any run against a
 host that still carries one of the nine retired per-command helper scripts in
 its vendored tools directory — hosts onboarded before the command surface was
@@ -85,6 +105,17 @@ same source bullet.)
   (capture flush b57f6470, 2026-07-19).
 
 ## Pointers (implementation)
+
+- Windows shell section: template `packages/bee/AGENTS.windows.md`, appended by
+  `render_agents_block` and resolved by `host_shell_is_powershell` (config key
+  `host_shell`, else `cfg!(windows)`) in
+  `packages/bee-rs/crates/bee/src/onboard/merge.rs`; path field
+  `Engine::agents_windows_template` (`onboard/source.rs`), wired at the
+  `onboard/plan.rs` render call. Tests:
+  `a_powershell_host_carries_the_shell_section_inside_the_same_markers`,
+  `a_posix_host_renders_exactly_what_the_single_template_form_rendered`,
+  `the_repository_decides_the_host_shell_before_the_machine_does`
+  (`onboard/merge.rs`). Provenance: cell `wsd-1`, commit 8b93d749.
 
 - `.bee/config-sample.json` — the annotated, copyable configuration reference
   (`_doc` block per top-level key); `.bee/config-sample-cli-executors.json` —

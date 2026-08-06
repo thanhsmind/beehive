@@ -326,6 +326,7 @@
     "tooling",
     "friction",
     "worktree-orphan-verdict",
-    "verify-pipeline"
+    "verify-pipeline",
+    "cross-platform"
   ]
 }
