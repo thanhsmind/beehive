@@ -1,0 +1,73 @@
+{
+  "id": "rti-1",
+  "feature": "route-identity",
+  "lane": "small",
+  "change_class": "behavior",
+  "behavior_change": true,
+  "deps": [],
+  "title": "Give the route an identity so a finished feature's lane stops floor-setting the next one",
+  "action": "The route object is {class, lane, flags, product_files, rationale, updated_at} stored under the \"route\" key of whichever record is active (workflows.rs:776-778) — it carries no feature identity. start_default (policy.rs:415-517) reads the WHOLE prior record with read_state_strict and inserts only feature/mode/phase/approved_gates/summary/next_action before writing it back, so the previous feature's route rides along untouched; start_lane (policy.rs:384-409) does not have this problem because it builds a fresh Map. Then run_route hands that stale route to validate_route_lane_transition (workflows.rs:761), which compares lane against lane with no idea whose feature it belonged to, and refuses: 'route --set: refused — the feature's route is lane \"high-risk\" and lane \"small\" would move it off high-risk; rule violated: high-risk lanes never demote.' Measured live: after `bee state start-feature --feature feature-swap-door`, route --show still returned worktree-reclaim's route (lane high-risk, files 7, updated_at 2026-08-05T10:07:35Z), and two one-file bugfixes had to run under a high-risk label they never earned. Three changes, all small: (1) start_default removes the \"route\" key from the record it writes — a feature that has not been triaged has no route, which is exactly the state `cells claim`'s no-route warning (cells/handlers_write.rs:988-997) exists to detect. Touch nothing else it carries. (2) validate_route_set_flags (workflows.rs:486-583) stamps the route with the feature it was recorded for, so identity travels with the record from now on. (3) run_route (workflows.rs:761) only runs the transition check when the existing route's feature MATCHES the record's current feature; a route belonging to another feature — or a pre-fix route with no feature field at all — is treated as no route: first-time set, no demote check, overwritten cleanly. Do NOT change validate_route_lane_transition's own signature or lane-vs-lane semantics — its seven tests (state_group/tests.rs:1494-1630) must stay green as they are; the attribution check belongs at the call site.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "After bee state start-feature, the record carries no route at all — route --show reads null and the first route --set for the new feature is accepted whatever its lane",
+      "A route recorded through route --set carries the feature it was triaged for",
+      "A pre-fix route with no feature field, or one naming a different feature, is treated as no route: the set is accepted and overwrites it, with no demote refusal",
+      "Within one feature the never-demote rule is unchanged — a same-feature high-risk route still refuses a demotion, and the first-demotion/demoted_at history still behaves as its existing tests assert",
+      "The lane path (start_lane and lane records) is unaffected"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+        "substantive": "start_default removes the route key before writing; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "substantive": "the route object carries its feature, and run_route only validates a transition against a route of the same feature"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "substantive": "tests drive start_default then route --set end to end, including a stale foreign route and a pre-fix route with no feature field"
+      }
+    ],
+    "key_links": [
+      "validate_route_lane_transition keeps its signature and its seven existing tests",
+      "cells claim's no-route warning is what a freshly started feature should now trigger"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs"
+  ],
+  "decisions": [
+    "The never-demote rule is right within one feature and meaningless across a feature boundary (decision 132362c7, 2026-08-06)"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "exec-rti-1",
+    "outcome": "Route now carries the feature it was recorded for; start_default drops a stale route; run_route only checks demotion against a same-feature route",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T03:19:43.207Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bb2df452-734c-4dc1-80a8-0578a8027e18",
+    "claimed_at": "2026-08-06T03:09:07.577Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T03:19:31.460Z"
+  }
+}
