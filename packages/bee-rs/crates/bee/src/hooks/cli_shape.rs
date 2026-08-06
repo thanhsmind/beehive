@@ -601,6 +601,16 @@ pub(crate) fn check_cli_shape(command: &str) -> Option<String> {
                 flag_tokens,
                 entry.parameters.get("properties").and_then(Value::as_object),
             );
+            // `--help` is never a schema parameter — no registry entry declares a
+            // `help` property — so a parsed `help` key can only be the caller
+            // asking for the help surface. Required-parameter validation must not
+            // stand in front of it: the denial's own Correction line names
+            // `bee <cmd> --help --json`, which the guard would deny in turn.
+            // The test is the PARSED key, not a raw token scan, so a `--help`
+            // swallowed as another flag's value never disarms the guard.
+            if parsed.get("help").is_some() {
+                break;
+            }
             if let Some(problems) = validate(entry, &parsed) {
                 return Some(render_denial(command, entry, &problems));
             }
@@ -766,6 +776,20 @@ parameters (see `bee cells show --help --json`)."
         allow("node .bee/bin/bee.mjs --help"); // group starts with '-'
         allow("node .bee/bin/bee.mjs cells"); // no verb token after the group
         allow("node .bee/bin/bee.mjs nosuchgroup nosuchverb --x y"); // resolves to nothing
+    }
+
+    #[test]
+    fn asking_a_subcommand_for_its_help_reaches_the_help_surface() {
+        // Reported from a Windows host: the guard denied `bee config set --help
+        // --json` for the very parameters help would have explained, and its own
+        // Correction line named that same denied command. Help now passes.
+        allow("node .bee/bin/bee.mjs config set --help");
+        allow("node .bee/bin/bee.mjs config set --help --json");
+        // But only when `--help` was PARSED as help. Here it is consumed as the
+        // value of `--key`, so the missing `--value` is still a denial.
+        let reason = deny("node .bee/bin/bee.mjs config set --key --help");
+        assert!(reason.contains("config.set"), "{reason}");
+        assert!(reason.contains("(--value)"), "{reason}");
     }
 
     #[test]
