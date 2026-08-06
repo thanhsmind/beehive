@@ -1,0 +1,38 @@
+{
+  "id": "cps-1",
+  "feature": "ci-preamble-session-fixture",
+  "lane": "tiny",
+  "change_class": "test",
+  "behavior_change": false,
+  "deps": [],
+  "title": "Give the preamble test's session record a heartbeat so it resolves without an env session id",
+  "action": "hooks/session_preamble/tests.rs's an_unbound_hook_session_id_still_finds_the_process_bound_lane_over_the_default_record writes its session record without last_heartbeat. With no BEE_SESSION_ID / CLAUDE_CODE_SESSION_ID exported — CI's shape — resolve_session_id_no_flag falls back to 'exactly one FRESH session record', a heartbeat-less record reads as stale, resolution returns None, and the knowledge bridge never sees the bound lane. The test then blamed the bridge for its own fixture gap. Stamp the record with now_iso().",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "exec-cps-1",
+    "outcome": "The fixture's session record now carries a heartbeat; reproduced red with the env session ids unset, green after, and green both with and without them.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-06T04:17:11.888Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bb2df452-734c-4dc1-80a8-0578a8027e18",
+    "claimed_at": "2026-08-06T04:16:54.330Z",
+    "inline_reason": "Tiny lane, one line in one test file, run inline in the main checkout per AGENTS.md's solo-tiny allowance — no worker was dispatched.",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-06T04:17:00.091Z"
+  }
+}

@@ -908,10 +908,20 @@ use crate::version::BEE_VERSION;
         let root = tmp.path();
         write(root, ".bee/state.json", r#"{"phase":"compounding-complete","feature":"stale-closed"}"#);
         let sid = fixture_session_id(root);
+        // The heartbeat is load-bearing, not decoration. With no session-id
+        // env var exported — CI's shape, where this test used to be the only
+        // red — `resolve_session_id_no_flag` falls back to "exactly one FRESH
+        // session record", and a record with no `last_heartbeat` reads as
+        // stale. The fixture then resolved to nothing, the knowledge bridge
+        // never saw the bound lane, and the assertion below blamed the
+        // bridge for the fixture's own gap.
         write(
             root,
             &format!(".bee/sessions/{sid}.json"),
-            &format!(r#"{{"id":"{sid}","lane":"f-active"}}"#),
+            &format!(
+                r#"{{"id":"{sid}","lane":"f-active","last_heartbeat":"{}"}}"#,
+                crate::verbs::reservations::now_iso()
+            ),
         );
         write(
             root,
