@@ -218,5 +218,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-07T03:06:56.937Z"
+  },
+  "harness-audit-hardening": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-08-07T05:54:09.001Z"
   }
 }
