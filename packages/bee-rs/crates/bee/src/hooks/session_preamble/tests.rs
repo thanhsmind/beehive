@@ -188,35 +188,29 @@ use crate::version::BEE_VERSION;
 
     // ── csc-1: the command surface ─────────────────────────────────────────
 
-    /// Known fixtures from the embedded registry: `cells claim` has two
-    /// required flags, `reservations reserve` mixes required and optional
-    /// ones, and `orient` carries none beyond `--json`.
+    /// Known fixtures from the embedded registry: the `cells` group carries
+    /// its verbs (claim among them), and no flag token appears anywhere —
+    /// flags live behind `bee <command> --help` since preamble-surface-slim.
     #[test]
-    fn command_surface_lines_render_a_known_fixture_with_required_flags_marked() {
+    fn command_surface_lines_render_grouped_names_without_flags() {
         let lines = command_surface_lines();
-        let cells_claim = lines
+        let cells = lines
             .iter()
-            .find(|l| l.starts_with("cells claim: "))
-            .unwrap_or_else(|| panic!("cells claim missing: {lines:?}"));
-        assert!(cells_claim.contains("--id*:str"), "{cells_claim}");
-        assert!(cells_claim.contains("--worker*:str"), "{cells_claim}");
-        // session-id is optional — no star.
-        assert!(cells_claim.contains("--session-id:str"), "{cells_claim}");
-        assert!(!cells_claim.contains("--session-id*"), "{cells_claim}");
-        let reservations_reserve = lines
+            .find(|l| l.starts_with("cells: "))
+            .unwrap_or_else(|| panic!("cells group missing: {lines:?}"));
+        assert!(cells.contains("claim"), "{cells}");
+        assert!(cells.contains("finish"), "{cells}");
+        let state = lines
             .iter()
-            .find(|l| l.starts_with("reservations reserve: "))
-            .unwrap_or_else(|| panic!("reservations reserve missing: {lines:?}"));
-        assert!(reservations_reserve.contains("--agent*:str"), "{reservations_reserve}");
-        assert!(reservations_reserve.contains("--cell*:str"), "{reservations_reserve}");
-        assert!(reservations_reserve.contains("--path*:str"), "{reservations_reserve}");
-        // session is optional — no star.
-        assert!(reservations_reserve.contains("--session:str"), "{reservations_reserve}");
-        assert!(!reservations_reserve.contains("--session*"), "{reservations_reserve}");
+            .find(|l| l.starts_with("state: "))
+            .unwrap_or_else(|| panic!("state group missing: {lines:?}"));
+        // A deeper dotted name joins with a space and stays one verb.
+        assert!(state.contains("plan-rev bump"), "{state}");
+        assert!(!lines.iter().any(|l| l.contains("--")), "no flag tokens allowed: {lines:?}");
     }
 
-    /// A command with no flags besides `json` renders its bare name — never
-    /// a dangling colon.
+    /// A single-segment command renders its bare name — never a dangling
+    /// colon.
     #[test]
     fn a_flagless_command_renders_without_a_trailing_colon() {
         let lines = command_surface_lines();
@@ -224,30 +218,43 @@ use crate::version::BEE_VERSION;
         assert!(!lines.iter().any(|l| l == "orient:"), "{lines:?}");
     }
 
-    /// `--json` is dropped from every line — stated once, in the header,
-    /// instead.
+    /// `--json` appears nowhere — the header note names `json` once and
+    /// points at per-command help.
     #[test]
     fn the_json_flag_appears_nowhere_inside_the_command_surface_section() {
         let section = command_surface_section().join("\n");
         assert!(!section.contains("--json"), "{section}");
         assert!(section.contains("### Command surface"), "{section}");
+        assert!(section.contains("`bee <command> --help`"), "{section}");
         assert!(section.contains('`'), "the header note should mention `json` once:\n{section}");
     }
 
-    /// Every registry command appears exactly once, path-sorted (dotted
-    /// name, ascending) for byte-stability across regenerations that
-    /// reorder the source array.
+    /// Every registry command appears exactly once across the grouped
+    /// lines: each group line carries exactly its members' verbs, and the
+    /// group count matches the distinct first segments, path-sorted for
+    /// byte-stability across regenerations that reorder the source array.
     #[test]
     fn every_registry_command_appears_once_path_sorted() {
         let entries = crate::catalog::entries();
         let lines = command_surface_lines();
-        assert_eq!(lines.len(), entries.len(), "{lines:?}");
         let mut sorted_names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
         sorted_names.sort();
+        let total_verbs: usize = lines
+            .iter()
+            .map(|l| match l.split_once(": ") {
+                Some((_, verbs)) => verbs.split(", ").count(),
+                None => 1,
+            })
+            .sum();
+        assert_eq!(total_verbs, entries.len(), "{lines:?}");
+        // A name that is both bare and a group renders both spellings.
+        assert!(lines.contains(&"doctor".to_string()), "{lines:?}");
+        assert!(lines.iter().any(|l| l.starts_with("doctor: ")), "{lines:?}");
         let mut prior = "";
-        for name in &sorted_names {
-            assert!(*name >= prior, "not sorted: {prior} then {name}");
-            prior = name;
+        for line in &lines {
+            let head = line.split_once(':').map_or(line.as_str(), |(h, _)| h);
+            assert!(head >= prior, "not sorted: {prior} then {head}");
+            prior = head;
         }
     }
 
