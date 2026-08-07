@@ -125,13 +125,15 @@ slice's demo posts as a PR comment.
 
 ### Progress ticks — worked examples
 
-**The rule itself lives in `AGENTS.md`'s "Communication" section**, not here: one short chat line
-per perceivable pipeline step, on by default, the fixed format `<glyph> <event>: <what> —
-<key fact>`, the glyph table, and the only two switches that produce silence (`quiet`,
-which never silences the `✗` line, and `ship_visibility`, which reaches only the two PR
-ticks). A rule that applies every turn cannot live behind an on-demand reference. This
-section is the worked-example catalog for that rule: it shows the shape of a line, not
-whether a tick is owed.
+**This file is the declared home of the tick rule's substance** — the fixed format
+`<glyph> <event>: <what> — <key fact>`, the glyph table, and the only two switches that
+produce silence (`quiet`, which never silences the `✗` line, and `ship_visibility`, which
+reaches only the two PR ticks) are catalogued below. `AGENTS.md`'s "Communication" section
+states the rule bare — one short chat line per perceivable pipeline step, on by default,
+four glyphs, never silenced by a switch or bypass level — and points here for the full
+form. A rule that applies every turn cannot live behind an on-demand reference: it is
+bare in AGENTS.md AND catalogued here, never only here. This section shows the shape of
+a line, not whether a tick is owed.
 
 Two things the catalog does not repeat, and that the rule depends on. Ticks are chat
 output the agent writes as it goes, not an emitter subsystem — nothing to build, nothing
@@ -140,9 +142,9 @@ to poll. And the work-language litmus still applies to every line (`routing-and-
 what happened to the work, an id may ride at the end. The litmus governs the WORDS of a
 tick, not whether it is owed — a mechanical step is ticked like any other.
 
-**Bypass silences QUESTIONS, never ticks.** Gate auto-approval under bypass (Gate bypass
-mode above) already posts its own `⚡` line and keeps going instead of stopping to ask —
-that line is a tick, not an exception to one.
+**Bypass silences QUESTIONS, never ticks.** Gate auto-approval under bypass
+(`gates-and-delegation.md`, "Gate bypass mode") already posts its own `⚡` line and keeps
+going instead of stopping to ask — that line is a tick, not an exception to one.
 
 **Composite ticks, tiny/small only.** In the `tiny` and `small` lanes,
 consecutive GREEN ticks of one phase may composite into a single line — same fixed

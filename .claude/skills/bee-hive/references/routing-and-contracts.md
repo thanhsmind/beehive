@@ -87,10 +87,10 @@ examples, and the session scout in full.
 
 ## Lane ceremony in full
 
-The router's Modes and Lanes section keeps the classification rule and the scaling law; this section
+`bee-planning/SKILL.md`'s Route section keeps the classification rule and the scaling law; this section
 carries the full per-lane ceremony detail.
 
-Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 3 after execution. Every lane below closes through scribing/compounding as `unreviewed`; a review session — and its Gate 3 — happens only when the user asks, over whatever scope they choose. Separately, `standard`/`high-risk` goal-checks also run a semantic checklist judge once per slice over its capped `behavior_change` cells (table: "Goal-check judge tier" below) — that is verification of the cells, not this on-demand review session.
+Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 3 after execution. Every lane below closes through scribing/compounding as `unreviewed`; a review session — and its Gate 3 — happens only when the user asks, over whatever scope they choose. Separately, `standard`/`high-risk` goal-checks also run a semantic checklist judge once per slice over its capped `behavior_change` cells (table: "Goal-check judge tier", `gates-and-delegation.md`) — that is verification of the cells, not this on-demand review session.
 
 **"Validate" below is ceremony, not a phase — it runs inline inside `planning`'s shape stage.**
 
@@ -106,7 +106,7 @@ Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 3 afte
 
 ### Concurrency law in full
 
-**THE LAW:** if pieces of work can run at the same time, open the threads and run them; serial only when forced. One rule, three tiers — gather work fans out to I/O workers (Delegation contract below), a slice's cells fan out to a wave whenever their product file sets are disjoint (reservations are the proof and the police, 3-4 live workers is the cap), and independent ready features fan out to lanes or worktrees (Lanes, first-class below). Undeclared-overlap concurrency for the same feature is a `standard`/`high-risk` wave shape wearing a `small` lane, the exact ceremony-mismatch red flag this lane scaling exists to catch.
+**THE LAW:** if pieces of work can run at the same time, open the threads and run them; serial only when forced. One rule, three tiers — gather work fans out to I/O workers (Delegation contract, `gates-and-delegation.md`), a slice's cells fan out to a wave whenever their product file sets are disjoint (reservations are the proof and the police, 3-4 live workers is the cap), and independent ready features fan out to lanes or worktrees (Lanes, first-class below). Undeclared-overlap concurrency for the same feature is a `standard`/`high-risk` wave shape wearing a `small` lane, the exact ceremony-mismatch red flag this lane scaling exists to catch.
 
 **MANDATORY CONCURRENCY PLAN:** before dispatching anything, the orchestrator states in one line what runs concurrently and what is forced serial and why — computed, not guessed, never assumed by default. WAIVED when exactly one cell is being dispatched (a one-worker plan states nothing); owed again from two cells up. Cells: `bee cells schedule` names the disjoint sets from declared file overlap; a real product-file conflict named in the dispatch note is what makes a cell wait, nothing else does. Features: the declared `--paths` on `state start-feature --as-lane` are checked against every other live session's claims/reservations before the lane starts — a refusal names the holder and is itself the plan's proof that the paths were not disjoint.
 
@@ -114,9 +114,9 @@ Review is on demand: no lane auto-dispatches a reviewer wave or asks Gate 3 afte
 
 **LANES, FIRST-CLASS:** before every feature start, check whether other ready feature work has disjoint declared paths — if so, the paved road is a lane, not a queue, whether or not another feature is already live — `bee state start-feature --feature <f> --mode <m> --as-lane --paths <declared>`; lane-scoped mutations take `--lane`. Lanes classify and coordinate; they no longer keep code in main — a code-touching feature branches into its own worktree at feature start regardless (worktree-first — `docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md`), its declared paths still coordinating through the shared store; only docs-lane and solo tiny work runs directly in the main checkout. A lane refusal (holder + expiry) means the paths were not disjoint after all — pick other ready work or wait for the hold to lapse — never work around it.
 
-**TICK:** the concurrency plan emits its own progress line per the Progress ticks catalog above — same silent-bookkeeping rule as every other tick, never suppressed by bypass.
+**TICK:** the concurrency plan emits its own progress line per the Progress ticks catalog (`scout-and-ticks.md`, "Progress ticks — worked examples") — same silent-bookkeeping rule as every other tick, never suppressed by bypass.
 
-Full doctrine for the cell/wave tier — the wave-barrier regen protocol and the execution-worker class relationship: `bee-swarming/references/swarming-reference.md` ("Single execution worker in full", "Default — parallel"), and the Delegation contract below.
+Full doctrine for the cell/wave tier — the wave-barrier regen protocol and the execution-worker class relationship: `bee-swarming/references/swarming-reference.md` ("Single execution worker in full", "Default — parallel"), and the Delegation contract (`gates-and-delegation.md`).
 
 ### Docs lane
 
@@ -246,7 +246,7 @@ Every bee command (`bee orient`, `cells`, `reservations`, `decisions`, onboardin
 commands) is run by the agent itself the moment the workflow calls for it — never printed for the
 user to execute, never "run this and tell me the output". The only human actions in bee are gate
 approvals, decision answers, and privacy approvals. `AGENTS.md` states the same law inside its
-workflow boundaries and defers here for the full form; `SKILL.md`'s Priority Rules list carries the router-side pointer.
+workflow boundaries and defers here for the full form; `SKILL.md`'s Hard rules list carries the router-side pointer.
 
 ## Gate Presentation Contract
 
@@ -309,7 +309,8 @@ binary onboarding installs into the repo, invoked by its repo-relative path
 from the session's cwd. Prose elsewhere writes it `bee <group> <verb>` for
 readability; that always means this same binary, never a PATH lookup and
 never a Node script. `bee --help` prints the porcelain flow surface;
-`bee --help --all` prints the full registry — the help output is the command
+`bee --help --all` prints the full registry (`bee --help --json` / `--names`
+give the same two surfaces machine-readably) — the help output is the command
 reference, not this file. Legacy `bee_*.mjs` shims do not ship;
 `LEGACY_HELPER_RE` in the write-guard stays only as a transition guard for
 hosts mid-upgrade.

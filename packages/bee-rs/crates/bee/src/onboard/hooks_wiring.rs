@@ -140,9 +140,21 @@ fn is_bee_hook_entry(entry: &Value) -> bool {
     false
 }
 
+#[derive(Debug)]
 pub struct Merged {
     pub text: String,
     pub changed: bool,
+}
+
+/// Planning wants a yes/no "does this file need a merge item queued" without
+/// deciding the refusal itself — that decision belongs to apply's preflight,
+/// which can name the file in a typed refusal. A file that will refuse at
+/// apply time still needs its item queued so apply gets the chance to say so.
+pub fn merge_needs_apply(result: &Result<Merged, String>) -> bool {
+    match result {
+        Ok(m) => m.changed,
+        Err(_) => true,
+    }
 }
 
 /// The shared merge body of mergeRepoSettings / mergeCodexHooks: non-bee
@@ -150,25 +162,61 @@ pub struct Merged {
 /// no-op. `{...existing, hooks: merged}` keeps `existing`'s key order and
 /// overwrites `hooks` in place (appending it only when absent) — IndexMap
 /// insert has exactly those semantics.
+///
+/// A file that EXISTS but is malformed — invalid JSON, a non-object
+/// top-level, a non-object `hooks` key, or a non-array `hooks.<Event>`
+/// value — refuses instead of being treated as absent: `read_json_if_exists`
+/// collapses all of those into `None`, and this function used to inherit
+/// that and silently rewrite the file as bare `{"hooks": …}`, destroying
+/// whatever else the host had in it. `Err` here means zero writes to `file`.
 fn merge_hooks_file(
-    existing: Option<Value>,
+    file: &Path,
     rendered: Vec<(&'static str, Value)>,
     is_bee: fn(&Value) -> bool,
-) -> Merged {
-    let existing = match existing {
-        Some(Value::Object(m)) => m,
-        _ => Map::new(),
+) -> Result<Merged, String> {
+    let label = file.display();
+    let text = read_text_if_exists(file);
+    let existing = if text.trim().is_empty() {
+        Map::new()
+    } else {
+        let parsed: Value = serde_json::from_str(&text).map_err(|e| {
+            format!(
+                "hooks merge refused: \"{label}\" exists but is not valid JSON ({e}). \
+FIX: repair or remove the file, then retry."
+            )
+        })?;
+        match parsed {
+            Value::Object(m) => m,
+            _ => {
+                return Err(format!(
+                    "hooks merge refused: \"{label}\" does not contain a JSON object at the top \
+level. FIX: repair or remove the file, then retry."
+                ));
+            }
+        }
     };
     let hooks = match existing.get("hooks") {
         Some(Value::Object(m)) => m.clone(),
-        _ => Map::new(),
+        Some(_) => {
+            return Err(format!(
+                "hooks merge refused: \"{label}\" has a non-object \"hooks\" key. \
+FIX: repair or remove the file, then retry."
+            ));
+        }
+        None => Map::new(),
     };
     let mut merged = hooks;
     let mut changed = false;
     for (event_name, entries) in rendered {
         let current: Vec<Value> = match merged.get(event_name) {
             Some(Value::Array(a)) => a.clone(),
-            _ => Vec::new(),
+            Some(_) => {
+                return Err(format!(
+                    "hooks merge refused: \"{label}\" has a non-array \"hooks.{event_name}\" \
+value. FIX: repair or remove the file, then retry."
+                ));
+            }
+            None => Vec::new(),
         };
         let mut next: Vec<Value> = current.iter().filter(|e| !is_bee(e)).cloned().collect();
         next.extend(entries.as_array().unwrap().iter().cloned());
@@ -180,22 +228,19 @@ fn merge_hooks_file(
     }
     let mut out = existing;
     out.insert("hooks".into(), Value::Object(merged));
-    Merged { text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(out))), changed }
+    Ok(Merged { text: format!("{}\n", jsjson::stringify_pretty(&Value::Object(out))), changed })
 }
 
 /// mergeRepoSettings (l. 2296). `<repo>/.claude/settings.json -> <repo>` for
-/// the vendored-binary probe.
-pub fn merge_repo_settings(settings_path: &Path) -> Merged {
+/// the vendored-binary probe. `Err` names the file and the problem — see
+/// `merge_hooks_file` — and callers must not write on that path.
+pub fn merge_repo_settings(settings_path: &Path) -> Result<Merged, String> {
     let repo_root = settings_path
         .parent()
         .and_then(Path::parent)
         .map(Path::to_path_buf)
         .unwrap_or_else(|| Path::new(".").to_path_buf());
-    merge_hooks_file(
-        read_json_if_exists(settings_path),
-        render_repo_hook_entries(&repo_root),
-        is_bee_hook_entry,
-    )
+    merge_hooks_file(settings_path, render_repo_hook_entries(&repo_root), is_bee_hook_entry)
 }
 
 // ── Codex repo projection (.codex/hooks.json) ──────────────────────────────
@@ -398,13 +443,10 @@ fn is_bee_codex_hook_entry(entry: &Value) -> bool {
         .any(|c| matches_codex_bee_command(c) || (c.contains(".bee/bin/bee") && c.contains(" hook ")))
 }
 
-/// mergeCodexHooks (l. 2504).
-pub fn merge_codex_hooks(hooks_path: &Path) -> Merged {
-    merge_hooks_file(
-        read_json_if_exists(hooks_path),
-        render_codex_hook_entries(),
-        is_bee_codex_hook_entry,
-    )
+/// mergeCodexHooks (l. 2504). `Err` names the file and the problem — see
+/// `merge_hooks_file` — and callers must not write on that path.
+pub fn merge_codex_hooks(hooks_path: &Path) -> Result<Merged, String> {
+    merge_hooks_file(hooks_path, render_codex_hook_entries(), is_bee_codex_hook_entry)
 }
 
 /// The `.codex/hooks.json` pseudo-entry hashed into managed.repo_hooks /
@@ -644,7 +686,7 @@ mod tests {
 "#,
         )
         .unwrap();
-        let merged = merge_repo_settings(&settings);
+        let merged = merge_repo_settings(&settings).unwrap();
         assert!(merged.changed);
         let v: Value = serde_json::from_str(&merged.text).unwrap();
         // Foreign top-level keys keep their order; hooks stays in place.
@@ -658,9 +700,49 @@ mod tests {
         assert_eq!(v["hooks"]["Notification"][0]["hooks"][0]["command"], "notify");
         // Second pass is a no-op.
         std::fs::write(&settings, &merged.text).unwrap();
-        let again = merge_repo_settings(&settings);
+        let again = merge_repo_settings(&settings).unwrap();
         assert!(!again.changed);
         assert_eq!(again.text, merged.text);
+    }
+
+    #[test]
+    fn malformed_settings_json_refuses_and_is_never_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        let original = r#"{"model": "opus", "hooks": {"#; // truncated / invalid JSON
+        std::fs::write(&settings, original).unwrap();
+        let err = merge_repo_settings(&settings).unwrap_err();
+        assert!(err.contains("settings.json"), "{err}");
+        assert!(err.contains("not valid JSON"), "{err}");
+        // Zero writes: the file survives byte-for-byte.
+        assert_eq!(std::fs::read_to_string(&settings).unwrap(), original);
+    }
+
+    #[test]
+    fn non_object_hooks_key_refuses_instead_of_dropping_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        let original = r#"{"model": "opus", "hooks": "not-an-object"}"#;
+        std::fs::write(&settings, original).unwrap();
+        let err = merge_repo_settings(&settings).unwrap_err();
+        assert!(err.contains("settings.json"), "{err}");
+        assert!(err.contains("non-object \"hooks\""), "{err}");
+        assert_eq!(std::fs::read_to_string(&settings).unwrap(), original);
+    }
+
+    #[test]
+    fn non_array_event_value_refuses_instead_of_dropping_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings = dir.path().join(".claude").join("settings.json");
+        std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        let original = r#"{"hooks": {"PreToolUse": "not-an-array"}}"#;
+        std::fs::write(&settings, original).unwrap();
+        let err = merge_repo_settings(&settings).unwrap_err();
+        assert!(err.contains("settings.json"), "{err}");
+        assert!(err.contains("non-array \"hooks.PreToolUse\""), "{err}");
+        assert_eq!(std::fs::read_to_string(&settings).unwrap(), original);
     }
 
     #[test]
@@ -673,7 +755,7 @@ mod tests {
             r#"{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"node \"$CLAUDE_PROJECT_DIR\"/.bee/bin/hooks/bee-prompt-context.mjs --old"}]}]}}"#,
         )
         .unwrap();
-        let merged = merge_repo_settings(&settings);
+        let merged = merge_repo_settings(&settings).unwrap();
         let v: Value = serde_json::from_str(&merged.text).unwrap();
         assert_eq!(v["hooks"]["UserPromptSubmit"].as_array().unwrap().len(), 1);
         assert!(!v["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
@@ -686,7 +768,7 @@ mod tests {
     fn codex_projection_shape_and_idempotence() {
         let dir = tempfile::tempdir().unwrap();
         let hooks = dir.path().join(".codex").join("hooks.json");
-        let merged = merge_codex_hooks(&hooks);
+        let merged = merge_codex_hooks(&hooks).unwrap();
         assert!(merged.changed);
         let v: Value = serde_json::from_str(&merged.text).unwrap();
         let events: Vec<&str> = v["hooks"].as_object().unwrap().keys().map(|k| k.as_str()).collect();
@@ -714,7 +796,20 @@ mod tests {
             .starts_with("git -c alias.beehook=\"!"));
         std::fs::create_dir_all(hooks.parent().unwrap()).unwrap();
         std::fs::write(&hooks, &merged.text).unwrap();
-        assert!(!merge_codex_hooks(&hooks).changed);
+        assert!(!merge_codex_hooks(&hooks).unwrap().changed);
+    }
+
+    #[test]
+    fn malformed_codex_hooks_json_refuses_and_is_never_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let hooks = dir.path().join(".codex").join("hooks.json");
+        std::fs::create_dir_all(hooks.parent().unwrap()).unwrap();
+        let original = r#"{"hooks": ["#; // truncated / invalid JSON
+        std::fs::write(&hooks, original).unwrap();
+        let err = merge_codex_hooks(&hooks).unwrap_err();
+        assert!(err.contains("hooks.json"), "{err}");
+        assert!(err.contains("not valid JSON"), "{err}");
+        assert_eq!(std::fs::read_to_string(&hooks).unwrap(), original);
     }
 
     /// rust-port R6 — the FOURTH wiring surface. Both legs must name the
@@ -799,13 +894,13 @@ mod tests {
             r#"{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"exec node \"$r\"/.bee/bin/hooks/bee-prompt-context.mjs --source=repo"}]}]}}"#,
         )
         .unwrap();
-        let merged = merge_codex_hooks(&hooks);
+        let merged = merge_codex_hooks(&hooks).unwrap();
         let v: Value = serde_json::from_str(&merged.text).unwrap();
         assert_eq!(v["hooks"]["UserPromptSubmit"].as_array().unwrap().len(), 1);
         assert!(!merged.text.contains(".mjs"));
         // …and the fresh render is itself idempotent.
         std::fs::write(&hooks, &merged.text).unwrap();
-        assert!(!merge_codex_hooks(&hooks).changed);
+        assert!(!merge_codex_hooks(&hooks).unwrap().changed);
     }
 
     #[test]

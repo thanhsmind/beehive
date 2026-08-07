@@ -65,11 +65,11 @@ cp packages/bee-rs/target/release/bee     <your-repo>/.bee/bin/bee      # macOS 
 cp packages/bee-rs/target/release/bee.exe <your-repo>/.bee/bin/bee.exe  # Windows
 ```
 
-`.bee/bin/bee[.exe]` is machine-local and git-ignored. **Node.js is no longer
-required** — the entire runtime (CLI, hooks, statusline, dev tools) is that one
-binary. The single exception is Codex on native Windows, whose hook transport
-uses a ~10-line `node -e` launcher to find the repo root before handing off to
-the binary; every other transport is Node-free.
+`.bee/bin/bee[.exe]` is machine-local and ignored by the managed gitignore
+block. **Node.js is no longer required** — the entire runtime (CLI, hooks,
+statusline, dev tools) is that one binary. Codex on native Windows resolves
+the repo root through a `!`-prefixed git alias, so its hook transport also
+needs nothing beyond git — no Node anywhere.
 
 > Path used in the examples: `D:\projects\tools\AI\bee`. Replace with wherever this plugin lives (a local clone of `thanhsmind/beehive` or the git URL).
 
@@ -93,7 +93,7 @@ Inside a Claude Code session:
 Restart the session, then verify:
 
 - `/plugin` → bee shows as installed and enabled.
-- Ask: "What bee skills do you have?" → the 15 `bee-*` skills should be listed.
+- Ask: "What bee skills do you have?" → the 9 `bee-*` skills should be listed.
 - Hooks self-arm only in onboarded repos (they exit silently when `.bee/onboarding.json` is absent), so no hook activity is expected yet — that changes after step 3.
 
 ### Option B — no plugin system (fallback)
@@ -108,7 +108,7 @@ If you can't (or don't want to) use the plugin manager, onboarding (step 3 below
    ```powershell
    Copy-Item -Recurse D:\projects\tools\AI\bee\skills\* <repo>\.claude\skills\
    ```
-2. Wire the hooks per repo during onboarding with `--repo-hooks` (step 3 below) — this copies the hook scripts into `<repo>\.bee\bin\hooks\` and merges the 6 entries into `<repo>\.claude\settings.json` (a `.bak` backup is created; re-running never duplicates entries).
+2. Wire the hooks per repo during onboarding with `--repo-hooks` (step 3 below) — this copies the hook scripts into `<repo>\.bee\bin\hooks\` and merges the 7 entries into `<repo>\.claude\settings.json` (a `.bak` backup is created; re-running never duplicates entries).
 3. CLAUDE.md's `@AGENTS.md` import is written by default during onboarding (opt out with `--no-claude-md`) so the BEE block auto-loads even if hooks are disabled.
 
 ---
@@ -212,7 +212,7 @@ ls <repo>/.claude/skills | grep bee-   # Claude Code project discovery
 ls <repo>/.agents/skills | grep bee-   # Codex repo-level discovery
 ```
 
-Each should list all 15 `bee-*` skill dirs. If you passed `--global-skills`, also expect `~/.claude/skills/bee-*` (and, via the install scripts, `~/.codex/skills/bee-*`).
+Each should list all 9 `bee-*` skill dirs. If you passed `--global-skills`, also expect `~/.claude/skills/bee-*` (and, via the install scripts, `~/.codex/skills/bee-*`).
 
 Claude Code (plugin route) — start a new session in the repo: the session should begin with the bee preamble (phase, gates, critical-patterns digest) injected by `bee-session-init`. Quick hook check by hand:
 

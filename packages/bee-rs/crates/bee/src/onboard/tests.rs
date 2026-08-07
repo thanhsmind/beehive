@@ -573,6 +573,55 @@ fn repo_hooks_wires_both_projections_and_preserves_foreign_entries() {
 }
 
 #[test]
+fn malformed_settings_json_refuses_the_hooks_merge_with_zero_mutations() {
+    let fx = fixture();
+    let settings_path = fx.repo.join(".claude").join("settings.json");
+    let original = r#"{"model": "opus", "hooks": {"#; // truncated / invalid JSON
+    write(&settings_path, original);
+
+    let a = apply(&fx, &["--repo-hooks"]);
+    assert_eq!(a["status"], "blocked_hooks_merge");
+    let reason = a["reason"].as_str().unwrap();
+    assert!(reason.contains("settings.json"), "{reason}");
+    assert!(reason.contains("not valid JSON"), "{reason}");
+    // Zero mutations: the malformed file survives byte-for-byte, and nothing
+    // else the apply would have written landed either.
+    assert_eq!(std::fs::read_to_string(&settings_path).unwrap(), original);
+    assert!(!fx.repo.join(".codex").join("hooks.json").exists());
+    assert!(!fx.repo.join(".bee").join("onboarding.json").exists());
+}
+
+#[test]
+fn non_object_hooks_key_refuses_instead_of_silently_dropping_it() {
+    let fx = fixture();
+    let settings_path = fx.repo.join(".claude").join("settings.json");
+    let original = r#"{"model": "opus", "hooks": "not-an-object"}"#;
+    write(&settings_path, original);
+
+    let a = apply(&fx, &["--repo-hooks"]);
+    assert_eq!(a["status"], "blocked_hooks_merge");
+    let reason = a["reason"].as_str().unwrap();
+    assert!(reason.contains("settings.json"), "{reason}");
+    assert!(reason.contains("non-object \"hooks\""), "{reason}");
+    assert_eq!(std::fs::read_to_string(&settings_path).unwrap(), original);
+}
+
+#[test]
+fn non_array_event_value_refuses_instead_of_silently_dropping_it() {
+    let fx = fixture();
+    let settings_path = fx.repo.join(".claude").join("settings.json");
+    let original = r#"{"hooks": {"PreToolUse": "not-an-array"}}"#;
+    write(&settings_path, original);
+
+    let a = apply(&fx, &["--repo-hooks"]);
+    assert_eq!(a["status"], "blocked_hooks_merge");
+    let reason = a["reason"].as_str().unwrap();
+    assert!(reason.contains("settings.json"), "{reason}");
+    assert!(reason.contains("non-array \"hooks.PreToolUse\""), "{reason}");
+    assert_eq!(std::fs::read_to_string(&settings_path).unwrap(), original);
+}
+
+#[test]
 fn hook_wiring_does_not_depend_on_a_vendored_binary_and_never_stacks() {
     let fx = fixture();
     apply(&fx, &["--repo-hooks"]);

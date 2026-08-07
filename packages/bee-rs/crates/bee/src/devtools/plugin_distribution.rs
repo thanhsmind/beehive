@@ -470,9 +470,19 @@ fn prove_plugin_inactive(states: &[PluginState]) -> R<()> {
 
 // ── hook configuration cleanup ─────────────────────────────────────────────
 
+/// Recognizes BOTH wirings a repo may still carry: the pre-cutover `.mjs`
+/// wrapper path and the post-R6 rendered command that launches the `bee`
+/// binary directly (`… .bee/bin/bee … hook <name> …`, no `.mjs` anywhere —
+/// pinned by hook_manifests.rs's `no_projection_launches_a_wrapper_or_node_on_any_transport`).
+/// Mirrors onboard/hooks_wiring.rs's `is_bee_hook_entry` so a re-render
+/// replaces either shape instead of stacking, and `--apply` actually strips
+/// a migrated host's fallback entries instead of leaving both to double-fire.
 fn recognized_bee_command(command: Option<&str>) -> bool {
     let Some(command) = command else { return false };
     let normalized = command.replace('\\', "/");
+    if normalized.contains(".bee/bin/bee") && normalized.contains(" hook ") {
+        return true;
+    }
     let has_handler =
         BEE_HOOK_HANDLERS.iter().any(|name| normalized.contains(&format!("/hooks/{name}")));
     if !has_handler {
@@ -1348,10 +1358,57 @@ mod tests {
     }
 
     #[test]
+    fn post_r6_binary_commands_are_recognized_alongside_the_mjs_wrapper() {
+        // Post-cutover rendered commands launch the `bee` binary directly and
+        // never name a `.mjs` wrapper — mirrors onboard/hooks_wiring.rs's
+        // is_bee_hook_entry so a migrated host's fallback entries are still
+        // stripped instead of double-firing every hook.
+        assert!(recognized_bee_command(Some(
+            r#"for b in "$CLAUDE_PROJECT_DIR/.bee/bin/bee" "$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe"; do [ -x "$b" ] && exec "$b" hook write-guard; done; g="$(git -C "$CLAUDE_PROJECT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; [ -n "$g" ] && for b in "$g/../.bee/bin/bee" "$g/../.bee/bin/bee.exe"; do [ -x "$b" ] && exec "$b" hook write-guard; done; echo "bee: hook binary missing (.bee/bin/bee)" >&2; exit 0"#
+        )));
+        assert!(recognized_bee_command(Some(r#"C:\x\.bee\bin\bee.exe hook state-sync"#)));
+        // The binary path alone, without a `hook <name>` invocation, is not
+        // enough — an unrelated command that merely names the bee binary
+        // (e.g. a status check) must not be stripped.
+        assert!(!recognized_bee_command(Some(".bee/bin/bee --version")));
+    }
+
+    #[test]
+    fn clean_hook_config_strips_the_actual_rendered_settings_json_entry() {
+        // The literal PreToolUse write-guard command this repo's own
+        // .claude/settings.json carries post-R6 — no `.mjs` wrapper anywhere.
+        // A migrated host must have this stripped by `--apply`, or the
+        // fallback double-fires alongside the plugin-provided hook.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let command = r#"for b in "$CLAUDE_PROJECT_DIR/.bee/bin/bee" "$CLAUDE_PROJECT_DIR/.bee/bin/bee.exe"; do [ -x "$b" ] && exec "$b" hook write-guard; done; g="$(git -C "$CLAUDE_PROJECT_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"; [ -n "$g" ] && for b in "$g/../.bee/bin/bee" "$g/../.bee/bin/bee.exe"; do [ -x "$b" ] && exec "$b" hook write-guard; done; echo "bee: hook binary missing (.bee/bin/bee)" >&2; exit 0"#;
+        let cfg = json!({
+            "hooks": {
+                "PreToolUse": [
+                    {"matcher": "Edit", "hooks": [
+                        {"type": "command", "command": command},
+                        {"type": "command", "command": "my-own-linter"}
+                    ]}
+                ]
+            }
+        });
+        write(root, ".claude/settings.json", &serde_json::to_string_pretty(&cfg).unwrap());
+
+        let plan = clean_hook_config(&root.join(".claude/settings.json")).unwrap().unwrap();
+        assert_eq!(plan.removed, 1);
+        let after: Value = serde_json::from_slice(&plan.after).unwrap();
+        let groups = after["hooks"]["PreToolUse"].as_array().unwrap();
+        assert_eq!(groups[0]["hooks"].as_array().unwrap().len(), 1);
+        assert_eq!(groups[0]["hooks"][0]["command"], json!("my-own-linter"));
+    }
+
+    #[test]
     fn the_codex_hybrid_flag_exempts_exactly_one_file() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        let bee_entry = r#"{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"/x/.bee/bin/hooks/bee-write-guard.mjs"}]}]}}"#;
+        // Post-R6 shape: no `.mjs` wrapper, the rendered command launches the
+        // `bee` binary directly.
+        let bee_entry = r#"{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"$CLAUDE_PROJECT_DIR/.bee/bin/bee hook write-guard"}]}]}}"#;
         write(root, ".claude/settings.json", bee_entry);
         write(root, ".codex/hooks.json", bee_entry);
         let skills: BTreeSet<String> = ["bee-hive".to_string()].into_iter().collect();
@@ -1408,7 +1465,9 @@ mod tests {
         write(root, "manifest.json", &manifest);
 
         write(&repo, ".claude/skills/bee-hive/SKILL.md", "stale copy");
-        write(&repo, ".claude/settings.json", r#"{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"/r/.bee/bin/hooks/bee-write-guard.mjs"}]}]}}"#);
+        // Post-R6 shape: no `.mjs` wrapper, the rendered command launches the
+        // `bee` binary directly.
+        write(&repo, ".claude/settings.json", r#"{"hooks":{"PreToolUse":[{"hooks":[{"type":"command","command":"/r/.bee/bin/bee hook write-guard"}]}]}}"#);
 
         let state = plugin_state_file(root, &pkg);
         let repo_s = repo.to_string_lossy().into_owned();
