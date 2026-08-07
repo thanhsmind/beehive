@@ -1,0 +1,67 @@
+{
+  "id": "hah-7",
+  "feature": "harness-audit-hardening",
+  "lane": "standard",
+  "title": "Repair wrong-home cross references in the AGENTS block and bee-hive/bee-swarming skill docs",
+  "action": "Each fix names its two sides; verify both anchors before editing, then run the regen chain inside THIS cell, in order: `bee dev render-skill-trees`, then `bee onboard --repo-root . --apply`, then `bee dev release-manifest --write` (updates docs/history/codex-harness-hardening/release-manifest.json), and include the regenerated projections in the commit. Fixes: (1) AGENTS.block.md line pointing at gates-and-delegation.md 'Native Codex subagent tending' ships to BOTH runtimes but that section is <!-- bee:only codex --> (gates-and-delegation.md:162) so the Claude render deletes it — wrap the pointer in matching bee:only codex markers or point Claude readers at their own anchor; (2) scout-and-ticks.md:128 claims the tick rule's substance (format string, glyph table, quiet/ship_visibility switches) lives in AGENTS.md's Communication section — AGENTS.md carries none of it; make scout-and-ticks.md the declared home and have the pointer say so (do NOT copy the substance into AGENTS.block.md); (3) routing-and-contracts.md:93 names a 'Goal-check judge tier' table 'below' that lives at gates-and-delegation.md:144, and go-mode.md:60 points the same table at routing-and-contracts.md — both pointers name gates-and-delegation.md; (4) README.md:317 and swarming-reference.md:331 cite the Delegation contract / cli gather branch to routing-and-contracts.md — actual home gates-and-delegation.md:100/:110; (5) routing-and-contracts.md:109 and :119 say 'Delegation contract below' (it is in gates-and-delegation.md) and :117 says 'Progress ticks catalog above' (it is scout-and-ticks.md:126); scout-and-ticks.md:143 says 'Gate bypass mode above' (gates-and-delegation.md:57) — name the real files; (6) routing-and-contracts.md:90 names a SKILL.md 'Modes and Lanes' section and :249 a 'Priority Rules' list — SKILL.md has neither (its list is '## Hard rules', SKILL.md:89); name the real headings; (7) AGENTS.block.md tier list 'bee-build … bee-gather … bee-extract, bee-review' vs gates-and-delegation.md:108 Transport line 'bee-gather|bee-extract|bee-review' missing bee-build while swarming-reference.md:270 lists all four — add bee-build to the Transport line; (8) AGENTS.block.md:42 spells the help surface '--help --json / --names' while routing-and-contracts.md:311 spells '--help / --help --all' — have each mention both spellings in one line; (9) SKILL.md:56 says the bypass level table is stated in gates-and-delegation.md 'and nowhere else' — true again once hah-6 collapses the README copy; leave as is but confirm; (10) swarming-reference.md:275 'codex 0.145.0 schema' vs :314 'codex-cli 0.144.4' — align both lines to the real current pin (read the file context to pick the right version).",
+  "verify": "rg -n 'routing-and-contracts' skills/bee-hive/references/go-mode.md README.md skills/bee-swarming/references/swarming-reference.md shows no stale table/contract pointer; regenerated AGENTS.md contains the fixed lines; bee dev release-manifest --check",
+  "files": [
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "skills/bee-hive/references/go-mode.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "README.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-hive/SKILL.md"
+  ],
+  "deps": [
+    "hah-6"
+  ],
+  "must_haves": {
+    "truths": [
+      "Every fixed pointer names a file and heading that actually exist at the cited location",
+      "The Claude-rendered skill tree no longer carries a pointer into a codex-only section",
+      "Regenerated AGENTS.md and plugin skill trees carry the fixes"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-hah-7",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "skills/bee-hive/references/go-mode.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "README.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".claude-plugin/skills",
+      ".codex-plugin/skills",
+      ".claude/skills",
+      ".agents/skills",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-07T05:49:46.170Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bfc4f811-dd38-45a2-946a-1bdaec10d4e4",
+    "claimed_at": "2026-08-07T05:33:06.599Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-07T05:49:34.319Z"
+  }
+}

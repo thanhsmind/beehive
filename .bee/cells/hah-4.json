@@ -1,0 +1,46 @@
+{
+  "id": "hah-4",
+  "feature": "harness-audit-hardening",
+  "lane": "standard",
+  "title": "Render every declared flag in per-command text help, not only the required ones",
+  "action": "`bee <cmd> --help` text output prints only a required: line, so optional flags are invisible — `bee dispatch prepare --help` never shows --claim/--purpose/--session-id though the registry parameters hold them. The text-help renderer is render_help_text in packages/bee-rs/crates/bee/src/verbs/help.rs (the required: line is built at ~:528; the --help dispatch path try_native/group_scoped/manifest_entry lives there too). Render the full flag surface per command in the compact shape the session preamble uses (see hooks/session_preamble/budget.rs): one line like `--id*:str --worker*:str --session-id:str`, * marking required, --json omitted per line and stated once in the output header or trailer. Keep or fold the existing required: line — writer judgment — but optional flags must be visible and the choice pinned by a test asserting dispatch prepare help text contains --claim and --purpose and that required flags are visibly marked. Do not break --help --names / --help --all outputs or their tests; adjust assertions only where the new line legitimately appears.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml router catalog",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/help.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "deps": [],
+  "must_haves": {
+    "truths": [
+      "`bee dispatch prepare --help` output names --claim and --purpose",
+      "Required flags are visibly marked distinct from optional ones",
+      "A test pins the full-flag rendering"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-hah-4",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/help.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-07T05:25:56.328Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bfc4f811-dd38-45a2-946a-1bdaec10d4e4",
+    "claimed_at": "2026-08-07T05:18:00.523Z",
+    "verify_command": null,
+    "verified_at": null,
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-07T05:25:44.554Z"
+  }
+}

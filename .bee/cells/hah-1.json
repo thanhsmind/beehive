@@ -1,0 +1,59 @@
+{
+  "id": "hah-1",
+  "feature": "harness-audit-hardening",
+  "lane": "standard",
+  "title": "Teach plugin-migration cleanup the post-R6 hook command spelling",
+  "action": "In packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs the recognizer at ~L473-485 only matches pre-cutover '/hooks/<name>.mjs' commands (BEE_HOOK_HANDLERS at ~L60-70), so after the R6 cutover (rendered commands invoke '.bee/bin/bee hook <name>' and contain no .mjs — pinned by hook_manifests.rs:414-433) recognized_bee_command returns false and `bee dev plugin-distribution --apply` removes nothing: a migrated host double-fires every hook. Fix: recognize BOTH spellings — mirror or share the updated onboarding recognizer in onboard/hooks_wiring.rs:131-141. Update the stale fixtures at plugin_distribution.rs ~L1343-1346, ~L1354, ~L1411 and add a regression test proving a current rendered command string (as found in this repo's .claude/settings.json) is recognized and cleaned.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml plugin_distribution",
+  "files": [
+    "packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+    "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs"
+  ],
+  "deps": [],
+  "must_haves": {
+    "truths": [
+      "A current rendered hook command (no .mjs, invoking .bee/bin/bee hook <name>) is recognized by recognized_bee_command and removed by clean_hook_config",
+      "Pre-cutover .mjs commands are still recognized",
+      "cargo test plugin_distribution green"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-hah-1",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-07T05:22:35.995Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bfc4f811-dd38-45a2-946a-1bdaec10d4e4",
+    "claimed_at": "2026-08-07T05:14:36.218Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-07T05:21:17.784Z",
+        "claim_session": "bfc4f811-dd38-45a2-946a-1bdaec10d4e4",
+        "claimed_at": "2026-08-07T05:18:50.085Z",
+        "acquired_at": "2026-08-07T05:14:36.217Z",
+        "worker": "w-hah-1",
+        "verdict": "tests-red",
+        "failure_signature": "42a47aa4ab3a",
+        "note": "te) (run `cargo fix --bin \"bee\" -p bee --tests` to apply 2 suggestions)"
+      }
+    ],
+    "inline_reason": "worker w-hah-1 was dispatched per task contract but not pre-registered in state.json workers[] by the orchestrator; execution and green worktree verify already proven in step 4",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-07T05:22:23.474Z"
+  }
+}

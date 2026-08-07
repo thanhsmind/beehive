@@ -1,0 +1,40 @@
+{
+  "id": "hah-6",
+  "feature": "harness-audit-hardening",
+  "lane": "small",
+  "title": "Correct INSTALL.md and README.md claims that drifted from the shipped code",
+  "action": "Fix stale claims, each verified against the anchor before editing: INSTALL.md:96/215/217 say '15 bee-* skills' — the source skills/ tree ships 9 (bee-hive, bee-swarming, bee-capturing, bee-shaping, bee-planning, bee-reviewing, bee-researching, bee-grooming, bee-herding); INSTALL.md:111 says the Claude settings merge writes '6 entries' — hooks_wiring.rs:77-108 renders 7 event keys; INSTALL.md:70-72 describes a 'node -e launcher' for Codex-on-Windows — replaced by the git-alias transport (hooks_wiring.rs:296), and hook_manifests.rs:426-442 asserts no node anywhere; INSTALL.md:68 calls the vendored binary 'git-ignored' — only true once hah-3 lands, phrase it as ignored-by-the-managed-block. README.md:240 write-guard allowlist says '.bee/, docs/, .spikes/, AGENTS.md' — the code (write_guard/guards.rs:27) says '.bee/, docs/, plans/, AGENTS.md'; README.md:327 '6 lifecycle hooks' vs :501 '9-hook set' — 9 is right (hooks/mod.rs:85-93); README.md:259 'GATE BYPASS ON' — the code emits level-specific banners (session_preamble/state.rs:132-134), quote one of the real strings; README.md:248-253 carries a second gate-bypass level table with different columns from gates-and-delegation.md:63-68 which claims to be the single home — collapse the README table to one line pointing at the skill reference; README.md:289 spike path '.spikes/' vs the skills' '.bee/spikes/' (bee-shaping SKILL.md:111, routing-and-contracts.md:302) — use .bee/spikes/; README.md:293/:351 name docs/specs/ unconditionally as the state layer — bee-capturing SKILL.md:18 says docs/knowledge/ with a bundle, else docs/specs/; match that.",
+  "verify": "rg -n 'GATE BYPASS ON|\\.spikes/|15 bee|6 entries|node -e' README.md INSTALL.md returns nothing stale",
+  "files": [
+    "INSTALL.md",
+    "README.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs"
+  ],
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-hah-6",
+    "outcome": null,
+    "files_changed": [
+      "INSTALL.md",
+      "README.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-07T05:31:44.842Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bfc4f811-dd38-45a2-946a-1bdaec10d4e4",
+    "claimed_at": "2026-08-07T05:26:37.819Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-07T05:31:33.212Z"
+  }
+}

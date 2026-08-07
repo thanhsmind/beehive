@@ -1,0 +1,51 @@
+{
+  "id": "hah-2",
+  "feature": "harness-audit-hardening",
+  "lane": "standard",
+  "title": "Refuse the hooks merge on an unparseable host settings file instead of clobbering it",
+  "action": "onboard/util.rs:55-61 returns None on any settings parse error and hooks_wiring.rs:158-183 then treats the file as absent, rewriting a host's .claude/settings.json as just {\"hooks\":...} — permissions/env/model silently lost; same path for .codex/hooks.json via merge_codex_hooks (~:402). Narrower variants: a non-object top-level 'hooks' key loses all hook config (:162-165); a non-array hooks.<Event> value loses that event (:169-172). Fix: a file that exists but fails to parse, a non-object hooks key, or a non-array event value must produce a typed refusal naming the file and the problem with zero writes to that file (blocked action or refused apply — follow the existing blocked_* pattern used by skills sync, see onboard/apply.rs:133-179), never a silent replace/drop. Add tests: malformed JSON file preserved byte-for-byte + refusal surfaced; non-object hooks key refused; non-array event refused. Existing green-path merge test (onboard/tests.rs:504-547) stays green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard",
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/util.rs",
+    "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+  ],
+  "deps": [],
+  "must_haves": {
+    "truths": [
+      "A settings file with invalid JSON survives onboard apply byte-for-byte and the refusal names the file",
+      "A non-object hooks key and a non-array event value each refuse instead of silently dropping",
+      "The existing well-formed merge test still passes"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-hah-2",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-07T05:26:14.317Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bfc4f811-dd38-45a2-946a-1bdaec10d4e4",
+    "claimed_at": "2026-08-07T05:14:37.646Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-07T05:26:02.514Z"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "id": "hah-5",
+  "feature": "harness-audit-hardening",
+  "lane": "small",
+  "title": "Print hook usage instead of panicking on bare `bee hook`",
+  "action": "`bee hook` with no argument panics: 'range start index 2 out of range for slice of length 1' at hooks/mod.rs:78; `bee hook --help` falls into the unknown-hook branch (:98-101) and errors. Fix: bare `bee hook` and `bee hook --help` print a usage line listing the nine hook names (the registered set at hooks/mod.rs:85-97) and exit deliberately (0 for --help; nonzero-but-clean for bare is acceptable — no panic either way). Add a test for both spellings.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml hooks",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+  ],
+  "read_first": [],
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-hah-5",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-07T05:21:45.162Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bfc4f811-dd38-45a2-946a-1bdaec10d4e4",
+    "claimed_at": "2026-08-07T05:14:38.878Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-07T05:20:02.397Z",
+        "claim_session": "bfc4f811-dd38-45a2-946a-1bdaec10d4e4",
+        "claimed_at": "2026-08-07T05:18:50.085Z",
+        "acquired_at": "2026-08-07T05:14:38.878Z",
+        "worker": "w-hah-5",
+        "verdict": "tests-red",
+        "failure_signature": "f77f756b8e84",
+        "note": "ggestions)"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-07T05:21:33.528Z"
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "id": "hah-3",
+  "feature": "harness-audit-hardening",
+  "lane": "small",
+  "title": "Ignore the vendored bee binary and .bak backups in the managed gitignore block",
+  "action": "GITIGNORE_BLOCK_PATTERNS in onboard/templates.rs:24-53 (28 entries) covers neither the vendored binary the installer copies into hosts (.bee/bin/bee, .bee/bin/bee.exe — scripts/install.sh:583-598) nor the backup files apply writes (.claude/settings.json.bak, .codex/hooks.json.bak — apply.rs:363-377). Hosts can commit a 9.3MB binary; this very repo tracks .claude/settings.json.bak. Fix: add the four patterns to the managed block, bump any test pinning the pattern count, and in this repo run `git rm --cached .claude/settings.json.bak` so the tracked backup drops out (commit that removal in this cell's commit).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard && git ls-files .claude | grep -v settings.json.bak",
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+  ],
+  "deps": [
+    "hah-2"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-hah-3",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-07T05:32:38.183Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bfc4f811-dd38-45a2-946a-1bdaec10d4e4",
+    "claimed_at": "2026-08-07T05:26:37.216Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-07T05:32:26.601Z"
+  }
+}
