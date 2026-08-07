@@ -4,6 +4,10 @@
 //   1. worktree-migration conflicts (msn-18d / advisor F4) — outranks
 //      everything, zero mutations,
 //   2. the codex-hybrid hook-write preflight (advisor R3, fail-closed),
+//   2b. the hooks-merge validity preflight — a settings/hooks file that
+//       exists but is malformed (bad JSON, a non-object `hooks` key, a
+//       non-array event value) refuses by name, zero mutations, rather than
+//       being treated as absent and silently rewritten,
 //   3. the D3 blocked-first skill refusal (--force-downgrade overrides only
 //      a fully-numeric version refusal).
 // Only then does the item loop run, and only after IT does onboarding.json
@@ -120,6 +124,33 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
         if let Some((status, reason)) = hw::codex_hook_write_blocker(repo_root) {
             return ApplyOutcome::Blocked(Box::new(ApplyBlocked {
                 status,
+                reason,
+                versions: None,
+                skills: None,
+                host_items: None,
+                stranded: None,
+                bee_version,
+            }));
+        }
+    }
+
+    // 2b. hooks-merge validity preflight: a settings/hooks file that exists
+    // but fails the merge shape check (malformed JSON, a non-object "hooks"
+    // key, a non-array event value) refuses BEFORE any item touches disk —
+    // never silently treated as absent and clobbered with a bare
+    // {"hooks": …}. Checked for whichever of the two merge items compute_plan
+    // actually queued.
+    for item in &plan {
+        let action = item["action"].as_str().unwrap_or("");
+        let rel = item["path"].as_str().unwrap_or("");
+        let result = match action {
+            "merge_repo_hook_settings" => Some(hw::merge_repo_settings(&join_rel(repo_root, rel))),
+            "merge_codex_hooks" => Some(hw::merge_codex_hooks(&join_rel(repo_root, rel))),
+            _ => None,
+        };
+        if let Some(Err(reason)) = result {
+            return ApplyOutcome::Blocked(Box::new(ApplyBlocked {
+                status: "blocked_hooks_merge".into(),
                 reason,
                 versions: None,
                 skills: None,
@@ -359,22 +390,27 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                 );
             }
             "merge_repo_hook_settings" => {
-                let merged = hw::merge_repo_settings(&target);
-                if exists(&target) {
-                    let mut bak = target.clone().into_os_string();
-                    bak.push(".bak");
-                    let _ = std::fs::copy(&target, PathBuf::from(bak));
+                // The 2b preflight already refused on an Err before the loop
+                // started; this Ok-only branch is a defensive fallback for a
+                // plan-to-apply race, not the primary refusal path.
+                if let Ok(merged) = hw::merge_repo_settings(&target) {
+                    if exists(&target) {
+                        let mut bak = target.clone().into_os_string();
+                        bak.push(".bak");
+                        let _ = std::fs::copy(&target, PathBuf::from(bak));
+                    }
+                    let _ = write_file_atomic(&target, merged.text.as_bytes());
                 }
-                let _ = write_file_atomic(&target, merged.text.as_bytes());
             }
             "merge_codex_hooks" => {
-                let merged = hw::merge_codex_hooks(&target);
-                if exists(&target) {
-                    let mut bak = target.clone().into_os_string();
-                    bak.push(".bak");
-                    let _ = std::fs::copy(&target, PathBuf::from(bak));
+                if let Ok(merged) = hw::merge_codex_hooks(&target) {
+                    if exists(&target) {
+                        let mut bak = target.clone().into_os_string();
+                        bak.push(".bak");
+                        let _ = std::fs::copy(&target, PathBuf::from(bak));
+                    }
+                    let _ = write_file_atomic(&target, merged.text.as_bytes());
                 }
-                let _ = write_file_atomic(&target, merged.text.as_bytes());
             }
             "ensure_codex_statusline" => {
                 // Machine-level target: NEVER the repoRoot-joined path above.

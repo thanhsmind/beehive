@@ -608,12 +608,12 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
             }
         }
         let settings_path = repo_root.join(".claude").join("settings.json");
-        if hw::merge_repo_settings(&settings_path).changed {
+        if hw::merge_needs_apply(&hw::merge_repo_settings(&settings_path)) {
             plan.push(plan_item("merge_repo_hook_settings", ".claude/settings.json"));
         }
         if !hw::repo_owns_hook_catalog(repo_root) {
             let codex_hooks_path = repo_root.join(".codex").join("hooks.json");
-            if hw::merge_codex_hooks(&codex_hooks_path).changed {
+            if hw::merge_needs_apply(&hw::merge_codex_hooks(&codex_hooks_path)) {
                 plan.push(plan_item("merge_codex_hooks", ".codex/hooks.json"));
             }
         }
@@ -629,7 +629,7 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
             }
         }
         let codex_hooks_path = repo_root.join(".codex").join("hooks.json");
-        if hw::merge_codex_hooks(&codex_hooks_path).changed {
+        if hw::merge_needs_apply(&hw::merge_codex_hooks(&codex_hooks_path)) {
             plan.push(plan_item("merge_codex_hooks", ".codex/hooks.json"));
         }
     }
