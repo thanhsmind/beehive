@@ -436,8 +436,10 @@ use std::time::Instant;
     fn gather_envelope_is_the_claude_agent_shape() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
-        let out =
-            prepare_dispatch(&root, "claude", "gather", None, None, false, None, false).unwrap();
+        let out = prepare_dispatch(
+            &root, "claude", "gather", None, None, false, None, None, false,
+        )
+        .unwrap();
         let Prepared::Value(v) = out else { panic!("expected an envelope") };
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
         let p = v.get("payload").unwrap();
@@ -466,7 +468,7 @@ use std::time::Instant;
             r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
         );
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -502,7 +504,7 @@ use std::time::Instant;
         cell("c-1", "cap the test scrubber");
         let d = |id: &str| {
             let Prepared::Value(v) =
-                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, false)
+                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, None, false)
                     .unwrap()
             else {
                 panic!("expected an envelope")
@@ -533,11 +535,162 @@ use std::time::Instant;
         assert_eq!(d("c-5"), "c-5: first line second line (sonnet)");
     }
 
+    /// Gap 2 of the audit (dispatch-label-chokepoint plan.md): a non-cell
+    /// kind (`gather`/`reviewer`/`advisor`) had no way to say what it was FOR
+    /// — `--purpose` is that way. Given, it renders; omitted, today's exact
+    /// bytes (covered by `gather_envelope_is_the_claude_agent_shape` above).
+    #[test]
+    fn a_non_cell_kind_with_purpose_renders_it_in_the_description() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "claude",
+            "gather",
+            None,
+            None,
+            false,
+            None,
+            Some("scout the auth middleware before the shape gate"),
+            false,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(
+            v.get("payload").unwrap().get("description"),
+            Some(&json!("gather: scout the auth middleware before the shape gate (sonnet)"))
+        );
+    }
+
+    /// Gap 1 of the audit: codex's `task_name` carried the bare cell id
+    /// (`prepare.rs:687` pre-fix), the exact case a live agent list still
+    /// read as `Execute cell etom-nid-mapping-6` a month after work-
+    /// visibility D2 required a real label. `task_name` now carries the same
+    /// subject as the claude Agent's `description`.
+    #[test]
+    fn codex_task_name_carries_the_cell_title_not_the_bare_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"codex":{"generation":"gpt-5"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","title":"cap the test scrubber","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false,
+        )
+        .unwrap() else {
+            panic!("expected an envelope")
+        };
+        assert_eq!(v.get("tool"), Some(&json!("spawn_agent")));
+        assert_eq!(
+            v.get("payload").unwrap().get("task_name"),
+            Some(&json!("c-1: cap the test scrubber"))
+        );
+    }
+
+    /// THE ANTI-RECURRENCE DEVICE (dispatch-label-chokepoint plan.md — the
+    /// fourth attempt at "a dispatch label says what the work is"). All four
+    /// audited gaps shared one shape: a subject computed for ONE transport
+    /// arm, silently absent everywhere else — codex's `task_name`, claude's
+    /// `gather`/`reviewer`/`advisor` description, cli-exec's bare payload.
+    /// This walks DISPATCH_RUNTIMES × DISPATCH_KINDS FROM THE CONSTANTS
+    /// THEMSELVES — never a hand-written list — so a runtime or kind added
+    /// later fails HERE until its payload actually carries a subject,
+    /// instead of shipping unlabelled for a month like the last one did.
+    #[test]
+    fn every_supported_runtime_and_kind_pair_labels_its_dispatch_with_a_subject() {
+        for &runtime in DISPATCH_RUNTIMES.iter() {
+            for &kind in DISPATCH_KINDS.iter() {
+                let tmp = tempfile::tempdir().unwrap();
+                let root = repo(
+                    &tmp,
+                    r#"{"models":{
+                        "claude":{"generation":"sonnet","advisor":"sonnet"},
+                        "codex":{"generation":"gpt-5","advisor":"gpt-5"}
+                    }}"#,
+                );
+                let model = if runtime == "claude" { "sonnet" } else { "gpt-5" };
+
+                // kind=="cell" carries its subject through the cell record;
+                // every other kind carries it through --purpose. Both are
+                // exercised with REAL content — the byte-identical
+                // no-cell-title / no-purpose fallback is covered separately
+                // (a_cell_dispatch_description_says_what_the_work_is,
+                // gather_envelope_is_the_claude_agent_shape) so it can never
+                // paper over a branch that silently drops what it was given.
+                let (cell_id, worker, purpose, marker) = if kind == "cell" {
+                    w(
+                        &root,
+                        ".bee/cells/mx-1.json",
+                        r#"{"id":"mx-1","feature":"f","title":"matrix subject text","status":"claimed","trace":{"worker":"w"}}"#,
+                    );
+                    (Some("mx-1"), Some("w"), None, "mx-1: matrix subject text".to_string())
+                } else {
+                    (None, None, Some("matrix subject text"), format!("{kind}: matrix subject text"))
+                };
+
+                let Prepared::Value(v) = prepare_dispatch(
+                    &root,
+                    runtime,
+                    kind,
+                    cell_id,
+                    worker,
+                    false,
+                    None,
+                    purpose,
+                    false,
+                )
+                .unwrap() else {
+                    panic!("{runtime}/{kind}: expected an envelope, not a refusal")
+                };
+                let payload = match v.get("payload") {
+                    Some(p) => p,
+                    None => panic!("{runtime}/{kind}: envelope carries no payload at all"),
+                };
+
+                // Only a pair whose payload actually carries a label field
+                // owes the assertion below — a transport with none (cli-exec,
+                // the recorded limit) is exempt by construction, never by a
+                // hand-picked skip; under this fixture (plain string models,
+                // no cli/native kind) every (runtime, kind) pair here resolves
+                // to a labelled transport, so `continue` is unreached today
+                // and only guards a future resolution shape.
+                let label = match runtime {
+                    "claude" => payload.get("description").and_then(Value::as_str),
+                    "codex" => payload.get("task_name").and_then(Value::as_str),
+                    _ => None,
+                };
+                let Some(label) = label else { continue };
+
+                assert!(
+                    label.contains(&marker),
+                    "{runtime}/{kind}: label {label:?} carries no subject — expected it to contain {marker:?}"
+                );
+                assert_ne!(
+                    label, kind,
+                    "{runtime}/{kind}: label {label:?} is the bare kind, not a subject"
+                );
+                assert_ne!(
+                    label,
+                    format!("({model})"),
+                    "{runtime}/{kind}: label {label:?} is only a model name"
+                );
+                assert_ne!(
+                    label,
+                    format!("{kind} ({model})"),
+                    "{runtime}/{kind}: label {label:?} dropped the given subject and fell back to the bare kind"
+                );
+            }
+        }
+    }
+
     #[test]
     fn recording_pass_appends_exactly_one_prepare_line() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
-        prepare_dispatch(&root, "claude", "gather", None, None, false, None, true).unwrap();
+        prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, true).unwrap();
         let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
         assert_eq!(log.lines().count(), 1);
         let line: Value = serde_json::from_str(log.lines().next().unwrap()).unwrap();
@@ -553,7 +706,7 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, false).unwrap()
+            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false).unwrap()
         else {
             panic!("expected a refusal value")
         };
@@ -577,7 +730,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
                 .unwrap()
         else {
             panic!()
@@ -587,7 +740,7 @@ use std::time::Instant;
         assert_eq!(v.get("fix"), Some(&json!(CLI_REFUSAL_FIX)));
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "gather", None, None, false, None, false).unwrap()
+            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false).unwrap()
         else {
             panic!()
         };
@@ -613,7 +766,7 @@ use std::time::Instant;
         };
         assert_eq!(
             thrown(
-                prepare_dispatch(&root, "claude", "cell", None, Some("w"), false, None, false)
+                prepare_dispatch(&root, "claude", "cell", None, Some("w"), false, None, None, false)
                     .unwrap()
             ),
             "dispatch prepare: --cell is required when --kind cell."
@@ -621,7 +774,7 @@ use std::time::Instant;
         assert_eq!(
             thrown(
                 prepare_dispatch(
-                    &root, "claude", "cell", Some("ghost"), Some("w"), false, None, false
+                    &root, "claude", "cell", Some("ghost"), Some("w"), false, None, None, false
                 )
                 .unwrap()
             ),
@@ -635,7 +788,7 @@ use std::time::Instant;
         assert_eq!(
             thrown(
                 prepare_dispatch(
-                    &root, "claude", "cell", Some("c-1"), Some("   "), false, None, false
+                    &root, "claude", "cell", Some("c-1"), Some("   "), false, None, None, false
                 )
                 .unwrap()
             ),
@@ -654,7 +807,7 @@ use std::time::Instant;
         );
         // Forced past a real conflict.
         let Prepared::Value(v) = prepare_dispatch(
-            &root, "claude", "cell", Some("c-1"), Some("thief"), true, None, true,
+            &root, "claude", "cell", Some("c-1"), Some("thief"), true, None, None, true,
         )
         .unwrap() else {
             panic!()
@@ -666,7 +819,7 @@ use std::time::Instant;
         assert_eq!(ov.get("transferred"), Some(&json!(false)));
         // Forced with NO conflict still audits (msh-4 mirror).
         let Prepared::Value(v) = prepare_dispatch(
-            &root, "claude", "cell", Some("c-1"), Some("owner"), true, None, false,
+            &root, "claude", "cell", Some("c-1"), Some("owner"), true, None, None, false,
         )
         .unwrap() else {
             panic!()
@@ -695,6 +848,7 @@ use std::time::Instant;
             None,
             false,
             Some(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
+            None,
             false,
         )
         .unwrap() else {
@@ -713,6 +867,7 @@ use std::time::Instant;
             None,
             false,
             Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE),
+            None,
             false,
         )
         .unwrap() else {
@@ -792,7 +947,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, false)
+            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -858,7 +1013,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
                 .unwrap()
         else {
             panic!("expected an envelope")

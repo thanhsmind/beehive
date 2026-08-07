@@ -101,6 +101,15 @@ pub(crate) const LEARNED_CONTEXT_MAX_LINES: usize = 8;
 /// what the work is, short enough that the row still reads at a glance.
 pub(crate) const DESCRIPTION_TITLE_MAX: usize = 60;
 
+/// How much of the dispatch SUBJECT codex's `task_name` field carries. The
+/// live-probed 0.145.0 schema (docs/knowledge/areas/hook-runtime/codex-spawn-
+/// agent-dispatch-payload-schema-and-schema-agnosti.md) types `task_name` as
+/// a plain required string with no documented charset or length limit, so
+/// this exists to keep the row readable, not to satisfy a schema constraint —
+/// kept as its own constant rather than reusing DESCRIPTION_TITLE_MAX in case
+/// the two ever need to diverge.
+pub(crate) const TASK_NAME_MAX: usize = 60;
+
 /// provenance: dispatch-prepare.mjs priorRoundEventLines — the machine-
 /// assembled digest of the cell record's own trace history, chronological
 /// (ISO strings compare lexicographically; timeless events sink to the end in
@@ -477,6 +486,7 @@ pub(crate) fn prepare_dispatch(
     worker: Option<&str>,
     force_ownership: bool,
     classification: Option<&str>,
+    purpose: Option<&str>,
     record_it: bool,
 ) -> D<Prepared> {
     // The runtime/kind gates already fired in the probe (validate() owns those
@@ -618,6 +628,38 @@ pub(crate) fn prepare_dispatch(
     let pinned_type =
         if kind == "cell" { "bee-build" } else { pinned_agent_type(tier_token) };
 
+    // The dispatch SUBJECT — computed ONCE, here, before the transport match,
+    // so every branch below (native override, native fallback, codex
+    // spawn_agent, claude Agent) reads the identical value. It used to be
+    // computed only inside the claude Agent arm, which is exactly how the
+    // codex `task_name` branch was missed for a month (dispatch-label-
+    // chokepoint plan.md — the fourth attempt at this one rule).
+    //
+    // `kind == "cell"`: subject is the cell's own "<id>: <title>" — the cell
+    // is already loaded here for the prompt, and its title is what the row
+    // is FOR. A whitespace-only or absent title is no title: the bare kind,
+    // never a dangling "id: ".
+    //
+    // Every other kind: subject is "<kind>: <purpose>" when the caller passes
+    // `--purpose`, and the bare kind otherwise — today's exact bytes when no
+    // `--purpose` is given, so this stays back-compatible by construction.
+    // Their purpose is the caller's to state; prepare never invents one.
+    let subject = if kind == "cell" {
+        cell.as_ref()
+            .map(|c| (tpl(vget(c, "id")), one_line(vget(c, "title"), DESCRIPTION_TITLE_MAX)))
+            .filter(|(_, title)| !title.trim().is_empty())
+            .map(|(id, title)| format!("{id}: {title}"))
+            .unwrap_or_else(|| kind.to_string())
+    } else {
+        match purpose.map(js_trim).filter(|p| !p.is_empty()) {
+            Some(p) => format!(
+                "{kind}: {}",
+                one_line(Some(&Value::String(p.to_string())), DESCRIPTION_TITLE_MAX)
+            ),
+            None => kind.to_string(),
+        }
+    };
+
     let mut tool = String::new();
     let mut payload = Map::new();
     let mut channel = String::new();
@@ -653,6 +695,10 @@ pub(crate) fn prepare_dispatch(
                 channel = "codex-native".into();
                 extra_transport = Some("native-override");
             } else if let Some(command) = fallback.as_ref().filter(|c| !c.is_empty()) {
+                // cli-exec: NO label field. This payload is `{command, stdin}`
+                // only — a recorded limit (dispatch-label-chokepoint plan.md
+                // "What this does not do"), not an oversight: no field exists
+                // on an external CLI-executor call to carry a subject.
                 tool = "Bash".into();
                 payload.insert("command".into(), Value::String(command.clone()));
                 payload.insert("stdin".into(), Value::String(prompt_body.clone()));
@@ -676,6 +722,9 @@ pub(crate) fn prepare_dispatch(
             }
         }
         Resolved::Cli { command } => {
+            // cli-exec: NO label field — see the identical comment on the
+            // native-fallback Bash arm above; this is the same recorded
+            // limit, not an oversight.
             tool = "Bash".into();
             payload.insert("command".into(), Value::String(command.clone()));
             payload.insert("stdin".into(), Value::String(prompt_body.clone()));
@@ -683,12 +732,15 @@ pub(crate) fn prepare_dispatch(
         }
         _ if runtime == "codex" => {
             tool = "spawn_agent".into();
+            // Carries the SAME subject as the claude Agent branch below,
+            // instead of the bare cell id (or "bee-{kind}") it used to —
+            // this arm is exactly the one the codex gap hid in (plan.md).
+            // codex's `task_name` is a plain required string on the
+            // live-probed 0.145.0 schema (see TASK_NAME_MAX); one-lined and
+            // capped so a long subject cannot read like a paragraph.
             payload.insert(
                 "task_name".into(),
-                Value::String(match &cell {
-                    Some(c) => tpl(vget(c, "id")),
-                    None => format!("bee-{kind}"),
-                }),
+                Value::String(one_line(Some(&Value::String(subject.clone())), TASK_NAME_MAX)),
             );
             payload.insert(
                 "message".into(),
@@ -712,17 +764,9 @@ pub(crate) fn prepare_dispatch(
             // A description that is only a model name is a red flag
             // (work-visibility D2) — and it was the one prepare emitted, so
             // orchestrators wrote their own bare `Execute <id>` instead and
-            // the agent list read as a column of ids. The cell is already
-            // loaded here for the prompt; its title is what the row is FOR.
-            // Every other kind keeps its bytes: their purpose is the
-            // caller's to state, not this record's to know.
-            let subject = cell
-                .as_ref()
-                .filter(|_| kind == "cell")
-                .map(|c| (tpl(vget(c, "id")), one_line(vget(c, "title"), DESCRIPTION_TITLE_MAX)))
-                .filter(|(_, title)| !title.trim().is_empty())
-                .map(|(id, title)| format!("{id}: {title}"))
-                .unwrap_or_else(|| kind.to_string());
+            // the agent list read as a column of ids. `subject` is computed
+            // once, above, and every transport branch (including this one)
+            // reads it.
             payload.insert("description".into(), Value::String(format!("{subject} ({model_tag})")));
             if let Resolved::Model { model, .. } = &resolved {
                 payload.insert("model".into(), Value::String(model.clone()));
@@ -952,7 +996,7 @@ pub(crate) fn claim_and_reserve_for_dispatch(
 pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(
         &flags,
-        &["runtime", "kind", "cell", "worker", "force-ownership", "claim", "session-id"],
+        &["runtime", "kind", "cell", "worker", "force-ownership", "claim", "session-id", "purpose"],
     ) {
         return None;
     }
@@ -989,6 +1033,10 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     // `typeof flags.cell === 'string' && flags.cell ? flags.cell : null`
     let cell_id = flags.truthy_str("cell").map(str::to_string);
     let worker = flags.truthy_str("worker").map(str::to_string);
+    // Only read for a non-cell kind (prepare_dispatch itself ignores it for
+    // `--kind cell`); `one_line` inside prepare_dispatch collapses it to a
+    // single line, so no separate "<one line>" validation is needed here.
+    let purpose = flags.truthy_str("purpose").map(str::to_string);
     let force_ownership = matches!(flags.get("force-ownership"), Some(FlagV::Present));
 
     // ── everything that can still delegate happens BEFORE prelude: its
@@ -1053,6 +1101,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             worker.as_deref(),
             force_ownership,
             classification,
+            purpose.as_deref(),
             false,
         )
         .ok()?
@@ -1106,6 +1155,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                 worker.as_deref(),
                 force_ownership,
                 classification,
+                purpose.as_deref(),
                 true,
             ) {
                 Ok(Prepared::Value(result)) => {

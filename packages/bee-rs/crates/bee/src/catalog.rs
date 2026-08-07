@@ -279,7 +279,15 @@ mod tests {
     /// take on — it only stops the count from climbing unnoticed.
     #[test]
     fn distinct_flag_vocabulary_is_pinned_so_growth_is_a_decision() {
-        const PINNED_FLAG_COUNT: usize = 143;
+        // 143 -> 144 (dispatch-label-chokepoint dlc-1): `dispatch.prepare`
+        // gained `--purpose`, a one-line statement of what a non-cell
+        // dispatch is FOR, folded into the dispatch label. The existing
+        // `reason`/`note` flags (cells.block/drop/reopen/reset-budget,
+        // decisions.redact, perf.stop/section) all name why something
+        // ALREADY happened; `--purpose` names what a dispatch about to
+        // happen is for — a prospective, not retrospective, concept, so
+        // reusing one of those names would have been the wrong ratchet.
+        const PINNED_FLAG_COUNT: usize = 144;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
