@@ -10,6 +10,7 @@
 // No branch in this hook still returns Outcome::Delegate; every decision is
 // native.
 
+use crate::fsutil::{read_json, ReadJson};
 use crate::hooks::adapter::{append_hook_log, now_iso, read_hook_context};
 use crate::hooks::Outcome;
 use crate::textutil::truncate_chars_head;
@@ -78,7 +79,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
     let models = normalize_models(config.get("models"));
     let tool_input = ctx.payload.get("tool_input").cloned().unwrap_or(Value::Null);
 
-    let verdict = if is_codex_spawn {
+    let mut verdict = if is_codex_spawn {
         evaluate_codex_spawn(&tool_input)
     } else {
         evaluate_claude_dispatch(&tool_input, &models)
@@ -102,6 +103,20 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(u8, String, String), ()> {
         log_deny(&root, &tool_name, &input_map);
         return Ok((2, String::new(), verdict.reason.unwrap_or_default()));
     }
+    // dispatch-label-chokepoint (dlc-2): every dispatch reaches this point,
+    // including one written by hand that never called `prepare` — the one
+    // case no amount of fixing `prepare` can reach. Runs on top of whatever
+    // the verdict above already changed, so a param-tier repair and a label
+    // repair on the same dispatch both land in one updatedInput.
+    let label_base = verdict
+        .updated_input
+        .clone()
+        .unwrap_or_else(|| Value::Object(input_map.clone()));
+    if let Some((fixed, note)) = repair_dispatch_label(&root, is_codex_spawn, &label_base) {
+        verdict.updated_input = Some(fixed);
+        verdict.notes.push(note);
+    }
+
     // A repaired dispatch is audited as the request that will actually run —
     // logging the field the guard just replaced would put a value in the
     // audit trail that never reached the runtime.
@@ -714,6 +729,106 @@ fn derive_dispatch_economics(
     Some(out)
 }
 
+// ─── dispatch-label chokepoint (dispatch-label-chokepoint dlc-2) ───────────
+//
+// Every Agent/Task/spawn_agent dispatch passes this hook, including one
+// typed by hand that never called `prepare` — the exact case a fix inside
+// `prepare` can never reach. When the dispatch names a cell (the worker
+// prompt/message carries a line "Assigned cell id: <id>") and the label
+// field does not already carry that cell's title, the label is rewritten to
+// `<id>: <title>` — the same form `prepare` emits for kind=="cell" — and the
+// rewrite rides the same repair_stdout announcement every other repair here
+// uses.
+//
+// REPAIR, NEVER REFUSE (ask-guard-autofix D1/D2): a label is not worth
+// losing a dispatch over. Every resolution failure — no cell id in the
+// prompt/message, no cell record at the active or archived path, an
+// unreadable or unparseable record, a missing or blank title — returns
+// `None` and the payload passes through untouched and silent; no branch
+// here can produce a deny or an error.
+
+/// `<label field>` for Agent/Task is `description`; for codex spawn_agent it
+/// is `task_name`. The cell id is read from `prompt` (Agent/Task) or
+/// `message` (spawn_agent) — the field that carries the worker's full
+/// dispatch text.
+fn repair_dispatch_label(root: &Path, is_codex_spawn: bool, tool_input: &Value) -> Option<(Value, String)> {
+    let Value::Object(obj) = tool_input else { return None };
+    let search_field = if is_codex_spawn { "message" } else { "prompt" };
+    let text = obj.get(search_field).and_then(Value::as_str)?;
+    let cell_id = extract_assigned_cell_id(text)?;
+    let title = read_cell_title(root, &cell_id)?;
+    if title.is_empty() {
+        return None;
+    }
+    let prepared = format!("{cell_id}: {title}");
+    let label_field = if is_codex_spawn { "task_name" } else { "description" };
+    let current = obj.get(label_field).and_then(Value::as_str).unwrap_or("");
+    if current.contains(title.as_str()) {
+        return None; // already carries the title — byte-identical, nothing to do
+    }
+    let note = format!("dispatch label rewritten to \"{prepared}\" — it did not name what cell {cell_id} does");
+    Some((with_field(obj, label_field, Value::String(prepared)), note))
+}
+
+/// The one line every worker prompt/message carries: "Assigned cell id:
+/// <id>". First matching line, exact prefix, trimmed. No such line, or a
+/// blank id, is a dispatch naming no cell — None, and the caller leaves the
+/// label alone.
+fn extract_assigned_cell_id(text: &str) -> Option<String> {
+    for line in text.lines() {
+        if let Some(rest) = line.trim().strip_prefix("Assigned cell id:") {
+            let id = rest.trim();
+            if !id.is_empty() && cell_id_looks_safe(id) {
+                return Some(id.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// The shape lib/cells.mjs ID_PATTERN enforces — guards the path joins in
+/// [`read_cell_title`] against a `..` or path-separator segment riding in on
+/// hand-typed text. Anything outside the shape fails resolution silently
+/// rather than erroring.
+fn cell_id_looks_safe(id: &str) -> bool {
+    let mut chars = id.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphanumeric() => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+}
+
+/// `.bee/cells/<id>.json`, falling back to every `.bee/cells/archive/*/`
+/// directory the cells store uses (lib/cells.mjs readCell) — the same shape
+/// as the cells store's own read, kept local so this hot-path hook stays
+/// native and self-contained. Missing, corrupt, or unparseable all read as
+/// absent — no warning: this repair only ever adds a label, never a message
+/// about why it could not.
+fn read_cell_title(root: &Path, id: &str) -> Option<String> {
+    let cells_dir = root.join(".bee").join("cells");
+    let read = |file: &Path| -> Option<Value> {
+        match read_json(file) {
+            ReadJson::Parsed(v) => Some(v),
+            ReadJson::Missing | ReadJson::Corrupt => None,
+        }
+    };
+    let title_of = |v: &Value| v.get("title").and_then(Value::as_str).map(str::to_string);
+    if let Some(v) = read(&cells_dir.join(format!("{id}.json"))) {
+        return title_of(&v);
+    }
+    let entries = std::fs::read_dir(cells_dir.join("archive")).ok()?;
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        if let Some(v) = read(&entry.path().join(format!("{id}.json"))) {
+            return title_of(&v);
+        }
+    }
+    None
+}
+
 // ─── audit logs ─────────────────────────────────────────────────────────────
 
 fn log_dispatch(
@@ -1307,5 +1422,144 @@ mod tests {
         assert_eq!(code, 0);
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["description"].as_str().unwrap().len(), 120);
+    }
+
+    // ─── dispatch-label chokepoint (dlc-2) ─────────────────────────────────
+
+    fn write_cell(root: &Path, id: &str, title: &str) {
+        std::fs::create_dir_all(root.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("cells").join(format!("{id}.json")),
+            json!({"id": id, "title": title}).to_string(),
+        )
+        .unwrap();
+    }
+
+    const TITLE: &str = "Repair a dispatch label at the hook every dispatch passes";
+
+    #[test]
+    fn bare_id_label_on_a_cell_dispatch_is_rewritten_to_carry_the_title() {
+        let fx = fixture(&repo_config());
+        write_cell(fx.path(), "dlc-2", TITLE);
+        let prompt = "[bee-tier: generation] Execute cell dlc-2\nAssigned cell id: dlc-2\nFeature: dispatch-label-chokepoint\n";
+        let (code, stdout, _) = run_full(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": prompt, "description": "dlc-2"}}),
+        );
+        assert_eq!(code, 0);
+        let out = repair_output(&stdout);
+        assert_eq!(
+            out["hookSpecificOutput"]["updatedInput"]["description"],
+            json!(format!("dlc-2: {TITLE}"))
+        );
+        // the rest of the request survives the rewrite untouched
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["prompt"], json!(prompt));
+        assert!(out["systemMessage"].as_str().unwrap().contains("dlc-2"));
+        assert!(out["hookSpecificOutput"]["permissionDecision"].is_null());
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["description"], json!(format!("dlc-2: {TITLE}")), "the audit records what will run");
+    }
+
+    #[test]
+    fn already_correct_label_is_left_byte_identical() {
+        let fx = fixture(&repo_config());
+        write_cell(fx.path(), "dlc-2", TITLE);
+        let prompt = "[bee-tier: generation] Execute cell dlc-2\nAssigned cell id: dlc-2\n";
+        let (code, stdout, _) = run_full(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": prompt, "description": format!("dlc-2: {TITLE}")}}),
+        );
+        assert_eq!(code, 0);
+        assert_eq!(stdout, "", "already-correct label triggers no repair emission at all");
+    }
+
+    #[test]
+    fn a_dispatch_naming_no_cell_is_untouched() {
+        let fx = fixture(&repo_config());
+        write_cell(fx.path(), "dlc-2", TITLE);
+        // No "Assigned cell id:" line anywhere in the prompt — the bare
+        // "dlc-2" description looks repairable but nothing names a cell.
+        let (code, stdout, _) = run_full(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] just go, no cell named here", "description": "dlc-2"}}),
+        );
+        assert_eq!(code, 0);
+        assert_eq!(stdout, "", "no cell named -> nothing to repair");
+    }
+
+    #[test]
+    fn unreadable_or_missing_cell_record_is_untouched_and_does_not_error() {
+        let fx = fixture(&repo_config());
+        // Present but corrupt.
+        std::fs::create_dir_all(fx.path().join(".bee").join("cells")).unwrap();
+        std::fs::write(fx.path().join(".bee").join("cells").join("dlc-corrupt.json"), "{not json").unwrap();
+        for (cell_id, description) in [("dlc-corrupt", "dlc-corrupt"), ("dlc-missing", "dlc-missing")] {
+            let prompt = format!("[bee-tier: generation] go\nAssigned cell id: {cell_id}\n");
+            let (code, stdout, stderr) = run_full(
+                fx.path(),
+                json!({"tool_name": "Agent", "tool_input": {"prompt": prompt, "description": description}}),
+            );
+            assert_eq!(code, 0, "{cell_id} must not error");
+            assert_eq!(stderr, "");
+            assert_eq!(stdout, "", "{cell_id}: unresolved record leaves the payload untouched");
+        }
+    }
+
+    #[test]
+    fn label_repair_never_produces_a_deny_and_composes_with_other_repairs() {
+        let fx = fixture(&repo_config());
+        write_cell(fx.path(), "dlc-2", TITLE);
+        // A bare, unmarked dispatch that also names a resolvable cell still
+        // denies for the untouched reason — naming a cell never rescues a
+        // dispatch this hook would otherwise refuse.
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "no tier here\nAssigned cell id: dlc-2\n"}}),
+        );
+        assert_eq!(code, 2);
+        assert!(stderr.contains("bee-tier"));
+
+        // Composes with an existing repair: subagent_type "general-purpose"
+        // at [bee-tier: extraction] is rewritten to "bee-extract" AND the
+        // bare-id description is rewritten to carry the cell's title, both
+        // in the one updatedInput.
+        let prompt = "[bee-tier: extraction] Execute cell dlc-2\nAssigned cell id: dlc-2\n";
+        let (code, stdout, _) = run_full(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": prompt, "description": "dlc-2", "subagent_type": "general-purpose"}}),
+        );
+        assert_eq!(code, 0);
+        let out = repair_output(&stdout);
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["subagent_type"], json!("bee-extract"));
+        assert_eq!(
+            out["hookSpecificOutput"]["updatedInput"]["description"],
+            json!(format!("dlc-2: {TITLE}"))
+        );
+    }
+
+    #[test]
+    fn codex_spawn_label_repair_targets_task_name_from_message() {
+        let fx = fixture(&repo_config());
+        write_cell(fx.path(), "dlc-2", TITLE);
+        let message = "[bee-tier: generation] gather\nAssigned cell id: dlc-2\n";
+        let (code, stdout, _) = run_full(
+            fx.path(),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": message, "task_name": "dlc-2"}}),
+        );
+        assert_eq!(code, 0);
+        let out = repair_output(&stdout);
+        assert_eq!(
+            out["hookSpecificOutput"]["updatedInput"]["task_name"],
+            json!(format!("dlc-2: {TITLE}"))
+        );
+        assert_eq!(out["hookSpecificOutput"]["updatedInput"]["message"], json!(message));
+        // A codex dispatch with no cell id in `message` is untouched, even
+        // when `prompt` (not the read field) carries one.
+        let (code, stdout, _) = run_full(
+            fx.path(),
+            json!({"tool_name": "spawn_agent", "tool_input": {"agent_type": "worker", "message": "[bee-tier: generation] gather", "prompt": "Assigned cell id: dlc-2\n"}}),
+        );
+        assert_eq!(code, 0);
+        assert_eq!(stdout, "");
     }
 }
