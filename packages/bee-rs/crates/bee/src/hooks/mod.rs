@@ -68,6 +68,30 @@ fn emit_undecidable(name: &str) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// The hook names `bee hook <name>` dispatches to. Kept as one list so the
+/// usage line and the dispatch match arm can never drift apart silently —
+/// add a hook to both, or the usage line lies.
+const HOOK_NAMES: [&str; 9] = [
+    "tools-logger",
+    "codex-subagent-audit",
+    "chain-nudge",
+    "state-sync",
+    "prompt-context",
+    "session-init",
+    "session-close",
+    "model-guard",
+    "write-guard",
+];
+
+fn print_hook_usage() {
+    println!("usage: bee hook <name> [args...]");
+    println!();
+    println!("hooks:");
+    for hook_name in HOOK_NAMES {
+        println!("  {hook_name}");
+    }
+}
+
 /// Dispatch `bee hook <name> [args...]`. Returns None when argv is not a
 /// hook invocation at all.
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
@@ -75,7 +99,20 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         return None;
     }
     let name = args.get(1).and_then(|a| a.to_str()).unwrap_or("").to_string();
-    let rest: Vec<String> = args[2..]
+    if name.is_empty() {
+        // Bare `bee hook`: no name given. Print usage and exit deliberately —
+        // nonzero (this is a missing-argument error) but never a panic.
+        print_hook_usage();
+        return Some(ExitCode::FAILURE);
+    }
+    if name == "--help" || name == "-h" {
+        // `bee hook --help`: print usage and exit 0 — the user asked, not erred.
+        print_hook_usage();
+        return Some(ExitCode::SUCCESS);
+    }
+    let rest: Vec<String> = args
+        .get(2..)
+        .unwrap_or(&[])
         .iter()
         .filter_map(|a| a.to_str().map(str::to_string))
         .collect();
@@ -100,4 +137,34 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         Outcome::Done(code) => code,
         Outcome::Delegate => emit_undecidable(&name),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Bare `bee hook` (no name argument) must not panic — it must print
+    /// usage and exit cleanly, nonzero because no hook name was given.
+    #[test]
+    fn bare_hook_prints_usage_and_does_not_panic() {
+        let args = vec![OsString::from("hook")];
+        let code = try_native(&args).expect("bee hook is a hook invocation");
+        assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::FAILURE));
+    }
+
+    /// `bee hook --help` must print usage and exit 0 — the user asked for
+    /// help, that is not an error.
+    #[test]
+    fn hook_help_prints_usage_and_exits_zero() {
+        let args = vec![OsString::from("hook"), OsString::from("--help")];
+        let code = try_native(&args).expect("bee hook --help is a hook invocation");
+        assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
+    }
+
+    #[test]
+    fn hook_short_help_flag_also_exits_zero() {
+        let args = vec![OsString::from("hook"), OsString::from("-h")];
+        let code = try_native(&args).expect("bee hook -h is a hook invocation");
+        assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
+    }
 }
