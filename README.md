@@ -237,7 +237,7 @@ Gates are **human** approvals, and two of them are enforced by code — the agen
 
 Gate 2 used to be two separate approvals ("Is this the right thing" then "may I start editing") — validation-diet merged them into one call (`bee state gate --merge`) that flips `approved_gates.shape` and `approved_gates.execution` together; there is no standalone validating skill or `validating` phase left to earn a gate of its own. That merge is why bee has three gates rather than four, and why the review gate — numbered 4 back when the execution approval stood alone — is numbered 3 today.
 
-Enforcement, not etiquette: until Gate 2's execution component is approved, `bee cells claim` throws and the write-guard hook **denies source edits** (while keeping `.bee/`, `docs/`, `.spikes/`, and `AGENTS.md` writable). Gate 3 never auto-merges past an open P1.
+Enforcement, not etiquette: until Gate 2's execution component is approved, `bee cells claim` throws and the write-guard hook **denies source edits** (while keeping `.bee/`, `docs/`, `plans/`, and `AGENTS.md` writable). Gate 3 never auto-merges past an open P1.
 
 ### Gate bypass (opt-in autopilot)
 
@@ -245,18 +245,13 @@ If you trust bee in a given repo and want speed, turn on **gate bypass** — `be
 
 **The safety floor is real at `normal` — and you can deliberately lift it.** Earlier wording here called the floor "absolute and not configurable", which was wrong: `full` and `total` exist precisely to remove it, and saying otherwise made a safety promise the code does not keep.
 
-| Level | Gates 1–2 | High-risk / hard-gate | Gate 3 UAT & P1 | Secret reads |
-|---|---|---|---|---|
-| `off` | you approve | you approve | you approve | asks |
-| `normal` | auto (normal lanes) | **stops** | **stops** | **asks** |
-| `full` | auto | **auto** | **stops** | **asks** |
-| `total` | auto | **auto** | **auto** | **auto — nothing stops** |
+The level-by-level table (what each of `off`/`normal`/`full`/`total` auto-approves and still stops for) lives in one place — `skills/bee-hive/references/gates-and-delegation.md` ("Gate bypass mode") — read it there rather than a second copy here.
 
 - At **`normal`** the floor holds: high-risk/hard-gate work (auth, authorization, data loss, security, an external provider, validation removal, a database migration), Gate 3 UAT, P1 findings, and secret reads all still stop for you.
 - **`full`** lifts the high-risk floor. **`total`** lifts everything — no human checkpoint remains anywhere, including UAT, P1 findings, and reading `.env`/keys/credentials.
 - Raising to `full`/`total` is a deliberate act you take; bee never raises it for you, and the active level is printed loudly in the session preamble and `bee_status`.
 
-Bypass is **not** the same as headless mode (headless still stops at every gate). It's off by default, persists per-repo, and is surfaced loudly (`GATE BYPASS ON`) in the session preamble and `bee_status` so it's never silently in effect.
+Bypass is **not** the same as headless mode (headless still stops at every gate). It's off by default, persists per-repo, and is surfaced loudly in the session preamble and `bee_status` with a level-specific banner (e.g. `⚡ GATE BYPASS: NORMAL`) so it's never silently in effect.
 
 ---
 
@@ -286,11 +281,11 @@ Every planning pass counts mechanical **risk flags** (auth · authorization · d
 | `small` | 0–1 flags, ≤3 product files, no gray areas | logged scoping synthesis + a cell or two; plan.md is opt-in, only when a durable multi-slice doc is genuinely needed; self-checks only (no auto reviewer) |
 | `standard` | 2–3 flags, or story-sized behavior | full cells + must_haves; a review session runs only if you ask for one |
 | `high-risk` | 4+ flags, or any hard-gate flag | opt-in-by-change-class spikes (migration/security/external-side-effect/no-precedent), strict trace, slower merged Gate 2; a review session runs only if you ask for one |
-| `spike` | one yes/no question decides if the plan is real | a disposable experiment under `.spikes/`, answers then discards |
+| `spike` | one yes/no question decides if the plan is real | a disposable experiment under `.bee/spikes/`, answers then discards |
 
 The rule that never bends: **lanes scale ceremony, never memory.** Even a `tiny` cell that changed behavior obliges a spec sync, and a settled decision is logged the moment it settles — in every lane.
 
-A capped `behavior_change` cell also creates **scribing debt** until its meaning reaches `docs/specs/`: `bee_status`, the session preamble, and the swarming chain-nudge all surface the count so settled behavior is captured mid-flight, not only when someone remembers (decision 0011).
+A capped `behavior_change` cell also creates **scribing debt** until its meaning reaches `docs/knowledge/` (with a bundle) or, absent one, `docs/specs/`: `bee_status`, the session preamble, and the swarming chain-nudge all surface the count so settled behavior is captured mid-flight, not only when someone remembers (decision 0011).
 
 ---
 
@@ -324,7 +319,7 @@ The orchestrator pattern keeps the strongest model scarce:
 
 bee has two layers that always work together:
 
-1. **Runtime layer** (per machine) — the 9 `bee-*` skills the agent loads, plus (Claude Code) 6 lifecycle hooks.
+1. **Runtime layer** (per machine) — the 9 `bee-*` skills the agent loads, plus (Claude Code) 9 lifecycle hooks.
 2. **Repo layer** (per project) — the `AGENTS.md` BEE block, `.bee/` state, and the vendored `bee` binary that *mechanically* enforces the workflow for any agent, on any runtime.
 
 ```
@@ -348,7 +343,7 @@ you approve GATE 2      →   ← before this, source writes are DENIED by the w
                             implement → verify → cap              (verify output + before-state
                             (refuses without proof +              recorded in the trace)
                                a recorded before-state)
-                            bee-capturing syncs area specs     docs/specs/<area>.md
+                            bee-capturing syncs area specs     docs/knowledge/ (bundle) else docs/specs/<area>.md
                             and stores learnings (Compound)    decisions, critical-patterns,
                                                                 review candidate recorded
 feature closes          ←   done — verified, unreviewed
