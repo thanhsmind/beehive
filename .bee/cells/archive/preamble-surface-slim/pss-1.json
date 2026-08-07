@@ -1,0 +1,37 @@
+{
+  "id": "pss-1",
+  "feature": "preamble-surface-slim",
+  "lane": "tiny",
+  "title": "Shrink the preamble Command surface to grouped command names",
+  "action": "budget.rs command_surface_lines(): render grouped names only — split each dotted registry name at the first segment; a group with verbs renders one line `group: verb-a, verb-b` (deeper dots joined by space), a single-segment command renders its bare name; path-sorted. Header note becomes the help pointer: flags and usage live behind bee <command> --help (mention --help --all and json once). Repin tests: fixture test asserts cells group line contains claim and no --flag tokens; flagless test still holds; json test unchanged in spirit; count test adapts to grouped lines; lower COMMAND_SURFACE_BUDGET_CHARS to fit the new size with headroom; placement/trailer test untouched.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_preamble",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "read_first": [],
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "main-inline",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-07T06:38:29.100Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "bfc4f811-dd38-45a2-946a-1bdaec10d4e4",
+    "claimed_at": "2026-08-07T06:33:41.672Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-07T06:38:16.765Z"
+  }
+}
