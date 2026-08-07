@@ -502,31 +502,86 @@ fn is_js_whitespace(c: char) -> bool {
     )
 }
 
+/// First three characters of a JSON-schema type name (`"string"` → `"str"`),
+/// the same abbreviation `command_surface_lines` (session_preamble/budget.rs)
+/// renders with — kept as its own copy here since this module reads
+/// registry-shaped `Value` maps, never the parsed `catalog::Entry` that
+/// section works from.
+fn type_abbrev(schema_type: &str) -> String {
+    schema_type.chars().take(3).collect()
+}
+
+/// The full declared flag surface for one manifest entry, in the compact
+/// shape the session preamble's `### Command surface` section uses:
+/// `--flag*:type ...`, `*` marking a required flag, `--json` always dropped
+/// (its omission is stated once, in the render's own header note, never
+/// repeated per line). `None` when the entry declares no properties at all
+/// (or only `json`) — the fka-4 required-only line's "only a non-empty
+/// list prints" behavior, folded to cover optional flags too.
+fn flags_line(entry: &Value) -> Option<String> {
+    let properties = entry
+        .as_object()?
+        .get("parameters")?
+        .get("properties")?
+        .as_object()?;
+    let required: HashSet<&str> = entry
+        .as_object()
+        .and_then(|m| m.get("parameters"))
+        .and_then(|p| p.get("required"))
+        .and_then(Value::as_array)
+        .map(|r| r.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    let flags: Vec<String> = properties
+        .iter()
+        .filter(|(k, _)| k.as_str() != "json")
+        .map(|(k, v)| {
+            let star = if required.contains(k.as_str()) { "*" } else { "" };
+            let t = v.get("type").and_then(Value::as_str).unwrap_or("value");
+            format!("--{k}{star}:{}", type_abbrev(t))
+        })
+        .collect();
+    if flags.is_empty() {
+        None
+    } else {
+        Some(flags.join(" "))
+    }
+}
+
+/// True when at least one rendered entry declares a `json` property — the
+/// trigger for the one, render-wide header note that states its omission
+/// instead of repeating it on every flags line.
+fn any_entry_takes_json(entries: &[Value]) -> bool {
+    entries.iter().any(|e| {
+        e.as_object()
+            .and_then(|m| m.get("parameters"))
+            .and_then(|p| p.get("properties"))
+            .and_then(Value::as_object)
+            .is_some_and(|props| props.contains_key("json"))
+    })
+}
+
 fn render_help_text(entries: &[Value], footer_lines: &[String], schema_version: &Value) -> String {
-    let mut lines: Vec<String> = vec![
-        format!(
-            "bee — unified CLI dispatcher (schema_version {})",
-            jsjson::js_to_string(schema_version)
-        ),
-        String::new(),
-    ];
+    let mut lines: Vec<String> = vec![format!(
+        "bee — unified CLI dispatcher (schema_version {})",
+        jsjson::js_to_string(schema_version)
+    )];
+    if any_entry_takes_json(entries) {
+        lines.push(
+            "Nearly every command below also takes a `json` flag for machine-readable output \
+             — omitted from every flags line."
+                .to_string(),
+        );
+    }
+    lines.push(String::new());
     for entry in entries {
         let get = |k: &str| entry.as_object().and_then(|m| m.get(k));
         lines.push(js_display(get("invoke")));
         lines.push(format!("    {}", js_display(get("description"))));
-        // entry.parameters?.required || [] — only a non-empty array prints.
-        let required = get("parameters")
-            .and_then(|p| p.get("required"))
-            .and_then(Value::as_array);
-        if let Some(req) = required {
-            if !req.is_empty() {
-                let flags = req
-                    .iter()
-                    .map(|r| format!("--{}", jsjson::js_to_string(r)))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                lines.push(format!("    required: {flags}"));
-            }
+        // The full flag surface — required and optional both visible, `*`
+        // marking the required ones (folds the old required-only line: see
+        // flags_line).
+        if let Some(flags) = flags_line(entry) {
+            lines.push(format!("    flags: {flags}"));
         }
         if let Some(surface) = get("surface") {
             if js_truthy(surface) {
@@ -724,13 +779,13 @@ mod tests {
     fn render_help_text_matches_node_shape() {
         let entries = vec![Value::Object(obj(
             r#"{"name":"cells.show","invoke":"bee cells show","description":"Show one cell.",
-                "parameters":{"type":"object","properties":{},"required":["id"]},
+                "parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},
                 "examples":[],"deprecated":null}"#,
         ))];
         let text = render_help_text(&entries, &[], &json!("1.0"));
         assert_eq!(
             text,
-            "bee — unified CLI dispatcher (schema_version 1.0)\n\nbee cells show\n    Show one cell.\n    required: --id\n"
+            "bee — unified CLI dispatcher (schema_version 1.0)\n\nbee cells show\n    Show one cell.\n    flags: --id*:str\n"
         );
         // Footer path: body trimmed, two newlines, footer lines, one trailing
         // \n. Each footer line is its own paragraph, so the index pointer that
@@ -748,6 +803,32 @@ mod tests {
         )))];
         let text = render_help_text(&surfaced, &[], &json!("1.0"));
         assert!(text.contains("\nbee a\n    d\n    surface: plumbing\n"));
+    }
+
+    /// hah-4: text help used to print only a `required:` line, so an
+    /// optional flag like `--claim`/`--purpose` never appeared even though
+    /// the registry declares it — pins the full-surface rendering the fix
+    /// adds, on the live registry entry that first exposed the gap.
+    #[test]
+    fn dispatch_prepare_help_text_shows_the_full_flag_surface() {
+        let reg = registry().expect("embedded payload parses");
+        let entry = reg
+            .commands
+            .iter()
+            .find(|e| e.get("name").and_then(Value::as_str) == Some("dispatch.prepare"))
+            .expect("dispatch.prepare is registered");
+        let text = render_help_text(&[Value::Object(manifest_entry(entry))], &[], &json!("1.0"));
+        // Optional flags are visible at all.
+        assert!(text.contains("--claim"), "{text}");
+        assert!(text.contains("--purpose"), "{text}");
+        // Required flags are marked distinct from optional ones.
+        assert!(text.contains("--runtime*:str"), "{text}");
+        assert!(text.contains("--kind*:str"), "{text}");
+        assert!(text.contains("--claim:boo"), "{text}");
+        assert!(text.contains("--purpose:str"), "{text}");
+        // --json is dropped from the line and stated once instead.
+        assert!(!text.contains("--json"), "{text}");
+        assert!(text.contains("also takes a `json` flag"), "{text}");
     }
 
     #[test]
