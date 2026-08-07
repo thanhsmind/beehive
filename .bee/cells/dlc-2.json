@@ -1,0 +1,49 @@
+{
+  "id": "dlc-2",
+  "feature": "dispatch-label-chokepoint",
+  "lane": "standard",
+  "title": "Repair a dispatch label at the hook every dispatch passes",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "docs/history/dispatch-label-chokepoint/plan.md"
+  ],
+  "action": "The model-guard hook already reads the dispatch label (model_guard.rs:732, inside log_dispatch) and does nothing but log it. Give it one repair step, on the PreToolUse path before the payload reaches the runtime. When the dispatch names a cell — the worker prompt carries a line 'Assigned cell id: <id>', and for codex the same text is in `message` — resolve that cell record from .bee/cells/<id>.json (fall back to the archive path the cells store uses), and when the label does not already contain the cell's title, rewrite it to the prepared form: for Agent/Task the `description` field, for spawn_agent the `task_name` field. Announce the repair on the same advisory channel the guard already uses for its other repairs — read how ask-guard-autofix words its announcement and match that shape; the user-visible sentence names what changed and why, never bee mechanics. REPAIR, NEVER REFUSE (ask-guard-autofix D1/D2): a label is not worth losing a dispatch over, and no path added here may return a deny. Every resolution failure — no cell id in the prompt, no cell record, an unreadable or unparseable record, a missing label field — leaves the payload untouched and is silent; the hook is fail-open by construction and this step must not change that. Tests: a bare-id label on a cell dispatch is rewritten to carry the title; an already-correct label is left byte-identical; a dispatch naming no cell is untouched; an unreadable cell record is untouched and does not error; and no input added here ever produces a deny verdict.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+  "must_haves": {
+    "truths": [
+      "A hand-written dispatch that never called prepare still ends up labelled",
+      "An already-correct label is byte-identical after the hook",
+      "Every resolution failure leaves the payload untouched and silent",
+      "No path added by this cell can produce a deny",
+      "The full declared test suite is green"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "dlc-2",
+    "outcome": "Model-guard now repairs a stale/bare dispatch label to the cell's prepared \"<id>: <title>\" form whenever a dispatch names a cell, fail-open on every resolution failure",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-07T02:52:12.756Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f91db0c1-e1fd-4a58-aa14-5c13fd8fbec1",
+    "claimed_at": "2026-08-07T02:44:01.200Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-07T02:52:00.891Z"
+  }
+}

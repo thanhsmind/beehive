@@ -117,12 +117,19 @@ bee:
 
 ## Pointers (implementation)
 
-- **P2a —** Payload label (R8): the `description` build in `prepare_dispatch`'s
-  Agent arm, `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`, with
-  `DESCRIPTION_TITLE_MAX` in the same file. Test:
-  `a_cell_dispatch_description_says_what_the_work_is` (`drivers/tests.rs`),
-  which also pins `gather (sonnet)` unchanged. Provenance: cell `ddi-1`,
-  commit 537b9e85.
+- **P2a —** Payload label (R8): the subject is computed ONCE above the transport
+  match in `prepare_dispatch`, `packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs`
+  (`DESCRIPTION_TITLE_MAX`, `TASK_NAME_MAX`, and the optional `--purpose` flag
+  for the non-cell kinds); the claude arm renders it into `description`, the
+  codex arm into `task_name`, and the cli-exec arm has no label field — a
+  recorded limit, named in a comment there. The anti-recurrence device is
+  `every_supported_runtime_and_kind_pair_labels_its_dispatch_with_a_subject`
+  (`drivers/tests.rs`), which walks `DISPATCH_RUNTIMES` × `DISPATCH_KINDS` from
+  the constants, so a runtime or kind added later fails until it is labelled.
+  Chokepoint repair for dispatches that never called prepare:
+  `repair_dispatch_label` in `hooks/model_guard.rs` — repair-only, never a deny,
+  silent on every resolution failure. Provenance: cells `ddi-1` (commit
+  537b9e85), `dlc-1` (ba295066) and `dlc-2` (4a22210e).
 
 - **P3 —** Read-only validation: `validateModelsConfig` (advice-class token
   blocklist) + `validateAgentFilesDrift`, same lib; suite

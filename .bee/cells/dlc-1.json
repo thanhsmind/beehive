@@ -1,0 +1,54 @@
+{
+  "id": "dlc-1",
+  "feature": "dispatch-label-chokepoint",
+  "lane": "standard",
+  "title": "Give every runtime and kind a dispatch label that names the work",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "docs/history/dispatch-label-chokepoint/plan.md"
+  ],
+  "action": "Lift the dispatch SUBJECT out of the Agent arm so every transport shares it. Today it is computed inside the `_ =>` (claude Agent) branch around prepare.rs:715, which is exactly how the codex branch was missed. Compute it ONCE before the `match` on transport: for kind==\"cell\" it is '<cell id>: <one_line(title, DESCRIPTION_TITLE_MAX)>' as today; for the other kinds it is '<kind>: <purpose>' when a new optional --purpose <one line> flag is given, and the bare kind otherwise. Register --purpose in the command registry entry for dispatch.prepare (string, optional) and run the regen chain this cell owes. Then: (a) the claude Agent branch keeps rendering '<subject> (<model>)' — byte-identical to today for a titled cell and for a kind with no --purpose; (b) the codex branch's `task_name` (prepare.rs:687) carries the same subject instead of the bare cell id, sanitized to what that field accepts — check the codex spawn_agent schema notes in docs/knowledge/areas/hook-runtime/codex-spawn-agent-dispatch-payload-schema-and-schema-agnosti.md before choosing the sanitization, and keep it short; (c) the cli-exec Bash branch gets NO label — its payload has only `command` and `stdin` — and carries a one-line comment saying so, naming it as a recorded limit rather than an oversight. THE ANTI-RECURRENCE DEVICE, which is the point of this cell: add a matrix test that iterates DISPATCH_RUNTIMES x DISPATCH_KINDS from the constants themselves (never a hand-written list) and asserts, for every pair whose payload carries a label field at all, that the label contains a subject and is not merely a model name or a bare kind — so adding a runtime or a kind fails this test until it is labelled. Plus one case per audited gap: codex task_name carries the title; a non-cell kind with --purpose renders it; a non-cell kind without --purpose keeps today's exact bytes; the existing 'gather (sonnet)' assertion at drivers/tests.rs:446 still holds unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers",
+  "must_haves": {
+    "truths": [
+      "The subject is computed once and every transport branch reads it",
+      "codex task_name carries the cell title, not the bare id",
+      "A non-cell kind renders its --purpose when given, and today's bytes when not",
+      "The matrix test enumerates the supported pairs from the constants, not a literal list",
+      "cli-exec's missing label is named in a comment as a recorded limit",
+      "The full declared test suite is green"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "dlc-1",
+    "outcome": "Computed the dispatch subject once before the transport match so every runtime/kind pair carries a real label, added --purpose for non-cell kinds, and added the DISPATCH_RUNTIMES x DISPATCH_KINDS matrix test as the anti-recurrence device.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-07T03:02:08.902Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f91db0c1-e1fd-4a58-aa14-5c13fd8fbec1",
+    "claimed_at": "2026-08-07T02:44:01.122Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-07T03:01:57.051Z"
+  }
+}

@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 100 concept(s)
-- [patterns/](patterns/index.md) — 100 concept(s)
+- [patterns/](patterns/index.md) — 101 concept(s)
 - [work/](work/index.md) — 4 concept(s)
 
 ## Critical patterns
@@ -103,3 +103,4 @@ never a generation timestamp or any other wall-clock value.
 - [An invitation keyed on the old precondition survives the machinery that removed it](patterns/20260805-an-invitation-keyed-on-the-old-precondition-survives-the-machinery-that-removed-it.md) — Widening what a resolver accepts does not widen the invitation built on the resolver's old precondition unless every caller of that precondition is re-checked — the session preamble kept gating its knowledge-context invitation on has_work_item after the resolver stopped requiring one.
 - [Source that ships without reinstalling the binary the hooks call is inert](patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md) — A green test suite and a merged branch describe the source tree; when every hook and command invocation actually runs a built binary outside version control, neither implies the running system reflects the merge until the binary is reinstalled.
 - [A guard on the shared index does not stop a path-scoped commit naming someone else's file](patterns/20260806-a-guard-on-the-shared-index-does-not-stop-a-path-scoped-commit-naming-someone-elses-file.md) — The escape a guard recommends inherits the guard's job: the concurrent-worker git guard closes the staging path that swept siblings' work into the wrong commit, then allows a path-scoped commit to name any path, including a file another live worker is still editing.
+- [Fix the fan-out, not the one cell of it that was reported](patterns/20260807-fix-the-fan-out-not-the-cell-of-it-that-was-reported.md) — A rule stated over a grid gets patched one cell at a time: three fixes to one dispatch-label rule each touched a single runtime-kind-transport combination, and the untouched combinations never failed — they resurfaced weeks later as a screenshot.
