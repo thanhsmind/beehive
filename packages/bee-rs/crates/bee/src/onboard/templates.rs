@@ -50,6 +50,10 @@ pub const GITIGNORE_BLOCK_PATTERNS: &[&str] = &[
     ".codex-plugin/skills.old-*/",
     ".bee/tmp_*",
     ".bee/patch-*.json",
+    ".bee/bin/bee",
+    ".bee/bin/bee.exe",
+    ".claude/settings.json.bak",
+    ".codex/hooks.json.bak",
 ];
 
 /// onboard_bee.mjs HOOK_FILENAMES (l. 225–248) — the vendoring order is the
