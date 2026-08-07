@@ -57,7 +57,7 @@ DONE — verified, unreviewed, development continues
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-Separately, `standard`/`high-risk` swarming waves also run a semantic checklist judge once per slice at slice close over its capped `behavior_change` cells (table in `bee-hive/references/routing-and-contracts.md`) — that is verification of the cells, not the boxed review flow above, and never triggers Gate 3 on its own.
+Separately, `standard`/`high-risk` swarming waves also run a semantic checklist judge once per slice at slice close over its capped `behavior_change` cells (table in `bee-hive/references/gates-and-delegation.md`, "Goal-check judge tier") — that is verification of the cells, not the boxed review flow above, and never triggers Gate 3 on its own.
 
 ## Pre-Pipeline: Bootstrap
 

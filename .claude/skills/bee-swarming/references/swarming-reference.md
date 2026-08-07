@@ -17,7 +17,7 @@ The orchestrator claims the cell itself before spawning — same as any
 wave — then spawns it per the Operating Contract's Spawn step (param-carrying
 dispatch — a `model` param or a pinned agent type, never a bare marker) and
 the Delegation contract's execution-worker class
-(`bee-hive/references/routing-and-contracts.md`): it registers in the swarm
+(`bee-hive/references/gates-and-delegation.md`): it registers in the swarm
 registry (`state worker add`), validates the claim it was handed (against
 the inlined cell JSON in its prompt — never `cells claim`)
 and takes reservations under its own nickname,
@@ -80,7 +80,7 @@ single worker — never wave analysis or multi-cell assignment.
    the schedule already auto-serializes file overlap into a later wave
    rather than refusing it. The schedule computation and verify-output
    capture delegate as extraction-tier I/O workers per the Delegation
-   contract (`bee-hive/references/routing-and-contracts.md`);
+   contract (`bee-hive/references/gates-and-delegation.md`);
    judgment (assignment, tier choice, goal-check verdicts, override
    decisions) stays on the orchestrator.
 2. **Assign and claim first.** The orchestrator picks exactly **one
@@ -284,7 +284,7 @@ Or in code: `resolveTier(root, tier, runtime, purpose?)` returns a typed dispatc
 
 Every dispatch carries an explicit tier marker: `inherit` needs the [bee-tier: ceiling] marker anchored to the first non-whitespace token of the prompt, or the description must start with it; `budget` needs the matching [bee-tier: <tier>] marker anchored the same way, stated alongside the budget in the prompt. A marker anywhere else — embedded mid-prompt or mid-description — never satisfies the transport, and a bare dispatch with neither the model param nor an anchored marker is denied by the model-guard hook.
 
-**Dispatch economics:** `.bee/config.json` names the **requested** model for a tier — what should run, never a guarantee of what did. Every dispatch the guard evaluates (allowed or denied) logs the honest split in `.bee/logs/dispatch.jsonl`: `logical_tier` (the declared tier), `requested_model` (what config names, when resolvable), `effective_model` + `effective_model_status`, `channel` (the transport family), and `enforcement` (the mechanism). A real structural `model` param on a claude Agent/Task dispatch is `pinned` — `effective_model` equals that param, because the param is something we actually watched the caller pass. A claude dispatch carrying only the `[bee-tier: <t>]` marker (no param — the prompt-budget style) is `unverified` — `requested_model` may still name the tier's configured model, informationally, but nothing pins the dispatch to it. On **codex-native** transport (`spawn_agent`), the effective model is `inherited-or-unknown` **always** — codex-cli 0.144.4 has no per-agent model selection at all, so this status never flips to `pinned` no matter what the tier resolves to; only a future capability probe proving per-agent selection would justify moving it. A **cli-exec** dispatch (external executor, below) is `unverified` too — the command names its own model in its own argv, outside this vocabulary, so `requested_model` is always `null` there.
+**Dispatch economics:** `.bee/config.json` names the **requested** model for a tier — what should run, never a guarantee of what did. Every dispatch the guard evaluates (allowed or denied) logs the honest split in `.bee/logs/dispatch.jsonl`: `logical_tier` (the declared tier), `requested_model` (what config names, when resolvable), `effective_model` + `effective_model_status`, `channel` (the transport family), and `enforcement` (the mechanism). A real structural `model` param on a claude Agent/Task dispatch is `pinned` — `effective_model` equals that param, because the param is something we actually watched the caller pass. A claude dispatch carrying only the `[bee-tier: <t>]` marker (no param — the prompt-budget style) is `unverified` — `requested_model` may still name the tier's configured model, informationally, but nothing pins the dispatch to it. On **codex-native** transport (`spawn_agent`), the effective model is `inherited-or-unknown` **always** — codex-cli 0.145.0 has no per-agent model selection at all, so this status never flips to `pinned` no matter what the tier resolves to; only a future capability probe proving per-agent selection would justify moving it. A **cli-exec** dispatch (external executor, below) is `unverified` too — the command names its own model in its own argv, outside this vocabulary, so `requested_model` is always `null` there.
 
 ## External Executors — Multi-Provider Workers
 
@@ -301,7 +301,7 @@ A configurable tier may name an **external CLI executor** instead of a model —
 
 **Dispatch guard — what never routes to a cli executor:** a cell whose work needs the *session's* tools — MCP servers (browser, computer-use), credential managers, secrets reads, or anything only the orchestrating harness can reach — stays on a native tier; the external process cannot see those tools and will improvise instead of failing loudly. Destructive/irreversible operations (pushes, releases, external-system mutations) also never go external.
 
-**Status:** `resolveTier` purpose-scopes cli resolution — a bare/cell-purpose resolve of a cli-shaped tier **refuses** (`{type:'refused', reason:'cli_tier_gather_only'}`); only the explicit `resolveTier(root, slot, runtime, {for:'gather'})` reaches `{type:'cli'}`. Cli cell execution — the reserve/verify/cap/release worker contract described below — is not dispatched today; a cli-shaped tier serves gathers only, through the Delegation contract's cli gather branch (`bee-hive/references/routing-and-contracts.md`), which has no reservation, no cap, and no `result.json` — stdout **is** the digest. This section documents the cell-execution contract for when that path is enabled; until then, do not dispatch a cell to a cli-shaped tier under the protocol below.
+**Status:** `resolveTier` purpose-scopes cli resolution — a bare/cell-purpose resolve of a cli-shaped tier **refuses** (`{type:'refused', reason:'cli_tier_gather_only'}`); only the explicit `resolveTier(root, slot, runtime, {for:'gather'})` reaches `{type:'cli'}`. Cli cell execution — the reserve/verify/cap/release worker contract described below — is not dispatched today; a cli-shaped tier serves gathers only, through the Delegation contract's cli gather branch (`bee-hive/references/gates-and-delegation.md`), which has no reservation, no cap, and no `result.json` — stdout **is** the digest. This section documents the cell-execution contract for when that path is enabled; until then, do not dispatch a cell to a cli-shaped tier under the protocol below.
 
 The cell-execution protocol for that path — prompt file, finish contract,
 detached spawn, artifact tending, acceptance, trust boundary, rescue — is

@@ -40,7 +40,9 @@ Four boundaries hold in every mode:
   other session is live — land through `bee worktree merge`.
 
 `bee --help --json` prints the porcelain flow surface; `--names` adds a
-one-line-per-command index. Spend full text on `bee <command> --help`.
+one-line-per-command index (plain `bee --help` / `bee --help --all` are the
+human-readable spellings of the same two surfaces). Spend full text on
+`bee <command> --help`.
 
 ## Judgment and deviation
 
@@ -111,8 +113,6 @@ context before planning or executing.
   hold conflict, stop and report it — never write through it. A worker
   executes exactly the one cell it was handed.
 
-**Native Codex empty waits require a progress interval** — the full ordered rule lives in `bee-hive` → `references/gates-and-delegation.md` ("Native Codex subagent tending").
-
 ## Multi-session etiquette
 
 Parallel sessions coordinate through lanes, claims, and holds — never
@@ -174,8 +174,9 @@ The full mechanics live in `skills/bee-hive/SKILL.md` and its
 references, loaded when routing work: lanes and gate wording; § Gate
 bypass mode; § Progress ticks; § Judgment contract; § Goal-check
 judge tier; § Concurrency law in full; § Delegation contract;
-worktrees; § Native Codex subagent tending; plus the worker contract
-in `bee-swarming` ("Execute"), the capture discipline in
+worktrees; plus the worker contract
+in `bee-swarming` ("Execute") — including native-Codex subagent tending on
+a Codex runtime — the capture discipline in
 `bee-capturing` ("Capture the moment it settles"), and the question
 craft in `bee-shaping` ("Interview craft"). Independent review runs
 on user request: `bee-reviewing`, never as an automatic stage.

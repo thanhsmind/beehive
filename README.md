@@ -309,7 +309,7 @@ The **orchestrator judges each cell's tier when it dispatches** (decision 0016) 
 
 The orchestrator pattern keeps the strongest model scarce:
 
-- **Fan-out delegation** (default): run the session on your strong model; it orchestrates all work and dispatches gather-altitude steps (multi-file reads, document rendering, trace mining) down-tier to cheaper workers, collecting digests instead of verbatim output. The Delegation contract (in routing-and-contracts.md) specifies which steps delegate and what a digest must carry. `bee-swarming`'s default.
+- **Fan-out delegation** (default): run the session on your strong model; it orchestrates all work and dispatches gather-altitude steps (multi-file reads, document rendering, trace mining) down-tier to cheaper workers, collecting digests instead of verbatim output. The Delegation contract (in gates-and-delegation.md) specifies which steps delegate and what a digest must carry. `bee-swarming`'s default.
 
 **To change the worker models**, edit `.bee/config.json` `models.claude.generation` / `extraction`; the ceiling changes by running the session on a different model. Every field + a full sample to copy: **[docs/config-reference.md](docs/config-reference.md)**.
 
