@@ -238,5 +238,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-08T13:13:58.407Z"
+  },
+  "decisions-worktree-door": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-08T14:31:57.695Z"
   }
 }
