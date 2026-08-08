@@ -9,24 +9,31 @@
   ],
   "verify": "decisions active count drops by the number of applied edges; decisions render --check clean; skipped list reported with reasons",
   "slice": 1,
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "read_first": [],
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "exec-dsh2",
+    "outcome": "Applied 5 redact edges for unambiguous full-content verbal-supersede claims (dbc67669,7385ee5d,20534ea9,d2b8b94f,7e459c15); active count 1078->1073; remaining ~65 candidates skipped as false positives, already-edged, partial-clause refinements of compound decisions, or spec/plan-line targets (no decision id)",
+    "files_changed": [
+      ".bee/decisions.jsonl",
+      "docs/decisions/index.md"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-08T12:25:04.508Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null,
-    "claimed_at": null,
+    "claim_session": "12ba6e83-1474-46d8-8026-1df6ba0eff7c",
+    "claimed_at": "2026-08-08T12:13:01.283Z",
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-08T12:24:52.981Z"
   }
 }
