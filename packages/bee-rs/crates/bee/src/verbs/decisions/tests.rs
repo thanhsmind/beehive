@@ -1081,6 +1081,169 @@ use std::time::Instant;
         assert!(err.ends_with("). Stub text must be data, not instructions."));
     }
 
+    // ── dcc-1 (decision-conflict-candidates): `decisions log` conflict hints ──
+
+    #[test]
+    fn log_returns_conflict_candidate_on_shared_tag_even_below_two_hits() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[r#"{"id":"a1111111-0000-0000-0000-000000000001","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"Use monthly billing cycle","rationale":"keeps cash flow predictable","tags":["billing"]}"#],
+        );
+        let p = LogParams {
+            decision: "Switch cadence to weekly".into(),
+            rationale: "ops team requested".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["billing".into()]),
+            supersedes: None,
+        };
+        let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        // The new decision text ("Switch cadence to weekly") scores 0 term
+        // hits against a1 — well below the >=2 threshold — but the shared
+        // "billing" tag alone still qualifies it.
+        let candidates = event["conflict_candidates"].as_array().unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0]["id"], "a1111111-0000-0000-0000-000000000001");
+        assert_eq!(candidates[0]["short8"], "a1111111");
+        assert_eq!(candidates[0]["date"], "2026-01-01T00:00:00.000Z");
+        assert_eq!(candidates[0]["excerpt"], "Use monthly billing cycle");
+        assert_eq!(candidates[0]["hits"], json!(0));
+        assert!(text.contains(
+            "possible conflict: a1111111 Use monthly billing cycle — if replaced, run decisions supersede --id a1111111"
+        ));
+    }
+
+    #[test]
+    fn log_returns_conflict_candidate_on_two_term_hits_without_shared_tag() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[r#"{"id":"b2222222-0000-0000-0000-000000000002","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"Adopt weekly billing cadence for staff","rationale":"ops requested predictability","tags":["ops"]}"#],
+        );
+        let p = LogParams {
+            decision: "Move billing cadence to quarterly".into(),
+            rationale: "finance requested".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["finance".into()]),
+            supersedes: None,
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        // "billing" and "cadence" both hit — 2 — no shared tag ("finance" vs
+        // "ops"), still qualifies on the >=2-hits leg alone.
+        let candidates = event["conflict_candidates"].as_array().unwrap();
+        assert_eq!(candidates.len(), 1);
+        assert_eq!(candidates[0]["id"], "b2222222-0000-0000-0000-000000000002");
+        assert_eq!(candidates[0]["hits"], json!(2));
+    }
+
+    #[test]
+    fn log_never_returns_a_superseded_candidate() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[
+                r#"{"id":"c1111111-0000-0000-0000-000000000001","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"Use monthly billing cycle","rationale":"r","tags":["billing"]}"#,
+                r#"{"id":"c2222222-0000-0000-0000-000000000002","type":"supersede","date":"2026-01-02T00:00:00.000Z","supersedes":"c1111111-0000-0000-0000-000000000001","decision":"Use weekly billing cycle","rationale":"r","tags":["billing"]}"#,
+            ],
+        );
+        let p = LogParams {
+            decision: "Switch cadence to daily".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["billing".into()]),
+            supersedes: None,
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        // c1 is already superseded (not in the active set), so it can never
+        // surface as a conflict candidate — only the still-active c2 can.
+        let candidates = event["conflict_candidates"].as_array().unwrap();
+        let ids: Vec<&str> = candidates.iter().map(|c| c["id"].as_str().unwrap()).collect();
+        assert!(!ids.contains(&"c1111111-0000-0000-0000-000000000001"));
+        assert!(ids.contains(&"c2222222-0000-0000-0000-000000000002"));
+    }
+
+    #[test]
+    fn log_conflict_candidates_empty_on_empty_store_or_no_overlap() {
+        let tmp = fixture_root();
+        // Empty store.
+        let p = LogParams {
+            decision: "First decision ever".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            supersedes: None,
+        };
+        let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(event["conflict_candidates"], json!([]));
+        assert!(!text.contains("possible conflict"));
+        // A second, wholly unrelated decision: no shared tag, no term hits.
+        let unrelated = LogParams {
+            decision: "Repaint the office lobby".into(),
+            rationale: "aesthetics".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            supersedes: None,
+        };
+        let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), unrelated, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(event2["conflict_candidates"], json!([]));
+        assert!(!text2.contains("possible conflict"));
+    }
+
+    #[test]
+    fn prose_guard_refusal_lists_conflict_candidates() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[r#"{"id":"d1111111-0000-0000-0000-000000000001","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"Weekly invoice run kept","rationale":"r","tags":["billing"]}"#],
+        );
+        let no_edge = LogParams {
+            decision: "This supersedes the billing schedule.".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["billing".into()]),
+            supersedes: None,
+        };
+        match do_log(tmp.path(), no_edge, 0) {
+            Ok(Out::Thrown(msg)) => {
+                assert!(msg.starts_with(SUPERSESSION_PROSE_GUARD_MESSAGE));
+                assert!(msg.contains(
+                    "possible conflict: d1111111 Weekly invoice run kept — if replaced, run decisions supersede --id d1111111"
+                ));
+            }
+            _ => panic!("expected prose-supersession refusal with conflict candidates"),
+        }
+        // The refused call never wrote anything.
+        assert_eq!(read_jsonl(&decisions_path(tmp.path())).len(), 1);
+    }
+
     #[test]
     fn split_list_and_tag_pattern() {
         assert_eq!(split_list(" a, b ,,c "), vec!["a", "b", "c"]);

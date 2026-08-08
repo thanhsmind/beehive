@@ -419,10 +419,7 @@ pub(crate) fn filter_decision_events(decisions: Vec<Value>, f: &DecisionFilters)
                 .into_iter()
                 .map(|h| h.to_lowercase())
                 .collect();
-            let hits = terms
-                .iter()
-                .filter(|t| haystacks.iter().any(|h| h.contains(*t)))
-                .count();
+            let hits = count_term_hits(&haystacks, &terms);
             if hits > 0 {
                 scored.push((e, hits));
             }
@@ -431,4 +428,97 @@ pub(crate) fn filter_decision_events(decisions: Vec<Value>, f: &DecisionFilters)
         result = scored.into_iter().map(|(e, _)| e).collect();
     }
     Ok(result)
+}
+
+/// dcc-1: the term-hit scorer `decisions search`'s `--text` filter uses
+/// above — pulled out so `conflict_candidates` below can reuse the exact
+/// same rule (count of lowercased terms each present as a substring of ANY
+/// haystack) instead of a second copy.
+pub(crate) fn count_term_hits(haystacks: &[String], terms: &[&str]) -> usize {
+    terms
+        .iter()
+        .filter(|t| haystacks.iter().any(|h| h.contains(*t)))
+        .count()
+}
+
+// ─── dcc-1 (decision-conflict-candidates): `decisions log` conflict hints ──
+
+/// dcc-1: up to 3 ACTIVE events that might conflict with a just-logged (or
+/// about-to-be-refused) decision — ranked by `count_term_hits` over
+/// `new_text`'s whitespace-split lowercase terms, matched the same way
+/// `decisions search --text` matches (decision/rationale/alternatives plus
+/// overlay-applied tags, case-insensitive substring). A candidate qualifies
+/// when it shares >=1 final tag with `new_tags` OR scores >=2 term hits;
+/// `exclude_id` drops the just-written event itself out of its own active
+/// set. Ties keep `active`'s newest-first order (stable sort).
+pub(crate) fn conflict_candidates(
+    active: &[Value],
+    new_text: &str,
+    new_tags: &[String],
+    exclude_id: Option<&str>,
+) -> Vec<Value> {
+    let lowered = new_text.to_lowercase();
+    let terms: Vec<&str> = lowered.split(js_is_ws).filter(|t| !t.is_empty()).collect();
+    let new_tag_set: Vec<String> = new_tags.iter().map(|t| t.to_lowercase()).collect();
+
+    let mut scored: Vec<(Value, usize)> = Vec::new();
+    for e in active {
+        if let (Some(exclude), Some(Value::String(id))) = (exclude_id, jget(e, "id")) {
+            if id == exclude {
+                continue;
+            }
+        }
+        let haystacks: Vec<String> = text_haystacks(e, true)
+            .into_iter()
+            .map(|h| h.to_lowercase())
+            .collect();
+        let hits = count_term_hits(&haystacks, &terms);
+        let shares_tag = match jget(e, "tags") {
+            Some(Value::Array(tags)) => tags
+                .iter()
+                .any(|t| new_tag_set.iter().any(|nt| js_disp(t).to_lowercase() == *nt)),
+            _ => false,
+        };
+        if shares_tag || hits >= 2 {
+            scored.push((e.clone(), hits));
+        }
+    }
+    scored.sort_by(|a, b| b.1.cmp(&a.1)); // stable: preserves active's newest-first order on ties
+    scored.truncate(3);
+    scored
+        .into_iter()
+        .map(|(e, hits)| {
+            let id = js_disp_opt(jget(&e, "id"));
+            let short8 = crate::textutil::truncate_chars_head(&id, 8);
+            let excerpt = crate::textutil::truncate_chars_head(&js_disp_opt(jget(&e, "decision")), 90);
+            json!({
+                "id": id,
+                "short8": short8,
+                "date": js_disp_opt(jget(&e, "date")),
+                "excerpt": excerpt,
+                "hits": hits,
+            })
+        })
+        .collect()
+}
+
+/// dcc-1: the human line format for a single conflict candidate — used in
+/// both `decisions log`'s success output and the prose-supersession guard's
+/// refusal message, so the fix command is ready-made either way.
+pub(crate) fn conflict_candidate_line(c: &Value) -> String {
+    let short8 = js_disp_opt(jget(c, "short8"));
+    format!(
+        "possible conflict: {short8} {} — if replaced, run decisions supersede --id {short8}",
+        js_disp_opt(jget(c, "excerpt")),
+    )
+}
+
+/// dcc-1: joins `conflict_candidate_line` for every candidate, each on its
+/// own leading-`\n` line (empty string when `candidates` is empty, so
+/// callers can `push_str` unconditionally).
+pub(crate) fn conflict_candidate_lines(candidates: &[Value]) -> String {
+    candidates
+        .iter()
+        .map(|c| format!("\n{}", conflict_candidate_line(c)))
+        .collect()
 }
