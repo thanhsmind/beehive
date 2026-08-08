@@ -367,7 +367,23 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     // dsh-1's prose-supersession guard: refuses inline supersession prose
     // that names no earlier decision via --supersedes.
     if supersedes.is_none() && matches_supersession_prose(js_trim(&p.decision)) {
-        return Ok(Out::Thrown(SUPERSESSION_PROSE_GUARD_MESSAGE.into()));
+        // dcc-1: the refusal names its own conflict candidates too, so the
+        // fix command (--supersedes / `decisions supersede`) is ready-made.
+        // Uses the raw (trimmed, not yet slug-validated) tags — matching
+        // purposes only, this refusal never writes the event either way.
+        let raw_tags: Vec<String> = p
+            .tags
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|t| js_trim(t).to_string())
+            .collect();
+        let active = active_decisions(root, false)?;
+        let candidates =
+            conflict_candidates(&active, js_trim(&p.decision), &raw_tags, None);
+        let mut msg = SUPERSESSION_PROSE_GUARD_MESSAGE.to_string();
+        msg.push_str(&conflict_candidate_lines(&candidates));
+        return Ok(Out::Thrown(msg));
     }
     let normalized = match normalize_tags(p.tags.clone()) {
         Ok(n) => n,
@@ -408,11 +424,21 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
             Value::Array(ids.iter().cloned().map(Value::String).collect()),
         );
     }
-    let event = Value::Object(event);
+    let mut event = Value::Object(event);
 
     let guard = acquire_decisions_lock(root, lock_retries).map_err(Err2::Msg)?;
     append_jsonl(&decisions_path(root), &event).map_err(|_| Err2::Ex)?;
     drop(guard);
+
+    // dcc-1: computed AFTER the append (so it reads the same active-set
+    // shape every other active_decisions() caller sees) and excluded by id
+    // so the just-written event is never its own candidate. Never persisted
+    // — `append_jsonl` already wrote the event above without this field.
+    let new_id = js_disp_opt(jget(&event, "id"));
+    let active = active_decisions(root, false)?;
+    let candidate_tags = normalized.clone().unwrap_or_default();
+    let candidates =
+        conflict_candidates(&active, js_trim(&p.decision), &candidate_tags, Some(&new_id));
 
     // dp-6 warn-only path (handleDecisionsLog).
     let warning = if !taxonomy_file_exists(root) && normalized.is_none() {
@@ -420,6 +446,11 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     } else {
         ""
     };
-    let text = format!("Logged decision {}.{warning}", js_disp_opt(jget(&event, "id")));
+    let mut text = format!("Logged decision {new_id}.{warning}");
+    text.push_str(&conflict_candidate_lines(&candidates));
+
+    if let Value::Object(m) = &mut event {
+        m.insert("conflict_candidates".into(), Value::Array(candidates));
+    }
     Ok(Out::Emit(event, text, 0))
 }
