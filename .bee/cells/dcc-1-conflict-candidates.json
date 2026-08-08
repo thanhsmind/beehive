@@ -1,0 +1,40 @@
+{
+  "id": "dcc-1-conflict-candidates",
+  "feature": "decision-conflict-candidates",
+  "lane": "small",
+  "title": "decisions log surfaces active conflict candidates in its output",
+  "action": "On every successful `decisions log` (and on the prose-guard refusal), compute up to 3 conflict candidates from the ACTIVE decision set: rank by the same deterministic term-hit scoring `decisions search` uses (whitespace-split terms of the new decision text, case-insensitive, matched over decision/rationale/alternatives and overlay-applied tags), considering only events that share >=1 final tag with the new event OR score >=2 term hits; exclude the just-written event and anything already superseded/redacted. Success output gains a `conflict_candidates` array [{id, short8, date, excerpt (first 90 chars), hits}] plus one human line per candidate ('possible conflict: <short8> <excerpt> — if replaced, run decisions supersede --id <short8>'); empty array when none. Warn-only: never refuse, no new required flag. The prose-guard refusal message also lists these candidates so the fix command is ready-made. Reuse the existing search ranking code (read.rs / search path) — no duplicate scorer. Registry description text for decisions log updated via hand-edit of generated registry_payload.json (precedent c06de083, no native regen chain).",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — new cases: candidate ranked and returned on tag overlap; >=2-term-hit candidate without shared tag returned; superseded target never a candidate; empty store / no-overlap yields empty array; prose-guard refusal carries candidates",
+  "slice": 1,
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "exec-dcc1",
+    "outcome": "decisions log emits up to 3 ranked conflict_candidates (warn-only), reusing the search term-hit scorer; prose-guard refusal lists them too",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-08T13:12:18.833Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "12ba6e83-1474-46d8-8026-1df6ba0eff7c",
+    "claimed_at": "2026-08-08T13:02:34.953Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-08T13:12:07.326Z"
+  }
+}
