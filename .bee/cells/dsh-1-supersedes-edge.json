@@ -1,0 +1,44 @@
+{
+  "id": "dsh-1-supersedes-edge",
+  "feature": "decision-supersede-hygiene",
+  "lane": "small",
+  "title": "decisions log: first-class --supersedes edge + prose-supersession guard",
+  "action": "Give `decisions log` a --supersedes:arr flag (full id or unique short8, validated against active decide/supersede events) that writes the decide event with a `supersedes` field; extend active_decisions() to exclude ids named by a `supersedes` field on ANY event type (string or array), not only type=='supersede'. Guard: decision text matching supersession prose (supersede(s|d)/replaces/overrides/'no longer applies'/'instead of the previous') with no --supersedes and not via `decisions supersede` gets a typed refusal naming both remedies. Registry payload is generated — change flows through the `bee dev` regen chain, never hand-edited.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — new cases: log with --supersedes drops target from active; prose-supersession without edge refused with remedy; short8 resolution; ambiguous/unknown target refused",
+  "slice": 1,
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "exec-dsh1",
+    "outcome": "decisions log gained --supersedes (active-set resolution, full id or unique short8) plus a prose-supersession guard that refuses inline supersede/replaces/overrides/no-longer-applies/instead-of-the-previous text without the edge; active_decisions() now honors any event's supersedes field, string or array",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-08T12:05:01.765Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "12ba6e83-1474-46d8-8026-1df6ba0eff7c",
+    "claimed_at": "2026-08-08T11:48:26.922Z",
+    "inline_reason": "cold-pickup generation worker dispatched straight to this pre-claimed cell in the feature worktree, per the dispatch contract; state worker add refuses inside a granted feature worktree (control-plane verb, main-checkout only), so no registration step was reachable from here",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-08T12:04:50.292Z"
+  }
+}

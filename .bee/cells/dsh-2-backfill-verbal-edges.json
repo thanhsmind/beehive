@@ -1,0 +1,32 @@
+{
+  "id": "dsh-2-backfill-verbal-edges",
+  "feature": "decision-supersede-hygiene",
+  "lane": "small",
+  "title": "Backfill: turn ~70 verbal-supersede decide events into real edges",
+  "action": "AFTER `bee worktree merge` of beehive--wt--decision-supersede-hygiene (grant released, worktree-first fence down, decisions verbs usable on main): for each decide event whose text claims supersession with no edge (~70), resolve the older decision it invalidates and drop it from the active set via `decisions redact --id <old> --reason 'superseded by <new short8>: <slug>'` — event log untouched, history keeps why. CLI only. Ambiguous targets skipped and listed, never guessed; partial refinements of compound decisions are skips. Prior analysis (verified false positives 47b61c7c/ff739d35/16f0d1ae; already-edged targets; partial-refinement skips aec38e11,d50564fa,7c52b6a3,bbc6bcea; no-decision-id skips fc82536e,5df3956b,a648ea2a,f1ca79b9) rides in the cell record. Ends with `decisions render` and an active-count before/after report.",
+  "files": [
+    ".bee/decisions.jsonl"
+  ],
+  "verify": "decisions active count drops by the number of applied edges; decisions render --check clean; skipped list reported with reasons",
+  "slice": 1,
+  "status": "open",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "verify_command": null,
+    "verified_at": null
+  }
+}

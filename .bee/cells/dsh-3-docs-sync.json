@@ -1,0 +1,36 @@
+{
+  "id": "dsh-3-docs-sync",
+  "feature": "decision-supersede-hygiene",
+  "lane": "small",
+  "title": "Docs sync: decisions area spec records the edge rule",
+  "action": "Sync docs/knowledge decisions-area spec with the new contract: supersession is a machine edge (--supersedes or supersede command), prose claims are refused, active projection is the single read surface, history answers why. Cite the two decisions logged 2026-08-08.",
+  "files": [
+    "docs/knowledge/index.md"
+  ],
+  "verify": "knowledge check / format check clean",
+  "slice": 1,
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "exec-dsh3",
+    "outcome": "Synced decision-memory overview.md with the supersession-edge rule (R2a): decisions log --supersedes / decisions supersede as the only valid edges, prose-supersession refusal at write time, active_decisions() as the single read surface.",
+    "files_changed": [
+      "docs/knowledge/areas/decision-memory/overview.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-08T12:10:21.361Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "12ba6e83-1474-46d8-8026-1df6ba0eff7c",
+    "claimed_at": "2026-08-08T12:05:54.273Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-08T12:10:09.852Z"
+  }
+}
