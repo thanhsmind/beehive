@@ -72,9 +72,20 @@
 //     from the embedded registry.
 //   * `status --brief` (verbs/status_brief.rs) — state/config/timings only.
 //   * `capture *` (.bee/capture-queue.jsonl), `backlog *` (.bee/backlog.jsonl),
-//     `decisions *` (.bee/decisions.jsonl + archive), `feedback *`,
-//     `knowledge *`, `intent *`, `reviews *`, `tmp sweep` (.bee/tmp, .bee/spikes,
-//     .bee/lanes) — all data-plane files under the store root.
+//     `feedback *`, `knowledge *`, `intent *`, `reviews *`, `tmp sweep`
+//     (.bee/tmp, .bee/spikes, .bee/lanes) — all data-plane files under the
+//     store root.
+//   * `decisions *` (log, active, search, redact, render, supersede, tag,
+//     archive — .bee/decisions.jsonl + archive) — verbs/decisions/*.rs. Was
+//     narrow only because it shared `reservations::prelude` with `cells *` /
+//     `state *` / `close`; it now has its own dedicated door,
+//     `verbs::decisions::decisions_prelude`, resolved through
+//     `resolve_store_root_any` instead. A granted worktree operates on its
+//     OWN workspace-local `.bee/decisions.jsonl`, matching the
+//     control-plane/data-plane split (docs/knowledge/areas/worktree-parallelism/
+//     control-plane-topology.md); an ordinary checkout and an ungranted
+//     worktree are unaffected (`resolve_store_root_any` answers the same root
+//     `resolve_store_root` would there).
 //   * `test` (verbs/test_runner.rs) — config read, .bee/logs write, and the
 //     child process's cwd, which is the store root in Node too.
 //
@@ -88,16 +99,14 @@
 //     control root through that module is a port of its own, and guessing it
 //     would write real bytes into the wrong store.
 //   * `close` (verbs/drivers.rs) — same reason, through the same prelude.
-//   * `cells *` (incl. `claim-next`), `dispatch prepare`, `decisions *`.
-//     cells.rs DOES re-root claims/sessions/leases through its own
-//     `control_root`, but its cross-worktree holds are still written against
-//     resolveHoldTopology's ORDINARY arm (`holds_ledger_path(root)`, holder
-//     `"main"`). In a granted worktree the real topology is (mainRoot, <the
-//     worktree's git id>), so serving it there would consult an empty ledger
-//     and release nobody's holds — a guard that silently stops guarding, which
-//     is worse than a refusal. `decisions *` is control-plane-free and could
-//     take the wide door; it stays narrow only because it shares this prelude,
-//     and that is a follow-up, not a hazard.
+//   * `cells *` (incl. `claim-next`), `dispatch prepare`. cells.rs DOES
+//     re-root claims/sessions/leases through its own `control_root`, but its
+//     cross-worktree holds are still written against resolveHoldTopology's
+//     ORDINARY arm (`holds_ledger_path(root)`, holder `"main"`). In a granted
+//     worktree the real topology is (mainRoot, <the worktree's git id>), so
+//     serving it there would consult an empty ledger and release nobody's
+//     holds — a guard that silently stops guarding, which is worse than a
+//     refusal.
 //
 // A granted worktree is an EXPLICIT act (`bee worktree register`) — an
 // ordinary `bee worktree new` checkout is ungranted and therefore served by

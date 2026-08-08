@@ -13,6 +13,7 @@
 use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce};
+use crate::roots::{resolve_store_root, Roots, Unsupported};
 use crate::verbs::reservations::{
     date_parse_val, finish, jget, js_date_parse, js_disp, js_disp_opt, js_is_ws, js_number_flag,
     js_numberify, js_quote, js_trim, keys_known, now_iso, parse_flags,
@@ -1253,4 +1254,152 @@ use std::time::Instant;
         assert!(!tag_pattern_test("-lead"));
         assert!(!tag_pattern_test("Upper"));
         assert!(!tag_pattern_test(""));
+    }
+
+    // ── dwd-1: the WIDE door — a granted worktree gets its OWN decisions
+    //    store instead of the narrow door's refusal ──────────────────────────
+    //
+    // `decisions_prelude_at` is the exact function `decisions_prelude` (the
+    // real cwd-reading entry point every `run_*` in this family calls)
+    // delegates to, parameterized on the start directory instead of
+    // `std::env::current_dir()` — see the doc comment on `decisions_prelude`
+    // in verbs_write.rs for why: mutating the test runner's own process-wide
+    // cwd is unsafe under `cargo test`'s default parallelism, the same
+    // hazard `tests/workflow_verbs.rs` documents for this family of `prelude`
+    // functions. This fixture is the reservations-module fixture shape
+    // (`verbs/reservations/tests.rs`'s `worktree_fixture`), reproduced here
+    // because that module's fixture is private to its own file.
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the worktree fixtures");
+        assert!(
+            out.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// A real main checkout with one real linked worktree, GRANTED (a
+    /// `worktree-grants.json` entry), and its own `.bee/onboarding.json` so
+    /// it resolves as a repo root in its own right.
+    fn granted_worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf) {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(main.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git(&main, &["init", "-q", "-b", "main", "."]);
+        git(&main, &["config", "user.email", "a@b.c"]);
+        git(&main, &["config", "user.name", "t"]);
+        git(&main, &["add", "-A"]);
+        git(&main, &["commit", "-qm", "init"]);
+        let wt = tmp.join("wt-a");
+        git(&main, &["worktree", "add", "-q", wt.to_str().unwrap(), "-b", "wt/a"]);
+        std::fs::create_dir_all(main.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("runtime").join("worktree-grants.json"),
+            "{\"wt-a\": true}\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(wt.join(".bee")).unwrap();
+        std::fs::write(wt.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        (main, wt)
+    }
+
+    /// `decisions log` and `decisions active` resolve the granted worktree's
+    /// OWN store through the wide door — a write lands in `wt-a/.bee/
+    /// decisions.jsonl`, never main's, and a subsequent read sees it there.
+    #[test]
+    fn decisions_log_and_active_succeed_against_a_granted_worktrees_own_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = granted_worktree_fixture(tmp.path());
+
+        let ctx = match decisions_prelude_at(&wt, "decisions log", false, Instant::now()) {
+            Some(Pre::Go(c)) => c,
+            _ => panic!("decisions log must resolve a store root from a granted worktree"),
+        };
+        assert_eq!(
+            dunce::canonicalize(&ctx.root).unwrap(),
+            dunce::canonicalize(&wt).unwrap(),
+            "a granted worktree gets its OWN store, not main's"
+        );
+
+        let p = LogParams {
+            decision: "Widen decisions to the wide door".into(),
+            rationale: "matches the control-plane/data-plane split".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            supersedes: None,
+        };
+        let Ok(Out::Emit(..)) = do_log(&ctx.root, p, 0) else {
+            panic!("expected decisions log to succeed against the worktree's own store");
+        };
+
+        // The worktree's OWN copy carries the event; main's copy does not
+        // exist at all — the write never crossed into the other checkout.
+        let wt_events = read_jsonl(&decisions_path(&wt));
+        assert_eq!(wt_events.len(), 1, "{wt_events:?}");
+        assert!(!decisions_path(&main).exists());
+
+        let active_ctx = match decisions_prelude_at(&wt, "decisions active", false, Instant::now())
+        {
+            Some(Pre::Go(c)) => c,
+            _ => panic!("decisions active must resolve a store root from a granted worktree"),
+        };
+        let active = active_decisions(&active_ctx.root, false).ok().unwrap();
+        assert_eq!(active.len(), 1, "{active:?}");
+        assert_eq!(active[0]["decision"], "Widen decisions to the wide door");
+    }
+
+    /// The SAME fixture, through the NARROW door: a genuinely control-plane
+    /// verb still refuses, byte-identically to before this cell — the two
+    /// doors diverge on `decisions *` alone.
+    #[test]
+    fn a_control_plane_verb_still_refuses_from_the_same_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, wt) = granted_worktree_fixture(tmp.path());
+
+        match resolve_store_root(&wt) {
+            Roots::Unsupported(Unsupported::GrantedWorktree { main_root }) => {
+                assert_eq!(
+                    dunce::canonicalize(&main_root).unwrap(),
+                    dunce::canonicalize(&main).unwrap()
+                );
+            }
+            _ => panic!(
+                "a control-plane verb (`state *`/`close`/`cells *`) must still refuse a \
+                 granted worktree, unchanged by widening `decisions *`"
+            ),
+        }
+    }
+
+    /// An ordinary main checkout is unaffected by the widening: both the
+    /// dedicated decisions door and the narrow control-plane door resolve
+    /// to the SAME root they always did.
+    #[test]
+    fn main_checkout_behavior_is_unchanged_by_the_wide_door() {
+        let tmp = fixture_root();
+        let main = tmp.path();
+
+        let ctx = match decisions_prelude_at(main, "decisions log", false, Instant::now()) {
+            Some(Pre::Go(c)) => c,
+            _ => panic!("an ordinary checkout must resolve a store root"),
+        };
+        assert_eq!(
+            dunce::canonicalize(&ctx.root).unwrap(),
+            dunce::canonicalize(main).unwrap()
+        );
+        match resolve_store_root(main) {
+            Roots::Ordinary(r) => {
+                assert_eq!(dunce::canonicalize(&r).unwrap(), dunce::canonicalize(main).unwrap())
+            }
+            _ => panic!("an ordinary checkout is served by the narrow door too"),
+        }
     }
