@@ -1,0 +1,43 @@
+{
+  "id": "dwd-1-widen-decisions-door",
+  "feature": "decisions-worktree-door",
+  "lane": "small",
+  "title": "decisions * verbs take the wide door: workspace-local store works from a granted worktree",
+  "action": "Widen the decisions verb family (log, active, search, redact, render, supersede, tag, archive) from the narrow reservations-prelude door (resolve_store_root refuses any granted worktree, roots.rs ~610-629) to the wide door, so a granted feature worktree operates on its OWN workspace-local .bee/decisions.jsonl copy — matching the documented control-plane/data-plane split (decisions are workspace-local per docs/knowledge/areas/worktree-parallelism/control-plane-topology.md). Resolve the follow-up comment at roots.rs ~98-100 ('decisions * is control-plane-free and could take the wide door; it stays narrow only because it shares this prelude'). Genuinely control-plane verbs keep refusing from a worktree, byte-identical refusal. Solo checkouts and main behave byte-identically to before.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/roots.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — new cases: decisions log/active succeed against a granted worktree's own store (temp-dir fixture with a registered grant); control-plane verb still refuses from the same fixture; main-checkout behavior unchanged",
+  "slice": 1,
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "exec-dwd1",
+    "outcome": "decisions * verbs now use resolve_store_root_any via a dedicated decisions_prelude; granted worktree gets its own store, control-plane verbs still refuse; 1375 passed / 3 ignored",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/roots.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/supersede.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-08T14:30:24.966Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "12ba6e83-1474-46d8-8026-1df6ba0eff7c",
+    "claimed_at": "2026-08-08T14:17:53.704Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-08T14:30:13.514Z"
+  }
+}
