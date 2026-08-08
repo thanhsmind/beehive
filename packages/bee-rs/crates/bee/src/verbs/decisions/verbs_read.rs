@@ -102,7 +102,7 @@ pub(crate) fn run_active_or_search(
     }
 
     let cmd: &'static str = if is_search { "decisions search" } else { "decisions active" };
-    let ctx = match crate::verbs::reservations::prelude(cmd, use_json, t0)? {
+    let ctx = match decisions_prelude(cmd, use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
@@ -225,7 +225,7 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         Some(FlagV::Present) => return None,
     };
 
-    let ctx = match crate::verbs::reservations::prelude("decisions log", use_json, t0)? {
+    let ctx = match decisions_prelude("decisions log", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };

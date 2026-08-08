@@ -106,7 +106,7 @@ pub(crate) fn run_supersede(flags: Flags, use_json: bool, t0: Instant) -> Option
         return None;
     }
 
-    let ctx = match crate::verbs::reservations::prelude("decisions supersede", use_json, t0)? {
+    let ctx = match decisions_prelude("decisions supersede", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };

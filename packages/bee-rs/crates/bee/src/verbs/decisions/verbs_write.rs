@@ -7,10 +7,11 @@ use super::*;
 use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock::{self, AcquireOnce};
+use crate::roots::Roots;
 use crate::verbs::reservations::{
     date_parse_val, finish, jget, js_date_parse, js_disp, js_disp_opt, js_is_ws, js_number_flag,
     js_numberify, js_quote, js_trim, keys_known, now_iso, parse_flags,
-    pseudo_uuid_v4, truthy, v_is_str, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
+    pseudo_uuid_v4, truthy, v_is_str, Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use serde_json::{json, Map, Number, Value};
 use sha2::{Digest, Sha256};
@@ -19,6 +20,63 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+
+// ─── the decisions family's own prelude (WIDE door) ────────────────────────
+//
+// `decisions *` (log, active, search, redact, render, supersede, tag,
+// archive) addresses only `.bee/decisions.jsonl` + its archive under the
+// store root — no sessions, claims, workers, workflows, handoff mailboxes or
+// cross-worktree holds. Every decisions verb used to share
+// `crate::verbs::reservations::prelude`, the NARROW door, only because
+// verbs/cells.rs, verbs/state_group.rs and verbs/drivers.rs do too — not
+// because decisions itself needed the control-plane refusal (roots.rs's door
+// audit, "WIDE"). This is the dedicated replacement: same shape as
+// `reservations::prelude`, resolved through `resolve_store_root_any` so a
+// GRANTED worktree operates on its own workspace-local store instead of
+// refusing. An ordinary checkout and an ungranted worktree see the identical
+// root either door would have resolved.
+pub(crate) fn decisions_prelude(cmd: &'static str, use_json: bool, t0: Instant) -> Option<Pre> {
+    let cwd = std::env::current_dir().ok()?;
+    decisions_prelude_at(&cwd, cmd, use_json, t0)
+}
+
+/// `decisions_prelude`, parameterized on the start directory instead of
+/// reading `std::env::current_dir()` itself — the seam `tests.rs` uses to
+/// exercise a granted-worktree fixture without mutating the test runner's
+/// own process-wide cwd across parallel tests (the hazard
+/// `tests/workflow_verbs.rs` documents for this exact family of `prelude`
+/// functions). `emit_unsupported_root` / `emit_no_root_error` only use
+/// `start` for the `.bee/timings.jsonl` append, so this is the real
+/// production path, not a parallel copy of it.
+pub(crate) fn decisions_prelude_at(
+    start: &Path,
+    cmd: &'static str,
+    use_json: bool,
+    t0: Instant,
+) -> Option<Pre> {
+    let root = match crate::roots::resolve_store_root_any(start) {
+        Roots::Ordinary(r) => r,
+        Roots::Unsupported(why) => {
+            return Some(Pre::Emitted(crate::verbs::emit_unsupported_root(
+                start, cmd, use_json, t0, &why,
+            )))
+        }
+        Roots::None => {
+            return Some(Pre::Emitted(crate::verbs::emit_no_root_error(
+                start, cmd, use_json, t0,
+            )))
+        }
+    };
+    let drift = crate::registry::check_manifest_drift(&root);
+    Some(Pre::Go(Ctx {
+        root,
+        cmd,
+        use_json,
+        t0,
+        drift_changed: drift.manifest_changed,
+        drift_hint: drift.hint,
+    }))
+}
 
 // ─── decisions tag (flag form AND --stdin batch) ───────────────────────────
 //
@@ -44,7 +102,7 @@ pub(crate) fn run_tag(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         // Everything that can still answer None runs FIRST: `prelude` (root
         // resolution, --json plumbing) is the last such gate, and the batch
         // body below has none. Only then is the pipe consumed.
-        let ctx = match crate::verbs::reservations::prelude("decisions tag", use_json, t0)? {
+        let ctx = match decisions_prelude("decisions tag", use_json, t0)? {
             Pre::Go(c) => c,
             Pre::Emitted(code) => return Some(code),
         };
@@ -76,7 +134,7 @@ pub(crate) fn run_tag(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
     let tags = split_list(flags.req_str("tags")?);
     let scope = str_flag(&flags, "scope")?;
 
-    let ctx = match crate::verbs::reservations::prelude("decisions tag", use_json, t0)? {
+    let ctx = match decisions_prelude("decisions tag", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
@@ -326,7 +384,7 @@ pub(crate) fn run_redact(flags: Flags, use_json: bool, t0: Instant) -> Option<Ex
     }
     let redacts = flags.req_str("id")?.to_string();
     let reason = flags.req_str("reason")?.to_string();
-    let ctx = match crate::verbs::reservations::prelude("decisions redact", use_json, t0)? {
+    let ctx = match decisions_prelude("decisions redact", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
@@ -366,7 +424,7 @@ pub(crate) fn run_archive(flags: Flags, use_json: bool, t0: Instant) -> Option<E
         return None;
     }
     let before = flags.req_str("before")?.to_string();
-    let ctx = match crate::verbs::reservations::prelude("decisions archive", use_json, t0)? {
+    let ctx = match decisions_prelude("decisions archive", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };

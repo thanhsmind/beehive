@@ -274,7 +274,7 @@ pub(crate) fn run_render(flags: Flags, use_json: bool, t0: Instant) -> Option<Ex
     let all = bool_flag_present(&flags, "all")?;
     let check = bool_flag_present(&flags, "check")?;
 
-    let ctx = match crate::verbs::reservations::prelude("decisions render", use_json, t0)? {
+    let ctx = match decisions_prelude("decisions render", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
