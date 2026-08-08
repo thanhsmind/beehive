@@ -125,6 +125,22 @@ pub(crate) fn is_decide_or_supersede(e: &Value) -> bool {
     matches!(jget(e, "type"), Some(t) if v_is_str(t, "decide") || v_is_str(t, "supersede"))
 }
 
+/// dsh-1 (decision-supersede-hygiene): the ids a `supersedes` field names, on
+/// ANY event type — a bare string (the type=="supersede" shape) or an array
+/// of strings (`decisions log --supersedes`'s shape). A non-string array
+/// entry is dropped; a non-string non-array field contributes nothing.
+pub(crate) fn supersedes_target_ids(e: &Value) -> Vec<Value> {
+    match jget(e, "supersedes") {
+        Some(Value::String(s)) if !s.is_empty() => vec![Value::String(s.clone())],
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter(|v| matches!(v, Value::String(s) if !s.is_empty()))
+            .cloned()
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// provenance: decisions.mjs activeDecisions (both branches; `recent` is
 /// applied by the callers, matching the handlers).
 pub(crate) fn active_decisions(root: &Path, all: bool) -> Ex<Vec<Value>> {
@@ -137,12 +153,11 @@ pub(crate) fn active_decisions(root: &Path, all: bool) -> Ex<Vec<Value>> {
         let mut superseded = VSet::new();
         let mut redacted = VSet::new();
         for e in &events {
-            if matches!(jget(e, "type"), Some(t) if v_is_str(t, "supersede")) {
-                if let Some(s) = jget(e, "supersedes") {
-                    if truthy(s) {
-                        superseded.add(s);
-                    }
-                }
+            // dsh-1: a `supersedes` field excludes its targets on ANY event
+            // type — not only type=="supersede" — so `decisions log
+            // --supersedes` carries the same exclusion weight inline.
+            for s in supersedes_target_ids(e) {
+                superseded.add(&s);
             }
             if matches!(jget(e, "type"), Some(t) if v_is_str(t, "redact")) {
                 if let Some(r) = jget(e, "redacts") {
@@ -188,12 +203,10 @@ pub(crate) fn active_decisions(root: &Path, all: bool) -> Ex<Vec<Value>> {
     let mut superseded = VSet::new();
     let mut redacted = VSet::new();
     for e in &evs {
-        if matches!(jget(e, "type"), Some(t) if v_is_str(t, "supersede")) {
-            if let Some(s) = jget(e, "supersedes") {
-                if truthy(s) {
-                    superseded.add(s);
-                }
-            }
+        // dsh-1: same any-event-type `supersedes` collection as the default
+        // branch above.
+        for s in supersedes_target_ids(e) {
+            superseded.add(&s);
         }
         if matches!(jget(e, "type"), Some(t) if v_is_str(t, "redact")) {
             if let Some(r) = jget(e, "redacts") {
@@ -229,6 +242,69 @@ pub(crate) fn active_decisions(root: &Path, all: bool) -> Ex<Vec<Value>> {
         .into_iter()
         .map(|(_, e, _)| apply_tag_overlay(e, &overlay))
         .collect())
+}
+
+// ─── dsh-1: `decisions log --supersedes` target resolution ─────────────────
+//
+// Deliberately narrower than verbs_write.rs's resolve_tag_target: that one
+// resolves against the active+archive union (retro-tagging history is fine),
+// this one resolves against the currently ACTIVE decide/supersede set only —
+// an already-superseded or already-redacted target cannot be named again,
+// which is the hygiene this cell is for.
+
+/// (id, event) pairs for every event currently in the active set, in FILE
+/// order (`active_decisions` itself returns newest-first for display; the
+/// `.rev()` here undoes that single reversal so an ambiguity list reads the
+/// same left-to-right order as resolve_tag_target's, which walks the raw
+/// file directly).
+pub(crate) fn active_decide_or_supersede_candidates(root: &Path) -> Ex<Vec<(String, Value)>> {
+    let active = active_decisions(root, false)?;
+    Ok(active
+        .into_iter()
+        .rev()
+        .filter_map(|e| match jget(&e, "id").cloned() {
+            Some(Value::String(id)) => Some((id, e)),
+            _ => None,
+        })
+        .collect())
+}
+
+/// `Err` carries the refusal message. Full id or unique short8, same
+/// matching shape as resolve_tag_target — worded for `decisions log
+/// --supersedes` and scoped to `candidates` (the active set only).
+pub(crate) fn resolve_supersedes_target(
+    candidates: &[(String, Value)],
+    raw: &str,
+) -> Result<String, String> {
+    let raw = js_trim(raw);
+    if let Some((id, _)) = candidates.iter().find(|(id, _)| id == raw) {
+        return Ok(id.clone());
+    }
+    // SHORT8_PATTERN /^[0-9a-f]{8}$/i
+    let is_short8 = raw.chars().count() == 8 && raw.chars().all(|c| c.is_ascii_hexdigit());
+    let mut matches: Vec<&String> = Vec::new();
+    if is_short8 {
+        let low = raw.to_ascii_lowercase();
+        for (id, _) in candidates {
+            if id.to_lowercase().starts_with(&low) {
+                matches.push(id);
+            }
+        }
+    }
+    match matches.len() {
+        1 => Ok(matches[0].clone()),
+        n if n > 1 => {
+            let list = matches.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
+            Err(format!(
+                "decisions log: --supersedes short id {} is ambiguous — matches {n} events ({list}); use the full id.",
+                js_quote(raw)
+            ))
+        }
+        _ => Err(format!(
+            "decisions log: --supersedes target {} does not resolve to any active decide/supersede event.",
+            js_quote(raw)
+        )),
+    }
 }
 
 // ─── filters (bee.mjs filterDecisionEvents / matchesWholeToken) ────────────

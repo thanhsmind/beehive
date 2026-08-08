@@ -287,7 +287,15 @@ mod tests {
         // ALREADY happened; `--purpose` names what a dispatch about to
         // happen is for — a prospective, not retrospective, concept, so
         // reusing one of those names would have been the wrong ratchet.
-        const PINNED_FLAG_COUNT: usize = 144;
+        // 144 -> 145 (decision-supersede-hygiene dsh-1): `decisions.log`
+        // gained `--supersedes`, an array of ids the new decision retires.
+        // Checked first: `decisions.supersede --id`/`decisions.redact --id`
+        // both name a SINGLE target id already carried by a dedicated event
+        // shape, and `--tags` classifies, it does not name a prior decision
+        // — none of those is this concept, so reusing one would have hidden
+        // an array-of-targets flag behind a singular-id name (or vice
+        // versa). `--supersedes` is new.
+        const PINNED_FLAG_COUNT: usize = 145;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

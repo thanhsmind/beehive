@@ -192,6 +192,7 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["billing".into(), "recall".into()]),
+            supersedes: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -210,6 +211,7 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["Bad_Tag".into()]),
+            supersedes: None,
         };
         match do_log(tmp.path(), bad, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -218,6 +220,185 @@ use std::time::Instant;
             ),
             _ => panic!("expected thrown slug error"),
         }
+    }
+
+    // ── dsh-1 (decision-supersede-hygiene): `decisions log --supersedes` ───
+
+    #[test]
+    fn log_supersedes_drops_target_from_active_and_extends_active_decisions() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[r#"{"id":"a1","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"first","rationale":"r"}"#],
+        );
+        let p = LogParams {
+            decision: "Second decision".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            supersedes: Some(vec!["a1".into()]),
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(event["supersedes"], json!(["a1"]));
+        // active_decisions() excludes a1 — a `supersedes` field's exclusion
+        // weight is not limited to type=="supersede" events anymore.
+        let active = active_decisions(tmp.path(), false).ok().unwrap();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0]["id"], event["id"]);
+    }
+
+    #[test]
+    fn log_supersedes_resolves_short8_and_refuses_ambiguous_or_unknown() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[
+                r#"{"id":"aaaa1111-0000-0000-0000-000000000001","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"d1","rationale":"r"}"#,
+                r#"{"id":"aaaa1111-0000-0000-0000-000000000002","type":"decide","date":"2026-01-02T00:00:00.000Z","decision":"d2","rationale":"r"}"#,
+                r#"{"id":"bbbb2222-0000-0000-0000-000000000003","type":"decide","date":"2026-01-03T00:00:00.000Z","decision":"d3","rationale":"r"}"#,
+            ],
+        );
+        // Unique short8 resolves to the full id.
+        let p = LogParams {
+            decision: "Replacement for d3".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            supersedes: Some(vec!["bbbb2222".into()]),
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(event["supersedes"], json!(["bbbb2222-0000-0000-0000-000000000003"]));
+
+        // Ambiguous short8 refuses, naming both matches.
+        let ambiguous = LogParams {
+            decision: "d".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            supersedes: Some(vec!["aaaa1111".into()]),
+        };
+        match do_log(tmp.path(), ambiguous, 0) {
+            Ok(Out::Thrown(msg)) => assert_eq!(
+                msg,
+                "decisions log: --supersedes short id \"aaaa1111\" is ambiguous — matches 2 events (aaaa1111-0000-0000-0000-000000000001, aaaa1111-0000-0000-0000-000000000002); use the full id."
+            ),
+            _ => panic!("expected ambiguity refusal"),
+        }
+
+        // Unknown target refuses.
+        let unknown = LogParams {
+            decision: "d".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            supersedes: Some(vec!["deadbeef".into()]),
+        };
+        match do_log(tmp.path(), unknown, 0) {
+            Ok(Out::Thrown(msg)) => assert_eq!(
+                msg,
+                "decisions log: --supersedes target \"deadbeef\" does not resolve to any active decide/supersede event."
+            ),
+            _ => panic!("expected unresolved refusal"),
+        }
+
+        // A target that is already superseded is no longer ACTIVE, so it is
+        // out of --supersedes's reach too — narrower than resolve_tag_target's
+        // active+archive union (retro-tagging history is fine; re-superseding
+        // it is not) — the hygiene edge this cell is for.
+        write_events(
+            tmp.path(),
+            &[
+                r#"{"id":"c1","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"c1","rationale":"r"}"#,
+                r#"{"id":"c2","type":"supersede","date":"2026-01-02T00:00:00.000Z","supersedes":"c1","decision":"c2","rationale":"r"}"#,
+            ],
+        );
+        let stale = LogParams {
+            decision: "d".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            supersedes: Some(vec!["c1".into()]),
+        };
+        match do_log(tmp.path(), stale, 0) {
+            Ok(Out::Thrown(msg)) => assert_eq!(
+                msg,
+                "decisions log: --supersedes target \"c1\" does not resolve to any active decide/supersede event."
+            ),
+            _ => panic!("expected already-superseded refusal"),
+        }
+    }
+
+    #[test]
+    fn log_prose_supersession_guard_refuses_without_edge_and_allows_with_it() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[r#"{"id":"a1","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"first","rationale":"r"}"#],
+        );
+        let no_edge = LogParams {
+            decision: "This supersedes the earlier billing threshold.".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            supersedes: None,
+        };
+        match do_log(tmp.path(), no_edge, 0) {
+            Ok(Out::Thrown(msg)) => assert_eq!(msg, SUPERSESSION_PROSE_GUARD_MESSAGE),
+            _ => panic!("expected prose-supersession refusal"),
+        }
+        // With --supersedes, the same prose passes and the earlier decision
+        // is named explicitly instead of left implicit in free text.
+        let with_edge = LogParams {
+            decision: "This supersedes the earlier billing threshold.".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            supersedes: Some(vec!["a1".into()]),
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), with_edge, 0) else {
+            panic!("expected log emit once --supersedes names the target");
+        };
+        assert_eq!(event["supersedes"], json!(["a1"]));
+    }
+
+    #[test]
+    fn supersession_prose_guard_vectors() {
+        assert!(matches_supersession_prose("This decision supersedes the old billing threshold."));
+        assert!(matches_supersession_prose("Supersedes decision X."));
+        assert!(matches_supersession_prose("This was superseded by the new plan."));
+        assert!(matches_supersession_prose("This replaces the earlier rollout plan."));
+        assert!(matches_supersession_prose("New config overrides the legacy default."));
+        assert!(matches_supersession_prose("This decision no longer applies."));
+        assert!(matches_supersession_prose("Use the new value instead of the previous one."));
+        assert!(!matches_supersession_prose(
+            "A perfectly normal decision with no supersession language."
+        ));
+        assert!(!matches_supersession_prose("supersedeX is unrelated to the pattern")); // \b guard
     }
 
     #[test]
@@ -232,6 +413,7 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
+            supersedes: None,
         };
         match do_log(tmp.path(), p, 0) {
             Err(Err2::Msg(msg)) => {
@@ -264,6 +446,7 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
+            supersedes: None,
         };
         match do_log(tmp.path(), zero, 0) {
             Err(Err2::Msg(msg)) => assert_eq!(msg, UNTAGGED_REFUSED_MESSAGE),
@@ -277,6 +460,7 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["newtag".into()]),
+            supersedes: None,
         };
         assert!(matches!(do_log(tmp.path(), unknown, 0), Ok(Out::Emit(_, _, 0))));
         let tax_after: Value = serde_json::from_str(&std::fs::read_to_string(&tax).unwrap()).unwrap();
@@ -388,6 +572,7 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["billing".into()]),
+            supersedes: None,
         };
         assert!(matches!(do_log(tmp.path(), p, 0), Ok(Out::Emit(_, _, 0))));
     }

@@ -189,7 +189,10 @@ pub(crate) fn run_active_or_search(
 pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(
         &flags,
-        &["decision", "rationale", "alternatives", "scope", "source", "confidence", "tags"],
+        &[
+            "decision", "rationale", "alternatives", "scope", "source", "confidence", "tags",
+            "supersedes",
+        ],
     ) {
         return None;
     }
@@ -215,6 +218,12 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         Some(FlagV::S(s)) => Some(split_list(s)),
         Some(FlagV::Present) => return None,
     };
+    // dsh-1: --supersedes, same comma-separated-array shape as --tags.
+    let supersedes_flag: Option<Vec<String>> = match flags.get("supersedes") {
+        None => None,
+        Some(FlagV::S(s)) => Some(split_list(s)),
+        Some(FlagV::Present) => return None,
+    };
 
     let ctx = match crate::verbs::reservations::prelude("decisions log", use_json, t0)? {
         Pre::Go(c) => c,
@@ -230,6 +239,7 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
             source,
             confidence_raw,
             tags: tags_flag,
+            supersedes: supersedes_flag,
         },
         DECISIONS_LOCK_RETRY_ATTEMPTS,
     );
@@ -244,7 +254,67 @@ pub(crate) struct LogParams {
     pub(crate) source: String,
     pub(crate) confidence_raw: Option<String>,
     pub(crate) tags: Option<Vec<String>>,
+    /// dsh-1 (decision-supersede-hygiene): full ids or unique short8s of
+    /// decide/supersede events this decision retires. Resolved against the
+    /// currently ACTIVE set only (see read.rs's active_decide_or_supersede_
+    /// candidates/resolve_supersedes_target) and written onto the decide
+    /// event as a `supersedes` array — active_decisions() then excludes
+    /// every named target, the same way a type=="supersede" event's single
+    /// `supersedes` string always has.
+    pub(crate) supersedes: Option<Vec<String>>,
 }
+
+/// dsh-1's prose-supersession guard: decision text that reads as an inline
+/// supersession — "supersede"/"supersedes"/"superseded", "replaces",
+/// "overrides", "no longer applies", "instead of the previous" — hides the
+/// earlier decision from active_decisions() forever unless it is EITHER
+/// named via --supersedes here or logged through `decisions supersede`
+/// (which carries its own `supersedes` field by construction and never
+/// calls this). Word-bounded, case-insensitive; reuses scanners.rs's
+/// hand-scanned matching primitives (no regex crate in this workspace).
+pub(crate) fn matches_supersession_prose(text: &str) -> bool {
+    let chars: Vec<char> = text.chars().collect();
+    let whole_word = |kw: &str| -> bool {
+        for i in 0..chars.len() {
+            if starts_with_ci(&chars, i, kw) && boundary_before(&chars, i) {
+                let end = i + kw.chars().count();
+                if end == chars.len() || !is_word(chars[end]) {
+                    return true;
+                }
+            }
+        }
+        false
+    };
+    // supersede / supersedes / superseded — shared "supersed" stem.
+    const STEM: &str = "supersed";
+    for i in 0..chars.len() {
+        if !starts_with_ci(&chars, i, STEM) || !boundary_before(&chars, i) {
+            continue;
+        }
+        let after = i + STEM.chars().count();
+        for suffix in ["ed", "es", "e"] {
+            if starts_with_ci(&chars, after, suffix) {
+                let end = after + suffix.chars().count();
+                if end == chars.len() || !is_word(chars[end]) {
+                    return true;
+                }
+            }
+        }
+    }
+    if whole_word("replaces") || whole_word("overrides") {
+        return true;
+    }
+    for phrase in ["no longer applies", "instead of the previous"] {
+        for i in 0..chars.len() {
+            if starts_with_ci(&chars, i, phrase) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+pub(crate) const SUPERSESSION_PROSE_GUARD_MESSAGE: &str = "logDecision: decision text reads as a supersession (\"supersede\"/\"supersedes\"/\"superseded\"/\"replaces\"/\"overrides\"/\"no longer applies\"/\"instead of the previous\") but names no earlier decision — pass --supersedes <id> to retire it here, or log it through `decisions supersede` instead.";
 
 pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     // handleDecisionsLog's confidence gate runs before logDecision.
@@ -272,6 +342,32 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
         if let Err(msg) = assert_safe_content(field, value) {
             return Ok(Out::Thrown(msg));
         }
+    }
+    // dsh-1: resolve --supersedes against the currently active decide/
+    // supersede set. Runs BEFORE the prose guard, so the flag's presence —
+    // not merely its shape — is what silences the guard below.
+    let supersedes: Option<Vec<String>> = match &p.supersedes {
+        None => None,
+        Some(raw_ids) if raw_ids.is_empty() => None,
+        Some(raw_ids) => {
+            let candidates = active_decide_or_supersede_candidates(root)?;
+            let mut resolved: Vec<String> = Vec::new();
+            for raw in raw_ids {
+                let id = match resolve_supersedes_target(&candidates, raw) {
+                    Ok(id) => id,
+                    Err(msg) => return Ok(Out::Thrown(msg)),
+                };
+                if !resolved.contains(&id) {
+                    resolved.push(id);
+                }
+            }
+            Some(resolved)
+        }
+    };
+    // dsh-1's prose-supersession guard: refuses inline supersession prose
+    // that names no earlier decision via --supersedes.
+    if supersedes.is_none() && matches_supersession_prose(js_trim(&p.decision)) {
+        return Ok(Out::Thrown(SUPERSESSION_PROSE_GUARD_MESSAGE.into()));
     }
     let normalized = match normalize_tags(p.tags.clone()) {
         Ok(n) => n,
@@ -304,6 +400,12 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
         event.insert(
             "tags".into(),
             Value::Array(tags.iter().cloned().map(Value::String).collect()),
+        );
+    }
+    if let Some(ids) = &supersedes {
+        event.insert(
+            "supersedes".into(),
+            Value::Array(ids.iter().cloned().map(Value::String).collect()),
         );
     }
     let event = Value::Object(event);
