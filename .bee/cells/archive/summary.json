@@ -233,5 +233,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-08T12:26:09.873Z"
+  },
+  "decision-conflict-candidates": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-08T13:13:58.407Z"
   }
 }
