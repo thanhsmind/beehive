@@ -7,8 +7,8 @@ bee:
   id: decision-memory-overview
   lifecycle: active
   areas: [decision-memory]
-  decisions: ["decision-propagation GH #32/#33/#34 (2026-07-21)", D1 b9b9fee3 (backlog CoS-gated done-flip), D2 b9b9fee3 (reversal citation sweep), D3 b9b9fee3 (citation discipline), "D4c b9b9fee3 (bounded store, archive verb)", "D5 b9b9fee3 (no stored graph, no daemon)", D6 b9b9fee3 (reversals inherit place), D7 c81c6795 (write-time classification + retro-tag reclassification), D8 1cea7713 (derived index recall surface), "D11b (scribing-skill copy of the done-flip rule, since consolidated into bee-capturing)", "compounding-skill fallback (identical, never-looser; same consolidation)"]
-  sources: ["docs/specs/decision-memory.md#R1", "docs/specs/decision-memory.md#R2", "docs/specs/decision-memory.md#R3", "docs/specs/decision-memory.md#R4", "docs/specs/decision-memory.md#R5", "docs/specs/decision-memory.md#R6", "docs/specs/decision-memory.md#R7", "docs/specs/decision-memory.md#R8", "docs/specs/decision-memory.md#R9", docs/history/decision-propagation/reports/e2e-supersede.md, test_decisions_propagation.mjs (84 checks incl. worker-thread log-vs-archive race), "backfill: 406/406 legacy events classified via extraction batches; --untagged --all returns zero; 5-event recall spot check green", "judge-record-tags cells jrt-1, jrt-2 (five internal callers swept; the census derives its sites by scanning source, and was itself widened by measurement after its first scope hid a live instance; traces in `.bee/cells/`, 2026-07-23)"]
+  decisions: ["decision-propagation GH #32/#33/#34 (2026-07-21)", D1 b9b9fee3 (backlog CoS-gated done-flip), D2 b9b9fee3 (reversal citation sweep), D3 b9b9fee3 (citation discipline), "D4c b9b9fee3 (bounded store, archive verb)", "D5 b9b9fee3 (no stored graph, no daemon)", D6 b9b9fee3 (reversals inherit place), D7 c81c6795 (write-time classification + retro-tag reclassification), D8 1cea7713 (derived index recall surface), "D11b (scribing-skill copy of the done-flip rule, since consolidated into bee-capturing)", "compounding-skill fallback (identical, never-looser; same consolidation)", "supersession-is-an-edge 252102b5 (2026-08-08, decision-supersede-hygiene dsh-1 d2c0a33e)"]
+  sources: ["docs/specs/decision-memory.md#R1", "docs/specs/decision-memory.md#R2", "docs/specs/decision-memory.md#R3", "docs/specs/decision-memory.md#R4", "docs/specs/decision-memory.md#R5", "docs/specs/decision-memory.md#R6", "docs/specs/decision-memory.md#R7", "docs/specs/decision-memory.md#R8", "docs/specs/decision-memory.md#R9", docs/history/decision-propagation/reports/e2e-supersede.md, test_decisions_propagation.mjs (84 checks incl. worker-thread log-vs-archive race), "backfill: 406/406 legacy events classified via extraction batches; --untagged --all returns zero; 5-event recall spot check green", "judge-record-tags cells jrt-1, jrt-2 (five internal callers swept; the census derives its sites by scanning source, and was itself widened by measurement after its first scope hid a live instance; traces in `.bee/cells/`, 2026-07-23)", "dsh-1-supersedes-edge (capped, d2c0a33e; packages/bee-rs/crates/bee/src/verbs/decisions/read.rs, verbs_read.rs, tests.rs)"]
   authoritative_for: "decision-memory: what the system remembers about its own decisions"
 ---
 
@@ -76,6 +76,27 @@ Three field failures (reported against a host repo, fixed generically):
   recorded reason; each hit also becomes a capture stub so an unreconciled
   citation resurfaces at every flush. Historical records (reports) are
   reconciled by appended dated correction notes, never by rewriting history.
+- **R2a — Supersession is an edge, never prose** (`252102b5`, 2026-08-08,
+  `d2c0a33e`). A decision that invalidates an earlier one must carry a
+  machine-readable link, not a verbal claim: either `decisions supersede`
+  (R2's own path) or `decisions log --supersedes <id[,id...]>` — full ids or
+  unique short8s, resolved against the currently ACTIVE decide/supersede set
+  only (an already-superseded or already-redacted target cannot be named
+  again). Either path lands the same shape: the retiring event carries a
+  `supersedes` field (a bare string for `decisions supersede`, an array for
+  `--supersedes`), and `active_decisions()` excludes every named target on
+  ANY event type, not only `type=="supersede"` — the flag carries the same
+  exclusion weight the dedicated verb always has. Decision text that reads as
+  an inline supersession claim — the word stem "supersed(e/es/ed)",
+  "replaces", "overrides", "no longer applies", "instead of the previous" —
+  is refused at `decisions log` write time unless `--supersedes` names the
+  earlier decision: free text was previously the only way to hide a
+  supersession from the active set, silently, and the store audit that
+  triggered this rule found 70 decide events doing exactly that against 29
+  proper supersede events. `active_decisions()` — the projection behind R5's
+  derived index — stays the single read surface for current truth; the
+  append-only log itself is never re-read for "is this still true," only for
+  "why."
 - **R3 — Reversals inherit their place** (D6, `b9b9fee3`). A supersede without
   explicit tags/scope inherits both from the (overlay-applied) decision it
   supersedes, so the reversal is discoverable exactly where the original
@@ -116,8 +137,11 @@ Three field failures (reported against a host repo, fixed generically):
 ## Data dictionary
 
 - **Decision event** — append-only record: `decide` (id, date, decision,
-  rationale, alternatives, scope, source, confidence, tags[]), `supersede`
-  (adds `supersedes`, `sweep`), `redact`, `tag` (target, tags[], scope?).
+  rationale, alternatives, scope, source, confidence, tags[], optional
+  `supersedes` array from `decisions log --supersedes`), `supersede` (adds
+  `supersedes` as a single string, `sweep`), `redact`, `tag` (target, tags[],
+  scope?). A `supersedes` field excludes its targets from `active_decisions()`
+  on any event type, string or array alike (R2a).
 - **Taxonomy** — `docs/decisions/taxonomy.json`: `tags[] {name, description}`
   (canonical, human-curated) + `candidates[]` (strings awaiting promotion;
   CLI-appended).

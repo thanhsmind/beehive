@@ -214,6 +214,7 @@ fn log_scribing_debt_waiver(root: &Path, feature: &str, ids: &[Value]) -> R2<()>
             source: "agent".to_string(),
             confidence_raw: None,
             tags: Some(vec!["scribing".to_string(), "state".to_string()]),
+            supersedes: None,
         },
         15,
     )? {
@@ -243,6 +244,7 @@ fn log_scribing_debt_swap_waiver(root: &Path, outgoing_feature: &str, ids: &[Val
             source: "agent".to_string(),
             confidence_raw: None,
             tags: Some(vec!["scribing".to_string(), "state".to_string()]),
+            supersedes: None,
         },
         15,
     )? {
@@ -269,6 +271,7 @@ fn log_compounding_waiver(root: &Path, feature: &str) -> R2<()> {
             source: "agent".to_string(),
             confidence_raw: None,
             tags: Some(vec!["scribing".to_string(), "state".to_string()]),
+            supersedes: None,
         },
         15,
     )? {
