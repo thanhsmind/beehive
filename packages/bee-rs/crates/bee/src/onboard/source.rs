@@ -60,9 +60,8 @@ impl Engine {
     /// of `SCRIPT_PATH`'s package root:
     ///   1. BEE_JS_ENTRY (the diff harness's own knob) — its grandparent's
     ///      parent is the package root.
-    ///   2. Walk up from the executable's directory, then from cwd, for the
-    ///      MARKER.
-    /// None ⇒ the probe declines the command: without a source tree there is
+    ///   2. Walk up from the process's cwd for the MARKER.
+    /// `Err` ⇒ the probe declines the command: without a source tree there is
     /// nothing authoritative to vendor FROM.
     ///
     /// The marker is the AGENTS block template, chosen on three properties:
@@ -73,36 +72,60 @@ impl Engine {
     /// `.claude-plugin/plugin.json` was rejected as the marker for exactly
     /// that last reason: a host repo can carry one, and onboarding a host
     /// FROM itself is the one answer that must stay impossible.
-    pub fn locate() -> Option<Self> {
+    ///
+    /// **INVOCATION ROOT, NEVER `current_exe()`.** The resolution used to
+    /// also start a walk from `current_exe()`'s directory, tried FIRST. In a
+    /// worktree whose `.bee/bin/bee` is a symlink into another checkout,
+    /// `current_exe()` (`/proc/self/exe` on Linux) resolves PAST the symlink
+    /// to that other checkout's real binary path, so the exe-rooted walk
+    /// found ITS `packages/bee/AGENTS.block.md` and returned before the cwd
+    /// walk ever ran — `onboard apply` then rendered the OTHER checkout's
+    /// templates over this one's files. The invocation root (the process's
+    /// own cwd — the same root every caller of `bee` from inside a checkout
+    /// already stands in; `install.sh` relies on exactly this by `cd`-ing
+    /// into the source checkout before invoking a binary that may live
+    /// anywhere) is the only root ever walked now, so a worktree render
+    /// always resolves to its own checkout. In the ordinary single-checkout
+    /// case cwd's walk and the old exe-rooted walk land on the same root, so
+    /// rendered bytes are unchanged there.
+    pub fn locate() -> Result<Self, LocateError> {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        Self::locate_from(&cwd)
+    }
+
+    /// `locate`'s search, parameterized on the invocation root so fixtures
+    /// can drive it without mutating the test process's real cwd.
+    pub fn locate_from(invocation_root: &Path) -> Result<Self, LocateError> {
         const MARKER: &str = "packages/bee/AGENTS.block.md";
         if let Some(entry) = std::env::var_os("BEE_JS_ENTRY") {
             let entry = PathBuf::from(entry);
             if let Some(root) = entry.parent().and_then(Path::parent).and_then(Path::parent) {
                 if super::util::join_rel(root, MARKER).is_file() {
-                    return Some(Self::from_plugin_root(root.to_path_buf()));
+                    return Ok(Self::from_plugin_root(root.to_path_buf()));
                 }
             }
         }
-        let mut starts: Vec<PathBuf> = Vec::new();
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(dir) = exe.parent() {
-                starts.push(dir.to_path_buf());
+        let mut dir = Some(invocation_root);
+        while let Some(d) = dir {
+            if super::util::join_rel(d, MARKER).is_file() {
+                return Ok(Self::from_plugin_root(d.to_path_buf()));
             }
+            dir = d.parent();
         }
-        if let Ok(cwd) = std::env::current_dir() {
-            starts.push(cwd);
-        }
-        for start in starts {
-            let mut dir = Some(start.as_path());
-            while let Some(d) = dir {
-                if super::util::join_rel(d, MARKER).is_file() {
-                    return Some(Self::from_plugin_root(d.to_path_buf()));
-                }
-                dir = d.parent();
-            }
-        }
-        None
+        Err(LocateError {
+            invocation_root: invocation_root.to_path_buf(),
+            missing_template: super::util::join_rel(invocation_root, MARKER),
+        })
     }
+}
+
+/// `Engine::locate` found no source checkout walking up from the invocation
+/// root — naming both the root that was searched and the template path that
+/// was never found there, so the refusal can quote them instead of guessing.
+#[derive(Debug, Clone)]
+pub struct LocateError {
+    pub invocation_root: PathBuf,
+    pub missing_template: PathBuf,
 }
 
 /// skillsTargetRoot (l. 398): the legacy global root.
@@ -627,5 +650,97 @@ mod tests {
         let host = dir.path().join("host").join(".claude").join("skills");
         std::fs::create_dir_all(host.join("bee-hive")).unwrap();
         assert_eq!(classify_source_kind(&host.join("bee-hive"), &home), "project_projection");
+    }
+
+    fn write(p: &Path, body: &str) {
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(p, body).unwrap();
+    }
+
+    // ── Engine::locate root resolution (onboard apply's live incident) ──────
+    //
+    // In a granted worktree whose `.bee/bin/bee` is a symlink into another
+    // checkout, `current_exe()` resolves PAST the symlink into that other
+    // checkout, so an exe-rooted walk finds ITS marker first. These fixtures
+    // never touch `current_exe()` (untestable — it is the real test binary's
+    // own path); instead they build the two checkouts a worktree/main pair
+    // would be, reproduce the OLD exe-then-cwd search order verbatim to prove
+    // it lands on the wrong (MAIN) checkout, and assert `locate_from` — the
+    // only search `Engine::locate` performs now — lands on the invocation
+    // root (the WORKTREE) instead.
+
+    /// The exact search `Engine::locate` used to perform: walk up from each
+    /// `start` in order, first match wins. Kept ONLY to prove, in-test, what
+    /// the old exe-rooted behavior would have picked — `Engine::locate`
+    /// itself no longer has an exe-rooted start.
+    fn old_exe_then_cwd_search(starts: &[&Path]) -> Option<PathBuf> {
+        const MARKER: &str = "packages/bee/AGENTS.block.md";
+        for start in starts {
+            let mut dir = Some(*start);
+            while let Some(d) = dir {
+                if super::super::util::join_rel(d, MARKER).is_file() {
+                    return Some(d.to_path_buf());
+                }
+                dir = d.parent();
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn locate_from_renders_the_invocation_roots_own_templates_not_a_symlinked_exes_checkout() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dunce::canonicalize(dir.path()).unwrap();
+
+        // Fake MAIN: what current_exe() resolved to through the worktree's
+        // `.bee/bin/bee` symlink in the live incident.
+        let main_root = base.join("main-checkout");
+        let main_exe_dir = main_root.join("target").join("release");
+        std::fs::create_dir_all(&main_exe_dir).unwrap();
+        write(
+            &main_root.join("packages").join("bee").join("AGENTS.block.md"),
+            "# MAIN checkout AGENTS block\nMAIN DISTINCTIVE BYTES\n",
+        );
+
+        // Fake WORKTREE: the invocation root — its OWN checkout, with its own
+        // (different) template bytes, distinct edits included.
+        let worktree_root = base.join("worktree-checkout");
+        write(
+            &worktree_root.join("packages").join("bee").join("AGENTS.block.md"),
+            "# WORKTREE checkout AGENTS block\nWORKTREE DISTINCTIVE BYTES (local edits)\n",
+        );
+
+        // Prove the regression: the OLD exe-then-cwd order, with the exe
+        // start pointing at MAIN (as a resolved symlink would), picks MAIN
+        // even though cwd/worktree comes second and also has a marker.
+        let old_pick = old_exe_then_cwd_search(&[&main_exe_dir, &worktree_root]);
+        assert_eq!(old_pick, Some(main_root.clone()), "old exe-rooted search must land on MAIN");
+
+        // The fix: `locate_from` never starts from the exe — only from the
+        // invocation root — so it renders the WORKTREE's own templates.
+        let engine = Engine::locate_from(&worktree_root).expect("worktree carries its own marker");
+        assert_eq!(engine.plugin_root, worktree_root);
+        let rendered = std::fs::read_to_string(&engine.agents_block_template).unwrap();
+        assert!(
+            rendered.contains("WORKTREE DISTINCTIVE BYTES"),
+            "must render the worktree's own template bytes, got: {rendered:?}"
+        );
+        assert!(
+            !rendered.contains("MAIN DISTINCTIVE BYTES"),
+            "must never render MAIN's template bytes over the worktree's, got: {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn locate_from_refuses_a_root_without_templates_naming_both_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        // A host repo root: no packages/bee/AGENTS.block.md anywhere above it
+        // within the sandbox (a fresh isolated tempdir has no such ancestor).
+        let host_root = dunce::canonicalize(dir.path()).unwrap().join("host-repo");
+        std::fs::create_dir_all(&host_root).unwrap();
+
+        let err = Engine::locate_from(&host_root).expect_err("no marker anywhere ⇒ refusal");
+        assert_eq!(err.invocation_root, host_root);
+        assert_eq!(err.missing_template, host_root.join("packages").join("bee").join("AGENTS.block.md"));
     }
 }
