@@ -1,0 +1,53 @@
+{
+  "id": "wsh-1",
+  "feature": "worktree-store-hygiene",
+  "title": "Worktree store bootstrap copies only the granted feature's cells",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/"
+  ],
+  "action": "PBI p-9c48a67c: bee worktree new/register bootstraps the island store by copying .bee content wholesale, so stale uncapped cells belonging to OTHER features land in the fresh worktree's store — confusing workers and miscounting open work. Fix: locate the store-bootstrap copy in the worktree module (declared handlers.rs is a guess — follow the real site, name it). Rule: cells are copied only when their feature field equals the granted feature (any status); every other feature's cell files are skipped. Feature-neutral records the island needs (config, expertise, prompts, non-cell stores) keep copying exactly as today. Archived cells: skip other features' archives the same way. TDD red-first: fixture main store with cells of two features -> worktree new for feature A: island holds A's cells only, B absent; main store untouched; a feature with zero cells bootstraps an empty cells dir cleanly; existing worktree tests stay green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "a fresh worktree store holds only the granted feature's cells",
+      "main store is untouched by the bootstrap filter",
+      "feature-neutral store content copies exactly as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "substantive": "filtered bootstrap plus tests (or the real site, named in the trace)"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wsh-1",
+    "outcome": "bootstrap_worktree_store (registry.rs, real site) prunes foreign-feature cell files and archives already checked out, fills granted feature's cells; main store read-only; 4 new tests",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T15:50:13.672Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T15:42:17.370Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T15:50:02.028Z"
+  }
+}
