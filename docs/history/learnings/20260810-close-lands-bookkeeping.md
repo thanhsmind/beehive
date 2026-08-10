@@ -41,3 +41,15 @@ convergence, dangling-source finding, search/bootstrap/report entry points),
 and the two promote-proposal pointers (knowledge-search: already carried by
 B10, area tags over-broad; close-lands-bookkeeping: empty proposal, R81
 already recorded).
+
+## Appended 2026-08-10 (review follow-ups)
+
+The review's 4 P2 and 6 P3 findings all shipped same-day as two small
+features (close-bookkeeping-hardening cbh-1; close-bookkeeping-p3
+cbp-1/cbp-2). Durable lesson: the review found the config-refusal claim
+UNSHIPPED (silently read as off) with a test pinning the wrong behavior —
+a spec sentence written at capture time is not proof; only the reviewer's
+adversarial re-read caught the divergence between R81's wording and the
+code. Second lesson: the authoring default (change_class behavior must arm
+the scribing door itself) closes a silent-debt hole that had already
+bitten twice (validation-diet friction row 602, then clb-1).
