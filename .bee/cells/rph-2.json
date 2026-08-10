@@ -1,0 +1,61 @@
+{
+  "id": "rph-2",
+  "feature": "review-p2-hardening",
+  "title": "Registry hardening: feature validation, visible skip report, fail-closed tracked set, checked dest archive",
+  "lane": "standard",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/create.rs"
+  ],
+  "action": "Review B-P2-2 + B-P2-7 + D-P2-1 + D-P3-1 + D-P3-2, all registry-cluster. (1) worktree register validates --feature with the same feature_slug_ok create.rs uses — non-slug refused naming the value, BEFORE any path join. (2) worktree new surfaces the cellsSync skip: handlers.rs's result map carries the bootstrap map's cellsSync when present and the text gains the same one-line skip note register already prints. (3) git_tracked_cells fails CLOSED on unexpected shape: any ls-files entry that does not strip_prefix(\".bee/cells/\") cleanly makes the whole tracked lookup return None (prune nothing) instead of an empty set (empty set = prune everything was the dangerous branch). (4) dest_archive.join(feature) joins the symlink-checked set at the guard (delta D-P3-1). (5) The bootstrap map gains a pruned list (file names) when the prune removed anything; the text mentions the count. (6) The fail-safe test gets a GIT_CEILING_DIRECTORIES-style scoped guard like close.rs's GitCeilingGuard (reuse or lift into a shared test helper). (7) close.rs fixture: seed commit passes --no-gpg-sign instead of relying on repo config (delta D-P3-2). TDD red-first where behavior changes; all existing worktree and close tests stay green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "register refuses a non-slug feature before any path join",
+      "worktree new's text and JSON carry the cellsSync skip when it fires",
+      "an unparseable ls-files line means prune-nothing, never prune-everything",
+      "a symlinked dest archive dir refuses the sync like the other checked paths"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+        "substantive": "validation, fail-closed guard, checked dest archive, prune reporting, plus tests"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-rph-2",
+    "outcome": "register validates feature slug pre-join; worktree new surfaces cellsSync skip; tracked-set parse fails closed; dest archive in symlink-checked set; pruned names reported; ceiling guard on fail-safe test; fixture seeds --no-gpg-sign",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T23:38:44.628Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T22:46:40.452Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T23:38:33.039Z"
+  }
+}

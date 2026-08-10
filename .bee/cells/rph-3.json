@@ -1,0 +1,57 @@
+{
+  "id": "rph-3",
+  "feature": "review-p2-hardening",
+  "title": "Engine::locate stops at the repository boundary and repo-root is the first candidate",
+  "lane": "standard",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/source.rs",
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+    "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/onboard/source.rs",
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+  ],
+  "action": "Review B-P2-3: Engine::locate walks cwd to / with no boundary — the nearest ancestor carrying packages/bee/AGENTS.block.md becomes the vendoring source (template/hook poisoning), and the repo-root flag is never a candidate (INSTALL.md's 'from any terminal' is false). Fix: (1) the upward walk STOPS after the first directory containing .git (file or dir — the repository boundary): inside a repo only that repo can win; outside any repo the walk keeps today's behavior to the filesystem root. (2) When the caller passed the repo-root flag, that root is tried FIRST as a locate candidate (its own packages/bee/AGENTS.block.md); only on miss does the cwd walk run, and LocateError then names both candidates. (3) Tests: neutralize ambient BEE_JS_ENTRY with a scoped env guard in every locate test; pin PRODUCTION Engine::locate() behavior — red test: ancestor ABOVE a .git boundary carries templates, cwd inside the repo without templates -> refusal (old code: ancestor wins); repo-root candidate test: cwd elsewhere, repo-root at a real checkout -> engine resolves. Existing onboard tests stay green (they use run_with_root and bypass locate).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "an ancestor beyond the repo's .git boundary can never become the template source",
+      "onboard with the repo-root flag at a bee checkout works from any cwd",
+      "locate tests are immune to ambient BEE_JS_ENTRY"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/source.rs",
+        "substantive": "bounded walk + repo-root candidate plus tests"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-rph-3",
+    "outcome": "locate walk stops at first .git boundary; repo-root is first candidate and LocateError names both; BEE_JS_ENTRY neutralized in tests; locate() pure delegate pinned via locate_from",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/source.rs",
+      "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T23:39:05.800Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T22:46:40.459Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T23:38:53.516Z"
+  }
+}

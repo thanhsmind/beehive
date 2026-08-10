@@ -1,0 +1,58 @@
+{
+  "id": "rph-1",
+  "feature": "review-p2-hardening",
+  "title": "One shared hardened unsigned-commit helper; config refusal names the real file and null reads as unset",
+  "lane": "standard",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/state.rs"
+  ],
+  "action": "Review B-P2-1 + B-P2-4. Part A (mechanism): add one shared helper in worktree/git.rs — commit_unsigned(cwd, message, pathspec: Option<&str>) -> GitOut — spawning git commit with --no-gpg-sign and stdin null; close.rs's bookkeeping commit and phases.rs's merge commit both call it. Do NOT change any user-facing failure text (R81 pins close's exit-status spelling — close keeps formatting its own reason from GitOut fields; fail_text stays for merge). The two gpg stub-proof tests must stay red-capable: verify once by removing the flag inside the helper (both red), restore, note in trace. Part B (config): close_commit_bookkeeping_invalid_value hardcodes .bee/config.json in its message while reading the merged overlay (state.rs merges config.local.json over config.json) — make the refusal name the file actually carrying the offending value (check local first, then main); Value::Null now reads as UNSET (defaults on) instead of refusing — null is bee's unset idiom; every other non-boolean still refuses up front. Restore a direct test on the defense-in-depth fallback arm of commit_close_bookkeeping (non-boolean reaching it returns config_off) lost in the cbh-1 retarget. TDD: local-overlay repro (bad value only in config.local.json -> refusal names config.local.json); null test (close proceeds); existing refusal + stub tests green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "both commit paths go through one shared hardened helper and both stub-proof tests stay red-capable",
+      "a bad value living only in config.local.json is refused naming config.local.json",
+      "null close_commit_bookkeeping behaves as unset (on), not a refusal"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+        "substantive": "commit_unsigned helper consumed by both callers, plus tests"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-rph-1",
+    "outcome": "shared commit_unsigned helper in worktree/git.rs consumed by close + merge (single-flag removal reds both stub tests); config refusal names the offending file across the overlay; null reads as unset; defense-arm test restored",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T23:38:25.801Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T22:46:40.445Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T23:38:14.203Z"
+  }
+}

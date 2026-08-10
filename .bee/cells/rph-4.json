@@ -1,0 +1,60 @@
+{
+  "id": "rph-4",
+  "feature": "review-p2-hardening",
+  "title": "Worker records upsert; payload keys pinned; cells update arms the behavior door",
+  "lane": "standard",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+  ],
+  "action": "Review B-P2-6 + B-P2-8. (1) push_worker_record upserts by (nickname, cell): an existing record with the same pair is updated in place (tier/status refreshed), never duplicated — run_worker_add and register_worker_for_cell both inherit it; a same-nickname different-cell pair still appends (legitimate multi-cell worker). Test: double add of the same pair yields one record; update then hits the live one. (2) Payload pins: tests through run_dispatch_prepare (the real entry, not the inner fn) asserting worker_registered:true on a successful claim and registration_error naming the failure when registration fails. (3) cells update: when an update sets change_class to behavior and the same call does not explicitly set behavior_change, arm trace.behavior_change=true (explicit false in the same call wins; setting change_class AWAY from behavior changes nothing). Reuse the same defaulting logic as validate.rs's normalize_new_cell — one shared function, not a copy. TDD red-first: update-to-behavior arms the door (assert via resolve_declared_behavior_change); explicit-false honored; away-from-behavior untouched. NOTE: the instruction-layer sync (swarming reference teaching manual worker add) is deliberately NOT in this cell — the orchestrator owes it as a docs-lane edit with the regen chain at capture time.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "double registration of the same nickname+cell yields one record and update mutates the live one",
+      "worker_registered/registration_error asserted through the real dispatch prepare entry",
+      "cells update to change_class behavior arms the scribing door under the same rules as add"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+        "substantive": "upsert plus tests; shared defaulting used by update path"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-rph-4",
+    "outcome": "push_worker_record upserts by nickname+cell; worker_registered pinned through real CLI entry (out-of-process child), failure shape on inner seam per noted split; cells update arms behavior door via shared arms_behavior_door",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T23:39:17.432Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T22:46:40.466Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T23:39:05.807Z"
+  }
+}
