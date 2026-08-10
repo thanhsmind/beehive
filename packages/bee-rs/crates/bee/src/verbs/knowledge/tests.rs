@@ -1073,6 +1073,54 @@ use std::time::Instant;
         assert!(report.ok);
     }
 
+    /// U2: a `bee.sources` entry naming a repo-relative path that no longer
+    /// exists on disk warns by name; a resolving path, a URL, and free-text
+    /// prose all stay silent. Files live under the REPO root (`tmp.path()`),
+    /// never the bundle dir — sources cite code, not bundle-relative targets.
+    #[test]
+    fn dangling_source_warns_only_for_the_unresolvable_repo_path() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("src/cli")).unwrap();
+        std::fs::write(root.join("src/cli/main.rs"), "fn main() {}\n").unwrap();
+        put(
+            &dir,
+            "patterns/linked.md",
+            Cx::new("linked").bee(
+                "sources",
+                json!([
+                    "src/cli/main.rs",                        // resolves — the control
+                    "src/cli/ghost.rs",                        // repo-relative, deleted/moved
+                    "src/cli/main.rs (see the entrypoint)",     // path prefix + free text — resolves
+                    "docs/specs/widgets.md#B5",                 // fragment stripped; still dangling
+                    "https://example.com/src/cli/ghost.rs",     // URL scheme — never a path
+                    "git@example.com:org/repo.git",             // ssh remote — never a path
+                    "See the gizmos spec",                      // prose — no path token at all
+                ]),
+            ),
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        let dangling = of_code(&report.warnings, "dangling_source");
+        assert_eq!(
+            dangling.len(),
+            2,
+            "only the two unresolvable repo paths may warn: {:?}",
+            report.warnings
+        );
+        assert!(dangling.iter().all(|f| f["file"] == "patterns/linked.md"));
+        assert!(dangling.iter().any(|f| msg(f).contains("src/cli/ghost.rs")), "{:?}", report.warnings);
+        assert!(dangling.iter().any(|f| msg(f).contains("docs/specs/widgets.md")), "{:?}", report.warnings);
+        assert!(report.ok, "a warning alone must not fail un-strict");
+        assert!(!check_bundle(&dir, true).unwrap().ok, "--strict flips a dangling source to failing");
+
+        // Control: every source resolving (or reading as a URL/prose) stays silent.
+        let (_tmp2, clean_dir) = bundle();
+        put(&clean_dir, "patterns/clean.md", Cx::new("clean").bee("sources", json!(["See the gizmos spec"])));
+        let clean = check_bundle(&clean_dir, false).unwrap();
+        assert!(of_code(&clean.warnings, "dangling_source").is_empty(), "{:?}", clean.warnings);
+        assert!(clean.ok);
+    }
+
     /// Node: 'profile warning: dangling supersedes id; a resolving id stays
     /// silent' (l.300).
     #[test]

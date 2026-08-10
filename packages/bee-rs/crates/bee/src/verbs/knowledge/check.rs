@@ -111,10 +111,41 @@ pub(crate) fn typeof_word(v: &Value) -> &'static str {
     }
 }
 
+// ─── U2: dangling `bee.sources` paths (pointers rot when files move) ──────
+//
+// A sources entry is prose citation as often as it is a code pointer
+// ("src/cli", "docs/specs/widgets.md#B5 (see the anchor table)", "See the
+// gizmos spec"), so only the LEADING whitespace-delimited token of each
+// entry is even a path candidate — everything after it is free text D4/U2
+// never parses. Within that token: a URL or an ssh-style remote reads as a
+// scheme (a ':' before the first '/' — `https://`, `git@host:org/repo`) and
+// is never flagged; a rooted form (leading '/') is not repo-relative and is
+// never flagged; a token carrying no '/' at all is prose. A trailing
+// `#fragment` (a doc-anchor citation) is dropped before the existence check
+// — the file is the pointer, the heading inside it is not.
+pub(crate) fn dangling_source_candidate(entry: &str) -> Option<String> {
+    let token = entry.split_whitespace().next()?;
+    let token = token.split('#').next().unwrap_or("");
+    if token.is_empty() || token.starts_with('/') {
+        return None;
+    }
+    let slash = token.find('/')?;
+    if let Some(colon) = token.find(':') {
+        if colon < slash {
+            return None; // scheme-shaped prefix — a URL or an ssh remote, never a repo path
+        }
+    }
+    Some(token.to_string())
+}
+
 pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
     let mut errors: Vec<Value> = Vec::new();
     let mut warnings: Vec<Value> = Vec::new();
     let mut profile_errors: Vec<Value> = Vec::new();
+    // bundle_dir always builds `dir` as `root/docs/knowledge` — the two
+    // parents recover the repo root that `sources` paths are relative to
+    // (unlike `required_context`, which is bundle-relative, D19).
+    let repo_root = dir.parent().and_then(Path::parent);
     let files = list_bundle_markdown(dir)?;
     let mut parsed_concepts: Vec<Concept> = Vec::new();
     let mut concept_count = 0usize;
@@ -334,6 +365,21 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
                     "dangling_supersedes",
                     format!("supersedes target id \"{sup}\" matches no concept's bee.id in the bundle"),
                 ));
+            }
+        }
+        if let (Some(root), Some(Value::Array(sources))) = (repo_root, bee.get("sources")) {
+            for source in sources {
+                let Value::String(s) = source else { continue };
+                let Some(candidate) = dangling_source_candidate(s) else { continue };
+                if !root.join(&candidate).exists() {
+                    warnings.push(finding(
+                        &concept.path,
+                        "dangling_source",
+                        format!(
+                            "sources entry \"{s}\" names path \"{candidate}\" that does not exist on disk (U2: pointers rot when files move)"
+                        ),
+                    ));
+                }
             }
         }
     }
