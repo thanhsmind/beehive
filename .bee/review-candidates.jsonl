@@ -95,3 +95,4 @@
 {"id":"dffa2df7-a182-4d18-a381-4e9c169e2635","type":"candidate","date":"2026-08-07T03:07:07.795Z","feature":"dispatch-label-chokepoint","head":"a49325473bf6f232a9b1e7f263186e4e423bf3a9","mode":"standard","baseline":null,"cells":[]}
 {"id":"26ad2c81-6568-47cc-8dfc-735dc8c3c64e","type":"candidate","date":"2026-08-10T13:23:21.111Z","feature":"close-lands-bookkeeping","head":"10a937ae5a7e952eed00186748ba0f5395760865","mode":"small","baseline":null,"cells":["clb-1"]}
 {"id":"fbb429b4-ef88-4309-a150-2575d143c81e","type":"candidate","date":"2026-08-10T14:20:14.355Z","feature":"close-bookkeeping-hardening","head":"ab352dcdb34cfcd495532492c1e2ec049edcf49b","mode":"small","baseline":null,"cells":["cbh-1"]}
+{"id":"46f72524-59af-45fd-8ddf-f89e726a6051","type":"candidate","date":"2026-08-10T14:37:48.796Z","feature":"close-bookkeeping-p3","head":"f6f6e76575a4de0b7e88384a40754c3d9577c8fe","mode":"small","baseline":null,"cells":["cbp-1","cbp-2"]}
