@@ -923,6 +923,53 @@ use std::time::Instant;
         );
     }
 
+    /// B-P1-2: pins `--no-gpg-sign` on the merge commit (phases.rs's
+    /// `merge_finish`). A `main` repo with `commit.gpgsign true` AND
+    /// `gpg.program` pointed at a stub that always fails must still let the
+    /// merge commit land — proving the merge, which runs while the
+    /// `worktree-admin` lock is held, can never block on a signing prompt.
+    /// Without `--no-gpg-sign` this turns red: the commit would ask the
+    /// failing stub to sign, `git commit` would exit non-zero, and
+    /// `merge_feature_worktree` would return `WORKTREE_MERGE_COMMIT_FAILED`
+    /// instead of `merged: true` (verified by hand: temporarily dropping the
+    /// flag from `phases.rs` flips this assertion red, restored after).
+    #[cfg(unix)]
+    #[test]
+    fn merge_commit_lands_with_gpgsign_true_and_a_failing_signer() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["commit", "-qam", "work"]);
+
+        // A "gpg" that always fails, wired in on `main` — the merge commit
+        // runs there, not in the worktree.
+        let stub = tmp.path().join("gpg-stub.sh");
+        std::fs::write(&stub, "#!/bin/sh\nexit 1\n").unwrap();
+        let mut perms = std::fs::metadata(&stub).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&stub, perms).unwrap();
+        git_ok(&main, &["config", "commit.gpgsign", "true"]);
+        git_ok(&main, &["config", "gpg.program", stub.to_str().unwrap()]);
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
     /// releaseAllForHolder marks every unreleased row for the holder and
     /// leaves everyone else's — and never rewrites the file when nothing
     /// changed (worktree-holds.mjs's own "only write when something changed").

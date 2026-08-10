@@ -355,7 +355,13 @@ pub(crate) fn merge_finish(
             ));
         }
 
-        let commit_result = run_git(main_root, &["commit", "-m", merge_message]);
+        // `--no-gpg-sign`: this merge commit runs while the worktree-admin
+        // lock is held, so a repo with `commit.gpgsign true` and a tty
+        // pinentry configured must never be able to block the merge on a
+        // signing prompt — same defense `close.rs`'s bee-store bookkeeping
+        // commit keeps (B-P1-2). `run_git` also always spawns `git` with
+        // stdin null, so even an unexpected prompt has nowhere to read from.
+        let commit_result = run_git(main_root, &["commit", "--no-gpg-sign", "-m", merge_message]);
         if commit_result.status != Some(0) {
             run_git(main_root, &["merge", "--abort"]);
             return Err(refuse_merge(
