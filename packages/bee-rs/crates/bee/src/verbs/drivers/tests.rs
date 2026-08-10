@@ -22,7 +22,7 @@ use crate::verbs::reservations::{
     release_reservations_for_agent, reserve_path_atomic, Err2, ReserveOutcome,
 };
 use serde_json::{Map, Number, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -1309,7 +1309,7 @@ use std::time::Instant;
         let root = repo(&tmp, r#"{"commands":{"test":["a","b"]}}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", true, declared, None).unwrap()
+            close_handler(&root, "demo", true, declared, None, &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1320,6 +1320,7 @@ use std::time::Instant;
                 "door tests: open — commands.test declared (2 command(s)) — close runs the full declared suite fresh; a stale test-results record is never trusted | settle: bee test\n",
                 "door scribing-debt: clear\n",
                 "door capture-queue: clear\n",
+                "door pattern-check: clear\n",
                 "next: bee close --feature demo — runs the declared tests and reports"
             )
         );
@@ -1329,7 +1330,7 @@ use std::time::Instant;
 
         // Undeclared repo: the teaching detail + a different next line.
         w(&root, ".bee/config.json", "{}");
-        let Out::Emit(_, text, _) = close_handler(&root, "demo", true, None, None).unwrap() else {
+        let Out::Emit(_, text, _) = close_handler(&root, "demo", true, None, None, &HashMap::new()).unwrap() else {
             panic!()
         };
         assert!(text.starts_with(&format!("door tests: open — {CLOSE_TESTS_UNDECLARED_DETAIL}\n")));
@@ -1345,7 +1346,7 @@ use std::time::Instant;
         let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1402,7 +1403,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1457,7 +1458,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1520,7 +1521,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, _text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1550,7 +1551,7 @@ use std::time::Instant;
         let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, _text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1568,7 +1569,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1827,7 +1828,7 @@ use std::time::Instant;
         w(&root, ".bee/cells/demo-5.json", r#"{"id":"demo-5","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-02T00:00:00.000Z"}}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1868,7 +1869,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1893,7 +1894,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1926,7 +1927,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1949,7 +1950,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -2051,7 +2052,7 @@ use std::time::Instant;
         // thrown error and never a refusal.
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", true, declared, None).unwrap()
+            close_handler(&root, "demo", true, declared, None, &HashMap::new()).unwrap()
         else {
             panic!("a corrupt lane record must not stop close")
         };
@@ -2124,7 +2125,7 @@ use std::time::Instant;
         w(&root, ".bee/lanes/other.json", r#"{"feature":"other"}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, without_lane, without_code) =
-            close_handler(&root, "demo", true, declared.clone(), None).unwrap()
+            close_handler(&root, "demo", true, declared.clone(), None, &HashMap::new()).unwrap()
         else {
             panic!("close_handler must run the driver, not refuse")
         };
@@ -2132,7 +2133,7 @@ use std::time::Instant;
         // delegate the whole command before `close_handler` was reached.
         w(&root, ".bee/lanes/demo.json", r#"{"feature":"demo","phase":"executing"}"#);
         let Out::Emit(_, with_lane, with_code) =
-            close_handler(&root, "demo", true, declared, None).unwrap()
+            close_handler(&root, "demo", true, declared, None, &HashMap::new()).unwrap()
         else {
             panic!("close still runs — a lane record is not a refusal")
         };
