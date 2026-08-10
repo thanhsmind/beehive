@@ -32,6 +32,16 @@ The store is classified into three lifecycle tiers, realized by git config (no d
 - **runtime tier** — live coordination (sessions, claims, reservations, the worktree grant
   registry). Gitignored; TTL/heartbeat lifetimes. Never merged — a merged stale hold is a bug.
 
+**The island's cell inventory is feature-scoped at bootstrap (worktree-store-hygiene cell
+wsh-1, 2026-08-10; PBI p-9c48a67c).** Cell files and archives are git-TRACKED, so `git
+worktree add` checks the whole `.bee/cells` tree out into a fresh island before the store
+bootstrap runs — which used to leave every other feature's uncapped cells sitting in the new
+worktree's store, confusing workers and miscounting open work. The bootstrap now reconciles
+`.bee/cells` by the cell's own feature field: files and archive dirs of any OTHER feature are
+pruned from the island, the granted feature's cells are filled in from the main store when
+missing, and the main store is read-only throughout. Status plays no part in the rule — only
+feature identity.
+
 ## Where it lives (reading map)
 
 - Decision + replay logic: `worktree-store.mjs` (`decideWorktreeStore`, `replayLog`,
