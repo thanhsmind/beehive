@@ -634,6 +634,52 @@ use std::time::Instant;
         assert!(text.contains("anchor: ledger — .bee/logs/scribing-runs.jsonl, .bee/lanes/led-1.json"));
     }
 
+    /// U5: this session's own repro — a feature bound the moment
+    /// `bee state bind` writes its `.bee/lanes/<feature>.json` record
+    /// resolves an anchor even with NO scribing-runs.jsonl entry (no
+    /// scribing run has happened yet) and no docs/history/<feature>/ file.
+    /// Before this widening, `resolve_anchor` returned None here — a bound
+    /// feature fell all the way through to the caller's recency fallback.
+    #[test]
+    fn resolve_anchor_widens_the_ledger_arm_to_a_bare_lane_record_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("lanes").join("bare-1.json"),
+            r#"{"schema_version":"1.0","feature":"bare-1","mode":"small","phase":"shaping","approved_gates":{"context":false,"shape":false,"execution":false,"review":false},"summary":"","created_at":"2026-08-10T00:00:00.000Z"}"#,
+        )
+        .unwrap();
+
+        let concepts: Vec<Concept> = Vec::new();
+        let anchor = resolve_anchor(&concepts, root, "bare-1")
+            .expect("a bare lane record alone must resolve an anchor (U5)");
+        assert_eq!(anchor.kind(), "ledger");
+        assert_eq!(anchor.paths(), vec![".bee/lanes/bare-1.json".to_string()]);
+    }
+
+    /// U5: a docs/history/<feature>/ file that is neither CONTEXT.md nor
+    /// plan.md (so the History arm above never looked for it) still counts
+    /// as SOMETHING on disk for the feature — the ledger arm's third
+    /// widened signal.
+    #[test]
+    fn resolve_anchor_widens_the_ledger_arm_to_any_docs_history_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("docs").join("history").join("other-1")).unwrap();
+        std::fs::write(
+            root.join("docs").join("history").join("other-1").join("notes.md"),
+            "a differently named artifact, not CONTEXT.md or plan.md\n",
+        )
+        .unwrap();
+
+        let concepts: Vec<Concept> = Vec::new();
+        let anchor = resolve_anchor(&concepts, root, "other-1")
+            .expect("any docs/history/<work>/ file must resolve an anchor (U5)");
+        assert_eq!(anchor.kind(), "ledger");
+        assert_eq!(anchor.paths(), vec!["docs/history/other-1/notes.md".to_string()]);
+    }
+
     /// D34ccf18d keeps its place as the LAST arm: a docs/history/ file for
     /// the feature wins over its own scribing-ledger entry, and a
     /// bee.work-item concept wins over both.

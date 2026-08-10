@@ -1,12 +1,16 @@
 // The shared "--work <id> resolves to no bee.work-item concept" fallback
-// (D1/D5/D6, extended by D34ccf18d): a bee.work-item concept whose bee.id
-// matches `work` always wins; otherwise docs/history/<work>/CONTEXT.md
-// and/or plan.md, whichever exist, both when both do; otherwise `work`'s
-// most recent .bee/logs/scribing-runs.jsonl entry (a small/tiny-lane
-// feature logs its scoping synthesis as a decision instead of a
-// docs/history/ artifact, so the ledger is the one thing still on disk for
-// it); otherwise no anchor at all, which every caller renders as today's
-// unknown_work refusal, byte for byte, unchanged.
+// (D1/D5/D6, extended by D34ccf18d, widened by U5): a bee.work-item concept
+// whose bee.id matches `work` always wins; otherwise docs/history/<work>/
+// CONTEXT.md and/or plan.md, whichever exist, both when both do; otherwise
+// the ledger arm, which now fires on ANY of: `work`'s most recent
+// .bee/logs/scribing-runs.jsonl entry (a small/tiny-lane feature logs its
+// scoping synthesis as a decision instead of a docs/history/ artifact, so
+// the ledger is the one thing still on disk for it), a bare
+// .bee/lanes/<work>.json record with no scribing-run entry required (a
+// bound feature carries a lane record from the moment it is bound, well
+// before its first scribing run), or any docs/history/<work>/ file other
+// than CONTEXT.md/plan.md; otherwise no anchor at all, which every caller
+// renders as today's unknown_work refusal, byte for byte, unchanged.
 //
 // Consumed identically by knowledge::context's build_context_manifest and
 // its byte-parity port at drivers/kctx.rs (D8) — both copies call the same
@@ -19,7 +23,7 @@
 
 use super::walk::Concept;
 use crate::verbs::state_group::read_scribing_ledger;
-use crate::verbs::workflow_store::read_lane_display;
+use crate::verbs::workflow_store::{lanes_dir, read_lane_display};
 use serde_json::{Map, Value};
 use std::path::Path;
 
@@ -38,9 +42,11 @@ pub(crate) enum Anchor<'a, C: ConceptLike> {
         body: String,
         bytes: u64,
     },
-    /// D34ccf18d: neither a work-item concept nor a docs/history/<work>/
-    /// file exists, but `work`'s most recent .bee/logs/scribing-runs.jsonl
-    /// entry does. `meta`/`body`/`bytes` are built the same way the History
+    /// D34ccf18d, widened by U5: neither a work-item concept nor a
+    /// docs/history/<work>/CONTEXT.md/plan.md exists, but at least one of
+    /// `work`'s most recent .bee/logs/scribing-runs.jsonl entry, a bare
+    /// .bee/lanes/<work>.json record, or some OTHER docs/history/<work>/
+    /// file does. `meta`/`body`/`bytes` are built the same way the History
     /// arm builds them — from what was actually read off disk — so every
     /// caller below can treat the two arms identically.
     Ledger {
@@ -62,9 +68,9 @@ impl<'a, C: ConceptLike> Anchor<'a, C> {
 
     /// Repo-relative paths the anchor was built from — a single-element list
     /// for a work item's own bundle file, one or two docs/history entries
-    /// for the history fallback, .bee/logs/scribing-runs.jsonl (plus
-    /// .bee/lanes/<work>.json when it contributed a next_action) for the
-    /// ledger fallback.
+    /// for the history fallback; for the ledger fallback, whichever of
+    /// .bee/logs/scribing-runs.jsonl, .bee/lanes/<work>.json, and other
+    /// docs/history/<work>/ file names actually fired (U5).
     pub(crate) fn paths(&self) -> Vec<String> {
         match self {
             Anchor::WorkItem(c) => vec![format!("docs/knowledge/{}", c.concept_path())],
@@ -183,28 +189,83 @@ fn ledger_next_action(root: &Path, work: &str) -> Option<String> {
     if next.is_empty() { None } else { Some(next.to_string()) }
 }
 
-/// D34ccf18d, the third and last arm: no bee.work-item concept and no
-/// docs/history/<work>/ file, but `work`'s most recent scribing-ledger entry
-/// names it. `meta`/`body` are the stamped area names and the lane record's
-/// recorded next_action, concatenated exactly as read — never composed
-/// prose, the same discipline `meta_text_of`/`first_heading` already hold —
-/// and `bytes` sizes the anchor off that same built text, since (unlike the
-/// history arm) there is no backing file to stat.
-fn read_ledger_anchor(root: &Path, work: &str) -> Option<(Vec<String>, String, String, u64)> {
-    let areas = latest_ledger_areas(root, work)?;
-    let next_action = ledger_next_action(root, work);
+/// U5: does `.bee/lanes/<work>.json` exist at all, regardless of whether it
+/// carries a `last_scribing_run`? A bound feature gets this file the moment
+/// it is bound (`bee state bind` / a lane claim), well before its first
+/// scribing run — so its bare existence is its own ledger-arm signal, not
+/// gated on `ledger_next_action` finding a next_action inside it.
+fn lane_record_exists(root: &Path, work: &str) -> bool {
+    lanes_dir(root).join(format!("{work}.json")).is_file()
+}
 
-    let mut paths = vec![".bee/logs/scribing-runs.jsonl".to_string()];
-    if next_action.is_some() {
+/// U5: file names under docs/history/<work>/ other than CONTEXT.md/plan.md —
+/// those two already won the History arm above by the time this runs, so a
+/// hit here means the feature dropped something else there (a differently
+/// named note, a scoped excerpt) that the History arm's fixed two-name list
+/// never looked for. Sorted for byte-stable paths across directory-order
+/// differences. `[]` (never an error) when the directory does not exist.
+fn other_history_file_names(root: &Path, work: &str) -> Vec<String> {
+    let mut dir = root.to_path_buf();
+    for seg in ["docs", "history", work] {
+        dir.push(seg);
+    }
+    let Ok(entries) = std::fs::read_dir(&dir) else { return Vec::new() };
+    let mut names: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|name| name != "CONTEXT.md" && name != "plan.md")
+        .collect();
+    names.sort();
+    names
+}
+
+/// D34ccf18d, widened by U5: the third and last arm, now firing on ANY of
+/// three signals rather than requiring a scribing-ledger entry alone —
+/// `work`'s most recent .bee/logs/scribing-runs.jsonl entry (unchanged), a
+/// bare .bee/lanes/<work>.json record (`lane_record_exists`), or any
+/// docs/history/<work>/ file other than CONTEXT.md/plan.md
+/// (`other_history_file_names`). This session's own repro: a feature bound
+/// with only a lane record (no scribing run yet, no docs/history/ file)
+/// used to fall through to the caller's recency fallback — now it resolves
+/// here instead. `meta`/`body` are built from whatever actually fired —
+/// stamped area names, the lane record's next_action, other file names —
+/// concatenated exactly as read, never composed prose, the same discipline
+/// `meta_text_of`/`first_heading` already hold; `bytes` sizes the anchor off
+/// that same built text, since (unlike the history arm) there is no single
+/// backing file to stat.
+fn read_ledger_anchor(root: &Path, work: &str) -> Option<(Vec<String>, String, String, u64)> {
+    let areas = latest_ledger_areas(root, work);
+    let next_action = ledger_next_action(root, work);
+    let has_lane_record = lane_record_exists(root, work);
+    let other_files = other_history_file_names(root, work);
+
+    if areas.is_none() && !has_lane_record && other_files.is_empty() {
+        return None;
+    }
+
+    let mut paths = Vec::new();
+    if areas.is_some() {
+        paths.push(".bee/logs/scribing-runs.jsonl".to_string());
+    }
+    if has_lane_record {
         paths.push(format!(".bee/lanes/{work}.json"));
+    }
+    for name in &other_files {
+        paths.push(format!("docs/history/{work}/{name}"));
     }
 
     let mut meta_parts = vec![work.to_string()];
-    meta_parts.extend(areas.iter().cloned());
+    if let Some(areas) = &areas {
+        meta_parts.extend(areas.iter().cloned());
+    }
+    meta_parts.extend(other_files.iter().cloned());
 
     let mut body_parts: Vec<String> = Vec::new();
-    if !areas.is_empty() {
-        body_parts.push(areas.join(" "));
+    if let Some(areas) = &areas {
+        if !areas.is_empty() {
+            body_parts.push(areas.join(" "));
+        }
     }
     if let Some(next) = &next_action {
         body_parts.push(next.clone());
@@ -215,11 +276,11 @@ fn read_ledger_anchor(root: &Path, work: &str) -> Option<(Vec<String>, String, S
     Some((paths, meta_parts.join(" "), body, bytes))
 }
 
-/// D5 then D1/D6, then D34ccf18d: a bee.work-item concept whose bee.id
-/// matches `work` always wins; otherwise docs/history/<work>/CONTEXT.md and
-/// plan.md, whichever exist, both when both do; otherwise `work`'s most
-/// recent .bee/logs/scribing-runs.jsonl entry; otherwise None — the caller's
-/// unknown_work refusal (D27).
+/// D5 then D1/D6, then D34ccf18d, widened by U5: a bee.work-item concept
+/// whose bee.id matches `work` always wins; otherwise docs/history/<work>/
+/// CONTEXT.md and plan.md, whichever exist, both when both do; otherwise the
+/// ledger arm (`read_ledger_anchor`, U5-widened); otherwise None — the
+/// caller's unknown_work refusal (D27).
 pub(crate) fn resolve_anchor<'a, C: ConceptLike>(concepts: &'a [C], root: &Path, work: &str) -> Option<Anchor<'a, C>> {
     if let Some(c) = concepts.iter().find(|c| matches_work_item(c.concept_data(), work)) {
         return Some(Anchor::WorkItem(c));
