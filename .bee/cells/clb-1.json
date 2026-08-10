@@ -1,0 +1,56 @@
+{
+  "id": "clb-1",
+  "feature": "close-lands-bookkeeping",
+  "title": "Close auto-commits its own bee-store bookkeeping after a green close",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+  ],
+  "action": "After a GREEN, non-dry-run bee close (and only then): when the root is a git work tree and `git status --porcelain -- .bee` is non-empty, run path-scoped `git add -A -- .bee` then `git commit -m \"Record <feature> close bookkeeping in the bee store\" -- .bee`, and report the outcome in close's output as bookkeeping_commit: {committed: true, sha} | {committed: false, reason} (reasons: clean, config_off, not_a_repo, git_failed:<line>). Any git failure is ONE warning line in the text output and close's exit stays green (warn-never-block, same as the housekeeping doctrine). Config key close_commit_bookkeeping in .bee/config.json: absent or true = on; false = off; any non-boolean value is refused outright, never silently read as on (worktree_cleanup_on_merge precedent, phases.rs). A red close and --dry-run never commit. The commit must be path-scoped so unrelated user dirt and unrelated STAGED files are never swept (no-whole-tree-git law, friction rows 587-590). Update the close entry's help text in registry_payload.json (hand-maintained, no regen chain — knowledge-search ks-1 precedent) to name the auto-commit and the config opt-out. Tests TDD-style in the close driver's test module: (1) green close with dirty tracked .bee + unrelated dirty file commits only .bee paths, unrelated file untouched and uncommitted; (2) unrelated staged file stays staged and out of the commit; (3) config false = no commit, reason config_off; (4) non-boolean config value refused; (5) dry-run and red close never commit; (6) non-repo root = committed:false, reason not_a_repo, close still green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "a green close in a repo with tracked .bee dirt leaves a commit touching only .bee paths",
+      "unrelated dirty and staged files are never swept into the bookkeeping commit",
+      "close exit code never changes because of a bookkeeping-commit failure"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "bookkeeping auto-commit implementation plus its tests, no TODO stubs"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-clb-1",
+    "outcome": "close auto-commits path-scoped .bee bookkeeping after green close; bookkeeping_commit reported; config opt-out with typed non-boolean refusal; 6 new tests",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T13:19:54.821Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T13:01:24.034Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T13:19:43.152Z"
+  }
+}
