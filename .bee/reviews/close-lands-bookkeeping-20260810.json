@@ -107,9 +107,10 @@
   ],
   "uat": [],
   "decision": {
-    "status": "pending",
-    "review": null
+    "status": "approved",
+    "by": "user",
+    "note": "P1: 0. Merge approved by user 2026-08-10; P2 x4 and P3 x6 filed to backlog (review-finding rows), none blocking."
   },
   "created_at": "2026-08-10T13:51:36.898Z",
-  "updated_at": "2026-08-10T14:01:20.435Z"
+  "updated_at": "2026-08-10T14:04:09.494Z"
 }
