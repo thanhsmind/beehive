@@ -1,0 +1,53 @@
+{
+  "id": "cbh-1",
+  "feature": "close-bookkeeping-hardening",
+  "title": "Harden close bookkeeping commit: typed config refusal, index restore, non-empty failure reason, failure-branch tests",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs"
+  ],
+  "action": "Four fixes from review close-lands-bookkeeping-20260810, all in close.rs and its test module. (P2-3) A non-boolean close_commit_bookkeeping value REFUSES the whole close: validate the key up front in close_handler before tests run, emitting a typed error naming the key and the offending value, exit 1, nothing committed — mirror resolve_cleanup_on_merge/worktree_cleanup_on_merge_config (handlers.rs:388-407) where None propagates to a loud refusal; retarget the existing test that pins silent config_off for a string value so it now pins the refusal. (P2-1) When git commit fails after git add -A -- .bee, restore the scoped index best-effort with git reset -- .bee; if the reset itself fails, say so: the warning line and bookkeeping_commit gain the staged-state fact (e.g. reason git_failed:<line>; index_restored: true|false). (P2-2) git_fail_first_line: when stderr and stdout are both empty, fall back to 'exit status <code>' so reason and warning are never empty. (P2-4) New tests: a failing pre-commit hook fixture drives the git_failed branch (assert non-empty reason, warning line rendered with a cause, index clean afterward — proving the reset); a clean-store close asserts reason clean; keep every existing test green. Path-scoped commit discipline unchanged; warn-never-block unchanged for genuine git failures (only the malformed-config case upgrades to a refusal, per the locked synthesis).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "a string value for close_commit_bookkeeping refuses close with a typed error before tests run",
+      "after a failed bookkeeping commit the index holds no staged .bee entries (or the failure to restore is reported)",
+      "reason git_failed:<...> is never the bare prefix"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "all four fixes plus their tests, no TODO stubs"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-cbh-1",
+    "outcome": "typed up-front refusal for non-boolean config; index restored on failed commit with index_restored reported; git_failed reason never bare; failure-branch + clean-reason tests added",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T14:18:12.277Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T14:06:51.280Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T14:18:00.619Z"
+  }
+}
