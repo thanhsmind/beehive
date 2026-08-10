@@ -1,0 +1,54 @@
+{
+  "id": "ips-1",
+  "feature": "island-prune-safety",
+  "title": "sync_worktree_cells never deletes tracked cell files",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "action": "P1 fix-first: wsh-1's sync_worktree_cells prunes foreign-feature cell files from the island store — but .bee/cells/** is git-TRACKED, so git worktree add legitimately checks those files out and the prune manufactures tracked DELETIONS that a later worktree merge would apply to MAIN, wiping the cell archive (caught live pre-merge on beehive--wt--worktree-manifest-native). Fix in registry.rs: the prune arm asks git whether the file is tracked (git ls-files --error-unmatch or an ls-files set computed once) and deletes ONLY untracked strays; tracked foreign-feature cells stay on disk untouched. The fill arm (granted feature's cells copied in when missing) and the zero-cells case stay exactly as wsh-1 shipped. Update wsh-1's tests: the mixed-feature fixture must distinguish tracked vs untracked foreign cells — tracked survive, untracked pruned; add a regression asserting git status in the island is CLEAN after bootstrap (no deletions manufactured). Keep the whole suite green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bootstrap leaves the island git-clean — zero manufactured deletions",
+      "untracked foreign stray cells are still pruned",
+      "the fill arm and zero-cells behavior are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+        "substantive": "tracked-aware prune plus updated tests, no TODO stubs"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-ips-1",
+    "outcome": "sync_worktree_cells computes tracked set once (git ls-files); both prune passes skip tracked entries; git-unavailable = prune nothing; P1 regression pin: island git-status clean after bootstrap from real worktree checkout",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T16:21:14.019Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T16:14:49.224Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T16:21:02.371Z"
+  }
+}
