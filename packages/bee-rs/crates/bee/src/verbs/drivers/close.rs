@@ -1726,7 +1726,13 @@ mod tests {
         // the flag directly.
         w(root, ".bee/config.json", "{}\n");
         git_ok(root, &["add", ".bee/config.json"]);
-        git_ok(root, &["commit", "-q", "-m", "seed"]);
+        // D-P3-1: this SEED commit is fixture setup, not the code under
+        // test, so it passes `--no-gpg-sign` directly rather than relying on
+        // the repo's own (unset) config — a developer whose GLOBAL
+        // `commit.gpgsign` is `true` would otherwise have this bare `git
+        // commit` try to sign (and hang or fail on a missing/misconfigured
+        // agent) before any test module logic even runs.
+        git_ok(root, &["commit", "-q", "--no-gpg-sign", "-m", "seed"]);
     }
 
     fn dirty_tracked_bee_file(root: &Path) {

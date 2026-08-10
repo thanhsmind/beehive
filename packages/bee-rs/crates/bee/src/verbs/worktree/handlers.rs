@@ -161,6 +161,15 @@ pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         p(&created.worktree_root),
         created.id
     );
+    let (result, text) = new_result_and_text(&feature, &created, &next_step);
+    Some(ctx.emit(&Value::Object(result), &text))
+}
+
+/// bee.mjs handleWorktreeNew's result/text, split out the same way
+/// `merge_text_lines` is: it needs only `feature`, the `Created` answer, and
+/// the already-formatted `next_step` line, never a live `ctx`/cwd — so it is
+/// directly unit-testable without standing up a real linked worktree.
+pub(crate) fn new_result_and_text(feature: &str, created: &Created, next_step: &str) -> (Map<String, Value>, String) {
     let mut result = Map::new();
     result.insert("id".into(), json!(created.id));
     result.insert("worktreeRoot".into(), json!(p(&created.worktree_root)));
@@ -183,6 +192,13 @@ pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
             Value::Null
         },
     );
+    // review B-P2-7 / D-P3-1: carry the bootstrap report's `cellsSync` skip
+    // note into `worktree new`'s own result — `run_register` already
+    // surfaces it (both the map and the text), and a fresh-created worktree
+    // can hit the exact same symlinked-path refusal.
+    if let Some(sync) = created.bootstrap.get("cellsSync") {
+        result.insert("cellsSync".into(), sync.clone());
+    }
     result.insert("next_step".into(), json!(next_step));
 
     let skills_line = if created.skills_sync.get("applied") == Some(&Value::Bool(true)) {
@@ -231,6 +247,12 @@ pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         bootstrap_line,
         skills_line,
     ];
+    // review B-P2-7: the same one-line skip note `run_register` prints.
+    if let Some(sync) = created.bootstrap.get("cellsSync") {
+        let path = sync.get("path").map(jsjson::js_to_string).unwrap_or_default();
+        let reason = sync.get("reason").map(jsjson::js_to_string).unwrap_or_default();
+        lines.push(format!("  cells sync skipped — {path}: {reason}"));
+    }
     if js_truthy(&created.companion) {
         let field = |k: &str| {
             created
@@ -249,9 +271,9 @@ pub(crate) fn run_new(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
             field("worktreePath")
         ));
     }
-    lines.push(next_step);
+    lines.push(next_step.to_string());
     let text = lines.join("\n");
-    Some(ctx.emit(&Value::Object(result), &text))
+    (result, text)
 }
 
 /// bee.mjs's `WORKTREE_MERGE_SESSIONLESS_ID` (multisession-native-22): merge

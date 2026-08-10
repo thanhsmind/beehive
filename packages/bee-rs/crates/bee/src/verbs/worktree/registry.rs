@@ -287,6 +287,17 @@ pub(crate) fn run_register(flags: Flags, use_json: bool, t0: Instant) -> Option<
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
+    // review B-P2-2: the same shape create.rs's `feature_slug_ok` enforces —
+    // `worktree register` never routes through `create_feature_worktree`'s
+    // own gate (only `worktree new` does), so an unvalidated `--feature`
+    // value would otherwise reach `bootstrap_worktree_store`'s feature-keyed
+    // path joins (`archive/<feature>`) unchecked. Checked here, before
+    // `main_root`/`worktree_root` are even read off `ctx`, let alone joined
+    // with `feature` — a `../../etc` or an absolute value is refused by NAME
+    // rather than ever reaching a join.
+    if let Some(message) = register_feature_refusal(&feature) {
+        return Some(ctx.fail(&message));
+    }
     let (id, main_root) = match (&ctx.kind, &ctx.id, &ctx.main_root) {
         (&"linked-valid", Some(id), Some(main_root)) => (id.clone(), main_root.clone()),
         _ => {
@@ -351,8 +362,34 @@ pub(crate) fn run_register(flags: Flags, use_json: bool, t0: Instant) -> Option<
         let reason = sync.get("reason").map(jsjson::js_to_string).unwrap_or_default();
         lines.push(format!("  cells sync skipped — {path}: {reason}"));
     }
+    // review D-P3-2: name the count right in the CLI text, not just the
+    // JSON report — `bootstrap`'s own `pruned` key is already omitted when
+    // nothing was removed, so its mere presence here is the whole gate.
+    if let Some(pruned) = bootstrap.get("pruned").and_then(Value::as_array) {
+        lines.push(format!(
+            "  pruned {} foreign cell file{} from the island.",
+            pruned.len(),
+            if pruned.len() == 1 { "" } else { "s" }
+        ));
+    }
     let text = lines.join("\n");
     Some(ctx.emit(&Value::Object(result), &text))
+}
+
+/// review B-P2-2: `feature_slug_ok`'s refusal, in `run_register`'s own
+/// words — `create.rs`'s `refuse("WORKTREE_INVALID_SLUG", …)` carries
+/// `worktree new`'s bracketed `[CODE] message` convention (bee.mjs's
+/// thrown-error shape); `run_register`'s refusals are plain `ctx.fail` text,
+/// so this mirrors the sentence without the code prefix. `None` means the
+/// slug is fine.
+pub(crate) fn register_feature_refusal(feature: &str) -> Option<String> {
+    if feature_slug_ok(feature) {
+        return None;
+    }
+    Some(format!(
+        "feature slug {} must match /^[a-z0-9][a-z0-9-]*$/ (lowercase letters/digits, starting with a letter or digit, hyphens allowed after that).",
+        jsjson::stringify(&Value::String(feature.to_string()))
+    ))
 }
 
 /// worktree-store.mjs writeCreationIdentity — the worktree's IMMUTABLE
@@ -453,14 +490,31 @@ fn git_tracked_cells(worktree_root: &Path) -> Option<HashSet<String>> {
     if !output.status.success() {
         return None;
     }
+    parse_git_ls_files_cells_output(&output.stdout)
+}
+
+/// review D-P2-1: the pure parse half of `git_tracked_cells`, split out so
+/// its fail-CLOSED shape is directly testable without a real `git` process.
+/// `None` on ANY entry that does not itself `strip_prefix(".bee/cells/")`
+/// cleanly — an unexpected shape used to fall through as "skip just this
+/// line", which left the tracked SET silently under-populated; a
+/// under-populated set is indistinguishable from "git tracks nothing here",
+/// and an empty set is exactly the shape that makes the prune arm above
+/// delete everything. Refusing the whole lookup keeps the caller's existing
+/// `None` == "prune nothing" contract the only way an unexpected shape can
+/// resolve.
+pub(crate) fn parse_git_ls_files_cells_output(stdout: &[u8]) -> Option<HashSet<String>> {
     let mut set = HashSet::new();
-    for raw in output.stdout.split(|&b| b == 0) {
+    for raw in stdout.split(|&b| b == 0) {
         if raw.is_empty() {
             continue;
         }
         let rel = String::from_utf8_lossy(raw);
-        if let Some(stripped) = rel.strip_prefix(".bee/cells/") {
-            set.insert(stripped.to_string());
+        match rel.strip_prefix(".bee/cells/") {
+            Some(stripped) => {
+                set.insert(stripped.to_string());
+            }
+            None => return None,
         }
     }
     Some(set)
@@ -487,7 +541,11 @@ fn git_tracked_cells(worktree_root: &Path) -> Option<HashSet<String>> {
 /// because one of the fixed store paths it is about to prune or fill
 /// through is a SYMLINK.
 enum CellsSync {
-    Ran,
+    /// review D-P3-2: `pruned` names every file the prune arm actually
+    /// removed, `.bee/cells/`-relative (a bare `name.json` for a top-level
+    /// removal, `archive/<feature>/name.json` for an archive one) — empty on
+    /// the common case where nothing foreign was sitting in the island.
+    Ran { pruned: Vec<String> },
     /// `path` is the symlink that tripped the refusal; `reason` is the
     /// one-line explanation the bootstrap report carries verbatim.
     Skipped { path: PathBuf, reason: String },
@@ -507,6 +565,13 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
     let src_cells = main_store_root.join(CELLS_DIR_NAME);
     let dest_archive = dest_cells.join(CELLS_ARCHIVE_DIR_NAME);
     let src_feature_archive = src_cells.join(CELLS_ARCHIVE_DIR_NAME).join(feature);
+    // review B-P2-7 / D-P3-1: the granted feature's OWN archive subdir — the
+    // exact path `fs::copy` writes into at the bottom of this function.
+    // `dest_archive` (its parent, `cells/archive`) being a real directory
+    // said nothing about THIS child: a symlinked `archive/<feature>` let
+    // `create_dir_all` no-op on the existing link and `fs::copy` land
+    // straight in the link's target, outside the store entirely.
+    let dest_feature_archive = dest_archive.join(feature);
 
     // review B-P1-1 / D23 never-follow: a repo committing `.bee` or
     // `.bee/cells` (or either store's archive dir) as a SYMLINK defeats the
@@ -518,7 +583,14 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
     // or `create_dir_all` through — never followed, never deleted through.
     // A per-entry foreign-feature archive subdir stays covered by
     // `DirEntry::file_type`, which already never follows a symlink either.
-    for suspect in [worktree_store_root, &dest_cells, &src_cells, &dest_archive, &src_feature_archive] {
+    for suspect in [
+        worktree_store_root,
+        &dest_cells,
+        &src_cells,
+        &dest_archive,
+        &dest_feature_archive,
+        &src_feature_archive,
+    ] {
         if is_symlink(suspect) {
             return Some(CellsSync::Skipped {
                 path: suspect.to_path_buf(),
@@ -530,6 +602,10 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
     std::fs::create_dir_all(&dest_cells).ok()?;
 
     let tracked = worktree_store_root.parent().and_then(git_tracked_cells);
+    // review D-P3-2: every file this pass actually removes, `.bee/cells/`-
+    // relative — carried up into the bootstrap report so `register`'s CLI
+    // text can name the count rather than pruning silently.
+    let mut pruned: Vec<String> = Vec::new();
 
     // (1) prune top-level cell files that are not the granted feature's,
     // and are not tracked — a tracked foreign-feature file is left alone.
@@ -551,6 +627,7 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
                     continue; // tracked foreign cell — main's history, stays
                 }
                 std::fs::remove_file(&path).ok()?;
+                pruned.push(name);
             }
         }
     }
@@ -603,6 +680,7 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
                             continue; // tracked foreign archive file — stays
                         }
                         std::fs::remove_file(file.path()).ok()?;
+                        pruned.push(rel);
                     }
                 }
                 let now_empty = std::fs::read_dir(&dir_path)
@@ -615,7 +693,6 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
         }
     }
     if src_feature_archive.exists() {
-        let dest_feature_archive = dest_archive.join(feature);
         std::fs::create_dir_all(&dest_feature_archive).ok()?;
         if let Ok(entries) = std::fs::read_dir(&src_feature_archive) {
             for entry in entries.filter_map(|e| e.ok()) {
@@ -632,7 +709,7 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
         }
     }
 
-    Some(CellsSync::Ran)
+    Some(CellsSync::Ran { pruned })
 }
 
 /// worktree-store.mjs bootstrapWorktreeStore. `None` = an fs failure Node
@@ -683,13 +760,21 @@ pub(crate) fn bootstrap_worktree_store(
         // never a partial prune/fill — and the refusal rides the report
         // (both the map and, via `run_register`'s text, the CLI line) so the
         // symlink and the reason are visible rather than silently no-op'd.
-        if let CellsSync::Skipped { path, reason } =
-            sync_worktree_cells(&worktree_store_root, main_store_root, feature)?
-        {
-            out.insert(
-                "cellsSync".into(),
-                json!({ "skipped": true, "path": p(&path), "reason": reason }),
-            );
+        match sync_worktree_cells(&worktree_store_root, main_store_root, feature)? {
+            CellsSync::Skipped { path, reason } => {
+                out.insert(
+                    "cellsSync".into(),
+                    json!({ "skipped": true, "path": p(&path), "reason": reason }),
+                );
+            }
+            // review D-P3-2: an empty prune omits the key entirely rather
+            // than reporting `[]` — the common, nothing-happened case stays
+            // silent in the report the same way `cellsSync` already does.
+            CellsSync::Ran { pruned } => {
+                if !pruned.is_empty() {
+                    out.insert("pruned".into(), json!(pruned));
+                }
+            }
         }
     }
 
