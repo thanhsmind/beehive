@@ -1172,8 +1172,13 @@ struct GitRun {
     stderr: String,
 }
 
+/// P3-1: stdin is ALWAYS `Stdio::null()` — a repo with `commit.gpgsign
+/// true` and a tty pinentry configured must never be able to block on a
+/// prompt that has nowhere to read from. Every close-bookkeeping git
+/// invocation runs through this one helper, so the guarantee holds for all
+/// of them, not just `commit`.
 fn run_git(root: &Path, args: &[&str]) -> Option<GitRun> {
-    match Command::new("git").args(args).current_dir(root).output() {
+    match Command::new("git").args(args).current_dir(root).stdin(Stdio::null()).output() {
         Ok(out) => Some(GitRun {
             status: out.status.code(),
             stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
@@ -1302,8 +1307,11 @@ fn commit_close_bookkeeping(root: &Path, feature: &str) -> BookkeepingCommit {
         None => return BookkeepingCommit::skipped("git_failed:git add could not be spawned"),
     }
 
+    // P3-1 (locked policy): bee's own bookkeeping commit is unsigned —
+    // `--no-gpg-sign` means a repo with `commit.gpgsign true` can never turn
+    // this into a hung `gpg`/pinentry prompt during close.
     let message = format!("Record {feature} close bookkeeping in the bee store");
-    match run_git(root, &["commit", "-m", &message, "--", ".bee"]) {
+    match run_git(root, &["commit", "--no-gpg-sign", "-m", &message, "--", ".bee"]) {
         Some(out) if out.status == Some(0) => {}
         // P2-1: `.bee` is staged (the `git add` above succeeded) and the
         // commit that would have consumed that stage never landed — a
@@ -1657,6 +1665,11 @@ mod tests {
         git_ok(root, &["init", "-q"]);
         git_ok(root, &["config", "user.email", "bee-close@example.com"]);
         git_ok(root, &["config", "user.name", "bee close tests"]);
+        // P3-1: `commit_close_bookkeeping` now passes `--no-gpg-sign` to
+        // every commit it makes, so this config line no longer does any
+        // work here — kept anyway so a repo-level `commit.gpgsign true`
+        // stays inert for every OTHER git invocation this test module
+        // makes outside `commit_close_bookkeeping` itself.
         git_ok(root, &["config", "commit.gpgsign", "false"]);
         w(root, ".bee/config.json", "{}\n");
         git_ok(root, &["add", ".bee/config.json"]);
@@ -1688,6 +1701,45 @@ mod tests {
         assert!(!status.contains(".bee/config.json"), "{status}");
         let subject = git_out(root, &["log", "-1", "--pretty=%s"]);
         assert_eq!(subject, "Record demo close bookkeeping in the bee store");
+    }
+
+    /// P3-3: proves the `rev-parse --is-inside-work-tree` detection also
+    /// reads a LINKED worktree — the second worktree `git worktree add`
+    /// creates, whose own `.git` is a FILE (a gitdir pointer back at the
+    /// main checkout's `.git/worktrees/<name>`) rather than the directory
+    /// every other test in this file relies on. The commit must land on
+    /// the linked worktree's own branch, not the main checkout's.
+    #[test]
+    fn linked_worktree_root_commits_on_its_own_branch() {
+        let base = tempfile::tempdir().unwrap();
+        let main_root = base.path().join("main");
+        std::fs::create_dir_all(&main_root).unwrap();
+        init_bee_repo(&main_root);
+
+        let linked = base.path().join("linked");
+        let branch = "feature/linked";
+        git_ok(&main_root, &["worktree", "add", linked.to_str().unwrap(), "-b", branch]);
+        assert!(linked.join(".git").is_file(), "a linked worktree's .git must be a FILE, not a dir");
+
+        dirty_tracked_bee_file(&linked);
+
+        let out = close_handler(&linked, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert_eq!(result["bookkeeping_commit"]["committed"], json!(true));
+        assert!(result["bookkeeping_commit"]["sha"].as_str().is_some_and(|s| !s.is_empty()));
+
+        // Landed on the linked worktree's own branch, not main's.
+        let current_branch = git_out(&linked, &["rev-parse", "--abbrev-ref", "HEAD"]);
+        assert_eq!(current_branch, branch);
+        let subject = git_out(&linked, &["log", "-1", "--pretty=%s"]);
+        assert_eq!(subject, "Record demo close bookkeeping in the bee store");
+        let committed = git_committed_paths(&linked);
+        assert_eq!(committed, vec![".bee/config.json".to_string()]);
+
+        // The main checkout's own branch never moved.
+        let main_branch = git_out(&main_root, &["rev-parse", "--abbrev-ref", "HEAD"]);
+        assert_ne!(main_branch, branch);
     }
 
     #[test]
@@ -1796,11 +1848,49 @@ mod tests {
         assert!(!git_status_porcelain(root2).is_empty(), "a red close must never commit");
     }
 
+    /// P3-4: `GIT_CEILING_DIRECTORIES` is process environment, so a bare
+    /// `set_var` around one assertion would leak into every other test that
+    /// spawns `git` while it was set. Scoped to exactly the life of one
+    /// test: `new` records whatever value (or absence) was already there
+    /// and pins the ceiling to `dir`; `Drop` puts it straight back — a
+    /// caller can never forget to unwind it, even on a panicking assert.
+    struct GitCeilingGuard {
+        prior: Option<std::ffi::OsString>,
+    }
+
+    impl GitCeilingGuard {
+        fn new(dir: &Path) -> Self {
+            let prior = std::env::var_os("GIT_CEILING_DIRECTORIES");
+            // SAFETY: no other thread reads/writes this specific var across
+            // this guard's lifetime — nothing else in this crate consults
+            // GIT_CEILING_DIRECTORIES, and it exists only to steer this
+            // one test's own `git` child processes.
+            unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", dir) };
+            GitCeilingGuard { prior }
+        }
+    }
+
+    impl Drop for GitCeilingGuard {
+        fn drop(&mut self) {
+            // SAFETY: see `new` above.
+            match self.prior.take() {
+                Some(v) => unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", v) },
+                None => unsafe { std::env::remove_var("GIT_CEILING_DIRECTORIES") },
+            }
+        }
+    }
+
     #[test]
     fn non_repo_root_reports_not_a_repo_and_close_stays_green() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         w(root, ".bee/config.json", "{}\n"); // no `git init` — not a repo at all
+
+        // P3-4: pin the ceiling to the tempdir's own parent for the life of
+        // this test — a TMPDIR that happens to sit under a real git
+        // checkout must never let `rev-parse --is-inside-work-tree` walk up
+        // into that enclosing repo and answer "true" by accident.
+        let _ceiling = GitCeilingGuard::new(root.parent().unwrap());
 
         let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
         let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
