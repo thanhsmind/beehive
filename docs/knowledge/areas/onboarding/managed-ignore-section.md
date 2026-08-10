@@ -28,7 +28,7 @@ never does it.
 | Element | Meaning |
 |---|---|
 | managed ignore section | A clearly-marked, start/end-delimited block that onboarding owns inside the project's version-control ignore list. Every byte outside the delimiters belongs to the project and is never touched. |
-| machine-local runtime record | Content the managed ignore section silences: workflow state, reservations, worker scratch, logs, capture queue, feedback snapshot, injection cache, the pause/handoff record, and disposable experiment files. |
+| machine-local runtime record | Content the managed ignore section silences: workflow state, reservations, worker scratch, logs, capture queue, feedback snapshot, injection cache, the pause/handoff record, disposable experiment files, the vendored executable itself (`.bee/bin/bee`, `.bee/bin/bee.exe` — bytes are machine-local; the tracked thing is the version record), and onboarding's own `.bak` backup files (harness-audit-hardening hah-3, 2026-08-07). |
 | team-durable knowledge | Content that always stays version-tracked, never silenced by the managed ignore section: vendored tooling, configuration, the decision log, the friction log, and work-cell records. |
 | ignore-section fingerprint | A hash of the managed ignore section's expected content, stored in the project's onboarding record so a later run can detect drift in that section specifically. |
 

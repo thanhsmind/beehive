@@ -53,6 +53,15 @@ through the first runtime's project variable (dead on the second runtime) and
 the source-repository layout — are replaced by the canonical render, never
 preserved beside it (a stale twin would fire every event twice); a pre-existing
 file is backed up before the first rewrite; a second apply changes nothing.
+A host settings file that does not parse as the expected shape — non-object
+where an object is required, non-array where an array is — REFUSES the merge
+with a typed error naming the file and the malformed member, and writes
+nothing: a malformed file is never clobbered by the canonical render
+(harness-audit-hardening hah-2, 2026-08-07). The plugin-migration cleanup
+pass recognizes the post-R6 command spelling (`.bee/bin/bee hook <name>`) as
+bee-shipped wiring, so entries in that shape are correctly claimed and
+replaced instead of being mistaken for owner entries and preserved as stale
+twins (hah-1, devtools/plugin_distribution.rs, 2026-08-07).
 Two pinned asymmetries with the first runtime, both catalog-declared: the
 model-tier guard is not wired (the second runtime does not expose agent spawn
 through a pre-tool event), and every command resolves the project root from the

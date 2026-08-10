@@ -66,6 +66,15 @@ under:
   both join (D34); a profile violation fails the chain the same way any other suite does. The
   per-migration coverage gates (`scripts/okf_migrate.mjs --check <area>` and `--check-patterns`,
   D35) join the same chain, one entry per migrated source.
+- `bee knowledge search --text "<symptom>" [--limit N] [--json]` — the mid-flow symptom pull
+  (knowledge-search D1-D7): ranked term-hit search over the bundle's patterns and area concepts,
+  read-only at any phase from any checkout (B10, in `context-and-promote.md`).
+- `bee knowledge bootstrap [--json]` — stands up an empty, well-formed bundle skeleton in a host
+  repo that has none, so a fresh project can start capturing into `docs/knowledge/` without
+  hand-typing frontmatter (knowledge-usable U9, cell ku-9, 2026-08-10).
+- `bee knowledge report [--json]` — recurrence counts for critical patterns grouped by failure
+  signature, the measurement feeding the selective `bee.critical` bar (knowledge-usable U8, cell
+  ku-8; the bar itself: `critical-bar.md`).
 - `bee knowledge promote --work <id> [--json]` — the loop closer (D38): finished work **proposes**
   the knowledge it earned. It reads the work item's concept and the **capped** cell traces of that
   feature from `.bee/cells/*.json` (a read of the runtime store — D2 permits reads and forbids

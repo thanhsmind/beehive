@@ -1,7 +1,7 @@
 ---
 type: bee.area
 title: Hook Runtime — the command surface a session starts with
-description: "The briefing's command index: why every session opens carrying the whole command surface as flag names rather than leaving it behind an on-demand lookup, what that section states and omits, and the limit it inherits from the catalog it is generated from."
+description: "The briefing's command index: why every session opens carrying the whole command surface as grouped command names — flags demoted to per-command help after measurement — what that section states and omits, and the limit it inherits from the catalog it is generated from."
 timestamp: 2026-08-06
 bee:
   id: hook-runtime-command-surface-in-briefing
@@ -9,7 +9,7 @@ bee:
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
   decisions: ["cli-surface-in-context Gate 2: the name-and-type index is carried every session and the description-per-flag variant is priced and declined (2026-08-06)", "8ef2bae6 (cli-ergonomics D1): exhaustive refusal — every problem named in one message"]
-  sources: ["cells csc-1 through csc-4: docs/history/cli-surface-in-context/plan.md, 2026-08-06 — full suite 1341 passed, 3 ignored", "measured 2026-08-06: five invented flag names across two agents in one working session, every one a wrong name and none a misunderstood meaning", "measured 2026-08-06: 142 commands, 143 distinct flag names, rendered section 7,950 characters"]
+  sources: ["cells csc-1 through csc-4: docs/history/cli-surface-in-context/plan.md, 2026-08-06 — full suite 1341 passed, 3 ignored", "measured 2026-08-06: five invented flag names across two agents in one working session, every one a wrong name and none a misunderstood meaning", "measured 2026-08-06: 142 commands, 143 distinct flag names, rendered section 7,950 characters", "preamble-surface-slim cell pss-1 (grouped-name renderer in budget.rs, 7.9KB to 1.7KB, supersede decision logged; capture stub 6e9734f6, 2026-08-07)"]
   authoritative_for: "hook-runtime: the command surface carried in the session briefing"
 ---
 
@@ -17,12 +17,18 @@ bee:
 
 ## Behaviors & Operations
 
-**Carry the whole command surface, every session.** Trigger: any session
-opening. What changes: the briefing gains a section listing every command the
-catalog publishes, each with its own flag names, the declared type of each, and
-a marker on the ones the catalog calls required. What the agent observes: it
-never has to guess a flag name, because every name it could need is already in
-front of it before its first command.
+**Carry the whole command surface, every session — as grouped NAMES
+(preamble-surface-slim pss-1, 2026-08-07, superseding the flag-per-line
+shape).** Trigger: any session opening. What changes: the briefing gains a
+section listing every command the catalog publishes as grouped, dotted
+command names (one line per verb group), with a header pointer naming
+`bee <command> --help` as where the flags live. What the agent observes: it
+never has to guess whether a COMMAND exists, and it asks per-command help
+for the flags — measured, the flag-per-line rendering cost 7,950 characters
+per session start and the grouped-name shape costs about 1,700 for the same
+does-it-exist answer. The original flag-name index (the shape this concept
+first recorded) is superseded: flag names are no longer carried in the
+briefing at all.
 
 The section is generated from the embedded catalog at render time, never from a
 checked-in copy. A copy would be correct on the day it was written and wrong on
@@ -30,18 +36,20 @@ the day a verb changed, and the failure would be silent — the reader cannot te
 a stale list from a current one.
 
 **State the near-universal flag once.** The machine-readable-output flag is
-accepted by almost every command. Repeating it on every line costs roughly a
-seventh of the section for no information, so it is named once in the section
-header and omitted from every line. A command with no other flag renders as its
-bare name, never as a name followed by an empty separator.
+accepted by almost every command, so it is named once in the section header
+and never per command. The count of commands accepting it rides the header
+line (e.g. "133 of 145"), generated from the catalog like everything else.
 
 ## Business Rules
 
-- **R1 — Names, not meanings.** The section carries what each flag is CALLED
-  and what type it takes; it does not carry what each flag does. This is the
-  measured shape of the problem: every observed failure was a wrong name, none
-  was a misunderstood meaning. An agent that knows a flag exists can ask what it
-  does; an agent that does not know it exists invents a spelling and is refused.
+- **R1 — Names, not meanings — now at COMMAND grain (pss-1).** The section
+  carries what each command is CALLED; it carries neither flag names nor
+  meanings. The measured failure mode was invented spellings; the invented
+  spellings were curable one level cheaper than first thought: an agent that
+  knows the command exists reaches its full flag surface through
+  `bee <command> --help` (which since harness-audit-hardening hah-4 renders
+  EVERY declared flag, not only required ones). Flag-name recall moved from
+  the always-loaded briefing to on-demand help.
 
 - **R2 — The cost is stated and bounded.** The full name-and-type index costs
   roughly a seventh of what a description-per-flag variant would, and that

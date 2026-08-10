@@ -148,6 +148,11 @@ nothing had ever looked.
 - **A pre-existing set of stale delivery copies sits outside every check.** Two of the install-target
   trees are not covered by the manifest or by any chain check, so drift there is invisible. Unrelated
   to this gate, but adjacent to it and worth naming.
+- **Factual counts and paths in INSTALL.md/README.md sit outside every check too.** Skill counts,
+  command counts, launcher descriptions, and path spellings there drift silently — a one-time
+  de-drift pass (harness-audit-hardening hah-6/hah-7, 2026-08-07) fixed the accumulated set and
+  re-homed cross-references across the instruction layer, but no standing check owns that class;
+  the next drift is invisible until the next manual sweep.
 
 - **The advisory sibling's *file-and-heading* check silently skips any citation it cannot parse
   whole.** It recognises a citation only when the parenthetical holds exactly one quoted heading

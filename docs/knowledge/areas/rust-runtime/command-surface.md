@@ -111,6 +111,15 @@ bought a smaller help output at the price of a blind guard.
 - **`bee orient` never computes state a second way.** It reuses the status
   builder. A second derivation of "where am I" is a second answer waiting to
   disagree with the first.
+- **Per-command text help renders the FULL flag surface.** `bee <command>
+  --help` prints a `--flag*:type` line for every flag the registry declares —
+  optional ones included — never only the required set; the always-accepted
+  json/help pair is stated once in the header instead (harness-audit-hardening
+  hah-4, verbs/help.rs, 2026-08-07).
+- **A hook entry point without a hook name is usage, never a panic.** Bare
+  `bee hook` and `bee hook --help` print the usage line and exit cleanly; the
+  hook dispatcher never panics on a missing subcommand (harness-audit-hardening
+  hah-5, hooks/mod.rs, 2026-08-07).
 
 ## Open Gaps
 

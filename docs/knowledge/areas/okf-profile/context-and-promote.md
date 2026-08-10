@@ -47,7 +47,10 @@ Zero hits is an empty result with a one-line note, exit 0, never a typed refusal
 read-only with `writes: []`, callable at any phase from any checkout (D7). The two debug moments
 that invoke it are wired into the instruction layer (D6): the bee-swarming Execute worker contract
 and bee-hive's scout — the wiring targets bee-swarming, not the retired bee-executing (site
-erratum, D6). The registry entry lives in the hand-maintained registry payload; no regen chain
+erratum, D6). The session preamble's project map additionally carries one always-loaded pull line
+naming the verb for mid-flow symptoms ("Hit a symptom mid-flow? Pull it: `bee knowledge search
+--text …`"), so the retrieval move is taught before the symptom ever appears (knowledge-usable U1,
+cell ku-1, 2026-08-10). The registry entry lives in the hand-maintained registry payload; no regen chain
 exists for it — the gap is recorded in the ks-1 trace, with `tests/registry_contracts.rs` as the
 drift net.
 

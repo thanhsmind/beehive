@@ -425,6 +425,18 @@ a malformed record has earned none.
   main and `worktree merge` then refused `WORKTREE_MERGE_MAIN_DIRTY` on
   bee's own bookkeeping (backlog P2 row 708; close-lands-bookkeeping cell
   clb-1, 2026-08-10).
+- R82 — `bee close` carries a PATTERN-CHECK door: critical patterns whose
+  areas overlap the feature's touched areas are listed, and each wants a
+  verdict via `--pattern-verdicts=<pattern-id>:<violated|respected|
+  not-applicable>[,…]`. An unanswered pattern reports `pending` and the door
+  stays NON-blocking; a `violated` verdict is the one blocking answer — the
+  violation is the work. Verdicts land on the close record (knowledge-usable
+  U7, cell ku-7, 2026-08-10).
+- R83 — Close's promote proposal CONVERGES on the capture queue: alongside
+  writing `docs/history/<feature>/promote-proposals.md` (R80), close
+  enqueues one capture stub pointing at that proposal, so the flush loop —
+  not a separate reminder channel — is what carries the review-then-merge
+  obligation forward (knowledge-usable U4, cell ku-4, 2026-08-10).
 
 ## Edge Cases Settled
 

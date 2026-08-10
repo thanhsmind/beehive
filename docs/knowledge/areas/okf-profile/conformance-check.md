@@ -69,6 +69,7 @@ Profile-warning codes — reported always, failing only under `--strict`:
 | `duplicate_id` | Two or more concepts share one `bee.id` (D31). |
 | `dangling_required_context` | A `bee.required_context` entry does not resolve to a real file inside the bundle. |
 | `dangling_supersedes` | A `bee.supersedes` id matches no concept's `bee.id` in the bundle. |
+| dangling source (knowledge-usable U2, cell ku-2, 2026-08-10) | A `bee.sources` entry that names an in-repo file path resolving to no file on disk is reported, so a concept citing code a later port retired degrades visibly instead of silently. |
 
 **B3 — Emitter-first parsing, zero dependencies (D12).** `knowledge.mjs` ships its own frontmatter
 codec covering exactly the YAML subset its own emitter can produce; anything outside that subset
