@@ -114,6 +114,112 @@ use std::time::Instant;
         );
     }
 
+    /// p-9c48a67c: `bootstrap_worktree_store` copies only the granted
+    /// feature's cells — a fixture main store carries feature A's and B's
+    /// cells (live and archived); bootstrapping for "a" must leave the
+    /// island holding A's alone, B's entirely absent, and must never mutate
+    /// the main store itself.
+    #[test]
+    fn bootstrap_copies_only_the_granted_features_cells() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = tmp.path().join("main").join(".bee");
+        let main_cells = main_store.join("cells");
+        std::fs::create_dir_all(&main_cells).unwrap();
+        std::fs::write(main_cells.join("a-1.json"), "{\"id\":\"a-1\",\"feature\":\"a\",\"status\":\"open\"}")
+            .unwrap();
+        std::fs::write(
+            main_cells.join("b-1.json"),
+            "{\"id\":\"b-1\",\"feature\":\"b\",\"status\":\"claimed\"}",
+        )
+        .unwrap();
+        let main_archive_a = main_cells.join("archive").join("a");
+        let main_archive_b = main_cells.join("archive").join("b");
+        std::fs::create_dir_all(&main_archive_a).unwrap();
+        std::fs::create_dir_all(&main_archive_b).unwrap();
+        std::fs::write(main_archive_a.join("a-0.json"), "{\"id\":\"a-0\",\"feature\":\"a\",\"status\":\"capped\"}")
+            .unwrap();
+        std::fs::write(main_archive_b.join("b-0.json"), "{\"id\":\"b-0\",\"feature\":\"b\",\"status\":\"capped\"}")
+            .unwrap();
+        std::fs::write(main_cells.join("archive").join("summary.json"), "{\"a\":{\"capped\":1}}").unwrap();
+        // Snapshot the main store's bytes before bootstrapping.
+        let before: Vec<(PathBuf, Vec<u8>)> = [
+            main_cells.join("a-1.json"),
+            main_cells.join("b-1.json"),
+            main_archive_a.join("a-0.json"),
+            main_archive_b.join("b-0.json"),
+            main_cells.join("archive").join("summary.json"),
+        ]
+        .into_iter()
+        .map(|p| (p.clone(), std::fs::read(&p).unwrap()))
+        .collect();
+
+        let wt = tmp.path().join("wt-a");
+        std::fs::create_dir_all(&wt).unwrap();
+        let result = bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
+        assert_eq!(result.get("created"), Some(&Value::Bool(true)));
+
+        let wt_cells = wt.join(".bee").join("cells");
+        assert!(wt_cells.join("a-1.json").exists());
+        assert!(!wt_cells.join("b-1.json").exists(), "feature b's live cell must be absent from the island");
+        assert!(wt_cells.join("archive").join("a").join("a-0.json").exists());
+        assert!(
+            !wt_cells.join("archive").join("b").exists(),
+            "feature b's archive dir must be absent from the island"
+        );
+
+        // Main store byte-identical after.
+        for (path, bytes) in before {
+            assert_eq!(std::fs::read(&path).unwrap(), bytes, "main store mutated at {}", path.display());
+        }
+    }
+
+    /// The same rule when the WORKTREE's own `.bee/cells` already holds a
+    /// wholesale checkout of every feature's cells (`git worktree add`
+    /// checks out `.bee/cells` in full because it's git-tracked) — this is
+    /// the actual production bug shape, not just an absent-and-filled one:
+    /// bootstrap must prune the foreign cell that was already sitting there.
+    #[test]
+    fn bootstrap_prunes_foreign_cells_already_checked_out_in_the_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = tmp.path().join("main").join(".bee");
+        std::fs::create_dir_all(main_store.join("cells")).unwrap();
+
+        let wt = tmp.path().join("wt-a");
+        let wt_cells = wt.join(".bee").join("cells");
+        std::fs::create_dir_all(&wt_cells).unwrap();
+        std::fs::write(wt_cells.join("a-1.json"), "{\"id\":\"a-1\",\"feature\":\"a\",\"status\":\"open\"}")
+            .unwrap();
+        std::fs::write(wt_cells.join("b-1.json"), "{\"id\":\"b-1\",\"feature\":\"b\",\"status\":\"open\"}")
+            .unwrap();
+        let wt_archive_b = wt_cells.join("archive").join("b");
+        std::fs::create_dir_all(&wt_archive_b).unwrap();
+        std::fs::write(wt_archive_b.join("b-0.json"), "{\"id\":\"b-0\",\"feature\":\"b\",\"status\":\"capped\"}")
+            .unwrap();
+
+        bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
+
+        assert!(wt_cells.join("a-1.json").exists(), "the granted feature's already-checked-out cell stays");
+        assert!(!wt_cells.join("b-1.json").exists(), "a foreign already-checked-out cell is pruned");
+        assert!(!wt_cells.join("archive").join("b").exists(), "a foreign already-checked-out archive dir is pruned");
+    }
+
+    /// A feature with zero cells in the main store bootstraps a clean, empty
+    /// `cells` dir rather than erroring or leaving the dir absent.
+    #[test]
+    fn bootstrap_with_no_matching_cells_makes_an_empty_cells_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = tmp.path().join("main").join(".bee");
+        std::fs::create_dir_all(&main_store).unwrap(); // no cells/ at all
+
+        let wt = tmp.path().join("wt-empty");
+        std::fs::create_dir_all(&wt).unwrap();
+        bootstrap_worktree_store(&wt, &main_store, "empty-feature").unwrap();
+
+        let wt_cells = wt.join(".bee").join("cells");
+        assert!(wt_cells.is_dir());
+        assert_eq!(std::fs::read_dir(&wt_cells).unwrap().count(), 0);
+    }
+
     /// resolveWorktreeFeature's preference order (issues-46-53 D4): the
     /// IMMUTABLE creation slug wins, and its absence degrades EXACTLY to the
     /// pre-fix `state.feature` behavior rather than refusing.

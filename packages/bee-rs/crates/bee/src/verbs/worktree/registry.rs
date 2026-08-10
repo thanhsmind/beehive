@@ -399,6 +399,121 @@ pub(crate) fn write_creation_identity(worktree_store_root: &Path, feature: &str)
     out
 }
 
+/// Cell store layout, restated locally rather than reached-for from
+/// `verbs/cells/` or `verbs/status_full/cells.rs` (both private submodules
+/// outside their own parent) — same duplication pattern those two already
+/// use between each other.
+const CELLS_DIR_NAME: &str = "cells";
+const CELLS_ARCHIVE_DIR_NAME: &str = "archive";
+
+/// `true` only when `path` parses as a JSON object whose `"feature"` is the
+/// string `feature` (JS strict-equality shape: a missing/non-string/mismatched
+/// field, or an unreadable/unparsable file, is "not this feature" — never a
+/// silent keep).
+fn cell_file_feature_matches(path: &Path, feature: &str) -> bool {
+    let Ok(bytes) = std::fs::read(path) else {
+        return false;
+    };
+    let Ok(parsed) = serde_json::from_slice::<Value>(&bytes) else {
+        return false;
+    };
+    matches!(parsed.get("feature"), Some(Value::String(f)) if f == feature)
+}
+
+/// PBI p-9c48a67c: restrict the worktree island's `.bee/cells` to the
+/// granted feature's cells only. `git worktree add` checks out `.bee/cells`
+/// in FULL — it is git-tracked — so a freshly created worktree can already
+/// hold every OTHER feature's open cells before this function ever runs;
+/// pruning has to run unconditionally, not just "copy whatever's missing".
+/// Two passes, main store read-only throughout:
+///   1. PRUNE — drop any cell file (or `archive/<feature>` dir) already
+///      sitting in the worktree store whose feature is not the granted one.
+///   2. FILL — copy in the main store's matching-feature cells that are not
+///      already present (a from-scratch `worktree register` adopting a bare
+///      checkout, or a main-store cell not yet committed to git).
+/// Feature-neutral content under `.bee` (config, expertise, prompts,
+/// decisions/backlog, `cells/archive/summary.json`, …) is untouched — this
+/// function only ever looks inside `cells/`.
+fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, feature: &str) -> Option<()> {
+    let dest_cells = worktree_store_root.join(CELLS_DIR_NAME);
+    std::fs::create_dir_all(&dest_cells).ok()?;
+
+    // (1) prune top-level cell files that are not the granted feature's.
+    if let Ok(entries) = std::fs::read_dir(&dest_cells) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue; // archive/ handled in pass (3) below
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.ends_with(".json") {
+                continue;
+            }
+            let path = entry.path();
+            if !cell_file_feature_matches(&path, feature) {
+                std::fs::remove_file(&path).ok()?;
+            }
+        }
+    }
+
+    // (2) fill in the main store's matching cells not already present.
+    let src_cells = main_store_root.join(CELLS_DIR_NAME);
+    if let Ok(entries) = std::fs::read_dir(&src_cells) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !name.ends_with(".json") {
+                continue;
+            }
+            let src_path = entry.path();
+            if !cell_file_feature_matches(&src_path, feature) {
+                continue;
+            }
+            let dest_path = dest_cells.join(&name);
+            if dest_path.exists() {
+                continue;
+            }
+            std::fs::copy(&src_path, &dest_path).ok()?;
+        }
+    }
+
+    // (3) archive: already partitioned by feature-name subdirectory — prune
+    // every OTHER feature's subdir, then fill in the granted feature's.
+    let dest_archive = dest_cells.join(CELLS_ARCHIVE_DIR_NAME);
+    if let Ok(entries) = std::fs::read_dir(&dest_archive) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                continue; // e.g. archive/summary.json is feature-neutral
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name != feature {
+                std::fs::remove_dir_all(entry.path()).ok()?;
+            }
+        }
+    }
+    let src_feature_archive = src_cells.join(CELLS_ARCHIVE_DIR_NAME).join(feature);
+    if src_feature_archive.exists() {
+        let dest_feature_archive = dest_archive.join(feature);
+        std::fs::create_dir_all(&dest_feature_archive).ok()?;
+        if let Ok(entries) = std::fs::read_dir(&src_feature_archive) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    continue;
+                }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let dest_path = dest_feature_archive.join(&name);
+                if dest_path.exists() {
+                    continue;
+                }
+                std::fs::copy(entry.path(), &dest_path).ok()?;
+            }
+        }
+    }
+
+    Some(())
+}
+
 /// worktree-store.mjs bootstrapWorktreeStore. `None` = an fs failure Node
 /// would surface with a V8 message (delegate; every step so far is
 /// idempotent, see the module header).
@@ -434,6 +549,15 @@ pub(crate) fn bootstrap_worktree_store(
     let identity = write_creation_identity(&worktree_store_root, feature);
     if identity.get("reason") == Some(&Value::Null) {
         return None; // V8-worded fs error in the identity write
+    }
+
+    // p-9c48a67c: prune/fill `.bee/cells` down to the granted feature — runs
+    // every bootstrap (not just a fresh one), so a re-run `register` on an
+    // already-adopted worktree also loses any foreign cell that leaked in.
+    // An empty `feature` (write_creation_identity's own "no feature slug
+    // given" case) skips this rather than pruning everything as "no match".
+    if !feature.is_empty() {
+        sync_worktree_cells(&worktree_store_root, main_store_root, feature)?;
     }
 
     let mut out = Map::new();
