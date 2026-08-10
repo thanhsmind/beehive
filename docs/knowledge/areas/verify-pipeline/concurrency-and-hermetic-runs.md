@@ -90,5 +90,8 @@ place is `suite-topology-and-discovery.md`.
 
 ## Pointers (implementation)
 
+- Pointer erratum (2026-08-10): the `scripts/tests/*.mjs` suites named in
+  this concept retired with the Node runner; the race and isolation proofs
+  live in `packages/bee-rs/crates/bee/tests/concurrency.rs` now.
 - **P5** — `bee dev render-skill-trees`, `scripts/tests/test_render_race.mjs` —
   locked tmp-swap render + race proof.

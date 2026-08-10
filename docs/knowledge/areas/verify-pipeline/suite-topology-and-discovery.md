@@ -5,7 +5,7 @@ description: "Keeping full-repo verification fast and contention-free by giving 
 timestamp: 2026-07-29
 bee:
   id: verify-pipeline-suite-topology-and-discovery
-  lifecycle: active
+  lifecycle: archived
   areas: [verify-pipeline]
   decisions: [contention-split D1-D6 (decision 1ce777d9), verify-scoping D1/D2 (decisions e39d3f89, 20534ea9), impacted-level1 D1 (decision 4f8295fb), i54-closeout D2, "test-economy D6 (impacted cap over the transitive tail — level-1 direct/self-selected always run, exit reflects only the part actually run, best-effort CI delegation)", derived-check-hardening E3/E4 (index-derived scan sets are existence-filtered and unioned with the porcelain status; the hand-grep that found it becomes a standing check), derived-check-hardening E2/E9 (the scheduled full run moves its daily slot and stays once-a-day; the 24-hour blind window ships open and named)]
   sources: ["contention-split cells cs-1/cs-2a/cs-2b/cs-3/cs-4 (fixture extraction, monolith split 430-check conservation, monolith deletion, convention-based suite discovery; traces in .bee/cells/, 2026-07-20)", "hardening-1-7-10 cells 1710-1..1710-11 (2026-07-21 — Windows CI runs the real split suites through the runner's own discovery rather than a hand-maintained list; write-guard-hook-fix wgf-1, 2026-07-21 — the fixture that vendors a module tree copies the tree, never a hand-maintained file list)", "verify-scoping cells vs-1/vs-2 (scoped --only include filter + two-tier verify doctrine; traces in .bee/cells/, 2026-07-23)", "impacted-level1 cells l1-1/l1-2 (registry per-edge depth split + run_verify --level 1 direct-only selection; traces in .bee/cells/, 2026-07-23)", "test-economy cell te-3 (impacted cap — transitive tail delegated to CI; docs/history/test-economy/CONTEXT.md, trace in .bee/cells/, 2026-07-25)", "docs/specs/verify-pipeline.md#R1", "docs/specs/verify-pipeline.md#R2", "docs/specs/verify-pipeline.md#R3", "docs/specs/verify-pipeline.md#E1", "docs/specs/verify-pipeline.md#P1", "docs/specs/verify-pipeline.md#P2", "docs/specs/verify-pipeline.md#P3", "docs/specs/verify-pipeline.md#P4", "i54-closeout cell i54-closeout-2 (run_verify per-suite wall-clock timeout + heartbeat; trace in .bee/cells/, 2026-07-24)", "derived-check-hardening cells dch-3/dch-4/dch-5 (CI schedule slot, portable-paths scan-set reconciliation, scan-set hygiene suite; traces .bee/cells/dch-{3,4,5}.json, reports docs/history/derived-check-hardening/reports/, 2026-07-29)"]
@@ -13,6 +13,16 @@ bee:
 ---
 
 # Verify Pipeline — Suite Topology and Discovery
+
+> **Archived (2026-08-10).** Everything below describes the retired Node
+> runner (`scripts/run_verify.mjs`) — deleted with the Rust port. The LIVE
+> verify chain is one declared command: `commands.test` in
+> `.bee/config.json` runs `cargo test --release` over the crate's 14 suites,
+> executed fresh at `cells finish`, `close`, `worktree merge`, and CI —
+> there is no suite discovery, no impact registry, no impacted mode, and no
+> per-suite selection in the shipped runtime. Kept as the historical record
+> of the Node-era topology (backlog P1 row 649: this file was being read as
+> ground truth by planning sessions).
 
 Keep the full-repo verification fast, complete, and — above all —
 contention-free: two features working in parallel must not need to edit the

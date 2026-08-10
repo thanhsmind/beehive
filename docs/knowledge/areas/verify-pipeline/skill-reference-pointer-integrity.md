@@ -142,6 +142,9 @@ nothing had ever looked.
 
 - **Only reference-document pointers are checked.** Citations to source files, history documents, or
   external URLs are out of scope. Whether they deserve the same treatment is undecided.
+- Pointer erratum (2026-08-10): the Node implementation this concept's pointers name retired with
+  the Rust port; the gate lives in `packages/bee-rs/crates/bee/tests/pointer_integrity.rs`
+  (its own header records the Node provenance).
 - **Heading matching covers the three phrasings in current use.** A fourth phrasing introduced later
   would pass unchecked rather than fail loudly, which is the quieter of the two possible wrong
   behaviours but still wrong.
