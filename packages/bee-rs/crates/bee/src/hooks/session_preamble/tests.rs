@@ -421,9 +421,12 @@ use crate::version::BEE_VERSION;
             "promote proposal for work item \"f2\" (docs/history/f2/CONTEXT.md) — 3 capped cell(s): a-1, a-2, a-3\nanchor: history — docs/history/f2/CONTEXT.md\n",
         );
         let text = render(root);
-        assert!(text.contains("### Unapplied promote proposal(s): 1"), "{text}");
+        // U4: the block is now ONE line — count + newest proposal path,
+        // never a per-feature enumeration.
         assert!(
-            text.contains("- f2 (3 capped cell(s)): docs/history/f2/promote-proposals.md"),
+            text.contains(
+                "### Unapplied promote proposal(s): 1 — newest: docs/history/f2/promote-proposals.md"
+            ),
             "{text}"
         );
 
@@ -452,6 +455,40 @@ use crate::version::BEE_VERSION;
         );
         let text = render(root);
         assert!(!text.contains("Unapplied promote proposal"), "{text}");
+    }
+
+    /// U4 (docs/history/knowledge-usable/CONTEXT.md): two unapplied
+    /// proposals still render as ONE line — count 2, and the NEWEST file by
+    /// mtime, never both paths enumerated.
+    #[test]
+    fn two_unapplied_promote_proposals_still_render_one_line_naming_the_newest() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/history/f1/promote-proposals.md",
+            "promote proposal for work item \"f1\" (docs/history/f1/CONTEXT.md) — 1 capped cell(s): a-1\nanchor: history — docs/history/f1/CONTEXT.md\n",
+        );
+        let older = filetime::FileTime::from_system_time(
+            std::time::SystemTime::now() - std::time::Duration::from_secs(600),
+        );
+        filetime::set_file_mtime(root.join("docs/history/f1/promote-proposals.md"), older).unwrap();
+        write(
+            root,
+            "docs/history/f2/promote-proposals.md",
+            "promote proposal for work item \"f2\" (docs/history/f2/CONTEXT.md) — 3 capped cell(s): a-1, a-2, a-3\nanchor: history — docs/history/f2/CONTEXT.md\n",
+        );
+        let text = render(root);
+        let line = text
+            .lines()
+            .find(|l| l.contains("Unapplied promote proposal"))
+            .unwrap_or_default();
+        assert_eq!(
+            line,
+            "### Unapplied promote proposal(s): 2 — newest: docs/history/f2/promote-proposals.md — never applied to docs/knowledge/ (D3): review the proposal, then apply what belongs or record why not."
+        );
+        // ONE line total — no per-feature enumeration trails it.
+        assert!(!text.contains("f1 (1 capped"), "{text}");
     }
 
     /// D4/D4a: a granted worktree `bee worktree merge` never reached and
@@ -759,6 +796,47 @@ use crate::version::BEE_VERSION;
         // A feature with no docs/history/<slug>/ anchor at all -> falls back too.
         let no_anchor = bundle_critical_patterns_digest(root, 2, Some("ghost")).unwrap();
         assert!(no_anchor[0].contains("recency fallback (no anchor for \"ghost\")"), "{no_anchor:?}");
+    }
+
+    /// U5: this session's own repro — a feature bound the moment
+    /// `bee state bind` writes its `.bee/lanes/<feature>.json` record, well
+    /// before its first scribing run and with no docs/history/<feature>/
+    /// file yet, used to fall through resolve_anchor's History arm, its
+    /// (pre-widening) Ledger arm, and land on the caller's recency
+    /// fallback — the digest printed "recency fallback (no anchor)" for a
+    /// feature that WAS bound. The ledger arm now treats a bare lane
+    /// record as its own signal, so this resolves and ranks instead.
+    #[test]
+    fn a_bound_feature_with_only_a_lane_record_resolves_an_anchor_and_ranks() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/knowledge/patterns/p-auth.md",
+            "---\ntype: bee.pattern\ntitle: Auth pattern\n---\nAuthentication login session token flow.\n",
+        );
+        write(
+            root,
+            "docs/knowledge/index.md",
+            "# Index\n\n## Critical patterns\n- [Auth](patterns/p-auth.md)\n\n## Next\n",
+        );
+        // A bare lane record: bound, but no last_scribing_run yet, no
+        // .bee/logs/scribing-runs.jsonl entry, no docs/history/f3/ file.
+        write(
+            root,
+            ".bee/lanes/f3.json",
+            r#"{"schema_version":"1.0","feature":"f3","mode":"small","phase":"shaping","approved_gates":{"context":false,"shape":false,"execution":false,"review":false},"summary":"","created_at":"2026-08-10T00:00:00.000Z"}"#,
+        );
+
+        let digest = bundle_critical_patterns_digest(root, 2, Some("f3")).unwrap();
+        assert!(
+            digest[0].contains("ranked by relevance to \"f3\""),
+            "a bound feature with only a lane record must resolve an anchor and rank, not recency-fallback: {digest:?}"
+        );
+        assert!(
+            !digest[0].contains("recency fallback"),
+            "a lane record alone must be enough — no scribing-run entry required (U5): {digest:?}"
+        );
     }
 
     #[test]

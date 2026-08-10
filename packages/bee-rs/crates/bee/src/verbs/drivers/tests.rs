@@ -1491,6 +1491,73 @@ use std::time::Instant;
         assert!(root.join(".bee/cells/archive/demo/demo-1.json").exists());
     }
 
+    /// U4 (docs/history/knowledge-usable/CONTEXT.md): a close that writes a
+    /// promote proposal ALSO enqueues exactly one capture-queue stub
+    /// pointing at it — the queue is the living channel a proposal reaches
+    /// flush through; the proposals file keeps being written unchanged
+    /// (asserted above, in the sibling test this one shares its fixture
+    /// with).
+    #[test]
+    fn close_green_promote_ok_enqueues_one_capture_stub_pointing_at_it() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
+        w(
+            &root,
+            "docs/history/demo/CONTEXT.md",
+            "# Demo Context\n\nBody.\n",
+        );
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","title":"first","verify":"cargo test","trace":{"behavior_change":true,"outcome":"did the thing","files_changed":["src/a.rs"],"capped_at":"2024-06-02T10:00:00.000Z"}}"#,
+        );
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2024-06-03T00:00:00.000Z\"}\n",
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, _text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        let queue = std::fs::read_to_string(root.join(".bee/capture-queue.jsonl")).unwrap();
+        let rows: Vec<Value> = queue.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(rows.len(), 1, "expected exactly one enqueued stub: {queue}");
+        let stub = &rows[0];
+        assert_eq!(stub.get("kind"), Some(&json!("stub")));
+        assert_eq!(
+            stub.get("outcome"),
+            Some(&json!("Promote proposal for \"demo\" — docs/history/demo/promote-proposals.md"))
+        );
+        assert_eq!(
+            stub.get("files"),
+            Some(&json!(["docs/history/demo/promote-proposals.md"]))
+        );
+        assert_eq!(stub.get("source"), Some(&json!("promote")));
+    }
+
+    /// D2: a promote door that skips (no proposal was written) never
+    /// enqueues a stub — nothing to point at.
+    #[test]
+    fn close_green_promote_skipped_enqueues_nothing() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, _text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        assert!(!root.join(".bee/capture-queue.jsonl").exists());
+    }
+
     #[test]
     fn close_red_stops_at_the_tests_door_and_exits_one() {
         let Some(shell) = posix_shell() else { return };

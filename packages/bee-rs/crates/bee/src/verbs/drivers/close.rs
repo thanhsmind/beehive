@@ -4,13 +4,13 @@
 #![allow(unused_imports)]
 
 use super::*;
-use crate::fsutil::{ensure_dir, read_json, write_json_atomic, write_text_atomic, ReadJson};
+use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, write_text_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state::{capture_queue_threshold, read_config_raw};
 use crate::textutil::truncate_chars_tail;
 use crate::verbs::reservations::{
-    finish, js_is_ws, now_ms, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
+    finish, js_is_ws, now_iso, now_ms, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{
@@ -401,6 +401,49 @@ pub(crate) fn capture_queue_pending(root: &Path) -> (usize, f64) {
         .filter(|ms| ms.is_finite())
         .fold(f64::NAN, |acc, ms| if acc.is_nan() || ms < acc { ms } else { acc });
     (pending.len(), oldest_ms)
+}
+
+/// U4 (docs/history/knowledge-usable/CONTEXT.md): the proposal's dominant
+/// area — the `area_updates` entry with the most attributed bullets, ties
+/// keeping the proposal's own order — names the stub's `area` field. `None`
+/// when the proposal named no area at all (D19: a work item with no
+/// `bee.areas` and no scribing stamp).
+pub(crate) fn dominant_promote_area(proposal: &Value) -> Option<String> {
+    proposal["area_updates"]
+        .as_array()?
+        .iter()
+        .max_by_key(|u| u["bullets"].as_array().map(Vec::len).unwrap_or(0))
+        .and_then(|u| u["area"].as_str())
+        .map(str::to_string)
+}
+
+/// U4: once close writes `promote-proposals.md`, it ALSO appends one
+/// capture-queue stub pointing at it — the queue is the living channel a
+/// proposal reaches flush through (the 22 dead files under
+/// docs/history/*/promote-proposals.md proved the standalone file is
+/// write-only); the file itself keeps being written unchanged (audit trail,
+/// D38). Same stub shape `capture add` writes (verbs/capture.rs run_add) so
+/// `bee capture list`/flush treat it identically to a hand-added one.
+/// Best-effort: an append failure here never fails close — the proposal file
+/// itself is still the durable record.
+pub(crate) fn enqueue_promote_stub(root: &Path, feature: &str, proposal: &Value, proposals_rel: &str) {
+    let mut stub = Map::new();
+    stub.insert("kind".into(), Value::String("stub".into()));
+    stub.insert("id".into(), Value::String(pseudo_uuid_v4()));
+    stub.insert("at".into(), Value::String(now_iso()));
+    stub.insert(
+        "outcome".into(),
+        Value::String(format!("Promote proposal for \"{feature}\" — {proposals_rel}")),
+    );
+    stub.insert("dids".into(), Value::Array(Vec::new()));
+    stub.insert(
+        "area".into(),
+        dominant_promote_area(proposal).map(Value::String).unwrap_or(Value::Null),
+    );
+    stub.insert("files".into(), Value::Array(vec![Value::String(proposals_rel.to_string())]));
+    stub.insert("lane".into(), Value::Null);
+    stub.insert("source".into(), Value::String("promote".into()));
+    let _ = append_jsonl(&root.join(".bee").join("capture-queue.jsonl"), &Value::Object(stub));
 }
 
 /// D1 escape hatch: a logged decision tagged `capture-deferral` whose
@@ -804,6 +847,7 @@ pub(crate) fn close_handler(
             let text = crate::verbs::knowledge::promote_text(&proposal);
             match write_text_atomic(&root.join(&proposals_rel), &text) {
                 Ok(()) => {
+                    enqueue_promote_stub(root, feature, &proposal, &proposals_rel);
                     let cells_mined = proposal["cells"].as_array().map(Vec::len).unwrap_or(0);
                     let area_bullets: usize = proposal["area_updates"]
                         .as_array()
