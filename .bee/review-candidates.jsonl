@@ -103,3 +103,4 @@
 {"id":"94b4e037-4268-4f4f-b39b-0a31038c9712","type":"candidate","date":"2026-08-10T16:14:15.031Z","feature":"worktree-manifest-native","head":"4de511098a52d3a70715877266a4ccefe20ef79d","mode":"small","baseline":null,"cells":["wmn-1"]}
 {"id":"9252cf35-0f56-4a2d-a2ce-5d38fc8456db","type":"candidate","date":"2026-08-10T16:23:45.678Z","feature":"island-prune-safety","head":"6911af02631185a739e95e6f4282f67859a129fe","mode":"small","baseline":null,"cells":["ips-1"]}
 {"id":"42fcefdb-a577-4fba-b382-69d7ee8a0edc","type":"candidate","date":"2026-08-10T20:48:18.936Z","feature":"review-p1-batch-fixes","head":"d7db5c8222402ec5b9aa6b6dde252599e776a4c5","mode":"small","baseline":null,"cells":["rpb-1","rpb-2"]}
+{"id":"cac5e497-af10-435a-90c9-4c4446a974e4","type":"candidate","date":"2026-08-10T23:42:30.960Z","feature":"review-p2-hardening","head":"696e9f07751c0bd8795de5bc1de0076a9961fd5b","mode":"standard","baseline":null,"cells":["rph-1","rph-2","rph-3","rph-4"]}
