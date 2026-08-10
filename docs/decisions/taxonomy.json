@@ -327,6 +327,7 @@
     "friction",
     "worktree-orphan-verdict",
     "verify-pipeline",
-    "cross-platform"
+    "cross-platform",
+    "okf-profile"
   ]
 }
