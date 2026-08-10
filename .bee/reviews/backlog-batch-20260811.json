@@ -212,9 +212,10 @@
   ],
   "uat": [],
   "decision": {
-    "status": "pending",
-    "review": null
+    "status": "approved",
+    "by": "user",
+    "note": "P1: 0 after fixes — B-P1-1/B-P1-2 fixed by review-p1-batch-fixes (rpb-1 eb28f6dd, rpb-2 f9bdce3f), delta re-review CLOSED both with independent evidence. 9 P2 and P3 residue filed to backlog as review-finding rows, none blocking. Merge approved by user 2026-08-11."
   },
   "created_at": "2026-08-10T20:09:14.451Z",
-  "updated_at": "2026-08-10T20:55:22.302Z"
+  "updated_at": "2026-08-10T22:42:55.539Z"
 }
