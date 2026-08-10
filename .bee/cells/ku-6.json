@@ -1,0 +1,65 @@
+{
+  "id": "ku-6",
+  "feature": "knowledge-usable",
+  "title": "Critical label earns a bar; patterns re-graded to a selective pool",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "ku-5"
+  ],
+  "decisions": [
+    "U6"
+  ],
+  "files": [
+    "docs/knowledge/areas/okf-profile/critical-bar.md",
+    "docs/knowledge/index.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-usable/CONTEXT.md",
+    "docs/knowledge/index.md",
+    "docs/knowledge/areas/okf-profile"
+  ],
+  "action": "Per U6: author the bee.critical bar as a concept in the okf-profile area (critical = recurrence-prone + cross-feature + costly-when-missed; a pattern failing any leg is not critical). Then re-grade all 101 patterns' frontmatter against it — target at most ~30 critical — recording the per-pattern verdict reason in the commit body (grouped one-liners acceptable), never a bulk strip. Regenerate indexes (`bee knowledge index`), run `bee knowledge check` clean, and update any fixture/test asserting the old critical count. Reserve additional pattern files as you touch them.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && /home/thanhsmind/projects/goglbe/beehive/.bee/bin/bee knowledge check",
+  "must_haves": {
+    "truths": [
+      "Critical pool is at most ~30 with a written bar",
+      "Every de-flagged pattern has a stated reason in the commit"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/okf-profile/critical-bar.md",
+        "substantive": "the bar as an OKF-valid concept"
+      }
+    ],
+    "key_links": [
+      "index.md Critical patterns section regenerated to the new pool"
+    ],
+    "prohibitions": [
+      "No pattern file deleted",
+      "No bulk unexplained strip"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ku-6",
+    "outcome": "Authored the bee.critical bar as an okf-profile concept and re-graded all 101 patterns to a 30-pattern critical pool; index regenerated clean",
+    "files_changed": [
+      "docs/knowledge/areas/okf-profile/critical-bar.md",
+      "docs/knowledge/index.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T11:06:26.095Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T10:49:52.519Z",
+    "commit_pending": "51a5933a20b8ec4029568a7b8f5f68337a005828",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T11:06:15.119Z"
+  }
+}

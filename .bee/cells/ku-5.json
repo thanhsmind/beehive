@@ -1,0 +1,65 @@
+{
+  "id": "ku-5",
+  "feature": "knowledge-usable",
+  "title": "Anchor resolves for any feature with a lane record or history file",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "ku-1"
+  ],
+  "decisions": [
+    "U5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-usable/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "action": "Per U5: widen resolve_anchor's ledger arm — a `.bee/lanes/<feature>.json` record alone (no scribing-run entry required) or ANY file under docs/history/<feature>/ yields an anchor, so a bound feature falling to recency fallback becomes the exception. Preserve the priority order (work-item > history > ledger) and every existing anchor kind's behavior; the digest fallback header keeps naming its reason. Repro first: this session's own case — feature decisions-worktree-door was bound with a lane record present yet the digest printed 'recency fallback (no anchor)'; encode that as the red test, then fix. All three consumers (preamble digest, knowledge context, cell-prepare kctx) inherit via the shared resolver.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A bound feature with only a lane record resolves an anchor and gets a ranked digest",
+      "Anchor priority order unchanged for work-item and history arms"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+        "substantive": "ledger arm widened with red-first test"
+      }
+    ],
+    "key_links": [
+      "budget.rs rank path exercises the widened arm"
+    ],
+    "prohibitions": [
+      "No change to ranking math itself"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ku-5",
+    "outcome": "Widened resolve_anchor's ledger arm to fire on a bare lane record or any other docs/history file, and rank_critical_rows to accept the Ledger anchor kind, so a bound feature no longer recency-falls-back",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T10:49:35.409Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T10:37:36.082Z",
+    "commit_pending": "57a4e8a1",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T10:49:23.725Z"
+  }
+}

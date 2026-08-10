@@ -1,0 +1,67 @@
+{
+  "id": "ku-9",
+  "feature": "knowledge-usable",
+  "title": "bee knowledge bootstrap stands up a bundle in a host repo",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "U9"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/bootstrap.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-usable/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+    "docs/knowledge/areas/okf-profile"
+  ],
+  "action": "Per U9: new verb `bee knowledge bootstrap` — in a repo with docs/specs/*.md and NO bundle, creates docs/knowledge/: one bee.area concept per spec (spec body imported under the area, OKF frontmatter authored: type, title, description from first heading/paragraph, timestamp, bee.id/areas/authoritative_for), plus generated index.md and subdir indexes via the existing index machinery. Typed refusal when a bundle already exists (bundle_mode true) or docs/specs is absent/empty — refusal names what to do instead. Output names each area created and the gaps (specs it could not classify). Register in routing try_native + hand-maintained registry payload (ks-1 precedent), keep tests/registry_contracts.rs green. TDD on temp-dir fixtures: fresh bootstrap, existing-bundle refusal, no-specs refusal, frontmatter validity via check_bundle.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Fresh host fixture: bootstrap creates a bundle that knowledge check accepts and bundle_mode reads true",
+      "Existing bundle: typed refusal, zero writes"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/bootstrap.rs",
+        "substantive": "full verb with tests, no stubs"
+      }
+    ],
+    "key_links": [
+      "registry payload carries knowledge.bootstrap; routing dispatches it"
+    ],
+    "prohibitions": [
+      "No code scanning in v1",
+      "Never touches an existing bundle"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ku-9",
+    "outcome": "bee knowledge bootstrap stands up a docs/knowledge/ bundle from docs/specs/*.md in a host repo, refusing on an existing bundle or an absent docs/specs/",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/bootstrap.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T10:32:44.090Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T10:16:08.321Z",
+    "commit_pending": "commit c58592c4 on branch wt/knowledge-search carries trailer 'cell: ku-9' but this worktree's .bee/runtime/worktree-identity.json registers feature knowledge-search, not this cell's feature knowledge-usable, so the D6 lookup falls back to main and never finds it — verified the commit exists with git log on this worktree",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T10:32:32.310Z"
+  }
+}

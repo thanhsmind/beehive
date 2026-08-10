@@ -1,0 +1,60 @@
+{
+  "id": "ku-2",
+  "feature": "knowledge-usable",
+  "title": "knowledge check reports dangling source paths",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "U2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-usable/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs"
+  ],
+  "action": "Per U2: new finding in `bee knowledge check` — for each concept, any token in frontmatter `sources:` entries that parses as a repo-relative file path (contains '/', no scheme, no spaces-as-prose heuristic: extract the leading path-like token of each entry) and does not exist on disk is reported (finding code e.g. DANGLING_SOURCE, concept path + missing target). URLs and prose never flagged — sources entries are often 'path (free text)': parse the path prefix only. Warning by default; failing under --strict. TDD: existing bundle stays clean or findings are real; synthetic fixtures for hit/miss/URL/prose cases.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A sources entry naming a deleted file is reported with concept + target",
+      "URL and prose entries never flagged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+        "substantive": "finding implemented with tests"
+      }
+    ],
+    "key_links": [
+      "--strict flips severity"
+    ],
+    "prohibitions": [
+      "No changes to existing finding codes' behavior"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ku-2",
+    "outcome": "knowledge check flags dangling bee.sources repo paths (warning; failing under --strict), URLs/prose/fragments excluded",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T10:23:28.282Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T10:16:05.953Z",
+    "commit_pending": "commit eacae5cf carries trailer 'cell: ku-2' on branch wt/knowledge-search in the feature worktree; not yet visible to main's git log, lands via bee worktree merge",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T10:23:15.700Z"
+  }
+}

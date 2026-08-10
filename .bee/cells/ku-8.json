@@ -1,0 +1,72 @@
+{
+  "id": "ku-8",
+  "feature": "knowledge-usable",
+  "title": "bee knowledge report counts recurrence per critical pattern",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "ku-6",
+    "ku-9"
+  ],
+  "decisions": [
+    "U8"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-usable/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs"
+  ],
+  "action": "Per U8: critical patterns may carry frontmatter `bee.signature` (a deterministic, literally grep-able string). New read-only verb `bee knowledge report`: for each critical pattern with a signature, count decision-log entries and capture-queue stubs whose text contains the signature AND whose date is after the pattern's date — render per-pattern recurrence count + last-seen (json + text). Patterns without signatures listed as unmeasured. Backfill signatures on at least the 3 patterns this session proved live (binary-inert 20260805, fan-out 20260807, shared-index commit 20260806) — reserve those files. Register in routing + hand-maintained registry, contracts green. TDD on fixtures: match counts, date filtering, unmeasured listing.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "report renders count + last-seen for signature-bearing criticals",
+      "signatureless criticals shown as unmeasured, never guessed"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+        "substantive": "full verb with tests"
+      }
+    ],
+    "key_links": [
+      "registry payload carries knowledge.report; at least 3 patterns carry signatures"
+    ],
+    "prohibitions": [
+      "Read-only — no automatic writes to patterns or logs",
+      "No fuzzy matching"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ku-8",
+    "outcome": "Add read-only bee knowledge report verb counting critical-pattern recurrence by signature; backfill 3 pattern signatures",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md",
+      "docs/knowledge/patterns/20260806-a-guard-on-the-shared-index-does-not-stop-a-path-scoped-commit-naming-someone-elses-file.md",
+      "docs/knowledge/patterns/20260807-fix-the-fan-out-not-the-cell-of-it-that-was-reported.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T11:18:55.382Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T11:06:47.784Z",
+    "commit_pending": "worktree branch wt/knowledge-search commit fece8080 carries the cell trailer; main checkout's 50-commit trailer scan does not see cross-worktree branch history",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T11:18:43.237Z"
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "id": "ku-1",
+  "feature": "knowledge-usable",
+  "title": "Preamble names the pull move in one always-loaded line",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "U1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-usable/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs"
+  ],
+  "action": "Per U1: when a knowledge bundle exists, the session preamble's project-map/knowledge block gains exactly one line naming the pull move — spelling `bee knowledge search --text \"<symptom>\"` and when to use it (a symptom mid-flow: error text, odd behavior, unfamiliar mechanism). One sentence, no flag docs. Update any preamble fixture/snapshot tests that assert the block byte-for-byte (ci-preamble-session-fixture suite). TDD: assert the line renders with a bundle and is absent without one.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Preamble with bundle shows the one-line pull move",
+      "No-bundle repos render byte-identically to before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+        "substantive": "line rendered from bundle presence, tested"
+      }
+    ],
+    "key_links": [
+      "fixture tests updated, not deleted"
+    ],
+    "prohibitions": [
+      "No second line, no flag-by-flag documentation"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ku-1",
+    "outcome": "Bundle project map gains one always-loaded line naming the bee knowledge search pull move; no-bundle repos unchanged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T10:37:23.524Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T10:16:03.755Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-10T10:23:24.630Z",
+        "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+        "claimed_at": "2026-08-10T10:17:02.121Z",
+        "acquired_at": "2026-08-10T10:16:03.754Z",
+        "worker": "exec-ku-1",
+        "verdict": "tests-red",
+        "failure_signature": "9b72efbcd9a1",
+        "note": "e(\"standard\"), \"shaping\", &[]));"
+      },
+      {
+        "n": 2,
+        "at": "2026-08-10T10:27:19.286Z",
+        "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+        "claimed_at": "2026-08-10T10:23:32.957Z",
+        "acquired_at": "2026-08-10T10:16:03.754Z",
+        "worker": "exec-ku-1",
+        "verdict": "tests-red",
+        "failure_signature": "90e38e236539",
+        "note": "re: &str) -> Map<String, Value> {"
+      },
+      {
+        "n": 3,
+        "at": "2026-08-10T10:28:06.778Z",
+        "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+        "claimed_at": "2026-08-10T10:23:32.957Z",
+        "acquired_at": "2026-08-10T10:16:03.754Z",
+        "worker": "exec-ku-1",
+        "verdict": "tests-red",
+        "failure_signature": "3d7aa60228f9",
+        "note": ":20"
+      }
+    ],
+    "commit_pending": "commit b3f332a0 on worktree branch wt/knowledge-search, not visible in main store's 50-commit trailer scan (same pattern as ku-3/ku-9)",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T10:37:12.640Z"
+  }
+}

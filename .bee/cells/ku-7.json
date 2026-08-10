@@ -1,0 +1,63 @@
+{
+  "id": "ku-7",
+  "feature": "knowledge-usable",
+  "title": "Close-time pattern check door with blocking violated verdict",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "ku-4",
+    "ku-6"
+  ],
+  "decisions": [
+    "U7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-usable/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Per U7: `bee close` (and --dry-run) gains a pattern-check door — map the feature's cells' touched files to bundle areas, list those areas' critical patterns, and read a per-pattern verdict (violated/respected/not-applicable) supplied by the closing agent via a flag or answers file (pick the smallest transport the close call already supports; document it in the door's own detail text). Unanswered patterns report as pending (non-blocking); a recorded `violated` blocks close exactly like a red test, naming the pattern. Verdicts persist on the existing close/trace records — no new artifact file. TDD: violated blocks, respected/n-a pass, absent answers report pending.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A violated verdict refuses close naming the pattern",
+      "No verdicts = pending report, close proceeds on green tests"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "door implemented with tests"
+      }
+    ],
+    "key_links": [
+      "door consumes ku-6's selective critical pool via area mapping"
+    ],
+    "prohibitions": [
+      "No new artifact files for verdicts"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ku-7",
+    "outcome": "Close-time pattern-check door: maps touched files to bundle areas, lists critical patterns, blocks on a recorded violated verdict via --pattern-verdicts",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T11:23:09.321Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T11:06:46.491Z",
+    "commit_pending": "63fa587d",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T11:22:57.511Z"
+  }
+}

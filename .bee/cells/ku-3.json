@@ -1,0 +1,77 @@
+{
+  "id": "ku-3",
+  "feature": "knowledge-usable",
+  "title": "Capture-queue pressure past a configurable threshold",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "U3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/state.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-usable/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs"
+  ],
+  "action": "Per U3: config key `capture_queue_threshold` {count (default 5), days (default 7)} — validated by config validate, non-object/negative refused. When pending stubs exceed count OR oldest stub age exceeds days: the session-close capture-queue nudge escalates to overdue wording naming the breach ('N stubs pending, oldest D days — flush before new work'), and bee close's capture-queue door detail escalates the same way. Never a hard block. Below threshold: wording unchanged, byte-identical. TDD both sides of the threshold and config validation.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Over-threshold queue produces overdue wording at Stop and close",
+      "Under-threshold output byte-identical to before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs",
+        "substantive": "threshold escalation with tests"
+      }
+    ],
+    "key_links": [
+      "config validate rejects malformed capture_queue_threshold"
+    ],
+    "prohibitions": [
+      "No hard block anywhere"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ku-3",
+    "outcome": "Capture-queue pressure past configurable threshold (U3): overdue wording at Stop nudge and close door, config-validated capture_queue_threshold, never a hard block",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+      "packages/bee-rs/crates/bee/src/state.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T10:36:06.108Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T10:16:07.394Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-10T10:32:01.507Z",
+        "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+        "claimed_at": "2026-08-10T10:28:40.014Z",
+        "acquired_at": "2026-08-10T10:16:07.394Z",
+        "worker": "exec-ku-3",
+        "verdict": "tests-red",
+        "failure_signature": "42a47aa4ab3a",
+        "note": "te) (run `cargo fix --bin \"bee\" -p bee --tests` to apply 2 suggestions)"
+      }
+    ],
+    "commit_pending": "worker committed in the feature worktree (branch wt/knowledge-search, commit a3db93d2, verified via git log --all --grep 'cell: ku-3'); the finish verb's commit-trailer check resolves against the main store checkout's git log, which does not include un-merged worktree commits until bee worktree merge — a known worktree/store-root gap, not a missing commit",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T10:35:54.393Z"
+  }
+}

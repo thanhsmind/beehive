@@ -1,0 +1,66 @@
+{
+  "id": "ku-4",
+  "feature": "knowledge-usable",
+  "title": "Promote proposals converge into the capture queue",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "ku-1",
+    "ku-3"
+  ],
+  "decisions": [
+    "U4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-usable/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Per U4: when close's knowledge-promote step writes promote-proposals.md, it ALSO appends one capture-queue stub (area from the proposal's dominant area, outcome naming the proposal path) so the queue — the living channel — carries it to flush. Proposal file keeps being written. The preamble's unapplied-promote-proposals block shrinks to ONE line: count + newest proposal path (replacing the multi-entry enumeration). Update fixture tests. TDD: close with a proposal enqueues exactly one stub; preamble renders the one-liner.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A close that generates a proposal leaves one new capture stub pointing at it",
+      "Preamble promote block is one line"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "stub enqueue wired with tests"
+      }
+    ],
+    "key_links": [
+      "stub flows through the same pendingCaptureStubs path U3 measures"
+    ],
+    "prohibitions": [
+      "Proposal file generation is not removed"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ku-4",
+    "outcome": "Close now enqueues one capture-queue stub per promote proposal (dominant area, outcome naming the proposal path); preamble's unapplied-proposals block shrinks to one line (count + newest path).",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T10:46:11.861Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T10:37:34.724Z",
+    "commit_pending": "491c4792",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T10:46:00.151Z"
+  }
+}
