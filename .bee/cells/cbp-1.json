@@ -1,0 +1,52 @@
+{
+  "id": "cbp-1",
+  "feature": "close-bookkeeping-p3",
+  "title": "Bookkeeping commit: null stdin + no-gpg-sign, linked-worktree test, ceiling-guarded not_a_repo test",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Three review P3s (close-lands-bookkeeping-20260810 P3-1/P3-3/P3-4), all in close.rs. (P3-1) run_git sets stdin to null; the bookkeeping `git commit` invocation adds --no-gpg-sign so a commit.gpgsign=true repo with a tty pinentry can never hang close (chosen policy: bee's own bookkeeping commit is unsigned; the test fixture's `git config commit.gpgsign false` defense becomes redundant but may stay). (P3-3) New test: create a repo, `git worktree add` a linked checkout (whose .git is a FILE), dirty tracked .bee there, run the bookkeeping path with that root, assert committed:true on the linked worktree's branch — proves the rev-parse --is-inside-work-tree detection the spec calls out. (P3-4) Harden non_repo_root_reports_not_a_repo_and_close_stays_green: scoped env guard sets GIT_CEILING_DIRECTORIES to the tempdir's parent for the duration (restore previous value on drop), so a TMPDIR under a real git checkout cannot make the test stage into that repo. All existing tests stay green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bookkeeping commit passes --no-gpg-sign and run_git spawns git with stdin null",
+      "a linked worktree root commits its .bee bookkeeping in the suite, not only by hand",
+      "the not_a_repo test cannot stage into an enclosing repo regardless of TMPDIR"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "fixes plus tests, no TODO stubs"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-cbp-1",
+    "outcome": "run_git stdin null + --no-gpg-sign on bookkeeping commit; linked-worktree branch test; GIT_CEILING_DIRECTORIES guard on not_a_repo test",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T14:35:18.146Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T14:27:00.951Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T14:35:06.508Z"
+  }
+}

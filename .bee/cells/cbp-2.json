@@ -1,0 +1,54 @@
+{
+  "id": "cbp-2",
+  "feature": "close-bookkeeping-p3",
+  "title": "cells add maps change_class behavior to trace.behavior_change=true by default",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_add.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_add.rs"
+  ],
+  "action": "Review P3-5 (close-lands-bookkeeping-20260810): a cell authored with change_class 'behavior' but no explicit trace.behavior_change landed with trace.behavior_change=false, so resolve_declared_behavior_change (handlers_close.rs:40-53) read the explicit false and the scribing-debt door never armed for a genuine behavior change. Fix at authoring: when cells add (and cells update if it can set change_class) receives change_class 'behavior' and the payload does NOT explicitly set trace.behavior_change, default it to true; an explicit false in the payload is respected (the author opted out on purpose). Locate the exact authoring site that writes the default false first — if the file is not handlers_add.rs, follow the real path and note it in the trace. TDD: red test proving a change_class-behavior cell added without the flag now resolves as behavior change via resolve_declared_behavior_change; explicit-false test stays false; non-behavior classes unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "a cell added with change_class behavior and no explicit flag counts as behavior change at the debt door",
+      "an explicit trace.behavior_change=false still wins",
+      "other change_class values keep today's behavior"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_add.rs",
+        "substantive": "authoring default plus tests (or the real authoring site, named in the trace)"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-cbp-2",
+    "outcome": "cells add defaults trace.behavior_change=true for change_class behavior when unset (normalize_new_cell in validate.rs — declared file handlers_add.rs does not exist, real site followed per cell instruction); explicit false respected; other classes unchanged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T14:35:36.042Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T14:27:00.956Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T14:35:24.426Z"
+  }
+}
