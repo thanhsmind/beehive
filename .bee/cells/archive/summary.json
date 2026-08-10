@@ -288,5 +288,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-10T16:14:08.216Z"
+  },
+  "island-prune-safety": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-10T16:23:09.793Z"
   }
 }
