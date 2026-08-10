@@ -87,6 +87,15 @@ same source bullet.)
   nine retired per-command helper scripts are deleted from a host on its next
   apply; removal is scoped to the exact retired filenames inside the managed
   tools directory and is idempotent (decision bbc6bcea, D1/D2).
+- **R15** — The template source root is resolved from the INVOCATION's own
+  project root (walking up from the working directory), never from the
+  executable's physical location: a granted worktree whose vendored binary
+  is a symlink into the main checkout renders its OWN checkout's templates,
+  so an apply can no longer splice the main checkout's managed block over
+  worktree edits. A root carrying no templates refuses with a typed error
+  naming the invocation root and the missing template path — never a silent
+  fallback to the executable's checkout (onboard-root-resolution cell orr-1,
+  2026-08-10; live overwrite incident, backlog row 659).
 
 ## Edge Cases Settled
 
