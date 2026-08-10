@@ -168,6 +168,46 @@
           "evidence": "architecture P3-D/H + test-coverage F10-F13 batch"
         }
       ]
+    },
+    {
+      "findings": [
+        {
+          "severity": "P1",
+          "id": "B-P1-1",
+          "status": "closed",
+          "summary": "CLOSED by rpb-1 (eb28f6dd): symlink refusal before any prune/fill, both entry points covered by construction, deletion set verified closed; TOCTOU noted as informational"
+        },
+        {
+          "severity": "P1",
+          "id": "B-P1-2",
+          "status": "closed",
+          "summary": "CLOSED by rpb-2 (f9bdce3f): failing-signer stubs bind on both paths (red without the flag); crate-wide commit-spawn sweep clean; stdin-null verified already-null via output() — documentation only"
+        },
+        {
+          "severity": "P2",
+          "id": "D-P2-1",
+          "file": "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs:164-186",
+          "summary": "worktree new drops the cellsSync skip report — symlink refusal happens but user sees normal success with an unsynced store and no stated cause (register shows it; new does not)"
+        },
+        {
+          "severity": "P3",
+          "id": "D-P3-1",
+          "file": "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs:618-630",
+          "summary": "dest archive dir not in the checked set — a symlinked archive/<feature> lets fs::copy WRITE into its target (create-only, never clobber/delete); add it to the checked array"
+        },
+        {
+          "severity": "P3",
+          "id": "D-P3-2",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1677",
+          "summary": "un-masked fixture now inherits developer global gitconfig — a gpgsign=true ~/.gitconfig makes the seed commit fail loudly across the close module; pass --no-gpg-sign on the fixture's own seed commit"
+        },
+        {
+          "severity": "P3",
+          "id": "D-P3-3",
+          "file": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs:79",
+          "summary": "stdin-null comment overstates — output() already nulled stdin; keep as defense-in-depth but the doc reads as a closed live hang"
+        }
+      ]
     }
   ],
   "uat": [],
@@ -176,5 +216,5 @@
     "review": null
   },
   "created_at": "2026-08-10T20:09:14.451Z",
-  "updated_at": "2026-08-10T20:23:29.540Z"
+  "updated_at": "2026-08-10T20:55:22.302Z"
 }
