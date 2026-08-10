@@ -167,7 +167,14 @@ silent.
   itself for a declared behavior change; an explicit false in the payload is
   a deliberate opt-out and is respected (close-bookkeeping-p3 cell cbp-2,
   after review P3-5 found a behavior cell shipping with the flag silently
-  false and the door never arming).
+  false and the door never arming). The same defaulting covers the UPDATE
+  door since review-p2-hardening cell rph-4 (2026-08-11): an update that
+  sets `change_class: behavior` without explicitly setting the flag in the
+  same call arms it too, through the one shared function the add path uses
+  — re-classing away from behavior changes nothing (review B-P2-8). Worker
+  records also stopped accumulating: registration upserts by
+  nickname-plus-cell, so re-registering the same pair refreshes the live
+  record instead of appending a stale twin (review B-P2-6).
 - R56 — A regeneration obligation implied by a unit's own scope refuses the
   authoring write unless the verification carries the derived checks or the
   unit records a reasoned acknowledgement; the obligated roots are always

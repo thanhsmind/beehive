@@ -95,7 +95,13 @@ same source bullet.)
   worktree edits. A root carrying no templates refuses with a typed error
   naming the invocation root and the missing template path — never a silent
   fallback to the executable's checkout (onboard-root-resolution cell orr-1,
-  2026-08-10; live overwrite incident, backlog row 659).
+  2026-08-10; live overwrite incident, backlog row 659). The walk is
+  BOUNDED since review-p2-hardening cell rph-3 (2026-08-11): it stops at
+  the first directory containing `.git`, so an ancestor beyond the
+  repository boundary can never become the template source (review B-P2-3,
+  template-poisoning consequence); and an explicit `--repo-root` is tried
+  FIRST as a locate candidate, so onboarding a named bee checkout works
+  from any working directory — a refusal names both candidates.
 
 ## Edge Cases Settled
 

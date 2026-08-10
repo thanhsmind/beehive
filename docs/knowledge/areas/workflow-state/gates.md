@@ -438,7 +438,14 @@ a malformed record has earned none.
   rpb-2 (2026-08-11) that claim is PROVEN by failing-signer stub tests on
   both this path and `worktree merge`'s own commit, which now carries the
   same `--no-gpg-sign` + stdin-null hardening (the defense had shipped
-  unpinned and per-copy; review B-P1-2). Named cost, chosen not accidental: the
+  unpinned and per-copy; review B-P1-2) — and since review-p2-hardening
+  cell rph-1 (2026-08-11) both paths call ONE shared unsigned-commit
+  helper, so removing the flag there reds both stub tests at once: the
+  hardening lives on the mechanism, not on copies. Same cell made the
+  config refusal honest: the message names the file actually carrying the
+  offending value across the merged overlay (`.bee/config.local.json`
+  checked first), and `null` reads as UNSET (defaults on) instead of
+  refusing — null is bee's unset idiom. Named cost, chosen not accidental: the
   sweep is `.bee`-wide, so a CONCURRENT session's in-flight tracked
   bee-store dirt rides into this feature's bookkeeping commit under this
   feature's message — misattributed history, never data loss (review

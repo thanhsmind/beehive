@@ -44,11 +44,18 @@ deletions in the island that a later `worktree merge` would have applied to MAIN
 cell archive — caught live pre-merge the same day. The invariant is pinned by test: after
 bootstrap from a real worktree checkout, `git status` inside the island is EMPTY; when git is
 unavailable the prune runs not at all (fail safe). A SYMLINKED store is refused outright:
-symlink metadata is checked on the island `.bee`, `.bee/cells`, the source cells dir, and every
-archive dir before any prune or fill — one symlink skips the whole sync, named in the bootstrap
-report, never followed (review B-P1-1: a symlinked `.bee/cells` made git track only the link,
-emptied the tracked-set shield, and the prune deleted through into the target; review-p1-batch-fixes
-cell rpb-1, 2026-08-11). The original confusion problem (foreign
+symlink metadata is checked on the island `.bee`, `.bee/cells`, the source cells dir, the
+destination archive dir, and every archive dir before any prune or fill — one symlink skips the
+whole sync, named in the bootstrap report, never followed (review B-P1-1: a symlinked
+`.bee/cells` made git track only the link, emptied the tracked-set shield, and the prune deleted
+through into the target; review-p1-batch-fixes cell rpb-1, 2026-08-11; the destination-archive
+join and the `worktree new` surface joined under review-p2-hardening cell rph-2). Further
+hardening from rph-2: `worktree register` validates `--feature` against the same slug rule
+`worktree new` uses BEFORE any path join; the tracked-set lookup fails CLOSED — one unparseable
+`ls-files` line means prune-nothing, never the empty-set prune-everything branch; a prune that
+removed anything names the pruned files in the bootstrap report; and `worktree new` prints the
+cellsSync skip note `register` already printed (review D-P2-1: the refusal used to be invisible
+on the primary entry point). The original confusion problem (foreign
 tracked cells visible in island reads) therefore remains for a read-side filter, not a disk
 prune — reopened on the PBI.
 
