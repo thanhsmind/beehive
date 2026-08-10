@@ -895,7 +895,7 @@ pub(crate) fn claim_and_reserve_for_dispatch(
     cell_id: &str,
     worker: &str,
     session_flag: Option<&str>,
-) -> R2<Result<(Value, Vec<Value>), String>> {
+) -> R2<Result<(Value, Vec<Value>, bool, Option<String>), String>> {
     use crate::verbs::cells;
     // ttl/isolate are structurally absent: bee.mjs builds `{id, worker}` plus
     // `session-id` only when one was passed.
@@ -990,7 +990,25 @@ pub(crate) fn claim_and_reserve_for_dispatch(
         lines.extend(conflict_lines);
         return Ok(Err(lines.join("\n")));
     }
-    Ok(Ok((cell, reserved)))
+
+    // dp-r1: the claim (and every reservation) stands from here on — register
+    // the claiming worker against the cell it now owns, THE SAME record shape
+    // `bee state worker add --nickname <w> --cell <id> --tier <t> --status
+    // running` writes (state_group::register_worker_for_cell reuses that
+    // door's own write path). A registration failure never unwinds the claim
+    // — it is real state the caller already holds — it only travels back as
+    // `(worker_registered: false, Some(registration_error))` for the payload
+    // to name loudly.
+    let tier = match cell.get("tier") {
+        Some(Value::String(t)) if !t.is_empty() => Some(t.clone()),
+        _ => None,
+    };
+    let (worker_registered, registration_error) =
+        match crate::verbs::state_group::register_worker_for_cell(root, worker, &claimed_id, tier.as_deref()) {
+            Ok(()) => (true, None),
+            Err(message) => (false, Some(message)),
+        };
+    Ok(Ok((cell, reserved, worker_registered, registration_error)))
 }
 
 pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -1127,6 +1145,8 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
 
     // ── the claim + reserve gesture, before the payload build (Node's order).
     let mut claim_outcome: Option<Vec<Value>> = None;
+    let mut worker_registered = false;
+    let mut registration_error: Option<String> = None;
     if claim {
         let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
         match claim_and_reserve_for_dispatch(
@@ -1136,7 +1156,11 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             worker.as_deref().unwrap_or(""),
             session_flag.as_deref(),
         ) {
-            Ok(Ok((_cell, reserved))) => claim_outcome = Some(reserved),
+            Ok(Ok((_cell, reserved, registered, reg_err))) => {
+                claim_outcome = Some(reserved);
+                worker_registered = registered;
+                registration_error = reg_err;
+            }
             Ok(Err(message)) => return finish(&ctx, Ok(Out::Thrown(message))),
             Err(e) => return finish(&ctx, Err(e)),
         }
@@ -1171,6 +1195,12 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                             };
                             m.insert("claimed".into(), Value::Bool(true));
                             m.insert("reserved".into(), Value::Array(reserved.clone()));
+                            // dp-r1: named loudly either way — the payload IS
+                            // the printed text below, json mode or not.
+                            m.insert("worker_registered".into(), Value::Bool(worker_registered));
+                            if let Some(err) = &registration_error {
+                                m.insert("registration_error".into(), Value::String(err.clone()));
+                            }
                             Value::Object(m)
                         }
                     };

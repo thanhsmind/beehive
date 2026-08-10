@@ -1031,6 +1031,173 @@ use std::time::Instant;
         assert!(!prompt.contains("{{"), "no unrendered marker residue: {prompt}");
     }
 
+    // ── dp-r1: dispatch prepare --claim registers the claiming worker ───────
+
+    /// A lane record whose `approved_gates.execution` is true and whose
+    /// `route` key is present — `claim_cell_from_flags`'s execution-gate
+    /// door and D4's route check both clear the same way `cells/tests.rs`'s
+    /// own `lane_with_route` fixture does (kept local since that helper is
+    /// private to its own `#[cfg(test)] mod tests`).
+    fn dpr1_lane_with_route(root: &Path, feature: &str) {
+        w(
+            root,
+            &format!(".bee/lanes/{feature}.json"),
+            &format!(r#"{{"feature":"{feature}","approved_gates":{{"execution":true}},"route":true}}"#),
+        );
+    }
+
+    fn dpr1_workers(root: &Path) -> Vec<Value> {
+        match crate::fsutil::read_json(&crate::state::state_path(root)) {
+            ReadJson::Parsed(Value::Object(m)) => match m.get("workers") {
+                Some(Value::Array(a)) => a.clone(),
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        }
+    }
+
+    /// must-have: a successful `--claim` registers the claiming worker
+    /// against the cell it just claimed, in the exact shape `bee state
+    /// worker add --nickname <w> --cell <id> --tier <t> --status running`
+    /// writes — findable by the SAME read the B44 close-time door
+    /// (`registered_worker_for_cell`) uses, never a raw file peek.
+    #[test]
+    fn claim_registers_the_worker_findable_by_the_close_doors_own_read() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        dpr1_lane_with_route(&root, "f");
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","title":"t","status":"open","lane":"tiny","feature":"f","deps":[],"tier":"generation"}"#,
+        );
+
+        assert!(
+            !crate::verbs::cells::registered_worker_for_cell(&root, "c-1", Some("bee-w1")).unwrap(),
+            "an unclaimed cell has no registered worker yet"
+        );
+
+        let (cell, reserved, registered, err) =
+            claim_and_reserve_for_dispatch(&root, None, "c-1", "bee-w1", None).unwrap().unwrap();
+        assert_eq!(cell["status"], json!("claimed"), "the claim itself still lands");
+        assert!(reserved.is_empty(), "no files declared, nothing to reserve");
+        assert!(registered, "registration must succeed: {err:?}");
+        assert_eq!(err, None);
+
+        // The exact read the B44 cap-time door (`registered_worker_for_cell`,
+        // verbs/cells/handlers_close.rs) uses to decide whether a small+ cell
+        // may cap — never a raw file read standing in for it.
+        assert!(
+            crate::verbs::cells::registered_worker_for_cell(&root, "c-1", Some("bee-w1")).unwrap(),
+            "the freshly registered worker must be findable through the close door's own check"
+        );
+
+        // The record shape itself: nickname/cell/tier/status, tier lifted
+        // off the cell's own `tier` field, status hard-coded "running".
+        let workers = dpr1_workers(&root);
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].get("nickname"), Some(&json!("bee-w1")));
+        assert_eq!(workers[0].get("cell"), Some(&json!("c-1")));
+        assert_eq!(workers[0].get("tier"), Some(&json!("generation")));
+        assert_eq!(workers[0].get("status"), Some(&json!("running")));
+    }
+
+    /// A cell with no `tier` field of its own registers with `tier: null` —
+    /// `state worker add`'s own default when `--tier` is not passed, never a
+    /// guessed value.
+    #[test]
+    fn claim_registers_with_a_null_tier_when_the_cell_names_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        dpr1_lane_with_route(&root, "f");
+        w(
+            &root,
+            ".bee/cells/c-2.json",
+            r#"{"id":"c-2","title":"t","status":"open","lane":"tiny","feature":"f","deps":[]}"#,
+        );
+
+        let (_cell, _reserved, registered, err) =
+            claim_and_reserve_for_dispatch(&root, None, "c-2", "bee-w2", None).unwrap().unwrap();
+        assert!(registered, "registration must succeed: {err:?}");
+
+        let workers = dpr1_workers(&root);
+        assert_eq!(workers.len(), 1);
+        assert_eq!(workers[0].get("nickname"), Some(&json!("bee-w2")));
+        assert_eq!(workers[0].get("tier"), Some(&Value::Null));
+        assert_eq!(workers[0].get("status"), Some(&json!("running")));
+    }
+
+    /// A claim that never happens (already-claimed cell, refused before any
+    /// registration attempt) registers nothing.
+    #[test]
+    fn a_failed_claim_registers_no_worker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        dpr1_lane_with_route(&root, "f");
+        w(
+            &root,
+            ".bee/cells/c-3.json",
+            r#"{"id":"c-3","title":"t","status":"claimed","lane":"tiny","feature":"f","deps":[],"trace":{"worker":"someone-else"}}"#,
+        );
+
+        let refusal = match claim_and_reserve_for_dispatch(&root, None, "c-3", "bee-w3", None).unwrap() {
+            Err(message) => message,
+            Ok(_) => panic!("an already-claimed cell must refuse, not succeed"),
+        };
+        assert!(refusal.contains("not \"open\""), "{refusal}");
+        assert!(dpr1_workers(&root).is_empty(), "a refused claim registers nothing");
+        assert!(!crate::verbs::cells::registered_worker_for_cell(&root, "c-3", Some("bee-w3")).unwrap());
+    }
+
+    /// `dispatch prepare` WITHOUT `--claim` never reaches the claim-and-
+    /// register door at all — `prepare_dispatch`'s own dry-run build over an
+    /// already-claimed cell (the shape a claim-less call reads) leaves
+    /// `workers` untouched.
+    #[test]
+    fn claim_less_prepare_registers_no_worker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-4.json",
+            r#"{"id":"c-4","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(_) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-4"), Some("w"), false, None, None, false)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        assert!(dpr1_workers(&root).is_empty(), "a claim-less prepare registers nothing");
+        assert!(!crate::verbs::cells::registered_worker_for_cell(&root, "c-4", Some("w")).unwrap());
+    }
+
+    /// A registration failure (an invalid tier on the cell — the one
+    /// deterministic failure `register_worker_for_cell` can hit) never
+    /// unwinds a claim that already stands: the cell is claimed, the
+    /// reservations (none, here) stand, and the outcome names the failure
+    /// rather than silently dropping it.
+    #[test]
+    fn a_registration_failure_never_unwinds_the_standing_claim() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        dpr1_lane_with_route(&root, "f");
+        w(
+            &root,
+            ".bee/cells/c-5.json",
+            r#"{"id":"c-5","title":"t","status":"open","lane":"tiny","feature":"f","deps":[],"tier":"bogus"}"#,
+        );
+
+        let (cell, reserved, registered, err) =
+            claim_and_reserve_for_dispatch(&root, None, "c-5", "bee-w5", None).unwrap().unwrap();
+        assert_eq!(cell["status"], json!("claimed"), "the claim stands despite the registration failure");
+        assert!(reserved.is_empty());
+        assert!(!registered, "an invalid tier must fail registration, not silently pass");
+        let message = err.expect("a failed registration must name why");
+        assert!(message.contains("invalid tier"), "{message}");
+        assert!(dpr1_workers(&root).is_empty(), "the bad record was never written");
+    }
+
     #[test]
     fn absent_probe_record_classifies_budget_only_without_a_subprocess() {
         let tmp = tempfile::tempdir().unwrap();

@@ -63,6 +63,38 @@ pub(crate) fn thrown_ok(out: R2<Out>) -> R2<Out> {
     }
 }
 
+/// The shared record-push body for `state worker add` — the exact shape
+/// (`{nickname, cell, tier, status}`, tier enum-checked, absent tier/status
+/// writing `null`) that `worker add`'s own CLI door builds. Any OTHER native
+/// door that needs to register a worker (dispatch prepare --claim, dp-r1)
+/// calls this too, through [`worker_mutate`], rather than re-deriving the
+/// record shape — forking it would let the two callers' records drift.
+pub(crate) fn push_worker_record(
+    workers: &mut Vec<Value>,
+    nickname: &str,
+    cell: &str,
+    tier: Option<&str>,
+    status: Option<&str>,
+) -> Result<String, Err2> {
+    let tier_val: Value = match tier {
+        None => Value::Null,
+        Some(t) => {
+            if !MODEL_TIERS.contains(&t) {
+                return Err(Err2::Msg(format!(
+                    "worker add: invalid tier \"{t}\" — must be one of extraction, generation, ceiling."
+                )));
+            }
+            json!(t)
+        }
+    };
+    let status_val: Value = match status {
+        None => Value::Null,
+        Some(s) => json!(s),
+    };
+    workers.push(json!({"nickname": nickname, "cell": cell, "tier": tier_val, "status": status_val}));
+    Ok(format!("Added worker \"{nickname}\" (cell {cell})."))
+}
+
 pub(crate) fn run_worker_add(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["nickname", "cell", "tier", "status"]) {
         return None;
@@ -74,25 +106,40 @@ pub(crate) fn run_worker_add(flags: Flags, use_json: bool, t0: Instant) -> Optio
     let out = thrown_ok(worker_mutate(&ctx.root, |workers| {
         let nickname = require_flag(&flags, "nickname")?;
         let cell = require_flag(&flags, "cell")?;
-        let tier: Value = match flag_string(&flags, "tier") {
-            None => Value::Null,
-            Some(t) => {
-                if !MODEL_TIERS.contains(&t.as_str()) {
-                    return Err(Err2::Msg(format!(
-                        "worker add: invalid tier \"{t}\" — must be one of extraction, generation, ceiling."
-                    )));
-                }
-                json!(t)
-            }
-        };
-        let status: Value = match flag_string(&flags, "status") {
-            None => Value::Null,
-            Some(s) => json!(s),
-        };
-        workers.push(json!({"nickname": nickname, "cell": cell, "tier": tier, "status": status}));
-        Ok(format!("Added worker \"{nickname}\" (cell {cell})."))
+        let tier = flag_string(&flags, "tier");
+        let status = flag_string(&flags, "status");
+        push_worker_record(workers, &nickname, &cell, tier.as_deref(), status.as_deref())
     }));
     finish(&ctx, out)
+}
+
+/// dp-r1: register the worker a successful `dispatch prepare --claim` just
+/// claimed the cell for — the SAME record `bee state worker add --nickname
+/// <w> --cell <id> --tier <t> --status running` writes, through the SAME
+/// [`worker_mutate`] lock+read+write frame and the SAME [`push_worker_record`]
+/// body `run_worker_add` uses, never a second copy of the record shape.
+///
+/// Every failure here (an invalid `tier`, a lock/read/write error) is
+/// returned as `Err(message)` rather than propagated as a delegate or a
+/// thrown command failure — the caller's claim already stands and must
+/// never be unwound over a registration problem; it only needs to know the
+/// registration did not happen and why.
+pub(crate) fn register_worker_for_cell(
+    root: &Path,
+    nickname: &str,
+    cell: &str,
+    tier: Option<&str>,
+) -> Result<(), String> {
+    match worker_mutate(root, |workers| {
+        push_worker_record(workers, nickname, cell, tier, Some("running"))
+    }) {
+        Ok(Out::Thrown(m)) => Err(m),
+        Ok(_) => Ok(()),
+        Err(Err2::Msg(m)) => Err(m),
+        Err(Err2::Ex) => {
+            Err("registering the claimed worker hit an unsupported store shape".to_string())
+        }
+    }
 }
 
 pub(crate) fn run_worker_update(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
