@@ -768,6 +768,22 @@ pub(crate) fn close_handler(
     shell: Option<&'static str>,
     pattern_verdicts: &HashMap<String, String>,
 ) -> D<Out> {
+    // P2-3: a non-boolean `close_commit_bookkeeping` refuses the WHOLE
+    // close UP FRONT — before the dry-run door listing, before the declared
+    // tests run, before anything is written. Precedent:
+    // `worktree_cleanup_on_merge_config` (verbs/worktree/handlers.rs) reads
+    // "present-but-non-boolean" as `None` and refuses rather than guesses —
+    // but that verb still has a Node fallback for the bare `None` its own
+    // `?` produces. Close has none (`rg -l buildContextManifest --glob
+    // '*.mjs'` finds nothing left to delegate to), so the refusal here is a
+    // typed `Out::Thrown` that names the key and the offending value
+    // instead of a silent `None`.
+    if let Some(bad) = close_commit_bookkeeping_invalid_value(root) {
+        return Ok(Out::Thrown(format!(
+            "close: \"close_commit_bookkeeping\" in .bee/config.json must be a boolean, got {bad} — fix the config, then re-run bee close --feature {feature}."
+        )));
+    }
+
     if dry_run {
         let mut doors = vec![Door {
             door: "tests",
@@ -1078,10 +1094,18 @@ pub(crate) fn close_handler(
     // succeeded, and a store that could not be tidied is not a failed close.
     let bookkeeping = commit_close_bookkeeping(root, feature);
     result.insert("bookkeeping_commit".into(), bookkeeping.value());
-    if let BookkeepingCommit::Skipped { reason } = &bookkeeping {
+    if let BookkeepingCommit::Skipped { reason, index_restored } = &bookkeeping {
         if let Some(detail) = reason.strip_prefix("git_failed:") {
+            // P2-1: name what happened to the stage, not just the git
+            // failure — a reader deciding whether to go look at `.bee`
+            // themselves needs to know whether it is still sitting staged.
+            let stage_note = match index_restored {
+                Some(true) => " (index restored)",
+                Some(false) => " (WARNING: .bee left staged)",
+                None => "",
+            };
             lines.push(format!(
-                "Warning: bee-store bookkeeping commit failed for \"{feature}\": {detail}"
+                "Warning: bee-store bookkeeping commit failed for \"{feature}\": {detail}{stage_note}"
             ));
         }
     }
@@ -1162,24 +1186,51 @@ fn run_git(root: &Path, args: &[&str]) -> Option<GitRun> {
 /// The first line of whichever stream carries the message — stderr wins,
 /// stdout is the fallback — trimmed. Feeds the `git_failed:<first line>`
 /// reason so a multi-line git error never blows up the one-line warning.
+///
+/// P2-2: a silent failure (a pre-commit hook that exits non-zero without a
+/// word on either stream, for instance) must never render as the bare
+/// `git_failed:` prefix with nothing after it — that reads as a truncation
+/// bug, not a cause. When both streams are empty or whitespace-only, this
+/// falls back to the real exit status (`exit status <code>`), or
+/// `killed by signal` for the signal-death case a spawned `git` can still
+/// hit (`ExitStatus::code()` returns `None` there on Unix).
 fn git_fail_first_line(out: &GitRun) -> String {
     let src = if !out.stderr.trim().is_empty() { out.stderr.as_str() } else { out.stdout.as_str() };
-    src.trim().lines().next().unwrap_or("").to_string()
+    let first_line = src.trim().lines().next().unwrap_or("").trim();
+    if !first_line.is_empty() {
+        return first_line.to_string();
+    }
+    match out.status {
+        Some(code) => format!("exit status {code}"),
+        None => "killed by signal".to_string(),
+    }
 }
 
 /// What close's bee-store bookkeeping commit did, and why not when it
 /// didn't. `reason` is one of: `clean`, `config_off`, `not_a_repo`, or
-/// `git_failed:<first line>`.
+/// `git_failed:<first line>`. `index_restored` is only ever `Some` on the
+/// one `git_failed` reason that can leave `.bee` staged after `git add`
+/// already ran — `git commit` itself failing (P2-1) — every other `Skipped`
+/// arm never staged anything, so there is nothing to report restoring.
 pub(crate) enum BookkeepingCommit {
     Committed { sha: String },
-    Skipped { reason: String },
+    Skipped { reason: String, index_restored: Option<bool> },
 }
 
 impl BookkeepingCommit {
+    fn skipped(reason: impl Into<String>) -> Self {
+        BookkeepingCommit::Skipped { reason: reason.into(), index_restored: None }
+    }
+
     fn value(&self) -> Value {
         match self {
             BookkeepingCommit::Committed { sha } => json!({"committed": true, "sha": sha}),
-            BookkeepingCommit::Skipped { reason } => json!({"committed": false, "reason": reason}),
+            BookkeepingCommit::Skipped { reason, index_restored: None } => {
+                json!({"committed": false, "reason": reason})
+            }
+            BookkeepingCommit::Skipped { reason, index_restored: Some(restored) } => {
+                json!({"committed": false, "reason": reason, "index_restored": restored})
+            }
         }
     }
 }
@@ -1198,6 +1249,18 @@ fn close_commit_bookkeeping_config(root: &Path) -> Option<bool> {
     }
 }
 
+/// P2-3: the raw offending value, present ONLY when
+/// `close_commit_bookkeeping_config` would refuse (present, non-boolean) —
+/// `close_handler` reads this BEFORE anything else runs so the refusal can
+/// name the key and the value rather than folding into the bookkeeping
+/// commit's own silent `config_off` skip.
+fn close_commit_bookkeeping_invalid_value(root: &Path) -> Option<Value> {
+    match read_config_raw(root).get("close_commit_bookkeeping") {
+        None | Some(Value::Bool(_)) => None,
+        Some(other) => Some(other.clone()),
+    }
+}
+
 /// Auto-commits the `.bee` bookkeeping a GREEN, non-dry-run close just wrote
 /// (retirement, the promote-proposal capture-queue stub) — path-scoped to
 /// `.bee` throughout, so unrelated dirt and unrelated staged files are never
@@ -1208,60 +1271,62 @@ fn close_commit_bookkeeping_config(root: &Path) -> Option<bool> {
 fn commit_close_bookkeeping(root: &Path, feature: &str) -> BookkeepingCommit {
     let enabled = match close_commit_bookkeeping_config(root) {
         Some(b) => b,
-        // Non-boolean: refused outright, never silently read as on.
-        None => return BookkeepingCommit::Skipped { reason: "config_off".to_string() },
+        // Non-boolean: refused outright, never silently read as on. In
+        // practice `close_handler` already refuses the whole close before
+        // this function is ever reached (P2-3) — this arm is the
+        // defense-in-depth fallback for any other caller of this function.
+        None => return BookkeepingCommit::skipped("config_off"),
     };
     if !enabled {
-        return BookkeepingCommit::Skipped { reason: "config_off".to_string() };
+        return BookkeepingCommit::skipped("config_off");
     }
 
     match run_git(root, &["rev-parse", "--is-inside-work-tree"]) {
         Some(out) if out.status == Some(0) && out.stdout.trim() == "true" => {}
-        Some(_) => return BookkeepingCommit::Skipped { reason: "not_a_repo".to_string() },
-        None => {
-            return BookkeepingCommit::Skipped {
-                reason: "git_failed:git rev-parse could not be spawned".to_string(),
-            }
-        }
+        Some(_) => return BookkeepingCommit::skipped("not_a_repo"),
+        None => return BookkeepingCommit::skipped("git_failed:git rev-parse could not be spawned"),
     }
 
     let status = match run_git(root, &["status", "--porcelain", "--", ".bee"]) {
         Some(out) if out.status == Some(0) => out,
-        Some(out) => {
-            return BookkeepingCommit::Skipped { reason: format!("git_failed:{}", git_fail_first_line(&out)) }
-        }
-        None => {
-            return BookkeepingCommit::Skipped {
-                reason: "git_failed:git status could not be spawned".to_string(),
-            }
-        }
+        Some(out) => return BookkeepingCommit::skipped(format!("git_failed:{}", git_fail_first_line(&out))),
+        None => return BookkeepingCommit::skipped("git_failed:git status could not be spawned"),
     };
     if status.stdout.trim().is_empty() {
-        return BookkeepingCommit::Skipped { reason: "clean".to_string() };
+        return BookkeepingCommit::skipped("clean");
     }
 
     match run_git(root, &["add", "-A", "--", ".bee"]) {
         Some(out) if out.status == Some(0) => {}
-        Some(out) => {
-            return BookkeepingCommit::Skipped { reason: format!("git_failed:{}", git_fail_first_line(&out)) }
-        }
-        None => {
-            return BookkeepingCommit::Skipped {
-                reason: "git_failed:git add could not be spawned".to_string(),
-            }
-        }
+        Some(out) => return BookkeepingCommit::skipped(format!("git_failed:{}", git_fail_first_line(&out))),
+        None => return BookkeepingCommit::skipped("git_failed:git add could not be spawned"),
     }
 
     let message = format!("Record {feature} close bookkeeping in the bee store");
     match run_git(root, &["commit", "-m", &message, "--", ".bee"]) {
         Some(out) if out.status == Some(0) => {}
+        // P2-1: `.bee` is staged (the `git add` above succeeded) and the
+        // commit that would have consumed that stage never landed — a
+        // git-degraded close must not leave `.bee` sitting staged on top of
+        // whatever the feature's next commit does. Best-effort, same
+        // warn-never-block contract as every other git step here: a reset
+        // that itself fails is one more line in the warning, never a second
+        // failure this function raises.
         Some(out) => {
-            return BookkeepingCommit::Skipped { reason: format!("git_failed:{}", git_fail_first_line(&out)) }
+            let index_restored =
+                matches!(run_git(root, &["reset", "--", ".bee"]), Some(r) if r.status == Some(0));
+            return BookkeepingCommit::Skipped {
+                reason: format!("git_failed:{}", git_fail_first_line(&out)),
+                index_restored: Some(index_restored),
+            };
         }
         None => {
+            let index_restored =
+                matches!(run_git(root, &["reset", "--", ".bee"]), Some(r) if r.status == Some(0));
             return BookkeepingCommit::Skipped {
                 reason: "git_failed:git commit could not be spawned".to_string(),
-            }
+                index_restored: Some(index_restored),
+            };
         }
     }
 
@@ -1654,25 +1719,45 @@ mod tests {
 
         let commit = commit_close_bookkeeping(root, "demo");
         match commit {
-            BookkeepingCommit::Skipped { reason } => assert_eq!(reason, "config_off"),
+            BookkeepingCommit::Skipped { reason, index_restored } => {
+                assert_eq!(reason, "config_off");
+                assert_eq!(index_restored, None);
+            }
             BookkeepingCommit::Committed { .. } => panic!("expected no commit"),
         }
         assert!(!git_status_porcelain(root).is_empty(), "dirty .bee must stay uncommitted");
     }
 
+    /// P2-3: a non-boolean `close_commit_bookkeeping` used to fall silently
+    /// through `commit_close_bookkeeping`'s own `config_off` skip. It now
+    /// refuses the WHOLE close, up front, before anything else runs —
+    /// retargeted from pinning that silent skip to pinning this typed
+    /// refusal (exit via `Out::Thrown`, `finish()` maps that to exit 1 —
+    /// reservations/emit.rs:168).
     #[test]
-    fn non_boolean_config_is_refused_and_nothing_is_committed() {
+    fn non_boolean_config_refuses_the_whole_close_up_front() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         init_bee_repo(root);
         w(root, ".bee/config.json", r#"{"close_commit_bookkeeping": "sometimes"}"#);
+        let store_before = std::fs::read_to_string(root.join(".bee/config.json")).unwrap();
 
-        let commit = commit_close_bookkeeping(root, "demo");
-        match commit {
-            BookkeepingCommit::Skipped { reason } => assert_eq!(reason, "config_off"),
-            BookkeepingCommit::Committed { .. } => panic!("expected no commit"),
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new());
+        match out {
+            Ok(Out::Thrown(msg)) => {
+                assert!(msg.contains("close_commit_bookkeeping"), "{msg}");
+                assert!(msg.contains("\"sometimes\""), "{msg}");
+            }
+            Ok(Out::Emit(..)) => panic!("expected a refusal, got an Emit"),
+            Err(_) => panic!("expected Ok(Out::Thrown(_))"),
         }
-        assert!(!git_status_porcelain(root).is_empty(), "dirty .bee must stay uncommitted");
+        // Nothing ran, nothing committed: the config file itself is
+        // untouched and no commit was created off the seeded HEAD.
+        let store_after = std::fs::read_to_string(root.join(".bee/config.json")).unwrap();
+        assert_eq!(store_before, store_after, "the store must stay untouched by a refused close");
+        assert!(git_status_porcelain(root).contains(".bee/config.json"), "{}", git_status_porcelain(root));
+        let log = git_out(root, &["log", "--oneline"]);
+        assert_eq!(log.lines().count(), 1, "no new commit: {log}");
     }
 
     #[test]
@@ -1724,5 +1809,87 @@ mod tests {
             result["bookkeeping_commit"],
             json!({"committed": false, "reason": "not_a_repo"})
         );
+    }
+
+    /// P2-4(b): a clean `.bee` (nothing for close to have dirtied) reports
+    /// `reason: "clean"` through the full `close_handler` path, GREEN, not
+    /// just through `commit_close_bookkeeping` directly. There are no
+    /// `docs/knowledge/` bundle and no cells for "demo" in this fixture, so
+    /// promote is skipped and retirement moves nothing — close itself never
+    /// touches `.bee` on top of the already-clean seed commit.
+    #[test]
+    fn clean_store_green_close_reports_reason_clean() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert_eq!(result["bookkeeping_commit"], json!({"committed": false, "reason": "clean"}));
+        assert!(git_status_porcelain(root).is_empty(), "{}", git_status_porcelain(root));
+    }
+
+    /// P2-4(a) + P2-1 + P2-2: a `pre-commit` hook that fails SILENTLY (exit
+    /// 1, nothing on either stream) drives the `git commit` failure branch.
+    /// Proves three things at once: P2-2's non-empty fallback reason (the
+    /// bare `git_failed:` prefix is impossible), P2-1's best-effort
+    /// `git reset -- .bee` after the failed commit (`.bee` ends up dirty
+    /// but UNSTAGED, never left sitting staged), and that the failure stays
+    /// warn-never-block (`close` itself still exits 0).
+    #[cfg(unix)]
+    #[test]
+    fn silent_pre_commit_hook_failure_restores_the_index_and_stays_green() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        dirty_tracked_bee_file(root);
+
+        let hook = root.join(".git/hooks/pre-commit");
+        std::fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+        let mut perms = std::fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&hook, perms).unwrap();
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, text, code) = out else { panic!("expected Emit") };
+        // Warn-never-block: the hook killed the bookkeeping commit, not close.
+        assert_eq!(code, 0);
+        assert_eq!(
+            result["bookkeeping_commit"],
+            json!({"committed": false, "reason": "git_failed:exit status 1", "index_restored": true})
+        );
+        assert!(
+            text.contains("Warning: bee-store bookkeeping commit failed for \"demo\": exit status 1 (index restored)"),
+            "{text}"
+        );
+
+        // `.bee` is dirty (the hook blocked the commit) but UNSTAGED — the
+        // index column (first of the two porcelain characters) must never
+        // read `A` or `M` on a `.bee` line once the reset ran.
+        //
+        // `git_status_porcelain`'s helper `.trim()`s the WHOLE captured
+        // string (fine for the `contains(...)` checks every other test in
+        // this file makes), which would eat exactly the leading space this
+        // assertion depends on when `.bee/config.json` is the first porcelain
+        // line — so this reads the porcelain output raw instead.
+        let raw = Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir(root)
+            .output()
+            .unwrap();
+        let status = String::from_utf8_lossy(&raw.stdout).into_owned();
+        assert!(status.contains(".bee/config.json"), "{status}");
+        for line in status.lines() {
+            if line.trim_end().ends_with(".bee/config.json") {
+                let index_col = line.chars().next().unwrap_or(' ');
+                assert!(
+                    index_col == ' ' || index_col == '?',
+                    "expected .bee/config.json unstaged, got index column {index_col:?}: {status}"
+                );
+            }
+        }
     }
 }
