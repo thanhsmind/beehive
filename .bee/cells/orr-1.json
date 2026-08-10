@@ -1,0 +1,54 @@
+{
+  "id": "orr-1",
+  "feature": "onboard-root-resolution",
+  "title": "onboard apply resolves templates from the invocation root, never current_exe",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/onboard/"
+  ],
+  "action": "Backlog debt row 659: onboard apply resolves its template source via current_exe(), so in a granted worktree whose .bee/bin/bee is a symlink into MAIN, /proc/self/exe resolves to MAIN's checkout and apply splices MAIN's AGENTS.block.md content over the worktree's AGENTS.md — silently overwriting worktree edits. Fix: locate the current_exe()-based source resolution in the onboard module (declared file apply.rs is a guess — follow the real site) and replace it: the template/source root is derived from the PROJECT ROOT of the invocation (the repo root onboard is already given or resolves from cwd), so a worktree renders from its own checkout's templates. When that root carries no templates (a host repo without bee source), refuse with a typed error naming the invocation root and the missing path — never silently fall back to the exe's checkout. TDD red-first: fixture with two checkouts (a fake MAIN with distinctive template bytes and a fake worktree with different bytes, exe-equivalent resolution pointed at MAIN) proving apply renders the WORKTREE's bytes; a no-templates root refuses naming both paths; existing onboard tests stay green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "a worktree onboard apply renders its own checkout's templates, never the exe's checkout",
+      "a root without templates refuses naming both paths",
+      "existing onboard behavior for the ordinary single-checkout case is byte-identical"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "substantive": "root-derived source resolution plus tests, no TODO stubs (or the real site, named in the trace)"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-orr-1",
+    "outcome": "Engine::locate walks up from current_dir only (never current_exe); typed LocateError names invocation root + missing template; refusal payload carries both; real site source.rs not apply.rs, noted per instruction",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/source.rs",
+      "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T15:39:50.898Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T15:31:06.532Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T15:39:39.203Z"
+  }
+}
