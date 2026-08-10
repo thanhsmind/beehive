@@ -3426,3 +3426,127 @@ use std::time::Instant;
         let Out::Emit(result, _, 0) = out else { panic!("expected a green finish") };
         assert_eq!(result["released"], json!(["src/only.ts"]));
     }
+
+    // ══ B-P2-8 — `cells update` arms the behavior door ═══════════════════
+    //
+    // `run_update` (handlers_write.rs) resolves its store root off
+    // `std::env::current_dir()` — process-global — so it is exercised
+    // out-of-process via a `#[ignore]`d child, the same isolation
+    // `session_id_env_chain_child` (above) uses for its own process-global
+    // seam, rather than mutating this binary's shared cwd under every other
+    // test in the suite.
+
+    fn bp28_repo(root: &Path) {
+        let dir = root.join(".bee");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("onboarding.json"), "{}\n").unwrap();
+    }
+
+    const CELLS_UPDATE_BEHAVIOR_CHILD: &str = "verbs::cells::tests::cells_update_behavior_child";
+
+    /// Runs ONLY as a child of the tests below — applies `patch.json` (left
+    /// in its cwd by the parent) to cell "c-1" through the REAL `cells
+    /// update` CLI door.
+    #[test]
+    #[ignore = "spawned by the cells update behavior-door tests"]
+    fn cells_update_behavior_child() {
+        let (flags, use_json) = rsv::parse_flags(&["--id", "c-1", "--file", "patch.json", "--json"])
+            .expect("well-formed fixture argv");
+        run_update(flags, use_json, Instant::now());
+    }
+
+    /// Spawns `cells_update_behavior_child` with `root` as its cwd and
+    /// `patch` written to `patch.json` there, and returns the raw process
+    /// output — never a stdout parse, since every case below only needs to
+    /// read the cell file the child wrote back off disk.
+    fn cells_update_behavior_run(root: &Path, patch: &Value) -> std::process::Output {
+        std::fs::write(root.join("patch.json"), jsjson::stringify_pretty(patch)).unwrap();
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = std::process::Command::new(&exe);
+        cmd.args(["--exact", CELLS_UPDATE_BEHAVIOR_CHILD, "--ignored", "--test-threads", "1"]);
+        cmd.current_dir(root);
+        cmd.output().expect("spawn the test binary")
+    }
+
+    /// must-have: an update that sets `change_class` to `"behavior"`, with
+    /// no explicit `behavior_change` in the SAME patch, arms
+    /// `trace.behavior_change = true` — read back through the exact door the
+    /// close-time gate uses (`resolve_declared_behavior_change`), never a
+    /// raw field peek.
+    #[test]
+    fn update_setting_change_class_to_behavior_arms_the_close_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        bp28_repo(root);
+        write_cell_fixture(root, "c-1", &cell("c-1", "open", "f", json!([])));
+
+        let out = cells_update_behavior_run(root, &json!({"change_class": "behavior"}));
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let updated = read_cell(root, "c-1").unwrap().unwrap();
+        let Value::Object(map) = &updated else { panic!("expected an object") };
+        assert!(
+            resolve_declared_behavior_change(map),
+            "change_class:\"behavior\" must arm the door: {updated}"
+        );
+    }
+
+    /// An explicit `behavior_change` in the SAME patch wins over the
+    /// change_class default — an explicit `false` is a deliberate opt-out
+    /// and stays honored.
+    #[test]
+    fn update_explicit_behavior_change_false_wins_over_the_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        bp28_repo(root);
+        write_cell_fixture(root, "c-1", &cell("c-1", "open", "f", json!([])));
+
+        let out = cells_update_behavior_run(
+            root,
+            &json!({"change_class": "behavior", "behavior_change": false}),
+        );
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let updated = read_cell(root, "c-1").unwrap().unwrap();
+        let Value::Object(map) = &updated else { panic!("expected an object") };
+        assert!(
+            !resolve_declared_behavior_change(map),
+            "an explicit false in the same call must be honored: {updated}"
+        );
+    }
+
+    /// Changing `change_class` AWAY from `"behavior"` changes nothing — the
+    /// door only ever arms, it never disarms an already-armed cell.
+    #[test]
+    fn update_changing_change_class_away_from_behavior_leaves_the_door_untouched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        bp28_repo(root);
+        let mut seed = cell("c-1", "open", "f", json!([]));
+        seed["change_class"] = json!("behavior");
+        seed["trace"] = json!({"behavior_change": true});
+        write_cell_fixture(root, "c-1", &seed);
+
+        let out = cells_update_behavior_run(root, &json!({"change_class": "bugfix"}));
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let updated = read_cell(root, "c-1").unwrap().unwrap();
+        let Value::Object(map) = &updated else { panic!("expected an object") };
+        assert!(
+            resolve_declared_behavior_change(map),
+            "an already-armed door must stay armed when change_class moves away from behavior: {updated}"
+        );
+        assert_eq!(updated["change_class"], json!("bugfix"));
+    }

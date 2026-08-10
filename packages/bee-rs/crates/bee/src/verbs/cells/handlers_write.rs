@@ -545,6 +545,22 @@ pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
             }
             let mut merged = cell_map.clone();
             spread_into(&mut merged, &patch_map);
+            // B-P2-8: this SAME call setting change_class to "behavior" arms
+            // trace.behavior_change=true, unless the same patch already
+            // declares its own (flat) "behavior_change" — an explicit false
+            // is a deliberate opt-out and is respected as-is via the shared
+            // door (arms_behavior_door, validate.rs) addCell's own
+            // normalize_new_cell calls too. A patch that changes
+            // change_class AWAY from "behavior" (or never touches it)
+            // changes nothing: the door only ever arms, never disarms.
+            if arms_behavior_door(patch_map.get("change_class"), patch_map.contains_key("behavior_change")) {
+                let mut trace = match merged.get("trace") {
+                    Some(Value::Object(t)) => t.clone(),
+                    _ => Map::new(),
+                };
+                trace.insert("behavior_change".into(), Value::Bool(true));
+                merged.insert("trace".into(), Value::Object(trace));
+            }
             let merged_lane = match merged.get("lane") {
                 Some(Value::String(s)) => s.clone(),
                 _ => String::new(),
