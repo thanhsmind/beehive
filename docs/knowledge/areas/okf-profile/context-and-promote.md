@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Bee OKF Profile — the context consumer, the promote proposer, and the session preamble"
-description: "The budget-aware manifest a work item's curated context is returned as, the measured relevance ranking that cuts critical patterns without losing one, the propose-never-write loop closer, the shared anchor resolver that lets both verbs work from a docs/history/ fallback when no work-item concept exists, and the preamble that makes the bundle load-bearing — every section of which resolves through the one bundle predicate, including the critical-patterns digest's own relevance ranking."
+description: "The budget-aware manifest a work item's curated context is returned as, the measured relevance ranking that cuts critical patterns without losing one, the propose-never-write loop closer, the shared anchor resolver that lets both verbs work from a docs/history/ fallback when no work-item concept exists, the symptom-text search verb that pulls matching patterns and area concepts mid-flow, and the preamble that makes the bundle load-bearing — every section of which resolves through the one bundle predicate, including the critical-patterns digest's own relevance ranking."
 timestamp: 2026-08-06
 bee:
   id: okf-profile-context-and-promote
   lifecycle: active
   areas: [okf-profile]
   required_context: [areas/okf-profile/overview.md]
-  decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3, i54-closeout D3, "knowledge-loop D1/D5/D6/D7/D8 (one shared anchor resolver; a history CONTEXT.md/plan.md fallback when no work-item concept matches; zero_signal reported not thrown under it; the fallback reaches context, promote, kctx and dispatch prepare)", "07dce495 (capture-reads-proposals: review-then-merge a promote proposal, never apply it as written; the area tag and the code it describes are both verified first, and the scribing stamp is owed even when nothing is kept)"]
-  sources: ["okf-foundation cell okf-9 (`bee knowledge promote` — the propose-never-write loop closer, B5; trace in `.bee/cells/`, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B5", "docs/specs/okf-profile.md#B6", "docs/specs/okf-profile.md#B6b", "docs/specs/okf-profile.md#B7", "docs/specs/okf-profile.md#P2", "docs/specs/okf-profile.md#P3", "okf-integration-close-f4 cell f4-3 (the preamble stops printing the retired model — bundle-routed digest and project map, both no-bundle branches proven byte-identical; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`, "i54-closeout cell i54-closeout-3 (knowledge context --lane budget presets; trace in .bee/cells/, 2026-07-24)", "knowledge-loop cell kl-1 (anchor.rs + context.rs/kctx.rs fallback, D5/D6/D7/D8; commit 1b2a8253, 2026-08-05)", "knowledge-loop cell kl-2 (promote.rs consumes the resolver; dispatch-prepare manifest proof; commit e6f99a7a, 2026-08-05)", CONTEXT.md `docs/history/knowledge-loop/CONTEXT.md`, "capture-reads-proposals cell crp-1 (the capture doctrine names the proposal as the first input of a compounding run and the scribing stamp as its receipt; skills/bee-capturing/SKILL.md, 2026-08-06)"]
+  decisions: [D2, D10, D12, D13, D27, D38, "G5/G11 (okf-switchover-f3 — critical patterns ranked, cut, floored and conserved)", F4-D1, F4-D2, F4-D3, i54-closeout D3, "knowledge-loop D1/D5/D6/D7/D8 (one shared anchor resolver; a history CONTEXT.md/plan.md fallback when no work-item concept matches; zero_signal reported not thrown under it; the fallback reaches context, promote, kctx and dispatch prepare)", "07dce495 (capture-reads-proposals: review-then-merge a promote proposal, never apply it as written; the area tag and the code it describes are both verified first, and the scribing stamp is owed even when nothing is kept)", "knowledge-search D1-D7 (symptom pull verb `bee knowledge search`: decisions-search grammar, patterns+areas corpus only, read-only at any phase from any checkout, skill wiring at the two debug moments — docs/history/knowledge-search/CONTEXT.md)"]
+  sources: ["knowledge-search cells ks-1 (`bee knowledge search` verb; commit 448287b7, 2026-08-10) and ks-2 (skill wiring; commit f693f20f, 2026-08-10)", CONTEXT.md `docs/history/knowledge-search/CONTEXT.md`, "okf-foundation cell okf-9 (`bee knowledge promote` — the propose-never-write loop closer, B5; trace in `.bee/cells/`, 2026-07-22)", "okf-foundation cell okf-6 (critical-patterns.md -> patterns/ migration, work/okf-foundation/ work item + plan concepts, Templates section; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-foundation/CONTEXT.md`, "docs/specs/okf-profile.md#B5", "docs/specs/okf-profile.md#B6", "docs/specs/okf-profile.md#B6b", "docs/specs/okf-profile.md#B7", "docs/specs/okf-profile.md#P2", "docs/specs/okf-profile.md#P3", "okf-integration-close-f4 cell f4-3 (the preamble stops printing the retired model — bundle-routed digest and project map, both no-bundle branches proven byte-identical; trace in `.bee/cells/`, 2026-07-22)", CONTEXT.md `docs/history/okf-integration-close-f4/CONTEXT.md`, red evidence `docs/history/okf-integration-close-f4/reports/red-preamble-before.md`, "i54-closeout cell i54-closeout-3 (knowledge context --lane budget presets; trace in .bee/cells/, 2026-07-24)", "knowledge-loop cell kl-1 (anchor.rs + context.rs/kctx.rs fallback, D5/D6/D7/D8; commit 1b2a8253, 2026-08-05)", "knowledge-loop cell kl-2 (promote.rs consumes the resolver; dispatch-prepare manifest proof; commit e6f99a7a, 2026-08-05)", CONTEXT.md `docs/history/knowledge-loop/CONTEXT.md`, "capture-reads-proposals cell crp-1 (the capture doctrine names the proposal as the first input of a compounding run and the scribing stamp as its receipt; skills/bee-capturing/SKILL.md, 2026-08-06)"]
   authoritative_for: "okf-profile: the context consumer, the promote proposer, and the session preamble"
 ---
 
@@ -32,6 +32,24 @@ rather than optional.
 Both verbs name what they resolved. The `--json` payload for each carries an `anchor` object (`kind`: `"work-item"`, `"history"`, or `"ledger"`, `paths`: the file or files behind it), and the plain-text output states the same in one line, so a caller can always tell which anchor answered the call and not only that one did.
 
 `bee dispatch prepare` consumes the same resolver through the port copy in `drivers/kctx.rs` (D8): a dispatched worker prompt for a feature whose only anchor is its history directory now carries a learned-context manifest, where before the swallowed `unknown_work` refusal left it with none.
+
+**B10 — `search` pulls bundle knowledge by symptom text, mid-flow, read-only (knowledge-search D1-D7).**
+`bee knowledge search --text "<symptom>"` is the pull move for a session that hits an error text,
+odd behavior, or unfamiliar mechanism mid-work — no work item, no anchor, no budget involved. Its
+grammar deliberately mirrors `decisions search` (D1): `--text` required, whitespace-split terms,
+case-insensitive OR; `--limit` optional, default 5 (D4). The corpus is the active bundle's
+patterns and area concepts ONLY — generated `index.md`/`log.md` files are skipped, and
+`docs/specs/` and the decisions corpus are never searched (decisions belong to `decisions search`,
+D2). Matching runs over title, body, and the frontmatter `sources`/`decisions` entries; ranking is
+deterministic — term-hit count descending, then file recency descending (D3) — and every result
+row names the path, the title, and a why-matched line stating which terms hit in which field (D4).
+Zero hits is an empty result with a one-line note, exit 0, never a typed refusal (D5). The verb is
+read-only with `writes: []`, callable at any phase from any checkout (D7). The two debug moments
+that invoke it are wired into the instruction layer (D6): the bee-swarming Execute worker contract
+and bee-hive's scout — the wiring targets bee-swarming, not the retired bee-executing (site
+erratum, D6). The registry entry lives in the hand-maintained registry payload; no regen chain
+exists for it — the gap is recorded in the ks-1 trace, with `tests/registry_contracts.rs` as the
+drift net.
 
 **B5 — `promote` proposes; it never writes (D38).** `bee knowledge promote --work <id>` resolves
 the work item by `bee.id` (the same resolution `context` performs — an unresolvable id exits 1 with

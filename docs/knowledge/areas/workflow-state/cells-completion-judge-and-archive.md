@@ -223,7 +223,14 @@ reader always sees why the check was bypassed rather than finding a silent
 gap in the record. What each actor observes: a `small`-or-larger unit can no
 longer complete by naming a worker nobody registered for it and leaving no
 trace of why; running the work inline stays permitted, but it is never silent
-again (worker-proof, cell wp-1).
+again (worker-proof, cell wp-1). Open Gap: a unit claimed through the
+dispatch-preparation path (`dispatch prepare --claim`) is claimed WITHOUT its
+worker being registered, so its completion later hits this door's refusal even
+though the claim was made for that exact worker; the recorded remedy is
+registering the worker (`state worker add --nickname <w> --cell <id> --tier
+generation --status running`) before completing — the preparation step
+registering the worker it claims for is filed as backlog (knowledge-search
+cell ks-2, finish refusal + applied remedy, 2026-08-10).
 
 **B31 — A judge verdict is a structured, append-only record with an honest
 independence stamp.** Trigger: a judge examines a unit of work and renders a

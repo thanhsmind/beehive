@@ -104,6 +104,15 @@ shared holds ledger closes that gap at WRITE time:
   corrupt-store rule); unresolvable topology = fail-open with crash-log. Both runtime files
   (`cross-worktree-holds.json`, `worktree-grants.json`) are direct-edit-denied in every
   phase — CLI-only writes.
+- **A worktree session that reserves via the main checkout mirrors a hold against ITSELF
+  (knowledge-search cell ks-2, live incident, 2026-08-10; second instance after the wr-2 handoff
+  note).** A session working in a granted worktree that runs its reservations by cd-ing to the
+  main checkout lands rows under `holder: "main"` — the holder is derived from the invoking
+  checkout, not the session's home. Those rows then read as FOREIGN holds from the worktree side
+  and hard-block that same session's own commit when the paths are exclusive-resource-listed. The
+  remedy is self-release before the commit: `reservations release --agent <worker> --cell <id>`
+  for the session's own rows. The durable rule: reserve from the checkout you write in, so the
+  holder matches the writer.
 - **Waiting model:** fail-fast, never blocking — an exclusive-resource refusal names who and
   until when; the session takes other open work (`claim-next` already routed it away) and the
   hold lapses by TTL if its owner dies. On a normal path (revised multisession-native D4)
