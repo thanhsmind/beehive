@@ -93,3 +93,4 @@
 {"id":"cfdb81ba-f1b4-4b7c-bfe3-4508aaf71e63","type":"candidate","date":"2026-08-06T10:45:31.564Z","feature":"dispatch-description-intent","head":"a75f1c48a733331a16329823a521d17415a869ec","mode":"tiny","baseline":null,"cells":[]}
 {"id":"3fc29ed9-0c2f-41bf-847a-343b67d76dee","type":"candidate","date":"2026-08-06T12:47:35.190Z","feature":"cli-surface-in-context","head":"5e59ac2a55001fe9282c18bace3e6253f7017657","mode":"standard","baseline":null,"cells":[]}
 {"id":"dffa2df7-a182-4d18-a381-4e9c169e2635","type":"candidate","date":"2026-08-07T03:07:07.795Z","feature":"dispatch-label-chokepoint","head":"a49325473bf6f232a9b1e7f263186e4e423bf3a9","mode":"standard","baseline":null,"cells":[]}
+{"id":"26ad2c81-6568-47cc-8dfc-735dc8c3c64e","type":"candidate","date":"2026-08-10T13:23:21.111Z","feature":"close-lands-bookkeeping","head":"10a937ae5a7e952eed00186748ba0f5395760865","mode":"small","baseline":null,"cells":["clb-1"]}
