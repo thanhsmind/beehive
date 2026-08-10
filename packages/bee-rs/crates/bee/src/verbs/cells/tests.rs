@@ -502,6 +502,41 @@ use std::time::Instant;
         );
     }
 
+    // P3-5: a cell authored with change_class "behavior" and no explicit
+    // trace.behavior_change flag must default to a real behavior change —
+    // otherwise the scribing-debt door never arms.
+    #[test]
+    fn normalize_new_cell_defaults_behavior_change_for_behavior_class() {
+        // (a) change_class "behavior", no explicit flag -> resolves true.
+        let normalized =
+            normalize_new_cell(&json!({"id": "n-1", "title": "t", "change_class": "behavior"}))
+                .unwrap();
+        assert_eq!(normalized["trace"]["behavior_change"], json!(true));
+        let cell_map = normalized.as_object().unwrap();
+        assert!(resolve_declared_behavior_change(cell_map));
+
+        // (b) explicit trace.behavior_change=false is respected (deliberate
+        // opt-out), even with change_class "behavior".
+        let normalized = normalize_new_cell(&json!({
+            "id": "n-2",
+            "title": "t",
+            "change_class": "behavior",
+            "trace": {"behavior_change": false}
+        }))
+        .unwrap();
+        assert_eq!(normalized["trace"]["behavior_change"], json!(false));
+        let cell_map = normalized.as_object().unwrap();
+        assert!(!resolve_declared_behavior_change(cell_map));
+
+        // (c) a non-"behavior" change_class without the flag stays false.
+        let normalized =
+            normalize_new_cell(&json!({"id": "n-3", "title": "t", "change_class": "refactor"}))
+                .unwrap();
+        assert_eq!(normalized["trace"]["behavior_change"], json!(false));
+        let cell_map = normalized.as_object().unwrap();
+        assert!(!resolve_declared_behavior_change(cell_map));
+    }
+
     #[test]
     fn cycle_detection_and_refusal_message() {
         let cells = vec![

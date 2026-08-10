@@ -206,7 +206,18 @@ pub(crate) fn normalize_new_cell(cell: &Value) -> MR<Value> {
         };
         out.insert(key.into(), value);
     }
-    out.insert("trace".into(), Value::Object(merge_trace(map.get("trace"))?));
+    let mut trace = merge_trace(map.get("trace"))?;
+    // A cell authored with change_class "behavior" defaults to a behavior
+    // change unless the payload explicitly sets trace.behavior_change — an
+    // explicit false is a deliberate opt-out and is respected as-is.
+    let explicit_behavior_change =
+        matches!(map.get("trace"), Some(Value::Object(t)) if t.contains_key("behavior_change"));
+    if !explicit_behavior_change
+        && matches!(map.get("change_class"), Some(Value::String(s)) if s == "behavior")
+    {
+        trace.insert("behavior_change".into(), Value::Bool(true));
+    }
+    out.insert("trace".into(), Value::Object(trace));
     Ok(Value::Object(out))
 }
 
