@@ -1031,6 +1031,87 @@ use std::time::Instant;
         assert!(!prompt.contains("{{"), "no unrendered marker residue: {prompt}");
     }
 
+    // ── wmn-1: the knowledge bundle is native to the WORKING TREE, so a
+    //    granted-worktree feature's learned-context block reads the
+    //    worktree's own docs/knowledge/, never the control root's ─────────
+
+    /// debt row 621: `docs/knowledge/` lives in the repo working tree. When
+    /// `dispatch prepare` runs from the MAIN checkout for a cell whose
+    /// feature has a granted worktree, the bundle that answers `--work
+    /// <feature>` is the one checked out in THAT worktree, not main's own
+    /// (possibly bundle-less) checkout — exactly like a native verb resolves
+    /// its store root from inside the worktree (roots.rs's WIDE door).
+    #[test]
+    fn learned_context_reads_the_bundle_from_the_cells_granted_worktree_not_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        // The bundle lives ONLY in the granted worktree's own checkout —
+        // main carries no docs/knowledge/ at all.
+        bundle_fixture(&granted);
+        w(
+            &main,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let prompt = v.get("payload").unwrap().get("prompt").unwrap().as_str().unwrap();
+        assert!(
+            prompt.contains("Learned context (machine-assembled"),
+            "the worktree's own bundle must produce a real learned-context block: {prompt}"
+        );
+        assert!(
+            prompt.contains("- docs/knowledge/work/demo/work-item.md — Demo work item"),
+            "{prompt}"
+        );
+        assert!(
+            prompt.contains("- docs/knowledge/patterns/dispatch-prompt.md — Dispatch prompt assembly"),
+            "{prompt}"
+        );
+    }
+
+    /// The unworktreed / main-checkout path stays exactly as it was:
+    /// `bundle_root` falls back to the control root itself, so a bundle that
+    /// lives in main's own checkout renders unchanged.
+    #[test]
+    fn learned_context_still_reads_mains_own_bundle_without_a_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        bundle_fixture(&root);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"},"lane":"small"}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+                .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let prompt = v.get("payload").unwrap().get("prompt").unwrap().as_str().unwrap();
+        assert_eq!(
+            learned_context_lines(&root, &json!({"id": "c-1", "feature": "demo", "lane": "small"})).unwrap(),
+            vec![
+                "- docs/knowledge/work/demo/work-item.md — Demo work item",
+                "- docs/knowledge/work/demo/plan.md — Demo plan",
+                "- docs/knowledge/patterns/dispatch-prompt.md — Dispatch prompt assembly",
+                "- docs/knowledge/patterns/unrelated.md — Unrelated pattern",
+                "- docs/knowledge/areas/dispatch.md — Dispatch decision",
+            ]
+        );
+        assert!(
+            prompt.contains("- docs/knowledge/work/demo/work-item.md — Demo work item"),
+            "{prompt}"
+        );
+    }
+
     // ── dp-r1: dispatch prepare --claim registers the claiming worker ───────
 
     /// A lane record whose `approved_gates.execution` is true and whose

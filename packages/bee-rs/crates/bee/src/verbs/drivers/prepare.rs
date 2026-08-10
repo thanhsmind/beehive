@@ -427,12 +427,19 @@ pub(crate) fn prompt_body_for(
     }
     let cell = cell.expect("kind cell always carries a loaded cell");
     let Some(template) = load_prompt("worker-cell") else { return Err(Delegate) };
-    let learned = learned_context_lines(root, cell)?.join("\n");
+    let (worktree_root, control_root) = worktree_location.unwrap_or(("", ""));
+    // The knowledge bundle (docs/knowledge/) and docs/history/ live in the
+    // repo WORKING TREE, never the control store: when the cell's feature
+    // carries a granted worktree, that worktree's own checkout is the
+    // native root for the bundle read, exactly like a native verb invoked
+    // from inside it (roots.rs's WIDE door) — never the control root's own
+    // (possibly bundle-less, possibly stale) checkout.
+    let bundle_root: &Path = if worktree_root.is_empty() { root } else { Path::new(worktree_root) };
+    let learned = learned_context_lines(bundle_root, cell)?.join("\n");
     let prior = prior_round_event_lines(cell).join("\n");
     let cell_json = jsjson::stringify_pretty(cell);
     let feature = tpl(vget(cell, "feature"));
     let cell_id = tpl(vget(cell, "id"));
-    let (worktree_root, control_root) = worktree_location.unwrap_or(("", ""));
     Ok(render(
         &template,
         &[
