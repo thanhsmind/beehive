@@ -31,7 +31,7 @@ rather than optional.
 
 Both verbs name what they resolved. The `--json` payload for each carries an `anchor` object (`kind`: `"work-item"`, `"history"`, or `"ledger"`, `paths`: the file or files behind it), and the plain-text output states the same in one line, so a caller can always tell which anchor answered the call and not only that one did.
 
-`bee dispatch prepare` consumes the same resolver through the port copy in `drivers/kctx.rs` (D8): a dispatched worker prompt for a feature whose only anchor is its history directory now carries a learned-context manifest, where before the swallowed `unknown_work` refusal left it with none.
+`bee dispatch prepare` consumes the same resolver through the port copy in `drivers/kctx.rs` (D8): a dispatched worker prompt for a feature whose only anchor is its history directory now carries a learned-context manifest, where before the swallowed `unknown_work` refusal left it with none. The bundle that manifest is built FROM follows the cell's checkout: when the cell's feature holds a granted worktree, the learned-context lines read that worktree's own `docs/knowledge/` (the control root only as fallback) — before this, prepare always read the control root's bundle and a worktree-updated bundle rendered an empty or stale block (worktree-manifest-native cell wmn-1, 2026-08-10). A call made FROM a worktree already resolved correctly through the wide-door store resolution; wmn-1's empirical check retired the row-621 suspicion that `knowledge context` itself dead-ends there.
 
 **B10 — `search` pulls bundle knowledge by symptom text, mid-flow, read-only (knowledge-search D1-D7).**
 `bee knowledge search --text "<symptom>"` is the pull move for a session that hits an error text,
