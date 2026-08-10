@@ -267,14 +267,21 @@ pub(crate) const NO_ENGINE_KIND: &str = "engine_not_found";
 
 /// The refusal's prose — a pure function so the test suite can assert both
 /// the invocation root and the missing template path are named, without
-/// capturing stdout/stderr.
+/// capturing stdout/stderr. B-P2-3: when the caller passed `--repo-root`,
+/// that candidate is named too, so a refusal reports every root it tried,
+/// never only the cwd walk's.
 fn no_engine_message(err: &source::LocateError) -> String {
+    let repo_root_clause = match &err.repo_root_candidate {
+        Some(r) => format!(" --repo-root ({}) was also tried and also missed the template.", r.display()),
+        None => String::new(),
+    };
     format!(
         "bee onboard: no bee source checkout is visible from this binary, and onboarding \
 vendors its files FROM that checkout — the skills, the expertise layer, the AGENTS.md block. \
-Searched upward from the invocation root ({}) for {} and found none. FIX: run this from inside \
-a bee checkout (`cd <bee>` first), or re-run the installer, which brings its own: \
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y",
+Searched upward from the invocation root ({}) for {} and found none.{repo_root_clause} FIX: run \
+this from inside a bee checkout (`cd <bee>` first), or re-run the installer, which brings its \
+own: curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | \
+bash -s -- -y",
         err.invocation_root.display(),
         err.missing_template.display()
     )
@@ -291,6 +298,11 @@ fn no_engine_refusal(err: &source::LocateError, as_json: bool) -> ExitCode {
                 "error": message,
                 "invocation_root": err.invocation_root.to_string_lossy(),
                 "missing_template": err.missing_template.to_string_lossy(),
+                "repo_root_candidate": err
+                    .repo_root_candidate
+                    .as_ref()
+                    .map(|r| json!(r.to_string_lossy()))
+                    .unwrap_or(Value::Null),
             }))
         );
     } else {
@@ -522,7 +534,13 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
             // downloaded binary from a temp dir while the clone sits
             // elsewhere, and every host repo, where `bee-hive` tells the agent
             // to run exactly this command when onboarding is stale.
-            let engine = match Engine::locate() {
+            // B-P2-3: a caller-passed `--repo-root` is a locate CANDIDATE
+            // too, resolved the same way `run_inner` resolves it for
+            // everything else — so `bee onboard --repo-root <checkout>`
+            // works from a cwd that shares no ancestry with that checkout.
+            let repo_root_candidate: Option<PathBuf> =
+                parsed.repo_root.as_deref().map(util::path_resolve);
+            let engine = match Engine::locate(repo_root_candidate.as_deref()) {
                 Ok(engine) => engine,
                 Err(err) => return Some(no_engine_refusal(&err, parsed.json)),
             };
