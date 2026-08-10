@@ -1,0 +1,55 @@
+{
+  "id": "dpr-1",
+  "feature": "dispatch-registers-worker",
+  "title": "dispatch prepare --claim registers the execution worker it claims for",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/"
+  ],
+  "action": "Friction rows 670/707: a cell claimed via `bee dispatch prepare --claim` is claimed WITHOUT its worker being registered, so `cells finish` on a small+ lane later refuses at the B44 registered-worker door and the remedy is a manual `state worker add`. Fix: in the prepare driver, after a SUCCESSFUL claim, register the claimed-for worker against the cell in the same call — same record shape as `state worker add --nickname <worker> --cell <id> --tier <tier> --status running` (reuse the existing worker-add code path, never a parallel writer; locate it under verbs/state_group/ — the declared read_first dir is a starting point, follow the real module). Tier comes from the cell's own tier field, defaulting as state worker add defaults. Rules: no registration when --claim absent; no registration when the claim itself fails; if the claim succeeds and the registration then fails, the payload and text output say so loudly (claim stands, registration_error named) — never silent. Payload gains a worker_registered: true|false field on the claim branch. TDD: red test first proving prepare --claim leaves a registered worker findable by the same read the B44 door uses; tests for claim-failure (no registration), no --claim (no registration), and the registration shape (nickname/cell/tier/status). Keep every existing prepare and worker test green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "a prepare --claim leaves the worker registered for the cell (B44 door finds it)",
+      "a failed claim or a claim-less prepare registers nothing",
+      "registration failure after a successful claim is loud in payload and text"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "registration wiring plus tests, no TODO stubs"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-dpr-1",
+    "outcome": "prepare --claim registers the claimed worker through the shared worker-add path; payload carries worker_registered/registration_error; failed or absent claim registers nothing",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T15:20:39.728Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T15:09:30.371Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T15:20:28.058Z"
+  }
+}
