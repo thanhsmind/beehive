@@ -373,6 +373,130 @@ use std::time::Instant;
         assert_eq!(std::fs::read_dir(&wt_cells).unwrap().count(), 0);
     }
 
+    // ── review B-P1-1: a symlinked cell-store path refuses sync entirely ────
+
+    /// review B-P1-1 fixture (a): the ISLAND's `.bee/cells` is itself a
+    /// SYMLINK to a victim directory full of `*.json` files — a home-dir
+    /// config dir stands in for the transcript's real demo target. Before
+    /// this fix the tracked-set shield came back empty (`git ls-files` never
+    /// sees paths under a symlink) and the prune arm deleted every `*.json`
+    /// it found in the symlink's TARGET, outside the store entirely. This
+    /// must be RED against the pre-fix code: the victim directory has to
+    /// stay byte-identical, and the bootstrap report has to name the skip.
+    #[test]
+    fn bootstrap_refuses_a_symlinked_island_cells_dir_before_any_prune() {
+        if !symlink_capable() {
+            eprintln!("SKIP (env-limited: {SYMLINK_CAP}) — symlinked island .bee/cells refusal");
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = tmp.path().join("main").join(".bee");
+        std::fs::create_dir_all(main_store.join("cells")).unwrap();
+
+        // The victim: a directory full of `*.json` with nothing to do with
+        // bee's cell store.
+        let victim = tmp.path().join("victim-config");
+        std::fs::create_dir_all(&victim).unwrap();
+        std::fs::write(victim.join("settings.json"), "{\"unrelated\":true}").unwrap();
+        std::fs::write(victim.join("keys.json"), "{\"token\":\"secret\"}").unwrap();
+        let before: Vec<(PathBuf, Vec<u8>)> = std::fs::read_dir(&victim)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| (e.path(), std::fs::read(e.path()).unwrap()))
+            .collect();
+        assert_eq!(before.len(), 2);
+
+        let wt = tmp.path().join("wt-a");
+        std::fs::create_dir_all(wt.join(".bee")).unwrap();
+        let wt_cells = wt.join(".bee").join("cells");
+        symlink_dir(&victim.to_string_lossy(), &wt_cells).unwrap();
+
+        let report = bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
+
+        for (path, bytes) in &before {
+            assert_eq!(
+                &std::fs::read(path).unwrap(),
+                bytes,
+                "victim dir must stay byte-identical at {}",
+                path.display()
+            );
+        }
+        assert_eq!(std::fs::read_dir(&victim).unwrap().count(), 2, "victim dir must keep every file");
+
+        let sync = report.get("cellsSync").expect("bootstrap report must name the symlink skip");
+        assert_eq!(sync.get("skipped"), Some(&Value::Bool(true)));
+        assert_eq!(sync.get("path"), Some(&json!(p(&wt_cells))));
+        assert!(
+            sync.get("reason").and_then(Value::as_str).unwrap().to_lowercase().contains("symlink"),
+            "{sync:?}"
+        );
+
+        // Never deleted through: the symlink itself is still there.
+        assert!(std::fs::symlink_metadata(&wt_cells).unwrap().file_type().is_symlink());
+    }
+
+    /// review B-P1-1 fixture (b): the MAIN store's `cells` source dir is the
+    /// symlink instead. The whole sync (prune AND fill) is refused before it
+    /// ever reads through it, and the island's own `.bee/cells` is left
+    /// absent rather than partially filled.
+    #[test]
+    fn bootstrap_refuses_a_symlinked_main_store_cells_dir_before_any_prune() {
+        if !symlink_capable() {
+            eprintln!("SKIP (env-limited: {SYMLINK_CAP}) — symlinked main store cells refusal");
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = tmp.path().join("main").join(".bee");
+        std::fs::create_dir_all(&main_store).unwrap();
+
+        let victim = tmp.path().join("victim-config-2");
+        std::fs::create_dir_all(&victim).unwrap();
+        std::fs::write(victim.join("settings.json"), "{\"unrelated\":true}").unwrap();
+        let before = std::fs::read(victim.join("settings.json")).unwrap();
+
+        let main_cells = main_store.join("cells");
+        symlink_dir(&victim.to_string_lossy(), &main_cells).unwrap();
+
+        let wt = tmp.path().join("wt-a");
+        std::fs::create_dir_all(&wt).unwrap();
+
+        let report = bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
+
+        assert_eq!(std::fs::read(victim.join("settings.json")).unwrap(), before);
+        let sync = report.get("cellsSync").expect("bootstrap report must name the symlink skip");
+        assert_eq!(sync.get("skipped"), Some(&Value::Bool(true)));
+        assert_eq!(sync.get("path"), Some(&json!(p(&main_cells))));
+
+        // The skip is whole-function: the island's own `.bee/cells` was
+        // never even created, let alone partially filled from the symlink.
+        let wt_cells = wt.join(".bee").join("cells");
+        assert!(
+            !wt_cells.exists(),
+            "a symlinked source must skip before creating the destination dir at all"
+        );
+    }
+
+    /// review B-P1-1 fixture (c): the ordinary, non-symlinked path is
+    /// unaffected by the new guard — no `cellsSync` skip in the report, and
+    /// the existing wsh/ips fixtures above (byte-for-byte prune/fill,
+    /// `git status --porcelain` clean) stay green untouched.
+    #[test]
+    fn bootstrap_cell_sync_runs_normally_when_nothing_is_symlinked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = tmp.path().join("main").join(".bee");
+        let main_cells = main_store.join("cells");
+        std::fs::create_dir_all(&main_cells).unwrap();
+        std::fs::write(main_cells.join("a-1.json"), "{\"id\":\"a-1\",\"feature\":\"a\",\"status\":\"open\"}")
+            .unwrap();
+
+        let wt = tmp.path().join("wt-a");
+        std::fs::create_dir_all(&wt).unwrap();
+        let report = bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
+
+        assert!(report.get("cellsSync").is_none(), "a plain directory run must never report a symlink skip");
+        assert!(wt.join(".bee").join("cells").join("a-1.json").exists());
+    }
+
     /// resolveWorktreeFeature's preference order (issues-46-53 D4): the
     /// IMMUTABLE creation slug wins, and its absence degrades EXACTLY to the
     /// pre-fix `state.feature` behavior rather than refusing.
