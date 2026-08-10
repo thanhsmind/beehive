@@ -15,6 +15,11 @@ Retrieval triggers, not reading lists. Token budgets by lane:
 | standard | ≈ 5K tokens | + recent active decisions, CONTEXT.md | touching schema → schema decisions first; touching auth → auth decisions |
 | high-risk | ≈ 10K tokens | + full decision search on tags, plan history | + high-risk template, prior spikes in `.bee/spikes/`, related learnings files |
 
+A symptom outside the always-read set — an error string, a mechanism name, a
+wrong-behavior report — is a pull moment on its own: `bee knowledge search
+--text "<symptom>"` reaches across the whole bundle by symptom text, not just
+the touched area.
+
 **Reading order per area (state layer, bundleMode):**
 
 - **With a bundle** — read `docs/knowledge/areas/<area>/` FIRST: its `index.md` names the area's concepts. Then decision index (the area's section of `docs/decisions/index.md`, complete by construction; drill into events via `decisions search --tag/--scope`) → history. `docs/specs/<area>.md` is the read-only compatibility surface only ("Note the state layer" below).

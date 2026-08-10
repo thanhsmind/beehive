@@ -35,6 +35,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "index" => run_index(flags, json, pre_json, t0),
         "list" => run_list(flags, json, pre_json, t0),
         "context" => run_context(flags, json, pre_json, t0),
+        "search" => run_search(flags, json, pre_json, t0),
         "promote" => run_promote(flags, json, pre_json, t0),
         _ => None, // unknown verbs (group-usage fallback) → Node
     }

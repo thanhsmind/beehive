@@ -85,7 +85,9 @@ outputs — when a verb refuses, its message names the fix.
    record the deviation; a missing piece the outcome depends on → add it,
    record; blocking breakage in your path → fix, record; anything
    architectural → `[BLOCKED]`. Never reinterpret a locked decision to
-   make the cell fit.
+   make the cell fit. An unexpected red or an unfamiliar mechanism
+   mid-cell is a pull moment: `bee knowledge search --text "<symptom>"`
+   surfaces matching patterns and area concepts before you guess.
 4. Commit once: subject describes the change in imperative mood; the cell
    id rides the last line of the body.
 5. `bee finish --id <cell> --outcome "<one line>" --files <a,b>` —
