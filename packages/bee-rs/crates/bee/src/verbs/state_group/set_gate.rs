@@ -1323,6 +1323,118 @@ mod tests {
         assert_eq!(lane["approved_gates"]["shape"], json!(true));
     }
 
+    // ── run_gate_body — input validation (giv-1) ────────────────────────────
+    //
+    // `bee state gate` must refuse an unknown --name and a non-boolean
+    // --approved before any lock or write, on both the plain and --merge
+    // paths, and must leave every currently-legal call byte-identical.
+
+    #[test]
+    fn gate_refuses_an_unknown_name_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let before = r#"{"phase":"planning","feature":"gate-door-unknown-name","approved_gates":{}}"#;
+        w(root, ".bee/state.json", before);
+        let out = run_gate_body(
+            root,
+            &flags(&["--no-lane", "--name", "bogus", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else {
+            panic!("expected an unknown --name to be refused, got a write")
+        };
+        assert!(msg.contains("bogus"), "{msg}");
+        for legal in GATE_NAMES {
+            assert!(msg.contains(legal), "{msg} missing legal name {legal}");
+        }
+        let after = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        assert_eq!(after, before, "a refusal must write nothing");
+    }
+
+    #[test]
+    fn gate_refuses_a_non_boolean_approved_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let before = r#"{"phase":"planning","feature":"gate-door-non-bool","approved_gates":{}}"#;
+        w(root, ".bee/state.json", before);
+        let out = run_gate_body(
+            root,
+            &flags(&["--no-lane", "--name", "execution", "--approved", "yes"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else {
+            panic!("expected a non-boolean --approved to be refused, got a write")
+        };
+        assert!(msg.contains("yes"), "{msg}");
+        let after = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        assert_eq!(after, before, "a refusal must write nothing");
+    }
+
+    #[test]
+    fn gate_merge_refuses_a_non_boolean_approved_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        let before = r#"{"phase":"planning","feature":"gate-door-merge-non-bool","approved_gates":{}}"#;
+        w(root, ".bee/state.json", before);
+        let out = run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "maybe"]))
+            .unwrap();
+        let Out::Thrown(msg) = out else {
+            panic!("expected a non-boolean --approved to be refused on --merge, got a write")
+        };
+        assert!(msg.contains("maybe"), "{msg}");
+        let after = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        assert_eq!(after, before, "a refusal must write nothing");
+    }
+
+    /// Pin: a legal, non-merge `gate --name` call still succeeds unchanged.
+    #[test]
+    fn a_legal_gate_by_name_call_still_succeeds() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/gate-door-legal-name.json",
+            r#"{"feature":"gate-door-legal-name","phase":"planning","mode":"safe","approved_gates":{}}"#,
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "gate-door-legal-name", "--name", "shape", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(_, text, _) = out else {
+            panic!("expected a clean approval, got a refusal")
+        };
+        assert!(text.contains("Gate \"shape\" set to true"), "{text}");
+        let lane = read_json_file(root, ".bee/lanes/gate-door-legal-name.json");
+        assert_eq!(lane["approved_gates"]["shape"], json!(true));
+    }
+
+    /// Pin: a legal `gate --merge` call still succeeds unchanged (mirrors
+    /// non_high_risk_gate_approval_is_unaffected_by_the_advisor_precondition
+    /// above, kept here so the input-validation suite is self-contained).
+    #[test]
+    fn a_legal_gate_merge_call_still_succeeds() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/gate-door-legal-merge.json",
+            r#"{"feature":"gate-door-legal-merge","phase":"planning","mode":"safe"}"#,
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "gate-door-legal-merge", "--merge", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(_, text, _) = out else {
+            panic!("expected a clean approval, got a refusal")
+        };
+        assert!(text.contains("Gates \"shape\" and \"execution\" set to true"), "{text}");
+        let lane = read_json_file(root, ".bee/lanes/gate-door-legal-merge.json");
+        assert_eq!(lane["approved_gates"]["execution"], json!(true));
+        assert_eq!(lane["approved_gates"]["shape"], json!(true));
+    }
+
     // ── run_set_body — the feature-swap scribing-debt door (fsd-1) ─────────
     //
     // scribing-integrity D1: a real `--feature` swap on the default record
