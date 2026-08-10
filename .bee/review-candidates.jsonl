@@ -100,3 +100,4 @@
 {"id":"7025ffbe-10fb-46e7-a332-0261f8feacaa","type":"candidate","date":"2026-08-10T15:30:26.086Z","feature":"gate-input-validation","head":"58648ed239dbcedbfd9a59a6faef541c64765e71","mode":"small","baseline":null,"cells":["giv-1"]}
 {"id":"b5c73eca-8fde-4c31-9fd7-1306371c8f22","type":"candidate","date":"2026-08-10T15:41:41.119Z","feature":"onboard-root-resolution","head":"7e79cc9b8a56eccaf2f26e92d226d662b707a6a3","mode":"small","baseline":null,"cells":["orr-1"]}
 {"id":"0c990400-8854-4646-a57b-69c7e0f925dc","type":"candidate","date":"2026-08-10T15:52:00.767Z","feature":"worktree-store-hygiene","head":"926cc0dace6a1f51754c58c6482bf9d5ea4cde14","mode":"small","baseline":null,"cells":["wsh-1"]}
+{"id":"94b4e037-4268-4f4f-b39b-0a31038c9712","type":"candidate","date":"2026-08-10T16:14:15.031Z","feature":"worktree-manifest-native","head":"4de511098a52d3a70715877266a4ccefe20ef79d","mode":"small","baseline":null,"cells":["wmn-1"]}
