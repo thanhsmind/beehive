@@ -263,5 +263,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-10T14:37:43.392Z"
+  },
+  "dispatch-registers-worker": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-10T15:22:06.786Z"
   }
 }
