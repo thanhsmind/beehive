@@ -12,6 +12,7 @@ bee:
   sources: [".bee/bin/bee (gitignored, built by the installer, not tracked in version control)", "measured 2026-08-05: the installed `.bee/bin/bee` refused `bee knowledge promote --work promote-reach` with `unknown_work`, while `cargo run --release --manifest-path packages/bee-rs/Cargo.toml -- knowledge promote --work promote-reach` resolved it", "decision 399d72e1 (hook-teeth, 2026-08-04, same defect class one day earlier)", "decision 3baa41f6 (counter-teeth, 2026-08-04, same defect class)"]
   polarity: pitfall
   critical: true
+  signature: stale-installed-binary-not-reinstalled-after-merge
 ---
 
 # Source that ships without reinstalling the binary the hooks call is inert
