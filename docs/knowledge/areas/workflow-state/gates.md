@@ -408,6 +408,23 @@ a malformed record has earned none.
   a SOFT door: a `None` or a `Thrown` promote outcome both degrade to one
   warning line, close's exit code never changes because of this door, and
   nothing it writes lands under `docs/knowledge/` (knowledge-loop D2/D9).
+- R81 — A GREEN, non-dry-run `bee close` sweeps its own tracked bee-store
+  dirt with a path-scoped commit: when the root is a git work tree (detected
+  via `rev-parse --is-inside-work-tree`, so a linked worktree's `.git` FILE
+  counts) and `git status --porcelain -- .bee` is non-empty, close runs
+  `git add -A -- .bee` then `git commit -m "Record <feature> close
+  bookkeeping in the bee store" -- .bee` and reports `bookkeeping_commit`
+  ({committed, sha} or {committed:false, reason: clean | config_off |
+  not_a_repo | git_failed:<line>}) in its output. The commit is path-scoped
+  so unrelated dirty AND staged files are never swept (no-whole-tree-git
+  law). Warn-never-block: a git failure is one warning line and close's exit
+  stays green. `.bee/config.json` `close_commit_bookkeeping: false` opts
+  out; a non-boolean value is refused outright, never silently read as on
+  (worktree_cleanup_on_merge precedent). A red close and `--dry-run` never
+  commit. This closes the dead-end where a worktree-session close dirtied
+  main and `worktree merge` then refused `WORKTREE_MERGE_MAIN_DIRTY` on
+  bee's own bookkeeping (backlog P2 row 708; close-lands-bookkeeping cell
+  clb-1, 2026-08-10).
 
 ## Edge Cases Settled
 
