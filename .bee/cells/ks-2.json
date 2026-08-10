@@ -1,0 +1,75 @@
+{
+  "id": "ks-2",
+  "feature": "knowledge-search",
+  "title": "Wire the pull move into bee-swarming Execute and the bee-hive scout",
+  "lane": "small",
+  "status": "capped",
+  "deps": [
+    "ks-1"
+  ],
+  "decisions": [
+    "D6"
+  ],
+  "files": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-search/CONTEXT.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-hive/references/scout-and-ticks.md"
+  ],
+  "action": "Name `bee knowledge search --text \"<symptom>\"` as the pull move at the debug moment (per D6, site erratum in CONTEXT.md: bee-executing was retired into bee-swarming on 2026-07-31, commit 12ccd460): in skills/bee-swarming/SKILL.md's Execute (worker) section where a worker hits an unexpected red or unfamiliar mechanism mid-cell, and in skills/bee-hive/references/scout-and-ticks.md where the scout meets a symptom outside the always-read set. One or two sentences per site, matching each file's existing voice and density — no new sections, no duplicated flag documentation (point at `bee knowledge search --help`). Then run the full regen chain inside this cell, in order: bee dev render-skill-trees, bee onboard --repo-root . --apply, bee dev release-manifest --write.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "Both files name the verb at their debug moment and read naturally in context",
+      "release manifest check passes after regen"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-executing/SKILL.md",
+        "substantive": "pull move named at the mid-cell debug moment"
+      }
+    ],
+    "key_links": [
+      "scout-and-ticks.md names the same verb so both entry points teach one habit"
+    ],
+    "prohibitions": [
+      "No flag-by-flag duplication of help text into skills",
+      "No new sections or contracts invented"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ks-2",
+    "outcome": "Named bee knowledge search as the mid-cell debug pull move in bee-swarming Execute and the bee-hive scout, regenerated skill trees and release manifest",
+    "files_changed": [
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-hive/references/scout-and-ticks.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/references/scout-and-ticks.md",
+      ".claude-plugin/skills/bee-swarming/SKILL.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/references/scout-and-ticks.md",
+      ".codex-plugin/skills/bee-swarming/SKILL.md",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T09:50:37.454Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T09:41:54.182Z",
+    "verify_command": null,
+    "verified_at": null,
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T09:50:24.632Z"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "id": "ks-1",
+  "feature": "knowledge-search",
+  "title": "Add read-only verb bee knowledge search (symptom pull into the bundle)",
+  "lane": "small",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-search/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/registry.rs"
+  ],
+  "action": "New verb `bee knowledge search` in verbs/knowledge/search.rs, registered in routing.rs try_native and the knowledge group. Grammar mirrors decisions search (per D1): --text required, whitespace-split terms, case-insensitive OR; --limit optional (default 5, per D4); json flag. Corpus: patterns + area concepts of the active bundle only — skip generated index.md/log.md files, never docs/specs/ or decisions (per D2). Match over title, body, and frontmatter sources/decisions entries; rank by deterministic term-hit count desc then file recency desc (per D3). Output rows: path — title — why-matched line naming which terms hit in which field (per D4). Zero hits emits an empty result with a one-line note, exit 0, never a typed refusal (per D5). Verb is read-only, writes:[], callable at any phase from any checkout (per D7). Registry entry (help text + flags) goes through the registry payload's real regen chain — find it first (registry.rs points at `bee dev`); if the chain turns out to be hand-maintained JSON, edit it and keep tests/registry_contracts.rs green, noting the gap in the trace. Tests TDD-style in the knowledge verb test module: rank order determinism, field attribution in why-matched, zero-hit shape, bundle-absent behavior.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "`bee knowledge search --text <term>` returns ranked rows with why-matched from a repo with a bundle",
+      "zero-hit query exits 0 with empty result note",
+      "verb never writes any file or state"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+        "substantive": "full verb implementation with tests, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "routing.rs try_native dispatches \"search\"",
+      "registry payload carries knowledge.search entry so --help and catalog resolve it"
+    ],
+    "prohibitions": [
+      "No write path, no state mutation",
+      "No change to existing knowledge verbs' behavior",
+      "Decisions corpus stays excluded"
+    ]
+  },
+  "trace": {
+    "worker": "exec-ks-1",
+    "outcome": "Add read-only bee knowledge search verb (--text/--limit/json), ranked term-hit + recency over patterns/areas, registered in routing and registry payload",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/search.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/routing.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/mod.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T09:35:18.725Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f72148c7-5288-4f71-ad45-1cc61b7b7bf2",
+    "claimed_at": "2026-08-10T09:20:32.376Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T09:35:05.767Z"
+  }
+}
