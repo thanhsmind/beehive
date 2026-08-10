@@ -338,13 +338,20 @@ pub(crate) fn run_register(flags: Flags, use_json: bool, t0: Instant) -> Option<
             bootstrap.get("reason").map(jsjson::js_to_string).unwrap_or_default()
         )
     };
-    let text = [
+    let mut lines = vec![
         format!("Registered worktree grant: id {id} (feature \"{feature}\")."),
         format!("  worktree:    {}", p(&worktree_root)),
         format!("  main store:  {}", p(&main_store_root)),
         last,
-    ]
-    .join("\n");
+    ];
+    // review B-P1-1: name the symlinked path and the reason right in the
+    // CLI text, not just the JSON report.
+    if let Some(sync) = bootstrap.get("cellsSync") {
+        let path = sync.get("path").map(jsjson::js_to_string).unwrap_or_default();
+        let reason = sync.get("reason").map(jsjson::js_to_string).unwrap_or_default();
+        lines.push(format!("  cells sync skipped — {path}: {reason}"));
+    }
+    let text = lines.join("\n");
     Some(ctx.emit(&Value::Object(result), &text))
 }
 
@@ -476,8 +483,50 @@ fn git_tracked_cells(worktree_root: &Path) -> Option<HashSet<String>> {
 /// Feature-neutral content under `.bee` (config, expertise, prompts,
 /// decisions/backlog, `cells/archive/summary.json`, …) is untouched — this
 /// function only ever looks inside `cells/`.
-fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, feature: &str) -> Option<()> {
+/// review B-P1-1 / D23: whether the whole cell sync ran, or was refused
+/// because one of the fixed store paths it is about to prune or fill
+/// through is a SYMLINK.
+enum CellsSync {
+    Ran,
+    /// `path` is the symlink that tripped the refusal; `reason` is the
+    /// one-line explanation the bootstrap report carries verbatim.
+    Skipped { path: PathBuf, reason: String },
+}
+
+/// `true` only for a path that itself resolves to a symlink — never follows
+/// it. A missing/unreadable path is `false` (delegate to the caller's own
+/// existence handling), matching `std::fs::symlink_metadata`'s own contract.
+fn is_symlink(path: &Path) -> bool {
+    std::fs::symlink_metadata(path)
+        .map(|m| m.file_type().is_symlink())
+        .unwrap_or(false)
+}
+
+fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, feature: &str) -> Option<CellsSync> {
     let dest_cells = worktree_store_root.join(CELLS_DIR_NAME);
+    let src_cells = main_store_root.join(CELLS_DIR_NAME);
+    let dest_archive = dest_cells.join(CELLS_ARCHIVE_DIR_NAME);
+    let src_feature_archive = src_cells.join(CELLS_ARCHIVE_DIR_NAME).join(feature);
+
+    // review B-P1-1 / D23 never-follow: a repo committing `.bee` or
+    // `.bee/cells` (or either store's archive dir) as a SYMLINK defeats the
+    // tracked-set shield below — git tracks the symlink OBJECT, not paths
+    // under it, so `git ls-files` comes back empty for that prefix and the
+    // prune arm would delete every `*.json` sitting in the symlink's TARGET,
+    // which is outside the store entirely. Checked before any prune or
+    // fill, against every fixed path this function is about to `read_dir`
+    // or `create_dir_all` through — never followed, never deleted through.
+    // A per-entry foreign-feature archive subdir stays covered by
+    // `DirEntry::file_type`, which already never follows a symlink either.
+    for suspect in [worktree_store_root, &dest_cells, &src_cells, &dest_archive, &src_feature_archive] {
+        if is_symlink(suspect) {
+            return Some(CellsSync::Skipped {
+                path: suspect.to_path_buf(),
+                reason: "refusing to sync .bee/cells through a symlinked path".to_string(),
+            });
+        }
+    }
+
     std::fs::create_dir_all(&dest_cells).ok()?;
 
     let tracked = worktree_store_root.parent().and_then(git_tracked_cells);
@@ -507,7 +556,6 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
     }
 
     // (2) fill in the main store's matching cells not already present.
-    let src_cells = main_store_root.join(CELLS_DIR_NAME);
     if let Ok(entries) = std::fs::read_dir(&src_cells) {
         for entry in entries.filter_map(|e| e.ok()) {
             if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
@@ -533,7 +581,6 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
     // every OTHER feature's subdir down to its tracked files, then fill in
     // the granted feature's. A tracked file inside a foreign dir stays; only
     // when nothing tracked is left does the now-empty dir itself go.
-    let dest_archive = dest_cells.join(CELLS_ARCHIVE_DIR_NAME);
     if let Some(tracked) = &tracked {
         if let Ok(entries) = std::fs::read_dir(&dest_archive) {
             for entry in entries.filter_map(|e| e.ok()) {
@@ -567,7 +614,6 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
             }
         }
     }
-    let src_feature_archive = src_cells.join(CELLS_ARCHIVE_DIR_NAME).join(feature);
     if src_feature_archive.exists() {
         let dest_feature_archive = dest_archive.join(feature);
         std::fs::create_dir_all(&dest_feature_archive).ok()?;
@@ -586,7 +632,7 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
         }
     }
 
-    Some(())
+    Some(CellsSync::Ran)
 }
 
 /// worktree-store.mjs bootstrapWorktreeStore. `None` = an fs failure Node
@@ -631,11 +677,22 @@ pub(crate) fn bootstrap_worktree_store(
     // already-adopted worktree also loses any foreign cell that leaked in.
     // An empty `feature` (write_creation_identity's own "no feature slug
     // given" case) skips this rather than pruning everything as "no match".
+    let mut out = Map::new();
     if !feature.is_empty() {
-        sync_worktree_cells(&worktree_store_root, main_store_root, feature)?;
+        // review B-P1-1: a symlinked store path skips the WHOLE cell sync —
+        // never a partial prune/fill — and the refusal rides the report
+        // (both the map and, via `run_register`'s text, the CLI line) so the
+        // symlink and the reason are visible rather than silently no-op'd.
+        if let CellsSync::Skipped { path, reason } =
+            sync_worktree_cells(&worktree_store_root, main_store_root, feature)?
+        {
+            out.insert(
+                "cellsSync".into(),
+                json!({ "skipped": true, "path": p(&path), "reason": reason }),
+            );
+        }
     }
 
-    let mut out = Map::new();
     let state_file = worktree_store_root.join("state.json");
     if state_file.exists() {
         out.insert("created".into(), Value::Bool(false));

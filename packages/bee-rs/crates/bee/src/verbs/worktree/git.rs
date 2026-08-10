@@ -76,8 +76,19 @@ impl GitOut {
     }
 }
 
+/// stdin is ALWAYS `Stdio::null()` — a repo with `commit.gpgsign true` and
+/// a tty pinentry configured must never be able to block on a prompt that
+/// has nowhere to read from. Every worktree git invocation runs through
+/// this one helper (including the merge-commit call in `phases.rs`), so
+/// the guarantee holds for all of them — same defense `close.rs`'s own
+/// `run_git` keeps for the bee-store bookkeeping commit.
 pub(crate) fn run_git(cwd: &Path, args: &[&str]) -> GitOut {
-    match std::process::Command::new("git").args(args).current_dir(cwd).output() {
+    match std::process::Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .stdin(std::process::Stdio::null())
+        .output()
+    {
         Ok(out) => GitOut {
             status: out.status.code(),
             // encoding:'utf8' — Node decodes the whole buffer lossily.

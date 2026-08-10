@@ -1665,12 +1665,13 @@ mod tests {
         git_ok(root, &["init", "-q"]);
         git_ok(root, &["config", "user.email", "bee-close@example.com"]);
         git_ok(root, &["config", "user.name", "bee close tests"]);
-        // P3-1: `commit_close_bookkeeping` now passes `--no-gpg-sign` to
-        // every commit it makes, so this config line no longer does any
-        // work here — kept anyway so a repo-level `commit.gpgsign true`
-        // stays inert for every OTHER git invocation this test module
-        // makes outside `commit_close_bookkeeping` itself.
-        git_ok(root, &["config", "commit.gpgsign", "false"]);
+        // B-P1-2: this fixture used to force `commit.gpgsign false`, which
+        // masked the very condition `--no-gpg-sign` exists to defend
+        // against — every test in this module would stay green even if
+        // that flag were deleted. Left at the repo default (unset/off in a
+        // test sandbox) here; `gpgsign_true_with_a_failing_signer_still_lands_the_bookkeeping_commit`
+        // below is the one test that turns `commit.gpgsign` ON and pins
+        // the flag directly.
         w(root, ".bee/config.json", "{}\n");
         git_ok(root, &["add", ".bee/config.json"]);
         git_ok(root, &["commit", "-q", "-m", "seed"]);
@@ -1758,6 +1759,39 @@ mod tests {
         assert_eq!(committed, vec![".bee/config.json".to_string()]);
         let status = git_status_porcelain(root);
         assert!(status.contains("A  staged.txt"), "{status}");
+    }
+
+    /// B-P1-2: pins the `--no-gpg-sign` flag `commit_close_bookkeeping`
+    /// passes to its `git commit` — a repo with `commit.gpgsign true` AND a
+    /// `gpg.program` pointed at a stub that always fails must still let the
+    /// bookkeeping commit land. Without `--no-gpg-sign` this turns red: the
+    /// commit would invoke the failing stub, `git commit` would exit
+    /// non-zero, and this would return `Skipped { reason: "git_failed:…" }`
+    /// instead of `Committed` (verified by hand: temporarily dropping the
+    /// flag from `commit_close_bookkeeping` flips this assertion red,
+    /// restored after).
+    #[cfg(unix)]
+    #[test]
+    fn gpgsign_true_with_a_failing_signer_still_lands_the_bookkeeping_commit() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        dirty_tracked_bee_file(root);
+
+        // A "gpg" that always fails — proves the bookkeeping commit never
+        // invokes a signer at all, without ever risking a real hang.
+        let stub = root.join("gpg-stub.sh");
+        std::fs::write(&stub, "#!/bin/sh\nexit 1\n").unwrap();
+        let mut perms = std::fs::metadata(&stub).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&stub, perms).unwrap();
+        git_ok(root, &["config", "commit.gpgsign", "true"]);
+        git_ok(root, &["config", "gpg.program", stub.to_str().unwrap()]);
+
+        let commit = commit_close_bookkeeping(root, "demo");
+        assert!(matches!(commit, BookkeepingCommit::Committed { .. }));
     }
 
     #[test]
