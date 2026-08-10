@@ -1,0 +1,56 @@
+{
+  "id": "wmn-1",
+  "feature": "worktree-manifest-native",
+  "title": "knowledge context and dispatch prepare resolve granted-worktree roots natively",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full.rs"
+  ],
+  "action": "Debt row 621 core: build_context_manifest (knowledge/context.rs, ManifestOut::NeedsNode at ~194-311) and its verbatim port copy in drivers/kctx.rs (~704-818) return NeedsNode on linked/granted-worktree roots — with no Node behind the signal, `bee knowledge context` from a granted worktree silently returns nothing (routing.rs:335 -> None) and `bee dispatch prepare` drops its learned-context block (prepare.rs:291 -> Delegate). Fix: resolve worktree topology natively in both — the grant-aware resolution already exists natively (status_full.rs find_granted_worktree_for_feature and the crate's roots module; follow how native verbs that work from a worktree resolve main root vs island store) — so both sites produce the same manifest a main-checkout call produces (bundle lives in the repo tree, shared across worktrees; anchor resolution per B9 unchanged). NeedsNode variants disappear from both files (delete the dead arms and their conversions at routing.rs:335 / prepare.rs:291 if now unreachable). Behavior from the MAIN checkout stays byte-identical. TDD red-first: fixture repo + git worktree add + grant-shaped root proving knowledge context returns a manifest from the worktree root (red: today None/NeedsNode); dispatch prepare's learned-context block renders from a worktree fixture; main-checkout tests pinned unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee knowledge context returns a real manifest when invoked from a granted worktree root",
+      "dispatch prepare's learned-context block renders from a worktree",
+      "main-checkout output byte-identical; no NeedsNode variant remains in either file"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+        "substantive": "native worktree-roots resolution plus tests, no TODO stubs"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-wmn-1",
+    "outcome": "real bug fixed: dispatch prepare's learned-context bundle now reads from the cell's granted worktree (control-root fallback when none); named deviation: knowledge context from a worktree already resolves via the wide door (proven empirically), NeedsNode kept as legitimate non-worktree refusal paths",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T16:11:31.363Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T15:57:14.174Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T16:11:19.719Z"
+  }
+}
