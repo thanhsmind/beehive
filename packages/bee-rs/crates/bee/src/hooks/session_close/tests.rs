@@ -213,12 +213,17 @@ use std::process::ExitCode;
         write_json_file(&root.join(".bee").join("config.json"), &json!({}));
         write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
         let queue = root.join(".bee").join("capture-queue.jsonl");
+        // s2's `at` must stay recent — U3 (docs/history/knowledge-usable/
+        // CONTEXT.md) escalates the nudge once the oldest PENDING stub is
+        // older than the configured day threshold (default 7); a fixed
+        // past date would drift stale and flip this test's wording.
+        let recent = now_iso();
         std::fs::write(
             &queue,
-            concat!(
-                "{\"kind\":\"stub\",\"id\":\"s1\",\"at\":\"2026-01-01T00:00:00.000Z\",\"outcome\":\"x\"}\n",
-                "{\"kind\":\"stub\",\"id\":\"s2\",\"at\":\"2026-01-02T00:00:00.000Z\",\"outcome\":\"y\"}\n",
-                "{\"kind\":\"flush\",\"id\":\"s1\",\"at\":\"2026-01-03T00:00:00.000Z\"}\n"
+            format!(
+                "{{\"kind\":\"stub\",\"id\":\"s1\",\"at\":\"2026-01-01T00:00:00.000Z\",\"outcome\":\"x\"}}\n\
+{{\"kind\":\"stub\",\"id\":\"s2\",\"at\":\"{recent}\",\"outcome\":\"y\"}}\n\
+{{\"kind\":\"flush\",\"id\":\"s1\",\"at\":\"2026-01-03T00:00:00.000Z\"}}\n"
             ),
         )
         .unwrap();

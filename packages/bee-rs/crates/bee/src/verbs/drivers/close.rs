@@ -7,10 +7,10 @@ use super::*;
 use crate::fsutil::{ensure_dir, read_json, write_json_atomic, write_text_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
-use crate::state::read_config_raw;
+use crate::state::{capture_queue_threshold, read_config_raw};
 use crate::textutil::truncate_chars_tail;
 use crate::verbs::reservations::{
-    finish, js_is_ws, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
+    finish, js_is_ws, now_ms, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{
@@ -368,9 +368,11 @@ pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
 }
 
 /// provenance: capture.mjs pendingCaptureStubs + captureQueue
-/// (verbs/status_full.rs:2382) — only the COUNT reaches close's door text, so
-/// pendingCaptureStubs' localeCompare sort cannot affect an emitted byte.
-pub(crate) fn capture_queue_count(root: &Path) -> usize {
+/// (verbs/status_full.rs:2382) — only the COUNT used to reach close's door
+/// text (localeCompare sort therefore never mattered); U3 (docs/history/
+/// knowledge-usable/CONTEXT.md) also needs the oldest pending stub's age,
+/// so both ride the one read below.
+pub(crate) fn capture_queue_pending(root: &Path) -> (usize, f64) {
     let events = read_jsonl(&root.join(".bee").join("capture-queue.jsonl"));
     let mut flushed: Vec<Value> = Vec::new();
     let mut stubs: Vec<&Value> = Vec::new();
@@ -389,10 +391,16 @@ pub(crate) fn capture_queue_count(root: &Path) -> usize {
             stubs.push(event);
         }
     }
-    stubs
-        .into_iter()
+    let pending: Vec<&&Value> = stubs
+        .iter()
         .filter(|s| !flushed.iter().any(|f| strict_eq(Some(f), vget(s, "id"))))
-        .count()
+        .collect();
+    let oldest_ms = pending
+        .iter()
+        .map(|s| date_parse(vget(s, "at")))
+        .filter(|ms| ms.is_finite())
+        .fold(f64::NAN, |acc, ms| if acc.is_nan() || ms < acc { ms } else { acc });
+    (pending.len(), oldest_ms)
 }
 
 /// D1 escape hatch: a logged decision tagged `capture-deferral` whose
@@ -440,6 +448,30 @@ impl Door {
     }
 }
 
+/// U3 (docs/history/knowledge-usable/CONTEXT.md): past the configured
+/// `capture_queue_threshold` — the pending count exceeds it, OR the oldest
+/// pending stub is older than the configured day count — the capture-queue
+/// door's detail escalates to name the breach. The door stays report-only
+/// (`blocking: false`, decision c8e25271's deferral, untouched by U3) either
+/// way; only the wording changes.
+pub(crate) fn capture_queue_door_detail(root: &Path, queue: usize, oldest_ms: f64) -> String {
+    if queue == 0 {
+        return "clear".to_string();
+    }
+    let config = read_config_raw(root);
+    let threshold = capture_queue_threshold(&config);
+    let oldest_age_days = if oldest_ms.is_nan() { None } else { Some((now_ms() - oldest_ms) / 86_400_000.0) };
+    let over_count = queue as u64 > threshold.count;
+    let over_age = oldest_age_days.map(|d| d > threshold.days).unwrap_or(false);
+    if over_count || over_age {
+        let oldest_days = oldest_age_days.unwrap_or(0.0).max(0.0).floor() as u64;
+        return format!(
+            "OVERDUE — {queue} stub(s) pending, oldest {oldest_days} days — flush before new work; settle via bee-capturing"
+        );
+    }
+    format!("pending — {queue} capture stub(s) awaiting flush; settle later via bee-capturing")
+}
+
 /// provenance: bee.mjs buildCloseReportDoors, extended by D1 — the
 /// capture-queue door stays report-only (decision c8e25271's blanket
 /// deferral, untouched here), but the scribing-debt door now BLOCKS close
@@ -474,15 +506,11 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
         },
         command: if scribing_blocking { Some("bee-capturing") } else { None },
     });
-    let queue = capture_queue_count(root);
+    let (queue, oldest_ms) = capture_queue_pending(root);
     doors.push(Door {
         door: "capture-queue",
         blocking: false,
-        detail: if queue > 0 {
-            format!("pending — {queue} capture stub(s) awaiting flush; settle later via bee-capturing")
-        } else {
-            "clear".to_string()
-        },
+        detail: capture_queue_door_detail(root, queue, oldest_ms),
         command: None,
     });
     Ok(doors)
@@ -921,5 +949,105 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             run_dispatch_prepare(flags, use_json, t0)
         }
         _ => None,
+    }
+}
+
+// ─── tests: U3 capture-queue pressure escalation (close door) ──────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn w(root: &Path, rel: &str, body: &str) {
+        let file = rel.split('/').fold(root.to_path_buf(), |p, s| p.join(s));
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, body).unwrap();
+    }
+
+    fn stub_line(id: &str, at: &str) -> String {
+        format!(r#"{{"kind":"stub","id":"{id}","at":"{at}","outcome":"x"}}"#)
+    }
+
+    /// Below the default threshold (5 stubs, 7 days): the door's wording
+    /// stays byte-identical to before U3, same as the nudge's contract.
+    #[test]
+    fn under_threshold_detail_is_byte_identical_to_before() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = crate::verbs::reservations::now_iso();
+        w(root, ".bee/capture-queue.jsonl", &format!("{}\n", stub_line("s1", &now)));
+        let (queue, oldest_ms) = capture_queue_pending(root);
+        assert_eq!(
+            capture_queue_door_detail(root, queue, oldest_ms),
+            "pending — 1 capture stub(s) awaiting flush; settle later via bee-capturing"
+        );
+    }
+
+    #[test]
+    fn zero_pending_reads_clear() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert_eq!(capture_queue_door_detail(root, 0, f64::NAN), "clear");
+    }
+
+    #[test]
+    fn over_count_threshold_escalates_the_door_to_overdue_wording() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = crate::verbs::reservations::now_iso();
+        let lines: String =
+            (0..6).map(|i| format!("{}\n", stub_line(&format!("s{i}"), &now))).collect();
+        w(root, ".bee/capture-queue.jsonl", &lines);
+        let (queue, oldest_ms) = capture_queue_pending(root);
+        assert_eq!(queue, 6);
+        let detail = capture_queue_door_detail(root, queue, oldest_ms);
+        assert!(
+            detail.starts_with("OVERDUE — 6 stub(s) pending, oldest 0 days — flush before new work"),
+            "{detail}"
+        );
+        assert!(detail.ends_with("settle via bee-capturing"));
+    }
+
+    #[test]
+    fn over_age_threshold_escalates_even_under_count() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let old = crate::verbs::reservations::iso_from_ms(now_ms() - 10.0 * 86_400_000.0).ok().unwrap();
+        w(root, ".bee/capture-queue.jsonl", &format!("{}\n", stub_line("s1", &old)));
+        let (queue, oldest_ms) = capture_queue_pending(root);
+        assert_eq!(queue, 1);
+        let detail = capture_queue_door_detail(root, queue, oldest_ms);
+        assert!(
+            detail.starts_with("OVERDUE — 1 stub(s) pending, oldest 10 days — flush before new work"),
+            "{detail}"
+        );
+    }
+
+    #[test]
+    fn configured_threshold_overrides_the_default_for_the_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"capture_queue_threshold":{"count":1,"days":30}}"#);
+        let now = crate::verbs::reservations::now_iso();
+        let lines = format!("{}\n{}\n", stub_line("s1", &now), stub_line("s2", &now));
+        w(root, ".bee/capture-queue.jsonl", &lines);
+        let (queue, oldest_ms) = capture_queue_pending(root);
+        let detail = capture_queue_door_detail(root, queue, oldest_ms);
+        assert!(detail.starts_with("OVERDUE — 2 stub(s) pending"), "{detail}");
+    }
+
+    /// A malformed threshold falls back to the default (5, 7) — the door
+    /// never blocks either way (`build_close_report_doors`' capture-queue
+    /// row always carries `blocking: false`).
+    #[test]
+    fn malformed_threshold_falls_back_and_the_door_never_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"capture_queue_threshold":{"count":-1,"days":7}}"#);
+        w(root, ".bee/capture-queue.jsonl", &format!("{}\n", stub_line("s1", &crate::verbs::reservations::now_iso())));
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let capture_door = doors.iter().find(|d| d.door == "capture-queue").unwrap();
+        assert!(!capture_door.blocking);
+        assert_eq!(capture_door.detail, "pending — 1 capture stub(s) awaiting flush; settle later via bee-capturing");
     }
 }

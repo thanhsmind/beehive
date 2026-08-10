@@ -260,6 +260,56 @@ fn warn_half_set_doc_viewer() -> Option<String> {
     None
 }
 
+/// Capture-queue pressure threshold (U3, docs/history/knowledge-usable/CONTEXT.md):
+/// the count and age past which the session-close capture-queue nudge and
+/// `bee close`'s capture-queue door escalate their wording to name the
+/// breach — never a hard block anywhere.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CaptureQueueThreshold {
+    pub count: u64,
+    pub days: f64,
+}
+
+pub const DEFAULT_CAPTURE_QUEUE_THRESHOLD: CaptureQueueThreshold =
+    CaptureQueueThreshold { count: 5, days: 7.0 };
+
+/// captureQueueThreshold: config key `capture_queue_threshold` in
+/// .bee/config.json, shape `{count, days}` (either field may be omitted;
+/// its own default fills in). Absent key or null => the default, silent —
+/// that IS the default. A present value that is not an object, or a
+/// present `count`/`days` that is not a non-negative number, is refused as
+/// a WHOLE (the pair falls back to the default together, not field by
+/// field) plus one stderr warning naming the key — the same
+/// warn-and-fallback shape `ship_visibility`/`doc_viewer_prefix` use above.
+pub fn capture_queue_threshold(config: &Map<String, Value>) -> CaptureQueueThreshold {
+    let obj = match config.get("capture_queue_threshold") {
+        None | Some(Value::Null) => return DEFAULT_CAPTURE_QUEUE_THRESHOLD,
+        Some(Value::Object(m)) => m,
+        Some(_) => return warn_malformed_capture_queue_threshold(),
+    };
+    let non_negative = |v: Option<&Value>, default: f64| -> Option<f64> {
+        match v {
+            None | Some(Value::Null) => Some(default),
+            Some(Value::Number(n)) => n.as_f64().filter(|f| *f >= 0.0),
+            _ => None,
+        }
+    };
+    let count = non_negative(obj.get("count"), DEFAULT_CAPTURE_QUEUE_THRESHOLD.count as f64);
+    let days = non_negative(obj.get("days"), DEFAULT_CAPTURE_QUEUE_THRESHOLD.days);
+    match (count, days) {
+        (Some(count), Some(days)) => CaptureQueueThreshold { count: count as u64, days },
+        _ => warn_malformed_capture_queue_threshold(),
+    }
+}
+
+fn warn_malformed_capture_queue_threshold() -> CaptureQueueThreshold {
+    eprint!(
+        "config: capture_queue_threshold in .bee/config.json must be an object {{count, days}} \
+with non-negative numbers — ignoring it and using the default (count: 5, days: 7).\n"
+    );
+    DEFAULT_CAPTURE_QUEUE_THRESHOLD
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -514,5 +564,59 @@ mod tests {
             doc_viewer_prefix(&cfg).as_deref(),
             Some("http://local:7700/p/local-project")
         );
+    }
+
+    fn cq_config(v: Value) -> Map<String, Value> {
+        let mut m = Map::new();
+        m.insert("capture_queue_threshold".into(), v);
+        m
+    }
+
+    #[test]
+    fn capture_queue_threshold_absent_is_the_default() {
+        assert_eq!(capture_queue_threshold(&Map::new()), DEFAULT_CAPTURE_QUEUE_THRESHOLD);
+        assert_eq!(
+            capture_queue_threshold(&cq_config(json!(null))),
+            DEFAULT_CAPTURE_QUEUE_THRESHOLD
+        );
+    }
+
+    #[test]
+    fn capture_queue_threshold_reads_both_fields() {
+        let cfg = cq_config(json!({"count": 12, "days": 3}));
+        assert_eq!(capture_queue_threshold(&cfg), CaptureQueueThreshold { count: 12, days: 3.0 });
+    }
+
+    #[test]
+    fn capture_queue_threshold_field_omitted_fills_its_own_default() {
+        let cfg = cq_config(json!({"count": 20}));
+        assert_eq!(capture_queue_threshold(&cfg), CaptureQueueThreshold { count: 20, days: 7.0 });
+        let cfg = cq_config(json!({"days": 1}));
+        assert_eq!(capture_queue_threshold(&cfg), CaptureQueueThreshold { count: 5, days: 1.0 });
+    }
+
+    #[test]
+    fn capture_queue_threshold_non_object_is_refused() {
+        for bad in [json!("5"), json!(5), json!(true), json!([5, 7])] {
+            assert_eq!(
+                capture_queue_threshold(&cq_config(bad.clone())),
+                DEFAULT_CAPTURE_QUEUE_THRESHOLD,
+                "non-object: {bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn capture_queue_threshold_negative_field_is_refused_as_a_whole() {
+        let cfg = cq_config(json!({"count": -1, "days": 7}));
+        assert_eq!(capture_queue_threshold(&cfg), DEFAULT_CAPTURE_QUEUE_THRESHOLD);
+        let cfg = cq_config(json!({"count": 5, "days": -1}));
+        assert_eq!(capture_queue_threshold(&cfg), DEFAULT_CAPTURE_QUEUE_THRESHOLD);
+    }
+
+    #[test]
+    fn capture_queue_threshold_non_numeric_field_is_refused() {
+        let cfg = cq_config(json!({"count": "5", "days": 7}));
+        assert_eq!(capture_queue_threshold(&cfg), DEFAULT_CAPTURE_QUEUE_THRESHOLD);
     }
 }

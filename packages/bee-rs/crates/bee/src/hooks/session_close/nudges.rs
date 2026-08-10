@@ -8,7 +8,7 @@ use crate::fsutil::{read_json, ReadJson};
 use crate::hooks::adapter::{emit_hook_output, encode_block, log_crash, now_iso, read_hook_context, HookContext};
 use crate::hooks::Outcome;
 use crate::jsjson::{self, js_to_string};
-use crate::state::{bypass_level, read_config_raw};
+use crate::state::{bypass_level, capture_queue_threshold, read_config_raw};
 use serde_json::{Map, Value};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -16,10 +16,14 @@ use std::process::ExitCode;
 
 // ─── maybeCaptureQueueNudge (decision 0017) ────────────────────────────────
 
-pub(crate) fn pending_capture_stub_ids(root: &Path) -> Vec<String> {
+/// Pending (stub-minus-flush) capture-queue rows, in file order — the same
+/// membership `pending_capture_stub_ids` used to compute on its own; kept
+/// here as the single read so U3's threshold check (count + oldest `at`)
+/// and the nudge's dedup hash (ids only) share one pass over the file.
+pub(crate) fn pending_capture_stubs(root: &Path) -> Vec<Value> {
     let events = read_jsonl(&root.join(".bee").join("capture-queue.jsonl"));
     let mut flushed: HashSet<String> = HashSet::new();
-    let mut stubs: Vec<&Value> = Vec::new();
+    let mut stubs: Vec<Value> = Vec::new();
     for event in &events {
         if !event.is_object() {
             continue;
@@ -31,7 +35,7 @@ pub(crate) fn pending_capture_stub_ids(root: &Path) -> Vec<String> {
                 flushed.insert(k);
             }
         } else if kind == Some("stub") && id_truthy {
-            stubs.push(event);
+            stubs.push(event.clone());
         }
     }
     stubs
@@ -39,29 +43,59 @@ pub(crate) fn pending_capture_stub_ids(root: &Path) -> Vec<String> {
         .filter(|s| {
             s.get("id").and_then(primitive_key).map(|k| !flushed.contains(&k)).unwrap_or(true)
         })
-        .map(|s| js_to_string(s.get("id").unwrap_or(&Value::Null)))
         .collect()
+}
+
+/// The oldest pending stub's `at`, in epoch ms — NaN when there is no
+/// pending stub or its `at` doesn't parse (an unresolvable timestamp is
+/// never treated as a breach, same fallback shape the rest of this hook
+/// uses for unparseable dates).
+pub(crate) fn oldest_pending_stub_at_ms(stubs: &[Value]) -> f64 {
+    stubs
+        .iter()
+        .filter_map(|s| js_date_parse_value(s.get("at").unwrap_or(&Value::Null)))
+        .fold(f64::NAN, |acc, ms| if acc.is_nan() || ms < acc { ms } else { acc })
 }
 
 pub(crate) fn maybe_capture_queue_nudge(
     root: &Path,
 ) -> Result<Option<String>, Flow> {
-    let pending = pending_capture_stub_ids(root);
-    if pending.is_empty() {
+    let stubs = pending_capture_stubs(root);
+    if stubs.is_empty() {
         return Ok(None);
     }
-    let mut ids = pending.clone();
+    let mut ids: Vec<String> =
+        stubs.iter().map(|s| js_to_string(s.get("id").unwrap_or(&Value::Null))).collect();
     ids.sort(); // JS default sort over string ids
     let hash = ids.join("|");
     if !should_inject(root, "capture-queue-nudge", &hash)? {
         return Ok(None);
     }
     mark_injected(root, "capture-queue-nudge", &hash)?;
+    let count = stubs.len();
+    // U3: past the configured threshold — count exceeds it, OR the oldest
+    // pending stub is older than the configured day count — the nudge
+    // escalates to overdue wording naming the breach. Never a hard block:
+    // this is still an advisory Stop message, same as the wording below.
+    let config = read_config_raw(root);
+    let threshold = capture_queue_threshold(&config);
+    let oldest_ms = oldest_pending_stub_at_ms(&stubs);
+    let oldest_age_days = if oldest_ms.is_nan() { None } else { Some((now_ms() - oldest_ms) / 86_400_000.0) };
+    let over_count = count as u64 > threshold.count;
+    let over_age = oldest_age_days.map(|d| d > threshold.days).unwrap_or(false);
+    if over_count || over_age {
+        let oldest_days = oldest_age_days.unwrap_or(0.0).max(0.0).floor() as u64;
+        return Ok(Some(format!(
+            "bee capture queue (decision 0017): OVERDUE — {count} stub(s) pending, oldest \
+{oldest_days} days — flush before new work. Flush them now via bee-capturing (drain \
+oldest-first, merge each into its area spec) — or they must survive into the next \
+session's preamble, never be dropped."
+        )));
+    }
     Ok(Some(format!(
-        "bee capture queue (decision 0017): {} settlement stub(s) are queued and \
+        "bee capture queue (decision 0017): {count} settlement stub(s) are queued and \
 unflushed. Flush them now via bee-capturing (drain oldest-first, merge each into its \
-area spec) — or they must survive into the next session's preamble, never be dropped.",
-        pending.len()
+area spec) — or they must survive into the next session's preamble, never be dropped."
     )))
 }
 
@@ -391,4 +425,103 @@ gate question. (If you genuinely need information only the human holds — not a
 rubber-stamp — ask that specific question instead; this net blocks once, then steps \
 aside.)"
     )))
+}
+
+// ─── tests: U3 capture-queue pressure escalation ───────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn queue_path(root: &Path) -> PathBuf {
+        root.join(".bee").join("capture-queue.jsonl")
+    }
+
+    fn write_queue(root: &Path, lines: &[String]) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(queue_path(root), format!("{}\n", lines.join("\n"))).unwrap();
+    }
+
+    fn stub(id: &str, at: &str) -> String {
+        format!(r#"{{"kind":"stub","id":"{id}","at":"{at}","outcome":"x"}}"#)
+    }
+
+    fn write_config(root: &Path, content: &str) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), content).unwrap();
+    }
+
+    /// Below the default threshold (5 stubs, 7 days): wording stays exactly
+    /// what it was before U3 — byte-identical, per the must_haves contract.
+    #[test]
+    fn under_threshold_wording_is_byte_identical_to_before() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_queue(root, &[stub("s1", &now_iso())]);
+        let msg = maybe_capture_queue_nudge(root).unwrap().unwrap();
+        assert_eq!(
+            msg,
+            "bee capture queue (decision 0017): 1 settlement stub(s) are queued and \
+unflushed. Flush them now via bee-capturing (drain oldest-first, merge each into its \
+area spec) — or they must survive into the next session's preamble, never be dropped."
+        );
+    }
+
+    #[test]
+    fn over_count_threshold_escalates_to_overdue_wording() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = now_iso();
+        let lines: Vec<String> = (0..6).map(|i| stub(&format!("s{i}"), &now)).collect();
+        write_queue(root, &lines);
+        let msg = maybe_capture_queue_nudge(root).unwrap().unwrap();
+        assert!(
+            msg.starts_with(
+                "bee capture queue (decision 0017): OVERDUE — 6 stub(s) pending, oldest 0 days — flush before new work."
+            ),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn over_age_threshold_escalates_even_under_count() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let old = ms_to_iso(now_ms() - 10.0 * 86_400_000.0).unwrap();
+        write_queue(root, &[stub("s1", &old)]);
+        let msg = maybe_capture_queue_nudge(root).unwrap().unwrap();
+        assert!(
+            msg.starts_with(
+                "bee capture queue (decision 0017): OVERDUE — 1 stub(s) pending, oldest 10 days — flush before new work."
+            ),
+            "{msg}"
+        );
+    }
+
+    #[test]
+    fn configured_threshold_overrides_the_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{"capture_queue_threshold":{"count":1,"days":30}}"#);
+        let now = now_iso();
+        write_queue(root, &[stub("s1", &now), stub("s2", &now)]);
+        let msg = maybe_capture_queue_nudge(root).unwrap().unwrap();
+        assert!(
+            msg.starts_with("bee capture queue (decision 0017): OVERDUE — 2 stub(s) pending"),
+            "{msg}"
+        );
+    }
+
+    /// A malformed threshold config falls back to the default (5, 7) — the
+    /// nudge itself never hard-blocks, just as a healthy config would keep
+    /// wording unescalated below the default.
+    #[test]
+    fn malformed_threshold_config_falls_back_to_default_and_never_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_config(root, r#"{"capture_queue_threshold":{"count":-1,"days":7}}"#);
+        write_queue(root, &[stub("s1", &now_iso())]);
+        let msg = maybe_capture_queue_nudge(root).unwrap().unwrap();
+        assert!(msg.starts_with("bee capture queue (decision 0017): 1 settlement stub(s)"), "{msg}");
+    }
 }
