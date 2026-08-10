@@ -173,13 +173,55 @@ use std::time::Instant;
         }
     }
 
-    /// The same rule when the WORKTREE's own `.bee/cells` already holds a
-    /// wholesale checkout of every feature's cells (`git worktree add`
+    /// Tiny git helpers for the ips-1 tracked-ness fixtures below — no
+    /// `bee` CLI involved, just enough `git` to give `sync_worktree_cells`'s
+    /// `git ls-files` a real index to consult.
+    fn git_init(dir: &Path) {
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success());
+    }
+
+    fn git_add_commit(dir: &Path, paths: &[&str]) {
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .arg("add")
+            .args(paths)
+            .status()
+            .unwrap()
+            .success());
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "user.email=bee@example.com",
+                "-c",
+                "user.name=bee",
+                "commit",
+                "-q",
+                "-m",
+                "fixture"
+            ])
+            .status()
+            .unwrap()
+            .success());
+    }
+
+    /// ips-1 P1 fix, case (a): the WORKTREE's own `.bee/cells` already holds
+    /// a wholesale checkout of every feature's cells (`git worktree add`
     /// checks out `.bee/cells` in full because it's git-tracked) — this is
-    /// the actual production bug shape, not just an absent-and-filled one:
-    /// bootstrap must prune the foreign cell that was already sitting there.
+    /// the actual production bug shape, not just an absent-and-filled one.
+    /// A TRACKED foreign-feature cell (main's committed history riding along
+    /// in this checkout) must survive the prune; only an UNTRACKED foreign
+    /// stray is removed.
     #[test]
-    fn bootstrap_prunes_foreign_cells_already_checked_out_in_the_worktree() {
+    fn bootstrap_prunes_only_untracked_foreign_cells_already_checked_out_in_the_worktree() {
         let tmp = tempfile::tempdir().unwrap();
         let main_store = tmp.path().join("main").join(".bee");
         std::fs::create_dir_all(main_store.join("cells")).unwrap();
@@ -189,18 +231,129 @@ use std::time::Instant;
         std::fs::create_dir_all(&wt_cells).unwrap();
         std::fs::write(wt_cells.join("a-1.json"), "{\"id\":\"a-1\",\"feature\":\"a\",\"status\":\"open\"}")
             .unwrap();
+        // A foreign cell that IS tracked — checked out by `git worktree add`,
+        // never staged for deletion.
         std::fs::write(wt_cells.join("b-1.json"), "{\"id\":\"b-1\",\"feature\":\"b\",\"status\":\"open\"}")
             .unwrap();
         let wt_archive_b = wt_cells.join("archive").join("b");
         std::fs::create_dir_all(&wt_archive_b).unwrap();
         std::fs::write(wt_archive_b.join("b-0.json"), "{\"id\":\"b-0\",\"feature\":\"b\",\"status\":\"capped\"}")
             .unwrap();
+        git_init(&wt);
+        git_add_commit(&wt, &[".bee/cells/b-1.json", ".bee/cells/archive/b/b-0.json"]);
+
+        // A foreign cell that is NOT tracked — never committed, a plain
+        // stray sitting next to the tracked ones. Written after the commit
+        // so `git ls-files` never saw it.
+        std::fs::write(wt_cells.join("c-1.json"), "{\"id\":\"c-1\",\"feature\":\"c\",\"status\":\"open\"}")
+            .unwrap();
+        let wt_archive_c = wt_cells.join("archive").join("c");
+        std::fs::create_dir_all(&wt_archive_c).unwrap();
+        std::fs::write(wt_archive_c.join("c-0.json"), "{\"id\":\"c-0\",\"feature\":\"c\",\"status\":\"capped\"}")
+            .unwrap();
 
         bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
 
         assert!(wt_cells.join("a-1.json").exists(), "the granted feature's already-checked-out cell stays");
-        assert!(!wt_cells.join("b-1.json").exists(), "a foreign already-checked-out cell is pruned");
-        assert!(!wt_cells.join("archive").join("b").exists(), "a foreign already-checked-out archive dir is pruned");
+        assert!(wt_cells.join("b-1.json").exists(), "a TRACKED foreign cell stays — it is main's history");
+        assert!(
+            wt_cells.join("archive").join("b").join("b-0.json").exists(),
+            "a TRACKED foreign archive file stays"
+        );
+        assert!(!wt_cells.join("c-1.json").exists(), "an UNTRACKED foreign cell is still pruned");
+        assert!(
+            !wt_cells.join("archive").join("c").exists(),
+            "an UNTRACKED foreign archive dir is still pruned"
+        );
+    }
+
+    /// ips-1 P1 pin: the exact failure mode caught pre-merge — a fresh
+    /// island bootstrapped from a real `git worktree add` checkout must
+    /// leave `git status --porcelain` EMPTY. Before this fix, the prune arm
+    /// deleted the foreign feature's tracked `.bee/cells` files unconditionally,
+    /// manufacturing tracked deletions that a later `worktree merge` would
+    /// replay onto main and wipe the cell archive.
+    #[test]
+    fn bootstrap_from_a_real_worktree_checkout_leaves_git_status_clean() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        git_init(&main);
+        // Runtime-only bee paths are gitignored in the real repo too — same
+        // shape here so bootstrap's OWN writes (state.json, the creation
+        // identity under runtime/) don't show up as untracked noise and
+        // mask the deletion this test exists to catch.
+        std::fs::write(main.join(".gitignore"), ".bee/state.json\n.bee/runtime/\n").unwrap();
+
+        let main_cells = main.join(".bee").join("cells");
+        std::fs::create_dir_all(main_cells.join("archive").join("b")).unwrap();
+        std::fs::write(main_cells.join("a-1.json"), "{\"id\":\"a-1\",\"feature\":\"a\",\"status\":\"open\"}")
+            .unwrap();
+        std::fs::write(main_cells.join("b-1.json"), "{\"id\":\"b-1\",\"feature\":\"b\",\"status\":\"open\"}")
+            .unwrap();
+        std::fs::write(
+            main_cells.join("archive").join("b").join("b-0.json"),
+            "{\"id\":\"b-0\",\"feature\":\"b\",\"status\":\"capped\"}",
+        )
+        .unwrap();
+        git_add_commit(&main, &["."]);
+
+        let wt = tmp.path().join("wt-a");
+        assert!(std::process::Command::new("git")
+            .arg("-C")
+            .arg(&main)
+            .args(["worktree", "add", "-q", "-b", "wt-a-branch"])
+            .arg(&wt)
+            .status()
+            .unwrap()
+            .success());
+
+        let main_store = main.join(".bee");
+        bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
+
+        let wt_cells = wt.join(".bee").join("cells");
+        assert!(wt_cells.join("a-1.json").exists(), "granted feature's cell stays");
+        assert!(wt_cells.join("b-1.json").exists(), "tracked foreign cell survives the prune");
+        assert!(
+            wt_cells.join("archive").join("b").join("b-0.json").exists(),
+            "tracked foreign archive file survives the prune"
+        );
+
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&wt)
+            .args(["status", "--porcelain"])
+            .output()
+            .unwrap();
+        assert!(status.status.success());
+        assert!(
+            status.stdout.is_empty(),
+            "bootstrap must manufacture zero git changes in the island, got: {}",
+            String::from_utf8_lossy(&status.stdout)
+        );
+    }
+
+    /// git unavailable / not a repo: the prune arm fails safe and deletes
+    /// nothing, foreign or not — the fill arm and the zero-cells case are
+    /// untouched by this switch (they never asked git anything).
+    #[test]
+    fn bootstrap_prune_fails_safe_when_worktree_root_is_not_a_git_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = tmp.path().join("main").join(".bee");
+        std::fs::create_dir_all(main_store.join("cells")).unwrap();
+
+        let wt = tmp.path().join("wt-a"); // deliberately never `git init`-ed
+        let wt_cells = wt.join(".bee").join("cells");
+        std::fs::create_dir_all(&wt_cells).unwrap();
+        std::fs::write(wt_cells.join("b-1.json"), "{\"id\":\"b-1\",\"feature\":\"b\",\"status\":\"open\"}")
+            .unwrap();
+
+        bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
+
+        assert!(
+            wt_cells.join("b-1.json").exists(),
+            "git unavailable/not-a-repo fails safe — nothing is pruned"
+        );
     }
 
     /// A feature with zero cells in the main store bootstraps a clean, empty

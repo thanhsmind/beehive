@@ -11,9 +11,10 @@ use crate::verbs::workspace_store as ws;
 use crate::verbs::{emit_no_root_error, record_timing};
 use crate::{jsjson, lock};
 use serde_json::{json, Map, Value};
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 use std::time::Instant;
 
 // ─── emission frame (bee.mjs emit/emitError + the direct-run timing) ───────
@@ -420,14 +421,55 @@ fn cell_file_feature_matches(path: &Path, feature: &str) -> bool {
     matches!(parsed.get("feature"), Some(Value::String(f)) if f == feature)
 }
 
-/// PBI p-9c48a67c: restrict the worktree island's `.bee/cells` to the
+/// ips-1 P1: the tracked set behind the prune arm's safety check. `git
+/// worktree add` legitimately checks out every tracked file under
+/// `.bee/cells` — that directory is git-tracked — so a foreign-feature file
+/// already sitting in a fresh island is not a stray, it's main's committed
+/// history riding along. Deleting a TRACKED file manufactures a deletion
+/// that a later `worktree merge` would replay onto main and wipe the cell
+/// archive; only an UNTRACKED stray (never committed, e.g. a main-store cell
+/// written after this checkout was cut) is safe to remove.
+///
+/// One invocation covers both `cells/*.json` and `cells/archive/**` — the
+/// pathspec is a directory. `None` means git is unavailable or `worktree_root`
+/// is not (yet) a git repo; the caller's response is fail-safe: prune
+/// nothing. Paths come back forward-slash-relative to `.bee/cells/` (git
+/// always emits `/`, regardless of OS), matching the manual `/`-joined keys
+/// built at the call sites below.
+fn git_tracked_cells(worktree_root: &Path) -> Option<HashSet<String>> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(worktree_root)
+        .args(["ls-files", "-z", "--", ".bee/cells"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let mut set = HashSet::new();
+    for raw in output.stdout.split(|&b| b == 0) {
+        if raw.is_empty() {
+            continue;
+        }
+        let rel = String::from_utf8_lossy(raw);
+        if let Some(stripped) = rel.strip_prefix(".bee/cells/") {
+            set.insert(stripped.to_string());
+        }
+    }
+    Some(set)
+}
+
+/// PBI p-9c48a67c + ips-1: restrict the worktree island's `.bee/cells` to the
 /// granted feature's cells only. `git worktree add` checks out `.bee/cells`
 /// in FULL — it is git-tracked — so a freshly created worktree can already
 /// hold every OTHER feature's open cells before this function ever runs;
 /// pruning has to run unconditionally, not just "copy whatever's missing".
 /// Two passes, main store read-only throughout:
-///   1. PRUNE — drop any cell file (or `archive/<feature>` dir) already
-///      sitting in the worktree store whose feature is not the granted one.
+///   1. PRUNE — drop any UNTRACKED foreign-feature cell file (or the
+///      untracked leftovers of an `archive/<feature>` dir) already sitting
+///      in the worktree store. A TRACKED foreign-feature file stays on disk
+///      untouched (see `git_tracked_cells`); git unavailable fails safe —
+///      prune nothing.
 ///   2. FILL — copy in the main store's matching-feature cells that are not
 ///      already present (a from-scratch `worktree register` adopting a bare
 ///      checkout, or a main-store cell not yet committed to git).
@@ -438,18 +480,27 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
     let dest_cells = worktree_store_root.join(CELLS_DIR_NAME);
     std::fs::create_dir_all(&dest_cells).ok()?;
 
-    // (1) prune top-level cell files that are not the granted feature's.
-    if let Ok(entries) = std::fs::read_dir(&dest_cells) {
-        for entry in entries.filter_map(|e| e.ok()) {
-            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                continue; // archive/ handled in pass (3) below
-            }
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if !name.ends_with(".json") {
-                continue;
-            }
-            let path = entry.path();
-            if !cell_file_feature_matches(&path, feature) {
+    let tracked = worktree_store_root.parent().and_then(git_tracked_cells);
+
+    // (1) prune top-level cell files that are not the granted feature's,
+    // and are not tracked — a tracked foreign-feature file is left alone.
+    if let Some(tracked) = &tracked {
+        if let Ok(entries) = std::fs::read_dir(&dest_cells) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    continue; // archive/ handled in pass (3) below
+                }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if !name.ends_with(".json") {
+                    continue;
+                }
+                let path = entry.path();
+                if cell_file_feature_matches(&path, feature) {
+                    continue;
+                }
+                if tracked.contains(&name) {
+                    continue; // tracked foreign cell — main's history, stays
+                }
                 std::fs::remove_file(&path).ok()?;
             }
         }
@@ -479,16 +530,40 @@ fn sync_worktree_cells(worktree_store_root: &Path, main_store_root: &Path, featu
     }
 
     // (3) archive: already partitioned by feature-name subdirectory — prune
-    // every OTHER feature's subdir, then fill in the granted feature's.
+    // every OTHER feature's subdir down to its tracked files, then fill in
+    // the granted feature's. A tracked file inside a foreign dir stays; only
+    // when nothing tracked is left does the now-empty dir itself go.
     let dest_archive = dest_cells.join(CELLS_ARCHIVE_DIR_NAME);
-    if let Ok(entries) = std::fs::read_dir(&dest_archive) {
-        for entry in entries.filter_map(|e| e.ok()) {
-            if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-                continue; // e.g. archive/summary.json is feature-neutral
-            }
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if name != feature {
-                std::fs::remove_dir_all(entry.path()).ok()?;
+    if let Some(tracked) = &tracked {
+        if let Ok(entries) = std::fs::read_dir(&dest_archive) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                    continue; // e.g. archive/summary.json is feature-neutral
+                }
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name == feature {
+                    continue;
+                }
+                let dir_path = entry.path();
+                if let Ok(inner) = std::fs::read_dir(&dir_path) {
+                    for file in inner.filter_map(|e| e.ok()) {
+                        if file.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                            continue; // no nested dirs in a feature's archive
+                        }
+                        let file_name = file.file_name().to_string_lossy().into_owned();
+                        let rel = format!("{CELLS_ARCHIVE_DIR_NAME}/{name}/{file_name}");
+                        if tracked.contains(&rel) {
+                            continue; // tracked foreign archive file — stays
+                        }
+                        std::fs::remove_file(file.path()).ok()?;
+                    }
+                }
+                let now_empty = std::fs::read_dir(&dir_path)
+                    .map(|mut it| it.next().is_none())
+                    .unwrap_or(false);
+                if now_empty {
+                    std::fs::remove_dir(&dir_path).ok()?;
+                }
             }
         }
     }
