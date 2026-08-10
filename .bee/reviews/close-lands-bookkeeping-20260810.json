@@ -1,0 +1,115 @@
+{
+  "id": "close-lands-bookkeeping-20260810",
+  "requested_by": "user",
+  "requested_at": "2026-08-10T13:51:36.898Z",
+  "scope_description": "Feature close-lands-bookkeeping: bee close auto-commits its own tracked .bee bookkeeping (path-scoped) after a green close — cell clb-1 plus its spec capture (gates.md R81).",
+  "included": [
+    {
+      "type": "cell",
+      "id": "clb-1",
+      "reason": "The one capped behavior cell; suite green at finish (1437 passed)."
+    },
+    {
+      "type": "commit",
+      "id": "d550d661",
+      "reason": "Cell implementation commit (close.rs + registry_payload.json)."
+    },
+    {
+      "type": "commit",
+      "id": "d1076c9d",
+      "reason": "Spec capture: gates.md R81."
+    }
+  ],
+  "excluded": [
+    {
+      "type": "commit",
+      "id": "ac0eaca0",
+      "reason": "Capture batch for other features — separate work, reviewed content only restates already-shipped behavior."
+    }
+  ],
+  "baseline": "32f77e09",
+  "head": "ac0eaca0",
+  "reviewer_manifest": [],
+  "verification_preflight": {
+    "checked_at": "2026-08-10T13:51:36.898Z",
+    "cells_checked": [],
+    "passed": true
+  },
+  "findings": [
+    {
+      "findings": [
+        {
+          "severity": "P2",
+          "id": "P2-1",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1243-1266",
+          "summary": "Failed bookkeeping commit leaves .bee staged in the user's index, unreported — a later user commit (e.g. merge resolution) silently carries bee's changes",
+          "evidence": "repro: merge-in-progress -> add ok, partial commit refused exit 128, index left staged"
+        },
+        {
+          "severity": "P2",
+          "id": "P2-2",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1165-1168",
+          "summary": "git_failed reason and warning line can be empty when the failing hook prints nothing",
+          "evidence": "pre-commit hook exit 1 with silent streams -> reason 'git_failed:' and warning line with trailing colon"
+        },
+        {
+          "severity": "P2",
+          "id": "P2-3",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1209-1213",
+          "summary": "Non-boolean close_commit_bookkeeping silently reads as config_off — R81 and the cited precedent demand a loud refusal; a test pins the wrong behavior",
+          "evidence": "string 'true' -> silent config_off, .bee stays dirty with no signal"
+        },
+        {
+          "severity": "P2",
+          "id": "P2-4",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1555-1727",
+          "summary": "No test covers the git_failed branch, the warning-line render, or reason clean — the whole user-visible failure surface is unpinned",
+          "evidence": "6 tests cover committed/config_off/not_a_repo/absence only"
+        },
+        {
+          "severity": "P3",
+          "id": "P3-1",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1151-1160",
+          "summary": "commit runs without --no-gpg-sign or timeout; gpgsign+pinentry repo can hang close (fixture defends itself, prod path does not)"
+        },
+        {
+          "severity": "P3",
+          "id": "P3-2",
+          "file": "docs/knowledge/areas/workflow-state/gates.md",
+          "summary": "R81 says GREEN close; an undeclared-tests close also auto-commits — spec under-describes"
+        },
+        {
+          "severity": "P3",
+          "id": "P3-3",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1218-1226",
+          "summary": "Linked-worktree .git-file branch proven by hand, not by the suite"
+        },
+        {
+          "severity": "P3",
+          "id": "P3-4",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1714-1727",
+          "summary": "not_a_repo test is TMPDIR-dependent; under a git-owned TMPDIR it would stage into a real repo — set GIT_CEILING_DIRECTORIES"
+        },
+        {
+          "severity": "P3",
+          "id": "P3-5",
+          "file": ".bee/cells/archive/close-lands-bookkeeping/clb-1.json",
+          "summary": "change_class behavior but trace.behavior_change false — scribing-debt door never armed (capture landed anyway, mechanism bypassed not satisfied)"
+        },
+        {
+          "severity": "P3",
+          "id": "P3-6",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1243-1256",
+          "summary": ".bee-wide sweep commits a concurrent session's in-flight store dirt under this feature's message — chosen cost, now named"
+        }
+      ]
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "pending",
+    "review": null
+  },
+  "created_at": "2026-08-10T13:51:36.898Z",
+  "updated_at": "2026-08-10T14:01:20.435Z"
+}
