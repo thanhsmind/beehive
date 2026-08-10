@@ -12,6 +12,7 @@ bee:
   sources: ["cli-surface-in-context wave, 2026-08-06: cell csc-1's commit 7fc5439b carried 133 deleted lines of router.rs — sibling cell csc-4's in-progress edit — and needed corrective commit f94f262a to restore it", "the guard's own refusal text: a path-scoped commit is named as the sanctioned escape"]
   polarity: pitfall
   critical: true
+  signature: path-scoped-commit-named-a-sibling-owned-file
 ---
 
 # A guard on the shared index does not stop a path-scoped commit naming someone else's file

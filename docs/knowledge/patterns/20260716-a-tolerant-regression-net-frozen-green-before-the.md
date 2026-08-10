@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT2", "original feature: worktree-feature-parallelism"]
   polarity: practice
-  critical: true
+  critical: false
 ---
 
 # A tolerant regression net, frozen green BEFORE the edit, is what makes a load-bearing function safe to change

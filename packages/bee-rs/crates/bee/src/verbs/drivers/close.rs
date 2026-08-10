@@ -4,20 +4,21 @@
 #![allow(unused_imports)]
 
 use super::*;
-use crate::fsutil::{ensure_dir, read_json, write_json_atomic, write_text_atomic, ReadJson};
+use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, write_text_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
-use crate::state::read_config_raw;
+use crate::state::{capture_queue_threshold, read_config_raw};
 use crate::textutil::truncate_chars_tail;
 use crate::verbs::reservations::{
-    finish, js_is_ws, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
+    finish, js_is_ws, now_iso, now_ms, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::{emit_no_root_error, emit_unsupported_root};
 use crate::verbs::reservations::{
     release_reservations_for_agent, reserve_path_atomic, Err2, ReserveOutcome,
 };
+use crate::verbs::knowledge::{bee_of, collect_concepts, str_array, str_field, touches_subject};
 use serde_json::{json, Map, Number, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -368,9 +369,11 @@ pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
 }
 
 /// provenance: capture.mjs pendingCaptureStubs + captureQueue
-/// (verbs/status_full.rs:2382) — only the COUNT reaches close's door text, so
-/// pendingCaptureStubs' localeCompare sort cannot affect an emitted byte.
-pub(crate) fn capture_queue_count(root: &Path) -> usize {
+/// (verbs/status_full.rs:2382) — only the COUNT used to reach close's door
+/// text (localeCompare sort therefore never mattered); U3 (docs/history/
+/// knowledge-usable/CONTEXT.md) also needs the oldest pending stub's age,
+/// so both ride the one read below.
+pub(crate) fn capture_queue_pending(root: &Path) -> (usize, f64) {
     let events = read_jsonl(&root.join(".bee").join("capture-queue.jsonl"));
     let mut flushed: Vec<Value> = Vec::new();
     let mut stubs: Vec<&Value> = Vec::new();
@@ -389,10 +392,59 @@ pub(crate) fn capture_queue_count(root: &Path) -> usize {
             stubs.push(event);
         }
     }
-    stubs
-        .into_iter()
+    let pending: Vec<&&Value> = stubs
+        .iter()
         .filter(|s| !flushed.iter().any(|f| strict_eq(Some(f), vget(s, "id"))))
-        .count()
+        .collect();
+    let oldest_ms = pending
+        .iter()
+        .map(|s| date_parse(vget(s, "at")))
+        .filter(|ms| ms.is_finite())
+        .fold(f64::NAN, |acc, ms| if acc.is_nan() || ms < acc { ms } else { acc });
+    (pending.len(), oldest_ms)
+}
+
+/// U4 (docs/history/knowledge-usable/CONTEXT.md): the proposal's dominant
+/// area — the `area_updates` entry with the most attributed bullets, ties
+/// keeping the proposal's own order — names the stub's `area` field. `None`
+/// when the proposal named no area at all (D19: a work item with no
+/// `bee.areas` and no scribing stamp).
+pub(crate) fn dominant_promote_area(proposal: &Value) -> Option<String> {
+    proposal["area_updates"]
+        .as_array()?
+        .iter()
+        .max_by_key(|u| u["bullets"].as_array().map(Vec::len).unwrap_or(0))
+        .and_then(|u| u["area"].as_str())
+        .map(str::to_string)
+}
+
+/// U4: once close writes `promote-proposals.md`, it ALSO appends one
+/// capture-queue stub pointing at it — the queue is the living channel a
+/// proposal reaches flush through (the 22 dead files under
+/// docs/history/*/promote-proposals.md proved the standalone file is
+/// write-only); the file itself keeps being written unchanged (audit trail,
+/// D38). Same stub shape `capture add` writes (verbs/capture.rs run_add) so
+/// `bee capture list`/flush treat it identically to a hand-added one.
+/// Best-effort: an append failure here never fails close — the proposal file
+/// itself is still the durable record.
+pub(crate) fn enqueue_promote_stub(root: &Path, feature: &str, proposal: &Value, proposals_rel: &str) {
+    let mut stub = Map::new();
+    stub.insert("kind".into(), Value::String("stub".into()));
+    stub.insert("id".into(), Value::String(pseudo_uuid_v4()));
+    stub.insert("at".into(), Value::String(now_iso()));
+    stub.insert(
+        "outcome".into(),
+        Value::String(format!("Promote proposal for \"{feature}\" — {proposals_rel}")),
+    );
+    stub.insert("dids".into(), Value::Array(Vec::new()));
+    stub.insert(
+        "area".into(),
+        dominant_promote_area(proposal).map(Value::String).unwrap_or(Value::Null),
+    );
+    stub.insert("files".into(), Value::Array(vec![Value::String(proposals_rel.to_string())]));
+    stub.insert("lane".into(), Value::Null);
+    stub.insert("source".into(), Value::String("promote".into()));
+    let _ = append_jsonl(&root.join(".bee").join("capture-queue.jsonl"), &Value::Object(stub));
 }
 
 /// D1 escape hatch: a logged decision tagged `capture-deferral` whose
@@ -440,6 +492,30 @@ impl Door {
     }
 }
 
+/// U3 (docs/history/knowledge-usable/CONTEXT.md): past the configured
+/// `capture_queue_threshold` — the pending count exceeds it, OR the oldest
+/// pending stub is older than the configured day count — the capture-queue
+/// door's detail escalates to name the breach. The door stays report-only
+/// (`blocking: false`, decision c8e25271's deferral, untouched by U3) either
+/// way; only the wording changes.
+pub(crate) fn capture_queue_door_detail(root: &Path, queue: usize, oldest_ms: f64) -> String {
+    if queue == 0 {
+        return "clear".to_string();
+    }
+    let config = read_config_raw(root);
+    let threshold = capture_queue_threshold(&config);
+    let oldest_age_days = if oldest_ms.is_nan() { None } else { Some((now_ms() - oldest_ms) / 86_400_000.0) };
+    let over_count = queue as u64 > threshold.count;
+    let over_age = oldest_age_days.map(|d| d > threshold.days).unwrap_or(false);
+    if over_count || over_age {
+        let oldest_days = oldest_age_days.unwrap_or(0.0).max(0.0).floor() as u64;
+        return format!(
+            "OVERDUE — {queue} stub(s) pending, oldest {oldest_days} days — flush before new work; settle via bee-capturing"
+        );
+    }
+    format!("pending — {queue} capture stub(s) awaiting flush; settle later via bee-capturing")
+}
+
 /// provenance: bee.mjs buildCloseReportDoors, extended by D1 — the
 /// capture-queue door stays report-only (decision c8e25271's blanket
 /// deferral, untouched here), but the scribing-debt door now BLOCKS close
@@ -474,18 +550,178 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
         },
         command: if scribing_blocking { Some("bee-capturing") } else { None },
     });
-    let queue = capture_queue_count(root);
+    let (queue, oldest_ms) = capture_queue_pending(root);
     doors.push(Door {
         door: "capture-queue",
         blocking: false,
-        detail: if queue > 0 {
-            format!("pending — {queue} capture stub(s) awaiting flush; settle later via bee-capturing")
-        } else {
-            "clear".to_string()
-        },
+        detail: capture_queue_door_detail(root, queue, oldest_ms),
         command: None,
     });
     Ok(doors)
+}
+
+// ── U7: close-time pattern-check door ───────────────────────────────────────
+//
+// docs/history/knowledge-usable/CONTEXT.md U7 (PBI p-21583c96): a report-only
+// door that maps the feature's capped cells' touched files to the bundle
+// areas they reach — the SAME per-file `touches_subject` match promote.rs's
+// own area-update section already applies (decision b032be35: a concept's
+// own bundle path plus its recorded `bee.sources`), just unscoped to any one
+// work item — then lists the `bee.critical: true` patterns (ku-6's re-graded
+// pool, docs/knowledge/areas/okf-profile/critical-bar.md) tagged with any of
+// those areas. Smallest transport `bee close` already supports: one new
+// value flag, `--pattern-verdicts=<pattern-id>:<verdict>[,<pattern-id>:
+// <verdict>...]` (verdict one of violated/respected/not-applicable) — never
+// a new answers-file format. A pattern with no matching verdict reports
+// `pending` in the detail line and never blocks; a recorded `violated`
+// blocks close exactly like a red test, naming the pattern.
+pub(crate) const CLOSE_PATTERN_VIOLATED_PREFIX: &str = "Pattern violated for";
+
+pub(crate) const PATTERN_VERDICT_WORDS: [&str; 3] = ["violated", "respected", "not-applicable"];
+
+/// Parses `--pattern-verdicts`' whole value in one pass. A pair with no `:`,
+/// an empty id, or a word outside `PATTERN_VERDICT_WORDS` is silently
+/// dropped — that pattern reports `pending`, same as one never mentioned at
+/// all; malformed input never fails close (the door is report-only until a
+/// `violated` verdict is actually recorded).
+pub(crate) fn parse_pattern_verdicts(raw: &str) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    for pair in raw.split(',') {
+        let pair = js_trim(pair);
+        let Some(idx) = pair.find(':') else { continue };
+        let id = js_trim(&pair[..idx]);
+        let verdict = js_trim(&pair[idx + 1..]).to_lowercase();
+        if id.is_empty() || !PATTERN_VERDICT_WORDS.contains(&verdict.as_str()) {
+            continue;
+        }
+        out.insert(id.to_string(), verdict);
+    }
+    out
+}
+
+/// The feature's touched files: `files_changed` off every capped cell (live
+/// store + archive — the same read `scribing_debt` above uses), deduped,
+/// insertion order.
+pub(crate) fn feature_touched_files(root: &Path, feature: &str) -> D<Vec<String>> {
+    let mut files: Vec<String> = Vec::new();
+    for cell in list_cells_including_archive(root, feature, "capped")? {
+        let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
+        if let Some(Value::Array(items)) = vget(&trace, "files_changed") {
+            for item in items {
+                if let Value::String(s) = item {
+                    if !files.contains(s) {
+                        files.push(s.clone());
+                    }
+                }
+            }
+        }
+    }
+    Ok(files)
+}
+
+/// Bundle areas the touched files reach. A concept with no `bee.sources`
+/// naming a code path (most area concepts, per this very corpus's own
+/// pattern `20260805-a-derived-field-empty-for-a-whole-class-of-inputs...`)
+/// simply never matches on files alone — the door degrades to `clear`
+/// rather than to a wrong answer.
+pub(crate) fn touched_bundle_areas(dir: &Path, touched_files: &[String]) -> Vec<String> {
+    let Some(concepts) = collect_concepts(dir) else { return Vec::new() };
+    let mut areas: Vec<String> = Vec::new();
+    for concept in &concepts {
+        let bee = bee_of(&concept.data);
+        let concept_areas = str_array(&bee, "areas");
+        if concept_areas.is_empty() {
+            continue;
+        }
+        let mut subjects: Vec<String> = vec![format!("docs/knowledge/{}", concept.path)];
+        subjects.extend(str_array(&bee, "sources").into_iter().filter(|s| !s.is_empty()));
+        let touched = touched_files.iter().any(|f| subjects.iter().any(|s| touches_subject(f, s)));
+        if !touched {
+            continue;
+        }
+        for a in concept_areas {
+            if !areas.contains(&a) {
+                areas.push(a);
+            }
+        }
+    }
+    areas
+}
+
+pub(crate) struct CriticalPattern {
+    pub(crate) id: String,
+    pub(crate) title: String,
+}
+
+/// Every `bee.critical: true` concept tagged with at least one of `areas` —
+/// the same predicate `bee knowledge index`'s "Critical patterns" section
+/// applies (verbs/knowledge/index.rs), scoped down to the touched areas.
+pub(crate) fn critical_patterns_for_areas(dir: &Path, areas: &[String]) -> Vec<CriticalPattern> {
+    let Some(concepts) = collect_concepts(dir) else { return Vec::new() };
+    let mut out: Vec<CriticalPattern> = concepts
+        .iter()
+        .filter(|c| {
+            let bee = bee_of(&c.data);
+            matches!(bee.get("critical"), Some(Value::Bool(true)))
+                && str_array(&bee, "areas").iter().any(|a| areas.contains(a))
+        })
+        .map(|c| {
+            let bee = bee_of(&c.data);
+            let id = bee.get("id").and_then(Value::as_str).unwrap_or(&c.path).to_string();
+            let title = str_field(&c.data, "title").unwrap_or(&c.path).to_string();
+            CriticalPattern { id, title }
+        })
+        .collect();
+    out.sort_by(|a, b| a.id.cmp(&b.id));
+    out
+}
+
+/// U7's door itself: `blocking` is true the moment ANY matched pattern's
+/// verdict is `violated` — the one condition that stops close "exactly like
+/// a red test" (CONTEXT.md U7). `respected`/`not-applicable` pass silently;
+/// an unanswered pattern reports `pending` in the detail line and never
+/// blocks. No bundle, no touched files, no touched area, or no critical
+/// pattern in a touched area all collapse to the same `clear` report — the
+/// door has nothing to ask for.
+pub(crate) fn build_pattern_check_door(root: &Path, feature: &str, verdicts: &HashMap<String, String>) -> D<Door> {
+    if !crate::hooks::session_preamble::bundle_mode(root) {
+        return Ok(Door { door: "pattern-check", blocking: false, detail: "clear".to_string(), command: None });
+    }
+    let Some(dir) = crate::verbs::knowledge::bundle_dir(root) else {
+        return Ok(Door { door: "pattern-check", blocking: false, detail: "clear".to_string(), command: None });
+    };
+    let touched_files = feature_touched_files(root, feature)?;
+    let touched_areas = touched_bundle_areas(&dir, &touched_files);
+    let patterns = critical_patterns_for_areas(&dir, &touched_areas);
+    if patterns.is_empty() {
+        return Ok(Door { door: "pattern-check", blocking: false, detail: "clear".to_string(), command: None });
+    }
+    let mut rows: Vec<String> = Vec::new();
+    let mut violated: Vec<String> = Vec::new();
+    let mut pending = false;
+    for p in &patterns {
+        let verdict = verdicts.get(&p.id).cloned().unwrap_or_else(|| "pending".to_string());
+        if verdict == "violated" {
+            violated.push(format!("{} ({})", p.id, p.title));
+        }
+        if verdict == "pending" {
+            pending = true;
+        }
+        rows.push(format!("{}={verdict}", p.id));
+    }
+    let mut detail = format!(
+        "{} critical pattern(s) in touched area(s) [{}]: {}",
+        patterns.len(),
+        touched_areas.join(", "),
+        rows.join(", ")
+    );
+    if pending {
+        detail.push_str(
+            " — unanswered pattern(s) report pending; supply a verdict via \
+             --pattern-verdicts=<pattern-id>:<violated|respected|not-applicable>[,<pattern-id>:<verdict>...]",
+        );
+    }
+    Ok(Door { door: "pattern-check", blocking: !violated.is_empty(), detail, command: None })
 }
 
 /// JS Array.prototype.join (null/undefined render empty).
@@ -530,6 +766,7 @@ pub(crate) fn close_handler(
     dry_run: bool,
     declared: Option<Vec<String>>,
     shell: Option<&'static str>,
+    pattern_verdicts: &HashMap<String, String>,
 ) -> D<Out> {
     if dry_run {
         let mut doors = vec![Door {
@@ -545,6 +782,7 @@ pub(crate) fn close_handler(
             command: if declared.is_some() { Some("bee test") } else { None },
         }];
         doors.extend(build_close_report_doors(root, feature)?);
+        doors.push(build_pattern_check_door(root, feature, pattern_verdicts)?);
         let next_line = match &declared {
             Some(_) => format!("next: bee close --feature {feature} — runs the declared tests and reports"),
             None => format!(
@@ -575,6 +813,7 @@ pub(crate) fn close_handler(
         return Ok(Out::Thrown(msg.clone()));
     }
     let report_doors = build_close_report_doors(root, feature)?;
+    let pattern_door = build_pattern_check_door(root, feature, pattern_verdicts)?;
 
     if !run.undeclared && !run.green {
         let failing: Vec<&CommandResult> =
@@ -591,6 +830,7 @@ pub(crate) fn close_handler(
             command: Some("bee test"),
         }];
         doors.extend(report_doors);
+        doors.push(pattern_door);
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
@@ -655,6 +895,7 @@ pub(crate) fn close_handler(
         .unwrap_or_default();
     let mut doors = vec![tests_door];
     doors.extend(report_doors);
+    doors.push(pattern_door);
 
     // ── D1: refuse on uncaptured behavior_change cells ──────────────────────
     //
@@ -679,6 +920,32 @@ pub(crate) fn close_handler(
             ),
             format!("remedy: run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"{feature}\" to defer it."),
             format!("next: settle the capture debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // ── U7: refuse on a recorded `violated` pattern verdict ─────────────────
+    //
+    // Runs only here — tests GREEN (or undeclared) and past the D1 refusal
+    // above — same "stops close exactly like a red test" placement the
+    // scribing-debt door already established for its own blocking arm.
+    if doors.iter().any(|d| d.door == "pattern-check" && d.blocking) {
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
+        result.insert("tests".into(), tests_result_value(&run));
+        let pattern_detail = doors
+            .iter()
+            .find(|d| d.door == "pattern-check")
+            .map(|d| d.detail.clone())
+            .unwrap_or_default();
+        let lines = vec![
+            format!(
+                "{CLOSE_PATTERN_VIOLATED_PREFIX} \"{feature}\" — close stops at the pattern-check door: {pattern_detail}"
+            ),
+            "remedy: fix the violated pattern's finding, or re-run with a corrected --pattern-verdicts if it is a false positive.".to_string(),
+            format!("next: settle the violated pattern(s) above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
@@ -776,6 +1043,7 @@ pub(crate) fn close_handler(
             let text = crate::verbs::knowledge::promote_text(&proposal);
             match write_text_atomic(&root.join(&proposals_rel), &text) {
                 Ok(()) => {
+                    enqueue_promote_stub(root, feature, &proposal, &proposals_rel);
                     let cells_mined = proposal["cells"].as_array().map(Vec::len).unwrap_or(0);
                     let area_bullets: usize = proposal["area_updates"]
                         .as_array()
@@ -848,7 +1116,7 @@ fn auto_archive_on_close(root: &Path, feature: &str) -> Retirement {
 }
 
 pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !crate::verbs::reservations::keys_known(&flags, &["feature", "dry-run"]) {
+    if !crate::verbs::reservations::keys_known(&flags, &["feature", "dry-run", "pattern-verdicts"]) {
         return None;
     }
     // validate(): a boolean-typed flag given as =value must be true/false.
@@ -861,6 +1129,10 @@ pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     let feature = flags.req_str("feature")?.to_string();
     // `flags['dry-run'] === true`: only the flag-alone form is JS `true`.
     let dry_run = matches!(flags.get("dry-run"), Some(FlagV::Present));
+    // U7: `--pattern-verdicts=<id>:<verdict>[,...]` — absent or a bare flag
+    // (no value) both read as "no verdicts supplied," same as an empty one.
+    let pattern_verdicts: HashMap<String, String> =
+        flags.truthy_str("pattern-verdicts").map(parse_pattern_verdicts).unwrap_or_default();
 
     // ── everything that can still delegate happens BEFORE prelude, whose
     //    drift-cache write would swallow the Node re-run's drift line. ──────
@@ -885,12 +1157,13 @@ pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     // only cost two cheap directory scans — but it means a corrupt store can
     // still hand the whole command to Node BEFORE a test suite is spent.
     build_close_report_doors(&root, &feature).ok()?;
+    build_pattern_check_door(&root, &feature, &pattern_verdicts).ok()?;
 
     let ctx = match prelude("close", use_json, t0)? {
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
-    let out: R2<Out> = close_handler(&ctx.root, &feature, dry_run, declared, shell)
+    let out: R2<Out> = close_handler(&ctx.root, &feature, dry_run, declared, shell, &pattern_verdicts)
         .map_err(crate::verbs::reservations::Err2::from);
     finish(&ctx, out)
 }
@@ -921,5 +1194,204 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             run_dispatch_prepare(flags, use_json, t0)
         }
         _ => None,
+    }
+}
+
+// ─── tests: U3 capture-queue pressure escalation (close door) ──────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn w(root: &Path, rel: &str, body: &str) {
+        let file = rel.split('/').fold(root.to_path_buf(), |p, s| p.join(s));
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, body).unwrap();
+    }
+
+    fn stub_line(id: &str, at: &str) -> String {
+        format!(r#"{{"kind":"stub","id":"{id}","at":"{at}","outcome":"x"}}"#)
+    }
+
+    /// Below the default threshold (5 stubs, 7 days): the door's wording
+    /// stays byte-identical to before U3, same as the nudge's contract.
+    #[test]
+    fn under_threshold_detail_is_byte_identical_to_before() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = crate::verbs::reservations::now_iso();
+        w(root, ".bee/capture-queue.jsonl", &format!("{}\n", stub_line("s1", &now)));
+        let (queue, oldest_ms) = capture_queue_pending(root);
+        assert_eq!(
+            capture_queue_door_detail(root, queue, oldest_ms),
+            "pending — 1 capture stub(s) awaiting flush; settle later via bee-capturing"
+        );
+    }
+
+    #[test]
+    fn zero_pending_reads_clear() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert_eq!(capture_queue_door_detail(root, 0, f64::NAN), "clear");
+    }
+
+    #[test]
+    fn over_count_threshold_escalates_the_door_to_overdue_wording() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let now = crate::verbs::reservations::now_iso();
+        let lines: String =
+            (0..6).map(|i| format!("{}\n", stub_line(&format!("s{i}"), &now))).collect();
+        w(root, ".bee/capture-queue.jsonl", &lines);
+        let (queue, oldest_ms) = capture_queue_pending(root);
+        assert_eq!(queue, 6);
+        let detail = capture_queue_door_detail(root, queue, oldest_ms);
+        assert!(
+            detail.starts_with("OVERDUE — 6 stub(s) pending, oldest 0 days — flush before new work"),
+            "{detail}"
+        );
+        assert!(detail.ends_with("settle via bee-capturing"));
+    }
+
+    #[test]
+    fn over_age_threshold_escalates_even_under_count() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let old = crate::verbs::reservations::iso_from_ms(now_ms() - 10.0 * 86_400_000.0).ok().unwrap();
+        w(root, ".bee/capture-queue.jsonl", &format!("{}\n", stub_line("s1", &old)));
+        let (queue, oldest_ms) = capture_queue_pending(root);
+        assert_eq!(queue, 1);
+        let detail = capture_queue_door_detail(root, queue, oldest_ms);
+        assert!(
+            detail.starts_with("OVERDUE — 1 stub(s) pending, oldest 10 days — flush before new work"),
+            "{detail}"
+        );
+    }
+
+    #[test]
+    fn configured_threshold_overrides_the_default_for_the_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"capture_queue_threshold":{"count":1,"days":30}}"#);
+        let now = crate::verbs::reservations::now_iso();
+        let lines = format!("{}\n{}\n", stub_line("s1", &now), stub_line("s2", &now));
+        w(root, ".bee/capture-queue.jsonl", &lines);
+        let (queue, oldest_ms) = capture_queue_pending(root);
+        let detail = capture_queue_door_detail(root, queue, oldest_ms);
+        assert!(detail.starts_with("OVERDUE — 2 stub(s) pending"), "{detail}");
+    }
+
+    /// A malformed threshold falls back to the default (5, 7) — the door
+    /// never blocks either way (`build_close_report_doors`' capture-queue
+    /// row always carries `blocking: false`).
+    #[test]
+    fn malformed_threshold_falls_back_and_the_door_never_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"capture_queue_threshold":{"count":-1,"days":7}}"#);
+        w(root, ".bee/capture-queue.jsonl", &format!("{}\n", stub_line("s1", &crate::verbs::reservations::now_iso())));
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let capture_door = doors.iter().find(|d| d.door == "capture-queue").unwrap();
+        assert!(!capture_door.blocking);
+        assert_eq!(capture_door.detail, "pending — 1 capture stub(s) awaiting flush; settle later via bee-capturing");
+    }
+
+    // ─── tests: U7 close-time pattern-check door ───────────────────────────
+
+    /// Writes a minimal bundle: one area concept whose `bee.sources` names
+    /// `src/a.rs` (so the touched file matches it) tagged `areas: [demo]`,
+    /// and one `bee.critical: true` pattern also tagged `areas: [demo]`.
+    fn write_pattern_bundle(root: &Path) {
+        w(
+            root,
+            "docs/knowledge/areas/demo/overview.md",
+            "---\ntype: bee.area\ntitle: Demo area\ndescription: d\nbee:\n  id: demo-area\n  lifecycle: active\n  areas: [demo]\n  sources: [src/a.rs]\n---\nbody\n",
+        );
+        w(
+            root,
+            "docs/knowledge/patterns/p1.md",
+            "---\ntype: bee.pattern\ntitle: Demo critical pattern\ndescription: d\nbee:\n  id: pattern-p1\n  lifecycle: active\n  areas: [demo]\n  critical: true\n---\nbody\n",
+        );
+    }
+
+    fn write_capped_cell_touching(root: &Path, feature: &str, file: &str) {
+        w(
+            root,
+            &format!(".bee/cells/{feature}-1.json"),
+            &format!(
+                r#"{{"id":"{feature}-1","feature":"{feature}","status":"capped","trace":{{"behavior_change":true,"outcome":"did the thing","files_changed":["{file}"],"capped_at":"2026-08-10T00:00:00.000Z"}}}}"#
+            ),
+        );
+    }
+
+    #[test]
+    fn pattern_check_door_is_clear_with_no_bundle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_capped_cell_touching(root, "demo", "src/a.rs");
+        let door = build_pattern_check_door(root, "demo", &HashMap::new()).unwrap();
+        assert!(!door.blocking);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn pattern_check_door_reports_pending_when_no_verdicts_supplied() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_pattern_bundle(root);
+        write_capped_cell_touching(root, "demo", "src/a.rs");
+        let door = build_pattern_check_door(root, "demo", &HashMap::new()).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("pattern-p1=pending"), "{}", door.detail);
+        assert!(door.detail.contains("--pattern-verdicts="), "{}", door.detail);
+    }
+
+    #[test]
+    fn pattern_check_door_blocks_on_a_violated_verdict_naming_the_pattern() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_pattern_bundle(root);
+        write_capped_cell_touching(root, "demo", "src/a.rs");
+        let mut verdicts = HashMap::new();
+        verdicts.insert("pattern-p1".to_string(), "violated".to_string());
+        let door = build_pattern_check_door(root, "demo", &verdicts).unwrap();
+        assert!(door.blocking);
+        assert!(door.detail.contains("pattern-p1=violated"), "{}", door.detail);
+    }
+
+    #[test]
+    fn pattern_check_door_passes_on_respected_or_not_applicable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_pattern_bundle(root);
+        write_capped_cell_touching(root, "demo", "src/a.rs");
+        for verdict in ["respected", "not-applicable"] {
+            let mut verdicts = HashMap::new();
+            verdicts.insert("pattern-p1".to_string(), verdict.to_string());
+            let door = build_pattern_check_door(root, "demo", &verdicts).unwrap();
+            assert!(!door.blocking, "{verdict}: {}", door.detail);
+            assert!(door.detail.contains(&format!("pattern-p1={verdict}")), "{}", door.detail);
+        }
+    }
+
+    #[test]
+    fn pattern_check_door_clear_when_touched_files_miss_every_area() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_pattern_bundle(root);
+        write_capped_cell_touching(root, "demo", "src/unrelated.rs");
+        let door = build_pattern_check_door(root, "demo", &HashMap::new()).unwrap();
+        assert!(!door.blocking);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn parse_pattern_verdicts_accepts_known_words_and_drops_the_rest() {
+        let parsed = parse_pattern_verdicts("pattern-a:violated, pattern-b:Respected ,malformed,pattern-c:bogus");
+        assert_eq!(parsed.get("pattern-a").map(String::as_str), Some("violated"));
+        assert_eq!(parsed.get("pattern-b").map(String::as_str), Some("respected"));
+        assert_eq!(parsed.get("malformed"), None);
+        assert_eq!(parsed.get("pattern-c"), None);
+        assert_eq!(parsed.len(), 2);
     }
 }

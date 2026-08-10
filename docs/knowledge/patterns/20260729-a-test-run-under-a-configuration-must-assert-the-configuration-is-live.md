@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["original feature: worker-conformance", docs/history/learnings/20260729-worker-conformance.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A test run under a configuration must assert the configuration is live

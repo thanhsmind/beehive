@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT25", "original feature: review-on-demand", docs/history/learnings/20260712-review-on-demand.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Cross-cell contracts and census carriers are plan-authoring work, not validation work

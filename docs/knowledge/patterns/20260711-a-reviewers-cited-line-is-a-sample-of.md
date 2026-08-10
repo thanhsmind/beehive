@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT21", "original feature: grill-deltas", docs/history/learnings/20260711-grill-deltas.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A reviewer's cited line is a sample of a class — sweep the diff before re-review

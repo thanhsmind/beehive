@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT24", "original feature: bee-footprint"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Enumerated-move trap in migration cells

@@ -12,6 +12,7 @@ bee:
   sources: ["bee 2.2.6: kind==cell on the claude Agent transport was fixed and a written rationale shipped for leaving the rest", "audit 2026-08-07: four gaps — codex task_name was the bare cell id (prepare.rs:687), claude gather/reviewer/advisor rendered kind-plus-model, cli-exec carried no label field, and the guard read the label and only logged it (model_guard.rs:732)", "cells dlc-1 and dlc-2: full suite 1350 passed, 3 ignored"]
   polarity: pitfall
   critical: true
+  signature: fix-scoped-narrower-than-the-rule-it-implements
 ---
 
 # Fix the fan-out, not the one cell of it that was reported

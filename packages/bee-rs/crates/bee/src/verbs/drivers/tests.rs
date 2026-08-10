@@ -22,7 +22,7 @@ use crate::verbs::reservations::{
     release_reservations_for_agent, reserve_path_atomic, Err2, ReserveOutcome,
 };
 use serde_json::{Map, Number, Value};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -1309,7 +1309,7 @@ use std::time::Instant;
         let root = repo(&tmp, r#"{"commands":{"test":["a","b"]}}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", true, declared, None).unwrap()
+            close_handler(&root, "demo", true, declared, None, &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1320,6 +1320,7 @@ use std::time::Instant;
                 "door tests: open — commands.test declared (2 command(s)) — close runs the full declared suite fresh; a stale test-results record is never trusted | settle: bee test\n",
                 "door scribing-debt: clear\n",
                 "door capture-queue: clear\n",
+                "door pattern-check: clear\n",
                 "next: bee close --feature demo — runs the declared tests and reports"
             )
         );
@@ -1329,7 +1330,7 @@ use std::time::Instant;
 
         // Undeclared repo: the teaching detail + a different next line.
         w(&root, ".bee/config.json", "{}");
-        let Out::Emit(_, text, _) = close_handler(&root, "demo", true, None, None).unwrap() else {
+        let Out::Emit(_, text, _) = close_handler(&root, "demo", true, None, None, &HashMap::new()).unwrap() else {
             panic!()
         };
         assert!(text.starts_with(&format!("door tests: open — {CLOSE_TESTS_UNDECLARED_DETAIL}\n")));
@@ -1345,7 +1346,7 @@ use std::time::Instant;
         let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1402,7 +1403,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1457,7 +1458,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1491,6 +1492,73 @@ use std::time::Instant;
         assert!(root.join(".bee/cells/archive/demo/demo-1.json").exists());
     }
 
+    /// U4 (docs/history/knowledge-usable/CONTEXT.md): a close that writes a
+    /// promote proposal ALSO enqueues exactly one capture-queue stub
+    /// pointing at it — the queue is the living channel a proposal reaches
+    /// flush through; the proposals file keeps being written unchanged
+    /// (asserted above, in the sibling test this one shares its fixture
+    /// with).
+    #[test]
+    fn close_green_promote_ok_enqueues_one_capture_stub_pointing_at_it() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
+        w(
+            &root,
+            "docs/history/demo/CONTEXT.md",
+            "# Demo Context\n\nBody.\n",
+        );
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","title":"first","verify":"cargo test","trace":{"behavior_change":true,"outcome":"did the thing","files_changed":["src/a.rs"],"capped_at":"2024-06-02T10:00:00.000Z"}}"#,
+        );
+        w(
+            &root,
+            ".bee/logs/scribing-runs.jsonl",
+            "{\"feature\":\"demo\",\"ts\":\"2024-06-03T00:00:00.000Z\"}\n",
+        );
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, _text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        let queue = std::fs::read_to_string(root.join(".bee/capture-queue.jsonl")).unwrap();
+        let rows: Vec<Value> = queue.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(rows.len(), 1, "expected exactly one enqueued stub: {queue}");
+        let stub = &rows[0];
+        assert_eq!(stub.get("kind"), Some(&json!("stub")));
+        assert_eq!(
+            stub.get("outcome"),
+            Some(&json!("Promote proposal for \"demo\" — docs/history/demo/promote-proposals.md"))
+        );
+        assert_eq!(
+            stub.get("files"),
+            Some(&json!(["docs/history/demo/promote-proposals.md"]))
+        );
+        assert_eq!(stub.get("source"), Some(&json!("promote")));
+    }
+
+    /// D2: a promote door that skips (no proposal was written) never
+    /// enqueues a stub — nothing to point at.
+    #[test]
+    fn close_green_promote_skipped_enqueues_nothing() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(_, _text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        assert!(!root.join(".bee/capture-queue.jsonl").exists());
+    }
+
     #[test]
     fn close_red_stops_at_the_tests_door_and_exits_one() {
         let Some(shell) = posix_shell() else { return };
@@ -1501,7 +1569,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1760,7 +1828,7 @@ use std::time::Instant;
         w(&root, ".bee/cells/demo-5.json", r#"{"id":"demo-5","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-02T00:00:00.000Z"}}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1801,7 +1869,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1826,7 +1894,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1859,7 +1927,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1882,7 +1950,7 @@ use std::time::Instant;
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell)).unwrap()
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
         else {
             panic!()
         };
@@ -1984,7 +2052,7 @@ use std::time::Instant;
         // thrown error and never a refusal.
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
-            close_handler(&root, "demo", true, declared, None).unwrap()
+            close_handler(&root, "demo", true, declared, None, &HashMap::new()).unwrap()
         else {
             panic!("a corrupt lane record must not stop close")
         };
@@ -2057,7 +2125,7 @@ use std::time::Instant;
         w(&root, ".bee/lanes/other.json", r#"{"feature":"other"}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, without_lane, without_code) =
-            close_handler(&root, "demo", true, declared.clone(), None).unwrap()
+            close_handler(&root, "demo", true, declared.clone(), None, &HashMap::new()).unwrap()
         else {
             panic!("close_handler must run the driver, not refuse")
         };
@@ -2065,7 +2133,7 @@ use std::time::Instant;
         // delegate the whole command before `close_handler` was reached.
         w(&root, ".bee/lanes/demo.json", r#"{"feature":"demo","phase":"executing"}"#);
         let Out::Emit(_, with_lane, with_code) =
-            close_handler(&root, "demo", true, declared, None).unwrap()
+            close_handler(&root, "demo", true, declared, None, &HashMap::new()).unwrap()
         else {
             panic!("close still runs — a lane record is not a refusal")
         };

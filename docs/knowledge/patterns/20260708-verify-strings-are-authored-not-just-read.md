@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT9", "original feature: harness10", docs/history/learnings/20260708-harness10.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Verify strings are authored, not just read — two traps

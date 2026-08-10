@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT34", "original feature: installer-hardening"]
   polarity: practice
-  critical: true
+  critical: false
 ---
 
 # Agent-runtime discovery paths are version-moving targets — probe the binary, not memory

@@ -11,7 +11,7 @@ bee:
   decisions: ["29c40516 (knowledge-loop D9 — compute the promote proposal before auto_archive_on_close retires the feature's cells)"]
   sources: [packages/bee-rs/crates/bee/src/verbs/drivers/close.rs (soft promote door inserted after auto_archive_on_close at the line the plan pinned), "decision 29c40516 (2026-08-05: with cells_archive_on_close at its default true, a real close archives the just-capped cells into .bee/cells/archive/ before build_promotion scans .bee/cells/*.json, so the close's own proposal comes back empty)", "knowledge-loop cell kl-3 (commit 384587a1: give bee close a soft promote door)", "knowledge-loop cell kl-5 (commit c8d25dff: run build_promotion before close retires the feature's cells)", docs/knowledge/areas/workflow-state/gates.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A read placed after a cleanup always sees an empty store

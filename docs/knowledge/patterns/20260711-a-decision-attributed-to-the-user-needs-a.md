@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT23", "original feature: cli-mutations", docs/history/learnings/20260711-cli-mutations.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A decision attributed to the user needs a traceable in-session quote

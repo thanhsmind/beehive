@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["okf-integration-close-f4 cell f4-7 (the drift telemetry punished a migrated area for growing; denominator corrected, band untouched, proven by a two-directional negative control; trace in `.bee/cells/`, 2026-07-23)", docs/history/learnings/20260723-a-metric-that-punishes-growth-and-a-spec-that-was-wrong.md]
   polarity: practice
-  critical: true
+  critical: false
 ---
 
 # Clearing a red by widening the threshold is not the same act as correcting what is measured

@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["validation-diet cell vd-13 (deriveScanSet existence filter, scripts/tests/test_doctrine_parity.mjs:136, trace .bee/cells/vd-13.json, commit 656407c9, 2026-07-28)", "scripts/tests/test_portable_paths.mjs:23-34 (same defect, still live at close)", "scripts/tests/test_installers_e2e.mjs:191-199 (same source, correctly guarded)", docs/history/learnings/20260728-validation-diet.md L2]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A scan set built from the git index crashes the very gate it feeds

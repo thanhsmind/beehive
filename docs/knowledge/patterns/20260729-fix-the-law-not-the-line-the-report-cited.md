@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["original feature: budget-fence-removal", docs/history/learnings/20260729-budget-fence-removal.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Fix the law, not the line the report cited

@@ -275,13 +275,18 @@ pub(crate) fn rank_critical_rows(
 
     // Cost discipline: an empty concepts slice means resolve_anchor can only
     // ever land on the History arm (docs/history/<work>/CONTEXT.md and/or
-    // plan.md) or None — never the WorkItem arm, which would need
-    // collect_concepts to find. That is the deliberate cheaper reading this
-    // digest takes (see the module's "may not edit that file" banner).
+    // plan.md), the Ledger arm (U5: a scribing-ledger entry, a bare
+    // .bee/lanes/<work>.json record, or another docs/history/<work>/ file),
+    // or None — never the WorkItem arm, which would need collect_concepts to
+    // find. That is the deliberate cheaper reading this digest takes (see
+    // the module's "may not edit that file" banner).
     let empty: &[VerbsConcept] = &[];
     let anchor = verbs_resolve_anchor(empty, root, work).ok_or_else(|| format!("no anchor for \"{work}\""))?;
-    let VerbsAnchor::History { meta, body, .. } = &anchor else {
-        return Err(format!("no anchor for \"{work}\"")); // unreachable with an empty concepts slice
+    let (meta, body) = match &anchor {
+        VerbsAnchor::History { meta, body, .. } | VerbsAnchor::Ledger { meta, body, .. } => (meta, body),
+        // Unreachable with an empty concepts slice: WorkItem needs
+        // collect_concepts to match, which this digest never calls.
+        VerbsAnchor::WorkItem(_) => return Err(format!("no anchor for \"{work}\"")),
     };
 
     // Parse every row's target into a candidate path, dropping rows whose
@@ -318,8 +323,9 @@ pub(crate) fn rank_critical_rows(
     }
     let opened = concepts.len();
     let criticals: Vec<&VerbsConcept> = concepts.iter().collect();
-    // A history anchor carries no tags/areas of its own (context.rs D7) — the
-    // same IDF ranker, the same empty query sets it uses under that arm.
+    // Neither a history nor a ledger anchor carries tags/areas of its own
+    // (context.rs D7) — the same IDF ranker, the same empty query sets both
+    // arms use.
     let query_tags: HashSet<String> = HashSet::new();
     let query_areas: HashSet<&str> = HashSet::new();
     let scores = score_critical_relevance(&dir, &criticals, meta, body, &query_tags, &query_areas)

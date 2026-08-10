@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: [multisession-native-16 (reservations.mjs shim over lease-store.mjs; advisor consult slice 3 condition B named the atomic findForeignHolds+reserve()+insertHold cross-worktree mirror-write seam in bee.mjs as the biggest risk of the cell; the seam was deliberately left byte-for-byte untouched and a new CLI-level regression test was written specifically to prove the mirror write and the foreign-hold deny still fire through the shim), docs/history/multisession-native/reports/advisor-digest-slice3.md (condition B), .bee/cells/multisession-native-16.json]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A shim that preserves a CLI surface can still drop a side-effect that surface never named

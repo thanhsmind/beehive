@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["herding-adopt cells h-2, h-3 (an unattended dispatch+merge loop adopted with merge demoted to a gesture; traces in `.bee/cells/`, 2026-07-23)", docs/history/learnings/20260723-adopting-a-contribution-means-reviewing-what-it-does-not-what-it-says.md]
   polarity: practice
-  critical: true
+  critical: false
 ---
 
 # Split automation where an action becomes irreversible

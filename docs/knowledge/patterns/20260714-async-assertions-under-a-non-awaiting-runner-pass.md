@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT35", "original feature: fresh-session-handoff", docs/history/learnings/20260714-fresh-session-handoff.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Async assertions under a non-awaiting runner pass vacuously

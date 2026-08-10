@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT36", "original feature: codex-harness-hardening", docs/history/learnings/20260715-codex-harness-hardening-slice0.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A freeze fixture's wrapper verify must assert a printed sentinel, not a filename or bare exit

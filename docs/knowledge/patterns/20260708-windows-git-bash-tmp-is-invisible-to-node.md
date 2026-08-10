@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT8", "original feature: harness09", docs/history/learnings/20260708-harness09.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Windows Git Bash /tmp is invisible to node

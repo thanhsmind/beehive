@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["validation-diet cell vd-2 (verify omitted test_misc.mjs while editing lib/state.mjs, trace .bee/cells/vd-2.json, commit a7fab75d, 2026-07-28)", "validation-diet cell vd-1 (same file, verify INCLUDED test_misc.mjs, trace .bee/cells/vd-1.json, commit 4a03006e)", "validation-diet cell vd-5 (the repair, commit db11b709)", "skills/bee-planning/references/planning-reference.md:162", "skills/bee-swarming/references/worker-details.md (formerly the executing skill's copy, cited at its then line 166)", docs/history/learnings/20260728-validation-diet.md L1]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A derivation the tooling already computes is worthless where doctrine forbids it

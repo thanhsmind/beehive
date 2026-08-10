@@ -10,7 +10,7 @@ bee:
   decisions: [c45d0fb3, b8fe5c81]
   sources: ["docs/history/learnings/critical-patterns.md#PAT11", "original feature: evolving-loop"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A frozen assertion can encode the defect it guards — the worker must stop, not rewrite

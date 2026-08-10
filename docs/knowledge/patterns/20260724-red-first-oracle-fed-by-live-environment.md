@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: [i54-closeout-8 (PROBED_CODEX_VERSION bump; local reversion re-test green because live codex is 0.145.0; JUDGE_STANDARD_INSUFFICIENT flagged via deliberate_exceptions; external canary rerun substituted as proof), docs/history/i54-closeout/reports/i54-closeout-8.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A red-first proof whose oracle can be fed by live-environment detection proves nothing about the code under test

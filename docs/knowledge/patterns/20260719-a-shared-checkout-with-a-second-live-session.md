@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT42", "original feature: lane-ceremony-v3"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A shared checkout with a second live session: check the out-of-scope tree before a blocking verify, and diff before diagnosing "flaky"

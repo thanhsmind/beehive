@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["issues-46-53 cells i-2, i-3 (the write guard directing writes the sweeper could not see; the merge refusal blaming an unchangeable branch; traces in `.bee/cells/`, 2026-07-23)", docs/history/learnings/20260723-four-of-seven-bug-reports-named-the-wrong-cause.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A system contradicting itself hides in the seam, because each half passes inspection alone

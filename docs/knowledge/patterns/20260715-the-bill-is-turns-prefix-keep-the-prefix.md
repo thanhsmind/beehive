@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT4", "original feature: session-economics", docs/history/learnings/20260715-cache-economics.md]
   polarity: practice
-  critical: true
+  critical: false
 ---
 
 # The bill is turns × prefix: keep the prefix immutable, warm, and lean

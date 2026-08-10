@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT27", "original feature: harness-integration-adopt", docs/history/learnings/20260712-harness-integration-adopt.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Empty child-process output can be a sandbox denial, not a regression

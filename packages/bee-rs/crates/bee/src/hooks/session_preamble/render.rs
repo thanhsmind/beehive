@@ -308,21 +308,24 @@ pub(crate) fn promote_proposal_lines(root: &Path) -> Vec<String> {
     if proposals.is_empty() {
         return Vec::new();
     }
-    const SHOWN: usize = 3;
-    let shown = std::cmp::min(SHOWN, proposals.len());
-    let named = proposals[..shown]
+    // U4 (docs/history/knowledge-usable/CONTEXT.md): close now enqueues a
+    // capture-queue stub for every proposal it writes — the queue is the
+    // living channel that carries each one to flush, so this block no
+    // longer needs to enumerate them itself. It shrinks to naming the count
+    // and the newest one (by the proposal file's own mtime) to read first.
+    let newest_path = proposals
         .iter()
-        .map(|p| format!("{} ({}): {}", p.feature, p.counts, p.path))
-        .collect::<Vec<_>>()
-        .join("; ");
-    let more = proposals.len() - shown;
-    let tail = if more > 0 { format!(" +{more} more") } else { String::new() };
-    vec![
-        format!("### Unapplied promote proposal(s): {}", proposals.len()),
-        format!(
-            "- {named}{tail} — never applied to docs/knowledge/ (D3): review the proposal, then apply what belongs or record why not."
-        ),
-    ]
+        .max_by_key(|p| {
+            std::fs::metadata(root.join(&p.path))
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::UNIX_EPOCH)
+        })
+        .map(|p| p.path.clone())
+        .unwrap_or_default();
+    vec![format!(
+        "### Unapplied promote proposal(s): {} — newest: {newest_path} — never applied to docs/knowledge/ (D3): review the proposal, then apply what belongs or record why not.",
+        proposals.len()
+    )]
 }
 
 /// D4/D4a: a granted worktree `bee worktree merge`'s cleanup-by-default (D1)
@@ -366,5 +369,11 @@ pub(crate) fn bundle_project_map_lines(root: &Path) -> Vec<String> {
         areas.len(),
         concepts.len()
     ));
+    // U1: the always-loaded pull move — hit a symptom mid-flow (error text,
+    // odd behavior, an unfamiliar mechanism) and pull the bundle instead of
+    // re-deriving. One line, no flag-by-flag documentation.
+    lines.push(
+        "- Hit a symptom mid-flow (error text, odd behavior, an unfamiliar mechanism)? Pull it: `bee knowledge search --text \"<symptom>\"`.".to_string(),
+    );
     lines
 }

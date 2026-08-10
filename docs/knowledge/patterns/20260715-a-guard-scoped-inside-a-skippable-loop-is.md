@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT5", "original feature: codex-harness-hardening", docs/history/learnings/20260715-codex-harness-hardening-1b.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A guard scoped inside a skippable loop is absent on the path that skips it
