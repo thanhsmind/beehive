@@ -408,8 +408,10 @@ a malformed record has earned none.
   a SOFT door: a `None` or a `Thrown` promote outcome both degrade to one
   warning line, close's exit code never changes because of this door, and
   nothing it writes lands under `docs/knowledge/` (knowledge-loop D2/D9).
-- R81 — A GREEN, non-dry-run `bee close` sweeps its own tracked bee-store
-  dirt with a path-scoped commit: when the root is a git work tree (detected
+- R81 — A `bee close` that ends green — including the no-declared-tests
+  pass-through, which proceeds with a teaching note and is treated as green
+  here — and is not `--dry-run` sweeps its own tracked bee-store dirt with a
+  path-scoped commit: when the root is a git work tree (detected
   via `rev-parse --is-inside-work-tree`, so a linked worktree's `.git` FILE
   counts) and `git status --porcelain -- .bee` is non-empty, close runs
   `git add -A -- .bee` then `git commit -m "Record <feature> close
@@ -429,7 +431,14 @@ a malformed record has earned none.
   the key and the offending value, before the tests run, nothing committed
   (worktree_cleanup_on_merge precedent, made real by cbh-1 after review
   P2-3 found the first ship silently read it as off). A red close and
-  `--dry-run` never commit. This closes the dead-end where a worktree-session close dirtied
+  `--dry-run` never commit. The bookkeeping commit passes `--no-gpg-sign`
+  and git runs with stdin nulled — bee's own bookkeeping commit is unsigned
+  by chosen policy, so a signing repo's pinentry can never hang close
+  (close-bookkeeping-p3 cell cbp-1). Named cost, chosen not accidental: the
+  sweep is `.bee`-wide, so a CONCURRENT session's in-flight tracked
+  bee-store dirt rides into this feature's bookkeeping commit under this
+  feature's message — misattributed history, never data loss (review
+  close-lands-bookkeeping-20260810 P3-6). This closes the dead-end where a worktree-session close dirtied
   main and `worktree merge` then refused `WORKTREE_MERGE_MAIN_DIRTY` on
   bee's own bookkeeping (backlog P2 row 708; close-lands-bookkeeping cell
   clb-1, 2026-08-10).

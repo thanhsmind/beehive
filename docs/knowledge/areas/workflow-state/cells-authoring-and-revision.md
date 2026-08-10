@@ -160,7 +160,14 @@ silent.
 - R46 — A unit's change classification is set explicitly or derived only from
   the behavior-change flag — never any richer auto-derivation — and an
   insufficient verification plan is reported as an authoring-time warning on
-  the advisory channel, never a refusal (self-correcting-loop D3, Δ4).
+  the advisory channel, never a refusal (self-correcting-loop D3, Δ4). The
+  derivation also runs the OTHER way at authoring: a unit declared
+  `change_class: behavior` whose payload does not explicitly set the
+  behavior-change flag defaults it to TRUE, so the scribing-debt door arms
+  itself for a declared behavior change; an explicit false in the payload is
+  a deliberate opt-out and is respected (close-bookkeeping-p3 cell cbp-2,
+  after review P3-5 found a behavior cell shipping with the flag silently
+  false and the door never arming).
 - R56 — A regeneration obligation implied by a unit's own scope refuses the
   authoring write unless the verification carries the derived checks or the
   unit records a reasoned acknowledgement; the obligated roots are always
