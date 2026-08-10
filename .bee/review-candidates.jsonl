@@ -97,3 +97,4 @@
 {"id":"fbb429b4-ef88-4309-a150-2575d143c81e","type":"candidate","date":"2026-08-10T14:20:14.355Z","feature":"close-bookkeeping-hardening","head":"ab352dcdb34cfcd495532492c1e2ec049edcf49b","mode":"small","baseline":null,"cells":["cbh-1"]}
 {"id":"46f72524-59af-45fd-8ddf-f89e726a6051","type":"candidate","date":"2026-08-10T14:37:48.796Z","feature":"close-bookkeeping-p3","head":"f6f6e76575a4de0b7e88384a40754c3d9577c8fe","mode":"small","baseline":null,"cells":["cbp-1","cbp-2"]}
 {"id":"daf97b34-50f5-46ca-885e-f8aef4808573","type":"candidate","date":"2026-08-10T15:22:13.491Z","feature":"dispatch-registers-worker","head":"75746234692abc04c771d90ae7be2fa99a642dda","mode":"small","baseline":null,"cells":["dpr-1"]}
+{"id":"7025ffbe-10fb-46e7-a332-0261f8feacaa","type":"candidate","date":"2026-08-10T15:30:26.086Z","feature":"gate-input-validation","head":"58648ed239dbcedbfd9a59a6faef541c64765e71","mode":"small","baseline":null,"cells":["giv-1"]}
