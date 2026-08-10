@@ -1069,6 +1069,23 @@ pub(crate) fn close_handler(
     };
     lines.push(promote_line);
 
+    // ── bookkeeping auto-commit — GREEN, non-dry-run only, path-scoped ─────
+    //
+    // Runs last, after every other `.bee` write above (retirement,
+    // capture-queue stub, promote-proposal enqueue) so the commit captures
+    // all of them. Warn-never-block: a git failure here is one line in the
+    // text output and close's own exit code stays 0 — the close already
+    // succeeded, and a store that could not be tidied is not a failed close.
+    let bookkeeping = commit_close_bookkeeping(root, feature);
+    result.insert("bookkeeping_commit".into(), bookkeeping.value());
+    if let BookkeepingCommit::Skipped { reason } = &bookkeeping {
+        if let Some(detail) = reason.strip_prefix("git_failed:") {
+            lines.push(format!(
+                "Warning: bee-store bookkeeping commit failed for \"{feature}\": {detail}"
+            ));
+        }
+    }
+
     lines.push(
         "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
             .to_string(),
@@ -1113,6 +1130,146 @@ fn auto_archive_on_close(root: &Path, feature: &str) -> Retirement {
         Ok(moved) => Retirement::Archived { moved },
         Err(reason) => Retirement::Held { reason },
     }
+}
+
+// ── bee-store bookkeeping auto-commit ───────────────────────────────────────
+//
+// A minimal local git-exec helper: `verbs::worktree`'s `run_git` (and
+// `is_ordinary_checkout`) live in a private sibling module close.rs cannot
+// import, so this mirrors the shape (status/stdout/stderr) rather than
+// reaching across the module boundary.
+
+/// A completed `git` invocation: `None` means the spawn itself failed (git
+/// off PATH), same "every field absent" shape `verbs::worktree::git::GitOut`
+/// gives a `spawnSync` that never launched.
+struct GitRun {
+    status: Option<i32>,
+    stdout: String,
+    stderr: String,
+}
+
+fn run_git(root: &Path, args: &[&str]) -> Option<GitRun> {
+    match Command::new("git").args(args).current_dir(root).output() {
+        Ok(out) => Some(GitRun {
+            status: out.status.code(),
+            stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        }),
+        Err(_) => None,
+    }
+}
+
+/// The first line of whichever stream carries the message — stderr wins,
+/// stdout is the fallback — trimmed. Feeds the `git_failed:<first line>`
+/// reason so a multi-line git error never blows up the one-line warning.
+fn git_fail_first_line(out: &GitRun) -> String {
+    let src = if !out.stderr.trim().is_empty() { out.stderr.as_str() } else { out.stdout.as_str() };
+    src.trim().lines().next().unwrap_or("").to_string()
+}
+
+/// What close's bee-store bookkeeping commit did, and why not when it
+/// didn't. `reason` is one of: `clean`, `config_off`, `not_a_repo`, or
+/// `git_failed:<first line>`.
+pub(crate) enum BookkeepingCommit {
+    Committed { sha: String },
+    Skipped { reason: String },
+}
+
+impl BookkeepingCommit {
+    fn value(&self) -> Value {
+        match self {
+            BookkeepingCommit::Committed { sha } => json!({"committed": true, "sha": sha}),
+            BookkeepingCommit::Skipped { reason } => json!({"committed": false, "reason": reason}),
+        }
+    }
+}
+
+/// `close_commit_bookkeeping` in `.bee/config.json`: absent or `true` reads
+/// as ON (mirrors `archive_on_close_enabled`'s absent-means-on default just
+/// above). Unlike that helper, a present-but-non-boolean value is REFUSED
+/// (`None`) rather than silently read as ON — precedent:
+/// `worktree_cleanup_on_merge_config` (verbs/worktree/handlers.rs) — a
+/// typo'd config value must never resolve to a commit running unasked.
+fn close_commit_bookkeeping_config(root: &Path) -> Option<bool> {
+    match read_config_raw(root).get("close_commit_bookkeeping") {
+        None => Some(true),
+        Some(Value::Bool(b)) => Some(*b),
+        Some(_) => None,
+    }
+}
+
+/// Auto-commits the `.bee` bookkeeping a GREEN, non-dry-run close just wrote
+/// (retirement, the promote-proposal capture-queue stub) — path-scoped to
+/// `.bee` throughout, so unrelated dirt and unrelated staged files are never
+/// swept. Warn-never-block: every git step here is best-effort, same
+/// contract `auto_archive_on_close` already keeps for retirement — close has
+/// already succeeded, and a store that could not be tidied is not a failed
+/// close.
+fn commit_close_bookkeeping(root: &Path, feature: &str) -> BookkeepingCommit {
+    let enabled = match close_commit_bookkeeping_config(root) {
+        Some(b) => b,
+        // Non-boolean: refused outright, never silently read as on.
+        None => return BookkeepingCommit::Skipped { reason: "config_off".to_string() },
+    };
+    if !enabled {
+        return BookkeepingCommit::Skipped { reason: "config_off".to_string() };
+    }
+
+    match run_git(root, &["rev-parse", "--is-inside-work-tree"]) {
+        Some(out) if out.status == Some(0) && out.stdout.trim() == "true" => {}
+        Some(_) => return BookkeepingCommit::Skipped { reason: "not_a_repo".to_string() },
+        None => {
+            return BookkeepingCommit::Skipped {
+                reason: "git_failed:git rev-parse could not be spawned".to_string(),
+            }
+        }
+    }
+
+    let status = match run_git(root, &["status", "--porcelain", "--", ".bee"]) {
+        Some(out) if out.status == Some(0) => out,
+        Some(out) => {
+            return BookkeepingCommit::Skipped { reason: format!("git_failed:{}", git_fail_first_line(&out)) }
+        }
+        None => {
+            return BookkeepingCommit::Skipped {
+                reason: "git_failed:git status could not be spawned".to_string(),
+            }
+        }
+    };
+    if status.stdout.trim().is_empty() {
+        return BookkeepingCommit::Skipped { reason: "clean".to_string() };
+    }
+
+    match run_git(root, &["add", "-A", "--", ".bee"]) {
+        Some(out) if out.status == Some(0) => {}
+        Some(out) => {
+            return BookkeepingCommit::Skipped { reason: format!("git_failed:{}", git_fail_first_line(&out)) }
+        }
+        None => {
+            return BookkeepingCommit::Skipped {
+                reason: "git_failed:git add could not be spawned".to_string(),
+            }
+        }
+    }
+
+    let message = format!("Record {feature} close bookkeeping in the bee store");
+    match run_git(root, &["commit", "-m", &message, "--", ".bee"]) {
+        Some(out) if out.status == Some(0) => {}
+        Some(out) => {
+            return BookkeepingCommit::Skipped { reason: format!("git_failed:{}", git_fail_first_line(&out)) }
+        }
+        None => {
+            return BookkeepingCommit::Skipped {
+                reason: "git_failed:git commit could not be spawned".to_string(),
+            }
+        }
+    }
+
+    let sha = run_git(root, &["rev-parse", "HEAD"])
+        .filter(|out| out.status == Some(0))
+        .map(|out| out.stdout.trim().to_string())
+        .unwrap_or_default();
+    BookkeepingCommit::Committed { sha }
 }
 
 pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -1393,5 +1550,179 @@ mod tests {
         assert_eq!(parsed.get("malformed"), None);
         assert_eq!(parsed.get("pattern-c"), None);
         assert_eq!(parsed.len(), 2);
+    }
+
+    // ─── tests: bee-store bookkeeping auto-commit on a GREEN close ────────
+
+    fn git_ok(dir: &Path, args: &[&str]) {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap_or_else(|e| panic!("git {args:?}: {e}"));
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    fn git_out(dir: &Path, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap_or_else(|e| panic!("git {args:?}: {e}"));
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn git_status_porcelain(dir: &Path) -> String {
+        git_out(dir, &["status", "--porcelain"])
+    }
+
+    fn git_committed_paths(dir: &Path) -> Vec<String> {
+        git_out(dir, &["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"])
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// A real repo, seeded with a tracked `.bee/config.json` so later tests
+    /// can dirty it and prove the commit is path-scoped — same
+    /// `git_repo`/`git_commit` idiom `verbs::reviews` already uses for its
+    /// own git-degradation coverage.
+    fn init_bee_repo(root: &Path) {
+        git_ok(root, &["init", "-q"]);
+        git_ok(root, &["config", "user.email", "bee-close@example.com"]);
+        git_ok(root, &["config", "user.name", "bee close tests"]);
+        git_ok(root, &["config", "commit.gpgsign", "false"]);
+        w(root, ".bee/config.json", "{}\n");
+        git_ok(root, &["add", ".bee/config.json"]);
+        git_ok(root, &["commit", "-q", "-m", "seed"]);
+    }
+
+    fn dirty_tracked_bee_file(root: &Path) {
+        w(root, ".bee/config.json", "{\"seeded\": true}\n");
+    }
+
+    #[test]
+    fn green_close_commits_only_dirty_bee_paths_leaving_unrelated_dirt_uncommitted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        dirty_tracked_bee_file(root);
+        w(root, "unrelated.txt", "unrelated dirt\n");
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert_eq!(result["bookkeeping_commit"]["committed"], json!(true));
+        assert!(result["bookkeeping_commit"]["sha"].as_str().is_some_and(|s| !s.is_empty()));
+
+        let committed = git_committed_paths(root);
+        assert_eq!(committed, vec![".bee/config.json".to_string()]);
+        let status = git_status_porcelain(root);
+        assert!(status.contains("unrelated.txt"), "{status}");
+        assert!(!status.contains(".bee/config.json"), "{status}");
+        let subject = git_out(root, &["log", "-1", "--pretty=%s"]);
+        assert_eq!(subject, "Record demo close bookkeeping in the bee store");
+    }
+
+    #[test]
+    fn unrelated_staged_file_stays_staged_out_of_the_commit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        dirty_tracked_bee_file(root);
+        w(root, "staged.txt", "staged dirt\n");
+        git_ok(root, &["add", "staged.txt"]);
+
+        let commit = commit_close_bookkeeping(root, "demo");
+        assert!(matches!(commit, BookkeepingCommit::Committed { .. }));
+
+        let committed = git_committed_paths(root);
+        assert_eq!(committed, vec![".bee/config.json".to_string()]);
+        let status = git_status_porcelain(root);
+        assert!(status.contains("A  staged.txt"), "{status}");
+    }
+
+    #[test]
+    fn config_false_skips_the_commit_with_reason_config_off() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        // Dirties `.bee/config.json` itself — writing the `false` opt-out
+        // into the very file that must stay uncommitted.
+        w(root, ".bee/config.json", r#"{"close_commit_bookkeeping": false}"#);
+
+        let commit = commit_close_bookkeeping(root, "demo");
+        match commit {
+            BookkeepingCommit::Skipped { reason } => assert_eq!(reason, "config_off"),
+            BookkeepingCommit::Committed { .. } => panic!("expected no commit"),
+        }
+        assert!(!git_status_porcelain(root).is_empty(), "dirty .bee must stay uncommitted");
+    }
+
+    #[test]
+    fn non_boolean_config_is_refused_and_nothing_is_committed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(root, ".bee/config.json", r#"{"close_commit_bookkeeping": "sometimes"}"#);
+
+        let commit = commit_close_bookkeeping(root, "demo");
+        match commit {
+            BookkeepingCommit::Skipped { reason } => assert_eq!(reason, "config_off"),
+            BookkeepingCommit::Committed { .. } => panic!("expected no commit"),
+        }
+        assert!(!git_status_porcelain(root).is_empty(), "dirty .bee must stay uncommitted");
+    }
+
+    #[test]
+    fn dry_run_and_red_close_never_commit() {
+        // --dry-run: close_handler returns before the bookkeeping code runs
+        // at all — no `bookkeeping_commit` field, nothing committed.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        dirty_tracked_bee_file(root);
+        let out = close_handler(root, "demo", true, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert!(result.get("bookkeeping_commit").is_none(), "{result}");
+        assert!(!git_status_porcelain(root).is_empty(), "dry-run must never commit");
+
+        // RED: the declared suite fails, close stops at the tests door
+        // before the bookkeeping code is ever reached.
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        init_bee_repo(root2);
+        dirty_tracked_bee_file(root2);
+        let shell = posix_shell().expect("a POSIX shell is required for this test");
+        let out = close_handler(
+            root2,
+            "demo",
+            false,
+            Some(vec!["exit 1".to_string()]),
+            Some(shell),
+            &HashMap::new(),
+        )
+        .unwrap();
+        let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 1);
+        assert!(result.get("bookkeeping_commit").is_none(), "{result}");
+        assert!(!git_status_porcelain(root2).is_empty(), "a red close must never commit");
+    }
+
+    #[test]
+    fn non_repo_root_reports_not_a_repo_and_close_stays_green() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", "{}\n"); // no `git init` — not a repo at all
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
+        assert_eq!(code, 0);
+        assert_eq!(
+            result["bookkeeping_commit"],
+            json!({"committed": false, "reason": "not_a_repo"})
+        );
     }
 }
