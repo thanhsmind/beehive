@@ -258,5 +258,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-10T14:20:04.911Z"
+  },
+  "close-bookkeeping-p3": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-10T14:37:43.392Z"
   }
 }
