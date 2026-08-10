@@ -366,5 +366,11 @@ pub(crate) fn bundle_project_map_lines(root: &Path) -> Vec<String> {
         areas.len(),
         concepts.len()
     ));
+    // U1: the always-loaded pull move — hit a symptom mid-flow (error text,
+    // odd behavior, an unfamiliar mechanism) and pull the bundle instead of
+    // re-deriving. One line, no flag-by-flag documentation.
+    lines.push(
+        "- Hit a symptom mid-flow (error text, odd behavior, an unfamiliar mechanism)? Pull it: `bee knowledge search --text \"<symptom>\"`.".to_string(),
+    );
     lines
 }

@@ -667,6 +667,31 @@ use crate::version::BEE_VERSION;
     }
 
     #[test]
+    fn u1_the_preamble_names_the_pull_move_only_when_a_bundle_exists() {
+        // No bundle: the spec-only project map never gains the pull line —
+        // no-bundle repos render byte-identically to before (U1).
+        let tmp = minimal_repo();
+        let no_bundle = render(tmp.path());
+        assert!(
+            !no_bundle.contains("bee knowledge search --text"),
+            "{no_bundle}"
+        );
+
+        // A real bundle: the map gains exactly one line naming the pull
+        // move, and it spells the command in full.
+        write(tmp.path(), "docs/knowledge/areas/a/c.md", "---\ntype: bee.area\n---\nx\n");
+        let bundled = render(tmp.path());
+        assert!(
+            bundled.contains(
+                "- Hit a symptom mid-flow (error text, odd behavior, an unfamiliar mechanism)? Pull it: `bee knowledge search --text \"<symptom>\"`."
+            ),
+            "{bundled}"
+        );
+        // Exactly one occurrence — never a second line or flag-by-flag doc.
+        assert_eq!(bundled.matches("bee knowledge search --text").count(), 1, "{bundled}");
+    }
+
+    #[test]
     fn the_bundle_digest_counts_reverses_and_rewrites_its_links() {
         let tmp = minimal_repo();
         write(tmp.path(), "docs/knowledge/areas/a/c.md", "---\ntype: bee.pattern\n---\nx\n");
