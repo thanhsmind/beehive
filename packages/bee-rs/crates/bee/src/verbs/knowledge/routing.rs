@@ -37,6 +37,7 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         "context" => run_context(flags, json, pre_json, t0),
         "search" => run_search(flags, json, pre_json, t0),
         "promote" => run_promote(flags, json, pre_json, t0),
+        "bootstrap" => run_bootstrap(flags, json, pre_json, t0),
         _ => None, // unknown verbs (group-usage fallback) → Node
     }
 }
