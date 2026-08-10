@@ -253,5 +253,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-10T13:22:53.484Z"
+  },
+  "close-bookkeeping-hardening": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-10T14:20:04.911Z"
   }
 }
