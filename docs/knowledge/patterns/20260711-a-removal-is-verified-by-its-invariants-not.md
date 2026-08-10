@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT18", "original feature: learnings-pair-relocation", docs/history/learnings/20260711-learnings-pair-relocation.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A removal is verified by its invariants, not the names it deletes

@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT33", "original feature: installer-hardening"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Non-ASCII in a .ps1 without BOM is a parse-time bomb on Windows PowerShell 5.1

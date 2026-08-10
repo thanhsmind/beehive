@@ -10,7 +10,7 @@ bee:
   decisions: [0018]
   sources: ["docs/history/learnings/critical-patterns.md#PAT43", "original feature: transcript-recovery"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A feature is not a release: re-inspect the whole working tree at close, and never let the version tuple move without explicit release intent

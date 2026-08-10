@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT47", "original feature: hardening-1-7-10"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Locks guarding long synchronous child spawns cannot be heartbeat-renewed — probe owner liveness instead

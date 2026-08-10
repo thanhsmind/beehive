@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["state-phase-lock-race cell splr-1 (blanket 'state' wrap over the whole workflow branch, trace .bee/cells/splr-1.json, commit e787819a, 2026-07-27)", "state-phase-lock-race cell splr-3 (per-record fix, decision D13, trace .bee/cells/splr-3.json, commit ebc68f04, 2026-07-27)", docs/history/state-phase-lock-race/CONTEXT.md D1-D4, decision 61e21a42-39b2-4f8a-bcb8-2a4d99f00154 (D13)]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A lock that guards the wrong record buys nothing and costs an invariant

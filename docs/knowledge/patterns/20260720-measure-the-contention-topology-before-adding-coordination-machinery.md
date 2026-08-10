@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT44", "original feature: contention-split"]
   polarity: practice
-  critical: true
+  critical: false
 ---
 
 # Measure the contention topology before adding coordination machinery

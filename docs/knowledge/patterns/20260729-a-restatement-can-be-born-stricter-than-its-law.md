@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["original feature: lane-plan-unconditional", docs/history/learnings/20260729-lane-plan-unconditional.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A restatement can be born stricter than the law it restates

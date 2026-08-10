@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT12", "original feature: evolving-loop"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Evidence is checkpointed to disk per step, never held in context until the end

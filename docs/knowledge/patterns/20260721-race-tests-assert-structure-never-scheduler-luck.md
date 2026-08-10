@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT1", "original feature: release-1-7-10-rc"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Race tests assert structure, never scheduler luck — and a race harness that hides the child's stderr is itself a bug

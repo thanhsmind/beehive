@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT28", "original feature: dispatcher-unify"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Fixture vendored-module lists break on transitive imports

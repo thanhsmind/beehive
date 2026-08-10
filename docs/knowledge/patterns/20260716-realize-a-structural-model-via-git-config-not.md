@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT3", "original feature: worktree-feature-parallelism"]
   polarity: practice
-  critical: true
+  critical: false
 ---
 
 # Realize a structural model via git config, not a file migration, when the boundaries already exist

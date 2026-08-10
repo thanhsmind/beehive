@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT17", "original feature: evolving-loop slice B"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Scope an incident-born check to the defect class, never the first location

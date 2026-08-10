@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT19", "original feature: skill-sync", docs/history/learnings/20260711-skill-sync.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Pre-code gates filter spec defects; only diff review catches implementation defects

@@ -10,7 +10,7 @@ bee:
   areas: [okf-profile]
   sources: ["docs/history/knowledge-loop/CONTEXT.md and plan.md (D1/D6/D8 — the three-arm resolver: work item, docs/history/<slug>/{CONTEXT.md,plan.md}, or the scribing-ledger stamp, taking reachable features from 2 to 164)", packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs and budget.rs (knowledge_context_lines gated on a hand-rolled has_work_item check), "knowledge-in-flow cell kf-1 (commit 03d2fdf1, 2026-08-05: knowledge_context_lines now gates on resolve_anchor instead of the work-item-only check; the invitation reaches the 162 of 164 anchorable features it previously skipped, and the retired \"author a work-item file\" advice line is gone)"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # An invitation keyed on the old precondition survives the machinery that removed it

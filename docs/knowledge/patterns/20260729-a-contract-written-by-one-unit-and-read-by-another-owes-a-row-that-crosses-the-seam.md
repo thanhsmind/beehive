@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["original feature: worker-conformance", docs/history/learnings/20260729-worker-conformance.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A contract written by one unit and read by another owes a row that crosses the seam

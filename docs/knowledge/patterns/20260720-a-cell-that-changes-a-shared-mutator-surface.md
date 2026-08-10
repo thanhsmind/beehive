@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT39", "original feature: multi-session-hardening"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A cell that changes a shared mutator surface re-runs the sibling suites of that surface — its own new suite is not enough

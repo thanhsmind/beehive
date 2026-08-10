@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT26", "original feature: bee-footprint"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Dry-run negative-grep verifies against their own fixtures

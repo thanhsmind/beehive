@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT14", "original feature: evolving-loop"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A NUL byte in a source file makes grep silently match nothing

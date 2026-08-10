@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT15", "original feature: evolving-loop"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A plan that names a source must name the reader that can open it

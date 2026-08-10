@@ -11,7 +11,7 @@ bee:
   decisions: ["2fa69010 (open gap: a history-anchored `bee knowledge promote` proposes zero area bullets, proven on knowledge-loop's own close)", 86d96c9f (promote takes its areas from the scribing ledger when the work item names none)]
   sources: ["packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs (area-update section keyed on the work item's bee.areas)", "decision 2fa69010 (2026-08-05: proven on knowledge-loop's own close — 5 capped cells mined, 0 area bullets, 0 pattern candidates)", "promote-reach cell pr-1 (commit ab000d54: promote falls back to the scribing ledger for areas when the work item names none)", "promote-reach commit 30550b39 (attribute every capped cell to every scribing-ledger area instead of per-file matching, since touches_subject never matched)", "docs/knowledge/areas/okf-profile/context-and-promote.md (decision 86d96c9f: only 5 of 95 area concepts carry a code path in bee.sources, and only 10 of 95 mention packages/ at all)"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A derived field that is empty for a whole class of inputs makes its whole output section silently blank

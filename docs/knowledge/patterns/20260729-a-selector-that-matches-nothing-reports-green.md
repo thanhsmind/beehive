@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["original feature: budget-fence-removal", docs/history/learnings/20260729-budget-fence-removal.md]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A test selector that matches nothing reports green

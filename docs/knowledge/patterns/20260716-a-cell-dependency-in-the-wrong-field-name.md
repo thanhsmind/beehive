@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT41", "original feature: perf-log"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A cell dependency in the wrong field name is silently ignored — verify the wave, not the write

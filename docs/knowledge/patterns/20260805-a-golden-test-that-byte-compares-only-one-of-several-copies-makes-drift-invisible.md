@@ -10,7 +10,7 @@ bee:
   areas: [okf-profile]
   sources: ["packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs (build_context_manifest, refusal tagged D27)", "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs (build_context_manifest, verbatim port copy)", "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs (its own resolver, refusal tagged D38, before knowledge-loop)", "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs:881-905 (learned_context_agrees_with_the_knowledge_verb_port — the only byte-for-byte golden, calling the kctx copy alone)", "docs/history/knowledge-loop/plan.md (Discovery: the two copies had already drifted, carrying D27 vs D38 tags in otherwise identical messages)", "knowledge-loop cell kl-1 (anchor.rs unifies context.rs and kctx.rs in the same cell; commit 1b2a8253, 2026-08-05)", "knowledge-loop cell kl-2 (promote.rs consumes the same resolver; commit e6f99a7a, 2026-08-05)"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A golden test that byte-compares only one of several copies makes drift invisible

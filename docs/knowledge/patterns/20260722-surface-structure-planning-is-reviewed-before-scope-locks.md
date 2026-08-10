@@ -10,7 +10,7 @@ bee:
   areas: [okf-profile]
   sources: [docs/history/learnings/20260722-okf-foundation.md, "docs/history/okf-foundation/CONTEXT.md (D9/D23 withdrawn, D25/D29/D30 superseded)"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # A plan shaped by a document's literal structure gets fresh-eyed before scope locks

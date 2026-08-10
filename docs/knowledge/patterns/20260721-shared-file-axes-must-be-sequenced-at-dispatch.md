@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   sources: ["docs/history/learnings/critical-patterns.md#PAT45", "original feature: hardening-1-7-9"]
   polarity: pitfall
-  critical: true
+  critical: false
 ---
 
 # Shared-file axes must be sequenced at dispatch time; a worker's "watcher" dies with its turn
