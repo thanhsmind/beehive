@@ -1,0 +1,52 @@
+{
+  "id": "giv-1",
+  "feature": "gate-input-validation",
+  "title": "state gate refuses unknown gate names and non-boolean approved values",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "action": "PBI p-94ecc5a2: `bee state gate` currently accepts an unknown --name (writing or no-oping silently) and a non-boolean --approved. Fix in set_gate.rs (follow the real handler if it spans more files): (1) an unknown --name is refused with a typed error naming the offending value AND listing the legal gate names (derive the list from the same source the write path uses — never a second hand-typed list); (2) a non-boolean --approved is refused naming the value; (3) refusal writes nothing — the gate record is byte-identical after; (4) the --merge path gets the same guards. Every currently-legal call stays byte-identical. TDD red-first: unknown name refused + store untouched; non-boolean approved refused; legal set and merge unchanged (pin one of each). Keep the whole suite green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "unknown gate name refuses with the legal list and writes nothing",
+      "non-boolean approved refuses naming the value",
+      "legal gate and gate --merge calls are byte-identical to before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "substantive": "guards plus tests, no TODO stubs"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-giv-1",
+    "outcome": "validation already shipped (GATE_NAMES + require_flags batch refusal, both paths); cell pins it with 5 regression tests — named deviation: no production change needed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T15:28:59.943Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T15:22:43.022Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T15:28:48.279Z"
+  }
+}
