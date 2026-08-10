@@ -17,6 +17,7 @@ use crate::verbs::workspace_store as ws;
 use crate::verbs::{emit_no_root_error, record_timing};
 use crate::{jsjson, lock};
 use serde_json::{json, Map, Value};
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf, MAIN_SEPARATOR};
 use std::process::ExitCode;
@@ -66,6 +67,34 @@ use std::time::Instant;
         assert_eq!(read_grants_strict(&store), None);
         std::fs::write(grants_file(&store), "[true]").unwrap();
         assert_eq!(read_grants_strict(&store), None);
+    }
+
+    /// review B-P2-2: `run_register`'s own slug gate matches
+    /// `create.rs`'s `feature_slug_ok` — `worktree register` never routes
+    /// through `create_feature_worktree`'s validation (only `worktree new`
+    /// does), so this is the ONLY thing standing between an unvalidated
+    /// `--feature` value and `bootstrap_worktree_store`'s feature-keyed path
+    /// joins (`archive/<feature>`). A path-traversal or absolute value must
+    /// be refused BY NAME, never delegated or silently accepted.
+    #[test]
+    fn register_feature_refusal_matches_feature_slug_ok() {
+        for feature in ["demo", "demo-2", "a", "0abc", "trailing-hyphen-"] {
+            assert!(feature_slug_ok(feature), "{feature}");
+            assert_eq!(
+                register_feature_refusal(feature),
+                None,
+                "a valid slug must never be refused: {feature}"
+            );
+        }
+        for feature in ["../../etc", "/etc/passwd", "Demo", "-leading-hyphen", "has space"] {
+            assert!(!feature_slug_ok(feature), "{feature}");
+            let refusal = register_feature_refusal(feature)
+                .unwrap_or_else(|| panic!("a non-slug feature must be refused: {feature}"));
+            assert!(
+                refusal.contains(feature),
+                "the refusal must name the exact value, got {refusal:?} for {feature}"
+            );
+        }
     }
 
     /// bootstrapWorktreeStore's two shapes, including the idempotence rule:
@@ -213,6 +242,35 @@ use std::time::Instant;
             .success());
     }
 
+    /// review D-P2-1: `git_tracked_cells`'s fail-CLOSED contract, pinned at
+    /// the pure-parse layer rather than through a real `git` process — an
+    /// entry that does not itself carry the `.bee/cells/` prefix must fail
+    /// the WHOLE lookup, never just get skipped and leave the tracked set
+    /// silently under-populated (an under-populated set reads exactly like
+    /// "nothing is tracked", which is the shape that makes the prune arm
+    /// above delete everything).
+    #[test]
+    fn tracked_cells_output_fails_closed_on_an_unexpected_entry() {
+        let well_formed = b".bee/cells/a-1.json\0.bee/cells/archive/a/a-0.json\0";
+        let set = parse_git_ls_files_cells_output(well_formed).expect("well-formed output must parse");
+        assert_eq!(
+            set,
+            HashSet::from([String::from("a-1.json"), String::from("archive/a/a-0.json")])
+        );
+
+        // One entry that never carries the `.bee/cells/` prefix at all.
+        let unexpected = b".bee/cells/a-1.json\0.bee/config.json\0";
+        assert_eq!(
+            parse_git_ls_files_cells_output(unexpected),
+            None,
+            "an entry outside .bee/cells/ must fail the whole lookup closed, not just be skipped"
+        );
+
+        // Empty output (nothing tracked under the pathspec) still parses to
+        // an empty set — this is not the failure shape.
+        assert_eq!(parse_git_ls_files_cells_output(b""), Some(HashSet::new()));
+    }
+
     /// ips-1 P1 fix, case (a): the WORKTREE's own `.bee/cells` already holds
     /// a wholesale checkout of every feature's cells (`git worktree add`
     /// checks out `.bee/cells` in full because it's git-tracked) — this is
@@ -333,6 +391,42 @@ use std::time::Instant;
         );
     }
 
+    /// review D-P3-1: `GIT_CEILING_DIRECTORIES` is process environment, so a
+    /// bare `set_var` around one assertion would leak into every other test
+    /// that spawns `git` while it was set. Scoped to exactly the life of one
+    /// test: `new` records whatever value (or absence) was already there and
+    /// pins the ceiling to `dir`; `Drop` puts it straight back — a caller can
+    /// never forget to unwind it, even on a panicking assert. Lifted from
+    /// `verbs/drivers/close.rs`'s own `GitCeilingGuard` (P3-4) rather than
+    /// shared, because that struct is private to close.rs's own test module
+    /// and this cell's scope does not touch close.rs beyond its fixture seed
+    /// line — keep the two in sync by hand if either changes.
+    struct GitCeilingGuard {
+        prior: Option<std::ffi::OsString>,
+    }
+
+    impl GitCeilingGuard {
+        fn new(dir: &Path) -> Self {
+            let prior = std::env::var_os("GIT_CEILING_DIRECTORIES");
+            // SAFETY: no other thread reads/writes this specific var across
+            // this guard's lifetime — nothing else in this crate consults
+            // GIT_CEILING_DIRECTORIES, and it exists only to steer this one
+            // test's own `git` child processes.
+            unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", dir) };
+            GitCeilingGuard { prior }
+        }
+    }
+
+    impl Drop for GitCeilingGuard {
+        fn drop(&mut self) {
+            // SAFETY: see `new` above.
+            match self.prior.take() {
+                Some(v) => unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", v) },
+                None => unsafe { std::env::remove_var("GIT_CEILING_DIRECTORIES") },
+            }
+        }
+    }
+
     /// git unavailable / not a repo: the prune arm fails safe and deletes
     /// nothing, foreign or not — the fill arm and the zero-cells case are
     /// untouched by this switch (they never asked git anything).
@@ -347,6 +441,13 @@ use std::time::Instant;
         std::fs::create_dir_all(&wt_cells).unwrap();
         std::fs::write(wt_cells.join("b-1.json"), "{\"id\":\"b-1\",\"feature\":\"b\",\"status\":\"open\"}")
             .unwrap();
+
+        // review D-P3-1: pin the ceiling to the tempdir's own parent for the
+        // life of this test — a TMPDIR that happens to sit under a real git
+        // checkout must never let `git ls-files` walk up into that enclosing
+        // repo and answer with a real (but irrelevant) tracked set instead of
+        // the "not a repo" shape this test exists to pin.
+        let _ceiling = GitCeilingGuard::new(tmp.path());
 
         bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
 
@@ -476,6 +577,96 @@ use std::time::Instant;
         );
     }
 
+    /// review B-P2-7 / D-P3-1 fixture: the ISLAND's `archive/<feature>`
+    /// subdir itself — the exact join `fs::copy` writes through at the
+    /// bottom of `sync_worktree_cells` — is a SYMLINK to a victim directory.
+    /// Before this fix `dest_archive.join(feature)` was never in the checked
+    /// set (only its parent, `cells/archive`, was), so `create_dir_all`
+    /// no-op'd on the existing link and `fs::copy` landed straight in the
+    /// link's target. This must be RED against the pre-fix code: the victim
+    /// stays byte-identical, and the whole sync is refused before ANY
+    /// prune/fill runs (same whole-function skip the other B-P1-1 fixtures
+    /// pin), not just the archive-fill step.
+    #[test]
+    fn bootstrap_refuses_a_symlinked_feature_archive_subdir_before_any_copy() {
+        if !symlink_capable() {
+            eprintln!("SKIP (env-limited: {SYMLINK_CAP}) — symlinked feature archive subdir refusal");
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = tmp.path().join("main").join(".bee");
+        let src_feature_archive = main_store.join("cells").join("archive").join("a");
+        std::fs::create_dir_all(&src_feature_archive).unwrap();
+        std::fs::write(
+            src_feature_archive.join("a-0.json"),
+            "{\"id\":\"a-0\",\"feature\":\"a\",\"status\":\"capped\"}",
+        )
+        .unwrap();
+
+        // The victim: a directory with its own file, nothing to do with bee.
+        let victim = tmp.path().join("victim-feature-archive");
+        std::fs::create_dir_all(&victim).unwrap();
+        std::fs::write(victim.join("keep.json"), "{\"unrelated\":true}").unwrap();
+
+        let wt = tmp.path().join("wt-a");
+        let wt_archive = wt.join(".bee").join("cells").join("archive");
+        std::fs::create_dir_all(&wt_archive).unwrap();
+        let wt_feature_archive = wt_archive.join("a");
+        symlink_dir(&victim.to_string_lossy(), &wt_feature_archive).unwrap();
+
+        let report = bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
+
+        assert_eq!(std::fs::read_dir(&victim).unwrap().count(), 1, "victim dir must keep only its own file");
+        assert!(!victim.join("a-0.json").exists(), "fs::copy must never write into the symlink's target");
+        assert!(
+            std::fs::symlink_metadata(&wt_feature_archive).unwrap().file_type().is_symlink(),
+            "the symlink itself must be left untouched"
+        );
+
+        let sync = report.get("cellsSync").expect("bootstrap report must name the symlink skip");
+        assert_eq!(sync.get("skipped"), Some(&Value::Bool(true)));
+        assert_eq!(sync.get("path"), Some(&json!(p(&wt_feature_archive))));
+    }
+
+    /// review D-P3-2: an untracked foreign cell/archive file actually pruned
+    /// gets named in the bootstrap report's `pruned` list; the common
+    /// nothing-pruned case omits the key entirely rather than reporting `[]`.
+    #[test]
+    fn bootstrap_reports_pruned_file_names_only_when_something_was_removed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = tmp.path().join("main").join(".bee");
+        std::fs::create_dir_all(main_store.join("cells")).unwrap();
+
+        let wt = tmp.path().join("wt-a");
+        let wt_cells = wt.join(".bee").join("cells");
+        std::fs::create_dir_all(&wt_cells).unwrap();
+        std::fs::write(wt_cells.join("a-1.json"), "{\"id\":\"a-1\",\"feature\":\"a\",\"status\":\"open\"}")
+            .unwrap();
+        let wt_archive_c = wt_cells.join("archive").join("c");
+        std::fs::create_dir_all(&wt_archive_c).unwrap();
+        std::fs::write(wt_archive_c.join("c-0.json"), "{\"id\":\"c-0\",\"feature\":\"c\",\"status\":\"capped\"}")
+            .unwrap();
+        // An untracked foreign top-level cell and archive file — both
+        // prunable, since `git_init` below never commits either.
+        std::fs::write(wt_cells.join("c-1.json"), "{\"id\":\"c-1\",\"feature\":\"c\",\"status\":\"open\"}")
+            .unwrap();
+        git_init(&wt);
+
+        let result = bootstrap_worktree_store(&wt, &main_store, "a").unwrap();
+        let pruned = result.get("pruned").and_then(Value::as_array).expect("pruned must be reported");
+        let names: Vec<&str> = pruned.iter().map(|v| v.as_str().unwrap()).collect();
+        assert!(names.contains(&"c-1.json"), "{names:?}");
+        assert!(names.contains(&"archive/c/c-0.json"), "{names:?}");
+        assert_eq!(names.len(), 2, "{names:?}");
+        assert!(wt_cells.join("a-1.json").exists(), "the granted feature's own cell must stay");
+
+        // The nothing-pruned case: the key is absent entirely.
+        let wt2 = tmp.path().join("wt-b");
+        std::fs::create_dir_all(&wt2).unwrap();
+        let result2 = bootstrap_worktree_store(&wt2, &main_store, "a").unwrap();
+        assert!(result2.get("pruned").is_none(), "an empty prune must omit the key rather than report []");
+    }
+
     /// review B-P1-1 fixture (c): the ordinary, non-symlinked path is
     /// unaffected by the new guard — no `cellsSync` skip in the report, and
     /// the existing wsh/ips fixtures above (byte-for-byte prune/fill,
@@ -495,6 +686,65 @@ use std::time::Instant;
 
         assert!(report.get("cellsSync").is_none(), "a plain directory run must never report a symlink skip");
         assert!(wt.join(".bee").join("cells").join("a-1.json").exists());
+    }
+
+    /// review B-P2-7 / D-P3-1: `worktree new`'s own result/text must carry
+    /// the SAME `cellsSync` skip note `worktree register` already surfaces —
+    /// pinned at the pure `new_result_and_text` layer (no cwd, no real
+    /// `create_feature_worktree` call needed) so a `Created` whose bootstrap
+    /// map carries `cellsSync` is enough to prove it.
+    #[test]
+    fn new_result_and_text_carries_the_cells_sync_skip_note() {
+        let created = Created {
+            id: "wt-demo".to_string(),
+            worktree_root: PathBuf::from("/tmp/wt-demo"),
+            branch: "wt/demo".to_string(),
+            base_ref: None,
+            base_ref_sha: None,
+            bootstrap: map_of(&[
+                ("created", json!(true)),
+                ("worktreeStoreRoot", json!("/tmp/wt-demo/.bee")),
+                (
+                    "cellsSync",
+                    json!({
+                        "skipped": true,
+                        "path": "/tmp/wt-demo/.bee/cells",
+                        "reason": "refusing to sync .bee/cells through a symlinked path",
+                    }),
+                ),
+            ]),
+            companion: Value::Null,
+            skills_sync: json!({ "applied": true }),
+        };
+        let (result, text) = new_result_and_text("demo", &created, "next step text");
+
+        let sync = result.get("cellsSync").expect("result must carry the bootstrap map's cellsSync");
+        assert_eq!(sync["skipped"], Value::Bool(true));
+        assert!(
+            text.contains(
+                "cells sync skipped — /tmp/wt-demo/.bee/cells: refusing to sync .bee/cells through a symlinked path"
+            ),
+            "{text}"
+        );
+    }
+
+    /// The common case: no `cellsSync` in the bootstrap map means neither the
+    /// result nor the text carries any skip note.
+    #[test]
+    fn new_result_and_text_carries_no_cells_sync_key_when_nothing_was_skipped() {
+        let created = Created {
+            id: "wt-demo".to_string(),
+            worktree_root: PathBuf::from("/tmp/wt-demo"),
+            branch: "wt/demo".to_string(),
+            base_ref: None,
+            base_ref_sha: None,
+            bootstrap: map_of(&[("created", json!(true)), ("worktreeStoreRoot", json!("/tmp/wt-demo/.bee"))]),
+            companion: Value::Null,
+            skills_sync: json!({ "applied": true }),
+        };
+        let (result, text) = new_result_and_text("demo", &created, "next step text");
+        assert!(result.get("cellsSync").is_none());
+        assert!(!text.contains("cells sync skipped"));
     }
 
     /// resolveWorktreeFeature's preference order (issues-46-53 D4): the

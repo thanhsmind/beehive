@@ -69,6 +69,13 @@ pub(crate) fn thrown_ok(out: R2<Out>) -> R2<Out> {
 /// door that needs to register a worker (dispatch prepare --claim, dp-r1)
 /// calls this too, through [`worker_mutate`], rather than re-deriving the
 /// record shape — forking it would let the two callers' records drift.
+///
+/// Upserts by the `(nickname, cell)` pair: the SAME pair refreshes the live
+/// record in place (tier/status take the freshly passed values) rather than
+/// appending a second row — `run_worker_add` and `register_worker_for_cell`
+/// both inherit this automatically, since neither re-derives the record
+/// shape. The SAME nickname against a DIFFERENT cell still appends: one
+/// worker legitimately holding several cells is not a duplicate.
 pub(crate) fn push_worker_record(
     workers: &mut Vec<Value>,
     nickname: &str,
@@ -91,7 +98,16 @@ pub(crate) fn push_worker_record(
         None => Value::Null,
         Some(s) => json!(s),
     };
-    workers.push(json!({"nickname": nickname, "cell": cell, "tier": tier_val, "status": status_val}));
+    let record = json!({"nickname": nickname, "cell": cell, "tier": tier_val, "status": status_val});
+    let existing = workers.iter_mut().find(|w| {
+        truthy(w)
+            && opt_strict_eq(jget(w, "nickname"), Some(&Value::String(nickname.to_string())))
+            && opt_strict_eq(jget(w, "cell"), Some(&Value::String(cell.to_string())))
+    });
+    match existing {
+        Some(slot) => *slot = record,
+        None => workers.push(record),
+    }
     Ok(format!("Added worker \"{nickname}\" (cell {cell})."))
 }
 
@@ -599,4 +615,69 @@ pub(crate) fn run_compounding_run(flags: Flags, use_json: bool, t0: Instant) -> 
         Ok(Out::Emit(Value::Object(record), text, 0))
     })();
     finish(&ctx, out)
+}
+
+// ─── tests ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp_root() -> tempfile::TempDir {
+        tempfile::tempdir().unwrap()
+    }
+
+    // ── rph-4 item 1: (nickname, cell) upsert ──────────────────────────────
+
+    /// The SAME `(nickname, cell)` pair upserts: a second `push_worker_record`
+    /// call for the identical pair refreshes tier/status on the live record
+    /// in place — never a second, duplicate row.
+    #[test]
+    fn push_worker_record_upserts_the_same_nickname_cell_pair() {
+        let mut workers: Vec<Value> = Vec::new();
+        push_worker_record(&mut workers, "w1", "c1", Some("generation"), Some("running")).unwrap();
+        push_worker_record(&mut workers, "w1", "c1", Some("ceiling"), Some("capped")).unwrap();
+        assert_eq!(workers.len(), 1, "the same (nickname, cell) pair must never duplicate");
+        assert_eq!(workers[0].get("tier"), Some(&json!("ceiling")));
+        assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+    }
+
+    /// The SAME nickname against a DIFFERENT cell is a legitimate second row
+    /// — one worker really can hold several cells at once.
+    #[test]
+    fn push_worker_record_appends_for_the_same_nickname_a_different_cell() {
+        let mut workers: Vec<Value> = Vec::new();
+        push_worker_record(&mut workers, "w1", "c1", Some("generation"), Some("running")).unwrap();
+        push_worker_record(&mut workers, "w1", "c2", Some("generation"), Some("running")).unwrap();
+        assert_eq!(workers.len(), 2, "a different cell for the same worker is not a duplicate");
+        assert_eq!(workers[0].get("cell"), Some(&json!("c1")));
+        assert_eq!(workers[1].get("cell"), Some(&json!("c2")));
+    }
+
+    /// `run_worker_add` and `register_worker_for_cell` inherit the upsert
+    /// automatically because both funnel through `push_worker_record` inside
+    /// the SAME `worker_mutate` lock+read+write frame: a re-registration of
+    /// the still-live `(nickname, cell)` pair mutates the one record on
+    /// disk, it never appends a stale duplicate beside it.
+    #[test]
+    fn worker_mutate_re_registration_mutates_the_live_record_on_disk() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        worker_mutate(root, |workers| {
+            push_worker_record(workers, "w1", "c1", Some("generation"), Some("running"))
+        })
+        .unwrap();
+        worker_mutate(root, |workers| {
+            push_worker_record(workers, "w1", "c1", Some("generation"), Some("capped"))
+        })
+        .unwrap();
+        let state = read_state_strict(root).unwrap();
+        let workers = state.get("workers").unwrap().as_array().unwrap();
+        assert_eq!(
+            workers.len(),
+            1,
+            "re-registering the live (nickname, cell) pair must not duplicate it: {workers:?}"
+        );
+        assert_eq!(workers[0].get("status"), Some(&json!("capped")));
+    }
 }

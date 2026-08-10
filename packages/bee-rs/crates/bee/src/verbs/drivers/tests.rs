@@ -1279,6 +1279,73 @@ use std::time::Instant;
         assert!(dpr1_workers(&root).is_empty(), "the bad record was never written");
     }
 
+    // ── B-P2-6: worker_registered pinned through the REAL entry ────────────
+
+    const DISPATCH_CLAIM_CHILD: &str = "verbs::drivers::tests::dispatch_prepare_claim_payload_child";
+
+    /// Runs ONLY as a child of the test below. `run_dispatch_prepare` (the
+    /// REAL CLI entry, not `claim_and_reserve_for_dispatch` alone) resolves
+    /// its root off `std::env::current_dir()` and prints its payload to the
+    /// process's own stdout — both process-global, so this is exercised
+    /// out-of-process instead of mutating this binary's shared cwd/stdout
+    /// under every other test, the same isolation `cells/tests.rs`'s
+    /// `session_id_env_chain_child` uses for its own process-global seam.
+    #[test]
+    #[ignore = "spawned by dispatch_prepare_claim_payload_pins_worker_registered_true"]
+    fn dispatch_prepare_claim_payload_child() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime", "claude", "--kind", "cell", "--cell", "c-1", "--worker", "bee-w1",
+            "--claim", "--json",
+        ])
+        .expect("well-formed fixture argv");
+        run_dispatch_prepare(flags, use_json, Instant::now());
+    }
+
+    /// dp-r1 / B-P2-6: a successful `--claim` names `worker_registered:true`
+    /// on the SAME JSON payload `dispatch prepare` prints — pinned through
+    /// the real CLI entry (`run_dispatch_prepare`), not just the inner
+    /// claim/register function the tests above already cover.
+    ///
+    /// The registration-FAILURE half stays on `claim_and_reserve_for_dispatch`
+    /// directly (`a_registration_failure_never_unwinds_the_standing_claim`,
+    /// above): `run_dispatch_prepare` has no clean, corrupt-able seam that
+    /// fails registration alone without also refusing the claim itself
+    /// earlier (an invalid `--cell`/`--worker` never reaches registration; an
+    /// invalid cell `tier` is the one deterministic failure, and it is
+    /// already exercised, byte-for-byte, on the inner function both doors
+    /// share) — so this test pins the success shape through the real entry
+    /// and the existing inner-fn test keeps the failure shape, per rph-4.
+    #[test]
+    fn dispatch_prepare_claim_payload_pins_worker_registered_true() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        dpr1_lane_with_route(&root, "f");
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","title":"t","status":"open","lane":"tiny","feature":"f","deps":[],"tier":"generation"}"#,
+        );
+
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = Command::new(&exe);
+        cmd.args(["--exact", DISPATCH_CLAIM_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.current_dir(&root);
+        let out = cmd.output().expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let start = stdout.find('{').unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let payload: Value = serde_json::from_str(&stdout[start..end])
+            .unwrap_or_else(|e| panic!("child stdout was not valid JSON ({e}):\n{stdout}"));
+        assert_eq!(payload.get("claimed"), Some(&json!(true)), "payload: {payload}");
+        assert_eq!(payload.get("worker_registered"), Some(&json!(true)), "payload: {payload}");
+        assert!(payload.get("registration_error").is_none(), "payload: {payload}");
+    }
+
     #[test]
     fn absent_probe_record_classifies_budget_only_without_a_subprocess() {
         let tmp = tempfile::tempdir().unwrap();

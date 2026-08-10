@@ -57,12 +57,24 @@ impl Engine {
     }
 
     /// Locate the bee source checkout or plugin package that plays the part
-    /// of `SCRIPT_PATH`'s package root:
+    /// of `SCRIPT_PATH`'s package root, trying candidates IN ORDER until one
+    /// carries the marker:
     ///   1. BEE_JS_ENTRY (the diff harness's own knob) — its grandparent's
     ///      parent is the package root.
-    ///   2. Walk up from the process's cwd for the MARKER.
-    /// `Err` ⇒ the probe declines the command: without a source tree there is
-    /// nothing authoritative to vendor FROM.
+    ///   2. `--repo-root`, when the caller passed one (review B-P2-3): tried
+    ///      BEFORE the cwd walk, so `bee onboard --repo-root <bee-checkout>`
+    ///      resolves from an unrelated cwd instead of refusing.
+    ///   3. Walk up from the process's cwd for the MARKER, stopping at the
+    ///      first REPOSITORY BOUNDARY it crosses — an ancestor carrying
+    ///      `.git` (file or dir) — so an attacker-writable ancestor OUTSIDE
+    ///      the repo can never win over the repo's own (absent) marker
+    ///      (review B-P2-3). Outside any repo (no `.git` anywhere above cwd)
+    ///      the walk still reaches `/`, so a bare host directory whose
+    ///      PARENT holds a bee checkout still onboards.
+    /// `Err` ⇒ every candidate declined the command, naming both the
+    /// `--repo-root` candidate (when the caller passed one) and the walk's
+    /// invocation root: without a source tree there is nothing authoritative
+    /// to vendor FROM.
     ///
     /// The marker is the AGENTS block template, chosen on three properties:
     /// it lives in `packages/bee` (so finding it proves `templates_dir`
@@ -88,14 +100,14 @@ impl Engine {
     /// always resolves to its own checkout. In the ordinary single-checkout
     /// case cwd's walk and the old exe-rooted walk land on the same root, so
     /// rendered bytes are unchanged there.
-    pub fn locate() -> Result<Self, LocateError> {
-        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        Self::locate_from(&cwd)
+    pub fn locate(repo_root: Option<&Path>) -> Result<Self, LocateError> {
+        Self::locate_from(repo_root, &std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
     }
 
-    /// `locate`'s search, parameterized on the invocation root so fixtures
-    /// can drive it without mutating the test process's real cwd.
-    pub fn locate_from(invocation_root: &Path) -> Result<Self, LocateError> {
+    /// `locate`'s search, parameterized on the `--repo-root` candidate and
+    /// the invocation root so fixtures can drive both without mutating the
+    /// test process's real cwd or argv.
+    pub fn locate_from(repo_root: Option<&Path>, invocation_root: &Path) -> Result<Self, LocateError> {
         const MARKER: &str = "packages/bee/AGENTS.block.md";
         if let Some(entry) = std::env::var_os("BEE_JS_ENTRY") {
             let entry = PathBuf::from(entry);
@@ -105,27 +117,42 @@ impl Engine {
                 }
             }
         }
+        if let Some(root) = repo_root {
+            if super::util::join_rel(root, MARKER).is_file() {
+                return Ok(Self::from_plugin_root(root.to_path_buf()));
+            }
+        }
         let mut dir = Some(invocation_root);
         while let Some(d) = dir {
             if super::util::join_rel(d, MARKER).is_file() {
                 return Ok(Self::from_plugin_root(d.to_path_buf()));
+            }
+            if super::util::exists(&d.join(".git")) {
+                // Repository boundary (file or dir — a worktree's `.git` is
+                // a file). Inside a repo only that repo may ever win, so the
+                // walk goes no further even if a marker-bearing ancestor
+                // sits above it.
+                break;
             }
             dir = d.parent();
         }
         Err(LocateError {
             invocation_root: invocation_root.to_path_buf(),
             missing_template: super::util::join_rel(invocation_root, MARKER),
+            repo_root_candidate: repo_root.map(Path::to_path_buf),
         })
     }
 }
 
-/// `Engine::locate` found no source checkout walking up from the invocation
-/// root — naming both the root that was searched and the template path that
-/// was never found there, so the refusal can quote them instead of guessing.
+/// `Engine::locate` found no source checkout among every candidate it tried
+/// — naming the `--repo-root` candidate (when the caller passed one), the
+/// invocation root the walk searched, and the template path that was never
+/// found there, so the refusal can quote them instead of guessing.
 #[derive(Debug, Clone)]
 pub struct LocateError {
     pub invocation_root: PathBuf,
     pub missing_template: PathBuf,
+    pub repo_root_candidate: Option<PathBuf>,
 }
 
 /// skillsTargetRoot (l. 398): the legacy global root.
@@ -657,6 +684,39 @@ mod tests {
         std::fs::write(p, body).unwrap();
     }
 
+    /// `BEE_JS_ENTRY` is process environment and `locate_from` short-circuits
+    /// on it (source.rs l. 100) before ever consulting `repo_root` or the cwd
+    /// walk, so an ambient value left by the diff harness (or a stray prior
+    /// test) would make every fixture below resolve to whatever checkout
+    /// THAT entry names instead of the fixture under test. `new` unsets it
+    /// for the guard's lifetime and records whatever was there; `Drop` puts
+    /// it straight back — every locate test in this module holds one so a
+    /// panicking assert still unwinds the env cleanly.
+    struct NoBeeJsEntry {
+        prior: Option<std::ffi::OsString>,
+    }
+
+    impl NoBeeJsEntry {
+        fn new() -> Self {
+            let prior = std::env::var_os("BEE_JS_ENTRY");
+            // SAFETY: nothing else in this crate consults BEE_JS_ENTRY; it
+            // exists only as the diff harness's own knob, and this guard's
+            // scope covers exactly the locate call(s) under test.
+            unsafe { std::env::remove_var("BEE_JS_ENTRY") };
+            NoBeeJsEntry { prior }
+        }
+    }
+
+    impl Drop for NoBeeJsEntry {
+        fn drop(&mut self) {
+            // SAFETY: see `new` above.
+            match self.prior.take() {
+                Some(v) => unsafe { std::env::set_var("BEE_JS_ENTRY", v) },
+                None => unsafe { std::env::remove_var("BEE_JS_ENTRY") },
+            }
+        }
+    }
+
     // ── Engine::locate root resolution (onboard apply's live incident) ──────
     //
     // In a granted worktree whose `.bee/bin/bee` is a symlink into another
@@ -689,6 +749,7 @@ mod tests {
 
     #[test]
     fn locate_from_renders_the_invocation_roots_own_templates_not_a_symlinked_exes_checkout() {
+        let _no_bee_js_entry = NoBeeJsEntry::new();
         let dir = tempfile::tempdir().unwrap();
         let base = dunce::canonicalize(dir.path()).unwrap();
 
@@ -718,7 +779,8 @@ mod tests {
 
         // The fix: `locate_from` never starts from the exe — only from the
         // invocation root — so it renders the WORKTREE's own templates.
-        let engine = Engine::locate_from(&worktree_root).expect("worktree carries its own marker");
+        let engine =
+            Engine::locate_from(None, &worktree_root).expect("worktree carries its own marker");
         assert_eq!(engine.plugin_root, worktree_root);
         let rendered = std::fs::read_to_string(&engine.agents_block_template).unwrap();
         assert!(
@@ -733,14 +795,108 @@ mod tests {
 
     #[test]
     fn locate_from_refuses_a_root_without_templates_naming_both_paths() {
+        let _no_bee_js_entry = NoBeeJsEntry::new();
         let dir = tempfile::tempdir().unwrap();
         // A host repo root: no packages/bee/AGENTS.block.md anywhere above it
         // within the sandbox (a fresh isolated tempdir has no such ancestor).
         let host_root = dunce::canonicalize(dir.path()).unwrap().join("host-repo");
         std::fs::create_dir_all(&host_root).unwrap();
 
-        let err = Engine::locate_from(&host_root).expect_err("no marker anywhere ⇒ refusal");
+        let err = Engine::locate_from(None, &host_root).expect_err("no marker anywhere ⇒ refusal");
         assert_eq!(err.invocation_root, host_root);
         assert_eq!(err.missing_template, host_root.join("packages").join("bee").join("AGENTS.block.md"));
+        assert_eq!(err.repo_root_candidate, None);
+    }
+
+    // ── review B-P2-3: repository-boundary stop and --repo-root candidate ──
+
+    /// Red-capable pin for the boundary. Fixture shape: templates live in an
+    /// ancestor ABOVE a `.git` boundary; cwd sits INSIDE the repo, below the
+    /// boundary, with no templates of its own. Old code (no boundary check)
+    /// walks straight past the repo's own `.git` and finds the ancestor's
+    /// marker — the exact poisoning review B-P2-3 names. Verified red by
+    /// reverting the boundary check (the `if exists(.git) { break; }` line)
+    /// once by hand and confirming this test then fails; restored after.
+    #[test]
+    fn locate_from_stops_at_the_repository_boundary_never_an_ancestor_above_it() {
+        let _no_bee_js_entry = NoBeeJsEntry::new();
+        let dir = tempfile::tempdir().unwrap();
+        let base = dunce::canonicalize(dir.path()).unwrap();
+
+        // An ancestor ABOVE the repo carries a marker — attacker-writable
+        // territory the walk must never reach once it has crossed a `.git`.
+        write(
+            &base.join("packages").join("bee").join("AGENTS.block.md"),
+            "# ancestor-above-repo AGENTS block (must never win)\n",
+        );
+
+        // The repo itself: `.git` boundary, no marker inside it anywhere.
+        let repo_root = base.join("host-repo");
+        std::fs::create_dir_all(repo_root.join(".git")).unwrap();
+        let cwd = repo_root.join("nested").join("work");
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        let err = Engine::locate_from(None, &cwd)
+            .expect_err("the repo's own boundary must stop the walk before the ancestor's marker");
+        assert_eq!(err.invocation_root, cwd);
+        assert_eq!(err.repo_root_candidate, None);
+    }
+
+    /// Outside any repo (no `.git` above cwd at all) the walk still reaches
+    /// the sandbox root, unchanged from before B-P2-3: a bare host directory
+    /// whose PARENT holds a bee checkout still onboards.
+    #[test]
+    fn locate_from_still_walks_to_root_when_no_repo_boundary_exists() {
+        let _no_bee_js_entry = NoBeeJsEntry::new();
+        let dir = tempfile::tempdir().unwrap();
+        let base = dunce::canonicalize(dir.path()).unwrap();
+
+        write(&base.join("packages").join("bee").join("AGENTS.block.md"), "# parent checkout\n");
+        let cwd = base.join("host-dir");
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        let engine = Engine::locate_from(None, &cwd)
+            .expect("no .git anywhere above cwd ⇒ the walk still reaches the parent checkout");
+        assert_eq!(engine.plugin_root, base);
+    }
+
+    /// `--repo-root` is tried FIRST, ahead of the cwd walk: an unrelated cwd
+    /// with no marker anywhere in its own ancestry still resolves once a
+    /// checkout-shaped `--repo-root` is given (INSTALL.md's "from any
+    /// terminal" claim).
+    #[test]
+    fn locate_from_resolves_from_repo_root_candidate_when_cwd_has_no_marker() {
+        let _no_bee_js_entry = NoBeeJsEntry::new();
+        let dir = tempfile::tempdir().unwrap();
+        let base = dunce::canonicalize(dir.path()).unwrap();
+
+        let checkout = base.join("bee-checkout");
+        write(&checkout.join("packages").join("bee").join("AGENTS.block.md"), "# repo-root checkout\n");
+
+        let unrelated_cwd = base.join("somewhere-else");
+        std::fs::create_dir_all(&unrelated_cwd).unwrap();
+
+        let engine = Engine::locate_from(Some(&checkout), &unrelated_cwd)
+            .expect("--repo-root candidate must resolve even when cwd's own walk would miss");
+        assert_eq!(engine.plugin_root, checkout);
+    }
+
+    /// When BOTH candidates miss, the refusal names both: the `--repo-root`
+    /// candidate that was tried and the walk's invocation root.
+    #[test]
+    fn locate_from_refusal_names_both_the_repo_root_candidate_and_the_invocation_root() {
+        let _no_bee_js_entry = NoBeeJsEntry::new();
+        let dir = tempfile::tempdir().unwrap();
+        let base = dunce::canonicalize(dir.path()).unwrap();
+
+        let repo_root_candidate = base.join("not-a-checkout");
+        std::fs::create_dir_all(&repo_root_candidate).unwrap();
+        let cwd = base.join("also-not-a-checkout");
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        let err = Engine::locate_from(Some(&repo_root_candidate), &cwd)
+            .expect_err("neither candidate carries the marker ⇒ refusal");
+        assert_eq!(err.invocation_root, cwd);
+        assert_eq!(err.repo_root_candidate, Some(repo_root_candidate));
     }
 }

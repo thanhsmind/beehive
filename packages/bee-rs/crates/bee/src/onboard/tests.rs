@@ -909,6 +909,7 @@ fn no_engine_message_names_the_invocation_root_and_the_missing_template_path() {
     let err = super::source::LocateError {
         invocation_root: PathBuf::from("/host/repo"),
         missing_template: PathBuf::from("/host/repo/packages/bee/AGENTS.block.md"),
+        repo_root_candidate: None,
     };
     let message = no_engine_message(&err);
     assert!(message.contains("/host/repo"), "must name the invocation root: {message}");

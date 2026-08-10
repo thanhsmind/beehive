@@ -768,19 +768,24 @@ pub(crate) fn close_handler(
     shell: Option<&'static str>,
     pattern_verdicts: &HashMap<String, String>,
 ) -> D<Out> {
-    // P2-3: a non-boolean `close_commit_bookkeeping` refuses the WHOLE
-    // close UP FRONT — before the dry-run door listing, before the declared
-    // tests run, before anything is written. Precedent:
+    // P2-3: a non-boolean, non-null `close_commit_bookkeeping` refuses the
+    // WHOLE close UP FRONT — before the dry-run door listing, before the
+    // declared tests run, before anything is written. Precedent:
     // `worktree_cleanup_on_merge_config` (verbs/worktree/handlers.rs) reads
     // "present-but-non-boolean" as `None` and refuses rather than guesses —
     // but that verb still has a Node fallback for the bare `None` its own
     // `?` produces. Close has none (`rg -l buildContextManifest --glob
     // '*.mjs'` finds nothing left to delegate to), so the refusal here is a
     // typed `Out::Thrown` that names the key and the offending value
-    // instead of a silent `None`.
+    // instead of a silent `None`. B-P2-4: the refusal names the file that
+    // actually carries the offending value — `.bee/config.local.json` when
+    // it sets the key, `.bee/config.json` otherwise — since the merged
+    // config `close_commit_bookkeeping_invalid_value` reads can be an
+    // untracked overlay override the tracked file never mentions.
     if let Some(bad) = close_commit_bookkeeping_invalid_value(root) {
+        let offending_file = close_commit_bookkeeping_offending_file(root);
         return Ok(Out::Thrown(format!(
-            "close: \"close_commit_bookkeeping\" in .bee/config.json must be a boolean, got {bad} — fix the config, then re-run bee close --feature {feature}."
+            "close: \"close_commit_bookkeeping\" in {offending_file} must be a boolean, got {bad} — fix the config, then re-run bee close --feature {feature}."
         )));
     }
 
@@ -1158,10 +1163,17 @@ fn auto_archive_on_close(root: &Path, feature: &str) -> Retirement {
 
 // ── bee-store bookkeeping auto-commit ───────────────────────────────────────
 //
-// A minimal local git-exec helper: `verbs::worktree`'s `run_git` (and
-// `is_ordinary_checkout`) live in a private sibling module close.rs cannot
-// import, so this mirrors the shape (status/stdout/stderr) rather than
-// reaching across the module boundary.
+// A minimal local git-exec helper for every call here EXCEPT the commit
+// itself: `verbs::worktree`'s own `run_git`/`is_ordinary_checkout` are a
+// sibling module's internals, so this mirrors the shape (status/stdout/
+// stderr) rather than reaching across for `rev-parse`, `status`, `add`, and
+// `reset`. B-P2-1 is the one deliberate exception: the `git commit` call
+// itself now goes through `verbs::worktree::commit_unsigned`, the ONE
+// shared helper it and the worktree-merge commit (`phases.rs`) both call,
+// so the unsigned-commit mechanism can never drift between the two —
+// `commit_close_bookkeeping` converts its `GitOut` result back into a
+// `GitRun` below so `git_fail_first_line` (and this module's own wording)
+// stay untouched.
 
 /// A completed `git` invocation: `None` means the spawn itself failed (git
 /// off PATH), same "every field absent" shape `verbs::worktree::git::GitOut`
@@ -1240,29 +1252,57 @@ impl BookkeepingCommit {
     }
 }
 
-/// `close_commit_bookkeeping` in `.bee/config.json`: absent or `true` reads
-/// as ON (mirrors `archive_on_close_enabled`'s absent-means-on default just
-/// above). Unlike that helper, a present-but-non-boolean value is REFUSED
+/// `close_commit_bookkeeping` in the merged config (`.bee/config.json`
+/// overlaid by `.bee/config.local.json`, state.rs:157-182): absent OR
+/// `null` reads as ON (mirrors `archive_on_close_enabled`'s absent-means-on
+/// default just above) — B-P2-4: `null` is bee's own unset idiom, so a
+/// value round-tripped through a tool that only knows JSON's `null` (never
+/// "delete the key") must default exactly like an absent key, not refuse.
+/// Unlike that helper, a present, non-null, non-boolean value is REFUSED
 /// (`None`) rather than silently read as ON — precedent:
 /// `worktree_cleanup_on_merge_config` (verbs/worktree/handlers.rs) — a
 /// typo'd config value must never resolve to a commit running unasked.
 fn close_commit_bookkeeping_config(root: &Path) -> Option<bool> {
     match read_config_raw(root).get("close_commit_bookkeeping") {
-        None => Some(true),
+        None | Some(Value::Null) => Some(true),
         Some(Value::Bool(b)) => Some(*b),
         Some(_) => None,
     }
 }
 
 /// P2-3: the raw offending value, present ONLY when
-/// `close_commit_bookkeeping_config` would refuse (present, non-boolean) —
-/// `close_handler` reads this BEFORE anything else runs so the refusal can
-/// name the key and the value rather than folding into the bookkeeping
-/// commit's own silent `config_off` skip.
+/// `close_commit_bookkeeping_config` would refuse (present, non-null,
+/// non-boolean) — `close_handler` reads this BEFORE anything else runs so
+/// the refusal can name the key and the value rather than folding into the
+/// bookkeeping commit's own silent `config_off` skip. B-P2-4: `null` is
+/// never offending — it reads as unset, same as an absent key.
 fn close_commit_bookkeeping_invalid_value(root: &Path) -> Option<Value> {
     match read_config_raw(root).get("close_commit_bookkeeping") {
-        None | Some(Value::Bool(_)) => None,
+        None | Some(Value::Bool(_)) | Some(Value::Null) => None,
         Some(other) => Some(other.clone()),
+    }
+}
+
+/// B-P2-4: which config file actually carries the offending
+/// `close_commit_bookkeeping` value, for the refusal `close_handler` renders
+/// when [`close_commit_bookkeeping_invalid_value`] finds one. `read_config_raw`
+/// (state.rs:157-182) merges `.bee/config.local.json` OVER `.bee/config.json`,
+/// and for any non-object value the overlay's own key — when the raw overlay
+/// sets the key at all — wins the merge outright (state.rs `merge_config_overlay`),
+/// so the local overlay is checked first; the tracked file is the answer for
+/// every other case, including the (unreachable in practice) case where
+/// neither raw file carries the key.
+fn close_commit_bookkeeping_offending_file(root: &Path) -> &'static str {
+    let has_key = |file: PathBuf| -> bool {
+        matches!(
+            read_json(&file),
+            ReadJson::Parsed(Value::Object(m)) if m.contains_key("close_commit_bookkeeping")
+        )
+    };
+    if has_key(root.join(".bee").join("config.local.json")) {
+        ".bee/config.local.json"
+    } else {
+        ".bee/config.json"
     }
 }
 
@@ -1309,10 +1349,27 @@ fn commit_close_bookkeeping(root: &Path, feature: &str) -> BookkeepingCommit {
 
     // P3-1 (locked policy): bee's own bookkeeping commit is unsigned —
     // `--no-gpg-sign` means a repo with `commit.gpgsign true` can never turn
-    // this into a hung `gpg`/pinentry prompt during close.
+    // this into a hung `gpg`/pinentry prompt during close. B-P2-1: the
+    // spawn itself now goes through `verbs::worktree`'s shared
+    // `commit_unsigned` helper (also used by the worktree-merge commit in
+    // `phases.rs`), but the failure text below is still assembled entirely
+    // from the returned [`crate::verbs::worktree::GitOut`] fields — this
+    // function's own wording (including `git_fail_first_line`'s `exit
+    // status <code>` fallback, R81) never changes.
     let message = format!("Record {feature} close bookkeeping in the bee store");
-    match run_git(root, &["commit", "--no-gpg-sign", "-m", &message, "--", ".bee"]) {
-        Some(out) if out.status == Some(0) => {}
+    let commit_out = crate::verbs::worktree::commit_unsigned(root, &message, Some(".bee"));
+    if commit_out.stdout.is_none() {
+        // `commit_unsigned`'s spawn itself failed (git off PATH) — the
+        // `GitOut` "every field null" shape mirrors this module's own
+        // `run_git` returning `None` for the same condition.
+        let index_restored =
+            matches!(run_git(root, &["reset", "--", ".bee"]), Some(r) if r.status == Some(0));
+        return BookkeepingCommit::Skipped {
+            reason: "git_failed:git commit could not be spawned".to_string(),
+            index_restored: Some(index_restored),
+        };
+    }
+    if commit_out.status != Some(0) {
         // P2-1: `.bee` is staged (the `git add` above succeeded) and the
         // commit that would have consumed that stage never landed — a
         // git-degraded close must not leave `.bee` sitting staged on top of
@@ -1320,22 +1377,17 @@ fn commit_close_bookkeeping(root: &Path, feature: &str) -> BookkeepingCommit {
         // warn-never-block contract as every other git step here: a reset
         // that itself fails is one more line in the warning, never a second
         // failure this function raises.
-        Some(out) => {
-            let index_restored =
-                matches!(run_git(root, &["reset", "--", ".bee"]), Some(r) if r.status == Some(0));
-            return BookkeepingCommit::Skipped {
-                reason: format!("git_failed:{}", git_fail_first_line(&out)),
-                index_restored: Some(index_restored),
-            };
-        }
-        None => {
-            let index_restored =
-                matches!(run_git(root, &["reset", "--", ".bee"]), Some(r) if r.status == Some(0));
-            return BookkeepingCommit::Skipped {
-                reason: "git_failed:git commit could not be spawned".to_string(),
-                index_restored: Some(index_restored),
-            };
-        }
+        let out = GitRun {
+            status: commit_out.status,
+            stdout: commit_out.stdout.unwrap_or_default(),
+            stderr: commit_out.stderr.unwrap_or_default(),
+        };
+        let index_restored =
+            matches!(run_git(root, &["reset", "--", ".bee"]), Some(r) if r.status == Some(0));
+        return BookkeepingCommit::Skipped {
+            reason: format!("git_failed:{}", git_fail_first_line(&out)),
+            index_restored: Some(index_restored),
+        };
     }
 
     let sha = run_git(root, &["rev-parse", "HEAD"])
@@ -1674,7 +1726,13 @@ mod tests {
         // the flag directly.
         w(root, ".bee/config.json", "{}\n");
         git_ok(root, &["add", ".bee/config.json"]);
-        git_ok(root, &["commit", "-q", "-m", "seed"]);
+        // D-P3-1: this SEED commit is fixture setup, not the code under
+        // test, so it passes `--no-gpg-sign` directly rather than relying on
+        // the repo's own (unset) config — a developer whose GLOBAL
+        // `commit.gpgsign` is `true` would otherwise have this bare `git
+        // commit` try to sign (and hang or fail on a missing/misconfigured
+        // agent) before any test module logic even runs.
+        git_ok(root, &["commit", "-q", "--no-gpg-sign", "-m", "seed"]);
     }
 
     fn dirty_tracked_bee_file(root: &Path) {
@@ -1814,6 +1872,31 @@ mod tests {
         assert!(!git_status_porcelain(root).is_empty(), "dirty .bee must stay uncommitted");
     }
 
+    /// P2-3 defense-in-depth: `commit_close_bookkeeping`'s own `None` arm —
+    /// `close_commit_bookkeeping_config` refusing a non-boolean, non-null
+    /// value — is normally unreachable through `close_handler`, which
+    /// refuses the whole close before this function ever runs. This calls
+    /// `commit_close_bookkeeping` directly, bypassing that upfront gate, so
+    /// the fallback arm itself still has a test pinning it to
+    /// `reason: "config_off"`, same as the boolean-`false` case just above.
+    #[test]
+    fn non_boolean_config_reaching_commit_close_bookkeeping_directly_yields_config_off() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(root, ".bee/config.json", r#"{"close_commit_bookkeeping": "sometimes"}"#);
+
+        let commit = commit_close_bookkeeping(root, "demo");
+        match commit {
+            BookkeepingCommit::Skipped { reason, index_restored } => {
+                assert_eq!(reason, "config_off");
+                assert_eq!(index_restored, None);
+            }
+            BookkeepingCommit::Committed { .. } => panic!("expected no commit"),
+        }
+        assert!(!git_status_porcelain(root).is_empty(), "dirty .bee must stay uncommitted");
+    }
+
     /// P2-3: a non-boolean `close_commit_bookkeeping` used to fall silently
     /// through `commit_close_bookkeeping`'s own `config_off` skip. It now
     /// refuses the WHOLE close, up front, before anything else runs —
@@ -1833,6 +1916,10 @@ mod tests {
             Ok(Out::Thrown(msg)) => {
                 assert!(msg.contains("close_commit_bookkeeping"), "{msg}");
                 assert!(msg.contains("\"sometimes\""), "{msg}");
+                // B-P2-4: the bad value lives ONLY in the tracked file here,
+                // so the refusal must name it, not the (absent) overlay.
+                assert!(msg.contains(".bee/config.json"), "{msg}");
+                assert!(!msg.contains(".bee/config.local.json"), "{msg}");
             }
             Ok(Out::Emit(..)) => panic!("expected a refusal, got an Emit"),
             Err(_) => panic!("expected Ok(Out::Thrown(_))"),
@@ -1844,6 +1931,48 @@ mod tests {
         assert!(git_status_porcelain(root).contains(".bee/config.json"), "{}", git_status_porcelain(root));
         let log = git_out(root, &["log", "--oneline"]);
         assert_eq!(log.lines().count(), 1, "no new commit: {log}");
+    }
+
+    /// B-P2-4: a bad value living ONLY in the untracked overlay
+    /// (`.bee/config.local.json`) must have the refusal name THAT file, not
+    /// the hardcoded `.bee/config.json` — `read_config_raw` (state.rs)
+    /// merges the overlay OVER the tracked file, so the tracked file (here,
+    /// just `{}`) never carries the offending value at all.
+    #[test]
+    fn non_boolean_value_only_in_local_overlay_names_config_local_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(root, ".bee/config.local.json", r#"{"close_commit_bookkeeping": "sometimes"}"#);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new());
+        match out {
+            Ok(Out::Thrown(msg)) => {
+                assert!(msg.contains("close_commit_bookkeeping"), "{msg}");
+                assert!(msg.contains("\"sometimes\""), "{msg}");
+                assert!(msg.contains(".bee/config.local.json"), "{msg}");
+                assert!(!msg.contains("in .bee/config.json "), "{msg}");
+            }
+            Ok(Out::Emit(..)) => panic!("expected a refusal, got an Emit"),
+            Err(_) => panic!("expected Ok(Out::Thrown(_))"),
+        }
+    }
+
+    /// B-P2-4: `null` is bee's own unset idiom — a `close_commit_bookkeeping`
+    /// of `null` must read exactly like an absent key (defaults on), never
+    /// refuse the close the way every other non-boolean value does.
+    #[test]
+    fn null_config_value_reads_as_unset_and_close_proceeds_normally() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        init_bee_repo(root);
+        w(root, ".bee/config.json", r#"{"close_commit_bookkeeping": null}"#);
+
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(result, _text, code) = out else { panic!("expected Emit, got a refusal") };
+        assert_eq!(code, 0);
+        assert_eq!(result["bookkeeping_commit"]["committed"], json!(true));
+        assert!(result["bookkeeping_commit"]["sha"].as_str().is_some_and(|s| !s.is_empty()));
     }
 
     #[test]

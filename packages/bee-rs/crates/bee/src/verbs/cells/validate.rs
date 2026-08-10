@@ -188,6 +188,22 @@ pub(crate) fn validate_new_cell(root: &Path, cell: &Value) -> MR<()> {
     assert_regen_obligation(map, "addCell")
 }
 
+/// The shared behavior-door default (E6 / B-P2-8): a call that sets
+/// `change_class` to `"behavior"` arms `trace.behavior_change = true`
+/// UNLESS that same call already declared its own `behavior_change` value —
+/// an explicit `false` is a deliberate opt-out, honored as-is. Both
+/// `addCell` (`normalize_new_cell`, below — the payload's nested
+/// `trace.behavior_change`) and `updateCell` (`run_update`, handlers_write.rs
+/// — the patch's flat `behavior_change` field) call this ONE door rather
+/// than each re-deriving the rule, so the two shapes can never drift.
+///
+/// Never fires the other direction: a call that changes `change_class` AWAY
+/// from `"behavior"` (or never touches it) changes nothing here — the door
+/// only ever ARMS, it never disarms an already-armed cell.
+pub(crate) fn arms_behavior_door(change_class: Option<&Value>, explicit_behavior_change: bool) -> bool {
+    !explicit_behavior_change && matches!(change_class, Some(Value::String(s)) if s == "behavior")
+}
+
 /// lib/cells.mjs normalizeNewCell — key order: existing keys keep position,
 /// the literal's fields (status, deps, decisions, files, read_first, trace)
 /// append where absent.
@@ -212,9 +228,7 @@ pub(crate) fn normalize_new_cell(cell: &Value) -> MR<Value> {
     // explicit false is a deliberate opt-out and is respected as-is.
     let explicit_behavior_change =
         matches!(map.get("trace"), Some(Value::Object(t)) if t.contains_key("behavior_change"));
-    if !explicit_behavior_change
-        && matches!(map.get("change_class"), Some(Value::String(s)) if s == "behavior")
-    {
+    if arms_behavior_door(map.get("change_class"), explicit_behavior_change) {
         trace.insert("behavior_change".into(), Value::Bool(true));
     }
     out.insert("trace".into(), Value::Object(trace));
