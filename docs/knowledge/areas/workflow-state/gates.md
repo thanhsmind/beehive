@@ -418,10 +418,18 @@ a malformed record has earned none.
   not_a_repo | git_failed:<line>}) in its output. The commit is path-scoped
   so unrelated dirty AND staged files are never swept (no-whole-tree-git
   law). Warn-never-block: a git failure is one warning line and close's exit
-  stays green. `.bee/config.json` `close_commit_bookkeeping: false` opts
-  out; a non-boolean value is refused outright, never silently read as on
-  (worktree_cleanup_on_merge precedent). A red close and `--dry-run` never
-  commit. This closes the dead-end where a worktree-session close dirtied
+  stays green — and the failure path cleans up after itself: the scoped
+  `git add` is undone best-effort (`git reset -- .bee`), the report carries
+  `index_restored: true|false`, and the warning says "index restored" or
+  "WARNING: .bee left staged"; the `git_failed:` reason is never bare — a
+  silent failing hook renders as `git_failed:exit status <code>`
+  (close-bookkeeping-hardening cell cbh-1, 2026-08-10, review P2-1/P2-2).
+  `.bee/config.json` `close_commit_bookkeeping: false` opts out; a
+  non-boolean value REFUSES the whole close up front — typed error naming
+  the key and the offending value, before the tests run, nothing committed
+  (worktree_cleanup_on_merge precedent, made real by cbh-1 after review
+  P2-3 found the first ship silently read it as off). A red close and
+  `--dry-run` never commit. This closes the dead-end where a worktree-session close dirtied
   main and `worktree merge` then refused `WORKTREE_MERGE_MAIN_DIRTY` on
   bee's own bookkeeping (backlog P2 row 708; close-lands-bookkeeping cell
   clb-1, 2026-08-10).
