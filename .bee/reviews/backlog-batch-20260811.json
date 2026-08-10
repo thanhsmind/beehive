@@ -1,0 +1,180 @@
+{
+  "id": "backlog-batch-20260811",
+  "requested_by": "user",
+  "requested_at": "2026-08-10T20:09:14.451Z",
+  "scope_description": "Everything unreviewed since the approved close-lands-bookkeeping review: the close-bookkeeping hardening pair and the six-feature backlog sweep — 9 cells (cbh-1, cbp-1, cbp-2, dpr-1, giv-1, orr-1, wsh-1, wmn-1, ips-1) plus the docs-lane verify-pipeline archive and grooming bookkeeping.",
+  "included": [
+    {
+      "type": "cell",
+      "id": "cbh-1",
+      "reason": "close bookkeeping hardening: config refusal, index restore, non-empty reason (feature close-bookkeeping-hardening)"
+    },
+    {
+      "type": "cell",
+      "id": "cbp-1",
+      "reason": "gpg/stdin hardening + worktree-link and ceiling-guard tests (feature close-bookkeeping-p3)"
+    },
+    {
+      "type": "cell",
+      "id": "cbp-2",
+      "reason": "cells add defaults behavior_change for behavior class (feature close-bookkeeping-p3)"
+    },
+    {
+      "type": "cell",
+      "id": "dpr-1",
+      "reason": "dispatch prepare --claim registers the worker (feature dispatch-registers-worker)"
+    },
+    {
+      "type": "cell",
+      "id": "giv-1",
+      "reason": "state gate refusal pins — tests only (feature gate-input-validation)"
+    },
+    {
+      "type": "cell",
+      "id": "orr-1",
+      "reason": "onboard template root from invocation, never current_exe (feature onboard-root-resolution)"
+    },
+    {
+      "type": "cell",
+      "id": "wsh-1",
+      "reason": "island cell bootstrap feature-scoping (feature worktree-store-hygiene)"
+    },
+    {
+      "type": "cell",
+      "id": "wmn-1",
+      "reason": "dispatch prepare learned-context reads granted worktree bundle (feature worktree-manifest-native)"
+    },
+    {
+      "type": "cell",
+      "id": "ips-1",
+      "reason": "P1 fix-first: prune never deletes tracked cells (feature island-prune-safety)"
+    }
+  ],
+  "excluded": [],
+  "baseline": "ac0eaca0",
+  "head": "66d572ca",
+  "reviewer_manifest": [],
+  "verification_preflight": {
+    "checked_at": "2026-08-10T20:09:14.451Z",
+    "cells_checked": [
+      "dpr-1",
+      "giv-1",
+      "orr-1",
+      "wsh-1",
+      "wmn-1",
+      "ips-1"
+    ],
+    "passed": true
+  },
+  "findings": [
+    {
+      "findings": [
+        {
+          "severity": "P1",
+          "id": "B-P1-1",
+          "file": "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs:481-504",
+          "summary": "Symlinked .bee/cells defeats the tracked-set shield: prune deletes files OUTSIDE the store (git tracks the symlink, not paths under it) — verified with transcript",
+          "evidence": "security reviewer: ls-files returns only the 120000 symlink entry; loop deleted victim dir contents; introduced by wsh-1/ips-1"
+        },
+        {
+          "severity": "P1",
+          "id": "B-P1-2",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1314,1181",
+          "summary": "no-gpg-sign and stdin-null hang defenses have zero test assertions and the fixture masks them (gpgsign forced false) — deleting either keeps all 1461 tests green; the claim was never proven",
+          "evidence": "test-coverage reviewer; corroborated by architecture: the same hazard is STILL LIVE in worktree merge's commit (phases.rs:358, unhardened, holds worktree-admin lock mid-merge)"
+        },
+        {
+          "severity": "P2",
+          "id": "B-P2-1",
+          "file": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:358",
+          "summary": "gpg/stdin hardening bound to close.rs's private git runner copy, not the mechanism — worktree merge commit can still hang on pinentry; crate now has 4+ private git runners; failure wording drifted (exit status 1 vs exit 1) with one spelling pinned as R81 contract",
+          "evidence": "architecture P2-A/B/C"
+        },
+        {
+          "severity": "P2",
+          "id": "B-P2-2",
+          "file": "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs:281,570-573",
+          "summary": "worktree register --feature unvalidated and joined into fs paths — ../../.. escapes archive dirs; feature_slug_ok guards only worktree new",
+          "evidence": "security, rustc-verified joins"
+        },
+        {
+          "severity": "P2",
+          "id": "B-P2-3",
+          "file": "packages/bee-rs/crates/bee/src/onboard/source.rs:98-119",
+          "summary": "Engine::locate walks cwd to / with no boundary — nearest ancestor carrying packages/bee/AGENTS.block.md becomes the vendoring source (template/hook poisoning); production locate() itself unpinned; tests brittle to ambient BEE_JS_ENTRY; --repo-root never a locate candidate (INSTALL.md 'from any terminal' now false)",
+          "evidence": "security + test-coverage + correctness, empirically demonstrated"
+        },
+        {
+          "severity": "P2",
+          "id": "B-P2-4",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:781,1262",
+          "summary": "Config refusal names .bee/config.json but reads the merged local overlay — a bad value in config.local.json blocks every close incl. dry-run while pointing at the wrong file; null also hard-blocks though null is bee's unset idiom; the defense-in-depth fallback arm lost its test in the retarget",
+          "evidence": "correctness (real-binary repro) + test-coverage F9"
+        },
+        {
+          "severity": "P2",
+          "id": "B-P2-5",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1930",
+          "summary": "cfg(unix) leaves index-restore and reason-fallback wholly unpinned on Windows, the platform CI calls primary",
+          "evidence": "test-coverage F3"
+        },
+        {
+          "severity": "P2",
+          "id": "B-P2-6",
+          "file": "packages/bee-rs/crates/bee/src/verbs/state_group/workers.rs:127-142",
+          "summary": "Auto-registration makes duplicate worker records routine (no dedupe; update matches first only; skills doc still teaches manual worker add; Thrown re-run orphans a running record); payload keys worker_registered/registration_error never asserted",
+          "evidence": "architecture P3-I + correctness F4/F5 corroborated (promoted), test-coverage F6"
+        },
+        {
+          "severity": "P2",
+          "id": "B-P2-7",
+          "file": "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs:442-454",
+          "summary": "ls-files guard fails OPEN on unexpected output shape (empty tracked set = prune everything) and the fail-safe test is env-brittle (fails under a git-owned TMPDIR); register on an adopted worktree prunes the prior feature's untracked in-flight cells with no report",
+          "evidence": "architecture P3-G + test-coverage F4 corroborated (promoted) + correctness F9"
+        },
+        {
+          "severity": "P2",
+          "id": "B-P2-8",
+          "file": "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs:210-219",
+          "summary": "behavior_change default fires only at add — cells update --change_class behavior still leaves the scribing door unarmed (the exact P3-5 shape, one door over)",
+          "evidence": "architecture P3-F + correctness F8 corroborated (promoted)"
+        },
+        {
+          "severity": "P3",
+          "id": "B-P3-1",
+          "file": "docs/knowledge/areas/okf-profile/context-and-promote.md",
+          "summary": "Spec claims control-root fallback for learned-context that code does not have — a worktree missing its bundle renders empty silently; payload never names which root was read",
+          "evidence": "architecture P3-E + correctness F7"
+        },
+        {
+          "severity": "P3",
+          "id": "B-P3-2",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1325",
+          "summary": "index_restored overstates: unconditional git reset -- .bee also unstages entries the user staged deliberately; Some(false) arm and killed-by-signal arm unpinned",
+          "evidence": "correctness F3 + test-coverage F7/F8"
+        },
+        {
+          "severity": "P3",
+          "id": "B-P3-3",
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:330-333",
+          "summary": "Bundle file PATHS reach the worker prompt unescaped (newline filenames forge bullet lines); titles are flattened, paths are not — pre-existing, widened by the worktree root",
+          "evidence": "security P3"
+        },
+        {
+          "severity": "P3",
+          "id": "B-P3-4",
+          "file": "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs:403-408,635",
+          "summary": "Duplicated archive-dir constant with wrong justification; sync fs errors surface as dispatcher 'unsupported shape' after the grant already committed; GitCeilingGuard set_var soundness note under edition 2024; worktree fixtures missing gpgsign=false; wmn test pins presence not precedence; summary.json survival unasserted",
+          "evidence": "architecture P3-D/H + test-coverage F10-F13 batch"
+        }
+      ]
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "pending",
+    "review": null
+  },
+  "created_at": "2026-08-10T20:09:14.451Z",
+  "updated_at": "2026-08-10T20:23:29.540Z"
+}
