@@ -265,13 +265,23 @@ fn error_exit(message: &str) -> ExitCode {
 /// rather than prose a caller has to regex.
 pub(crate) const NO_ENGINE_KIND: &str = "engine_not_found";
 
-fn no_engine_refusal(as_json: bool) -> ExitCode {
-    let message = "bee onboard: no bee source checkout is visible from this binary, and \
-onboarding vendors its files FROM that checkout — the skills, the expertise layer, the \
-AGENTS.md block. Searched upward from the binary and from the current directory for one \
-containing packages/bee/. FIX: run this from inside a bee checkout (`cd <bee>` first), or \
-re-run the installer, which brings its own: \
-curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y";
+/// The refusal's prose — a pure function so the test suite can assert both
+/// the invocation root and the missing template path are named, without
+/// capturing stdout/stderr.
+fn no_engine_message(err: &source::LocateError) -> String {
+    format!(
+        "bee onboard: no bee source checkout is visible from this binary, and onboarding \
+vendors its files FROM that checkout — the skills, the expertise layer, the AGENTS.md block. \
+Searched upward from the invocation root ({}) for {} and found none. FIX: run this from inside \
+a bee checkout (`cd <bee>` first), or re-run the installer, which brings its own: \
+curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y",
+        err.invocation_root.display(),
+        err.missing_template.display()
+    )
+}
+
+fn no_engine_refusal(err: &source::LocateError, as_json: bool) -> ExitCode {
+    let message = no_engine_message(err);
     if as_json {
         print!(
             "{}\n",
@@ -279,6 +289,8 @@ curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/ins
                 "status": "blocked_no_engine",
                 "kind": NO_ENGINE_KIND,
                 "error": message,
+                "invocation_root": err.invocation_root.to_string_lossy(),
+                "missing_template": err.missing_template.to_string_lossy(),
             }))
         );
     } else {
@@ -510,8 +522,9 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
             // downloaded binary from a temp dir while the clone sits
             // elsewhere, and every host repo, where `bee-hive` tells the agent
             // to run exactly this command when onboarding is stale.
-            let Some(engine) = Engine::locate() else {
-                return Some(no_engine_refusal(parsed.json));
+            let engine = match Engine::locate() {
+                Ok(engine) => engine,
+                Err(err) => return Some(no_engine_refusal(&err, parsed.json)),
             };
             Some(run(&engine, &parsed))
         }

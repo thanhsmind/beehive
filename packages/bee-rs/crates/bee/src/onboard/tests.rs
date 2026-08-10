@@ -901,3 +901,19 @@ fn human_emit_shape_matches_the_engine() {
     emit(&payload, false);
     emit(&payload, true);
 }
+
+// ── engine root resolution refusal wording ─────────────────────────────────
+
+#[test]
+fn no_engine_message_names_the_invocation_root_and_the_missing_template_path() {
+    let err = super::source::LocateError {
+        invocation_root: PathBuf::from("/host/repo"),
+        missing_template: PathBuf::from("/host/repo/packages/bee/AGENTS.block.md"),
+    };
+    let message = no_engine_message(&err);
+    assert!(message.contains("/host/repo"), "must name the invocation root: {message}");
+    assert!(
+        message.contains("/host/repo/packages/bee/AGENTS.block.md"),
+        "must name the missing template path: {message}"
+    );
+}
