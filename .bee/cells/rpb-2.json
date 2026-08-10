@@ -1,0 +1,59 @@
+{
+  "id": "rpb-2",
+  "feature": "review-p1-batch-fixes",
+  "title": "Prove the gpg-hang defense with a signing fixture and harden the worktree merge commit the same way",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "action": "Review B-P1-2: the close bookkeeping commit's --no-gpg-sign and stdin-null defenses have zero assertions (deleting either keeps 1461 tests green) and the fixture masks the condition by forcing gpgsign false; the SAME hazard is still live un-hardened in worktree merge's commit (phases.rs:358 via the shared run_git in worktree/git.rs, which sets no stdin and no signing flag) - and that path holds the worktree-admin lock mid-merge. Fix: (1) close.rs: add a test that sets commit.gpgsign=true AND gpg.program pointing at a stub that exits 1 in the fixture repo, then asserts the bookkeeping commit still lands green - this is the pin that fails if --no-gpg-sign is removed; remove or repurpose the masking gpgsign=false fixture line where it hides the condition. (2) worktree/git.rs run_git: spawn with stdin Stdio::null(). (3) phases.rs merge commit: add --no-gpg-sign to the commit args. (4) same stub-proof test on the merge path: a merge-commit fixture with gpgsign=true + failing gpg stub proving the merge commit lands. Keep every existing test green; wording of failure texts unchanged (the R81 spelling drift is a separate P2, do not touch it here).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "removing --no-gpg-sign from the close bookkeeping commit turns a test red",
+      "worktree merge's commit carries --no-gpg-sign and run_git spawns with stdin null",
+      "a gpgsign=true repo with a failing gpg stub closes AND merges green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+        "substantive": "stdin-null runner + merge-path hardening plus stub-proof tests"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-rpb-2",
+    "outcome": "gpg-hang defense proven by failing-signer stubs on BOTH paths (red when flag removed); run_git stdin null; merge commit --no-gpg-sign; masking fixture line retired",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T20:46:21.356Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T20:28:33.155Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T20:46:09.726Z"
+  }
+}

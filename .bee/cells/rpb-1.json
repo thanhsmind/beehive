@@ -1,0 +1,53 @@
+{
+  "id": "rpb-1",
+  "feature": "review-p1-batch-fixes",
+  "title": "Island cell sync refuses symlinked stores before any prune or fill",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs"
+  ],
+  "action": "Review B-P1-1 (transcript-proven): a repo committing .bee/cells (or .bee) as a SYMLINK defeats sync_worktree_cells' tracked-set shield - git tracks the symlink object, not paths under it, so the tracked set is empty and the prune deletes every *.json in the symlink's target (outside the store). Fix in registry.rs: before ANY prune or fill, check symlink_metadata on the island's .bee, the island's .bee/cells, the main store's cells source dir, and each archive dir the loop is about to enter; any symlink = the whole cell-sync is SKIPPED and the bootstrap report (map + text) names the symlinked path with a one-line reason - never followed, never deleted through (same D23 never-follow rule the knowledge walkers apply). Per-entry: DirEntry::file_type already does not follow; keep that. TDD red-first: fixture with .bee/cells as a symlink to a victim dir full of json files -> bootstrap leaves the victim untouched and reports the skip; a symlinked main-store source is likewise refused; the normal-directory path stays byte-identical (existing wsh/ips tests green).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "a symlinked island or source cells dir causes zero deletions and zero copies, with the skip named in the report",
+      "the transcript scenario (symlink to a victim dir) leaves the victim byte-identical",
+      "normal-directory bootstrap behavior unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+        "substantive": "symlink refusal plus tests, no TODO stubs"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-rpb-1",
+    "outcome": "sync_worktree_cells checks symlink_metadata on island .bee, .bee/cells, source cells, archive dirs before any prune/fill; symlink = whole sync skipped, named in report (CellsSync::Skipped); red-first proven against pre-fix code",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-10T20:46:02.460Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-10T20:28:33.151Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-10T20:45:50.786Z"
+  }
+}
