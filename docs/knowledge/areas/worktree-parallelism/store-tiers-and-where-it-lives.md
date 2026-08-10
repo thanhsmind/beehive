@@ -43,7 +43,12 @@ disk untouched: wsh-1's first ship pruned tracked files too, which manufactured 
 deletions in the island that a later `worktree merge` would have applied to MAIN, wiping the
 cell archive — caught live pre-merge the same day. The invariant is pinned by test: after
 bootstrap from a real worktree checkout, `git status` inside the island is EMPTY; when git is
-unavailable the prune runs not at all (fail safe). The original confusion problem (foreign
+unavailable the prune runs not at all (fail safe). A SYMLINKED store is refused outright:
+symlink metadata is checked on the island `.bee`, `.bee/cells`, the source cells dir, and every
+archive dir before any prune or fill — one symlink skips the whole sync, named in the bootstrap
+report, never followed (review B-P1-1: a symlinked `.bee/cells` made git track only the link,
+emptied the tracked-set shield, and the prune deleted through into the target; review-p1-batch-fixes
+cell rpb-1, 2026-08-11). The original confusion problem (foreign
 tracked cells visible in island reads) therefore remains for a read-side filter, not a disk
 prune — reopened on the PBI.
 

@@ -434,7 +434,11 @@ a malformed record has earned none.
   `--dry-run` never commit. The bookkeeping commit passes `--no-gpg-sign`
   and git runs with stdin nulled — bee's own bookkeeping commit is unsigned
   by chosen policy, so a signing repo's pinentry can never hang close
-  (close-bookkeeping-p3 cell cbp-1). Named cost, chosen not accidental: the
+  (close-bookkeeping-p3 cell cbp-1) — and since review-p1-batch-fixes cell
+  rpb-2 (2026-08-11) that claim is PROVEN by failing-signer stub tests on
+  both this path and `worktree merge`'s own commit, which now carries the
+  same `--no-gpg-sign` + stdin-null hardening (the defense had shipped
+  unpinned and per-copy; review B-P1-2). Named cost, chosen not accidental: the
   sweep is `.bee`-wide, so a CONCURRENT session's in-flight tracked
   bee-store dirt rides into this feature's bookkeeping commit under this
   feature's message — misattributed history, never data loss (review
