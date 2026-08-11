@@ -1,0 +1,47 @@
+{
+  "id": "et-1",
+  "feature": "expertise-transplant",
+  "lane": "small",
+  "title": "Add merge-conflict resolution craft as .bee/expertise/merges.md",
+  "action": "Create .bee/expertise/merges.md in the exact voice of the existing expertise files (read .bee/expertise/debugging.md first for the shape: title, one-line scope, routing table of named rules, then per rule: trigger, move, one concrete example). Content per CONTEXT.md D2, adapted from /home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/resolving-merge-conflicts/SKILL.md (read it; rewrite, never copy): (1) see the full conflict state before touching a hunk; (2) recover the intent of BOTH sides from primary sources — commit messages, PR descriptions, linked tickets — never from the diff alone; (3) resolve each hunk preserving both intents where possible, else pick the side matching the merge's stated goal and record the tradeoff; (4) never invent behavior that neither side contains; (5) after resolving, run the project's checks (typecheck, tests, format) and treat a red as part of the resolution, not a separate task; (6) finish the merge — abort only as an explicit, recorded escalation, never a silent default; also cover the rebase variant (repeat per commit, intent of the replayed commit governs). Add one row for merges.md to .bee/expertise/INDEX.md matching its existing row format. Cross-link 'Related guides' to debugging.md and operations.md the way other files do.",
+  "goal": "The one craft area with zero coverage anywhere in bee — a worker hitting a worktree-merge or rebase conflict has a method instead of improvisation.",
+  "verify": "commands.test green (PATH cargo test --release); merges.md follows the expertise voice; INDEX.md row present.",
+  "files": [
+    ".bee/expertise/merges.md",
+    ".bee/expertise/INDEX.md"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D10"
+  ],
+  "read_first": [
+    "docs/history/expertise-transplant/CONTEXT.md",
+    ".bee/expertise/debugging.md",
+    ".bee/expertise/INDEX.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/resolving-merge-conflicts/SKILL.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "exec-et-1",
+    "outcome": "Add merges.md merge-conflict resolution craft and INDEX.md row",
+    "files_changed": [
+      ".bee/expertise/merges.md",
+      ".bee/expertise/INDEX.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T07:39:23.591Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+    "claimed_at": "2026-08-11T07:34:25.055Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T07:39:08.113Z"
+  }
+}

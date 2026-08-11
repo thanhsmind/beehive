@@ -1,0 +1,50 @@
+{
+  "id": "et-3",
+  "feature": "expertise-transplant",
+  "lane": "small",
+  "title": "Add deletion test and seam rules to architecture.md, independent-oracle rule to tests.md",
+  "action": "Two additive edits, each in the target file's existing voice (trigger, move, concrete example) with routing-table rows added. (A) .bee/expertise/architecture.md, per CONTEXT.md D4, adapted from /home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/codebase-design/SKILL.md and DEEPENING.md (read both; rewrite, never copy): (1) the deletion test — judge a suspect module by imagining its deletion: complexity reappearing at N call sites means it earned its keep, complexity simply vanishing means it was a pass-through; (2) the adapter-count seam rule — one adapter over a dependency is a hypothetical seam, two is a real one; do not introduce ports/indirection until something actually varies; (3) four-way dependency taxonomy driving test strategy: in-process (no adapter, test directly), local-substitutable (test against the stand-in), remote-but-owned (in-memory adapter for tests, real transport in prod), true external (mock the injected port only); (4) replace-don't-layer — after deepening a module behind an interface, delete the old shallow unit tests once interface-level tests cover the behavior; a test that breaks on an internal refactor was testing past the interface. (B) .bee/expertise/tests.md, per D6, adapted from /home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/tdd/tests.md: the independent-oracle rule — an expected value must come from a source the implementation cannot influence (a known literal, a hand-worked example, the spec), never recomputed the way the code computes it; a test whose assertion mirrors the implementation's own arithmetic passes by construction and verifies nothing; name the tautological test as the anti-pattern with one short good/bad pair consistent with the file's existing Rust examples. Skip anything either file already states (check both first).",
+  "goal": "Architecture craft gains module-depth judgment tools; test craft closes the tautology hole.",
+  "verify": "commands.test green (PATH cargo test --release); both sections in file voice; no duplication.",
+  "files": [
+    ".bee/expertise/architecture.md",
+    ".bee/expertise/tests.md"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4",
+    "D6",
+    "D10"
+  ],
+  "read_first": [
+    "docs/history/expertise-transplant/CONTEXT.md",
+    ".bee/expertise/architecture.md",
+    ".bee/expertise/tests.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/codebase-design/SKILL.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/codebase-design/DEEPENING.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/tdd/tests.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "exec-et-3",
+    "outcome": "Added deletion-test, adapter-count seam rule, dependency taxonomy, and replace-don't-layer to architecture.md; independent-oracle rule to tests.md",
+    "files_changed": [
+      ".bee/expertise/architecture.md",
+      ".bee/expertise/tests.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T07:40:23.345Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+    "claimed_at": "2026-08-11T07:35:14.920Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T07:40:10.928Z"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "id": "et-2",
+  "feature": "expertise-transplant",
+  "lane": "small",
+  "title": "Add feedback-loop-first section to expertise debugging.md",
+  "action": "Add one additive section 'Build the feedback loop first' to .bee/expertise/debugging.md, placed before the existing hypothesis material, and add its row to the file's routing table. Content per CONTEXT.md D3, adapted from /home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/diagnosing-bugs/SKILL.md (read it; rewrite in this file's trigger/move/example voice, never copy): (1) before any hypothesis, build a repeatable command that can show the failure — ranked construction ladder: failing test > direct HTTP call > CLI run diffed against a fixture > replaying a captured trace > throwaway harness > property/fuzz loop over random inputs > bisection harness (git bisect run) > differential run against a known-good version > human-in-the-loop script only when a human step is unavoidable; (2) loop quality bar: red-capable, deterministic, seconds not minutes, runnable by the agent alone; (3) hard gate — no red-capable command, no hypothesis work; caught reading code to build a theory first: stop and build the loop; genuinely cannot build one: say so explicitly instead of proceeding; (4) flaky bugs: the target is reproduction rate, not a clean repro — run the loop many times, raise the rate until debuggable; a 1% repro is not a loop yet; (5) tag every temporary probe with one unique prefix like [DEBUG-a4f2] so cleanup is a single grep; the existing cleanup section gains that grep as its mechanism. Do NOT restate reproduce-first or hypothesis-template content that the file already has — link to those sections instead.",
+  "goal": "Debugging craft gains the loop-construction ladder and the no-loop-no-hypothesis gate the current file lacks.",
+  "verify": "commands.test green (PATH cargo test --release); new section in file voice; no duplication of existing sections.",
+  "files": [
+    ".bee/expertise/debugging.md"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "D10"
+  ],
+  "read_first": [
+    "docs/history/expertise-transplant/CONTEXT.md",
+    ".bee/expertise/debugging.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/diagnosing-bugs/SKILL.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "exec-et-2",
+    "outcome": "Added feedback-loop-first section (loop ladder, no-loop-no-hypothesis gate, repro-rate, debug-tag cleanup) to debugging.md",
+    "files_changed": [
+      ".bee/expertise/debugging.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T07:48:05.278Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+    "claimed_at": "2026-08-11T07:35:14.868Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-11T07:39:35.434Z",
+        "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+        "claimed_at": "2026-08-11T07:39:27.657Z",
+        "acquired_at": "2026-08-11T07:35:14.868Z",
+        "worker": "exec-et-2",
+        "verdict": "tests-red",
+        "failure_signature": "9b72efbcd9a1",
+        "note": "e(\"standard\"), \"shaping\", &[]));"
+      },
+      {
+        "n": 2,
+        "at": "2026-08-11T07:44:24.047Z",
+        "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+        "claimed_at": "2026-08-11T07:43:37.569Z",
+        "acquired_at": "2026-08-11T07:35:14.868Z",
+        "worker": "exec-et-2",
+        "verdict": "tests-red",
+        "failure_signature": "ebecfb4bc258",
+        "note": "me(\"standard\"), \"shaping\", &[]));"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T07:47:52.524Z"
+  }
+}

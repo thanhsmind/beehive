@@ -1,0 +1,61 @@
+{
+  "id": "et-4",
+  "feature": "expertise-transplant",
+  "lane": "small",
+  "title": "Add design-it-twice and spike craft to expertise planning.md",
+  "action": "Two additive sections in .bee/expertise/planning.md, in its existing voice, with routing-table rows. (A) 'Design it twice' per CONTEXT.md D5, adapted from /home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/codebase-design/DESIGN-IT-TWICE.md (read it; rewrite for bee's swarm model, never copy): for a standard or high-risk shape whose interface is genuinely open, fan out 2-3 parallel read-only workers, each FORCED into a radically different design constraint (minimize the interface / optimize the common case / ports-and-adapters), each returning interface sketch + usage example + what it hides + tradeoffs; the orchestrator compares by depth, locality, and seam placement and recommends ONE with a stated reason — an opinionated read, not a menu; skip the move entirely when the shape's interface is already dictated by locked decisions or existing patterns. (B) 'Spike craft' per D7, adapted from prototype/SKILL.md, LOGIC.md, UI.md (read all three): a spike answers exactly ONE named question, written down before building; a logic/state question gets a minimal pure module plus the thinnest runnable shell; a UI/shape question gets 2-3 STRUCTURALLY different variants (visual tweaks of one structure answer nothing); no tests, no error handling beyond runnability, no abstractions — polish on throwaway code is waste; on completion the validated decision is captured (decision log / CONTEXT.md) and folds into real work, the spike itself never merges — it stays under .bee/spikes/ or a throwaway branch as a primary source to cite. Skip anything the file already states (check first — it already has walking-skeleton and smaller-path content nearby).",
+  "goal": "Planning craft gains an interface-exploration move that fits the existing swarm model, and the spike lane gets its missing HOW.",
+  "verify": "commands.test green (PATH cargo test --release); sections in file voice; no duplication of walking-skeleton material.",
+  "files": [
+    ".bee/expertise/planning.md"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D5",
+    "D7",
+    "D10"
+  ],
+  "read_first": [
+    "docs/history/expertise-transplant/CONTEXT.md",
+    ".bee/expertise/planning.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/prototype/SKILL.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/prototype/LOGIC.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/prototype/UI.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "exec-et-4",
+    "outcome": "Added design-it-twice and spike-craft sections to planning.md",
+    "files_changed": [
+      ".bee/expertise/planning.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T07:48:23.305Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+    "claimed_at": "2026-08-11T07:35:14.974Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-11T07:41:01.107Z",
+        "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+        "claimed_at": "2026-08-11T07:40:36.561Z",
+        "acquired_at": "2026-08-11T07:35:14.974Z",
+        "worker": "exec-et-4",
+        "verdict": "tests-red",
+        "failure_signature": "ebecfb4bc258",
+        "note": "me(\"standard\"), \"shaping\", &[]));"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T07:48:11.404Z"
+  }
+}

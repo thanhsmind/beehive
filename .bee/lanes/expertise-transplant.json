@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "feature": "expertise-transplant",
+  "mode": null,
+  "phase": "planning",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"expertise-transplant\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"expertise-transplant\" (lane).",
+  "created_at": "2026-08-11T07:30:09.597Z",
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 8,
+    "rationale": "8 markdown files docs-only; two are skill/contract surface",
+    "updated_at": "2026-08-11T07:34:31.409Z",
+    "feature": "expertise-transplant"
+  }
+}

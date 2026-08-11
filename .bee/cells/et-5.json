@@ -1,0 +1,73 @@
+{
+  "id": "et-5",
+  "feature": "expertise-transplant",
+  "lane": "small",
+  "title": "Add phase-boundary decision tree to routing-and-contracts.md and verify-the-claim to bee-shaping Qualify",
+  "action": "Two skill-source edits under bee-writing-skills discipline (edit skills/ sources, never the vendored .claude/skills/ copies), then re-render the vendored trees. (A) skills/bee-hive/references/routing-and-contracts.md, per CONTEXT.md D8, adapted from /home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/ask-matt/PHASE-BOUNDARIES.md (read it; rewrite in bee contract voice, never copy): add a compact 'Phase-boundary moves' subsection near the session-care/handoff material — at a phase boundary evaluate five moves IN ORDER, first yes wins: (1) continue in-session when the next phase needs this one as a primary source or budget remains; (2) fresh start when everything in-session is disposable — cheapest, but an irreversible discard; (3) handoff only for a genuinely new place or person (new session boundary, new checkout, another agent) — that list is the whole clause; (4) subagent when the piece is scoped enough to run away-from-keyboard; (5) compact LAST — every move but continue converts primary sources into lossy summaries, and compaction's failure mode is a fresh session confidently wrong about a decision the summary flattened; tie into the existing 65%-context handoff rule as the procedure behind it, not a replacement. Keep it under ~15 lines; do not renumber or disturb neighboring contract sections. (B) skills/bee-shaping/SKILL.md Qualify, per D9: extend step 1 (evidence gathering) with two sentences — a bug-shaped item gets its claim verified by reproducing it (or recording the failed attempt as evidence) before any verdict; the redundancy/duplicate check searches decisions and backlog by domain concept, not by the request's wording. Match the surrounding sentence rhythm; no new step numbers. Do NOT touch the vendored .claude/skills/ trees — the orchestrator runs the full regen chain (render-skill-trees, onboard --apply, release-manifest --write) once at wave close per the wave-barrier ack.",
+  "goal": "Session-care contract gains a decision procedure for context moves; Qualify stops triaging unverified bug claims.",
+  "verify": "commands.test green (PATH cargo test --release); both edits in surrounding voice; vendored-tree regen deferred to wave close (wave-barrier).",
+  "files": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-shaping/SKILL.md"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D8",
+    "D9",
+    "D11"
+  ],
+  "read_first": [
+    "docs/history/expertise-transplant/CONTEXT.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-shaping/SKILL.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/ask-matt/PHASE-BOUNDARIES.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/triage/SKILL.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "trace": {
+    "worker": "exec-et-5",
+    "outcome": "Added phase-boundary decision tree to routing-and-contracts.md and verify-the-claim plus concept-dedup to bee-shaping Qualify",
+    "files_changed": [
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-shaping/SKILL.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T07:48:41.442Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+    "claimed_at": "2026-08-11T07:35:15.025Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-11T07:39:51.999Z",
+        "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+        "claimed_at": "2026-08-11T07:39:27.657Z",
+        "acquired_at": "2026-08-11T07:35:15.024Z",
+        "worker": "exec-et-5",
+        "verdict": "tests-red",
+        "failure_signature": "ebecfb4bc258",
+        "note": "me(\"standard\"), \"shaping\", &[]));"
+      },
+      {
+        "n": 2,
+        "at": "2026-08-11T07:43:25.276Z",
+        "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+        "claimed_at": "2026-08-11T07:42:33.404Z",
+        "acquired_at": "2026-08-11T07:35:15.024Z",
+        "worker": "exec-et-5",
+        "verdict": "tests-red",
+        "failure_signature": "ebecfb4bc258",
+        "note": "me(\"standard\"), \"shaping\", &[]));"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T07:48:28.768Z"
+  }
+}
