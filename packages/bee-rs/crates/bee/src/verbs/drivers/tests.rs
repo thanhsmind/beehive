@@ -73,8 +73,8 @@ use std::time::Instant;
     #[test]
     fn a_lone_surrogate_frontmatter_scalar_is_a_typed_failure_not_a_delegation() {
         let raw = format!("{}{}{}", "\"\\", "uD800", "\"");
-        match kctx::parse_scalar_token(&raw, 7) {
-            Err(kctx::Fm::Failed { code, line, .. }) => {
+        match crate::verbs::knowledge::parse_scalar_token(&raw, 7) {
+            Err(crate::verbs::knowledge::Fm::Failed { code, line, .. }) => {
                 assert_eq!(code, "bad_quoted_string");
                 assert_eq!(line, 7);
             }
@@ -1393,81 +1393,21 @@ use std::time::Instant;
           "---\ntype: bee.decision\ntitle: Dispatch decision\ndescription: a decision about dispatch\nbee:\n  id: d-1\n  lifecycle: active\n  areas: [dispatch]\n---\n\nDecided.\n");
     }
 
-    /// THE CROSS-CHECK the port rules require: the `kctx` lift must produce
-    /// the SAME manifest as the shipped `bee knowledge context` verb (whose own
-    /// copy lives in verbs/knowledge.rs) and as Node's lib/knowledge.mjs
-    /// buildContextManifest. The golden below was captured from BOTH runtimes
-    /// on this exact fixture — `node bee.mjs knowledge context --work demo
-    /// --budget 20000 --json` and `bee.exe knowledge context --work demo
-    /// --budget 20000 --json` printed it byte-for-byte — so a drift in either
-    /// Rust copy, or from the .mjs, fails here.
-    #[test]
-    fn learned_context_agrees_with_the_knowledge_verb_port() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, "{}");
-        bundle_fixture(&root);
-        let dir = kctx::bundle_dir(&root).unwrap();
-        let kctx::ManifestOut::Built(manifest) =
-            kctx::build_context_manifest(&dir, "demo", 20000.0, &kctx::num(20000.0))
-        else {
-            panic!("expected a built manifest")
-        };
-        const GOLDEN: &str = concat!(
-            r#"{"work":"demo","anchor":{"kind":"work-item","paths":["docs/knowledge/work/demo/work-item.md"]},"#,
-            r#""decisions":["d-1"],"budget":20000,"estimator":"bytes/4","#,
-            r#""total_est":240,"entries":["#,
-            r#"{"path":"docs/knowledge/work/demo/work-item.md","bytes":232,"est_tokens":58,"reason":"work item"},"#,
-            r#"{"path":"docs/knowledge/work/demo/plan.md","bytes":124,"est_tokens":31,"reason":"plan sibling in work/demo/"},"#,
-            r#"{"path":"docs/knowledge/patterns/dispatch-prompt.md","bytes":252,"est_tokens":63,"reason":"critical pattern (relevance 0.508333, rank 1 of 2, floor)"},"#,
-            r#"{"path":"docs/knowledge/patterns/unrelated.md","bytes":195,"est_tokens":49,"reason":"critical pattern (relevance 0, rank 2 of 2, floor)"},"#,
-            r#"{"path":"docs/knowledge/areas/dispatch.md","bytes":156,"est_tokens":39,"reason":"decision for area dispatch"}"#,
-            r#"],"truncated":[],"excluded":[],"#,
-            r#""floor":["docs/knowledge/patterns/dispatch-prompt.md","docs/knowledge/patterns/unrelated.md"],"#,
-            r#""critical_total":2,"zero_signal_count":1}"#,
-        );
-        assert_eq!(jsjson::stringify(&manifest), GOLDEN);
-    }
-
-    /// D8: a slug with no bee.work-item concept but a docs/history/<slug>/
-    /// CONTEXT.md must resolve to the SAME manifest through both the
-    /// `knowledge` verb's own build_context_manifest and this kctx port —
-    /// proving the two copies share one resolver (anchor.rs) rather than
-    /// merely agreeing by coincidence on this one fixture.
-    #[test]
-    fn learned_context_history_anchor_agrees_across_both_ports() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, "{}");
-        w(&root, "docs/knowledge/patterns/dispatch-prompt.md",
-          "---\ntype: bee.pattern\ntitle: Dispatch prompt assembly\ndescription: how dispatch prompts are assembled\nbee:\n  id: p-dispatch\n  lifecycle: active\n  critical: true\n  areas: [dispatch]\n---\n\nDispatch prompts are assembled from templates and rust code.\n");
-        w(&root, "docs/knowledge/patterns/unrelated.md",
-          "---\ntype: bee.pattern\ntitle: Unrelated pattern\ndescription: about billing invoices\nbee:\n  id: p-billing\n  lifecycle: active\n  critical: true\n  areas: [billing]\n---\n\nBilling invoices and refunds.\n");
-        w(&root, "docs/history/demo-hist/CONTEXT.md",
-          "# Demo History Context\n\nDispatch prompts are assembled from templates using rust code.\n");
-
-        let dir = kctx::bundle_dir(&root).unwrap();
-        let kctx::ManifestOut::Built(kctx_manifest) =
-            kctx::build_context_manifest(&dir, "demo-hist", 20000.0, &kctx::num(20000.0))
-        else {
-            panic!("expected a built manifest from the kctx port")
-        };
-        let crate::verbs::knowledge::ManifestOut::Built(verb_manifest) =
-            crate::verbs::knowledge::build_context_manifest(&dir, "demo-hist", 20000.0, &kctx::num(20000.0))
-        else {
-            panic!("expected a built manifest from the knowledge verb")
-        };
-        assert_eq!(
-            jsjson::stringify(&kctx_manifest),
-            jsjson::stringify(&verb_manifest),
-            "the two ports must resolve the SAME history anchor (D8) — a drift here means only one copy was edited"
-        );
-        assert_eq!(kctx_manifest["anchor"]["kind"], "history");
-        assert_eq!(kctx_manifest["anchor"]["paths"], json!(["docs/history/demo-hist/CONTEXT.md"]));
-        let entries = kctx_manifest["entries"].as_array().unwrap();
-        assert_eq!(entries[0]["path"], "docs/history/demo-hist/CONTEXT.md");
-        assert!(entries[0]["bytes"].as_u64().unwrap() > 0, "the anchor's real byte size must never be zero");
-        assert_eq!(entries[0]["reason"], "history anchor");
-        assert_eq!(kctx_manifest["zero_signal_count"], json!(1), "the unrelated pattern still scores 0 against dispatch vocabulary");
-    }
+    // R6 (CLOSED): `learned_context_agrees_with_the_knowledge_verb_port` and
+    // `learned_context_history_anchor_agrees_across_both_ports` — the two
+    // byte-parity tests that pinned the drivers/kctx.rs lift against
+    // verbs/knowledge's own build_context_manifest — are retired with the
+    // copy they compared. There is exactly one build_context_manifest now
+    // (crate::verbs::knowledge::build_context_manifest, called directly by
+    // bundle_learned_lines/bundle_mode below), so a cross-copy-agreement
+    // assertion has nothing left to say; its behavior (work-item anchor,
+    // history anchor from CONTEXT.md/plan.md, zero_signal reporting under a
+    // history anchor) stays proven by knowledge/tests.rs's own suite
+    // (history_anchor_resolves_from_whichever_of_context_and_plan_exist,
+    // history_anchor_reports_zero_signal_instead_of_throwing, and
+    // neighbors), and by the learned-context tests below that already
+    // exercise this file's own bundle_learned_lines/learned_context_lines
+    // call sites end to end.
 
     #[test]
     fn learned_context_uses_the_manifest_and_honours_read_first() {
@@ -1546,7 +1486,7 @@ use std::time::Instant;
     /// `work` and maps `ManifestOut::Thrown(_)` to `None` — before this
     /// feature, a dispatched cell for a slug with no bee.work-item concept
     /// always hit that `Thrown` arm and fell back to the bare index pointer.
-    /// It now inherits kl-1's resolver through kctx, so a slug whose only
+    /// It now inherits kl-1's resolver through crate::verbs::knowledge, so a slug whose only
     /// anchor is a docs/history/<slug>/CONTEXT.md carries that manifest's
     /// own entries instead of falling back to `None`.
     #[test]

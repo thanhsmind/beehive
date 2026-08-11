@@ -455,7 +455,7 @@ pub(crate) fn build_promotion(root: &Path, dir: &Path, work: &str) -> Option<Pro
     // D5 then D1/D6: a bee.work-item concept whose bee.id matches always
     // wins; otherwise docs/history/<work_id>/CONTEXT.md and/or plan.md,
     // whichever exist; otherwise no anchor at all — unknown_work, unchanged
-    // byte for byte (D38), same shared resolver context.rs and kctx.rs use.
+    // byte for byte (D38), the same shared resolver context.rs uses.
     let Some(anchor) = resolve_anchor(&concepts, root, work_id) else {
         return Some(Promo::Thrown(format!(
             "knowledge promote: unknown_work — no bee.work-item concept in docs/knowledge/ carries bee.id \"{work_id}\" (D38)."

@@ -12,14 +12,13 @@
 // than CONTEXT.md/plan.md; otherwise no anchor at all, which every caller
 // renders as today's unknown_work refusal, byte for byte, unchanged.
 //
-// Consumed identically by knowledge::context's build_context_manifest and
-// its byte-parity port at drivers/kctx.rs (D8) — both copies call the same
-// resolve_anchor here so they cannot drift apart on the fallback's shape.
-// The two ports carry independent `Concept` structs (kctx.rs is a hand-kept
-// duplicate, not a re-export — see its own header comment), so this module
-// is generic over anything with a bundle-relative path and parsed
-// frontmatter data (`ConceptLike`) rather than depending on either port's
-// concrete type; each port supplies a two-line impl for its own `Concept`.
+// Consumed by knowledge::context's build_context_manifest (D8), the sole
+// caller since R6 folded the drivers/kctx.rs byte-parity lift back into this
+// module — a lift that used to carry its own independent `Concept` struct is
+// exactly why `resolve_anchor` stayed generic over anything with a
+// bundle-relative path and parsed frontmatter data (`ConceptLike`) rather
+// than depending on the concrete `walk::Concept` type; that genericity is
+// unchanged even with one caller left.
 
 use super::walk::Concept;
 use crate::verbs::state_group::read_scribing_ledger;
@@ -27,8 +26,9 @@ use crate::verbs::workflow_store::{lanes_dir, read_lane_display};
 use serde_json::{Map, Value};
 use std::path::Path;
 
-/// The shape knowledge::walk::Concept and drivers::kctx::Concept both carry
-/// (independently ported, kept identical by construction).
+/// The shape `knowledge::walk::Concept` carries; kept as a trait (not a
+/// concrete-type dependency) so a future second port can still supply its
+/// own two-line impl without this module changing.
 pub(crate) trait ConceptLike {
     fn concept_path(&self) -> &str;
     fn concept_data(&self) -> &Map<String, Value>;

@@ -138,14 +138,15 @@
 //
 // ─── Re-derived Rust (the "may not edit that file" rule) ───────────────────
 //
-// The knowledge-context builder is already ported in verbs/knowledge.rs but
-// every function it needs is PRIVATE to that module. The `kctx` module below
-// is a verbatim lift of that port (see its own banner for the exact line
-// ranges) — not a re-implementation — so the two cannot semantically drift;
-// `learned_context_agrees_with_the_knowledge_verb_port` pins them to the same
-// answer on a fixture. Same for the test runner (verbs/test_runner.rs) and
-// readCell/listCells (verbs/cells.rs), each re-derived here with a per-
-// function provenance line naming BOTH the .mjs source and the Rust port.
+// The knowledge-context builder lives in verbs/knowledge/ (anchor.rs,
+// context.rs, promote.rs, walk.rs, frame.rs, frontmatter.rs); prepare.rs
+// calls it directly (crate::verbs::knowledge::…) rather than carrying a
+// second, byte-parity copy — R6: the standing "may not edit that file" rule
+// was worked around by widening the knowledge module's own function
+// visibility to pub(crate), the one edit that removes the need for a lift.
+// Same for the test runner (verbs/test_runner.rs) and readCell/listCells
+// (verbs/cells.rs), each re-derived here with a per-function provenance line
+// naming BOTH the .mjs source and the Rust port.
 //
 // ─── Documented divergences ────────────────────────────────────────────────
 //
@@ -191,30 +192,12 @@ impl From<Delegate> for crate::verbs::reservations::Err2 {
     }
 }
 
-// ═══ kctx — VERBATIM LIFT of the knowledge-context port ════════════════════
-//
-// `bee knowledge context` is already ported in verbs/knowledge.rs, but every
-// function the Learned-context block needs (bundleDir, listBundleMarkdown,
-// parseFrontmatter, collectConcepts, normalizeBundleTarget,
-// scoreCriticalRelevance, buildContextManifest) is PRIVATE to that module and
-// that file may not be edited to widen them. Rather than re-implement the
-// ranking — which would be a second, independently-drifting answer to the same
-// question — the code below is a byte-for-byte lift of
-// verbs/knowledge.rs lines 212-233, 316-627, 629-686, 846-951 and 1325-1772
-// (commit-current at the time of this port). Its ultimate provenance is
-// lib/knowledge.mjs: bundleDir / KEY_RE / RESERVED_BASENAMES /
-// parseFrontmatter / listBundleMarkdown / normalizeBundleTarget /
-// resolveInsideBundle / collectConcepts / beeOf / dirOf / CONTEXT_ESTIMATOR /
-// CRITICAL_RELEVANCE / RELEVANCE_STOPWORDS / relevanceTokens / conceptBody /
-// metaTextOf / scoreCriticalRelevance / buildContextManifest.
-//
-// `learned_context_agrees_with_the_knowledge_verb_port` (below) pins the lift
-// to the shipped `bee knowledge context` verb on a fixture bundle, so a future
-// edit to either copy that changes the answer fails the suite.
-//
-// R6 debt: promote these to a shared `crate::knowledge_context` module and
-// delete this copy.
-mod kctx;
+// R6 (CLOSED): the `kctx` module — a hand-kept byte-for-byte lift of
+// verbs/knowledge/{walk,frame,frontmatter,anchor,context}.rs, carried here
+// only because those functions were PRIVATE to the knowledge module — is
+// folded away. Their visibility is now pub(crate) at the source, so
+// prepare.rs (below) calls crate::verbs::knowledge::… directly: one surface,
+// not two independently-drifting answers to the same question.
 
 // ═══ tests ═════════════════════════════════════════════════════════════════
 
