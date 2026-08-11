@@ -130,7 +130,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "ff4fa9c94362e85d39d2e34c1e9826e86e01af6470142e2ea666391782d03b98",
+      "sha256": "170a366e66fcdf6a7cc5b9c541814bab4898c1f11bbc19b482e48834f010083c",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -480,7 +480,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-swarming/references/worker-details.md",
-      "sha256": "65f48c52448aed822595dc062d9e4f502ef9858f03f879dc1f1ed5ef5f757dcd",
+      "sha256": "997d195eaa9457699792ff94fc9991e5d3b1e70212fc95a7dbbebdcc707cf6cd",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-swarming/references/worker-details.md"
@@ -501,7 +501,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "85c02077966f8be498251a6782682d36ba5939debbf6d59c826df8ef204a0ae0",
+      "sha256": "854bded4d24e7a9ca6faaffc06db6f43a1c2487e324df3f8259c06b4462f2b60",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -851,7 +851,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-swarming/references/worker-details.md",
-      "sha256": "932a0393fb4b712f33778e7dc3a51c7dab8b27061d465ac98801f599a345d62c",
+      "sha256": "e9d1ec8d8320e777cb0e595319f76b703cfe7c13d8ee97e47ff88280083e79bf",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-swarming/references/worker-details.md"
@@ -1413,7 +1413,7 @@
     },
     {
       "path": "skills/bee-swarming/references/worker-details.md",
-      "sha256": "21cba3deae465168cb6b6b3e067301caaf5d56fa90cf829c974462c5f44a9bbf",
+      "sha256": "aae41160512707cca1d515fe04bf049e27ec860174da0d161a3051d613001fe1",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/references/worker-details.md"

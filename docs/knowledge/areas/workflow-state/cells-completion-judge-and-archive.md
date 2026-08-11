@@ -237,6 +237,15 @@ out-of-process test child, since the entry resolves its root off the
 process working directory); the registration-failure shape stays pinned on
 the inner claim seam — the entry has no cleanly corrupt-able failure seam
 of its own, a recorded split (review-p2-hardening cell rph-4, 2026-08-11).
+Completion also records DEVIATIONS structurally: `cells cap` and `cells
+finish` accept `--deviation "<one line>"` (one line per call; a batch
+rides the pre-existing `--deviations-file`), appended to the unit's
+`trace.deviations` — the exact field the promote proposer mines for
+pattern candidates, so a worker-reported deviation reaches the automatic
+loop instead of dying in prose. An empty value is refused by name before
+any write; a call without the flag is byte-identical
+(finish-records-deviations cell frd-1, 2026-08-11, after four same-day
+prose-only deviations mined as zero).
 
 **B31 — A judge verdict is a structured, append-only record with an honest
 independence stamp.** Trigger: a judge examines a unit of work and renders a

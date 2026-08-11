@@ -33,7 +33,7 @@ Startup runs ZERO of these: the dispatch prompt inlines the cell JSON and the st
 
 ```text
 .bee/bin/bee reservations reserve --agent "<name>" --cell "<id>" --path "<path>" --ttl 3600
-.bee/bin/bee finish --id <id> [--outcome TEXT] [--files a,b] [--deviations-file F] [--friction TEXT]
+.bee/bin/bee finish --id <id> [--outcome TEXT] [--files a,b] [--deviation "ONE LINE"] [--deviations-file F] [--friction TEXT]
 .bee/bin/bee decisions active --recent 3
 ```
 
@@ -70,7 +70,11 @@ nothing here is a required output artifact, and none of it is written up anywher
    they actually are, not as the cell describes them.
 5. Cross-check the cell's declared `files` inventory against what the work truly
    needs; a real mismatch is a deviation to record, and an architectural one is
-   `[BLOCKED]`.
+   `[BLOCKED]`. Record it STRUCTURALLY at cap time — `--deviation "<one line>"`
+   (or `--deviations-file` for several) — never only in the prose report: the
+   promote proposer mines `trace.deviations`, and a deviation that lives only
+   in prose is invisible to the pattern loop
+   (pattern: a cell's declared file list is a hypothesis).
 
 **After editing each file**, three cheap checks:
 
