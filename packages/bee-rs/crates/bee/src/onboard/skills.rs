@@ -1174,4 +1174,61 @@ mod tests {
             "opencode sidecar drifted"
         );
     }
+
+    // ── the skills-version stamp trap (compounding-batch cmp-2) ─────────────
+    //
+    // A rendered skills root that EXISTS without `SKILLS_VERSION_STAMP` puts
+    // every future `bee onboard --apply` against it into `blocked_downgrade`
+    // (the three-version preflight above, ~l. 420-458: `installed_skills`
+    // cannot resolve without either the stamp or a readable `bee-hive/
+    // templates/lib/state.mjs`, and an unresolvable version blocks with
+    // "refusing (never forceable)"). Before this test, the only place that
+    // even NAMED the trap was a comment inside `regen_opencode_skills_tree`
+    // above's `#[ignore]`d body (oc-13) — nothing asserted it, for that
+    // target or the other two. This test is NOT `#[ignore]`d: it checks
+    // every `REPO_SKILL_TARGETS` root present in THIS checkout at once,
+    // never a hand-picked one.
+
+    /// For every `REPO_SKILL_TARGETS` root present in this checkout (all
+    /// three are git-tracked here, so a normal clone carries all three), its
+    /// rendered tree must carry `SKILLS_VERSION_STAMP`. A root that has
+    /// never been rendered anywhere (a fresh, pre-onboard host repo) is
+    /// skipped — there is no tree to trap yet — but this checkout's own
+    /// three roots are exactly the case the trap bites, so `present == 0`
+    /// here means the derivation itself broke, not a legitimately empty run.
+    #[test]
+    fn every_present_repo_skill_target_carries_its_version_stamp() {
+        let root = repo_root();
+        let mut missing: Vec<String> = Vec::new();
+        let mut present = 0usize;
+        for (kind, segments) in super::super::templates::REPO_SKILL_TARGETS {
+            let mut target_root = root.clone();
+            for seg in *segments {
+                target_root = target_root.join(seg);
+            }
+            if !target_root.is_dir() {
+                continue; // never rendered here — nothing to trap
+            }
+            present += 1;
+            let stamp = target_root.join(super::super::templates::SKILLS_VERSION_STAMP);
+            if !stamp.is_file() {
+                missing.push(format!("{kind} ({})", target_root.display()));
+            }
+        }
+        assert!(
+            present > 0,
+            "expected at least one REPO_SKILL_TARGETS root ({:?}) to exist under {} — the \
+             derivation likely broke, or this is not a source checkout",
+            super::super::templates::REPO_SKILL_TARGETS,
+            root.display()
+        );
+        assert!(
+            missing.is_empty(),
+            "REPO_SKILL_TARGETS root(s) present without their version stamp \
+             ({}) — every future `bee onboard --apply` against them blocks with \
+             blocked_downgrade, never forceable (skills.rs's three-version preflight, ~l. 420-458): {}",
+            super::super::templates::SKILLS_VERSION_STAMP,
+            missing.join(", ")
+        );
+    }
 }

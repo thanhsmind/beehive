@@ -24,37 +24,54 @@
 //      two mix). Node absence is a named, non-fatal skip — see
 //      `node_or_skip`.
 //
-//   2. A three-belt parity test that DERIVES the guard-rule inventory from
-//      the catalog of record — the two checked-in, generated hook manifests
-//      (`packages/bee/hooks/claude-hooks.json`, `packages/bee/hooks/
-//      hooks.json`; both are `hook_manifests.rs`'s CATALOG rendered to disk,
-//      kept honest by `hook_manifests_match_disk` in that module) — and
-//      never a hand-authored list, per
+//   2. A verdict-shape parity test (`three_belt_parity_every_blocking_rule_
+//      hits_helper_claude_codex_and_opencode` — name kept from its original
+//      per-rule form, since it is cited by name in docs/knowledge/areas/
+//      hook-runtime/catalog-projections-and-activation.md and docs/history/
+//      opencode-support/discovery.md) that DERIVES the guard-rule inventory
+//      from the catalog of record — the two checked-in, generated hook
+//      manifests (`packages/bee/hooks/claude-hooks.json`, `packages/bee/
+//      hooks/hooks.json`; both are `hook_manifests.rs`'s CATALOG rendered to
+//      disk, kept honest by `hook_manifests_match_disk` in that module) —
+//      and never a hand-authored list, per
 //      `docs/knowledge/patterns/20260722-a-coverage-gate-derives-ground-
-//      truth-it-never-compares-two-hand-lists.md`. For every rule the
-//      catalog marks BLOCKING (found wired under a `PreToolUse` event: today
-//      `write-guard` and `model-guard`), the test asserts FOUR independent
-//      signals exist, failing by name (rule + belt) if any is missing:
-//        - HELPER level  — `bee hook <rule>` itself denies (the shared FIRST
-//          belt every runtime's translation layer calls into — plan.md's
-//          Approach section: "helpers stay the FIRST belt on every
-//          runtime").
-//        - CLAUDE belt   — `hook_contracts.rs`'s own source (embedded at
-//          compile time) contains a deny fixture using one of the
-//          claude-shaped tool names the catalog says reaches this rule.
+//      truth-it-never-compares-two-hand-lists.md`. The row set is (rule,
+//      verdict SHAPE) pairs, not just rules: `emittable_shapes` derives
+//      which of deny/repair/ask each BLOCKING rule (today `write-guard` and
+//      `model-guard`) can actually put on the wire by scanning that rule's
+//      own emit-path source, so a whole SHAPE — not only a whole rule — now
+//      fails this suite by name if it goes missing on a belt. For every
+//      such (rule, shape) pair, the test asserts FOUR independent signals
+//      exist, failing by name (rule + shape + belt) if any is missing:
+//        - HELPER level  — `bee hook <rule>` itself emits this shape for its
+//          known-triggering payload (the shared FIRST belt every runtime's
+//          translation layer calls into — plan.md's Approach section:
+//          "helpers stay the FIRST belt on every runtime").
+//        - CLAUDE belt   — this rule's own embedded fixture suite
+//          (`hook_contracts.rs` for deny; `write_guard/tests.rs` or
+//          `model_guard.rs`'s own test module for repair/ask) contains a
+//          fixture using one of the claude-shaped tool names the catalog
+//          says reaches this rule, proving this shape.
 //        - CODEX belt    — the rule is wired under `PreToolUse` in the
 //          file-shipped codex projection itself (no separate Codex
-//          translation layer exists to fixture-test beyond that wiring —
-//          Codex's PreToolUse command execs `bee hook <rule>` directly, byte
-//          for byte the same mechanism the helper-level check already
-//          exercises; see bee-guard.ts's own header comment on the
-//          matcher-only Codex difference).
+//          translation layer exists to fixture-test beyond that wiring, for
+//          ANY shape — Codex's PreToolUse command execs `bee hook <rule>`
+//          directly, byte for byte the same mechanism the helper-level
+//          check already exercised for this exact shape; see bee-guard.ts's
+//          own header comment on the matcher-only Codex difference).
 //        - OPENCODE belt — `bee-guard.ts`'s `mapToolCall` actually routes at
 //          least one real OpenCode tool to this rule (derived by parsing the
-//          plugin's own switch statement, never hand-listed) — the actual
-//          deny/allow/crash/missing PROOF for every such row lives in part
-//          1 above; this is the routing-exists cross-check that keeps part 1
-//          from silently going vacuous if a row's `hook:` literal changes.
+//          plugin's own switch statement, never hand-listed) AND
+//          `runBlockingHook`'s own source still implements this shape (a
+//          literal marker cross-check) — the actual deny/repair/ask/
+//          unparseable PROOF for every such row lives in part 1 above; this
+//          is the routing+implementation cross-check that keeps part 1 from
+//          silently going vacuous if a row's `hook:` literal changes or a
+//          shape's handling is deleted from the plugin. The fourth shape,
+//          an UNPARSEABLE exit-0 verdict, is not producer-derived (bee never
+//          emits invalid JSON of its own) and is checked once, globally, at
+//          the end of the test — see the doc comment above
+//          `emittable_shapes`.
 //
 // The design and any environment-skip behavior are recorded in
 // `docs/history/opencode-support/discovery.md`.
@@ -99,6 +116,91 @@ const HOOK_CONTRACTS_SOURCE: &str = include_str!("hook_contracts.rs");
 /// ADVISORY hook the OpenCode plugin does not wire is a NAMED gap (already
 /// written up by oc-6), never a silent omission.
 const DISCOVERY_DOC: &str = include_str!("../../../../../docs/history/opencode-support/discovery.md");
+
+// ─── verdict shapes: derived from the guard's own emit paths ──────────────
+//
+// A blocking rule's decision reaches its belt as one of several distinct
+// WIRE SHAPES, not just "deny" vs "allow" — D6 (`.opencode/plugins/
+// bee-guard.ts`'s own header comment, docs/history/opencode-support/
+// discovery.md) names three the OpenCode belt must parse specially: an
+// exit-0 verdict carrying `hookSpecificOutput.updatedInput` (a repair), one
+// carrying `permissionDecision: "ask"` (bee's own "ask, never allow" —
+// write_guard/main.rs:389-394), and exit-0 stdout that is non-empty but
+// fails to parse at all (undecidable, and fail-closed on the blocking
+// path). The parity test below used to prove only that a RULE reaches
+// every belt — never that every SHAPE that rule can put on the wire does. A
+// belt with a narrower return surface than another can honor the one shape
+// it has a place for (deny) and let the rest go inert while a rule-only
+// parity test stays green — the defect oc-8 actually found on the OpenCode
+// belt (F2) before D6 closed it there. Widening the row set to (rule,
+// shape) pairs closes the same gap for every belt, not only the one that
+// already had it.
+//
+// Three of the four shapes are PRODUCER-side and are derived by scanning
+// each blocking rule's own emit-path source for the literal markers that
+// put the shape on the wire — never a hand-authored "these are the four
+// shapes" list, so a rule that starts or stops emitting a shape changes the
+// derived set on its own, per docs/knowledge/patterns/20260722-a-coverage-
+// gate-derives-ground-truth-it-never-compares-two-hand-lists.md. The
+// fourth, UNPARSEABLE, is not something bee itself ever emits
+// (`jsjson::stringify` never produces invalid JSON) — it is a BELT-side
+// parse-robustness requirement instead, asserted once, globally, wherever a
+// belt in this repo actually parses bee's own stdout (see the dedicated
+// block at the end of the parity test).
+
+const DENY_SHAPE: &str = "deny (exit code 2)";
+const REPAIR_SHAPE: &str = "exit-0 updatedInput repair";
+const ASK_SHAPE: &str = "exit-0 permissionDecision ask";
+
+/// `write_guard/main.rs`'s and `model_guard.rs`'s own source — the guard's
+/// EMIT PATHS this file derives verdict shapes from. `write_guard/tests.rs`
+/// doubles as write-guard's own CLAUDE-belt ask/repair-fixture proof source
+/// below (the AskUserQuestion auto-fix fixtures live there, not in
+/// `main.rs`, which holds only the emit path); `model_guard.rs`'s own
+/// embedded `#[cfg(test)] mod tests` serves the same purpose for
+/// model-guard's dispatch-repair fixtures, since this whole file (prod code
+/// and tests together) is embedded as one string.
+const WRITE_GUARD_MAIN_SOURCE: &str = include_str!("../src/hooks/write_guard/main.rs");
+const MODEL_GUARD_SOURCE: &str = include_str!("../src/hooks/model_guard.rs");
+const WRITE_GUARD_TESTS_SOURCE: &str = include_str!("../src/hooks/write_guard/tests.rs");
+
+/// The verdict shapes rule `hook`'s own emit-path source can actually put
+/// on the wire, derived by scanning that source for the literal markers
+/// each shape requires — never a hand-authored per-rule list. Today
+/// write-guard's AskUserQuestion auto-fix emits all three (its own comment
+/// at write_guard/main.rs:389-394 is explicit both `updatedInput` and
+/// `permissionDecision: "ask"` ride the SAME emission); model-guard's
+/// dispatch-label repair carries `updatedInput` alone — "No
+/// `permissionDecision` rides along" (model_guard.rs:137-141) — so
+/// ASK_SHAPE is never derived for it. A future rule (or a future emission
+/// on either existing rule) that adds or drops a marker changes this
+/// function's output on its own, with no list to update by hand.
+fn emittable_shapes(hook: &str) -> Vec<&'static str> {
+    let source = match hook {
+        "write-guard" => WRITE_GUARD_MAIN_SOURCE,
+        "model-guard" => MODEL_GUARD_SOURCE,
+        other => panic!(
+            "no known emit-path source for BLOCKING rule \"{other}\" — add one to \
+             `emittable_shapes` before trusting verdict-shape derivation for it"
+        ),
+    };
+    let mut shapes = Vec::new();
+    if source.contains("emit.code = 2") || source.contains("Ok((2,") {
+        shapes.push(DENY_SHAPE);
+    }
+    if source.contains("\"updatedInput\".into()") {
+        shapes.push(REPAIR_SHAPE);
+    }
+    if source.contains("Value::String(\"ask\".into())") {
+        shapes.push(ASK_SHAPE);
+    }
+    assert!(
+        !shapes.is_empty(),
+        "BLOCKING rule \"{hook}\": emittable_shapes derivation found ZERO verdict shapes in its \
+         own emit-path source — the markers likely drifted from the source"
+    );
+    shapes
+}
 
 // ─── catalog of record: derive the guard-rule inventory ────────────────────
 //
@@ -965,6 +1067,167 @@ fn claude_belt_deny_fixture_exists(tool_names: &[String]) -> bool {
     false
 }
 
+/// General form of `claude_belt_deny_fixture_exists`: true iff some
+/// `#[test] fn ... { ... }` block in `source` both names one of
+/// `tool_names` as a `"tool_name"` literal — either JSON-string spacing
+/// style, since `hook_contracts.rs`/`model_guard.rs` write `"tool_name":
+/// "X"` (with a space) and `write_guard/tests.rs`'s AskUserQuestion
+/// fixtures write `"tool_name":"X"` (without one) — AND contains every one
+/// of `markers`.
+fn claude_belt_test_block_has(source: &str, tool_names: &[String], markers: &[&str]) -> bool {
+    let idxs: Vec<usize> = source.match_indices("#[test]").map(|(i, _)| i).collect();
+    for (n, &start) in idxs.iter().enumerate() {
+        let end = idxs.get(n + 1).copied().unwrap_or(source.len());
+        let block = &source[start..end];
+        let names_a_tool = tool_names.iter().any(|t| {
+            block.contains(&format!("\"tool_name\": \"{t}\"")) || block.contains(&format!("\"tool_name\":\"{t}\""))
+        });
+        let has_markers = markers.iter().all(|m| block.contains(m));
+        if names_a_tool && has_markers {
+            return true;
+        }
+    }
+    false
+}
+
+/// Whether CLAUDE-belt fixture coverage exists for (hook, shape). Reuses
+/// `claude_belt_deny_fixture_exists` (and its `hook_contracts.rs` proof
+/// surface) for DENY_SHAPE unchanged; for the other two shapes, hand-authored
+/// knowledge of WHICH embedded source carries a given rule's OWN fixtures —
+/// `write_guard/tests.rs` for write-guard's ask/repair, `model_guard.rs`'s
+/// own embedded test module for model-guard's repair — since which file a
+/// rule's fixtures live in is not itself derivable from the emit path.
+fn claude_belt_shape_fixture_exists(hook: &str, shape: &str, tool_names: &[String]) -> bool {
+    if shape == DENY_SHAPE {
+        return claude_belt_deny_fixture_exists(tool_names);
+    }
+    let source = match hook {
+        "write-guard" => WRITE_GUARD_TESTS_SOURCE,
+        "model-guard" => MODEL_GUARD_SOURCE,
+        other => panic!("no known CLAUDE-belt fixture source for BLOCKING rule \"{other}\""),
+    };
+    if shape == REPAIR_SHAPE {
+        claude_belt_test_block_has(source, tool_names, &["updatedInput"])
+    } else if shape == ASK_SHAPE {
+        claude_belt_test_block_has(source, tool_names, &["permissionDecision", "\"ask\""])
+    } else {
+        panic!("claude_belt_shape_fixture_exists: no fixture-search wired for shape \"{shape}\"");
+    }
+}
+
+/// The known-payload SHAPE per (BLOCKING rule, verdict shape) at HELPER
+/// level. DENY_SHAPE defers to `helper_deny_payload` unchanged. The other
+/// two are domain knowledge no catalog row carries (mirroring
+/// `helper_deny_payload`'s own precedent): write-guard's AskUserQuestion
+/// long-header auto-fix (`write_guard/tests.rs`'s own
+/// `ask_long_header_is_auto_fixed`) carries BOTH REPAIR_SHAPE and ASK_SHAPE
+/// in one emission; model-guard's own `marker_plus_param_agreement_rules`
+/// param/tier disagreement repairs with no `permissionDecision` at all —
+/// `emittable_shapes` never derives ASK_SHAPE for model-guard, so that
+/// combination never reaches this function.
+fn helper_shape_payload(hook: &str, shape: &str, claude_tool: &str, root: &Path) -> Value {
+    if shape == DENY_SHAPE {
+        return helper_deny_payload(hook, claude_tool, root);
+    }
+    match (hook, shape) {
+        (h, s) if h == "write-guard" && (s == REPAIR_SHAPE || s == ASK_SHAPE) => json!({
+            "tool_name": "AskUserQuestion",
+            "tool_input": { "questions": [{
+                "question": "q",
+                "header": "Worktree switch",
+                "options": [{"label": "A", "description": "x"}, {"label": "B", "description": "y"}],
+            }]},
+            "cwd": root.to_string_lossy(),
+        }),
+        (h, s) if h == "model-guard" && s == REPAIR_SHAPE => json!({
+            "tool_name": claude_tool,
+            "tool_input": { "prompt": "[bee-tier: generation] go", "model": "opus" },
+            "cwd": root.to_string_lossy(),
+        }),
+        (h, s) => panic!(
+            "no known payload shape for BLOCKING rule \"{h}\" / verdict shape \"{s}\" — add one to \
+             `helper_shape_payload` before trusting this parity check"
+        ),
+    }
+}
+
+/// Runs `bee hook <hook>` at HELPER level against `shape`'s known-triggering
+/// payload and returns `Some(gap message)` (naming rule, shape, and belt) if
+/// the emission does not actually carry that shape.
+fn helper_shape_gap(hook: &str, shape: &str, claude_tool: &str, root: &Path) -> Option<String> {
+    let payload = helper_shape_payload(hook, shape, claude_tool, root);
+    let out = run_helper_hook(hook, payload.to_string().as_bytes(), root);
+    let code = out.status.code().unwrap_or(-1);
+    if code == 42 {
+        return Some(format!(
+            "{hook} / {shape} / helper belt: `bee hook {hook}` still delegates to Node under \
+             BEE_HOOK_NO_DELEGATE — the native decision path was never reached"
+        ));
+    }
+    if shape == DENY_SHAPE {
+        return if code != 2 {
+            Some(format!(
+                "{hook} / {shape} / helper belt: expected exit 2 (deny) for the known-denying \
+                 payload, got exit {code} stderr={}",
+                String::from_utf8_lossy(&out.stderr)
+            ))
+        } else {
+            None
+        };
+    }
+    if code != 0 {
+        return Some(format!(
+            "{hook} / {shape} / helper belt: expected exit 0 (a verdict-carrying allow) for the \
+             known-triggering payload, got exit {code} stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let parsed: Value = match serde_json::from_str(stdout.trim()) {
+        Ok(v) => v,
+        Err(e) => {
+            return Some(format!(
+                "{hook} / {shape} / helper belt: exit-0 stdout was not valid JSON ({e}): {stdout}"
+            ))
+        }
+    };
+    let hso = &parsed["hookSpecificOutput"];
+    let has_shape = if shape == REPAIR_SHAPE {
+        !hso["updatedInput"].is_null()
+    } else if shape == ASK_SHAPE {
+        hso["permissionDecision"].as_str() == Some("ask")
+    } else {
+        panic!("helper_shape_gap: no verdict-shape marker check wired for \"{shape}\"");
+    };
+    if has_shape {
+        None
+    } else {
+        Some(format!(
+            "{hook} / {shape} / helper belt: exit-0 verdict did not carry the expected shape: {parsed}"
+        ))
+    }
+}
+
+/// The literal marker in `bee-guard.ts`'s own `runBlockingHook` that proves
+/// it still implements `shape` — each marker is the exact
+/// conditional/property-access line D6's own doc comment cites for that
+/// shape (bee-guard.ts: `err?.status === 2` for deny, `hso.updatedInput` for
+/// repair, `hso.permissionDecision === "ask"` for ask).
+fn opencode_belt_shape_marker(shape: &str) -> &'static str {
+    if shape == DENY_SHAPE {
+        "err?.status === 2"
+    } else if shape == REPAIR_SHAPE {
+        "hso.updatedInput"
+    } else if shape == ASK_SHAPE {
+        "hso.permissionDecision === \"ask\""
+    } else {
+        panic!(
+            "opencode_belt_shape_marker: no marker wired for shape \"{shape}\" — add one before \
+             trusting this cross-check"
+        );
+    }
+}
+
 #[test]
 fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode() {
     let catalog = derive_catalog();
@@ -984,69 +1247,101 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
 
     for row in &blocking {
         let hook = row.hook.as_str();
+        let claude_tool = row
+            .claude_pretooluse_matchers
+            .first()
+            .unwrap_or_else(|| panic!("BLOCKING rule \"{hook}\" has no claude PreToolUse matcher to derive a tool name from"));
 
-        // HELPER level: `bee hook <hook>` itself denies the known-denying
-        // shape for this rule.
-        {
-            let claude_tool = row
-                .claude_pretooluse_matchers
-                .first()
-                .unwrap_or_else(|| panic!("BLOCKING rule \"{hook}\" has no claude PreToolUse matcher to derive a tool name from"));
-            let fx = helper_fixture();
-            let payload = helper_deny_payload(hook, claude_tool, &fx.root);
-            let out = run_helper_hook(hook, payload.to_string().as_bytes(), &fx.root);
-            let code = out.status.code().unwrap_or(-1);
-            if code == 42 {
+        // The row set widens from RULES to (rule, verdict SHAPE) pairs here
+        // — see the doc comment above `emittable_shapes`. A whole shape
+        // (not just a whole rule) can now go missing on one belt and fail
+        // this suite by name.
+        for shape in emittable_shapes(hook) {
+            // HELPER level: `bee hook <hook>` itself emits this shape for
+            // its known-triggering payload.
+            {
+                let fx = helper_fixture();
+                if let Some(gap) = helper_shape_gap(hook, shape, claude_tool, &fx.root) {
+                    gaps.push(gap);
+                }
+            }
+
+            // CLAUDE belt: the rule is wired under PreToolUse in claude's
+            // file-shipped projection (already true by construction of
+            // `blocking`, but checked per-projection here since `blocking`
+            // is a union) AND this rule's own embedded fixture suite proves
+            // a Claude-shaped tool_name literal reaches this shape.
+            if row.claude_pretooluse_matchers.is_empty() {
+                gaps.push(format!("{hook} / {shape} / claude belt: not wired under PreToolUse in claude-hooks.json"));
+            } else if !claude_belt_shape_fixture_exists(hook, shape, &row.claude_pretooluse_matchers) {
                 gaps.push(format!(
-                    "{hook} / helper belt: `bee hook {hook}` still delegates to Node under \
-                     BEE_HOOK_NO_DELEGATE — the native decision path was never reached"
+                    "{hook} / {shape} / claude belt: no fixture proves a Claude-shaped tool_name \
+                     literal (one of {:?}) reaches this shape",
+                    row.claude_pretooluse_matchers
                 ));
-            } else if code != 2 {
+            }
+
+            // CODEX belt: the rule is wired under PreToolUse in codex's
+            // file-shipped projection. Codex has no separate translation
+            // layer to fixture-test beyond that wiring, for ANY shape —
+            // its PreToolUse command execs `bee hook <rule>` directly, byte
+            // for byte the same call the HELPER check above already
+            // exercised for this exact shape.
+            if row.codex_pretooluse_matchers.is_empty() {
                 gaps.push(format!(
-                    "{hook} / helper belt: expected exit 2 (deny) for the known-denying payload, \
-                     got exit {code} stderr={}",
-                    String::from_utf8_lossy(&out.stderr)
+                    "{hook} / {shape} / codex belt: not wired under PreToolUse in \
+                     packages/bee/hooks/hooks.json"
+                ));
+            }
+
+            // OPENCODE belt: bee-guard.ts's mapToolCall actually routes some
+            // real tool to this hook (as before) AND runBlockingHook's own
+            // source still implements this shape — the live
+            // deny/repair/ask/unparseable PROOF lives in
+            // `every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary`;
+            // this is the routing+implementation cross-check that keeps
+            // that proof from silently going vacuous if the shape's own
+            // handling were ever deleted from the plugin.
+            if !opencode_hooks.contains(hook) {
+                gaps.push(format!(
+                    "{hook} / {shape} / opencode belt: bee-guard.ts's mapToolCall routes no tool \
+                     to this hook (derived pairs: {opencode_pairs:?})"
+                ));
+            } else if !PLUGIN_SOURCE.contains(opencode_belt_shape_marker(shape)) {
+                gaps.push(format!(
+                    "{hook} / {shape} / opencode belt: bee-guard.ts's runBlockingHook no longer \
+                     implements this shape (marker {:?} not found)",
+                    opencode_belt_shape_marker(shape)
                 ));
             }
         }
+    }
 
-        // CLAUDE belt: the rule is wired under PreToolUse in claude's
-        // file-shipped projection (already true by construction of
-        // `blocking`, but checked per-projection here since `blocking` is a
-        // union) AND hook_contracts.rs carries a deny fixture using one of
-        // claude's own matcher tokens.
-        if row.claude_pretooluse_matchers.is_empty() {
-            gaps.push(format!("{hook} / claude belt: not wired under PreToolUse in claude-hooks.json"));
-        } else if !claude_belt_deny_fixture_exists(&row.claude_pretooluse_matchers) {
-            gaps.push(format!(
-                "{hook} / claude belt: hook_contracts.rs has no deny fixture using any of {:?}",
-                row.claude_pretooluse_matchers
-            ));
-        }
-
-        // CODEX belt: the rule is wired under PreToolUse in codex's
-        // file-shipped projection. Codex has no separate translation layer
-        // to fixture-test beyond that wiring — its PreToolUse command execs
-        // `bee hook <rule>` directly, the exact call the HELPER check above
-        // already proved denies.
-        if row.codex_pretooluse_matchers.is_empty() {
-            gaps.push(format!("{hook} / codex belt: not wired under PreToolUse in packages/bee/hooks/hooks.json"));
-        }
-
-        // OPENCODE belt: bee-guard.ts's mapToolCall actually routes some
-        // real tool to this hook — the deny/allow/crash/missing PROOF lives
-        // in `every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary`.
-        if !opencode_hooks.contains(hook) {
-            gaps.push(format!(
-                "{hook} / opencode belt: bee-guard.ts's mapToolCall routes no tool to this hook \
-                 (derived pairs: {opencode_pairs:?})"
-            ));
-        }
+    // UNPARSEABLE_SHAPE: see the doc comment above `emittable_shapes` — not
+    // producer-derived (bee's own `jsjson::stringify` never emits invalid
+    // JSON), so it is not part of any rule's `emittable_shapes` row set and
+    // is checked once, globally, rather than per rule.
+    eprintln!(
+        "verdict-shape parity: an unparseable exit-0 verdict is a NAMED EXCLUSION for the helper, \
+         claude, and codex belts — bee's own `jsjson::stringify` never emits invalid JSON, so \
+         there is nothing to parse at the point of emission, and the claude/codex belts' stdout is \
+         parsed by their closed-source host applications, outside this repo. Asserted only where a \
+         belt in this repo actually parses bee's own stdout: the opencode belt \
+         (bee-guard.ts's runBlockingHook, live-proven by \
+         every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary's \
+         StubBehavior::UnparseableVerdict scenario)."
+    );
+    if !PLUGIN_SOURCE.contains("could not parse") {
+        gaps.push(
+            "unparseable exit-0 verdict / opencode belt: bee-guard.ts's runBlockingHook no longer \
+             throws a \"could not parse\" Error on invalid exit-0 verdict JSON"
+                .to_string(),
+        );
     }
 
     assert!(
         gaps.is_empty(),
-        "three-belt parity gap(s), naming the rule and the belt that missed it:\n{}",
+        "verdict-shape parity gap(s), naming the rule, the shape, and the belt that missed it:\n{}",
         gaps.join("\n")
     );
 }
