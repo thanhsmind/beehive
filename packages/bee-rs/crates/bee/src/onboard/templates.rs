@@ -184,17 +184,23 @@ pub const HEADER_POINTER_CANDIDATES: &[&str] =
 /// accepts it as a valid `<!-- bee:only opencode -->` label because the
 /// ONBOARDING SYNC PATH now renders a real opencode target
 /// (`.opencode/skills/`, via the already-runtime-agnostic
-/// `apply_sync_skill`/`render_skill_bytes`) — REPO_SKILL_TARGETS below does
-/// NOT gain an opencode entry yet; that CLI wiring (`--opencode`, `bee
-/// onboard --apply`) is a separate slice (plan.md E5).
+/// `apply_sync_skill`/`render_skill_bytes`).
 pub const RENDER_RUNTIMES: &[&str] = &["claude", "codex", "opencode"];
 pub const RENDER_SCHEMA: &str = "bee-render/2";
 pub const RENDER_SIDECAR: &str = ".bee-render.json";
 pub const SKILLS_VERSION_STAMP: &str = ".bee-skills-version.json";
 
 /// onboard_bee.mjs REPO_SKILL_TARGETS (l. 393–396): (kind, path segments).
-pub const REPO_SKILL_TARGETS: &[(&str, &[&str])] =
-    &[("repo-claude", &[".claude", "skills"]), ("repo-agents", &[".agents", "skills"])];
+/// `repo-opencode` joined this list in opencode-support oc-13 (S5): `bee
+/// onboard --apply` now drives the same runtime-agnostic sync writer
+/// against `.opencode/skills/` that the claude/agents targets already use —
+/// the same idempotent "copy when missing or drifted" behavior, no separate
+/// code path.
+pub const REPO_SKILL_TARGETS: &[(&str, &[&str])] = &[
+    ("repo-claude", &[".claude", "skills"]),
+    ("repo-agents", &[".agents", "skills"]),
+    ("repo-opencode", &[".opencode", "skills"]),
+];
 
 /// onboard_bee.mjs AGENT_TIER_BY_NAME (l. 1933–1937).
 pub const AGENT_TIER_BY_NAME: &[(&str, &str)] = &[

@@ -1,12 +1,13 @@
 # 06 — Runtime Integration: The Automation Skeleton
 
-bee supports **two first-class runtimes**, and neither is a port of the other — they get the same two belts:
+bee supports **three first-class runtimes** — Claude Code, Codex, and OpenCode (opencode-support D1) — and none is a port of another. Claude and Codex share one rendered hook belt; OpenCode carries its own, hand-written plugin belt (D2: OpenCode's `tool.execute.before` has no abort field, so a thrown `Error` is the only documented block path — that shape cannot be a rendered JSON manifest sharing Claude/Codex's catalog). All three sit on the same helper floor underneath:
 
-- **Hooks on both** (learned from claudekit). The 9 scripts in `hooks/` are rendered from one shared catalog and wired per runtime: `.codex/hooks.json` carries 8 lifecycle events for Codex, `hooks/claude-hooks.json` carries 7 for Claude Code. The workflow chain, gates, reservations, and state are refreshed *mechanically*, not by hoping the model remembers.
-- **The helper floor underneath both** (learned from khuym). The same rules are enforced inside the vendored CLI (`bee`) — identically on either runtime — plus the AGENTS.md block and compact-prompt recovery instructions.
-- **One caveat, stated honestly.** Whether an installed Codex CLI actually discovers and executes `.codex/hooks.json` is unverified (see the open question below). Shipping the file is not proof it runs, so on any runtime whose hook execution is unconfirmed the guardrails are self-honored, and the helper floor — never the hooks — is what parity rests on.
+- **Hooks on Claude and Codex** (learned from claudekit). The 9 scripts in `hooks/` are rendered from one shared catalog and wired per runtime: `.codex/hooks.json` carries 8 lifecycle events for Codex, `hooks/claude-hooks.json` carries 7 for Claude Code. The workflow chain, gates, reservations, and state are refreshed *mechanically*, not by hoping the model remembers.
+- **OpenCode's guard plugin** (proved live, opencode-support oc-2/oc-3/oc-6/oc-8). `.opencode/plugins/bee-guard.ts` maps `tool.execute.before`/`tool.execute.after`/`chat.message`/`event` onto the same `.bee/bin/bee hook <name>` calls the other two runtimes' scripts make — one brainstem, a third belt, because its block path is a thrown error rather than a shared catalog-rendered file. `bee onboard --apply` vendors it into a host project from this checkout's own installed copy (D3).
+- **The helper floor underneath all three** (learned from khuym). The same rules are enforced inside the vendored CLI (`bee`) — identically on every runtime — plus the AGENTS.md block and compact-prompt recovery instructions.
+- **One caveat, stated honestly.** Whether an installed Codex CLI actually discovers and executes `.codex/hooks.json` is unverified (see the open question below). Shipping the file is not proof it runs, so on any runtime whose hook execution is unconfirmed the guardrails are self-honored, and the helper floor — never the hooks — is what parity rests on. OpenCode's plugin belt, by contrast, is LIVE-PROVEN (a real deny and a real allow through a live `opencode run` session, opencode-support discovery.md) — its open questions are named gaps (`chain-nudge` unwired, `question`/`apply_patch` untested live), not an unverified-execution caveat.
 
-The principle that makes dual-runtime cheap: **enforcement lives in the shared helpers first; hooks are a second belt, not the only belt.** `bee cells cap` refusing to cap an unverified cell works identically on both runtimes. A hook that blocks an unreserved write is a Claude Code bonus on top of the same check the Codex worker runs through the helper.
+The principle that makes multi-runtime cheap: **enforcement lives in the shared helpers first; hooks are a second belt, not the only belt.** `bee cells cap` refusing to cap an unverified cell works identically on every runtime. A hook or plugin block that stops an unreserved write is a Claude Code/OpenCode bonus on top of the same check the Codex worker runs through the helper.
 
 ## What claudekit teaches (and bee adopts)
 
@@ -20,7 +21,9 @@ Reading claudekit's installed skeleton (`.claude/settings.json` + 16 hooks + `li
 
 And one anti-lesson bee keeps from the earlier audit: claudekit injects context via env vars and ~16 scripts with overlapping concerns. bee caps the skeleton at **9 thin scripts**, puts shared logic in `lib/` modules (claudekit itself extracts `project-detector.cjs` etc. into `lib/` precisely so another runtime's plugin can reuse it — the exact pattern bee needs), and keeps subagent context inline in spawn prompts, not env magic.
 
-## The bee hook skeleton (both runtimes)
+## The bee hook skeleton (Claude + Codex, the shared catalog)
+
+This section covers the ONE rendered catalog Claude Code and Codex share (`hook_manifests.rs`'s `Runtime { Claude, Codex }`). OpenCode's parallel, hand-written plugin belt is documented separately, right after the enforcement matrix below — it is a NAMED EXCLUSION from this catalog (no rendered manifest, no `Runtime::Opencode`), never an omission.
 
 Nine scripts, wired from one shared catalog across 8 Codex lifecycle events (`.codex/hooks.json`) and 7 Claude Code ones (`hooks/claude-hooks.json`). All ship inside the plugin (`hooks/` + `hooks.json`), so no user `settings.json` surgery is required. The six **core** hooks are tabled below; `bee-model-guard`, `bee-tools-logger` and `bee-codex-subagent-audit` were added later and are documented with the features that introduced them. Every script:
 
@@ -48,26 +51,26 @@ Hooks can only block or inject text; the *skills* define how the agent responds 
 - Gate-guard block → the agent MUST NOT retry the write; it surfaces the gate question to the user (Gate 2's execution wording from the workflow doc — the old standalone execution gate folded into it).
 - Reservation block → the worker returns `[BLOCKED]` with the conflict; the orchestrator fixes reservations or cell scope.
 
-## Codex parity: the helper-enforced skeleton
+## Runtime parity: the helper-enforced skeleton
 
-Codex now loads its own project hooks from `.codex/hooks.json` (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStart, SubagentStop, PreCompact, Stop — 8 events, rendered from the same shared catalog as the Claude Code side), replacing the earlier claim that Codex lacked lifecycle hook support. Helper-level enforcement stays the floor on both runtimes either way — hooks are a second belt, not the only one:
+Codex now loads its own project hooks from `.codex/hooks.json` (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStart, SubagentStop, PreCompact, Stop — 8 events, rendered from the same shared catalog as the Claude Code side), replacing the earlier claim that Codex lacked lifecycle hook support. OpenCode's guard plugin (`.opencode/plugins/bee-guard.ts`) is a third, independently-proved belt (opencode-support oc-2/oc-3/oc-6/oc-8) — every BLOCKING row below points at it by name, because a plugin that only ships in this repo's working tree is inert everywhere else until `bee onboard --apply` vendors it. Helper-level enforcement stays the floor on every runtime either way — hooks and the plugin are a second belt, never the only one:
 
-| Automation | Claude Code (hooks) | Codex (helpers + AGENTS.md) |
-|---|---|---|
-| Session bootstrap & routing | `bee-session-init` injects it | `AGENTS.md` BEE block: "run `.bee/bin/bee status --json` first, re-read after compaction"; `compact_prompt` recovery instructions (khuym pattern) |
-| HANDOFF surfacing, never auto-resume | Hook injects the handoff and the wait rule | `bee status` prints the handoff block first in its output; AGENTS.md rule |
-| Phase/gate reminder per prompt | `bee-prompt-context` (deduped) | Skill preambles: every stage skill's first step is "run bee status, verify the expected gate state" |
-| Gate 2 "no execution before its approval" (folds in the old standalone execution gate) | `bee-write-guard` blocks source writes pre-approval | `bee cells claim` refuses while `approved_gates.execution: false`; workers only act on claimed cells; AGENTS.md red-flag rule |
-| Reservation enforcement | `bee-write-guard` blocks unreserved writes | `bee reservations reserve` conflict → skill contract mandates `[BLOCKED]`; `BEE_AGENT_NAME` env prefix on write-heavy shell commands (khuym convention) |
-| Cap requires verification | (same helper) | `bee cells cap` refuses without a recorded verify pass — **helper-level, identical on both runtimes** |
-| Privacy / scout blocking | `bee-write-guard` check (c) | Guardrail text in AGENTS.md block + hive skill; no mechanical block (accepted gap, documented) |
-| State freshness | `bee-state-sync` | Skills update `state.json` at their handoff step (khuym contract); `bee status` flags staleness (`state.json` phase vs cell reality) |
-| Chain advancement after workers finish | `bee-chain-nudge` | The parent thread receives `[DONE]/[BLOCKED]/…` tokens directly (khuym same-session swarm); swarming skill's tend-loop is the nudge |
-| End-of-session hygiene | `bee-session-close` | "Session Finish" section of the AGENTS.md block (close/update cells, leave state + HANDOFF consistent, name blockers) |
+| Automation | Claude Code (hooks) | Codex (helpers + AGENTS.md) | OpenCode (guard plugin + helpers) |
+|---|---|---|---|
+| Session bootstrap & routing | `bee-session-init` injects it | `AGENTS.md` BEE block: "run `.bee/bin/bee status --json` first, re-read after compaction"; `compact_prompt` recovery instructions (khuym pattern) | `bee-guard.ts`'s `chat.message` hook injects the preamble digest once per session (ADVISORY — ships alongside the runtime's own `AGENTS.md` auto-read, doesn't replace it) |
+| HANDOFF surfacing, never auto-resume | Hook injects the handoff and the wait rule | `bee status` prints the handoff block first in its output; AGENTS.md rule | Same `chat.message` digest as session bootstrap |
+| Phase/gate reminder per prompt | `bee-prompt-context` (deduped) | Skill preambles: every stage skill's first step is "run bee status, verify the expected gate state" | `bee-guard.ts`'s `chat.message` hook, every message (ADVISORY) |
+| Gate 2 "no execution before its approval" (folds in the old standalone execution gate) | `bee-write-guard` blocks source writes pre-approval | `bee cells claim` refuses while `approved_gates.execution: false`; workers only act on claimed cells; AGENTS.md red-flag rule | **`bee-guard.ts`'s `tool.execute.before` BLOCKS** — throws on deny, live-proved against a real pre-gate write |
+| Reservation enforcement | `bee-write-guard` blocks unreserved writes | `bee reservations reserve` conflict → skill contract mandates `[BLOCKED]`; `BEE_AGENT_NAME` env prefix on write-heavy shell commands (khuym convention) | **Same `bee-guard.ts` `tool.execute.before` path BLOCKS** — one write-guard call covers gate, reservation, and read-size/privacy checks alike |
+| Cap requires verification | (same helper) | `bee cells cap` refuses without a recorded verify pass — **helper-level, identical on every runtime** | (same helper) |
+| Privacy / scout blocking | `bee-write-guard` check (c) | Guardrail text in AGENTS.md block + hive skill; no mechanical block (accepted gap, documented) | **`bee-guard.ts` BLOCKS** — write-guard's read-size/secret-glob checks are wired on `read`/`grep`/`glob`/`question`, not just writes; live-proved deny transcript in discovery.md |
+| State freshness | `bee-state-sync` | Skills update `state.json` at their handoff step (khuym contract); `bee status` flags staleness (`state.json` phase vs cell reality) | `bee-guard.ts`'s `event` hook on `file.edited`/`session.idle` (ADVISORY) — named gap: `file.edited` carries no `sessionID`, so only the cell-count rebuild half fires there; `session.idle` gets the full behavior |
+| Chain advancement after workers finish | `bee-chain-nudge` | The parent thread receives `[DONE]/[BLOCKED]/…` tokens directly (khuym same-session swarm); swarming skill's tend-loop is the nudge | **Not wired** (named gap, deferred — a bare `session.idle` fires on ANY session going idle, with no signal scoping it to the one subagent that just stopped); falls back to the same swarming tend-loop prose Codex uses |
+| End-of-session hygiene | `bee-session-close` | "Session Finish" section of the AGENTS.md block (close/update cells, leave state + HANDOFF consistent, name blockers) | `bee-guard.ts`'s `event` hook on `session.idle`/`session.deleted` (ADVISORY) — named gap: Claude's Stop-continuation block (the "GitHub-#18 bypass net") has no OpenCode enforcement equivalent; this belt only logs, never refuses a session going idle |
 
-Codex's project hooks ship a PreToolUse write/privacy guard and a SubagentStop chain-nudge alongside the rest, so the privacy-block and chain-nudging gaps once listed here are mechanism-present (file-shipped) rather than truly absent; whether a given installed Codex actually discovers and trusts each event — as opposed to the file merely being present — is what the capability spike confirms, not something assumed from shipping. Everything gate- and integrity-critical remains helper-enforced first regardless, so behavior stays identical either way.
+Codex's project hooks ship a PreToolUse write/privacy guard and a SubagentStop chain-nudge alongside the rest, so the privacy-block and chain-nudging gaps once listed here are mechanism-present (file-shipped) rather than truly absent; whether a given installed Codex actually discovers and trusts each event — as opposed to the file merely being present — is what the capability spike confirms, not something assumed from shipping. OpenCode's BLOCKING rows, by contrast, are LIVE-PROVEN on this repo (a real deny and a real allow through an `opencode run` session), not merely file-shipped. Everything gate- and integrity-critical remains helper-enforced first regardless, so behavior stays identical across every runtime.
 
-Codex's `approval_policy` (tool-call permission, `.codex/config.toml`) and bee's `gate_bypass` (workflow-gate auto-approval, `.bee/config.json`) are distinct layers, which is exactly why this table's helper-level enforcement column holds regardless of either setting: gate, reservation, and verification checks live in the shared helpers, not in Codex's permission mode. Codex hook trust is a third, independent layer underneath both — a changed `.codex/hooks.json` may be skipped pending a `/hooks` review no matter how `approval_policy` or `gate_bypass` are configured. See [INSTALL.md](../INSTALL.md) §2 for the recommended `bee-safe`/`bee-autopilot` profiles.
+Codex's `approval_policy` (tool-call permission, `.codex/config.toml`) and bee's `gate_bypass` (workflow-gate auto-approval, `.bee/config.json`) are distinct layers, which is exactly why this table's helper-level enforcement column holds regardless of either setting: gate, reservation, and verification checks live in the shared helpers, not in Codex's permission mode. Codex hook trust is a third, independent layer underneath — a changed `.codex/hooks.json` may be skipped pending a `/hooks` review no matter how `approval_policy` or `gate_bypass` are configured. OpenCode's BLOCKING rows fail CLOSED on any plugin-side spawn failure (a missing `.bee/bin/bee` throws rather than silently allowing); its ADVISORY rows fail OPEN (swallow + log), matching the exit-0 `updatedInput`/`ask` verdict handling `bee hook write-guard`/`model-guard` already honor on the Claude belt. See [INSTALL.md](../INSTALL.md) §2 for the recommended `bee-safe`/`bee-autopilot` profiles.
 
 ## Render model: one source tree, runtime-conditional blocks (D9)
 
@@ -80,24 +83,32 @@ The runtime-sensitive skills (`bee-hive` and `bee-swarming` — whose "Execute" 
 <!-- bee:only codex -->
 ...content that only makes sense on Codex (wait_agent/list_agents native tending, read-budget tier enforcement)...
 <!-- bee:end -->
+<!-- bee:only opencode -->
+...content that only makes sense on OpenCode (the task tool, .opencode/agent/bee-*.md, bee-guard.ts)...
+<!-- bee:end -->
 ```
 
-`render(bytes, runtime)` drops the block not meant for the target runtime and strips every marker line; a file with no markers passes through byte-identical (BOM, CRLF, final-newline state, and arbitrary bytes all preserved — nothing is decoded-and-re-encoded unless a marker line is actually present). The attribution rule is **who must act, not who is mentioned**: a passage is tagged only when it names a mechanism the agent invokes differently per runtime (a spawn call, a tool name, a config path); a sentence that merely mentions "Claude" or "Codex" as a config example or a data fact stays shared, untagged prose. A malformed marker anywhere (unclosed, nested, stray, inside frontmatter, inside a fenced code block) refuses the **entire** render with zero writes — never a partial or best-effort render.
+`render(bytes, runtime)` drops the block not meant for the target runtime and strips every marker line; a file with no markers passes through byte-identical (BOM, CRLF, final-newline state, and arbitrary bytes all preserved — nothing is decoded-and-re-encoded unless a marker line is actually present). The attribution rule is **who must act, not who is mentioned**: a passage is tagged only when it names a mechanism the agent invokes differently per runtime (a spawn call, a tool name, a config path); a sentence that merely mentions "Claude", "Codex", or "OpenCode" as a config example or a data fact stays shared, untagged prose. A malformed marker anywhere (unclosed, nested, stray, inside frontmatter, inside a fenced code block) refuses the **entire** render with zero writes — never a partial or best-effort render.
 
-This produces **four rendered-tree roots**, all generated from canonical `skills/` and never hand-edited:
+`opencode` is accepted grammar in BOTH render sites (`onboard/render.rs::classify_marker_line` and `devtools/skill_trees.rs`'s marker check), but the two rendering pipelines diverge on purpose past that point — see the roots table below.
+
+This produces **five rendered-tree roots**, all generated from canonical `skills/` and never hand-edited:
 
 | Root | Runtime | Generated by |
 |---|---|---|
 | `.claude/skills/` | claude | the onboarding sync path (`bee onboard`'s `applySyncSkill`), run via `bee onboard --repo-root . --apply` |
 | `.agents/skills/` | codex | the same onboarding sync path, codex target |
+| `.opencode/skills/` | opencode | the same onboarding sync path, opencode target (opencode-support oc-13/S5 — `REPO_SKILL_TARGETS`'s third `repo-opencode` entry) |
 | `.claude-plugin/skills/` | claude | `bee dev render-skill-trees` |
 | `.codex-plugin/skills/` | codex | `bee dev render-skill-trees` |
 
-Each rendered root is stamped with a `.bee-render.json` provenance sidecar (`{schema:"bee-render/1", target_runtime}`). `source-identity.mjs` classifies any skills root carrying that sidecar as a **rendered projection** and refuses it as an onboarding source for **any** target, own-runtime included — a projection can never become someone else's (or its own) source of truth, closing the loop that would otherwise let a stripped copy silently re-seed itself. Canonical `skills/` is the only valid onboarding source.
+`bee dev render-skill-trees`'s `RENDER_RUNTIMES` deliberately stays `["claude", "codex"]` — opencode never gets a `.opencode-plugin/` marketplace root, because no marketplace equivalent exists for it (a NAMED EXCLUSION, not an omission; see plan.md's "Rejected alternatives"). The marker grammar's `MARKER_RUNTIMES` is a strict superset of `RENDER_RUNTIMES` for exactly this reason: an `<!-- bee:only opencode -->` block is valid syntax everywhere, but it is stripped from both trees this pipeline actually writes and only lands when the ONBOARDING SYNC PATH (the table above) renders for `"opencode"`.
 
-Today only the 5 adapter-split skills carry any marker at all; the other 10 workflow-semantic skills and the always-loaded doctrine layer (`AGENTS.md`, `AGENTS.block.md`) stay deliberately unsplit — identical prose on both runtimes — because their content genuinely doesn't differ by runtime. When a cross-runtime contrast is useful for a human reading the docs but isn't itself part of either runtime's operating instructions, it belongs here, in this file, rather than duplicated (untagged) into both projections or shoehorned into a marker block that neither runtime actually needs to act on.
+Each rendered root is stamped with a `.bee-render.json` provenance sidecar (`{schema:"bee-render/2", target_runtime}`). `source-identity.mjs` classifies any skills root carrying that sidecar as a **rendered projection** and refuses it as an onboarding source for **any** target, own-runtime included — a projection can never become someone else's (or its own) source of truth, closing the loop that would otherwise let a stripped copy silently re-seed itself. Canonical `skills/` is the only valid onboarding source.
 
-## Shared `lib/` — one brain, two belts
+Today only the 5 adapter-split skills carry any marker at all; the other 10 workflow-semantic skills and the always-loaded doctrine layer (`AGENTS.md`, `AGENTS.block.md`) stay deliberately unsplit — identical prose on every runtime — because their content genuinely doesn't differ by runtime. When a cross-runtime contrast is useful for a human reading the docs but isn't itself part of any runtime's operating instructions, it belongs here, in this file, rather than duplicated (untagged) into every projection or shoehorned into a marker block that no runtime actually needs to act on.
+
+## Shared `lib/` — one brain, three belts
 
 ```
 .bee/bin/
@@ -109,20 +120,24 @@ Today only the 5 adapter-split skills carry any marker at all; the other 10 work
     guards.mjs         ← secret globs, scout-block dirs, gate-guard path rules
     inject.mjs         ← context digests (status, patterns, decisions), injection dedup
 plugin hooks/          ← 6 thin wrappers: parse stdin payload → call lib → print/exit
+.opencode/plugins/bee-guard.ts ← the third wrapper: no rule logic in TypeScript,
+                                  every guard decision is a call into
+                                  `.bee/bin/bee hook <name>` (opencode-support D2)
 ```
 
-Hooks are wrappers around `lib/`; CLI helpers are wrappers around the same `lib/`. When a rule changes (say, a new secret glob), both runtimes pick it up from one file. This is claudekit's `lib/` extraction pattern applied deliberately instead of retroactively.
+Claude/Codex hooks are wrappers around `lib/`; CLI helpers are wrappers around the same `lib/`; `bee-guard.ts` is a wrapper too, just an out-of-process one — it shells out to the same `.bee/bin/bee hook <name>` entry point rather than importing `lib/` in-process (TypeScript vs. the native binary). When a rule changes (say, a new secret glob), every runtime picks it up from one file. This is claudekit's `lib/` extraction pattern applied deliberately instead of retroactively.
 
-## Onboarding responsibilities (one script, both runtimes)
+## Onboarding responsibilities (one script, every runtime)
 
 `bee onboard` (with `--apply` after approval):
 
-1. Installs/updates the `AGENTS.md` BEE block (BEE:START/END markers) — bootstraps Codex and any AGENTS.md-reading tool.
+1. Installs/updates the `AGENTS.md` BEE block (BEE:START/END markers) — bootstraps Codex, OpenCode, and any AGENTS.md-reading tool.
 2. Vendors `.bee/bin/bee` + `lib/` into the repo, removes any retired `bee_*.mjs` shims found there (`RETIRED_HELPERS` pass, D2), writes `.bee/` runtime files and `config.json` (all six hooks default-on, each toggleable).
 3. Claude Code hooks need **no repo install** — they ship with the plugin and self-arm when `.bee/onboarding.json` appears. `--repo-hooks` exists as a fallback that writes them into `.claude/settings.json` for environments that don't load plugin hooks.
-4. Verifies drift on later runs: managed block version, helper versions, config keys (khuym's `onboarding.json` managed-versions pattern).
+4. Installs `.opencode/skills/` (the onboarding sync path's third target, `repo-opencode`) and `.opencode/plugins/bee-guard.ts` (vendored from this checkout's own installed copy — opencode-support D3, oc-13) — both copy-when-missing-or-drifted, so a settled repo re-applies as a no-op and a hand-edited plugin file is repaired on the next `--apply`, the same idempotency every other vendored artifact already gets.
+5. Verifies drift on later runs: managed block version, helper versions, config keys (khuym's `onboarding.json` managed-versions pattern).
 
-The session-start preamble content is generated from one source (`inject.mjs`) for all three consumers — the plugin hook, the AGENTS.md block text, and `bee status` output — so the two runtimes can never drift apart in what they tell the agent. (gstack's docs-from-code rule, applied to bee's own bootstrap.)
+The session-start preamble content is generated from one source (`inject.mjs`) for all three consumers — the plugin hook, the AGENTS.md block text, and `bee status` output — so no runtime can drift apart in what it tells the agent. (gstack's docs-from-code rule, applied to bee's own bootstrap.) OpenCode's own `chat.message`-driven digest (see the enforcement matrix above) is a fourth consumer of the same underlying content, reached through the CLI rather than `inject.mjs` directly.
 
 ## Tier 3: the repo-native playbook (any agent, no plugin)
 
@@ -135,10 +150,10 @@ bee is already half repo-native (helpers enforce mechanically for any agent; the
 3. The AGENTS block gains one routing line: *"If bee skills are not available in this runtime, follow `.bee/PLAYBOOK.md`."*
 4. `bee status`'s `recommended_next` points at the playbook section for the current phase — the repo navigates any agent, independent of skill triggering.
 
-Degradation ladder, complete: **skills** (Claude Code/Codex with plugin) → **playbook** (any AGENTS.md-reading agent) → **helpers** (mechanical enforcement for everyone, including agents that read nothing). Scheduled with the phase-4 docs-from-code work in [05-roadmap.md](05-roadmap.md).
+Degradation ladder, complete: **skills** (Claude Code/Codex with plugin, **OpenCode with its guard plugin and rendered `.opencode/skills/`** — sits at this top rung, not a rung below it, because its blocking enforcement is live-proved, the same live-blocking bar the other two runtimes clear) → **playbook** (any AGENTS.md-reading agent without one of the three above) → **helpers** (mechanical enforcement for everyone, including agents that read nothing). Scheduled with the phase-4 docs-from-code work in [05-roadmap.md](05-roadmap.md).
 
 ## Testing the skeleton
 
 - Each hook gets a fixture test: feed a recorded stdin payload, assert block/inject/silence (khuym's `test_onboard_khuym.mjs` style, no framework).
-- One parity test asserts that every rule in `guards.mjs`/`cells.mjs` is exercised by *both* a hook test and a helper test — the two-belt guarantee.
+- A parity test asserts that every rule in `guards.mjs`/`cells.mjs` is exercised at the helper level AND through each runtime's own hook/plugin belt — the two-belt guarantee, now a THREE-belt one: `tests/opencode_plugin_contracts.rs` (opencode-support oc-7/oc-9) is that suite's OpenCode leg, authored from zero since the predecessor test named here for Claude/Codex died with the Node runtime (R6) and was never ported before this feature; it derives its tool-registry inventory from the installed `@opencode-ai/plugin` package rather than a hand-floored list, and hard-fails (never silently skips) without a `node` binary on PATH.
 - Pressure scenarios for the skill-side contracts (e.g., agent tries to work around a privacy block) live with the hive skill per the Iron Law.

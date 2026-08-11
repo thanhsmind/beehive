@@ -1099,14 +1099,15 @@ mod tests {
         format!("{}\n", crate::jsjson::stringify_pretty(&sidecar)).into_bytes()
     }
 
-    /// Interim regen entry point for `.opencode/skills/` (oc-4, S2). Until a
-    /// later slice wires an `--opencode` flag through `bee onboard --apply`
-    /// (docs/history/opencode-support/plan.md E5), this is how the committed
-    /// tree below is (re)written — the onboarding sync path's per-skill
-    /// writer (`apply_sync_skill`) is already runtime-agnostic; this just
-    /// drives it against the real checkout instead of a tempdir fixture.
-    /// `#[ignore]`d because it writes the REAL checkout: run explicitly with
-    /// `cargo test --manifest-path packages/bee-rs/Cargo.toml
+    /// Regen entry point for `.opencode/skills/` (oc-4, S2). `bee onboard
+    /// --apply` (oc-13, S5: `REPO_SKILL_TARGETS`'s `repo-opencode` entry) now
+    /// drives this same runtime-agnostic writer for real host repos,
+    /// including this checkout itself — running it from inside a bee source
+    /// checkout is the ordinary regen path. This test remains as the
+    /// lower-ceremony one-liner for regenerating the COMMITTED tree below
+    /// without going through the full CLI plan/apply cycle. `#[ignore]`d
+    /// because it writes the REAL checkout: run explicitly with `cargo test
+    /// --manifest-path packages/bee-rs/Cargo.toml
     /// onboard::skills::tests::regen_opencode_skills_tree -- --ignored`
     /// whenever the canonical `skills/` source changes.
     #[test]
@@ -1127,6 +1128,22 @@ mod tests {
         super::super::util::write_file_atomic(
             &target_root.join(super::super::templates::RENDER_SIDECAR),
             &opencode_sidecar_bytes(&source_root),
+        )
+        .unwrap();
+        // oc-13: real `bee onboard --apply` also stamps SKILLS_VERSION_STAMP
+        // (apply.rs's "D9/D7 provenance stamps" section) — without it, the
+        // three-version preflight cannot resolve `installed_skills` for this
+        // target and blocks EVERY future `--apply` against this checkout
+        // with "version unresolvable ... refusing (never forceable)". The
+        // interim regen path skipped it; a real onboard apply never would.
+        let engine = super::super::source::Engine::from_plugin_root(root.clone());
+        let version = super::super::source::read_source_release_identity(&engine).version;
+        let payload = serde_json::json!({
+            "version": version.as_ref().map(|v| serde_json::json!(v)).unwrap_or(serde_json::Value::Null)
+        });
+        super::super::util::write_file_atomic(
+            &target_root.join(super::super::templates::SKILLS_VERSION_STAMP),
+            format!("{}\n", crate::jsjson::stringify_pretty(&payload)).as_bytes(),
         )
         .unwrap();
     }

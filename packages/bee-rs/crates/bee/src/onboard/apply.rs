@@ -357,6 +357,16 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                     read_text_if_exists(&engine.plugin_hooks_dir.join(name)).as_bytes(),
                 );
             }
+            "copy_opencode_plugin" => {
+                // opencode-support D2/D3, oc-13: source is this checkout's
+                // OWN `.opencode/plugins/` tree, not a `packages/bee/`
+                // template (see Engine::opencode_plugin_dir).
+                let name = posix_basename(rel);
+                let _ = write_file_atomic(
+                    &target,
+                    read_text_if_exists(&engine.opencode_plugin_dir.join(name)).as_bytes(),
+                );
+            }
             "copy_statusline" => {
                 let name = posix_basename(rel);
                 let _ = write_file_atomic(

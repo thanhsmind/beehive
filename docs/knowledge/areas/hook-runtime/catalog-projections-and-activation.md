@@ -90,9 +90,17 @@ owner sees the pending-review warning.
 
 ## Pointers (implementation)
 
-- Catalog + renderer: `packages/bee/hooks/catalog.mjs` (exports `ALLOWED_DIFFERENCES`,
-  `TARGETS`, `REPO_TRANSPORT_UNAVAILABLE_DIAGNOSTIC`); `renderProjection`/
-  `renderProjectionText` take an explicit `target` (`plugin` default, `repo`)
-  so both rendering targets share one function, never forked logic.
-  Projections: `packages/bee/hooks/hooks.json` (Codex, plugin target), `packages/bee/hooks/claude-hooks.json`
+- Catalog + renderer: `packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs`
+  — the Rust port of the deleted Node `packages/bee/hooks/catalog.mjs`
+  (retired at the R6 cutover, commit 5c62cad0). It exports `Runtime {
+  Claude, Codex }`, `Target { Plugin, Repo }`, and the `ALLOWED_DIFFERENCES`
+  table; `render_projection`/`render_projection_text` take an explicit
+  `Target` (`Plugin` default, `Repo`) so both rendering targets still share
+  one function, never forked logic. Projections: `packages/bee/hooks/hooks.json`
+  (Codex, plugin target), `packages/bee/hooks/claude-hooks.json`
   (Claude, plugin target; `.claude-plugin/plugin.json` points here).
+  OpenCode is a NAMED EXCLUSION from this catalog (opencode-support D1/D2,
+  R1): its belt is the checked-in TypeScript plugin at
+  `.opencode/plugins/bee-guard.ts`, not a rendered JSON manifest sharing this
+  catalog's `Entry`/`Group` rows — see `hook_manifests.rs`'s own `Runtime`
+  doc comment for why `Runtime::Opencode` would be the wrong shape.

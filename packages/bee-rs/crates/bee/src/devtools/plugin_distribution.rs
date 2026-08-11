@@ -1065,6 +1065,25 @@ fn parse_runtime(value: Option<&String>) -> R<Vec<String>> {
 fn run_cli(argv: &[&str]) -> R<Value> {
     let args = parse_args(argv)?;
     let runtimes = parse_runtime(args.named.get("runtime"))?;
+    // opencode-support S2 (plan.md, "Rejected alternatives"): this verb
+    // manages the `.claude-plugin`/`.codex-plugin` MARKETPLACE trees — a
+    // distribution shape OpenCode has none of (no `.opencode-plugin/`
+    // equivalent exists). `parse_runtime` still accepts "opencode" (kept for
+    // `--help`/error-message symmetry with `--runtime claude|codex|opencode|
+    // both`), but letting it fall through used to reach
+    // `prove_installed_package`'s generic "runtime bee plugin is not
+    // installed and enabled" — true of the bytes, misleading about the
+    // cause: nothing under this verb was ever going to find one. Refuse by
+    // name instead, before any filesystem work, and point at the real
+    // installer.
+    if runtimes.iter().any(|r| r == "opencode") {
+        return fail(
+            "opencode has no plugin-marketplace distribution tree to manage (--runtime opencode \
+             is accepted by --runtime's grammar, never by this verb's own work) — the OpenCode \
+             guard plugin installs at .opencode/plugins/bee-guard.ts via `bee onboard --apply`, \
+             not through plugin-distribution.",
+        );
+    }
     let (mode, repo_root, release_manifest, plugin_state_file) = match (
         args.named.get("mode"),
         args.named.get("repo_root"),
@@ -1593,5 +1612,32 @@ mod tests {
     fn missing_required_flags_refuse_before_any_filesystem_work() {
         let err = run_cli(&["--runtime", "claude"]).unwrap_err().0;
         assert!(err.contains("--mode, --runtime, --repo-root"), "{err}");
+    }
+
+    /// opencode-support S2 judge minor / oc-13: `--runtime opencode` used to
+    /// reach `prove_installed_package`'s generic "not installed and enabled"
+    /// message, which is misleading (nothing under this verb was ever going
+    /// to find a marketplace tree for OpenCode). It now refuses by name,
+    /// BEFORE the other required flags are even checked, and points at the
+    /// real installer.
+    #[test]
+    fn runtime_opencode_refuses_by_name_instead_of_a_missing_install_message() {
+        let err = run_cli(&["--runtime", "opencode"]).unwrap_err().0;
+        assert!(err.contains("no plugin-marketplace distribution tree"), "{err}");
+        assert!(err.contains("bee onboard --apply"), "{err}");
+        assert!(!err.contains("is not installed and enabled"), "{err}");
+
+        // Every other required flag can be present too — the refusal still
+        // fires first, never reaching discover_bee_plugin/build_distribution_plan.
+        let err = run_cli(&[
+            "--mode", "plugin-first",
+            "--runtime", "opencode",
+            "--repo-root", "/nonexistent",
+            "--release-manifest", "/nonexistent",
+            "--plugin-state-file", "/nonexistent",
+        ])
+        .unwrap_err()
+        .0;
+        assert!(err.contains("no plugin-marketplace distribution tree"), "{err}");
     }
 }

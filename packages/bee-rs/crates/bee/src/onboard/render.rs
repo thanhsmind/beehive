@@ -359,13 +359,14 @@ pub fn render_skill_bytes(buf: &[u8], runtime: &str) -> Vec<u8> {
     out.into_bytes()
 }
 
-/// runtimeForTargetKind (l. 926): repo-agents renders Codex, every other
-/// managed root renders Claude.
+/// runtimeForTargetKind (l. 926): repo-agents renders Codex, repo-opencode
+/// renders OpenCode (opencode-support oc-13/S5 — REPO_SKILL_TARGETS' third
+/// entry), every other managed root renders Claude.
 pub fn runtime_for_target_kind(kind: &str) -> &'static str {
-    if kind == "repo-agents" {
-        "codex"
-    } else {
-        "claude"
+    match kind {
+        "repo-agents" => "codex",
+        "repo-opencode" => "opencode",
+        _ => "claude",
     }
 }
 
@@ -552,6 +553,7 @@ mod tests {
     fn runtime_for_target_kind_maps_agents_to_codex() {
         assert_eq!(runtime_for_target_kind("repo-agents"), "codex");
         assert_eq!(runtime_for_target_kind("repo-claude"), "claude");
+        assert_eq!(runtime_for_target_kind("repo-opencode"), "opencode");
         assert_eq!(runtime_for_target_kind("global"), "claude");
         assert_eq!(runtime_for_target_kind("legacy-global"), "claude");
     }

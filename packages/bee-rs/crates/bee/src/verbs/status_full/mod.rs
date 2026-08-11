@@ -61,7 +61,11 @@ const MODEL_TIERS: [&str; 3] = ["extraction", "generation", "ceiling"];
 
 const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
-const RUNTIMES: [&str; 2] = ["claude", "codex"];
+// opencode-support D1/oc-13: models.opencode is a real config key (oc-11
+// made the reader widen to it); this status/doctor copy of the runtime list
+// follows so bee status's model line and the .claude(/opencode)/agent(s)
+// drift check both see it too — R1 named export, not a hand-kept mirror.
+const RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
 
 const MODEL_NORMALIZE_SLOTS: [&str; 4] = ["extraction", "generation", "review", "advisor"];
 

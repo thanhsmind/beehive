@@ -89,6 +89,23 @@ pub fn list_template_statusline(engine: &Engine) -> Vec<String> {
         .collect()
 }
 
+/// opencode-support oc-13 (S5): the OpenCode guard plugin file(s) this
+/// checkout ships at `.opencode/plugins/` — every plain `.ts` file, sorted.
+/// Vendored into a host project the same "copy when missing or drifted" way
+/// helpers/lib/prompts are, never through the rendered skill-tree pipeline
+/// (that pipeline's `RENDER_RUNTIMES` deliberately excludes opencode — no
+/// marketplace tree exists for it).
+pub fn list_opencode_plugin_files(engine: &Engine) -> Vec<String> {
+    if !exists(&engine.opencode_plugin_dir) {
+        return Vec::new();
+    }
+    read_dir_sorted(&engine.opencode_plugin_dir)
+        .into_iter()
+        .filter(|e| e.is_file && e.name.ends_with(".ts"))
+        .map(|e| e.name)
+        .collect()
+}
+
 fn list_files_by_suffix(dir: &Path, suffix: &str) -> Vec<String> {
     if !exists(dir) {
         return Vec::new();
@@ -521,6 +538,26 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
             if read_text_if_exists(&target) != source {
                 plan.push(plan_item("copy_statusline", &format!(".claude/{name}")));
             }
+        }
+    }
+
+    // 3f. OpenCode guard plugin (opencode-support D2/D3, oc-13): copy when
+    // missing or drifted, same shape as 3e's prompt files — this checkout's
+    // OWN `.opencode/plugins/` tree is the source (see Engine::opencode_plugin_dir),
+    // never a `packages/bee/` template. A belt that ships only in the source
+    // checkout's working tree is inert everywhere else, so this is what makes
+    // `bee onboard --apply` install it into a host project at all.
+    let opencode_plugin_files = list_opencode_plugin_files(engine);
+    if !opencode_plugin_files.is_empty()
+        && !exists(&repo_root.join(".opencode").join("plugins"))
+    {
+        plan.push(plan_item("create_dir", ".opencode/plugins"));
+    }
+    for name in &opencode_plugin_files {
+        let source = read_text_if_exists(&engine.opencode_plugin_dir.join(name));
+        let target = repo_root.join(".opencode").join("plugins").join(name);
+        if read_text_if_exists(&target) != source {
+            plan.push(plan_item("copy_opencode_plugin", &format!(".opencode/plugins/{name}")));
         }
     }
 
