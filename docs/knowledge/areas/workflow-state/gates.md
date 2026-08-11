@@ -397,6 +397,14 @@ a malformed record has earned none.
   feature — never the record stamp alone. This closes the seam where a
   workflow-record rebuild could drop an in-flight stamp write and force a
   genuine sync into the waiver path (scribing-stamp-seam decision 5b2f963d).
+- R78a — The gate write path validates its inputs with hard allowlists: an
+  unknown gate name is refused naming the offending value and the legal
+  names (derived from the same constant the write path uses), and a
+  non-boolean approval value is refused naming the value — on the plain and
+  merged paths alike, before any lock, writing nothing. This shipped as
+  production behavior before it was ever pinned; gate-input-validation cell
+  giv-1 (2026-08-10) added the five regression pins after PBI p-94ecc5a2
+  suspected the validation missing.
 - R79 — Every hand-written copy of the terminal-phase membership must agree
   with every other copy and with the closed phase vocabulary; drift fails the
   verification chain naming the offending place and line. The copies are

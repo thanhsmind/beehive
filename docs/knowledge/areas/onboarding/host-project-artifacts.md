@@ -101,7 +101,12 @@ same source bullet.)
   repository boundary can never become the template source (review B-P2-3,
   template-poisoning consequence); and an explicit `--repo-root` is tried
   FIRST as a locate candidate, so onboarding a named bee checkout works
-  from any working directory — a refusal names both candidates.
+  from any working directory — a refusal names both candidates. Test
+  discipline riding rph-3: every locate test neutralizes ambient
+  `BEE_JS_ENTRY` with a scoped guard (the env short-circuit fires before
+  the walk and had made the suite red under an exported entry), and
+  `Engine::locate()` stays a pure one-line delegate so the `locate_from`
+  pins cover production.
 
 ## Edge Cases Settled
 

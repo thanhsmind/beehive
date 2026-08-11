@@ -232,6 +232,11 @@ registers nothing, and a registration failure after a standing claim is loud
 in the payload (`worker_registered: false` + `registration_error`), never
 silent (dispatch-registers-worker cell dpr-1, 2026-08-10, closing the gap
 first hit on knowledge-search ks-2 and filed as friction rows 670/707).
+The payload keys are pinned through the REAL dispatch-prepare entry (an
+out-of-process test child, since the entry resolves its root off the
+process working directory); the registration-failure shape stays pinned on
+the inner claim seam — the entry has no cleanly corrupt-able failure seam
+of its own, a recorded split (review-p2-hardening cell rph-4, 2026-08-11).
 
 **B31 — A judge verdict is a structured, append-only record with an honest
 independence stamp.** Trigger: a judge examines a unit of work and renders a
