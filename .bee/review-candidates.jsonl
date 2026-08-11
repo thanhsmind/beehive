@@ -106,3 +106,4 @@
 {"id":"cac5e497-af10-435a-90c9-4c4446a974e4","type":"candidate","date":"2026-08-10T23:42:30.960Z","feature":"review-p2-hardening","head":"696e9f07751c0bd8795de5bc1de0076a9961fd5b","mode":"standard","baseline":null,"cells":["rph-1","rph-2","rph-3","rph-4"]}
 {"id":"55e3eb6a-533b-4169-a911-cba62e5698fc","type":"candidate","date":"2026-08-11T02:46:15.146Z","feature":"finish-records-deviations","head":"ad9646390d98414b863f61f87d765a2732898295","mode":"small","baseline":null,"cells":["frd-1"]}
 {"id":"2ba54adb-5aef-4edb-8438-3eff83c85860","type":"candidate","date":"2026-08-11T03:03:24.722Z","feature":"state-swap-hygiene","head":"20daf805c9ac7357fd7b7f7c1c2ef52dc8a8808e","mode":"small","baseline":null,"cells":["ssh-1","ssh-2"]}
+{"id":"58ab4b65-520f-4844-9425-8d23708b017e","type":"candidate","date":"2026-08-11T03:26:49.721Z","feature":"evolving-rank-freshness","head":"e09f15f57619c199de56984bba005614785cf5e0","mode":"small","baseline":null,"cells":["erf-1"]}
