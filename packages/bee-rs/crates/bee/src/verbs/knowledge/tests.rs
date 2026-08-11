@@ -1301,6 +1301,65 @@ use std::time::Instant;
         assert!(clean.ok);
     }
 
+    /// A body `[text](target.md)` link resolves against the CONTAINING
+    /// file's directory, must stay inside the bundle, and only a relative
+    /// `.md` target is even a candidate: http(s), mailto, absolute (`/…`)
+    /// and anchor-only (`#…`) targets never warn (dangling_md_link).
+    #[test]
+    fn dangling_md_link_warns_only_for_the_unresolvable_relative_target() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "areas/overview.md", Cx::new("demo-overview").ty("bee.area"));
+        put(
+            &dir,
+            "patterns/linked.md",
+            Cx::new("linked").body(
+                "See [overview](../areas/overview.md), a [ghost](../areas/ghost.md) link, \
+                 an [anchor](#skip), an [absolute](/etc/passwd.md), \
+                 a [mail link](mailto:person@example.com), and a [site](https://example.com/readme.md).",
+            ),
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        let dangling = of_code(&report.warnings, "dangling_md_link");
+        assert_eq!(
+            dangling.len(),
+            1,
+            "only the ghost relative .md target may warn — external/anchor/absolute/mailto never do: {:?}",
+            report.warnings
+        );
+        assert_eq!(dangling[0]["file"], "patterns/linked.md");
+        assert!(
+            msg(dangling[0]).contains("../areas/ghost.md"),
+            "the unresolved target must be named: {}",
+            msg(dangling[0])
+        );
+        assert!(report.ok, "a warning alone must not fail un-strict");
+    }
+
+    /// A body `[[target]]` wiki link resolves when `target`, or `target`
+    /// minus an optional `pattern-` prefix, matches the stem of any `.md` in
+    /// the bundle (dangling_wiki_link).
+    #[test]
+    fn dangling_wiki_link_warns_only_for_the_unresolvable_target() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "areas/overview.md", Cx::new("demo-overview").ty("bee.area"));
+        put(
+            &dir,
+            "patterns/linked.md",
+            Cx::new("linked").body("See [[overview]], also [[pattern-overview]], and a [[ghost]] link."),
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        let dangling = of_code(&report.warnings, "dangling_wiki_link");
+        assert_eq!(
+            dangling.len(),
+            1,
+            "the bare stem and the pattern- prefixed stem must both resolve silently: {:?}",
+            report.warnings
+        );
+        assert_eq!(dangling[0]["file"], "patterns/linked.md");
+        assert!(msg(dangling[0]).contains("ghost"), "the unresolved target must be named: {}", msg(dangling[0]));
+        assert!(report.ok, "a warning alone must not fail un-strict");
+    }
+
     /// Node: 'profile warning: dangling supersedes id; a resolving id stays
     /// silent' (l.300).
     #[test]
