@@ -40,7 +40,13 @@ refusal uses, never a hand-kept list — conflict exactly like a path overlap
 and serialize into different waves, because the shared regeneration chain is
 a whole-tree side effect two parallel workers cannot both run. The schedule
 names each such split (deferred unit, blocking unit, shared root) in its
-payload and its text, so the orchestrator sees why the wave broke. The query never
+payload and its text, so the orchestrator sees why the wave broke. In the
+`--json` payload those splits ride a dedicated `obligation_conflicts` array,
+one entry per split naming the deferred unit, the blocking unit, and the
+shared obligated root (sra-2); when no split occurs the array is empty and
+every other byte of the schedule output is identical to the pre-awareness
+rendering, so existing consumers see no change until a conflict actually
+exists. The query never
 writes anything. What each consumer observes: the orchestrator dispatches wave
 by wave and deviates only with a stated reason; feasibility validation of a
 multi-unit slice requires the diagnostics to be clean before execution is
