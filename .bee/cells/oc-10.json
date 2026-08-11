@@ -1,0 +1,99 @@
+{
+  "id": "oc-10",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Map the lsp and list tools through the guard",
+  "behavior_change": true,
+  "files": [
+    ".opencode/plugins/bee-guard.ts",
+    "docs/history/opencode-support/discovery.md",
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+  ],
+  "read_first": [
+    ".opencode/plugins/bee-guard.ts",
+    "docs/history/opencode-support/discovery.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+  ],
+  "action": "oc-9's new registry-derived gate named two registered OpenCode tools that fall through bee-guard.ts's `default: return null` (a TypeScript-side allow): `lsp` — which returns file content for an arbitrary filePath, so it reaches the same material the secret-read guard exists to protect — and `list`. Map both onto the read-shaped write-guard payload the other read tools already use (write_guard/main.rs:66's is_read_tool family), so every registered read- or write-capable tool asks bee. Then remove them from discovery.md's named-gap list and update the hook table. The registry gate in packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs must go green by mapping the tools, never by widening the gate's allow-list — if a tool genuinely should not be gated, that is a named exclusion with a written reason, not a silent skip. SCOPE WIDENED (orchestrator, after the first attempt blocked correctly): the suite's opencode_call_fixture payload table now needs one row per newly mapped tool id — add the lsp and list rows there, DATA ROWS ONLY, never a change to assertion logic or to the gates' derivation. Prior attempt left both tool mappings and the discovery.md updates in the working tree uncommitted; verify them rather than redoing them blind.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts",
+  "must_haves": {
+    "truths": [
+      "lsp and list reach bee hook write-guard — no registered read/write tool falls through to a TypeScript allow",
+      "The registry gate passes because the tools are mapped, not because the gate was loosened",
+      "discovery.md's gap list and hook table no longer claim these tools are unmapped"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-9"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-lsp2",
+    "outcome": "lsp and list mapped through write-guard; fixture rows added; registry gate green",
+    "files_changed": [
+      ".opencode/plugins/bee-guard.ts",
+      "docs/history/opencode-support/discovery.md",
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T17:04:10.923Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T17:01:07.203Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-11T16:59:42.593Z",
+        "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+        "claimed_at": "2026-08-11T16:53:46.773Z",
+        "acquired_at": "2026-08-11T16:52:55.425Z",
+        "worker": "oc-lsp",
+        "verdict": "blocked",
+        "failure_signature": "fc1850e0fd1b",
+        "note": "Mapping lsp/list into mapToolCall (required by the cell's action) makes packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs's every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary test panic: 'no payload fixture defined for OpenCode tool \"lsp\"' (opencode_call_fixture, main.rs:566-625) requires a new match arm per newly-mapped tool id. The cell forbids editing that test file ('another cell owns the suite'). lsp/list are mapped in .opencode/plugins/bee-guard.ts and discovery.md's named-gap paragraphs + hook table are updated to reflect the mapping (uncommitted, reserved under oc-lsp) but the cell's verify command (whole opencode_plugin_contracts test binary) cannot go green without a fixture-table addition to the forbidden file. Needs either scope widening to include that file's opencode_call_fixture data table, or a follow-up cell to add the lsp/list fixture rows."
+      }
+    ],
+    "blocked_reason": null,
+    "verify_command": null,
+    "verified_at": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-08-11T17:00:38.557Z",
+    "reopened_reason": "orchestrator scoping error: mapping lsp/list requires two data rows in the suite's opencode_call_fixture table, which the cell forbade touching",
+    "commit_pending": "cells finish trailer lookback cannot see worktree-local commits (commit 7d3f6917 in beehive--wt--opencode-support carries the cell: oc-10 trailer)",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T17:03:58.357Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "holes-closed",
+            "status": "PASS",
+            "evidence": "lsp and list reach bee hook write-guard; no registered read/write tool falls through to a TypeScript allow"
+          },
+          {
+            "id": "gate-not-loosened",
+            "status": "PASS",
+            "evidence": "Registry gate passes by mapping the tools; the two fixture rows are data only"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T18:47:21.818Z"
+      }
+    ]
+  }
+}

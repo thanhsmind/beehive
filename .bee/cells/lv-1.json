@@ -1,0 +1,44 @@
+{
+  "id": "lv-1",
+  "feature": "opencode-support-proof",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Throwaway proof: record a live OpenCode worker touch",
+  "behavior_change": false,
+  "files": [
+    "docs/history/opencode-support/live-worker-proof.md"
+  ],
+  "read_first": [],
+  "action": "Create docs/history/opencode-support/live-worker-proof.md with exactly one line of body text: 'Live OpenCode worker proof: this file was written and committed by a bee-build worker running inside an OpenCode session.' Commit the file with the cell id (lv-1) as the last line of the commit body, then cap the cell with `bee cells finish`.",
+  "verify": "test -f docs/history/opencode-support/live-worker-proof.md",
+  "must_haves": {
+    "truths": [
+      "The file exists with the required line",
+      "A commit was made with cell: lv-1 as the last body line"
+    ]
+  },
+  "deps": [],
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "oc-live",
+    "outcome": "live OpenCode worker proof",
+    "files_changed": [
+      "docs/history/opencode-support/live-worker-proof.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T17:32:09.802Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T17:15:34.661Z",
+    "commit_pending": "commit 96bb8f66 landed in the linked worktree; trailer lookback only scans the main checkout's history",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T17:31:58.031Z"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "id": "oc-11",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Make models.opencode real and define the bee worker agents",
+  "behavior_change": true,
+  "files": [
+    ".opencode/agent/bee-build.md",
+    ".opencode/agent/bee-gather.md",
+    ".opencode/agent/bee-extract.md",
+    ".opencode/agent/bee-review.md",
+    "docs/config-reference.md"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/plan.md",
+    "docs/config-reference.md",
+    ".claude/agents/bee-build.md"
+  ],
+  "action": "Per plan.md E4, CONTEXT.md D1/D4 and D5 (sequential dispatch accepted): make `opencode` a real key of the `models` config alongside claude and codex — today docs/config-reference.md:78-100 says any other key is SILENTLY IGNORED, which would make a models.opencode block look configured while doing nothing; find where the models map is read in packages/bee-rs and make the opencode key first-class there (tier resolution for extraction/generation/review), or, if the reader is already runtime-agnostic, prove that with a test and correct the doc's claim instead. Then write the four .opencode/agent/<name>.md worker definitions mirroring .claude/agents/bee-{build,gather,extract,review}.md: frontmatter description + mode: subagent + permission (read-only agents must not be able to write) + a model pinned from the matching models.opencode tier, prompt bodies carrying the same worker contract. Pinning the model per agent is what makes a wrong-tier dispatch unrepresentable on OpenCode (the structural half of the model-guard mapping). Do not touch .opencode/plugins/bee-guard.ts or discovery.md — other cells own them; record your evidence in the commit body and cell outcome.",
+  "verify": "rg -n \"^model:|^mode:\" .opencode/agent/bee-build.md .opencode/agent/bee-gather.md .opencode/agent/bee-extract.md .opencode/agent/bee-review.md",
+  "must_haves": {
+    "truths": [
+      "A models.opencode block is honored by the tier reader, or the doc's silently-ignored claim is corrected with a test proving the reader is runtime-agnostic",
+      "Each of the four agent files pins a model from its matching tier and sets mode: subagent",
+      "Read-only agents (gather, extract, review) cannot write, per their permission frontmatter",
+      "No edits land in bee-guard.ts or discovery.md"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-9"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-agents",
+    "outcome": "models.opencode is now a real, resolvable config key (3 readers widened + tests); .opencode/agent/bee-{build,gather,extract,review}.md hand-authored and live-verified against opencode 1.18.16, each pinning a free-tier model with mode: subagent and write-denying permission for the three read-only agents.",
+    "files_changed": [
+      ".opencode/agent/bee-build.md",
+      ".opencode/agent/bee-gather.md",
+      ".opencode/agent/bee-extract.md",
+      ".opencode/agent/bee-review.md",
+      "docs/config-reference.md",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T17:11:17.000Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T16:52:55.430Z",
+    "commit_pending": "commit ee5b391a landed in the feature worktree (wt/opencode-support), not the main beehive checkout bee cells finish scans for trailers",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T17:11:05.266Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "models-key-real",
+            "status": "PASS",
+            "evidence": "models.opencode resolves across every tier reader; the silently-ignored claim in config-reference.md corrected"
+          },
+          {
+            "id": "agents-verified",
+            "status": "PASS",
+            "evidence": "opencode agent list shows all four as subagents with the intended permission grants"
+          },
+          {
+            "id": "gap-named",
+            "status": "PASS",
+            "evidence": "model_guard's claude-literal dispatch branch carried forward as a named gap, not assumed away"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T18:47:21.822Z"
+      }
+    ]
+  }
+}

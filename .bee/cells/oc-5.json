@@ -52,6 +52,31 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-11T14:35:17.219Z"
+    "ran_at": "2026-08-11T14:35:17.219Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "runtime-accepted",
+            "status": "PASS",
+            "evidence": "parse_runtime accepts opencode; --opencode flag mirrored with test coverage at install_support.rs:246"
+          },
+          {
+            "id": "named-exclusion",
+            "status": "PASS",
+            "evidence": "Runtime enum keeps Claude|Codex with an R1 named-exclusion comment citing the TypeScript plugin"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T18:47:21.801Z"
+      }
+    ]
   }
 }

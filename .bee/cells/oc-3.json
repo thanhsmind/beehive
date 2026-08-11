@@ -48,6 +48,31 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-11T14:26:51.990Z"
+    "ran_at": "2026-08-11T14:26:51.990Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "apply_patch-mapped",
+            "status": "PASS",
+            "evidence": "case apply_patch routes patchText onto bee's patch key; later confirmed by oc-9's registry-derived gate going green without loosening"
+          },
+          {
+            "id": "registry-recorded",
+            "status": "PASS",
+            "evidence": "Write-capable tool registry recorded in discovery.md from the installed binary, not from probe transcripts"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T18:47:21.794Z"
+      }
+    ]
   }
 }

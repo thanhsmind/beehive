@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "doctor-binary-freshness",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,7 +10,7 @@
     "review": false
   },
   "summary": "Feature \"doctor-binary-freshness\" started at phase \"planning\" (lane).",
-  "next_action": "close and merge doctor-binary-freshness",
+  "next_action": "doctor binary_freshness live in main; independent review pending on request",
   "created_at": "2026-08-11T15:20:08.214Z",
   "route": {
     "class": "feature",

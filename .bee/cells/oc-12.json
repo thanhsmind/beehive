@@ -1,0 +1,52 @@
+{
+  "id": "oc-12",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Cap a real bee cell from inside an OpenCode session",
+  "behavior_change": false,
+  "files": [
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/plan.md",
+    "docs/history/opencode-support/discovery.md",
+    ".opencode/agent/bee-build.md"
+  ],
+  "action": "E4's proof, the one D4/D5 rest on: a bee worker must actually run and cap a cell from inside an OpenCode session, not merely be defined. Create a throwaway proof cell through the CLI (bee cells add — a trivial, real change such as a one-line docs touch under docs/history/opencode-support/, with its own id, never one of this feature's cells), then run an `opencode run` session that dispatches the bee-build worker agent against it and let that session's worker do the whole loop: read the cell, make the change, commit, and cap through `bee cells finish`. Record in discovery.md: the exact invocation, whether dispatch went through the task tool or an @-mention, which model each tier actually resolved to, whether the guard plugin engaged inside the sub-session (a nested dispatch is where a belt most often goes missing), and the wall-clock shape of sequential dispatch (D5). If the free provider cannot carry a worker-sized prompt, that is a named blocker with its evidence — never a simulated or hand-run substitute presented as the proof.",
+  "verify": "rg -n \"capped|cells finish\" docs/history/opencode-support/discovery.md",
+  "must_haves": {
+    "truths": [
+      "A cell was capped by a worker running inside an OpenCode session — transcript excerpt recorded",
+      "The guard plugin's engagement inside the sub-session is a recorded fact, either way",
+      "Model resolution per tier is recorded from the session, not from config",
+      "A failure to run is a named blocker with evidence, never a substituted proof"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-11"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-live",
+    "outcome": "proved E4 live: a bee-build subagent capped a real cell (lv-1) from inside a nested OpenCode task-tool dispatch, after naming two real gaps (reservation session-id mismatch on nested dispatch; --agent flag not reaching subagents)",
+    "files_changed": [
+      "docs/history/opencode-support/discovery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T17:35:29.810Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T17:11:51.096Z",
+    "commit_pending": "commit 7d11e91f landed in the linked worktree beehive--wt--opencode-support; trailer lookback only scans the main checkout's history",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T17:35:18.036Z"
+  }
+}

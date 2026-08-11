@@ -28,9 +28,9 @@
   "deps": [
     "oc-3"
   ],
-  "status": "capped",
+  "status": "open",
   "trace": {
-    "worker": "oc-mapper",
+    "worker": null,
     "outcome": "Extended bee-guard.ts to the full guard-hook mapping table (model-guard on task, read-shaped tools through write-guard, four advisory surfaces), with live deny proofs and named payload-contract gaps recorded in discovery.md",
     "files_changed": [
       ".opencode/plugins/bee-guard.ts",
@@ -43,12 +43,48 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
-    "claimed_at": "2026-08-11T14:54:30.009Z",
+    "claim_session": null,
+    "claimed_at": null,
     "commit_pending": "worktree-local commit 3b97bd85 not visible to main-worktree trailer lookback",
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-11T15:15:30.988Z"
+    "ran_at": "2026-08-11T15:15:30.988Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "blocking-separation",
+            "status": "PASS",
+            "evidence": "All throw paths reachable only from tool.execute.before; advisory handlers wrap their spawns"
+          },
+          {
+            "id": "exit-0-verdicts",
+            "status": "FAIL",
+            "evidence": "Every exit 0 was treated as a plain allow with stdout discarded, so bee's updatedInput repairs and permissionDecision ask never reached the session — model-guard's dominant mechanism was inert"
+          },
+          {
+            "id": "advisory-throw",
+            "status": "FAIL",
+            "evidence": "chat.message dereferenced output.message.id outside any try"
+          }
+        ],
+        "failure_signature": "bee's exit-0 repair and ask verdicts were dropped, leaving the model-guard belt inert on OpenCode",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T18:47:21.804Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-11T18:47:21.804Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   }
 }

@@ -1,0 +1,98 @@
+{
+  "id": "oc-14",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Make the shipped frame and the docs match what OpenCode support actually delivers",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "docs/06-runtime-integration.md",
+    "docs/01-distillation.md",
+    "docs/02-architecture.md"
+  ],
+  "read_first": [
+    "docs/06-runtime-integration.md",
+    "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs"
+  ],
+  "action": "Final judge findings on the shipped surface, all four traceable to one theme — what ships must equal what the docs claim. (1) release_manifest.rs:330-420 enumerates the shipped frame (skills/, .claude-plugin/skills/, .codex-plugin/skills/, packages/bee/**, plugin manifests, installers) but NOT .opencode/plugins/, so a release that loses bee-guard.ts stays green on release-manifest --check while installing nothing — the third belt can vanish silently; add the root to the inventory and regenerate the manifest. (2) onboard/agents.rs:112-116 renders .claude/agents/bee-*.md into a host repo but nothing renders .opencode/agent/bee-*.md, so worker dispatch (D4) works only in this checkout — render the four opencode agent definitions the same way, from the same source of truth as the hand-authored ones, and drop the now-obsolete 'a promise bee cannot keep yet' note in status_full/store.rs:934-937 if the rendering makes it keepable (reserve that file first). (3) docs/06-runtime-integration.md still teaches Node-era mechanisms that no longer exist: :107 points at source-identity.mjs (gone; the logic is onboard/source.rs:416-500), and :33/:113-128/:135/:140 describe .bee/bin/lib/*.mjs and inject.mjs as live (that tree is deleted — release_manifest.rs:342-345 says so) — correct each to the Rust reality. (4) docs/01-distillation.md:166 and docs/02-architecture.md:218,222 still teach dual-runtime as the contract and point readers at the rewritten doc — bring both to three runtimes. Where a claim would need work bee has not done, write the honest smaller claim rather than the aspiration.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A release missing .opencode/plugins/bee-guard.ts fails release-manifest --check instead of passing",
+      "An onboarded host repo receives the four .opencode/agent/bee-*.md worker definitions",
+      "No doc names a deleted Node-era file or tree as a live mechanism",
+      "No surviving dual-runtime claim in docs/01, docs/02, or docs/06"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-13"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-frame",
+    "outcome": "Release manifest covers .opencode/plugins/, onboarding renders the four .opencode/agent worker files, docs 01/02/06 name three runtimes with no surviving Node-era claim",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/devtools/release_manifest.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "docs/06-runtime-integration.md",
+      "docs/01-distillation.md",
+      "docs/02-architecture.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T18:44:50.976Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T18:20:01.225Z",
+    "commit_pending": "worktree-local commit 4defc618, cells finish trailer lookback cannot see worktree commits",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T18:44:38.288Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "frame-pinned",
+            "status": "PASS",
+            "evidence": "Removing bee-guard.ts now fails release-manifest --check with MISMATCH missing; passes again once restored"
+          },
+          {
+            "id": "agents-shipped",
+            "status": "PASS",
+            "evidence": ".opencode/agent/bee-*.md renders from the same template source as .claude/agents, byte-identical to the hand-authored files"
+          },
+          {
+            "id": "docs-honest",
+            "status": "PASS",
+            "evidence": "Node-era mechanism references corrected to their Rust homes across docs/01, docs/02, docs/06"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T18:47:21.828Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "id": "oc-13",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Install OpenCode support through onboarding and take the doctrine to three runtimes",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+    "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+    "docs/06-runtime-integration.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/plan.md",
+    "docs/06-runtime-integration.md",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "action": "Per plan.md E5 and CONTEXT.md D1/D3: make `bee onboard --apply` install the OpenCode support surface into a repo the way it already does for claude and codex — the .opencode/skills/ projection with its provenance sidecar, and the guard plugin at .opencode/plugins/ (the plugin is bee's third hook belt; a belt that ships only in this repo's working tree is inert everywhere else — see docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md). Idempotent on re-run, and a drift check like the existing ones. Then rewrite the doctrine: docs/06-runtime-integration.md goes from two first-class runtimes to three — the marker grammar's accepted values, the four-rendered-roots table (now five), the runtime/enforcement matrix gaining an opencode column whose blocking rows point at the plugin, and the degradation ladder restated with OpenCode above the playbook tier. Fix in passing what this feature already proved stale: the bee-render/1 schema string (all roots write bee-render/2) and the hook-runtime knowledge doc's pointer to the deleted packages/bee/hooks/catalog.mjs. Carry the S2 judge's minor: plugin_distribution.rs's opencode branch is accepted but dead-ends with a missing-install message — give it a named statement or a typed refusal, whichever the file's own idiom prefers. Also carry oc-11's named gap: verbs/status_full/{mod,store,render}.rs keep their own copies of normalize_models/RUNTIMES driving bee status's model line and the .claude/agents drift check — extend them to opencode here, since that is exactly this cell's onboarding/doctor territory.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee onboard --apply installs the opencode skills projection and the guard plugin, idempotently",
+      "The doctrine doc describes three first-class runtimes with no two-runtime claim left standing",
+      "The stale bee-render/1 string and the deleted-catalog.mjs pointer are corrected",
+      "plugin_distribution's opencode branch no longer dead-ends with a misleading missing-install message"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-12"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-onboard",
+    "outcome": "bee onboard --apply now vendors .opencode/skills/ and .opencode/plugins/bee-guard.ts idempotently (live-proved by re-applying against this repo: up_to_date on the second pass, plus two new fixture tests); status_full's RUNTIMES/normalize_models/agent-drift check and plugin_distribution's --runtime opencode branch widen to opencode with correct semantics; docs/06-runtime-integration.md rewritten 2->3 runtimes, fixing the stale bee-render/1 string and the deleted-catalog.mjs pointer in passing. Found and fixed a real pre-existing gap: the committed .opencode/skills/ tree (from oc-4's interim regen path) had no .bee-skills-version.json stamp, which would have permanently blocked every future bee onboard --apply against this repo.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/mod.rs",
+      "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/onboard/render.rs",
+      "packages/bee-rs/crates/bee/src/onboard/source.rs",
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs",
+      "docs/06-runtime-integration.md",
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      ".opencode/skills/.bee-skills-version.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T18:09:52.632Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T17:35:53.868Z",
+    "commit_pending": "commit 920ad79c landed in the feature worktree (wt/opencode-support), not the main beehive checkout bee cells finish scans for trailers",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T18:09:40.041Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "onboarding-installs",
+            "status": "PASS",
+            "evidence": "bee onboard --apply installs the opencode skills projection and the guard plugin; second apply reports up_to_date for all three targets"
+          },
+          {
+            "id": "doctrine-three",
+            "status": "PASS",
+            "evidence": "No two-runtime claim survives in docs/06; three cross-checks against code agree"
+          },
+          {
+            "id": "no-gate-weakening",
+            "status": "PASS",
+            "evidence": "Commit 920ad79c touches neither the parity suite nor the render refusal paths; test deltas are additive"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T18:47:21.825Z"
+      }
+    ]
+  }
+}

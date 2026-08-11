@@ -28,9 +28,9 @@
   "deps": [
     "oc-6"
   ],
-  "status": "capped",
+  "status": "open",
   "trace": {
-    "worker": "oc-parity",
+    "worker": null,
     "outcome": "Authored opencode_plugin_contracts.rs: fixture belt over the real bee-guard.ts (deny/allow/crash/missing for all 9 blocking mapped rows, never-throw for every advisory surface) plus a three-belt parity test deriving the guard-rule inventory from the checked-in hook manifests.",
     "files_changed": [
       "docs/history/opencode-support/discovery.md",
@@ -43,12 +43,53 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
-    "claimed_at": "2026-08-11T15:16:04.546Z",
+    "claim_session": null,
+    "claimed_at": null,
     "commit_pending": "worktree-local commit 351daca9 not visible to trailer lookback from this checkout, per orchestrator environment note",
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-11T15:32:30.879Z"
+    "ran_at": "2026-08-11T15:32:30.879Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "derived-inventory",
+            "status": "PASS",
+            "evidence": "Guard-rule inventory parsed from the checked-in hook manifests; a new blocking hook fails the gate before the opencode check runs"
+          },
+          {
+            "id": "real-plugin",
+            "status": "PASS",
+            "evidence": "Fixtures execute the repo's own bee-guard.ts and assert a JS throw, not a stub exit code"
+          },
+          {
+            "id": "skip-visibility",
+            "status": "FAIL",
+            "evidence": "node_or_skip printed to captured stderr and returned, so a node-incapable shell reported four green tests and zero enforcement coverage"
+          },
+          {
+            "id": "payload-fidelity",
+            "status": "FAIL",
+            "evidence": "Stubs discarded stdin and fixtures passed generic args, so a field-name mistranslation would fail open and stay green"
+          }
+        ],
+        "failure_signature": "the suite could report green while proving nothing: invisible environment skip plus unasserted payloads",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T18:47:21.808Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-11T18:47:21.808Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   }
 }

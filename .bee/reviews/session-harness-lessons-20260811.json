@@ -1,0 +1,412 @@
+{
+  "id": "session-harness-lessons-20260811",
+  "requested_by": "user",
+  "requested_at": "2026-08-11T16:11:45.575Z",
+  "scope_description": "The seven features landed in this session from the better-harness and dynamic-workflows reviews. Baseline is the pre-feature backlog-proposal commit; head is current main after every merge. opencode-support is EXCLUDED - another session is still executing it.",
+  "included": [
+    {
+      "type": "cell",
+      "id": "klc-1",
+      "reason": "knowledge-link-check: md/wiki link warnings in knowledge check"
+    },
+    {
+      "type": "cell",
+      "id": "klc-2",
+      "reason": "knowledge-link-check: repo-bundle link integrity test + link fixes"
+    },
+    {
+      "type": "cell",
+      "id": "ce-1",
+      "reason": "compounding-escalation: recurrence escalation rule in promotion doctrine"
+    },
+    {
+      "type": "cell",
+      "id": "fa-1",
+      "reason": "finish-advisory: diff-vs-test advisory at green cap"
+    },
+    {
+      "type": "cell",
+      "id": "el-1",
+      "reason": "evidence-ladder: bee.evidence state + report ladder"
+    },
+    {
+      "type": "cell",
+      "id": "el-2",
+      "reason": "evidence-ladder: backfill evidence on verified patterns"
+    },
+    {
+      "type": "cell",
+      "id": "ew-1",
+      "reason": "evolving-watch: closed clusters recur into the ranked digest"
+    },
+    {
+      "type": "cell",
+      "id": "wfl-1",
+      "reason": "workflow-lessons: worker Result form + finish --report"
+    },
+    {
+      "type": "cell",
+      "id": "wfl-2",
+      "reason": "workflow-lessons: bee dev regen chain verb"
+    },
+    {
+      "type": "cell",
+      "id": "wfl-3",
+      "reason": "workflow-lessons: judge-debt close door"
+    },
+    {
+      "type": "cell",
+      "id": "wfl-4",
+      "reason": "workflow-lessons: bee dispatch wave"
+    },
+    {
+      "type": "cell",
+      "id": "wfl-5",
+      "reason": "workflow-lessons: judge door keyed off route.lane (P1 fix)"
+    },
+    {
+      "type": "cell",
+      "id": "dbf-1",
+      "reason": "doctor-binary-freshness: doctor binary_freshness row"
+    }
+  ],
+  "excluded": [
+    {
+      "type": "feature",
+      "id": "opencode-support",
+      "reason": "in progress in another session"
+    }
+  ],
+  "baseline": "8129f06e",
+  "head": "b369ab58d13b",
+  "reviewer_manifest": [],
+  "verification_preflight": {
+    "checked_at": "2026-08-11T16:11:45.575Z",
+    "cells_checked": [
+      "klc-1",
+      "fa-1",
+      "el-1",
+      "ew-1",
+      "wfl-1",
+      "wfl-2",
+      "wfl-3",
+      "wfl-4",
+      "wfl-5",
+      "dbf-1"
+    ],
+    "passed": true
+  },
+  "findings": [
+    {
+      "severity": "P1",
+      "title": "close.rs feature_route falls back to the global state route without checking route ownership -- the judge-debt door fires on another feature's lane, in both directions",
+      "autofix_class": "manual",
+      "corroborated_by": [
+        "code-quality",
+        "test-coverage",
+        "architecture",
+        "security",
+        "contract"
+      ],
+      "summary": "When a feature's lane record carries no route, feature_route returns .bee/state.json's top-level route.lane and ignores route.feature. 37-40 of 53 live lane records have no route, so the door's presence is decided by whichever feature the session happens to be on.",
+      "what_code_does_today": "close.rs:390-403 reads read_lane_display(root, feature).route.lane, else read_state(root).route.lane with no identity check. The repo already ships route_belongs_to_feature (verbs/state_group/workflows.rs:683, rti-1) and gated_add_refusal consults the default state only when state.feature matches (verbs/cells/handlers_write.rs:119,133-142). feature_route is the one reader that skips it.",
+      "why_problem": "Fails open AND closed. Open: a standard feature with no route inherits a small/tiny route -> no door -> unjudged behavior_change cells close, the exact defect wfl-5 was filed to fix, relocated rather than closed. Closed: a small feature inherits a high-risk route -> a blocking door the spec says it can never grow.",
+      "failure_scenario": "Live, measured: .bee/state.json holds route {lane: high-risk, feature: opencode-support}. bee close --feature linux-verify-green (lane record mode small, no route) is refused with judge-debt naming 2 cells; ledger-anchor and gate-door-refusal are blocked the same way. Flip the session route to small and all 27 route-less standard/high-risk features silently lose the door.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "line": 401,
+          "snippet": "Ok(state.get(\"route\").and_then(route_lane))"
+        },
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+          "line": 683,
+          "snippet": "route_belongs_to_feature (rti-1: a route recorded for a DIFFERENT feature is treated as no route)"
+        }
+      ],
+      "minimal_fix": "Accept the default-state route only when state.route.feature is absent or equals the closing feature (reuse route_belongs_to_feature); otherwise fall back to the lane record's own mode when it names a lane class, else None. Add the mismatch test the four existing door tests never build."
+    },
+    {
+      "severity": "P1",
+      "title": "The judge-debt door is retroactive with no cutoff and no waiver -- it blocks close on 112+ cells capped before it existed, and its remedy refuses on archived cells",
+      "autofix_class": "manual",
+      "corroborated_by": [
+        "test-coverage",
+        "architecture",
+        "contract"
+      ],
+      "summary": "judge_debt scans list_cells_including_archive with no date or version floor. Store-wide: 122 capped behavior_change cells, 10 judged (8%). Every standard/high-risk feature with any historic capped cell now exits 1 on close where it previously passed.",
+      "what_code_does_today": "close.rs:405-426 counts every capped behavior_change cell lacking trace.semantic_judge, archive included; the refusal at close.rs:1029-1055 names bee cells judge / judge-record. The sibling blocking door built ten lines above (scribing-debt, close.rs:583-588) DOES offer a recorded capture-deferral escape; judge-debt offers none, and bee close takes no waiver flag.",
+      "why_problem": "Breaking change for every existing bee host that upgrades, with no migration path. Worse, the printed remedy fails on the cells it names: cells judge-record refuses archived cells (verbs/cells/util.rs:254) and close auto-archives on every green close, so any re-close is unfixable by the command the door recommends.",
+      "failure_scenario": "bee close --feature opencode-support (legitimately high-risk, 6 unjudged capped cells) exits 1. The operator runs the named remedy, bee cells judge-record --id <cell>, and gets 'cell is archived -- unarchive its feature first'. No documented path forward without unarchiving history.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "line": 415,
+          "snippet": "list_cells_including_archive(root, feature, \"capped\")"
+        },
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/cells/util.rs",
+          "line": 254,
+          "snippet": "assert_not_archived -- judge-record refuses archived cells"
+        }
+      ],
+      "minimal_fix": "Floor the scan on a door-introduction timestamp (count only caps after the door shipped), or mirror scribing-debt with a recorded judge-deferral decision escape; and make the door detail name bee cells unarchive --feature <f> first when an offending id resolves under archive."
+    },
+    {
+      "severity": "P1",
+      "title": "bee dispatch wave without --feature claims and reserves the first schedule wave across EVERY feature in the store",
+      "autofix_class": "manual",
+      "corroborated_by": [
+        "architecture",
+        "security",
+        "code-quality"
+      ],
+      "summary": "--feature is optional, so list_cells(root, None, None) spans all features; the first wave is then claimed, reserved and worker-registered under auto names w-<cell>. A mutating verb inherited a read-only verb's all-features default.",
+      "what_code_does_today": "prepare.rs:1329-1340 keys_known accepts an absent --feature; prepare.rs:1374 list_cells(&ctx.root, feature.as_deref(), None); prepare.rs:1387 takes schedule.waves.first() whole and claims each cell. cells schedule (verbs/cells/handlers_meta.rs:311-318) shares the default but never writes. skills/bee-swarming/SKILL.md now teaches the bare spelling bee dispatch wave --runtime <rt>.",
+      "why_problem": "Violates the multi-session boundary AGENTS.md states as a rule: cross-session pickup goes through cells claim-next, never a broad grab. Reservations catch file overlap only AFTER the claim landed and had to be unwound, and there is no --limit, so N speculative claims plus running worker rows can outlive a session that never dispatches them.",
+      "failure_scenario": "Two sessions work different features. Session A types the documented bare form; the computed wave includes session B's ready cells; A claims them under w-<cell>, registers workers, and either dispatches work B owns or leaves B's cells claimed until the 1h TTL expires. Latent in this store today only because exactly one cell is open.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "line": 1374,
+          "snippet": "list_cells(&ctx.root, feature.as_deref(), None)"
+        },
+        {
+          "file": "skills/bee-swarming/SKILL.md",
+          "line": 36,
+          "snippet": "bee dispatch wave --runtime <rt> prepares the WHOLE current wave in one call"
+        }
+      ],
+      "minimal_fix": "Require --feature (or default it to the session's bound feature and refuse when none resolves), and add --limit so speculative claims are bounded by what the caller can spawn."
+    },
+    {
+      "severity": "P2",
+      "title": "Per-cell verification evidence has no writer: trace.verification_evidence/verify_output/verify_passed are null on all 13 cells",
+      "autofix_class": "manual",
+      "summary": "verbs/cells/trace.rs:36-38 initializes the three fields to null and no code in the crate ever writes them; the only evidence pointer, trace.results, points at .bee/logs/test-results.json, one mutable file each cap overwrites. Reported as P1 by test-coverage; recorded P2 with a stated reason -- the slot is repo-wide and pre-existing (not a regression of this scope), and every cap did run the declared suite green with close re-running it per feature. The gap is durable per-cell attribution, not unproven behavior.",
+      "evidence": [
+        {
+          "file": "verbs/cells/trace.rs",
+          "line": 36,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "bee dev regen step 2 onboards the current directory, not the source root",
+      "autofix_class": "manual",
+      "summary": "devtools/mod.rs:144 hardcodes onboard --repo-root . while steps 1 and 3 resolve the checkout by walking up (bee_source_root). Run from packages/bee-rs, regen renders skill trees and the manifest into the real root while installing a second bee onboarding into the subdirectory (verified: bee onboard --repo-root . --json reports repo_root .../packages/bee-rs, status changes_needed).",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/devtools/mod.rs",
+          "line": 144,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "strip_code_regions leaks quoted syntax from blockquoted fences, indented code blocks and double-backtick spans; an unclosed fence silences the rest of the file",
+      "autofix_class": "manual",
+      "summary": "check.rs:237-263 only recognizes a fence when trim_start starts with ``` or ~~~, toggles a span on every single backtick, and does not match fence char/length. Extracted and run: blockquoted fences, 4-space indented blocks and ``[[x]]`` all leak their targets; an odd ~~~ inside a ```text fence desyncs the toggle. Legitimate prose then turns the repo-bundle guard red, and an unclosed fence hides real dangling links.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+          "line": 237,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "A .md link target containing a colon aborts the whole bee knowledge check with an unknown-command-shape exit",
+      "autofix_class": "manual",
+      "summary": "md_link_candidate filters only http(s)/mailto/absolute/anchor, so file:///x.md or vscode://a.md reaches normalize_bundle_target, which returns Err(()) for any colon (walk.rs:249-251); check.rs turns that into return None, and since the R6 cutover None means emit_unsupported_shape, exit 1. Fail-closed, but one prose link disables the check with a message naming neither file nor link.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs",
+          "line": 438,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "dispatch wave leaks a claim and its reservations when claim_and_reserve_for_dispatch returns Err, and never unwinds",
+      "autofix_class": "manual",
+      "summary": "prepare.rs:1398-1408 records skipped{reason:unsupported} and continues, but the Err originates after the claim was taken (claim at :917, reserve loop at :941). The cell stays claimed under w-<id> with partial reservations held; unwind_wave_claim exists but is called only on prepare_dispatch failures. Related: a failed unwind is classified as an ordinary reservation_conflict, so corrupted shared state reads to the orchestrator as a benign skip.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "line": 1398,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "dispatch wave unwind leaves the registered worker row behind",
+      "autofix_class": "manual",
+      "summary": "unwind_wave_claim (prepare.rs:1294-1321) releases reservations and unclaims but never removes the workers[] row written by register_worker_for_cell (prepare.rs:1021-1025). Because the auto name is deterministic (w-<cell>), a later claim satisfies the never-zero-execution-workers cap check from a registration left by a wave that dispatched nothing, and it silently overwrites a human-created row for the same cell.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "line": 1294,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "doctor's source walk follows symlinks with no cycle guard: a directory symlink to an ancestor overflows the stack",
+      "autofix_class": "manual",
+      "summary": "doctor.rs:411-419 recurses on Path::is_dir(), which stats through symlinks. The repo ships the safe idiom four files away: knowledge/walk.rs:44-55 uses entry.file_type() (no-follow) and skips is_symlinkish with the comment 'a symlink could escape the bundle -- never follow (D23)'.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/doctor.rs",
+          "line": 411,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "doctor spawns the repo-local binary with inherited stdin, no timeout and unbounded capture",
+      "autofix_class": "manual",
+      "summary": "doctor.rs:373-380 runs <root>/.bee/bin/bee rs-info via Command::output(). In a freshly cloned untrusted repo that executes committed code; a wedged or chatty binary hangs or OOMs the diagnostic. The repo's own git wrapper sets Stdio::null() (verbs/worktree/git.rs:85-101).",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/doctor.rs",
+          "line": 373,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "binary_freshness's version arm compares a constant with itself",
+      "autofix_class": "manual",
+      "summary": "The row compares bee rs-info's version against packages/bee-rs Cargo.toml [workspace.package] version. Both are 0.1.0 and have been since the port scaffold; bee's product version (2.4.4) lives in .claude-plugin/plugin.json. Only the mtime arm has teeth, while the spec documents two triggers, and each doctor run pays a subprocess spawn for a tautology.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/doctor.rs",
+          "line": 280,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "The finish advisory cannot see inline #[cfg(test)] mod tests, this crate's dominant convention -- its one live firing was a false positive",
+      "autofix_class": "manual",
+      "summary": "path_looks_like_test (finish_support.rs:759-766) matches path shapes only. The single advisory in the whole run fired on wfl-2, whose commit 29b8f7cb added five #[test] fns inside devtools/mod.rs and obligation.rs. The advisory told the author to add tests in the commit that added them. It also counts generated and docs-only diffs toward the 150-line threshold.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+          "line": 759,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "trace.report is written by nothing that reads it, and duplicates four fields the cap already computes without cross-checking them",
+      "autofix_class": "manual",
+      "summary": "handlers_close.rs:183,426-427 store the five-key report; a grep for readers across the crate finds only the writer and its tests. outcome/files/tests/deviations each shadow an existing trace field, and parse_report_flag accepts tests:red on a cap that by construction only happens green, so one record can hold trace.tests green beside trace.report.tests red.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+          "line": 426,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "The rendered worker prompt never names --report, so trace.report will be populated almost never",
+      "autofix_class": "manual",
+      "summary": "packages/bee/prompts/worker-cell.md:30 still gives the finish call without --report; the flag is spelled only in skills/bee-swarming/SKILL.md, which a cold dispatched worker does not read. The prompt is the worker's only contract surface.",
+      "evidence": [
+        {
+          "file": "packages/bee/prompts/worker-cell.md",
+          "line": 30,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "bee.evidence_ref is specified as proof but validated and read nowhere",
+      "autofix_class": "manual",
+      "summary": "conformance-check.md:75 states the ref names the enforcing hook/guard/doctor check/test; evidence_ref appears nowhere in the crate. bee.sources gets a dangling-path check, evidence_ref -- which also names in-repo paths, as proof -- gets none, so a rung can claim wired against a file a later port deleted and stay green. Raised P3 by three reviewers; promoted on corroboration.",
+      "evidence": [
+        {
+          "file": "docs/knowledge/areas/okf-profile/conformance-check.md",
+          "line": 75,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "The evidence ladder has no route into the workflow, and the close door reading the same concepts ignores it",
+      "autofix_class": "manual",
+      "summary": "build_evidence_ladder is reachable only via bee knowledge report, a verb named in no file under skills/. Meanwhile build_pattern_check_door (close.rs:767-804) already loads pattern concepts and their critical flag at close and demands a hand-typed verdict per pattern, without reading bee.evidence -- so a pattern already owned by a passing test is asked for the same manual verdict as a doc-only one.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/knowledge/report.rs",
+          "line": 230,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "bee finish (the flow spelling) omits --report from its registry entry while claiming identical flags",
+      "autofix_class": "manual",
+      "summary": "The registry entry for the finish flow verb says 'Identical behaviour, flags and output' as bee cells finish, but its flags line lacks --report (also --deviation, --commit-pending). skills/bee-swarming/SKILL.md instructs workers in exactly the spelling that does not document the flag.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+          "line": 1,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "Feedback recurrence compares first_seen strings of two different formats",
+      "autofix_class": "manual",
+      "summary": "code_unit_cmp is lexicographic over raw stored values; .bee/feedback-digest.json carries 527 full-ISO and 93 date-only entries. Same-day comparisons are wrong in both directions -- a date-only close reads as strictly newer than a full-ISO entry logged earlier that day (false recurrence), and the reverse misses a real one, contradicting the documented equal-timestamps rule. A closed entry with an empty first_seen retires its cluster permanently.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/feedback.rs",
+          "line": 1921,
+          "snippet": "see summary"
+        }
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "fa-1's only spec home is a page that declares itself retired",
+      "autofix_class": "manual",
+      "summary": "The advisory is documented at docs/knowledge/areas/verify-pipeline/suite-result-cache.md:48, whose own lines 16-25 say everything below describes a retired subsystem and is not current behavior. The advisory is a cells finish cap door; its owner is cells-completion-judge-and-archive.md, where wfl-3's door correctly went.",
+      "evidence": [
+        {
+          "file": "docs/knowledge/areas/verify-pipeline/suite-result-cache.md",
+          "line": 48,
+          "snippet": "see summary"
+        }
+      ]
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "pending",
+    "review": null
+  },
+  "created_at": "2026-08-11T16:11:45.575Z",
+  "updated_at": "2026-08-11T16:32:03.688Z"
+}

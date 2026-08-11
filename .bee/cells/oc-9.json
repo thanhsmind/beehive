@@ -1,0 +1,84 @@
+{
+  "id": "oc-9",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Close the parity suite's false-green paths",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    "docs/history/opencode-support/discovery.md",
+    ".opencode/plugins/bee-guard.ts"
+  ],
+  "action": "S3 judge findings F1, F3, F4, F5 — the suite can report green while proving nothing. (F1, blocker) opencode_plugin_contracts.rs:314-321's node_or_skip prints to captured stderr and returns, so a shell whose node predates v24 (e.g. /usr/bin/node v18 without nvm on PATH) yields 4 green tests and zero enforcement coverage; make the skip impossible to mistake for coverage — the suite must FAIL when the capability is absent unless an explicit opt-out env var is set, and the skip reason must reach the default (captured) output either way. Decide and record which, matching how this project treats environment-gated proof elsewhere. (F3) every stub swallows stdin (cat >/dev/null) and fixtures pass generic args, so a field-name mistranslation fails OPEN and stays green — assert the payload bee actually receives for each mapped row: real field names (filePath/command/patchText and the read-shaped ones), tool_name, cwd, session id. (F4) the plugin-side floor is a hand-written pairs.len() >= 9 and the belt check only asks whether >=1 tool routes to a hook — derive the tool inventory from the installed OpenCode binary's own registry (the same evidence oc-3 used) and fail when a registered write- or read-capable tool has no mapping, so the apply_patch defect class cannot recur; two registered tools already fall through today (list, lsp — lsp returns file content for an arbitrary filePath) and discovery.md:332-345's 13-tool enumeration is incomplete. (F5) the named-gap assertion ANDs a per-rule contains() with a document-global literal that is always present (discovery.md:560-561), so any mention anywhere passes — scope the check to the rule's own row. Update discovery.md's runner-design section to match.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts",
+  "must_haves": {
+    "truths": [
+      "A node-incapable environment cannot produce a green enforcement suite by default",
+      "Each mapped row asserts the exact payload bee receives — a renamed field fails the test",
+      "The tool inventory is derived from the installed binary; an unmapped registered write/read tool fails by name",
+      "The named-gap check is scoped to its own rule's row, not the whole document"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-8"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-suite",
+    "outcome": "Closed F1/F3/F4/F5 in the OpenCode parity suite: fail-by-default (opt-out env var) on missing node/opencode capability, exact per-row payload+D6 verdict assertions, binary-derived tool-registry coverage gate (caught real unmapped lsp tool by name), and a properly line-scoped named-gap check; plugin left unchanged, lsp/list recorded as named gaps in discovery.md",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+      "docs/history/opencode-support/discovery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T16:51:55.632Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T16:26:41.583Z",
+    "commit_pending": "worktree-local commit 3aa3fa12 not visible to trailer lookback from main checkout",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T16:51:43.886Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "skip-fails-closed",
+            "status": "PASS",
+            "evidence": "A node-incapable environment now fails by default; SKIP requires BEE_OPENCODE_SUITE_ALLOW_SKIP=1 and names its reason"
+          },
+          {
+            "id": "payload-asserted",
+            "status": "PASS",
+            "evidence": "Each mapped row asserts the exact payload bee receives"
+          },
+          {
+            "id": "registry-derived",
+            "status": "PASS",
+            "evidence": "Tool inventory derived from the installed binary — the gate immediately named lsp as unmapped"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T18:47:21.815Z"
+      }
+    ]
+  }
+}

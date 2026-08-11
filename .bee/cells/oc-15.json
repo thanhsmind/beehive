@@ -1,0 +1,54 @@
+{
+  "id": "oc-15",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Sync the knowledge bundle with what OpenCode support changed",
+  "behavior_change": false,
+  "files": [
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+    "docs/knowledge/areas/onboarding/installer-entrypoints-and-source-staging.md"
+  ],
+  "read_first": [
+    "docs/knowledge/areas/hook-runtime/index.md",
+    "docs/knowledge/areas/onboarding/index.md",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "action": "Feature close for opencode-support: merge the behavior deltas of the twelve capped behavior_change cells into the touched area concepts, once, from evidence (capped cell traces, discovery.md, the judge verdicts on each cell's trace.semantic_judge) — never from plan.md and never from memory. Ask the CLI for the write target and frontmatter rather than picking paths by eye (bee knowledge check / bee knowledge context --work opencode-support; bee knowledge promote where a concept is new). What settled and must be readable without the code: bee now has THREE first-class runtimes, and OpenCode's hook belt is a checked-in TypeScript plugin rather than a rendered JSON manifest — a named per-runtime difference under the area's R1 rule, not drift; blocking on that belt is a thrown error because the runtime's before-tool surface has no abort field; the belt must honor verdicts that arrive at exit 0 (an argument repair, an ask) or the guard's dominant mechanism is inert; a coverage gate over a runtime's own tool registry is what keeps a newly registered write- or read-capable tool from silently bypassing the guard, and it has already caught two (apply_patch, lsp); an environment-gated proof must fail rather than skip, or it certifies nothing; and worker dispatch under that runtime is functional but sequential. Add Open Gaps for what is known-unserved (the model-guard dispatch branch that still resolves against a claude literal; nested-dispatch reservation identity; the CLI's subagent-selection fallback) rather than implying coverage. Keep business vocabulary outside Pointers: an area spec describes behavior, and a stranger with only the spec must be able to rebuild it. If a concept file's Pointers section still names a deleted Node-era file, correct it while you are there.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Every claim traces to a capped cell, discovery.md, or a logged decision — no claim from plan.md or memory",
+      "The three-runtime reality and the plugin-as-third-belt difference are readable without the code",
+      "Known-unserved behavior appears as Open Gaps, never as implied coverage",
+      "No spec text outside Pointers names a language, file, or framework"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-14"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-scribe",
+    "outcome": "Merged the twelve capped opencode-support behavior_change cells' evidence into the hook-runtime catalog-projections-and-activation.md concept (three-runtime doctrine, the plugin belt as a named R1 difference, throw-based blocking, exit-0 repair/ask honoring, the tool-registry coverage gate, fail-not-skip proof discipline, and Open Gaps for the model-guard claude-literal check, the CLI subagent-selection fallback, and nested-dispatch reservation identity) and, deviating to the better-fit onboarding/repo-local-guardrails.md (recorded reason: installer-entrypoints-and-source-staging.md's R20b/R23/R27 govern bootstrap staging this feature never touched), added the third-runtime guard-belt vendoring behavior and the third models config key",
+    "files_changed": [
+      "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md",
+      "docs/knowledge/areas/onboarding/repo-local-guardrails.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T19:02:49.220Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T18:48:05.260Z",
+    "commit_pending": "commit e7544642 landed in the feature worktree (wt/opencode-support); cells finish trailer lookback cannot see worktree-local commits",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T19:02:36.488Z"
+  }
+}

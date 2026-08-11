@@ -1,0 +1,79 @@
+{
+  "id": "oc-8",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Honor bee's exit-0 repair verdicts in the OpenCode belt",
+  "behavior_change": true,
+  "files": [
+    ".opencode/plugins/bee-guard.ts",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/discovery.md",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+  ],
+  "action": "S3 judge, blocker F2: bee-guard.ts treats every exit 0 as a plain allow and discards stdout, so bee's DOMINANT enforcement path is inert on OpenCode — model_guard.rs:146-152 repairs a dispatch via hookSpecificOutput.updatedInput at exit 0, write_guard/main.rs:385-410 returns permissionDecision ask (its own comment: ask, never allow) at exit 0, and :413-429 returns a reservation warning as additionalContext. Per decision D6: parse the blocking hook's stdout JSON and (a) apply hookSpecificOutput.updatedInput onto output.args so the repair lands, (b) map permissionDecision ask to a THROW carrying bee's reason — OpenCode's tool.execute.before is two-valued, and ask-as-allow drops the guard, (c) surface additionalContext to the session instead of dropping it (advisory log at minimum; name the chosen surface). Unparseable stdout on a blocking hook is a THROW, never a silent allow. Also fix judge F6: bee-guard.ts:338's `output.message.id` dereference inside the chat.message advisory handler sits outside any try — an advisory surface must never be able to throw. Update the discovery.md hook table rows whose failure policy this changes, and delete the now-stale gap entries the fix closes (the unread on-allow stdout repairs entry). Leave the test file to oc-9.",
+  "verify": "rg -n \"updatedInput|permissionDecision\" .opencode/plugins/bee-guard.ts",
+  "must_haves": {
+    "truths": [
+      "An exit-0 updatedInput repair reaches output.args — proven, not asserted in prose",
+      "permissionDecision ask throws with bee's reason; unparseable blocking stdout throws",
+      "No advisory handler can throw, including the chat.message message-id path",
+      "discovery.md's table and gap list match the new behavior — no stale gap left claiming the repair is dropped"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-7"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-verdict",
+    "outcome": "Applied D6: exit-0 updatedInput repairs now land in output.args, permissionDecision ask throws with bee's reason, additionalContext is logged not dropped, unparseable exit-0 stdout throws fail-closed; chat.message's output.message.id dereference wrapped in try/catch (F6). Live-proved via direct plugin invocation against a stubbed bee binary (all 5 cases). oc-9's opencode_plugin_contracts suite still 4 passed, unmodified and unaffected.",
+    "files_changed": [
+      ".opencode/plugins/bee-guard.ts",
+      "docs/history/opencode-support/discovery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T16:26:25.850Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T16:19:33.862Z",
+    "commit_pending": "worktree-local commit e3df0fb3, trailer lookback cannot see worktree commits from the store root",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T16:26:14.085Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "repair-applied",
+            "status": "PASS",
+            "evidence": "updatedInput lands on output.args; ask throws with bee's reason; unparseable exit-0 verdict throws — each proven against a stubbed bee binary"
+          },
+          {
+            "id": "advisory-safe",
+            "status": "PASS",
+            "evidence": "chat.message message-id dereference wrapped; no advisory path can abort a session"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T18:47:21.812Z"
+      }
+    ]
+  }
+}
