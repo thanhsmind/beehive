@@ -161,13 +161,96 @@ pub(crate) fn measure_recurrence(root: &Path, signature: &str, pattern_date: &st
     (count, last_seen)
 }
 
+// ─── evidence ladder (el-1): bee.evidence over every bee.pattern concept ──
+//
+// A second, independent read alongside the signature-recurrence measurement
+// above: every `type: bee.pattern` concept in the bundle (critical or not —
+// unlike the corpus above, this one is not gated on `bee.critical`), grouped
+// by its optional `bee.evidence` rung. Absent counts as `present`, matching
+// `check.rs`'s own validity rule (an absent field is never guessed at
+// `wired`/`exercised`); a value `check.rs` would warn as `invalid_evidence_state`
+// is likewise folded into `present` here — this is a grooming read, not a
+// second copy of the validator, and "present" is the safe under-count
+// direction for a state bee cannot trust. The `present_only` list is exactly
+// the grooming signal U-el-1 asks for: important patterns still stuck at
+// doc-only, never wired to an enforcer or exercised by a test.
+
+/// One pattern concept's evidence rung — absent OR an unrecognized value
+/// both read as `present` (never guessed higher; `check.rs` owns warning on
+/// the unrecognized case).
+fn evidence_state(concept: &Concept) -> &'static str {
+    match bee_of(&concept.data).get("evidence") {
+        Some(Value::String(s)) if s == "wired" => "wired",
+        Some(Value::String(s)) if s == "exercised" => "exercised",
+        _ => "present",
+    }
+}
+
+fn is_pattern_concept(concept: &Concept) -> bool {
+    concept.data.get("type").and_then(Value::as_str) == Some("bee.pattern")
+}
+
+/// Builds the evidence-ladder counts (per state, over every `bee.pattern`
+/// concept) and the present-only pattern list, plus the text lines. Pure —
+/// concepts in, counts/rows/lines out — no filesystem or store reads.
+pub(crate) fn build_evidence_ladder(concepts: &[Concept]) -> (Value, Vec<Value>, Vec<String>) {
+    let mut patterns: Vec<&Concept> = concepts.iter().filter(|c| is_pattern_concept(c)).collect();
+    patterns.sort_by(|a, b| a.path.cmp(&b.path));
+
+    let mut present = 0usize;
+    let mut wired = 0usize;
+    let mut exercised = 0usize;
+    let mut present_only: Vec<Value> = Vec::new();
+
+    for concept in &patterns {
+        match evidence_state(concept) {
+            "wired" => wired += 1,
+            "exercised" => exercised += 1,
+            _ => {
+                present += 1;
+                let title = str_field(&concept.data, "title").unwrap_or(&concept.path).to_string();
+                let mut row = Map::new();
+                row.insert("path".into(), Value::String(format!("docs/knowledge/{}", concept.path)));
+                row.insert("title".into(), Value::String(title));
+                present_only.push(Value::Object(row));
+            }
+        }
+    }
+
+    let mut counts = Map::new();
+    counts.insert("present".into(), Value::from(present));
+    counts.insert("wired".into(), Value::from(wired));
+    counts.insert("exercised".into(), Value::from(exercised));
+    let mut ladder = Map::new();
+    ladder.insert("counts".into(), Value::Object(counts));
+    ladder.insert("present_only".into(), Value::Array(present_only.clone()));
+
+    let mut lines = vec![format!(
+        "evidence ladder: {present} present, {wired} wired, {exercised} exercised ({} bee.pattern concept(s); absent/invalid reads as present)",
+        patterns.len()
+    )];
+    for row in &present_only {
+        lines.push(format!(
+            "PRESENT-ONLY {} — {}",
+            row["path"].as_str().unwrap_or_default(),
+            row["title"].as_str().unwrap_or_default()
+        ));
+    }
+
+    (Value::Object(ladder), present_only, lines)
+}
+
 // ─── report assembly (pure — root + concepts in, rows + lines out) ────────
 
 /// Builds the measured/unmeasured rows and the text lines over every
 /// critical pattern in CONCEPTS, reading recurrence sources from ROOT. Pulled
 /// out of `run_report` so it is directly testable without a resolved store
 /// root / cwd dance — the same shape `search_bundle` gives `run_search`.
-pub(crate) fn build_report(root: &Path, concepts: &[Concept]) -> (Vec<Value>, Vec<Value>, Vec<String>) {
+///
+/// Returns `(measured, unmeasured, evidence_ladder, lines)` — the fourth
+/// element is the JSON object `build_evidence_ladder` above builds; `lines`
+/// carries both sections' text, signature-recurrence first.
+pub(crate) fn build_report(root: &Path, concepts: &[Concept]) -> (Vec<Value>, Vec<Value>, Value, Vec<String>) {
     let mut criticals: Vec<&Concept> = concepts.iter().filter(|c| is_critical_pattern(c)).collect();
     // Deterministic order (no fuzzy anything here either): path ascending.
     criticals.sort_by(|a, b| a.path.cmp(&b.path));
@@ -218,7 +301,11 @@ pub(crate) fn build_report(root: &Path, concepts: &[Concept]) -> (Vec<Value>, Ve
         measured.len(),
         unmeasured.len()
     ));
-    (measured, unmeasured, lines)
+
+    let (evidence_ladder, _present_only, ladder_lines) = build_evidence_ladder(concepts);
+    lines.extend(ladder_lines);
+
+    (measured, unmeasured, evidence_ladder, lines)
 }
 
 // ─── routing ────────────────────────────────────────────────────────────
@@ -234,7 +321,7 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     let dir = bundle_dir(&ctx.root)?;
     let concepts = collect_concepts(&dir)?;
 
-    let (measured, unmeasured, lines) = build_report(&ctx.root, &concepts);
+    let (measured, unmeasured, evidence_ladder, lines) = build_report(&ctx.root, &concepts);
 
     let mut result = Map::new();
     let measured_count = measured.len();
@@ -243,6 +330,7 @@ pub(crate) fn run_report(flags: Flags, json: bool, pre_json: bool, t0: Instant) 
     result.insert("unmeasured".into(), Value::Array(unmeasured));
     result.insert("measured_count".into(), Value::from(measured_count));
     result.insert("unmeasured_count".into(), Value::from(unmeasured_count));
+    result.insert("evidence_ladder".into(), evidence_ladder);
     Some(ctx.emit(&Value::Object(result), &lines.join("\n"), 0))
 }
 
@@ -276,6 +364,23 @@ mod tests {
         format!(
             "---\ntype: bee.pattern\ntitle: {title}\ndescription: {title}\ntimestamp: {timestamp}\nbee:\n  id: {}\n  lifecycle: active\n  polarity: pitfall\n  critical: true{sig_line}\n---\nbody\n",
             title.to_lowercase().replace(' ', "-"),
+        )
+    }
+
+    /// A plain (non-critical) `bee.pattern` concept carrying an optional
+    /// `bee.evidence` value — the evidence-ladder corpus, which (unlike the
+    /// signature-recurrence corpus above) is never gated on `bee.critical`.
+    fn pattern_with_evidence(title: &str, evidence: Option<&str>) -> String {
+        let ev_line = evidence.map(|e| format!("\n  evidence: {e}")).unwrap_or_default();
+        format!(
+            "---\ntype: bee.pattern\ntitle: {title}\ndescription: {title}\ntimestamp: 2026-08-05\nbee:\n  id: {}\n  lifecycle: active\n  polarity: practice\n  critical: false{ev_line}\n---\nbody\n",
+            title.to_lowercase().replace(' ', "-"),
+        )
+    }
+
+    fn area_concept(id: &str, title: &str) -> String {
+        format!(
+            "---\ntype: bee.area\ntitle: {title}\ndescription: {title}\ntimestamp: 2026-08-05\nbee:\n  id: {id}\n  lifecycle: active\n---\nbody\n"
         )
     }
 
@@ -396,6 +501,60 @@ mod tests {
         assert!(!is_critical_pattern(concept), "critical: false must never enter the report's corpus");
     }
 
+    // ═══ evidence ladder (el-1) ═════════════════════════════════════════════
+
+    #[test]
+    fn evidence_ladder_counts_every_state_and_absent_reads_as_present() {
+        let (_tmp, dir) = bundle();
+        write(&dir, "patterns/a.md", &pattern_with_evidence("Doc only", None));
+        write(&dir, "patterns/b.md", &pattern_with_evidence("Wired one", Some("wired")));
+        write(&dir, "patterns/c.md", &pattern_with_evidence("Exercised one", Some("exercised")));
+        write(&dir, "patterns/d.md", &pattern_with_evidence("Explicit present", Some("present")));
+        // A non-pattern concept must never enter the ladder's corpus.
+        write(&dir, "areas/x/overview.md", &area_concept("x-area", "X overview"));
+
+        let concepts = collect_concepts(&dir).unwrap();
+        let (ladder, present_only, lines) = build_evidence_ladder(&concepts);
+
+        assert_eq!(ladder["counts"]["present"], 2, "absent AND explicit \"present\" both land in present: {ladder}");
+        assert_eq!(ladder["counts"]["wired"], 1, "{ladder}");
+        assert_eq!(ladder["counts"]["exercised"], 1, "{ladder}");
+
+        let paths: Vec<&str> = present_only.iter().map(|r| r["path"].as_str().unwrap()).collect();
+        assert_eq!(
+            paths,
+            vec!["docs/knowledge/patterns/a.md", "docs/knowledge/patterns/d.md"],
+            "present-only, path-sorted, non-patterns excluded"
+        );
+        assert!(lines.iter().any(|l| l.starts_with("evidence ladder: 2 present, 1 wired, 1 exercised (4 bee.pattern concept(s)")));
+        assert!(lines.iter().any(|l| l.contains("PRESENT-ONLY docs/knowledge/patterns/a.md — Doc only")));
+        assert!(lines.iter().any(|l| l.contains("PRESENT-ONLY docs/knowledge/patterns/d.md — Explicit present")));
+    }
+
+    #[test]
+    fn evidence_ladder_folds_an_unrecognized_value_into_present_never_a_new_bucket() {
+        let (_tmp, dir) = bundle();
+        write(&dir, "patterns/bad.md", &pattern_with_evidence("Bad value", Some("not-a-state")));
+        let concepts = collect_concepts(&dir).unwrap();
+        let (ladder, present_only, _lines) = build_evidence_ladder(&concepts);
+        assert_eq!(ladder["counts"]["present"], 1, "an unrecognized value reads as present here — check.rs owns warning on it: {ladder}");
+        assert_eq!(ladder["counts"]["wired"], 0);
+        assert_eq!(ladder["counts"]["exercised"], 0);
+        assert_eq!(present_only.len(), 1);
+        assert_eq!(present_only[0]["path"], "docs/knowledge/patterns/bad.md");
+    }
+
+    #[test]
+    fn evidence_ladder_is_empty_over_an_empty_bundle() {
+        let (ladder, present_only, lines) = build_evidence_ladder(&[]);
+        assert_eq!(ladder["counts"]["present"], 0);
+        assert_eq!(ladder["counts"]["wired"], 0);
+        assert_eq!(ladder["counts"]["exercised"], 0);
+        assert!(present_only.is_empty());
+        assert!(lines[0].starts_with("evidence ladder: 0 present, 0 wired, 0 exercised (0 bee.pattern concept(s)"));
+        assert_eq!(lines.len(), 1, "no PRESENT-ONLY lines when nothing is present-only");
+    }
+
     #[test]
     fn build_report_renders_measured_and_unmeasured_rows_and_skips_uncritical() {
         let (_tmp, dir) = bundle();
@@ -410,7 +569,7 @@ mod tests {
         write_root(&root, "decisions.jsonl", &decision_line("2026-08-06T00:00:00.000Z", "recur-me landed again"));
 
         let concepts = collect_concepts(&dir).unwrap();
-        let (measured, unmeasured, lines) = build_report(&root, &concepts);
+        let (measured, unmeasured, evidence_ladder, lines) = build_report(&root, &concepts);
 
         assert_eq!(measured.len(), 1, "only the signature-bearing critical is measured");
         let row = &measured[0];
@@ -424,11 +583,23 @@ mod tests {
 
         assert!(lines.iter().any(|l| l.contains("recur-me") && l.contains("1 recurrence(s)")));
         assert!(lines.iter().any(|l| l.starts_with("UNMEASURED docs/knowledge/patterns/no-sig.md")));
+        // Mundane must never enter the signature-recurrence rows/rows-text —
+        // it legitimately appears further down in the evidence-ladder
+        // section below (a SEPARATE, non-critical-gated corpus).
         assert!(
-            lines.iter().all(|l| !l.contains("Mundane")),
-            "an uncritical pattern must never appear in either bucket"
+            measured.iter().all(|r| r["path"] != "docs/knowledge/patterns/mundane.md")
+                && unmeasured.iter().all(|r| r["path"] != "docs/knowledge/patterns/mundane.md"),
+            "an uncritical pattern must never appear in either signature-recurrence bucket"
         );
-        assert!(lines.last().unwrap().contains("1 measured critical pattern(s), 1 unmeasured"));
+        assert!(lines.iter().any(|l| l.contains("1 measured critical pattern(s), 1 unmeasured")));
+
+        // The evidence ladder is a SEPARATE corpus (every bee.pattern, not
+        // just criticals) — Mundane belongs here even though it never enters
+        // the signature-recurrence buckets above.
+        assert_eq!(evidence_ladder["counts"]["present"], 3, "none of the three patterns set bee.evidence");
+        assert_eq!(evidence_ladder["counts"]["wired"], 0);
+        assert_eq!(evidence_ladder["counts"]["exercised"], 0);
+        assert!(lines.iter().any(|l| l.starts_with("evidence ladder: 3 present, 0 wired, 0 exercised")));
     }
 
     #[test]

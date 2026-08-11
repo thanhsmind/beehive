@@ -138,6 +138,19 @@ pub(crate) fn dangling_source_candidate(entry: &str) -> Option<String> {
     Some(token.to_string())
 }
 
+// ─── evidence-ladder: optional `bee.evidence` state (el-1) ─────────────────
+//
+// A pattern concept may carry `bee.evidence: present|wired|exercised` — a
+// self-reported rung on the ladder from "written down" (present, the
+// default) through "cited by a live enforcer" (wired) to "a passing test
+// exercises it" (exercised). Optional, and NEVER guessed: absent reads as
+// `present` and stays valid; anything else (a typo, a stray boolean, a list)
+// is a profile WARNING naming the file and the value, never a bundle error —
+// the same never-block-on-a-SHOULD posture every other profile warning
+// takes (B2 above).
+
+pub(crate) const EVIDENCE_STATES: [&str; 3] = ["present", "wired", "exercised"];
+
 pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
     let mut errors: Vec<Value> = Vec::new();
     let mut warnings: Vec<Value> = Vec::new();
@@ -256,6 +269,23 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
                 "frontmatter parse→re-emit differs byte-wise from the file (hand-edited colon/#/CRLF/key-order outside the canonical emitted form) — normalize by re-emitting"
                     .to_string(),
             ));
+        }
+
+        // Optional bee.evidence: an absent field stays valid (reads as
+        // `present`, D-el-1); anything present that is not one of the three
+        // enum states warns by file and value, never errors the bundle.
+        if let Some(value) = bee_of(&data).get("evidence") {
+            let valid = matches!(value, Value::String(s) if EVIDENCE_STATES.contains(&s.as_str()));
+            if !valid {
+                warnings.push(finding(
+                    rel,
+                    "invalid_evidence_state",
+                    format!(
+                        "bee.evidence \"{}\" is not one of present|wired|exercised (absent reads as present)",
+                        jsjson::js_to_string(value)
+                    ),
+                ));
+            }
         }
 
         parsed_concepts.push(Concept { path: rel.clone(), data });
