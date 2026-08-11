@@ -1,0 +1,52 @@
+{
+  "id": "klc-2",
+  "feature": "knowledge-link-check",
+  "lane": "small",
+  "title": "Repo bundle link integrity test over docs/knowledge, fix surfaced links",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+    "docs/knowledge/"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+  ],
+  "action": "Add a test that locates the host repo docs/knowledge bundle from CARGO_MANIFEST_DIR (walk up; when absent, pass with a named skip reason so the crate works outside this repo), runs check_bundle, and fails listing every dangling_md_link/dangling_wiki_link finding. Fix every dangling link it surfaces inside docs/knowledge — mechanical doc edits only, prefer correcting the target over deleting the reference. Depends on klc-1.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Test names each dangling link with file and target on failure",
+      "Bundle passes clean after fixes",
+      "Crate tests still pass outside a repo carrying docs/knowledge"
+    ]
+  },
+  "deps": [
+    "klc-1"
+  ],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "klc2",
+    "outcome": "Added a host-repo docs/knowledge link integrity test (skips outside the repo) and fixed the five dangling wiki links it surfaced",
+    "files_changed": [
+      "docs/knowledge/patterns/20260727-an-impacted-run-computed-after-the-commit-selects-nothing.md",
+      "docs/knowledge/patterns/20260728-a-scan-set-from-the-git-index-crashes-the-gate-that-guards-it.md",
+      "docs/knowledge/patterns/20260728-one-membership-hand-copied-six-times-has-no-owner-and-no-alarm.md",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T10:58:57.334Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d9663ee4-1552-489a-a52a-cb6633b67dc1",
+    "claimed_at": "2026-08-11T10:53:32.523Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T10:58:44.286Z"
+  }
+}

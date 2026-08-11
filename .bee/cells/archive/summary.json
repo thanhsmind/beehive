@@ -368,5 +368,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-11T10:28:25.917Z"
+  },
+  "knowledge-link-check": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-11T11:00:10.061Z"
   }
 }
