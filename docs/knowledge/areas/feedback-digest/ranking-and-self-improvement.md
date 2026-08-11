@@ -49,6 +49,13 @@ each group is scored and the groups are returned most-pressing-first.
   earlier — closed rows existed under different titles, so the dead item kept topping the agenda.
   NOTE the payload shape change that rode this: the machine-readable ranking is now an object
   `{ranked, retired}`, no longer a bare array.
+- **A retired group recurs when a non-closed entry postdates its latest close (evolving-watch
+  ew-1, 2026-08-11).** Strictly-newer ISO timestamp on any non-closed entry re-enters the group
+  into the ranked list carrying `recurred: true`, `closed_at`, and `recurred_count`; ranking
+  arithmetic runs over its non-closed entries unchanged. A close that stays newest retires
+  exactly as above; equal timestamps never count as recurrence. Motivation: a fix that merges is
+  not proven — closure holds only while the friction stays absent, and a recurrence must reopen
+  as a finding instead of hiding in the retired list.
 
 **What blocks it:** nothing new — it consumes only the already-validated collected view (B2) and
 reads nothing itself.

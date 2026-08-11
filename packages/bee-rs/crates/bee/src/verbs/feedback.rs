@@ -1838,6 +1838,16 @@ struct Cluster {
     repos: Vec<String>,
 }
 
+/// An entry's `pain`: the stored integer when it is a positive whole
+/// number, else the floor value of 1 (see docs/knowledge
+/// areas/feedback-digest/data-model.md — "pain is computed once").
+fn entry_pain(entry: &Value) -> f64 {
+    match entry.get("pain").and_then(Value::as_f64) {
+        Some(p) if p.fract() == 0.0 && p > 0.0 => p,
+        _ => 1.0,
+    }
+}
+
 /// clusterEntries over the merged view (which on this arm carries no
 /// `merged` repos, so only the local entries contribute).
 fn cluster_entries(view: &Value) -> Vec<Cluster> {
@@ -1870,10 +1880,7 @@ fn cluster_entries(view: &Value) -> Vec<Cluster> {
                 buckets.len() - 1
             }
         };
-        let pain = match entry.get("pain").and_then(Value::as_f64) {
-            Some(p) if p.fract() == 0.0 && p > 0.0 => p,
-            _ => 1.0,
-        };
+        let pain = entry_pain(&entry);
         let bucket = &mut buckets[idx];
         bucket.entries.push(entry);
         if !bucket.repos.contains(&local_label) {
@@ -1887,9 +1894,8 @@ fn cluster_entries(view: &Value) -> Vec<Cluster> {
 }
 
 /// A cluster where any entry's normalized kind is "closed" (KIND_ALIASES:
-/// "backlog-closed" -> "closed") names a dead item. It never joins the
-/// ranked list — it is a retired cluster instead, carried in a separate
-/// array so nothing silently vanishes.
+/// "backlog-closed" -> "closed") names a candidate dead item — see
+/// `rank_clusters` for whether it actually retires or recurs.
 fn cluster_has_closed_entry(c: &Cluster) -> bool {
     c.entries
         .iter()
@@ -1912,11 +1918,67 @@ fn retired_value(c: &Cluster) -> Value {
     Value::Object(m)
 }
 
+/// Latest (code-unit-max) `first_seen` among a cluster's closed entries, or
+/// `None` if no closed entry carries a non-empty one.
+fn latest_closed_timestamp(c: &Cluster) -> Option<String> {
+    c.entries
+        .iter()
+        .filter(|e| e.get("kind").and_then(Value::as_str) == Some("closed"))
+        .filter_map(|e| e.get("first_seen").and_then(Value::as_str))
+        .filter(|s| !s.is_empty())
+        .fold(None::<String>, |acc, fs| match &acc {
+            Some(a) if code_unit_cmp(fs, a) != std::cmp::Ordering::Greater => acc,
+            _ => Some(fs.to_string()),
+        })
+}
+
+/// Builds the ranked JSON object (`key`, `entries`, `pain`, `frequency`,
+/// `corroboration`, `rank`, `first_seen`) over exactly the given entry set,
+/// plus the `rank`/`first_seen` values the caller sorts by. `pain` is
+/// recomputed from the entries passed in — never trusted from an aggregate —
+/// so a filtered set (a recurrence's non-closed entries) stays honest.
+fn build_ranked_map(key: &str, entries: Vec<Value>, repos_len: usize) -> (Value, f64, String) {
+    let pain = entries.iter().map(entry_pain).fold(0.0_f64, f64::max);
+    let frequency = entries.len() as f64;
+    let corroboration = repos_len as f64;
+    let rank = pain * frequency * corroboration;
+    let mut earliest: Option<String> = None;
+    for e in &entries {
+        if let Some(Value::String(fs)) = e.get("first_seen") {
+            if !fs.is_empty()
+                && (earliest.is_none()
+                    || code_unit_cmp(fs, earliest.as_ref().unwrap())
+                        == std::cmp::Ordering::Less)
+            {
+                earliest = Some(fs.clone());
+            }
+        }
+    }
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String(key.to_string()));
+    m.insert("entries".into(), Value::Array(entries));
+    m.insert("pain".into(), Value::from(pain));
+    m.insert("frequency".into(), Value::from(frequency));
+    m.insert("corroboration".into(), Value::from(corroboration));
+    m.insert("rank".into(), Value::from(rank));
+    m.insert(
+        "first_seen".into(),
+        earliest.clone().map(Value::String).unwrap_or(Value::Null),
+    );
+    (Value::Object(m), rank, earliest.unwrap_or_default())
+}
+
 /// rankClusters: rank desc, then earliest first_seen asc, then key — the last
 /// two via JS `<`/`>` on strings, i.e. UTF-16 code-unit order (NOT ICU).
-/// Clusters carrying a closed entry are excluded from the ranked list and
-/// returned separately as `retired`; ranking arithmetic for the surviving
-/// clusters is unchanged.
+///
+/// A cluster carrying a closed entry only retires when its closed entry is
+/// the newest thing in it. When any non-closed entry's `first_seen` is
+/// strictly newer than the latest closed entry's, the cluster is a
+/// **recurrence**: it re-joins the ranked list — arithmetic computed over
+/// its non-closed entries only — carrying `recurred: true`, `closed_at`
+/// (the latest closed entry's timestamp), and `recurred_count` (how many
+/// non-closed entries are newer than that close). Ranking arithmetic for
+/// clusters that never carried a closed entry is unchanged.
 fn rank_clusters(clusters: Vec<Cluster>) -> (Vec<Value>, Vec<Value>) {
     struct Ranked {
         value: Value,
@@ -1928,42 +1990,47 @@ fn rank_clusters(clusters: Vec<Cluster>) -> (Vec<Value>, Vec<Value>) {
     let mut ranked: Vec<Ranked> = clusters
         .into_iter()
         .filter_map(|c| {
-            if cluster_has_closed_entry(&c) {
+            if !cluster_has_closed_entry(&c) {
+                let repos_len = c.repos.len();
+                let key = c.key.clone();
+                let (value, rank, first_seen) = build_ranked_map(&key, c.entries, repos_len);
+                return Some(Ranked { value, rank, first_seen, key });
+            }
+            let latest_closed = latest_closed_timestamp(&c);
+            let recurred_count = latest_closed.as_deref().map_or(0, |closed_at| {
+                c.entries
+                    .iter()
+                    .filter(|e| {
+                        e.get("kind").and_then(Value::as_str) != Some("closed")
+                            && matches!(
+                                e.get("first_seen"),
+                                Some(Value::String(fs))
+                                    if !fs.is_empty()
+                                        && code_unit_cmp(fs, closed_at)
+                                            == std::cmp::Ordering::Greater
+                            )
+                    })
+                    .count()
+            });
+            if recurred_count == 0 {
                 retired.push(retired_value(&c));
                 return None;
             }
-            let frequency = c.entries.len() as f64;
-            let corroboration = c.repos.len() as f64;
-            let rank = c.pain * frequency * corroboration;
-            let mut earliest: Option<String> = None;
-            for e in &c.entries {
-                if let Some(Value::String(fs)) = e.get("first_seen") {
-                    if !fs.is_empty()
-                        && (earliest.is_none()
-                            || code_unit_cmp(fs, earliest.as_ref().unwrap())
-                                == std::cmp::Ordering::Less)
-                    {
-                        earliest = Some(fs.clone());
-                    }
-                }
+            let closed_at = latest_closed.expect("recurred_count > 0 implies a closed_at");
+            let repos_len = c.repos.len();
+            let key = c.key.clone();
+            let non_closed: Vec<Value> = c
+                .entries
+                .into_iter()
+                .filter(|e| e.get("kind").and_then(Value::as_str) != Some("closed"))
+                .collect();
+            let (mut value, rank, first_seen) = build_ranked_map(&key, non_closed, repos_len);
+            if let Value::Object(ref mut m) = value {
+                m.insert("recurred".into(), Value::Bool(true));
+                m.insert("closed_at".into(), Value::String(closed_at));
+                m.insert("recurred_count".into(), Value::from(recurred_count as u64));
             }
-            let mut m = Map::new();
-            m.insert("key".into(), Value::String(c.key.clone()));
-            m.insert("entries".into(), Value::Array(c.entries));
-            m.insert("pain".into(), Value::from(c.pain));
-            m.insert("frequency".into(), Value::from(frequency));
-            m.insert("corroboration".into(), Value::from(corroboration));
-            m.insert("rank".into(), Value::from(rank));
-            m.insert(
-                "first_seen".into(),
-                earliest.clone().map(Value::String).unwrap_or(Value::Null),
-            );
-            Some(Ranked {
-                value: Value::Object(m),
-                rank,
-                first_seen: earliest.unwrap_or_default(),
-                key: c.key,
-            })
+            Some(Ranked { value, rank, first_seen, key })
         })
         .collect();
     ranked.sort_by(|a, b| {
@@ -2551,5 +2618,78 @@ mod tests {
         assert_eq!(retired.len(), 1);
         assert_eq!(retired[0]["title"], "solo closed");
         assert_eq!(retired[0]["count"], 1);
+    }
+
+    #[test]
+    fn rank_clusters_clean_retire_stays_retired() {
+        // No entry is newer than the closed entry -> retires exactly as
+        // before (evolving-watch cell ew-1: this is the "no recurrence"
+        // baseline, distinct from the closed-only-cluster case above).
+        let view = json!({
+            "repo_label": "r",
+            "entries": [
+                {"kind":"friction","title":"widget breaks","first_seen":"2024-01-01","pain":2.0},
+                {"kind":"closed","title":"Widget   Breaks","first_seen":"2024-01-05","pain":1.0},
+            ]
+        });
+        let (ranked, retired) = rank_clusters(cluster_entries(&view));
+        assert!(ranked.is_empty());
+        assert_eq!(retired.len(), 1);
+        assert_eq!(retired[0]["title"], "widget breaks");
+        assert_eq!(retired[0]["count"], 2);
+    }
+
+    #[test]
+    fn rank_clusters_recurrence_re_enters_ranked_with_flags() {
+        // A non-closed entry strictly newer than the closed entry's
+        // timestamp turns retirement into a recurrence: the cluster
+        // re-joins `ranked`, computed over its non-closed entries only.
+        let view = json!({
+            "repo_label": "r",
+            "entries": [
+                {"kind":"friction","title":"widget breaks","first_seen":"2024-01-01","pain":2.0},
+                {"kind":"closed","title":"Widget   Breaks","first_seen":"2024-01-05","pain":1.0},
+                {"kind":"friction","title":"Widget Breaks","first_seen":"2024-02-01","pain":3.0},
+                {"kind":"friction","title":"widget breaks","first_seen":"2024-03-01","pain":1.0},
+            ]
+        });
+        let (ranked, retired) = rank_clusters(cluster_entries(&view));
+        assert!(retired.is_empty());
+        assert_eq!(ranked.len(), 1);
+        let top = &ranked[0];
+        assert_eq!(top["recurred"], true);
+        assert_eq!(top["closed_at"], "2024-01-05");
+        // Two non-closed entries (2024-02-01, 2024-03-01) are strictly
+        // newer than the 2024-01-05 close; the 2024-01-01 entry predates it.
+        assert_eq!(top["recurred_count"], 2);
+        // Ranking arithmetic runs over the 3 non-closed entries only — the
+        // closed marker itself never contributes frequency, pain, or entries.
+        assert_eq!(top["frequency"], 3.0);
+        assert_eq!(top["pain"], 3.0);
+        assert_eq!(top["corroboration"], 1.0);
+        assert_eq!(top["rank"], 9.0);
+        assert_eq!(top["first_seen"], "2024-01-01");
+        let entries = top["entries"].as_array().expect("entries array");
+        assert_eq!(entries.len(), 3);
+        assert!(entries.iter().all(|e| e["kind"] != "closed"));
+    }
+
+    #[test]
+    fn rank_clusters_equal_timestamp_is_not_a_recurrence() {
+        // A non-closed entry carrying the SAME timestamp as the close is not
+        // "strictly newer" -> the cluster stays retired.
+        let view = json!({
+            "repo_label": "r",
+            "entries": [
+                {"kind":"friction","title":"widget breaks","first_seen":"2024-01-01","pain":2.0},
+                {"kind":"closed","title":"Widget   Breaks","first_seen":"2024-01-05","pain":1.0},
+                {"kind":"friction","title":"Widget Breaks","first_seen":"2024-01-05","pain":3.0},
+            ]
+        });
+        let (ranked, retired) = rank_clusters(cluster_entries(&view));
+        assert!(ranked.is_empty());
+        assert_eq!(retired.len(), 1);
+        assert_eq!(retired[0]["title"], "widget breaks");
+        assert_eq!(retired[0]["count"], 3);
     }
 }
