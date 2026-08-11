@@ -237,7 +237,16 @@ is an open gap named below rather than a working path.
   `write_guard/tests.rs` (`sh_bash_eval_wrapper_around_a_git_verb_is_now_refused`,
   `nested_wrapper_still_refuses`, `tokenize_deep_never_expands_a_quoted_span_that_is_not_a_wrapper_payload`,
   `tokenize_deep_bounds_recursion_and_flags_truncation`). Provenance:
-  `.bee/cells/gpd-1.json`, commit 98888896.
+  `.bee/cells/gpd-1.json`, commit 98888896. HEREDOC bodies are fenced BEFORE
+  that deep read (`fence_heredocs`, ahead of `tokenize_deep` in
+  `extract_bash_targets`): `<<`/`<<-` with quoted, unquoted, and dash
+  terminators, several heredocs per line in operator order, unterminated
+  bodies failing safe as skipped content — heredoc CONTENT can never become
+  an extraction target, while the operator's neighboring real redirects keep
+  byte-identical extraction and `<<<` here-strings are untouched
+  (guard-heredoc-fencing cell ghf-1, 2026-08-11; friction row 570's residue —
+  a body word had been denied as a write target repeatedly, including a
+  live cells-add refusal over the word "it").
 
 - Question-schema guard + auto-fix: `check_ask_user_question` in
   `packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs`
