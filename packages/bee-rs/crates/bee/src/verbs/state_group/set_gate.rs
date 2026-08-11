@@ -439,6 +439,20 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
                 "set: owner mismatch \u{2014} selected {selected}'s pre-mutation phase is \"{phase_str}\", not \"{owner}\". FIX: retry with --owner {phase_str}."
             )));
         }
+        // ssh-1: capture a REAL --feature swap on the default record BEFORE
+        // the mutation below overwrites the pre-mutation feature. Same
+        // "current truthy AND different" definition the scribing-debt swap
+        // door above already uses on this file's own precedent — a lane
+        // target never reaches here (refused earlier), and a same-value
+        // --feature is not a swap.
+        let feature_swap: Option<String> = if target.lane().is_none() {
+            flag_string(flags, "feature").filter(|f| match target.record().get("feature") {
+                Some(v) if truthy(v) => js_disp(v) != *f,
+                _ => false,
+            })
+        } else {
+            None
+        };
         let mut changed: Vec<String> = Vec::new();
         {
             let state = target.record_mut();
@@ -466,6 +480,30 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
         let record = target.record().clone();
         write_through_projection(root, &target, &record, &[])?;
         drop(locks);
+        // ssh-1: ledger.rs's write_through_projection deliberately drops a
+        // --feature swap to the direct C1 write (see the comment at its
+        // `routable` computation) — the incoming feature's workflow record
+        // is never touched by that write, and the OUTGOING feature's live
+        // record is left live, orphaned. Reap it here, OUTSIDE the mutation
+        // locks just dropped, reusing the exact policy `start-feature` runs
+        // (feature.rs's ensure_workflow_record_for_feature then
+        // close_workflows_for_feature) — never a second implementation. A
+        // same-feature set takes `feature_swap == None` and this block never
+        // runs, so that path stays byte-identical.
+        if let Some(new_feature) = &feature_swap {
+            let phase_for_new = record.get("phase").filter(|v| truthy(v)).map(js_disp);
+            let mode_for_new = record.get("mode").filter(|v| !v.is_null()).map(js_disp);
+            ensure_workflow_record_for_feature(
+                root,
+                new_feature,
+                phase_for_new.as_deref().unwrap_or("idle"),
+                mode_for_new.as_deref(),
+                record.get("summary"),
+                record.get("next_action"),
+                None,
+            )?;
+            close_workflows_for_feature(root, Some(new_feature))?;
+        }
         // D4 — the waiver is loud and attributable: logged AFTER the write
         // succeeds so a refused mutation never leaves a decision claiming one
         // happened (decisions.jsonl sits outside the state/lane lock).
@@ -1634,5 +1672,82 @@ mod tests {
             .unwrap();
         let Out::Thrown(msg) = out else { panic!("expected a refusal, got a write") };
         assert!(msg.contains("--feature cannot target lane \"bound-lane\""), "{msg}");
+    }
+
+    // ── ssh-1: a swap closes every OTHER live workflow record ──────────────
+    //
+    // start-feature already reaps correctly (policy.rs's
+    // ensure_workflow_record_for_feature + close_workflows_for_feature); a
+    // `state set --feature <swap>` did not, because write_through_projection
+    // deliberately falls to the C1 direct write for a swap and never routes
+    // through the workflow store at all. These are red against pre-fix code:
+    // the outgoing feature's live workflow record stayed "active" forever.
+
+    fn write_workflow_fixture(root: &Path, id: &str, body: &str) {
+        w(root, &format!(".bee/runtime/workflows/{id}/state.json"), body);
+    }
+
+    fn read_workflow_fixture(root: &Path, id: &str) -> Value {
+        read_json_file(root, &format!(".bee/runtime/workflows/{id}/state.json"))
+    }
+
+    /// A real swap closes the OUTGOING feature's live workflow record and
+    /// creates one for the INCOMING feature — the same reap start-feature
+    /// already runs, ridden after the C1 write instead of replacing it.
+    #[test]
+    fn a_feature_swap_closes_the_outgoing_workflow_and_opens_the_incoming_one() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &idle_state_at("swarming", "outgoing"));
+        write_workflow_fixture(
+            root,
+            "wf-outgoing",
+            r#"{"id":"wf-outgoing","feature":"outgoing","status":"active","phase":"swarming",
+                "summary":"","next_action":"","created_at":"2026-01-01T00:00:00.000Z"}"#,
+        );
+        let out = run_set_body(
+            root,
+            &flags(&["--no-lane", "--feature", "incoming", "--owner", "swarming"]),
+        )
+        .unwrap();
+        assert!(matches!(out, Out::Emit(..)), "a debt-free swap must succeed");
+        // The C1 write itself is untouched: state.json took the swap.
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["feature"], json!("incoming"));
+        // The outgoing feature's live record is now terminal…
+        let outgoing = read_workflow_fixture(root, "wf-outgoing");
+        assert_eq!(outgoing["status"], json!("closed"), "{outgoing}");
+        // …and the incoming feature has a live record of its own.
+        let workflows = ok_ex(list_workflows(root));
+        let incoming = workflows
+            .iter()
+            .find(|wf| wf.get("feature") == Some(&json!("incoming")))
+            .unwrap_or_else(|| panic!("no workflow record for the incoming feature: {workflows:?}"));
+        assert_eq!(incoming.get("status"), Some(&json!("active")));
+    }
+
+    /// A same-value `--feature` is not a swap at all: the pre-existing live
+    /// workflow record for that feature is left completely untouched (no
+    /// reap runs, no second record is created).
+    #[test]
+    fn a_same_feature_set_leaves_the_live_workflow_record_untouched() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &idle_state_at("swarming", "outgoing"));
+        write_workflow_fixture(
+            root,
+            "wf-outgoing",
+            r#"{"id":"wf-outgoing","feature":"outgoing","status":"active","phase":"swarming",
+                "summary":"","next_action":"","created_at":"2026-01-01T00:00:00.000Z"}"#,
+        );
+        let out = run_set_body(
+            root,
+            &flags(&["--no-lane", "--feature", "outgoing", "--owner", "swarming"]),
+        )
+        .unwrap();
+        assert!(matches!(out, Out::Emit(..)));
+        let workflows = ok_ex(list_workflows(root));
+        assert_eq!(workflows.len(), 1, "no second record was created: {workflows:?}");
+        assert_eq!(workflows[0].get("status"), Some(&json!("active")));
     }
 }
