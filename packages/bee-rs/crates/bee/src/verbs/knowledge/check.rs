@@ -217,6 +217,40 @@ pub(crate) fn wiki_link_targets(body: &str) -> Vec<String> {
     out
 }
 
+/// Code regions are quotation, not linkage: a fenced block (``` / ~~~) or an
+/// inline backtick span quoting `[[syntax]]` or `](file.md)` must never feed
+/// the link extractors. Fenced lines are dropped whole; inline spans are
+/// blanked to spaces so byte offsets elsewhere stay honest.
+pub(crate) fn strip_code_regions(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    let mut in_fence = false;
+    for line in body.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            in_fence = !in_fence;
+            out.push('\n');
+            continue;
+        }
+        if in_fence {
+            out.push('\n');
+            continue;
+        }
+        let mut in_span = false;
+        for c in line.chars() {
+            if c == '`' {
+                in_span = !in_span;
+                out.push(' ');
+            } else if in_span {
+                out.push(' ');
+            } else {
+                out.push(c);
+            }
+        }
+        out.push('\n');
+    }
+    out
+}
+
 /// A wiki link resolves when `target`, or `target` minus an optional
 /// `pattern-` prefix, matches the file stem of any `.md` in the bundle.
 pub(crate) fn wiki_link_resolves(target: &str, stems: &[&str]) -> bool {
@@ -360,7 +394,10 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         }
 
         // ── D4-style body link checks (dangling_md_link / dangling_wiki_link) ──
-        for target in markdown_link_targets(&body) {
+        // Quoted syntax is not linkage: code fences and inline spans are
+        // stripped before extraction (strip_code_regions).
+        let scannable = strip_code_regions(&body);
+        for target in markdown_link_targets(&scannable) {
             let Some(candidate) = md_link_candidate(&target) else { continue };
             // Resolved against the CONTAINING FILE's directory, not the
             // bundle root — a body link is authored relative to where it
@@ -383,7 +420,7 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
                 ));
             }
         }
-        for target in wiki_link_targets(&body) {
+        for target in wiki_link_targets(&scannable) {
             if !wiki_link_resolves(&target, &md_stems) {
                 warnings.push(finding(
                     rel,

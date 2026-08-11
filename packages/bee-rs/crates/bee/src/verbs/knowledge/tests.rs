@@ -1360,6 +1360,27 @@ use std::time::Instant;
         assert!(report.ok, "a warning alone must not fail un-strict");
     }
 
+    /// Quoted syntax is not linkage: a `[[target]]` or `](x.md)` inside an
+    /// inline backtick span or a fenced code block never feeds the link
+    /// extractors (strip_code_regions).
+    #[test]
+    fn code_quoted_link_syntax_never_warns() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "patterns/quoting.md",
+            Cx::new("quoting").body(
+                "A `[[target]]` form and a `[x](ghost.md)` form are quoted.\n\n```\n[[fenced-ghost]] and [y](fenced-ghost.md)\n```\n\nBut [[real-ghost]] still warns.",
+            ),
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        let wiki = of_code(&report.warnings, "dangling_wiki_link");
+        let md = of_code(&report.warnings, "dangling_md_link");
+        assert_eq!(md.len(), 0, "code-quoted md links must stay silent: {:?}", report.warnings);
+        assert_eq!(wiki.len(), 1, "only the prose wiki link may warn: {:?}", report.warnings);
+        assert!(msg(wiki[0]).contains("real-ghost"), "the prose target must be named: {}", msg(wiki[0]));
+    }
+
     /// Node: 'profile warning: dangling supersedes id; a resolving id stays
     /// silent' (l.300).
     #[test]
