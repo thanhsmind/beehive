@@ -4851,3 +4851,117 @@ use std::time::Instant;
              nothing dispatched; UNWIND FAILED (release: ok; unclaim: boom) — restore by hand: ...:";
         assert_eq!(wave_skip_reason(failed_unwind), "unwind_failed");
     }
+
+    // ── dispatch review delta (hpf-3): a taken claim vs. an untaken one ────
+
+    /// must-have: "the wave never force-unclaims a cell whose claim it did
+    /// not take". `claim_cell_from_flags` can hit its own exotic-shape
+    /// delegate (a truthy, non-array `deps`, handlers_write.rs:915) BEFORE
+    /// it ever mutates the claim — even over a cell ALREADY claimed by a
+    /// live agent. The old wave unwind treated every `Err` alike and
+    /// force-unclaimed unconditionally, bypassing `guard_claim_ownership`
+    /// and handing that other agent's claim back to "open" — a write
+    /// straight through a claim conflict. The fix must leave the foreign
+    /// claim exactly as found and report a real, unwind-free reason.
+    #[test]
+    fn dispatch_wave_never_force_unclaims_a_claim_it_never_took() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        // `deps` truthy but not an array trips the claim door's own
+        // exotic-shape delegate — the SAME trigger a corrupt/foreign-
+        // authored cell record could hit for real — before any claim
+        // mutation, regardless of the cell's own status.
+        let mut c = cell("wu-1", "claimed", "f", json!("bogus"));
+        c["trace"] = json!({"worker": "someone-else"});
+        write_cell_fixture(&root, "wu-1", &c);
+
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
+        assert_eq!(payload["wave"], json!([]), "payload: {payload}");
+        assert_eq!(payload["economics"], json!([]), "payload: {payload}");
+        let skipped = payload["skipped"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(skipped.len(), 1, "payload: {payload}");
+        assert_eq!(skipped[0]["id"], json!("wu-1"), "payload: {payload}");
+        assert_eq!(skipped[0]["reason"], json!("claim_refused"), "payload: {payload}");
+        let detail = skipped[0]["detail"].as_str().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert!(
+            !detail.contains("UNWIND FAILED"),
+            "a benign, never-taken claim must carry no unwind note: {detail}"
+        );
+
+        // The other agent's claim stands exactly as found — never force-
+        // unclaimed by a wave that never took it.
+        let after = read_cell_fixture(&root, "wu-1");
+        assert_eq!(after["status"], json!("claimed"), "payload: {payload}");
+        assert_eq!(after["trace"]["worker"], json!("someone-else"), "payload: {payload}");
+    }
+
+    /// must-have: "a real unwind clears claim, reservations and the worker
+    /// row" — the carried-over P2 item. `unwind_wave_claim` released
+    /// reservations and unclaimed the cell but never removed the
+    /// `workers[]` row `dp-r1` registered for the same claim, leaving a
+    /// `running` row against a cell the unwind just returned to `open`.
+    /// Exercises `claim_and_reserve_for_dispatch` + `unwind_wave_claim`
+    /// directly (both take `root` explicitly, no cwd dependency) — the same
+    /// real claim+register `dispatch wave`'s `prepare_failed` unwind undoes.
+    #[test]
+    fn unwind_wave_claim_clears_the_claim_reservations_and_the_worker_row() {
+        use crate::verbs::drivers::{claim_and_reserve_for_dispatch, unwind_wave_claim};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), "{}").unwrap();
+        // Gate 2 (execution) must read approved for the claim door to admit
+        // this cell at all — the same lane fixture the wave tests above use.
+        lane_with_route(&root, "f");
+        let mut c = cell("uw-1", "open", "f", json!([]));
+        c["files"] = json!(["docs/uw-1.md"]);
+        c["tier"] = json!("generation");
+        write_cell_fixture(&root, "uw-1", &c);
+
+        // A real claim: taken, one file reserved, worker row registered.
+        let outcome = claim_and_reserve_for_dispatch(&root, None, "uw-1", "w-uw-1", None)
+            .expect("the claim door itself must not delegate over a plain, well-formed cell")
+            .expect("a fresh, unreserved cell must not hit a reservation conflict");
+        let (_cell, reserved, worker_registered, registration_error) = outcome;
+        assert!(!reserved.is_empty(), "at least one declared file must have been reserved");
+        assert!(worker_registered, "registration_error: {registration_error:?}");
+        let claimed = read_cell_fixture(&root, "uw-1");
+        assert_eq!(claimed["status"], json!("claimed"), "cell: {claimed}");
+        let state_path = root.join(".bee").join("state.json");
+        let state_before: Value = serde_json::from_str(&std::fs::read_to_string(&state_path).unwrap()).unwrap();
+        let workers_before = state_before["workers"].as_array().unwrap();
+        assert!(
+            workers_before
+                .iter()
+                .any(|w| w["nickname"] == json!("w-uw-1") && w["cell"] == json!("uw-1")),
+            "state before unwind: {state_before}"
+        );
+
+        // Undo it, exactly as `dispatch wave`'s `prepare_failed` unwind
+        // would over its own, still-fresh claim.
+        let note = unwind_wave_claim(&root, None, "w-uw-1", "uw-1");
+        assert!(!note.contains("UNWIND FAILED"), "unwind note: {note}");
+
+        let after = read_cell_fixture(&root, "uw-1");
+        assert_eq!(after["status"], json!("open"), "cell: {after}");
+
+        let state_after: Value = serde_json::from_str(&std::fs::read_to_string(&state_path).unwrap()).unwrap();
+        let workers_after = state_after["workers"].as_array().unwrap();
+        assert!(
+            !workers_after
+                .iter()
+                .any(|w| w["nickname"] == json!("w-uw-1") && w["cell"] == json!("uw-1")),
+            "the worker row must be removed by the unwind: {state_after}"
+        );
+
+        let active = match rsv::list_reservations(root.to_str().unwrap(), true, rsv::now_ms()) {
+            Ok(v) => v,
+            Err(_) => panic!("list_reservations hit an unproven shape"),
+        };
+        assert!(
+            !active.iter().any(|r| matches!(&r.agent, Some(Value::String(s)) if s == "w-uw-1")),
+            "the reservation must be released by the unwind"
+        );
+    }

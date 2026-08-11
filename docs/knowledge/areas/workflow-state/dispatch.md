@@ -24,7 +24,8 @@ record changes.
 ## Behaviors & Operations
 
 **Wave-batch dispatch (workflow-lessons wfl-4, 2026-08-11; scoped and bounded,
-dispatch review P1/P2, 2026-08-12).** `bee dispatch wave --runtime <rt>`
+dispatch review P1/P2, 2026-08-12; unwind claim-taken precision, dispatch
+review delta hpf-3, 2026-08-12).** `bee dispatch wave --runtime <rt>`
 prepares every ready unclaimed cell of the current schedule wave through the
 identical claim+reserve+payload path as per-cell `dispatch prepare --kind cell
 --claim`, under auto worker names (`w-<cell>`). Output `{wave, skipped,
@@ -38,10 +39,16 @@ resolving is a typed refusal, never a silent every-feature grab. `--limit <n>`
 (a positive integer) caps how many cells of the wave are actually claimed —
 the rest stand untouched, not reported — bounding a speculative claim batch to
 what the caller can actually spawn workers for. A claim+reserve that fails
-partway through (an unproven shape, not the door's own typed refusals) is
-unwound best-effort before its cell lands in `skipped`; an unwind that itself
-fails earns its own `unwind_failed` reason rather than folding into
-`reservation_conflict`.
+partway through (an unproven shape, not the door's own typed refusals)
+reports whether the claim door itself ever took the claim: an untaken claim
+(the door's own exotic-shape delegate fires before any claim mutation, even
+over a cell another agent already holds) is never force-unclaimed — it lands
+in `skipped` as `claim_refused` with no unwind note, because there is nothing
+to unwind and forcing one would write straight through a claim conflict. A
+claim the door DID take is unwound best-effort — claim, reservations, AND the
+worker row `dp-r1` registered for it — before its cell lands in `skipped`; an
+unwind that itself fails earns its own `unwind_failed` reason rather than
+folding into `reservation_conflict`.
 
 **Worker Result form (workflow-lessons wfl-1, 2026-08-11).** The rendered
 worker prompt requires a fenced JSON Result form `{outcome, commit, files,
