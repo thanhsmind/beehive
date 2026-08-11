@@ -220,6 +220,34 @@ pub const AGENT_TIER_DEFAULTS_CLAUDE: &[(&str, &str)] =
 
 pub const CODEX_AGENTS_NOTE: &str = "Codex has no per-agent model selection (DEFAULT_MODELS.codex is all-null by design) - tiers are enforced as a read budget + output cap in the worker prompt instead. No agent files are rendered under .agents/ (AO11).";
 
+/// opencode-support oc-14: OpenCode's own per-tier model defaults, mirroring
+/// AGENT_TIER_DEFAULTS_CLAUDE's role but for the free, zero-config
+/// `opencode/*` provider (the only live provider verified on this machine —
+/// opencode-support oc-11/discovery.md). `models.opencode.<slot>` in
+/// `.bee/config.json` overrides a slot exactly like `models.claude.<slot>`
+/// does; unconfigured stands on these baked-in names rather than the
+/// model-guard dispatch default of Null, because these agent files pin a
+/// real model regardless (structural enforcement, plan.md's model-guard
+/// fallback row).
+pub const AGENT_TIER_DEFAULTS_OPENCODE: &[(&str, &str)] = &[
+    ("extraction", "opencode/ling-3.0-tiny-free"),
+    ("generation", "opencode/big-pickle"),
+    ("review", "opencode/nemotron-3-ultra-free"),
+];
+
+/// opencode-support oc-14: the per-agent OpenCode `permission:` deny list —
+/// a capability profile keyed by AGENT NAME, not by tier (unlike the model).
+/// Only `bee-build` may edit; only `bee-build` and `bee-review` may run
+/// `bash`. Every agent denies `task`/`todowrite`/`webfetch`/`websearch`/`lsp`
+/// (mirrors oc-11's hand-authored `.opencode/agent/bee-*.md` baseline,
+/// verified live against opencode 1.18.16's `opencode agent list`).
+pub const AGENT_OPENCODE_PERMISSION_DENY: &[(&str, &[&str])] = &[
+    ("bee-build", &["task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-gather", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-extract", &["edit", "bash", "task", "todowrite", "webfetch", "websearch", "lsp"]),
+    ("bee-review", &["edit", "task", "todowrite", "webfetch", "websearch", "lsp"]),
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;

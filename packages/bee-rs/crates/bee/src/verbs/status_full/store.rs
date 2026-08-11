@@ -445,10 +445,15 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
     }
 }
 
-/// state.mjs DEFAULT_MODELS + normalizeModels. opencode-support oc-13: a
-/// third `opencode` entry joins claude/codex, defaulted null exactly like
-/// codex (no built-in model name — resolved per-agent by the `.opencode/agent/bee-*.md`
-/// `model:` pin instead, per drivers/models.rs's own `default_models`).
+/// state.mjs DEFAULT_MODELS + normalizeModels. opencode-support oc-13/oc-14:
+/// a third `opencode` entry joins claude/codex. Unlike codex (defaulted
+/// null, no built-in model name), opencode DOES carry a built-in default —
+/// the free `opencode/*` provider names `onboard::templates::
+/// AGENT_TIER_DEFAULTS_OPENCODE` bakes into every `.opencode/agent/bee-*.md`
+/// render (oc-14) — because those files pin a real model regardless of
+/// `models.opencode` config (structural model-guard enforcement, per
+/// plan.md's fallback row), not something resolved per dispatch call the way
+/// claude/codex's own model params are.
 pub(crate) fn normalize_models(raw: Option<&Value>) -> JMap {
     let mut claude = JMap::new();
     claude.insert("extraction".into(), json!("haiku"));
@@ -459,9 +464,9 @@ pub(crate) fn normalize_models(raw: Option<&Value>) -> JMap {
     codex.insert("generation".into(), Value::Null);
     codex.insert("review".into(), Value::Null);
     let mut opencode = JMap::new();
-    opencode.insert("extraction".into(), Value::Null);
-    opencode.insert("generation".into(), Value::Null);
-    opencode.insert("review".into(), Value::Null);
+    for (slot, model) in crate::onboard::templates::AGENT_TIER_DEFAULTS_OPENCODE {
+        opencode.insert((*slot).into(), json!(model));
+    }
     let mut out = JMap::new();
     out.insert("claude".into(), Value::Object(claude));
     out.insert("codex".into(), Value::Object(codex));
@@ -857,13 +862,17 @@ pub(crate) fn read_agent_file_model(file: &Path) -> (bool, Option<String>) {
     (true, None)
 }
 
-/// state.mjs validateAgentFilesDrift. opencode-support oc-13: a second
+/// state.mjs validateAgentFilesDrift. opencode-support oc-13/oc-14: a second
 /// runtime root joins `.claude/agents/` — `.opencode/agent/` (singular
-/// "agent", per oc-11's hand-authored `.opencode/agent/bee-*.md` files and
-/// discovery.md's verified on-disk layout), checked against `models.opencode`
-/// instead of `models.claude`. Same three read-only agents on both roots;
-/// `bee-build` carries no tier check on either (AGENT_FILE_TIER's existing
-/// scope, unchanged).
+/// "agent", per discovery.md's verified on-disk layout), checked against
+/// `models.opencode` instead of `models.claude`. Same three read-only agents
+/// on both roots; `bee-build` carries no tier check on either (AGENT_FILE_TIER's
+/// existing scope, unchanged). Before oc-14 the two roots needed different
+/// verdict wording — opencode's files were hand-authored, so "re-run
+/// onboarding" was a promise bee could not keep. oc-14 renders
+/// `.opencode/agent/` from the same template source `.claude/agents/` uses
+/// (`onboard::agents::compute_opencode_agent_file_plan`), so both roots now
+/// share one verdict shape below.
 pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) -> Vec<Problem> {
     const AGENT_FILE_TIER: [(&str, &str); 3] = [
         ("bee-gather", "generation"),
@@ -906,40 +915,24 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
                 Some(Value::Object(o)) => o.get("model").and_then(|m| m.as_str()).map(str::to_string),
                 _ => None,
             };
+            // Both roots are onboarding-rendered now (oc-14), so both carry a
+            // non-null built-in default and share one verdict shape: `None`
+            // only happens when config explicitly opted the slot OUT (a
+            // cli-shaped or literal-null-with-no-fallback override) — a real
+            // "this file should not exist" signal on either runtime.
             match expected {
-                // Only claude carries a non-null built-in default (haiku/
-                // sonnet/opus — normalize_models seeds it unconditionally),
-                // so an unconfigured claude slot resolving to None only
-                // happens when config explicitly opted the slot OUT (a
-                // cli-shaped or literal-null override) — a real "this file
-                // should not exist" signal. opencode has no such default:
-                // its agent files are hand-authored, pinned to a free-tier
-                // model regardless of config (oc-11), so an unconfigured
-                // models.opencode slot is the ORDINARY state, not drift.
-                None if runtime == "claude" => problems.push(Problem {
+                None => problems.push(Problem {
                     code: "agent-file-drift",
                     runtime: None,
                     slot: Some(slot),
                     message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the {slot} slot is now cli-shaped or unconfigured (no model name) — re-run onboarding to remove the stale file."),
                     agent: Some(agent_name),
                 }),
-                None => {}
-                Some(expected) if expected != file_model && runtime == "claude" => problems.push(Problem {
-                    code: "agent-file-drift",
-                    runtime: None,
-                    slot: Some(slot),
-                    message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — re-run onboarding to re-render it."),
-                    agent: Some(agent_name),
-                }),
-                // opencode's agent files are hand-authored (oc-11), not
-                // onboarding-rendered, so "re-run onboarding" would be a
-                // promise bee cannot keep yet — name the fix that actually
-                // applies today instead.
                 Some(expected) if expected != file_model => problems.push(Problem {
                     code: "agent-file-drift",
                     runtime: None,
                     slot: Some(slot),
-                    message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — {rel_prefix}/{agent_name}.md is hand-authored, not onboarding-rendered; update its \"model:\" line by hand or change models.{runtime}.{slot} to match."),
+                    message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — re-run onboarding to re-render it."),
                     agent: Some(agent_name),
                 }),
                 _ => {}

@@ -30,7 +30,7 @@ Nine scripts, wired from one shared catalog across 8 Codex lifecycle events (`.c
 - exits 0 silently if the repo has no `.bee/onboarding.json` (plugin enabled ≠ repo onboarded),
 - checks `.bee/config.json → hooks.<name>` and exits 0 if disabled — that is the six-toggle set below; the three later scripts are not individually toggleable,
 - is wrapped fail-open with crash logging to `.bee/logs/hooks.jsonl`,
-- imports its logic from `.bee/bin/lib/` — the same modules the CLI helpers use, so hook behavior and helper behavior cannot diverge.
+- runs as `bee hook <name>`, a subcommand of the same `.bee/bin/bee` binary the CLI helpers run as, not a separate script — so hook behavior and helper behavior cannot diverge (they are literally the same code).
 
 | # | Hook | Event (matcher) | What it does |
 |---|---|---|---|
@@ -104,40 +104,44 @@ This produces **five rendered-tree roots**, all generated from canonical `skills
 
 `bee dev render-skill-trees`'s `RENDER_RUNTIMES` deliberately stays `["claude", "codex"]` — opencode never gets a `.opencode-plugin/` marketplace root, because no marketplace equivalent exists for it (a NAMED EXCLUSION, not an omission; see plan.md's "Rejected alternatives"). The marker grammar's `MARKER_RUNTIMES` is a strict superset of `RENDER_RUNTIMES` for exactly this reason: an `<!-- bee:only opencode -->` block is valid syntax everywhere, but it is stripped from both trees this pipeline actually writes and only lands when the ONBOARDING SYNC PATH (the table above) renders for `"opencode"`.
 
-Each rendered root is stamped with a `.bee-render.json` provenance sidecar (`{schema:"bee-render/2", target_runtime}`). `source-identity.mjs` classifies any skills root carrying that sidecar as a **rendered projection** and refuses it as an onboarding source for **any** target, own-runtime included — a projection can never become someone else's (or its own) source of truth, closing the loop that would otherwise let a stripped copy silently re-seed itself. Canonical `skills/` is the only valid onboarding source.
+Each rendered root is stamped with a `.bee-render.json` provenance sidecar (`{schema:"bee-render/2", target_runtime}`). `onboard/source.rs`'s `classify_source_kind` — the Rust port of the deleted `lib/source-identity.mjs` — classifies any skills root carrying that sidecar as a **rendered projection** and refuses it as an onboarding source for **any** target, own-runtime included — a projection can never become someone else's (or its own) source of truth, closing the loop that would otherwise let a stripped copy silently re-seed itself. Canonical `skills/` is the only valid onboarding source.
 
 Today only the 5 adapter-split skills carry any marker at all; the other 10 workflow-semantic skills and the always-loaded doctrine layer (`AGENTS.md`, `AGENTS.block.md`) stay deliberately unsplit — identical prose on every runtime — because their content genuinely doesn't differ by runtime. When a cross-runtime contrast is useful for a human reading the docs but isn't itself part of any runtime's operating instructions, it belongs here, in this file, rather than duplicated (untagged) into every projection or shoehorned into a marker block that no runtime actually needs to act on.
 
-## Shared `lib/` — one brain, three belts
+## One binary, three belts
 
 ```
 .bee/bin/
-  bee            ← sole shipped CLI, all 9 command groups
-  lib/
-    state.mjs          ← read/write state.json, gate checks, staleness detection
-    cells.mjs          ← cell schema, cap-requires-verify, lane tiers, ready-set
-    reservations.mjs   ← reserve/release/conflict/sweep (khuym_reservations lineage)
-    guards.mjs         ← secret globs, scout-block dirs, gate-guard path rules
-    inject.mjs         ← context digests (status, patterns, decisions), injection dedup
-plugin hooks/          ← 6 thin wrappers: parse stdin payload → call lib → print/exit
-.opencode/plugins/bee-guard.ts ← the third wrapper: no rule logic in TypeScript,
-                                  every guard decision is a call into
-                                  `.bee/bin/bee hook <name>` (opencode-support D2)
+  bee            ← sole shipped CLI AND the whole hook implementation:
+                    `bee hook <name>` (9 subcommands) and `bee <group> <verb>`
+                    (all 9 command groups) live in the same native Rust
+                    binary. There is no separate `lib/` of `.mjs` modules and
+                    no per-hook wrapper script anymore — that layer was
+                    deleted at the R6 cutover (release_manifest.rs's dropped
+                    `runtime_lib` role, see that file's header).
+packages/bee/hooks/    ← JSON manifests ONLY (claude-hooks.json, hooks.json):
+                          each event's `command` execs
+                          `.bee/bin/bee hook <name>` directly, nothing else.
+.opencode/plugins/bee-guard.ts ← the third belt, and the one genuine
+                                  out-of-process wrapper: no rule logic in
+                                  TypeScript, every guard decision is a call
+                                  into `.bee/bin/bee hook <name>`
+                                  (opencode-support D2)
 ```
 
-Claude/Codex hooks are wrappers around `lib/`; CLI helpers are wrappers around the same `lib/`; `bee-guard.ts` is a wrapper too, just an out-of-process one — it shells out to the same `.bee/bin/bee hook <name>` entry point rather than importing `lib/` in-process (TypeScript vs. the native binary). When a rule changes (say, a new secret glob), every runtime picks it up from one file. This is claudekit's `lib/` extraction pattern applied deliberately instead of retroactively.
+Claude/Codex hooks and the CLI helpers are not wrappers around a shared `lib/` anymore — they ARE the same binary, invoked two different ways (`bee hook <name>` from a JSON manifest's `command` line, `bee <group> <verb>` from a shell or a skill). `bee-guard.ts` is the one genuine wrapper left: an out-of-process shell-out to `.bee/bin/bee hook <name>` rather than an in-process call, because TypeScript cannot link a Rust binary. When a rule changes (say, a new secret glob), every runtime picks it up from the same recompiled binary — the property claudekit's `lib/` extraction pattern was for, kept intact after the Node-era `lib/` it originally named was folded into the binary at the R6 cutover.
 
 ## Onboarding responsibilities (one script, every runtime)
 
 `bee onboard` (with `--apply` after approval):
 
 1. Installs/updates the `AGENTS.md` BEE block (BEE:START/END markers) — bootstraps Codex, OpenCode, and any AGENTS.md-reading tool.
-2. Vendors `.bee/bin/bee` + `lib/` into the repo, removes any retired `bee_*.mjs` shims found there (`RETIRED_HELPERS` pass, D2), writes `.bee/` runtime files and `config.json` (all six hooks default-on, each toggleable).
+2. Vendors `.bee/bin/bee` (the single binary; no separate `lib/` to copy) into the repo, removes any retired `bee_*.mjs` shims found there (`RETIRED_HELPERS` pass, D2 — a pre-R6 upgrade path), writes `.bee/` runtime files and `config.json` (all six hooks default-on, each toggleable).
 3. Claude Code hooks need **no repo install** — they ship with the plugin and self-arm when `.bee/onboarding.json` appears. `--repo-hooks` exists as a fallback that writes them into `.claude/settings.json` for environments that don't load plugin hooks.
 4. Installs `.opencode/skills/` (the onboarding sync path's third target, `repo-opencode`) and `.opencode/plugins/bee-guard.ts` (vendored from this checkout's own installed copy — opencode-support D3, oc-13) — both copy-when-missing-or-drifted, so a settled repo re-applies as a no-op and a hand-edited plugin file is repaired on the next `--apply`, the same idempotency every other vendored artifact already gets.
 5. Verifies drift on later runs: managed block version, helper versions, config keys (khuym's `onboarding.json` managed-versions pattern).
 
-The session-start preamble content is generated from one source (`inject.mjs`) for all three consumers — the plugin hook, the AGENTS.md block text, and `bee status` output — so no runtime can drift apart in what it tells the agent. (gstack's docs-from-code rule, applied to bee's own bootstrap.) OpenCode's own `chat.message`-driven digest (see the enforcement matrix above) is a fourth consumer of the same underlying content, reached through the CLI rather than `inject.mjs` directly.
+The session-start preamble content is generated from one source (`hooks::session_preamble`, the Rust port of the deleted `lib/inject.mjs`) for all three consumers — the plugin hook, the AGENTS.md block text, and `bee status` output — so no runtime can drift apart in what it tells the agent. (gstack's docs-from-code rule, applied to bee's own bootstrap.) OpenCode's own `chat.message`-driven digest (see the enforcement matrix above) is a fourth consumer of the same underlying content, reached through the CLI rather than `hooks::session_preamble` directly.
 
 ## Tier 3: the repo-native playbook (any agent, no plugin)
 
@@ -155,5 +159,5 @@ Degradation ladder, complete: **skills** (Claude Code/Codex with plugin, **OpenC
 ## Testing the skeleton
 
 - Each hook gets a fixture test: feed a recorded stdin payload, assert block/inject/silence (khuym's `test_onboard_khuym.mjs` style, no framework).
-- A parity test asserts that every rule in `guards.mjs`/`cells.mjs` is exercised at the helper level AND through each runtime's own hook/plugin belt — the two-belt guarantee, now a THREE-belt one: `tests/opencode_plugin_contracts.rs` (opencode-support oc-7/oc-9) is that suite's OpenCode leg, authored from zero since the predecessor test named here for Claude/Codex died with the Node runtime (R6) and was never ported before this feature; it derives its tool-registry inventory from the installed `@opencode-ai/plugin` package rather than a hand-floored list, and hard-fails (never silently skips) without a `node` binary on PATH.
+- A parity test asserts that every rule in `hooks::write_guard`/`verbs::cells` (the Rust homes of the deleted `guards.mjs`/`cells.mjs`) is exercised at the helper level AND through each runtime's own hook/plugin belt — the two-belt guarantee, now a THREE-belt one: `tests/opencode_plugin_contracts.rs` (opencode-support oc-7/oc-9) is that suite's OpenCode leg, authored from zero since the predecessor test named here for Claude/Codex died with the Node runtime (R6) and was never ported before this feature; it derives its tool-registry inventory from the installed `@opencode-ai/plugin` package rather than a hand-floored list, and hard-fails (never silently skips) without a `node` binary on PATH.
 - Pressure scenarios for the skill-side contracts (e.g., agent tries to work around a privacy block) live with the hive skill per the Iron Law.

@@ -11,7 +11,7 @@
 // (contract C2), so every item is built with an ordered map in the same
 // order the JS object literal declares.
 
-use super::agents::compute_agent_file_plan;
+use super::agents::{compute_agent_file_plan, compute_opencode_agent_file_plan};
 use super::hooks_wiring as hw;
 use super::merge::{
     agents_block_present, claude_md_imports_agents, extract_agents_block,
@@ -688,6 +688,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
 
     // 5d. bee agent files (config-rendered, AO10-safe flat sync)
     plan.extend(compute_agent_file_plan(engine, repo_root));
+
+    // 5e. OpenCode worker agent files — same source of truth, own frontmatter
+    // shape (opencode-support oc-14, D4).
+    plan.extend(compute_opencode_agent_file_plan(engine, repo_root));
 
     // 6. onboarding.json drift (managed versions)
     let statusline = hw::statusline_opt_in(repo_root);

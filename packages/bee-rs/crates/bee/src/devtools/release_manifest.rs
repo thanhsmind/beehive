@@ -79,6 +79,7 @@ pub(crate) const INVENTORY_ROOTS: &[&str] = &[
     ".claude-plugin/skills",
     ".codex-plugin/plugin.json",
     ".codex-plugin/skills",
+    ".opencode/plugins",
     "expertise",
     "packages/bee",
     "packages/bee/hooks",
@@ -338,6 +339,11 @@ fn enumerate_flat_dir(root: &Path, dir: &Path, role: &str, ext: &str) -> R<Vec<R
 ///   * the hook manifests    packages/bee/hooks/**
 ///   * the plugin identity   the two plugin.json + marketplace.json
 ///   * the installers        scripts/install.sh / .ps1
+///   * the third belt        .opencode/plugins/** (opencode-support oc-14) —
+///     `bee-guard.ts`, vendored into a host by `bee onboard --apply`; without
+///     this root a release that lost the file stayed green on `--check`
+///     while installing nothing, the exact silent-drop the manifest exists
+///     to catch for every other shipped artifact
 ///
 /// DROPPED, with reasons:
 ///   * the vendored Node library under `.bee/bin/lib/` (`runtime_lib`, 38
@@ -388,6 +394,16 @@ fn build_current_records(root: &Path) -> R<Vec<Record>> {
         root,
         &root.join("packages").join("bee").join("hooks"),
         "plugin_hook",
+        &[],
+    )?);
+    // The OpenCode guard plugin (opencode-support D2/oc-14) — the third
+    // enforcement belt. Not a rendered projection like the skills roots
+    // above; a hand-written, hand-vendored TypeScript file, but it ships the
+    // same way everything else in this inventory does.
+    records.extend(enumerate_tree(
+        root,
+        &root.join(".opencode").join("plugins"),
+        "opencode_plugin",
         &[],
     )?);
     for abs in [

@@ -870,6 +870,13 @@
       "packagePath": ".codex-plugin/skills/bee-swarming/SKILL.md"
     },
     {
+      "path": ".opencode/plugins/bee-guard.ts",
+      "sha256": "1a31f5e97618aa52c21b4773839d370172b17c08d41eb63d60740f4d636a9060",
+      "mode": "644",
+      "role": "opencode_plugin",
+      "packagePath": ".opencode/plugins/bee-guard.ts"
+    },
+    {
       "path": "expertise/apis.md",
       "sha256": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
       "mode": "644",

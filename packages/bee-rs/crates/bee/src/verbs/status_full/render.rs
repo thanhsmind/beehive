@@ -314,22 +314,18 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
             format_slot(claude.and_then(|c| vget(c, "extraction"))),
             format_slot(claude.and_then(|c| vget(c, "review"))),
         ));
-        // opencode-support oc-13: only printed when at least one slot is
-        // actually configured — models.opencode has no built-in default
-        // (unlike claude's haiku/sonnet/opus), so an unconfigured repo would
-        // otherwise print an all-null line nobody asked for.
+        // opencode-support oc-13/oc-14: printed unconditionally, same as
+        // claude's line above — opencode now carries a built-in default too
+        // (the free `opencode/*` provider names baked into every rendered
+        // `.opencode/agent/bee-*.md`, oc-14), so an unconfigured repo has a
+        // real answer to print, not an all-null line nobody asked for.
         let opencode = s("models").and_then(|m| vget(m, "opencode"));
-        let opencode_configured = ["generation", "extraction", "review"]
-            .iter()
-            .any(|slot| opt_truthy(opencode.and_then(|o| vget(o, slot))));
-        if opencode_configured {
-            lines.push(format!(
-                "Models (opencode): generation={} extraction={} review={}",
-                format_slot(opencode.and_then(|o| vget(o, "generation"))),
-                format_slot(opencode.and_then(|o| vget(o, "extraction"))),
-                format_slot(opencode.and_then(|o| vget(o, "review"))),
-            ));
-        }
+        lines.push(format!(
+            "Models (opencode): generation={} extraction={} review={}",
+            format_slot(opencode.and_then(|o| vget(o, "generation"))),
+            format_slot(opencode.and_then(|o| vget(o, "extraction"))),
+            format_slot(opencode.and_then(|o| vget(o, "review"))),
+        ));
     }
     {
         let tm = s("tier_mix");

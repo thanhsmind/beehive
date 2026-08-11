@@ -88,7 +88,10 @@ mod plan;
 mod render;
 mod skills;
 mod source;
-mod templates;
+// opencode-support oc-14: pub(crate) so status_full::store's drift check can
+// read AGENT_TIER_DEFAULTS_OPENCODE directly — the same ground truth
+// agents.rs renders from, never a second hand-kept copy of the defaults.
+pub(crate) mod templates;
 mod util;
 
 #[cfg(test)]

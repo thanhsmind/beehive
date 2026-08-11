@@ -13,7 +13,7 @@
 // Only then does the item loop run, and only after IT does onboarding.json
 // get its unconditional rewrite.
 
-use super::agents::{compute_agents_sync_record, resolve_agent_tier_model};
+use super::agents::{compute_agents_sync_record, resolve_agent_tier_model, resolve_opencode_agent_tier_model};
 use super::hooks_wiring as hw;
 use super::merge::{merge_agents_content, merge_gitignore_content};
 use super::migration::{apply_worktree_migration, build_migration_conflict_reason, stranded_json};
@@ -449,6 +449,20 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                 }
             }
             "remove_agent_file" => {
+                let _ = std::fs::remove_file(&target);
+            }
+            "sync_opencode_agent_file" => {
+                let agent = item["agent"].as_str().unwrap_or("");
+                let tier = T::AGENT_TIER_BY_NAME.iter().find(|(n, _)| *n == agent).map(|(_, t)| *t);
+                if let Some(model) = tier.and_then(|t| resolve_opencode_agent_tier_model(repo_root, t)) {
+                    if let Some(rendered) =
+                        super::agents::render_opencode_agent_template(engine, agent, &model)
+                    {
+                        let _ = write_file_atomic(&target, rendered.as_bytes());
+                    }
+                }
+            }
+            "remove_opencode_agent_file" => {
                 let _ = std::fs::remove_file(&target);
             }
             "write_onboarding" => {
