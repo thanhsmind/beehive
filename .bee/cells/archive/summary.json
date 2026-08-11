@@ -348,5 +348,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-11T06:53:42.757Z"
+  },
+  "backlog-anchor": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-11T07:27:44.516Z"
   }
 }
