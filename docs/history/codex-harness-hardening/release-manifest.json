@@ -44,7 +44,7 @@
     },
     {
       "path": ".bee/expertise/documentation.md",
-      "sha256": "595957ca75796645c6c6d23d64f4ca25675b596c2651832f73866940d94a0e5c",
+      "sha256": "7b3cf8afcea9dcb969d2a6965671f0282b53897da9275d09da5686b53f8aca19",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "908343abf54ec2e01cbb8aff36e0e76c516a6951b54352d75cc4c6d48f52e9f9",
+      "sha256": "ffb40d2b7da6cac20344959be5e1b5f917cb082a33bf5ce8b5b43859e4554fe1",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -150,7 +150,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-capturing/references/area-spec.md",
-      "sha256": "5482722f2eacb0283539ef2840aad3188c9786df5b126352b27797c017346670",
+      "sha256": "4bb827c94d9970431208f7fc43f234ab36fc9a46dca1f71a169081da476916fe",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-capturing/references/area-spec.md"
@@ -171,7 +171,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-capturing/SKILL.md",
-      "sha256": "5f67aab6525316111c3e61c5bb2a1440674ab2dddeafadf4afdba13bf2f86f4d",
+      "sha256": "284227dfe3b5ed67a1564cb3351eb4a93b9d3fbb6aabd8eddf632f997f608bb5",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-capturing/SKILL.md"
@@ -507,7 +507,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "e5e3bb3d7d911752222cdad803f9f8a9eab53d67e5b943aa2b42a91b618d71ce",
+      "sha256": "d132011c0fc90a54d23bdcdb68e4700bd16ca22b3c169c4270f9c1771acfd6a1",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -521,7 +521,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-capturing/references/area-spec.md",
-      "sha256": "5482722f2eacb0283539ef2840aad3188c9786df5b126352b27797c017346670",
+      "sha256": "4bb827c94d9970431208f7fc43f234ab36fc9a46dca1f71a169081da476916fe",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-capturing/references/area-spec.md"
@@ -542,7 +542,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-capturing/SKILL.md",
-      "sha256": "5f67aab6525316111c3e61c5bb2a1440674ab2dddeafadf4afdba13bf2f86f4d",
+      "sha256": "284227dfe3b5ed67a1564cb3351eb4a93b9d3fbb6aabd8eddf632f997f608bb5",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-capturing/SKILL.md"
@@ -901,7 +901,7 @@
     },
     {
       "path": "expertise/documentation.md",
-      "sha256": "595957ca75796645c6c6d23d64f4ca25675b596c2651832f73866940d94a0e5c",
+      "sha256": "7b3cf8afcea9dcb969d2a6965671f0282b53897da9275d09da5686b53f8aca19",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -1089,7 +1089,7 @@
     },
     {
       "path": "skills/bee-capturing/references/area-spec.md",
-      "sha256": "5482722f2eacb0283539ef2840aad3188c9786df5b126352b27797c017346670",
+      "sha256": "4bb827c94d9970431208f7fc43f234ab36fc9a46dca1f71a169081da476916fe",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-capturing/references/area-spec.md"
@@ -1110,7 +1110,7 @@
     },
     {
       "path": "skills/bee-capturing/SKILL.md",
-      "sha256": "5f67aab6525316111c3e61c5bb2a1440674ab2dddeafadf4afdba13bf2f86f4d",
+      "sha256": "284227dfe3b5ed67a1564cb3351eb4a93b9d3fbb6aabd8eddf632f997f608bb5",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-capturing/SKILL.md"

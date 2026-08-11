@@ -50,7 +50,9 @@ the answer. What deserves a record at all, and at what grain:
 The bar is the **rebuild test**: given only the spec (its Pointers
 section deleted), a stranger rebuilds the same behavior on another
 stack. One area = one spec, forever — locate before you create, update
-in place, never fork a `-v2`. Outside Pointers, business vocabulary
+in place, never fork a `-v2`. A flow-shaped behavior — states,
+sequence, containment, routing — always gets a Mermaid diagram
+section, never prose alone (`references/area-spec.md` "Diagrams"). Outside Pointers, business vocabulary
 only: no language, framework, class, table, or file name.
 
 Deltas come from evidence — capped cells, verification output, UAT

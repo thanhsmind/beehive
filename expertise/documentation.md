@@ -182,6 +182,36 @@ top, the structure has failed. Write the three most likely questions a
 reader arrives with, then check each is answerable from the headings
 alone.
 
+## Draw what is drawable
+
+When a behavior has a shape — a lifecycle of states, a sequence of
+actors, a containment of parts, a routing of cases — describe it with a
+Mermaid diagram, always, as its own section beside the prose. "Can this
+be drawn?" is a check you run on every behavior you document; when the
+answer is yes, the diagram is not optional polish, it is a section of
+the document with the same standing as a table:
+
+- The diagram carries the same business vocabulary as the prose —
+  node and edge labels use the pinned terms, never code identifiers
+  (those stay in Pointers).
+- Prose states the rule; the diagram shows the shape. Neither
+  substitutes the other: a diagram with no prose leaves the rule
+  ambiguous, prose with no diagram makes the reader rebuild the shape
+  in their head — the exact work the document exists to save.
+- Pick the form by the question it answers: `stateDiagram` for
+  lifecycles, `sequenceDiagram` for who-talks-to-whom, `flowchart` for
+  routing and containment. One diagram answers one question; two
+  questions get two diagrams.
+- A contradicted diagram is replaced in place, like a contradicted
+  line — never left beside its correction, never allowed to rot while
+  the prose moves on. The currency discipline above applies to edges
+  and nodes exactly as it applies to sentences.
+
+The cut test works in reverse here: if adding the diagram would not
+save a rebuilder from getting a transition, an ordering, or an
+ownership wrong, the behavior had no shape worth drawing — do not
+draw a list as a picture.
+
 ## What not to document
 
 Every sentence you write is a sentence someone must maintain and a

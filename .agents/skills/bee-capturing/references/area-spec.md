@@ -157,6 +157,13 @@ belongs in Open Gaps (harvest) or in exploring (new work).>
 <Only in `coverage: partial` specs. One line per unknown: what is unknown, and
 who/what could answer it. Empty section + `coverage: full` = the rebuild bar is met.>
 
+## Diagrams
+
+<Whenever a documented behavior is flow-shaped — states, sequences,
+containment, routing — it is drawn here in Mermaid, always. One diagram per
+question, business vocabulary only. A behavior with no drawable shape: omit,
+never force a list into a picture.>
+
 ## Visuals
 
 <UI areas only. One line per settled screen:
@@ -194,6 +201,15 @@ Deleting this section must not remove any business meaning.>
   observably does; a Rule is the policy behind it. A rule approved but
   not yet shipped is marked "not yet implemented" with a backlog id —
   never written as a Behavior.
+- **Diagrams:** drawable means drawn — when a behavior is flow-shaped
+  (a lifecycle of states, a sequence of actors, a containment of
+  parts, a routing of cases), a Mermaid diagram section is mandatory,
+  not decoration. `stateDiagram` for lifecycles, `sequenceDiagram` for
+  who-talks-to-whom, `flowchart` for routing and containment; labels
+  use the spec's pinned business terms, never code identifiers. A
+  contradicted diagram is replaced in place like a contradicted line.
+  The full craft lives in `.bee/expertise/documentation.md` ("Draw
+  what is drawable").
 - **Visuals:** the snapshot preserves what the spec cannot say — the
   settled *look*. One current image per screen, stable filename,
   replaced in place. Ask the user for a screenshot when you cannot
