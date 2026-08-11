@@ -30,6 +30,7 @@ pub mod state_group;
 pub mod status_brief;
 pub mod status_full;
 pub mod test_runner;
+pub mod timings;
 pub mod tmp_group;
 pub mod workflow_store; // library module (no try_native) — never probed below
 pub mod workspace_store; // library module (no try_native) — never probed below
@@ -58,6 +59,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = test_runner::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = timings::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = reservations::try_native(args, t0) {

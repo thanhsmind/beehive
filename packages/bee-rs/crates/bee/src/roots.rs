@@ -88,6 +88,9 @@
 //     `resolve_store_root` would there).
 //   * `test` (verbs/test_runner.rs) — config read, .bee/logs write, and the
 //     child process's cwd, which is the store root in Node too.
+//   * `timings report` (verbs/timings.rs) — reads only
+//     .bee/logs/timings.jsonl (data-plane telemetry); writes nothing but
+//     its own record_timing self-line.
 //
 // NARROW — `resolve_store_root`: served in an ordinary checkout and in an
 // UNGRANTED worktree (identical directories), REFUSED in a granted one:
