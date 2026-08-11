@@ -112,7 +112,12 @@ event without the identity is judged exactly as before. **Presentation** — the
 lane with its phase, gates, and bound sessions; the session preamble, given a
 bound session, shows that lane's view plus a one-line count of other active
 lanes; the two lifecycle guardrails (mid-work warning, session-close warning)
-judge the acting session's own lane. What each actor observes in a zero-lane
+judge the acting session's own lane. The session-close mid-phase warning
+names all THREE sanctioned exits since revision-deadlock-visibility cell
+rdv-2 (2026-08-11, PBI p-808487c4): finish and cap the work; write the
+handoff record and release reservations; or record a capture stub for what
+settled (decision 0017's road) and close cleanly — the third had been
+defined by doctrine but omitted from the warning's text. What each actor observes in a zero-lane
 repo: byte-identical output everywhere — the entire migration is invisible
 until a lane exists.
 

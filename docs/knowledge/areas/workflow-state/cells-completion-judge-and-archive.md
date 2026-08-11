@@ -34,7 +34,15 @@ Finishing a unit is a door, not a declaration. Three guards stand at it: proof
 that a behavior change fixed something real, a structured verdict from a judge
 whose independence is stamped honestly rather than assumed, and — for the unit
 that turns out not to have been finished after all — a reopen that takes its
-stale evidence away with it. The archive transaction sits here too, because it
+stale evidence away with it. A reopen is VISIBLE downstream since
+revision-deadlock-visibility cell rdv-1 (2026-08-11, friction row 618): a
+dependent unit's claim refused over an unmet dep that is open BECAUSE a
+NEEDS_REVISION verdict reopened it names that dep, quotes the verdict, and
+states both sanctioned roads — claim and re-cap the reopened dep first, or
+amend the dependent's declared dependencies with a recorded reason — where
+the generic unmet-deps text used to read as a permanent deadlock. The
+dependency law itself is unchanged: capped is still required, nothing is
+claimable-through. The archive transaction sits here too, because it
 is the other way a unit's record moves without a mutator having asked it to.
 
 ## Behaviors & Operations
