@@ -183,7 +183,14 @@ use std::process::ExitCode;
         // numeric-aware id sort: w-2 before w-10
         assert!(text.contains("Claimed-but-uncapped cells: w-2, w-10 (worker-b)."));
         assert!(text.contains("Active reservations: alpha -> src/api (cell w-2)."));
-        assert!(text.ends_with("resume cleanly."));
+        // three sanctioned exits: finish-and-cap, HANDOFF.json + release, or a
+        // decision-0017 capture stub (p-808487c4) — the third was missing.
+        assert!(text.contains(
+            "Either finish and cap the work, write .bee/HANDOFF.json and release reservations \
+so the next session can resume cleanly, or record a capture stub for what settled \
+(bee capture add) and close cleanly."
+        ));
+        assert!(text.ends_with("close cleanly."));
     }
 
     #[test]
