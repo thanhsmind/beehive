@@ -123,7 +123,7 @@
     },
     {
       "path": ".claude-plugin/plugin.json",
-      "sha256": "ac4121422bc08e3fd0a54990c72d8d5431cad06f520c535a34036f7d39ee1141",
+      "sha256": "677ec5b08a8d937be6fc77a43f50786018a77e74a6f08da48ab814b5e8108f7d",
       "mode": "644",
       "role": "plugin_manifest",
       "packagePath": ".claude-plugin/plugin.json"
@@ -494,7 +494,7 @@
     },
     {
       "path": ".codex-plugin/plugin.json",
-      "sha256": "73fcd765030fbb123193022ae242242e28fdbacf5958fdc4ce2c87e8578df8eb",
+      "sha256": "5308a84a91708e9d83c0df32e3142fdae8b6680bc52c6df675f4b6cd905f7b27",
       "mode": "644",
       "role": "plugin_manifest",
       "packagePath": ".codex-plugin/plugin.json"
