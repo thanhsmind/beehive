@@ -28,28 +28,28 @@
   "deps": [
     "oc-6"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": "Authored opencode_plugin_contracts.rs: fixture belt over the real bee-guard.ts (deny/allow/crash/missing for all 9 blocking mapped rows, never-throw for every advisory surface) plus a three-belt parity test deriving the guard-rule inventory from the checked-in hook manifests.",
+    "worker": "oc-suite-fix",
+    "outcome": "Re-verified after remediation by oc-9 (skip fails closed, payloads asserted) and oc-10 (the gate's first catch closed)",
     "files_changed": [
-      "docs/history/opencode-support/discovery.md",
-      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+      "docs/history/opencode-support/discovery.md"
     ],
     "deviations": [],
     "friction": null,
-    "capped_at": "2026-08-11T15:32:43.752Z",
+    "capped_at": "2026-08-11T19:05:54.145Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null,
-    "claimed_at": null,
-    "commit_pending": "worktree-local commit 351daca9 not visible to trailer lookback from this checkout, per orchestrator environment note",
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T19:05:42.233Z",
+    "commit_pending": "--json",
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-11T15:32:30.879Z",
+    "ran_at": "2026-08-11T19:05:42.241Z",
     "semantic_judge": [
       {
         "schema": "judge-verdict/1",
@@ -83,6 +83,29 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-08-11T18:47:21.808Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "remediated",
+            "status": "PASS",
+            "evidence": "The false-green paths this cell's verdict named were closed by oc-9: a node-incapable environment now fails by default and only degrades to a named SKIP behind an explicit opt-out, and each mapped row asserts the exact payload bee receives"
+          },
+          {
+            "id": "regression-held",
+            "status": "PASS",
+            "evidence": "The suite's own registry gate immediately caught a real unmapped tool (lsp), closed by oc-10; suite green at feature close"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T19:04:53.360Z"
       }
     ],
     "reopened_for_rework": {

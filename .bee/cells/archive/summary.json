@@ -403,5 +403,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-11T15:32:44.062Z"
+  },
+  "opencode-support": {
+    "capped": 15,
+    "dropped": 0,
+    "archived_at": "2026-08-11T19:07:00.819Z"
   }
 }

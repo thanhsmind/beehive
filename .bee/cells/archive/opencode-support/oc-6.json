@@ -28,28 +28,28 @@
   "deps": [
     "oc-3"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": "Extended bee-guard.ts to the full guard-hook mapping table (model-guard on task, read-shaped tools through write-guard, four advisory surfaces), with live deny proofs and named payload-contract gaps recorded in discovery.md",
+    "worker": "oc-verdict-fix",
+    "outcome": "Re-verified after remediation by oc-8 (exit-0 repair and ask honored per D6) and oc-9 (fixtures assert those paths)",
     "files_changed": [
       ".opencode/plugins/bee-guard.ts",
       "docs/history/opencode-support/discovery.md"
     ],
     "deviations": [],
     "friction": null,
-    "capped_at": "2026-08-11T15:15:42.927Z",
+    "capped_at": "2026-08-11T19:05:42.224Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null,
-    "claimed_at": null,
-    "commit_pending": "worktree-local commit 3b97bd85 not visible to main-worktree trailer lookback",
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T19:04:40.634Z",
+    "commit_pending": "--json",
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-11T15:15:30.988Z",
+    "ran_at": "2026-08-11T19:05:30.352Z",
     "semantic_judge": [
       {
         "schema": "judge-verdict/1",
@@ -78,6 +78,29 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-08-11T18:47:21.804Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "remediated",
+            "status": "PASS",
+            "evidence": "The dropped exit-0 verdicts this cell's verdict named were honored by oc-8 per decision D6 — updatedInput lands on output.args, permissionDecision ask throws with bee's reason, unparseable verdict JSON throws — and the advisory message-id dereference was wrapped in the same cell"
+          },
+          {
+            "id": "regression-held",
+            "status": "PASS",
+            "evidence": "oc-9's fixtures assert the repair, ask, and unparseable paths; suite green at feature close"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T19:04:40.640Z"
       }
     ],
     "reopened_for_rework": {

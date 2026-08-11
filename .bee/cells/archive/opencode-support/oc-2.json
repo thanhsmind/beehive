@@ -27,28 +27,28 @@
   "deps": [
     "oc-1"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": "Hand-wrote the throw-blocking OpenCode write-guard plugin and proved deny/allow/fail-closed/skills/AGENTS.md live in this checkout",
+    "worker": "oc-lsp-fix",
+    "outcome": "Re-verified after remediation by oc-3 (apply_patch mapped) and oc-9 (registry gate holds it shut)",
     "files_changed": [
       ".opencode/plugins/bee-guard.ts",
       "docs/history/opencode-support/discovery.md"
     ],
     "deviations": [],
     "friction": null,
-    "capped_at": "2026-08-11T14:07:29.360Z",
+    "capped_at": "2026-08-11T19:05:30.338Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null,
-    "claimed_at": null,
-    "commit_pending": "worktree-local commit c288e2ba not visible to the trailer lookback from the store's HEAD (same class as oc-1)",
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T19:04:28.802Z",
+    "commit_pending": "--json",
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-11T14:07:17.585Z",
+    "ran_at": "2026-08-11T19:05:17.665Z",
     "semantic_judge": [
       {
         "schema": "judge-verdict/1",
@@ -77,6 +77,29 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-08-11T18:47:21.777Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "remediated",
+            "status": "PASS",
+            "evidence": "The apply_patch bypass this cell's verdict named was closed by oc-3 (case apply_patch mapped onto bee's patch key) and is now held shut by oc-9's registry-derived coverage gate, which fails by name when a registered write- or read-capable tool has no mapping"
+          },
+          {
+            "id": "regression-held",
+            "status": "PASS",
+            "evidence": "cargo test --release green at feature close (1579 passed, 8 ignored), including the tool-registry gate"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T19:04:28.823Z"
       }
     ],
     "reopened_for_rework": {
