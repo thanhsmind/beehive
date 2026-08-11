@@ -33,10 +33,14 @@ cells up, state the one-line concurrency plan before dispatching.
 1. `bee cells schedule --json` sets dispatch order — override only with a
    stated reason. Overlapping-file cells are fixed by scope or
    reservations, never by "spawn both carefully".
-2. `bee dispatch wave --runtime <rt>` prepares the WHOLE current wave in
-   one call — claim, reserve, and payload per ready cell, refusals landing
-   in `skipped` with a typed reason instead of aborting the batch. One
-   cell, or a cell needing its own worker name, takes
+2. `bee dispatch wave --runtime <rt> --feature <f>` prepares the current
+   wave of one feature in one call — claim, reserve, and payload per
+   ready cell, refusals landing in `skipped` with a typed reason instead
+   of aborting the batch (`--feature` omitted only resolves from a bound
+   session lane or the default record's own feature; nothing resolving is
+   a typed refusal, never an every-feature grab — pass `--limit <n>` to
+   bound how many cells of the wave are claimed). One cell, or a cell
+   needing its own worker name, takes
    `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
    instead. Judge and record the model tier first (`bee cells tier`;
    rubric: `references/swarming-reference.md`).

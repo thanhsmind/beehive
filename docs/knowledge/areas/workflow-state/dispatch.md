@@ -23,13 +23,25 @@ record changes.
 
 ## Behaviors & Operations
 
-**Wave-batch dispatch (workflow-lessons wfl-4, 2026-08-11).** `bee dispatch
-wave --runtime <rt>` prepares every ready unclaimed cell of the current
-schedule wave through the identical claim+reserve+payload path as per-cell
-`dispatch prepare --kind cell --claim`, under auto worker names (`w-<cell>`).
-Output `{wave, skipped, economics}`; one refusal (foreign claim, reservation
-conflict) lands its cell in `skipped` with a typed reason and never aborts the
-batch. Per-cell prepare stays the fallback and the single-cell path.
+**Wave-batch dispatch (workflow-lessons wfl-4, 2026-08-11; scoped and bounded,
+dispatch review P1/P2, 2026-08-12).** `bee dispatch wave --runtime <rt>`
+prepares every ready unclaimed cell of the current schedule wave through the
+identical claim+reserve+payload path as per-cell `dispatch prepare --kind cell
+--claim`, under auto worker names (`w-<cell>`). Output `{wave, skipped,
+economics}`; one refusal (foreign claim, reservation conflict) lands its cell
+in `skipped` with a typed reason and never aborts the batch. Per-cell prepare
+stays the fallback and the single-cell path. This door mutates the shared
+control plane, so — unlike its read-only sibling `cells schedule` — it always
+scopes to exactly ONE feature: an explicit `--feature`, else the calling
+session's bound lane, else the default record's own `feature`; nothing
+resolving is a typed refusal, never a silent every-feature grab. `--limit <n>`
+(a positive integer) caps how many cells of the wave are actually claimed —
+the rest stand untouched, not reported — bounding a speculative claim batch to
+what the caller can actually spawn workers for. A claim+reserve that fails
+partway through (an unproven shape, not the door's own typed refusals) is
+unwound best-effort before its cell lands in `skipped`; an unwind that itself
+fails earns its own `unwind_failed` reason rather than folding into
+`reservation_conflict`.
 
 **Worker Result form (workflow-lessons wfl-1, 2026-08-11).** The rendered
 worker prompt requires a fenced JSON Result form `{outcome, commit, files,

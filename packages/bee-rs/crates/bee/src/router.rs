@@ -77,8 +77,9 @@ pub const PORTED: &[&str] = &[
     // R3 wave 3
     "close (incl. --dry-run; lane and non-lane features alike)",
     "dispatch prepare (all kinds; --claim still delegated)",
-    "dispatch wave --runtime <claude|codex> [--feature F] [--session-id S] \
-     (the current schedule wave, claimed + reserved + prepared in one call)",
+    "dispatch wave --runtime <claude|codex> [--feature F] [--limit N] [--session-id S] \
+     (the current schedule wave, claimed + reserved + prepared in one call, scoped to \
+     one resolved feature; --limit bounds how many cells are claimed)",
     "worktree list|register|unregister",
     // R4 dev surface
     "onboard [--repo-root R] [--apply] [--json] [--repo-hooks] [--plugin-source] \

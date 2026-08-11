@@ -35,6 +35,14 @@ use std::time::Instant;
         std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify_pretty(body)).unwrap();
     }
 
+    fn read_cell_fixture(root: &Path, id: &str) -> Value {
+        match read_json(&cells_dir(root).join(format!("{id}.json"))) {
+            ReadJson::Parsed(v) => v,
+            ReadJson::Missing => panic!("cell {id} fixture missing"),
+            ReadJson::Corrupt => panic!("cell {id} fixture corrupt"),
+        }
+    }
+
     fn cell(id: &str, status: &str, feature: &str, deps: Value) -> Value {
         json!({
             "id": id,
@@ -4611,12 +4619,18 @@ use std::time::Instant;
 
     /// Runs ONLY as a child of the tests below — drives the REAL `bee
     /// dispatch wave --runtime claude --json` CLI door over whatever cells
-    /// are on disk at its cwd.
+    /// are on disk at its cwd, plus whatever extra argv
+    /// `wfl4_dispatch_wave_run` relayed through `WFL4_WAVE_ARGS` (space-
+    /// joined; every caller's own tokens are plain flag/value pairs with no
+    /// embedded spaces, so a naive split is exact here).
     #[test]
     #[ignore = "spawned by the dispatch_wave_* tests"]
     fn wfl4_dispatch_wave_child() {
-        let (flags, use_json) =
-            rsv::parse_flags(&["--runtime", "claude", "--json"]).expect("well-formed fixture argv");
+        let extra = std::env::var("WFL4_WAVE_ARGS").unwrap_or_default();
+        let extra_toks: Vec<&str> = extra.split(' ').filter(|t| !t.is_empty()).collect();
+        let mut argv: Vec<&str> = vec!["--runtime", "claude", "--json"];
+        argv.extend(extra_toks);
+        let (flags, use_json) = rsv::parse_flags(&argv).expect("well-formed fixture argv");
         crate::verbs::drivers::run_dispatch_wave(flags, use_json, Instant::now());
     }
 
@@ -4634,18 +4648,23 @@ use std::time::Instant;
         root
     }
 
-    /// Spawns `wfl4_dispatch_wave_child` with `root` as its cwd and returns
-    /// the parsed `{wave, skipped, economics}` payload — sliced out of the
-    /// raw stdout by its outermost braces (the libtest banner surrounds it;
-    /// `--nocapture` is what makes a PASSING test's own stdout visible at
-    /// all), the same tolerant slice `dispatch_prepare_claim_payload_pins_
+    /// Spawns `wfl4_dispatch_wave_child` with `root` as its cwd and `extra`
+    /// relayed as additional argv (past the fixed `--runtime claude --json`)
+    /// via `WFL4_WAVE_ARGS`, and returns the parsed payload — sliced out of
+    /// the raw stdout by its outermost braces (the libtest banner surrounds
+    /// it; `--nocapture` is what makes a PASSING test's own stdout visible
+    /// at all), the same tolerant slice `dispatch_prepare_claim_payload_pins_
     /// worker_registered_true` (drivers/tests.rs) uses for the identical
-    /// seam.
-    fn wfl4_dispatch_wave_run(root: &Path) -> Value {
+    /// seam. A refusal's `{"error": ...}` envelope slices the same way, so
+    /// this same helper covers both the success and refusal shapes.
+    fn wfl4_dispatch_wave_run(root: &Path, extra: &[&str]) -> Value {
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", DISPATCH_WAVE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
         cmd.current_dir(root);
+        if !extra.is_empty() {
+            cmd.env("WFL4_WAVE_ARGS", extra.join(" "));
+        }
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
         assert!(
@@ -4680,7 +4699,7 @@ use std::time::Instant;
         b["tier"] = json!("generation");
         write_cell_fixture(&root, "wa-2", &b);
 
-        let payload = wfl4_dispatch_wave_run(&root);
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
         let wave = payload["wave"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
         assert_eq!(wave.len(), 2, "payload: {payload}");
         assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
@@ -4711,7 +4730,7 @@ use std::time::Instant;
         c["trace"] = json!({"worker": "someone-else"});
         write_cell_fixture(&root, "wb-1", &c);
 
-        let payload = wfl4_dispatch_wave_run(&root);
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
         assert_eq!(payload["wave"], json!([]), "payload: {payload}");
         assert_eq!(payload["economics"], json!([]), "payload: {payload}");
         let skipped = payload["skipped"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
@@ -4731,6 +4750,104 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = wfl4_wave_root(&tmp, "{}");
 
-        let payload = wfl4_dispatch_wave_run(&root);
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
         assert_eq!(payload, json!({"wave": [], "skipped": [], "economics": []}));
+    }
+
+    // ══ dispatch review P1 — scope to one feature, bound the batch ═════════
+
+    /// must-have: "no resolvable feature is a typed refusal, never a silent
+    /// all-features grab" — no `--feature`, no session lane binding, and no
+    /// default-record `feature` leaves nothing to resolve; the door refuses
+    /// by name rather than falling back to `cells schedule`'s own
+    /// every-feature default.
+    #[test]
+    fn dispatch_wave_refuses_when_no_feature_resolves() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, "{}");
+
+        let payload = wfl4_dispatch_wave_run(&root, &[]);
+        let error = payload["error"].as_str().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert!(error.contains("no feature resolved"), "payload: {payload}");
+        assert!(error.contains("--feature"), "payload: {payload}");
+    }
+
+    /// must-have: "a wave never claims a cell outside the resolved feature"
+    /// — two features each have a ready, disjoint cell; `--feature f` claims
+    /// only `f`'s cell, and `g`'s cell never appears in `wave`, `skipped`,
+    /// or `economics`.
+    #[test]
+    fn dispatch_wave_never_spans_a_second_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        lane_with_route(&root, "g");
+        let mut f1 = cell("wc-1", "open", "f", json!([]));
+        f1["files"] = json!(["docs/wc-1.md"]);
+        f1["tier"] = json!("generation");
+        write_cell_fixture(&root, "wc-1", &f1);
+        let mut g1 = cell("wg-1", "open", "g", json!([]));
+        g1["files"] = json!(["docs/wg-1.md"]);
+        g1["tier"] = json!("generation");
+        write_cell_fixture(&root, "wg-1", &g1);
+
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
+        let wave = payload["wave"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(wave.len(), 1, "payload: {payload}");
+        assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
+        let economics = payload["economics"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        let ids: Vec<&str> = economics.iter().map(|e| e["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, vec!["wc-1"], "payload: {payload}");
+        // g-1 stands untouched — still open, never claimed by this wave.
+        let g_after = read_cell_fixture(&root, "wg-1");
+        assert_eq!(g_after["status"], json!("open"), "payload: {payload}");
+    }
+
+    /// must-have: "--limit bounds the claims" — two disjoint ready cells of
+    /// the same feature, `--limit 1` claims exactly one and leaves the other
+    /// untouched (open, unclaimed, absent from every returned array) rather
+    /// than reporting it `skipped`.
+    #[test]
+    fn dispatch_wave_limit_caps_the_claims() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        let mut a = cell("wl-1", "open", "f", json!([]));
+        a["files"] = json!(["docs/wl-1.md"]);
+        a["tier"] = json!("generation");
+        write_cell_fixture(&root, "wl-1", &a);
+        let mut b = cell("wl-2", "open", "f", json!([]));
+        b["files"] = json!(["docs/wl-2.md"]);
+        b["tier"] = json!("generation");
+        write_cell_fixture(&root, "wl-2", &b);
+
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f", "--limit", "1"]);
+        let wave = payload["wave"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(wave.len(), 1, "payload: {payload}");
+        assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
+        // Exactly one of the two ready cells stands claimed; the other was
+        // never attempted at all (still open).
+        let economics = payload["economics"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(economics.len(), 1, "payload: {payload}");
+        let claimed_id = economics[0]["id"].as_str().unwrap_or_else(|| panic!("payload: {payload}"));
+        let untouched = if claimed_id == "wl-1" { "wl-2" } else { "wl-1" };
+        let untouched_after = read_cell_fixture(&root, untouched);
+        assert_eq!(untouched_after["status"], json!("open"), "payload: {payload}");
+    }
+
+    /// must-have: `wave_skip_reason` names an unwind failure by its own
+    /// reason rather than folding it back into `reservation_conflict` —
+    /// dispatch review P2. `claim_and_reserve_for_dispatch`'s own
+    /// reservation-conflict message already embeds its unwind note in the
+    /// SAME string, so the "UNWIND FAILED" check must win over the
+    /// "reservation conflict" substring it always co-occurs with here.
+    #[test]
+    fn wave_skip_reason_flags_a_failed_unwind_before_a_reservation_conflict() {
+        use crate::verbs::drivers::wave_skip_reason;
+        let ok_conflict = "dispatch prepare --claim: reservation conflict on cell \"x\" — \
+             nothing dispatched; the claim was unwound and state restored as found:";
+        assert_eq!(wave_skip_reason(ok_conflict), "reservation_conflict");
+        let failed_unwind = "dispatch prepare --claim: reservation conflict on cell \"x\" — \
+             nothing dispatched; UNWIND FAILED (release: ok; unclaim: boom) — restore by hand: ...:";
+        assert_eq!(wave_skip_reason(failed_unwind), "unwind_failed");
     }
