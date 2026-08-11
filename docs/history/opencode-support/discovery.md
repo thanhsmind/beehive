@@ -555,7 +555,7 @@ path (oc-8)".)
 
 | bee hook | OpenCode surface | Failure policy | Status |
 |---|---|---|---|
-| write-guard | `tool.execute.before` on `write`/`edit`/`bash`/`apply_patch` (oc-2/oc-3) **+ new:** `read`/`grep`/`glob`/`question` | BLOCKING — throw on deny **or** `permissionDecision: "ask"`; apply an exit-0 `updatedInput` repair onto `output.args`; throw on unparseable exit-0 verdict JSON; fail closed on any OpenCode-side spawn failure (oc-8) | Live-proved: read-size deny (below), AskUserQuestion repair-applied/ask-throws/unparseable-throws (oc-8, below); write/edit/bash/apply_patch already proved in oc-2/oc-3 |
+| write-guard | `tool.execute.before` on `write`/`edit`/`bash`/`apply_patch` (oc-2/oc-3) **+ new:** `read`/`grep`/`glob`/`question` **+ new:** `lsp`/`list` (oc-10) | BLOCKING — throw on deny **or** `permissionDecision: "ask"`; apply an exit-0 `updatedInput` repair onto `output.args`; throw on unparseable exit-0 verdict JSON; fail closed on any OpenCode-side spawn failure (oc-8) | Live-proved: read-size deny (below), AskUserQuestion repair-applied/ask-throws/unparseable-throws (oc-8, below); write/edit/bash/apply_patch already proved in oc-2/oc-3 |
 | model-guard | `tool.execute.before` on `task` | BLOCKING — same policy as write-guard, including the exit-0 `updatedInput`/`ask`/unparseable handling (oc-8) | Live-proved: Task deny (below); dispatch-label/`subagent_type` repair path shares runBlockingHook's proof above |
 | session-init | `chat.message`, ONCE per `sessionID` (in-memory `Set`, process-lifetime only) | ADVISORY — swallow + log, never throws | Live-proved: no crash across the whole session; digest text observed reaching the model (AGENTS.md-preamble-style content, distinct from AGENTS.md's own auto-load) |
 | prompt-context | `chat.message`, every message | ADVISORY — swallow + log, never throws | Live-proved: same run, no crash |
@@ -1103,34 +1103,65 @@ mapToolCall, and not documented on its own line as a named gap in
 docs/history/opencode-support/discovery.md (filepath_evidence=Some(true))
 ```
 
-**`lsp` — NAMED GAP.** The installed `opencode-ai@1.18.16` binary registers
-an `lsp` tool (`V("lsp",s.gen(function*(){...filePath:n...`, asking
-permission `"lsp"`) that returns file content (via LSP operations —
+**`lsp` — RESOLVED (oc-10).** The installed `opencode-ai@1.18.16` binary
+registers an `lsp` tool (`V("lsp",s.gen(function*(){...filePath:n...`,
+asking permission `"lsp"`) that returns file content (via LSP operations —
 `hover`/`documentSymbol`/etc.) for an arbitrary caller-supplied `filePath`,
 exactly the read-capable shape `read`/`grep`/`glob` already route through
-write-guard — but `mapToolCall`'s `default: return null` arm lets it through
-unguarded today, the SAME defect class `apply_patch` was before oc-3. Not
-fixed in this cell (`.opencode/plugins/bee-guard.ts` is out of scope here);
-a follow-up cell should add an `"lsp"` case to `mapToolCall` (routing to
-write-guard's `Read` shape, translating `filePath` -> `file_path`) the same
-way oc-3 added `apply_patch`.
+write-guard — `mapToolCall`'s `default: return null` arm used to let it
+through unguarded, the SAME defect class `apply_patch` was before oc-3.
+Fixed: `mapToolCall` now carries an `"lsp"` case routing to write-guard's
+`Read` shape, translating `filePath` -> `file_path`, the same way oc-3
+added `apply_patch`. See "Discovery: lsp and list mapped through
+write-guard (oc-10)" below for the mapping and verification.
 
-**`list` — named gap, NOT mechanically derivable by this test.** The S3
-judge's finding also named a second unmapped registered tool, `list`
-(discovery.md's oc-3 tool-registry table already shows 13 tools from a LIVE
-`tool.definition` probe, which oc-9's finding calls incomplete). oc-9's own
-investigation could not locate any static registration anchor for a `list`
-tool anywhere in the installed binary's text — the judge's evidence for it
-was almost certainly a live probe (oc-1/oc-3's OTHER, non-static evidence
-source: a scratch project with a `tool.definition`-hooking plugin run
-against a real `opencode run` session), which a `cargo test` cannot
-reproduce deterministically offline (no model access, no network). Recorded
-here as a real, disclosed limit — `derive_opencode_tool_registry` does not
-claim coverage for `list`, and the new test's silence about it is NOT proof
-it is safe. A follow-up cell with live-probe evidence (mirroring oc-3's
-"Live probe" + "Static binary read" two-source method) should confirm its
-field shape and either add it to `mapToolCall` or replace this paragraph
-with a binary-derivable anchor.
+**`list` — RESOLVED (oc-10); still NOT mechanically derivable by
+`every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_
+as_a_gap`.** The S3 judge's finding also named a second unmapped registered
+tool, `list` (discovery.md's oc-3 tool-registry table already shows 13
+tools from a LIVE `tool.definition` probe, which oc-9's finding calls
+incomplete). oc-9's own investigation could not locate any static
+`V("list", ...)` registration anchor for a `list` tool anywhere in the
+installed binary's text — the judge's evidence for it was almost certainly
+a live probe (oc-1/oc-3's OTHER, non-static evidence source: a scratch
+project with a `tool.definition`-hooking plugin run against a real
+`opencode run` session), which a `cargo test` cannot reproduce
+deterministically offline (no model access, no network).
+
+oc-10 instead confirmed `list`'s existence and field shape from two OTHER
+independent static-text anchors in the same installed binary (neither is
+the `V("list", ...)` registration-body pattern `lsp`/`apply_patch` use, so
+this does not give `derive_opencode_tool_registry` a mechanical anchor to
+add — the test's silence about `list` remains a real, disclosed limit, not
+a fixed one):
+
+- the TUI's own tool-title-rendering code, which switches on the same tool
+  id space as `read`/`glob`/`grep`/`bash`/`edit`/`task`/`webfetch`/
+  `websearch` and includes `list`:
+  `` if(a==="list"){let V=B.path,q=typeof V==="string"?V:"";return{icon:"→",title:`List ${...` `` —
+  confirming both that `list` is a real registered tool (grouped with the
+  other read-shaped tools in the same rendering switch, not a coincidental
+  string) and that its argument field is `path`, not `filePath`;
+- a second, independent UI-string function,
+  `` case"list":return{icon:"bullet-list",title:r.t("ui.tool.list"),subtitle:t.path?rn(t.path):void 0} ``,
+  confirming `path` again from an unrelated code path;
+- the server's HTTP API surface, which registers a matching route:
+  `` C.get("list",yg.list,{query:B$,success:A(g.Array(M8),"Files and directories")}).annotateMerge(... identifier:"file.list",summary:"List files",description:"List files and directories in a specified path." ``,
+  confirming `list`'s purpose (directory-entry listing, not raw file
+  content) and giving a bee-shape precedent: the same directory-listing
+  shape `glob` already routes through write-guard.
+
+Fixed: `mapToolCall` now carries a `"list"` case routing to write-guard's
+`Glob` shape (`path` -> `path`, no rename needed — matching `grep`/`glob`'s
+own field name). See "Discovery: lsp and list mapped through write-guard
+(oc-10)" below for the mapping and verification. The remaining gap —
+`derive_opencode_tool_registry` still cannot mechanically confirm `list` on
+its own — is now moot for THIS suite's pass/fail (the tool is mapped, so
+the registry-gate test's `mapped.contains(id)` branch short-circuits before
+ever reaching the named-gap check for `list`), but is recorded here in case
+a future `opencode-ai` release changes `list`'s shape: this mapping rests
+on UI-string/HTTP-API evidence, not a `V("list", ...)` registration-body
+anchor.
 
 ### F5 — the named-gap check is now scoped to the rule's own line
 

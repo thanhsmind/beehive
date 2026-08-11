@@ -615,6 +615,21 @@ fn opencode_call_fixture(tool: &str) -> (Value, Value, &'static str) {
             });
             (t.clone(), t, "Task")
         }
+        "lsp" => (
+            // operation/line/character are real args OpenCode's lsp tool
+            // sends but mapToolCall does not forward (bee-guard.ts's "lsp"
+            // case comment) — kept here so this row also proves the
+            // translation drops them rather than leaking extra fields into
+            // tool_input.
+            json!({"filePath": "/tmp/oc-fixture/target.txt", "operation": "hover", "line": 10, "character": 4}),
+            json!({"file_path": "/tmp/oc-fixture/target.txt"}),
+            "Read",
+        ),
+        "list" => (
+            json!({"path": "/tmp/oc-fixture"}),
+            json!({"path": "/tmp/oc-fixture"}),
+            "Glob",
+        ),
         other => panic!(
             "no payload fixture defined for OpenCode tool \"{other}\" — mapToolCall routes it but \
              this test's field-shape table (opencode_call_fixture) does not cover it yet; add a row \

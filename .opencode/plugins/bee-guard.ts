@@ -325,6 +325,41 @@ function mapToolCall(tool: string, args: any): MappedCall | null {
       // (write_guard/detectors.rs check_ask_user_question reads exactly
       // these keys) — passed through untouched, no translation needed.
       return { hook: "write-guard", tool_name: "AskUserQuestion", tool_input: args ?? {} }
+    case "lsp":
+      // OpenCode's `lsp` tool returns file content (via LSP operations —
+      // hover/documentSymbol/etc.) for an arbitrary caller-supplied
+      // `filePath` — confirmed by the installed opencode-ai@1.18.16
+      // binary's own registration body, `V("lsp",s.gen(function*(){...
+      // filePath:n...`, asking permission `"lsp"` (discovery.md's oc-9/
+      // oc-10 notes) — the same read-capable shape `read` already routes
+      // through write-guard's `Read` family (write_guard/main.rs:66's
+      // `is_read_tool`). filePath -> file_path, the one field bee's
+      // read-guard and read-size-denial checks need; every other
+      // lsp-specific field (operation, line, character, ...) is unread by
+      // bee, so it is not forwarded.
+      return {
+        hook: "write-guard",
+        tool_name: "Read",
+        tool_input: { file_path: args?.filePath },
+      }
+    case "list":
+      // OpenCode's `list` tool lists directory entries at an arbitrary
+      // caller-supplied `path` — no static `V("list", ...)` registration
+      // anchor exists in the installed binary's text (unlike `lsp`), but
+      // two independent binary-text anchors confirm the tool and its field
+      // name: the TUI's own title-rendering code reads `input.path`
+      // (`List ${path}`) for tool id `"list"`, and the server's HTTP API
+      // carries a matching `file.list` route, `"List files and
+      // directories in a specified path."` (discovery.md's oc-10 notes) —
+      // the same directory-listing shape `glob` already routes through
+      // write-guard's `Glob` family (write_guard/main.rs:66's
+      // `is_read_tool`). path -> path, no rename needed (matching
+      // grep/glob's own field name).
+      return {
+        hook: "write-guard",
+        tool_name: "Glob",
+        tool_input: { path: args?.path },
+      }
     case "task":
       // Same story: OpenCode's task args, `{ description, prompt,
       // subagent_type, task_id?, command?, background? }`, already match
