@@ -10,6 +10,7 @@ never a generation timestamp or any other wall-clock value.
 
 | ID | Story | CoS | Status | Feature |
 |----|-------|-----|--------|---------|
+| p-9fb64d0f | Reservation refusal must never write an unreleased cross-worktree hold mirror (self-poisoning deny loop) | Reproduced in workflow-lessons wfl-4: a reservations reserve that REFUSES writes a fresh unreleased entry into .bee/runtime/cross-worktree-holds.json naming the refused path, so every retry recreates the block it reports; holds also refresh expires on read instead of counting down. Fix: refusal path is read-only (no mirror write), mirror entries for a cell release when the cell caps, and sweep clears entries whose cell is terminal. Regression test: reserve-deny twice leaves ledger unchanged. | proposed | workflow-lessons |
 | p-ead9b2d4 | A bundle-only handover is proven: an area is rebuilt from its concepts alone, with no runtime and no source tree | Pick one mid-size area; hand its docs/knowledge concepts (Pointers stripped) to a fresh session on another stack; the rebuild reproduces the documented behaviors; gaps found feed back as spec fixes. This is P69's last clause, isolated so it ranks on its own. | proposed | knowledge-handover-proof |
 
 ## Done / Declined
@@ -36,6 +37,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-71d014e7] Reap orphaned workflow record on default feature swap — done
 - [p-727e9529] Port bee core mjs to single compiled Rust binary queen-bee (CLI + hooks), jsonl storage unchanged, <5ms invocation — done
 - [p-72af01ca] Status diet: status --brief fast path + workers stop paying full status at startup (dispatch embeds state line) — done
+- [p-7484c2ad] One wave-batch dispatch call replaces per-cell prepare ceremony — done
 - [p-7f564c5e] Workflow-record lifecycle: every startFeature path creates a record; close covers by feature; workflows list/close CLI verb — done
 - [p-7fceeba1] Feature-close events: scribing+compounding run once at full feature completion; per-slice keeps only capture stubs — done
 - [p-808487c4] Session-close mid-phase warning omits the decision-0017 remedy: work finished inline mid-phase should stub to capture-queue + close, not only 'finish/cap or HANDOFF' — done
@@ -50,11 +52,14 @@ never a generation timestamp or any other wall-clock value.
 - [p-b595a094] Main-verifies: feature-level verify by the orchestrator; workers implement+commit+report only; cap pending path + close-door gate — done
 - [p-c15fb6f5] As a doctrine author, I want the pointer checks to read a citation naming more than one heading, so its target file and every heading it names are verified instead of the citation being skipped. — done
 - [p-c7db35b1] Verb pull len tang always-loaded: preamble/AGENTS nêu bee knowledge search mot dong — session plain-turn/off-rail biet duong keo ma khong can load skill nao — done
+- [p-c9e20303] One deterministic regen verb replaces the remembered three-step chain — done
 - [p-cc2500e0] Explicit triage: machine-readable route record (class\|lane\|flags\|files) required at feature start, surfaced in status+preamble, updated by re-lane — done
 - [p-ccc558a0] Installer verify fails: bee.mjs status reports drift=true post-apply when repo-copy sync leaves an orphaned extra lib file — done
 - [p-d494b04b] Bootstrap bundle mot lenh cho host repo: goglbe khong co docs/knowledge nen khong digest/pattern/search — can duong dung bundle re tu specs hien co — done
 - [p-d7c88155] Duong keo giua dong: bee knowledge search — tra pattern/area theo trieu chung (error string, hanh vi sai, ten co che) ngay giua luc solve, khong chi 2 diem bom co dinh — done
 - [p-df2c0284] Advisory diff-vs-test check at cells finish: large diff with zero changed test files prints a non-blocking warning — done
+- [p-e0213b88] Worker results carry a structured report schema, not prose — done
+- [p-e0234de4] Judge is a mandatory close door for standard and high-risk lanes — done
 - [p-e0efd4fe] Longitudinal validation for bee-evolving: a friction fix counts done only when the next comparable run stays clean — done
 - [p-e20d82c9] multisession-native slice 3: sharded leases + handoff mailboxes (D4/D5) — done
 - [p-e8a153e2] Validation speedup: delta validation, merged review wave, deferred presentation (spec ak/plans/reports/spec-260727-1610-bee-validation-speedup.md) — done
