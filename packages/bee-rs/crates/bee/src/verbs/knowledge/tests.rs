@@ -887,6 +887,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
+            report: None,
         };
         crate::verbs::cells::cap_cell_from_flags(root, root, &flags, false)
             .expect("cap through --deviation must succeed");

@@ -2368,6 +2368,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
+            report: None,
         };
         let cell_body = |id: &str| {
             json!({
@@ -2431,6 +2432,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
+            report: None,
         }
     }
 
@@ -2491,6 +2493,138 @@ use std::time::Instant;
         let flags = cap_flags_frd("frd-1c", Vec::new(), None);
         let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
         assert_eq!(capped["trace"]["deviations"], json!([]));
+    }
+
+    // ══ wfl-1 — `--report <json>` on cells cap/finish ══════════════════════
+    //
+    // The structured counterpart to the worker Result form
+    // (packages/bee/prompts/worker-cell.md): --report validated against
+    // exactly REPORT_KEYS before any write, then stored verbatim as
+    // trace.report. Absent --report never touches trace.report — the same
+    // "add a flag, prove the old path unchanged" posture frd-1's own
+    // omitting_deviation test takes above.
+
+    fn cap_flags_report(id: &str, report: Option<&str>) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: report.map(str::to_string),
+        }
+    }
+
+    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"green","deviations":[]}"#;
+
+    #[test]
+    fn valid_report_is_validated_and_stored_on_trace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r1", &cell("wfl-r1", "claimed", "f", json!([])));
+
+        let flags = cap_flags_report("wfl-r1", Some(VALID_REPORT));
+        let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["report"],
+            json!({
+                "outcome": "did the thing",
+                "commit": "abc123",
+                "files": ["a.rs"],
+                "tests": "green",
+                "deviations": [],
+            })
+        );
+    }
+
+    #[test]
+    fn malformed_report_json_is_refused_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r2", &cell("wfl-r2", "claimed", "f", json!([])));
+        let before = std::fs::read_to_string(cell_file(root, "wfl-r2")).unwrap();
+
+        let flags = cap_flags_report("wfl-r2", Some("{not json"));
+        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        assert!(
+            refusal.contains("--report") && refusal.contains("not valid JSON"),
+            "{refusal}"
+        );
+        let after = std::fs::read_to_string(cell_file(root, "wfl-r2")).unwrap();
+        assert_eq!(before, after, "a malformed --report writes nothing");
+        let after_norm = read_cell_norm(root, "wfl-r2").ok().unwrap().unwrap();
+        assert_eq!(after_norm.get("status"), Some(&json!("claimed")));
+    }
+
+    #[test]
+    fn report_with_an_unknown_key_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r3", &cell("wfl-r3", "claimed", "f", json!([])));
+
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"green","deviations":[],"extra":"nope"}"#;
+        let flags = cap_flags_report("wfl-r3", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        assert!(
+            refusal.contains("unknown key \"extra\""),
+            "refusal must name the offending key: {refusal}"
+        );
+    }
+
+    #[test]
+    fn report_missing_a_required_key_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r4", &cell("wfl-r4", "claimed", "f", json!([])));
+
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"green"}"#; // no "deviations"
+        let flags = cap_flags_report("wfl-r4", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        assert!(
+            refusal.contains("missing required key \"deviations\""),
+            "refusal must name the missing key: {refusal}"
+        );
+    }
+
+    #[test]
+    fn report_tests_key_must_be_green_or_red() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r5", &cell("wfl-r5", "claimed", "f", json!([])));
+
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"maybe","deviations":[]}"#;
+        let flags = cap_flags_report("wfl-r5", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        assert!(
+            refusal.contains("\"tests\" must be the string \"green\" or \"red\""),
+            "{refusal}"
+        );
+    }
+
+    #[test]
+    fn omitting_report_is_byte_identical_to_before_the_flag_existed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r6", &cell("wfl-r6", "claimed", "f", json!([])));
+
+        let flags = cap_flags_report("wfl-r6", None);
+        let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
+        assert!(
+            capped["trace"].get("report").is_none(),
+            "absent --report must never add a trace.report key"
+        );
     }
 
     // ══ D6 — the cell commit trailer (docs/history/hook-teeth/CONTEXT.md) ══
@@ -2569,6 +2703,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: commit_pending.map(str::to_string),
             inline_reason: None,
+            report: None,
         }
     }
 
@@ -2684,6 +2819,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: inline_reason.map(str::to_string),
+            report: None,
         }
     }
 
@@ -3524,6 +3660,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
+            report: None,
         }
     }
 
