@@ -220,8 +220,8 @@ clarity — safety beats brevity, always.
 
 **Everything else is craft.** Open each unit with what is being done and why;
 give concrete units for anything over a minute ("verify ~2 min", never "a
-while"); make a win runnable by naming the command or path — when `doc_viewer`
-is configured, name a doc as its viewer URL, not the bare path; state a failure as
+while"); make a win runnable by naming the command or path — name a doc by
+its bare repo-relative path (`docs/...`), never a viewer URL; state a failure as
 cause, fix, and who acts, quoting the shortest decisive line; file a tangent and
 mention it once at the close; let the work be the subject of every line, with
 ids and counts trailing as handles or standing beside a claim as evidence, never
