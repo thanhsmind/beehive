@@ -77,7 +77,15 @@ against isolated fixtures, asserting that a denied action changed nothing.
   skills:[{name, sha256}]}` with per-skill digests over the rendered
   per-runtime bytes, single-sourced beside the renderer; doctor recomputes
   and names missing/stray/drifted skills (blocking); a legacy `bee-render/1`
-  sidecar degrades to a non-blocking "inventory unavailable" warn.
+  sidecar degrades to a non-blocking "inventory unavailable" warn. The marker
+  labels a skill source may declare are a strict superset of the runtimes
+  this render pipeline actually writes a tree for: the third runtime's
+  marker label is grammar-valid — content scoped to it is stripped from the
+  rendered trees like any other off-runtime block — even though the
+  pipeline never emits a plugin tree of its own for it (no marketplace
+  equivalent exists there); any label outside that known set is refused
+  outright rather than silently defaulted into another runtime's tree
+  (opencode-support D1, oc-4).
 
 - A scripted canary drives the REAL second-runtime CLI against a throwaway
   fixture (isolated CODEX_HOME so trust writes never touch the user's real

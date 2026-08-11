@@ -163,7 +163,18 @@ and the strongest of them is the one that reports success.
   or a symlink reads as unknown and is never treated as absent — it is never
   allowed to fall through to the legacy marker, which would reopen a
   downgrade-bypass path R15 already closed (packages-restructure D1;
-  decision e0f3e40e; cell packages-restructure-1).
+  decision e0f3e40e; cell packages-restructure-1). A rendered skills root can
+  also reach this preflight already populated — committed to the project
+  outside any real apply — with neither the stamp nor a readable legacy
+  marker present, since a post-restructure tree ships no version marker of
+  its own; that combination resolves the installed version to unknown, which
+  R15's own unreadable-version rule already blocks and never makes
+  forceable. Read alone, that refusal names no cause a stranger could act
+  on — nothing distinguishes it from any other blocked install, and the fix
+  (one real apply, which writes the missing stamp on success) is never
+  stated; the block is permanent only until that one apply runs
+  (opencode-support cell oc-13, which hit this shape live in this repo's own
+  third-runtime skills tree).
 - **R30** — The release inventory records each file's executable bit as
   version control carries it, never the raw permission bits the filesystem
   reports. Raw filesystem bits are not comparable across machines: one
@@ -229,12 +240,23 @@ and the strongest of them is the one that reports success.
   `proveInstalledPackage` keeps proving the vendored payload ships.
   `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` each point their
   `hooks` config at `./packages/bee/hooks/claude-hooks.json` and
-  `./packages/bee/hooks/hooks.json` respectively.
+  `./packages/bee/hooks/hooks.json` respectively. A third role,
+  `opencode_plugin`, was added for the third runtime's own guard file
+  (`release_manifest.rs:82`, `:399-406`; opencode-support D2/oc-14): a
+  hand-vendored file rather than a rendered projection, but inventoried and
+  role-checked exactly like the other two, so a release that loses it fails
+  the manifest's own check the same way losing either rendered skills root
+  already did, rather than installing with the guard file silently absent.
 - Skill-sync version stamp (R29): `SKILLS_VERSION_STAMP` constant
   (`.bee-skills-version.json`) and the stamp-first/legacy-marker-fallback read
   in `computeSkillSyncTarget` (`packages/bee/scripts/bee onboard:1271-1281`)
   and the analogous global-root read (`:1461-1471`). Evidence:
   `.bee/cells/packages-restructure-1.json`.
+- Stamp-trap resolution (R29): the read this stamp-first/legacy-fallback
+  logic performs is the one that decides whether a target trips the stamp
+  trap named in R29's own text above — `onboard/skills.rs:420-458`. Evidence:
+  opencode-support cell oc-13, which hit the trap live in this repo's own
+  `.opencode/skills/` tree.
 - Retired-library removal (R27): `bee onboard`'s plan builder derives a
   `remove_lib` item per retired library module by diffing the previous
   `.bee/onboarding.json` `managed.lib` keys against the current

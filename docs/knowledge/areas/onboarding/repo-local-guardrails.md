@@ -121,7 +121,12 @@ asymmetry named above for the second runtime does not repeat here
   carries a model pinned from its matching tier, giving that runtime the
   same structural guarantee against a wrong-tier dispatch the first
   runtime's rendered helper files already give (opencode-support D4, D5,
-  oc-11).
+  oc-11). Rendering has an apply lifecycle to match: every apply recomputes
+  each of the four helper files fresh from its resolved tier model, and
+  REMOVES a helper's file outright the moment that tier's model can no
+  longer be resolved — the same fresh-diff discipline R27 already applies to
+  a retired library module, so a helper never lingers on disk advertising a
+  dispatch that would no longer resolve (opencode-support oc-14).
 
 ## Edge Cases Settled
 
