@@ -31,6 +31,21 @@
 //        above must never have, and it is exactly why the two policies never
 //        mix on the same call.
 //
+// D6 (docs/history/opencode-support/CONTEXT.md): a verdict-carrying exit 0
+// on the BLOCKING path is not always a plain allow — write-guard's
+// AskUserQuestion repair and model-guard's dispatch-label/subagent_type
+// repair both ride `hookSpecificOutput` on stdout at exit 0, and
+// write-guard's own comment (write_guard/main.rs:389-394) is explicit that
+// its verdict there is "ask, never allow". runBlockingHook below parses
+// that stdout and (a) applies `updatedInput` onto `output.args` so the
+// repair actually lands, (b) throws on `permissionDecision === "ask"`
+// (OpenCode's `tool.execute.before` is two-valued — throw or allow, no ask
+// — so treating "ask" as allow would silently drop bee's dominant
+// enforcement path), (c) logs `additionalContext` (a repair note, or a
+// bare reservation warning with neither a repair nor an ask) instead of
+// discarding it. Unparseable stdout on this path is ALSO a throw — never a
+// silent allow.
+//
 // codex-subagent-audit is a NAMED EXCLUSION — n/a — codex-specific (no
 // OpenCode session ever carries Codex SubagentStart/SubagentStop evidence).
 // chain-nudge is NOT wired in this file — plan.md's Approach section names
@@ -92,31 +107,38 @@ function resolveBeeBinary(directory: string): string {
 // ─── blocking hooks (tool.execute.before): throw on deny, fail CLOSED ──────
 
 /** Runs a BLOCKING bee hook and turns its verdict into either a normal
- * return (allow) or a thrown Error (deny, or any undecidable OpenCode-side
- * failure — missing binary, spawn error, crash, unexpected exit code). This
- * is the one function in this file allowed to throw; every advisory call
- * below goes through runAdvisoryHook instead, which never does.
+ * return (allow, possibly with `output.args` repaired in place) or a thrown
+ * Error (deny, ask, or any undecidable OpenCode-side failure — missing
+ * binary, spawn error, crash, unexpected exit code, unparseable verdict
+ * JSON). This is the one function in this file allowed to throw; every
+ * advisory call below goes through runAdvisoryHook instead, which never
+ * does.
  *
- * A verdict-carrying exit 0 can also carry a repair on stdout (write-guard's
- * AskUserQuestion header auto-fix; model-guard's dispatch-label/subagent_type
- * auto-fix — both emitted as `hookSpecificOutput.updatedInput` JSON). This
- * function does not parse or apply that repair back into `output.args` —
- * named gap, see discovery.md; the call is still let through unmodified,
- * exactly as an ordinary allow would be. */
+ * D6: a verdict-carrying exit 0 is not always a plain allow. bee can emit
+ * `hookSpecificOutput` JSON on stdout at exit 0 carrying `updatedInput` (a
+ * repair — write-guard's AskUserQuestion header auto-fix, model-guard's
+ * dispatch-label/subagent_type auto-fix), `permissionDecision: "ask"`
+ * (write-guard's own comment at write_guard/main.rs:389-394: "ask, never
+ * allow" — the repaired AskUserQuestion call must still show its prompt),
+ * and/or `additionalContext` (a repair note, or a bare reservation warning
+ * with neither of the above). All three are handled below; empty stdout is
+ * still a plain allow, and non-empty stdout that fails to parse is a throw,
+ * never a silent allow — this path is fail-closed all the way through. */
 function runBlockingHook(
   directory: string,
   hookName: "write-guard" | "model-guard",
   payload: Record<string, unknown>,
+  output: { args: Record<string, unknown> },
 ): void {
   const beeBinary = resolveBeeBinary(directory) // throws (fail-closed) if unresolved
 
+  let stdout: string
   try {
-    execFileSync(beeBinary, ["hook", hookName], {
+    stdout = execFileSync(beeBinary, ["hook", hookName], {
       input: JSON.stringify(payload),
       encoding: "utf8",
       cwd: directory,
     })
-    // exit 0 — allow. Nothing to mutate; output.args passes through as-is.
   } catch (err: any) {
     // execFileSync throws on any non-zero exit or a spawn failure.
     // Exit code 2 is bee's documented DENY verdict — surface its stderr
@@ -134,6 +156,60 @@ function runBlockingHook(
       `bee ${hookName} did not return a verdict (${detail || "no output"}) — ` +
         "denying rather than allowing an unchecked call.",
     )
+  }
+
+  const text = stdout.trim()
+  if (text.length === 0) return // ordinary allow — no verdict JSON to apply
+
+  let parsed: any
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    // D6: an exit-0 verdict this plugin cannot understand is undecidable,
+    // and undecidable is fail-closed on the BLOCKING path — never a silent
+    // allow, exactly like a spawn failure or an unexpected exit code above.
+    throw new Error(
+      `bee ${hookName} returned an exit-0 verdict this plugin could not parse (${text}) — ` +
+        "denying rather than allowing an unchecked call.",
+    )
+  }
+
+  const hso = parsed?.hookSpecificOutput as Record<string, unknown> | undefined
+  if (!hso) return // exit-0 JSON with no hookSpecificOutput — nothing to apply
+
+  // D6(b): "ask" is bee's own "never allow" verdict — check it BEFORE
+  // applying any repair below, since OpenCode's tool.execute.before has no
+  // ask primitive of its own (throw or allow, nothing in between). The
+  // thrown reason is the same text a human would see in the ask prompt on
+  // a host that supports one.
+  if (hso.permissionDecision === "ask") {
+    const reason =
+      (hso.permissionDecisionReason as string | undefined) ||
+      (hso.additionalContext as string | undefined) ||
+      `bee ${hookName} requires confirmation for this call.`
+    throw new Error(`bee ${hookName}: ${reason}`)
+  }
+
+  // D6(a): apply the repair onto output.args so it actually lands. Both of
+  // today's repair paths (write-guard's AskUserQuestion header fix,
+  // model-guard's dispatch-label/subagent_type fix) target `question`/
+  // `task`, the two tools mapToolCall passes through UNCHANGED
+  // (`tool_input: args ?? {}` — see mapToolCall below), so the
+  // `updatedInput` bee emits is already in OpenCode's own field-name space:
+  // no reverse translation is needed for either. A future repair on a
+  // field-translated tool (write/edit/bash/read/grep/glob/apply_patch)
+  // would need one — named gap, see discovery.md.
+  if (hso.updatedInput && typeof hso.updatedInput === "object" && !Array.isArray(hso.updatedInput)) {
+    Object.assign(output.args, hso.updatedInput as Record<string, unknown>)
+  }
+
+  // D6(c): additionalContext must reach the session, not be dropped.
+  // tool.execute.before's `output` carries only `args` — no text-injection
+  // surface exists on this hook — so a stderr advisory log is the surface
+  // this cell picks; routing it into the session proper (e.g. queued into
+  // prompt-context's next digest) is a richer follow-up, not this cell's.
+  if (typeof hso.additionalContext === "string" && hso.additionalContext.length > 0) {
+    console.error(`bee ${hookName}: ${hso.additionalContext}`)
   }
 }
 
@@ -283,13 +359,18 @@ export default (async ({ directory }) => {
     "tool.execute.before": async (input, output) => {
       const mapped = mapToolCall(input.tool, output.args)
       if (!mapped) return
-      runBlockingHook(directory, mapped.hook, {
-        hook_event_name: "PreToolUse",
-        session_id: input.sessionID,
-        cwd: directory,
-        tool_name: mapped.tool_name,
-        tool_input: mapped.tool_input,
-      })
+      runBlockingHook(
+        directory,
+        mapped.hook,
+        {
+          hook_event_name: "PreToolUse",
+          session_id: input.sessionID,
+          cwd: directory,
+          tool_name: mapped.tool_name,
+          tool_input: mapped.tool_input,
+        },
+        output,
+      )
     },
 
     // ── ADVISORY: session-init (once per session) + prompt-context (every
@@ -326,20 +407,29 @@ export default (async ({ directory }) => {
 
       if (digestParts.length === 0) return
 
-      output.parts.push({
-        // OpenCode's own part-id schema requires a "prt"-prefixed string
-        // (confirmed live: an unprefixed UUID here throws
-        // `SchemaError: Expected a string starting with "prt"` inside
-        // Session.updatePart and fails the whole chat.message call) — this
-        // mirrors that prefix convention, not documented in the plugin
-        // type declarations themselves.
-        id: `prt_${randomUUID().replace(/-/g, "")}`,
-        sessionID,
-        messageID: input.messageID ?? output.message.id,
-        type: "text",
-        text: digestParts.join("\n\n"),
-        synthetic: true,
-      } as any)
+      // F6: an ADVISORY surface must never be able to throw — this whole
+      // block (including the `output.message.id` dereference, which has no
+      // guarantee `output.message` is present on every OpenCode build) sits
+      // in its own try/catch so a shape surprise here degrades exactly like
+      // a crashed bee spawn does: logged, never a session-ending exception.
+      try {
+        output.parts.push({
+          // OpenCode's own part-id schema requires a "prt"-prefixed string
+          // (confirmed live: an unprefixed UUID here throws
+          // `SchemaError: Expected a string starting with "prt"` inside
+          // Session.updatePart and fails the whole chat.message call) — this
+          // mirrors that prefix convention, not documented in the plugin
+          // type declarations themselves.
+          id: `prt_${randomUUID().replace(/-/g, "")}`,
+          sessionID,
+          messageID: input.messageID ?? output.message.id,
+          type: "text",
+          text: digestParts.join("\n\n"),
+          synthetic: true,
+        } as any)
+      } catch (err: any) {
+        console.error(`bee session-init/prompt-context (advisory): could not inject digest — ${err?.message ?? err}`)
+      }
     },
 
     // ── ADVISORY: state-sync (file.edited, session.idle) + session-close

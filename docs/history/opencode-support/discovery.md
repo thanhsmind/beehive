@@ -546,12 +546,17 @@ like Claude's belt, and the new model-guard deny routes through the `task`
 tool exactly like Claude's `Task` tool, with zero crash-log lines in either
 worktree's `.bee/logs/hooks.jsonl` across the whole session.
 
+(Amended by oc-8, below: BLOCKING's exit-0 path is not always a plain allow
+— it can also carry a repair (`updatedInput`) or a still-fail-closed `ask`
+verdict; see "Discovery: exit-0 repair/ask verdicts honored on the BLOCKING
+path (oc-8)".)
+
 ### Implemented hook → OpenCode surface table
 
 | bee hook | OpenCode surface | Failure policy | Status |
 |---|---|---|---|
-| write-guard | `tool.execute.before` on `write`/`edit`/`bash`/`apply_patch` (oc-2/oc-3) **+ new:** `read`/`grep`/`glob`/`question` | BLOCKING — throw on deny, fail closed | Live-proved: read-size deny (below); write/edit/bash/apply_patch already proved in oc-2/oc-3 |
-| model-guard | `tool.execute.before` on `task` | BLOCKING — throw on deny, fail closed (same policy, same before-hook, as write-guard) | Live-proved: Task deny (below) |
+| write-guard | `tool.execute.before` on `write`/`edit`/`bash`/`apply_patch` (oc-2/oc-3) **+ new:** `read`/`grep`/`glob`/`question` | BLOCKING — throw on deny **or** `permissionDecision: "ask"`; apply an exit-0 `updatedInput` repair onto `output.args`; throw on unparseable exit-0 verdict JSON; fail closed on any OpenCode-side spawn failure (oc-8) | Live-proved: read-size deny (below), AskUserQuestion repair-applied/ask-throws/unparseable-throws (oc-8, below); write/edit/bash/apply_patch already proved in oc-2/oc-3 |
+| model-guard | `tool.execute.before` on `task` | BLOCKING — same policy as write-guard, including the exit-0 `updatedInput`/`ask`/unparseable handling (oc-8) | Live-proved: Task deny (below); dispatch-label/`subagent_type` repair path shares runBlockingHook's proof above |
 | session-init | `chat.message`, ONCE per `sessionID` (in-memory `Set`, process-lifetime only) | ADVISORY — swallow + log, never throws | Live-proved: no crash across the whole session; digest text observed reaching the model (AGENTS.md-preamble-style content, distinct from AGENTS.md's own auto-load) |
 | prompt-context | `chat.message`, every message | ADVISORY — swallow + log, never throws | Live-proved: same run, no crash |
 | state-sync | `event` on `file.edited` and `session.idle` | ADVISORY — swallow + log, never throws | Wired; no crash observed. Live per-call proof not separately captured (advisory, always-silent-stdout by design — see tools_logger.rs-style comment in state_sync.rs) |
@@ -698,16 +703,20 @@ worktree.
   live-transcript proof this cell's action wants is not obtainable without
   a different agent/model configuration than is available on this machine —
   named gap for a later slice, exactly as oc-3 named for `apply_patch`.
-- **On-allow stdout repairs are not read back into `output.args`.**
-  write-guard's `AskUserQuestion` header-truncation auto-fix and
-  model-guard's dispatch-label/`subagent_type` auto-fix (both emitted as
-  `hookSpecificOutput.updatedInput` JSON on a verdict-carrying exit 0,
-  main.rs:385-411, model_guard.rs:130-155) are not parsed or merged back
-  into OpenCode's mutable `output.args` — the call is let through
-  unmodified, exactly as an ordinary allow would be, rather than with the
-  repair applied. Doing so would need a reverse field-name mapping (the
-  mirror image of `mapToolCall`) for each repaired shape — out of this
-  cell's scope, named rather than silently dropped.
+- **A future repair on a field-translated tool would need a reverse
+  mapping.** oc-8 closed the "on-allow stdout repairs are dropped" gap this
+  entry used to name (see "Discovery: exit-0 repair/ask verdicts honored on
+  the BLOCKING path (oc-8)" below) — `runBlockingHook` now applies
+  `hookSpecificOutput.updatedInput` onto `output.args` directly. That works
+  with zero reverse translation for both repair paths that exist today
+  (write-guard's `AskUserQuestion` header fix, model-guard's dispatch-label/
+  `subagent_type` fix) because both target `question`/`task`, the two tools
+  `mapToolCall` passes through UNCHANGED (`tool_input: args ?? {}`). A
+  repair on a field-TRANSLATED tool (write/edit/bash/read/grep/glob/
+  apply_patch — none of which bee emits a repair for today) would still
+  need a reverse mapping (the mirror image of `mapToolCall`) before direct
+  `Object.assign` would apply it correctly — unbuilt because unneeded so
+  far, named rather than silently assumed away.
 - **`file.edited` carries no `sessionID`.** `EventFileEdited.properties` is
   `{ file: string }` only (verified against the installed
   `@opencode-ai/sdk@1.18.16` type declarations) — state-sync still runs on
@@ -865,3 +874,77 @@ v18.19.1 first (both node-dependent tests print the named SKIP line above
 and return early, ~0.1s) — the suite never goes red on an incompatible
 `node`, and it never goes silently green either: the SKIP line names
 exactly which test degraded and why.
+
+## Discovery: exit-0 repair/ask verdicts honored on the BLOCKING path (oc-8)
+
+**Date:** 2026-08-11
+**Scope:** oc-8 — S3 judge fixes F2 and F6. F2: `bee-guard.ts` used to
+discard every exit-0 verdict's stdout, silently dropping write-guard's
+`AskUserQuestion` repair, model-guard's dispatch-label/`subagent_type`
+repair, and write-guard's `ask` verdict (write_guard/main.rs:389-394's own
+comment: "ask, never allow") — the last of these is bee's DOMINANT
+enforcement path for a repaired `AskUserQuestion` call, and treating it as
+a plain allow would have silently defeated it on OpenCode specifically. F6:
+`chat.message`'s `output.message.id` dereference sat outside any
+try/catch, so an advisory surface could crash the whole call.
+
+### D6 implementation
+
+`runBlockingHook` (`.opencode/plugins/bee-guard.ts`) now parses non-empty
+exit-0 stdout as JSON and, per decision D6:
+
+- applies `hookSpecificOutput.updatedInput` onto `output.args` directly —
+  correct with zero reverse field-name translation for both repair paths
+  that exist today, because both target `question`/`task`, the two tools
+  `mapToolCall` passes through UNCHANGED;
+- throws `bee <hook>: <reason>` when `permissionDecision === "ask"`, using
+  `permissionDecisionReason` (falling back to `additionalContext`) as the
+  thrown reason — checked BEFORE the repair is applied, since the throw
+  already carries the full context;
+- logs `additionalContext` to `console.error` when present with no `ask`
+  (a repair note, or a bare reservation warning) — `tool.execute.before`'s
+  `output` has no text-injection field to carry it into the session proper,
+  so a stderr advisory log is the surface this cell picks;
+- throws on stdout that is non-empty but fails `JSON.parse` — undecidable,
+  and undecidable stays fail-closed on this path, never a silent allow.
+
+`chat.message`'s synthetic-part push (including the `output.message.id`
+dereference) is now wrapped in its own try/catch, logging to
+`console.error` on failure — matching every other advisory surface in this
+file, none of which can throw.
+
+### Live proof (direct plugin invocation, stub `bee` binary)
+
+`opencode run` cannot exercise the `AskUserQuestion` repair specifically in
+this installation (oc-6 already named this: the default `build` agent +
+free `opencode/*` provider does not offer the model a `question` tool
+call). Instead, `runBlockingHook`'s exit-0 handling was proved by importing
+the real, unmodified `.opencode/plugins/bee-guard.ts` (Node's native `.ts`
+type-stripping, no build step — the same load path OpenCode itself uses)
+against a scripted stub `.bee/bin/bee` that emits each of bee's real
+`write_guard/main.rs` verdict shapes on stdin/stdout, and calling
+`tool.execute.before` on the `question` tool directly:
+
+```
+[repair]      allow, args= {"questions":[{"header":"short…","options":[]}]}
+[ask]         THROW: bee write-guard: header truncated, confirm
+[garbage]     THROW: bee write-guard returned an exit-0 verdict this plugin could not parse (not json{{{) — denying rather than allowing an unchecked call.
+[plain-allow] allow, args= {"questions":[{"header":"ok","options":[]}]}
+[chat.message] no throw, no output.message present
+```
+
+`[repair]`'s `args` shows the mutated `header` (`"short…"`, truncated) —
+the repair reached `output.args`, not just an unread stdout string.
+`[ask]`'s thrown message carries `permissionDecisionReason` verbatim —
+proof the ask path throws rather than silently allowing. `[garbage]`
+proves an unparseable exit-0 verdict fails closed. `[chat.message]` proves
+F6: calling the handler with no `output.message` at all does not throw.
+
+`cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test
+opencode_plugin_contracts` — oc-9's suite, unmodified by this cell — still
+passes `4 passed` against the changed plugin: none of its four fixture/
+parity assertions exercise a repair or `ask` shape (its stub only allows
+with empty stdout, denies, crashes, or is absent), so this cell's new
+parsing branches are exercised by the direct-invocation proof above, not
+by that suite; the not-yet-covered repair/ask/unparseable shapes are named
+here for oc-9 to pick up as fixture cases, not silently assumed covered.
