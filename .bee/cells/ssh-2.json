@@ -1,0 +1,54 @@
+{
+  "id": "ssh-2",
+  "feature": "state-swap-hygiene",
+  "title": "Bundle paths pass one_line before joining the worker prompt",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "action": "Review B-P3-3, join site verified at prepare.rs:316-334: the learned-context line is format!(\"- {path} — {}\", one_line(title, 140)) — one_line is applied only to the TITLE; path is raw, and a Linux filename may contain a newline, so a crafted bundle filename forges extra bullet lines inside the worker prompt's Learned context block. Fix: pass the path through the same whitespace-collapsing one_line treatment (length cap generous enough for real paths, e.g. 200) before the format; apply to every sibling join in the same function that interpolates a raw path into a prompt line (check the critical-patterns fallback lines ~391-405 too). TDD red-first: an entry whose path contains a newline renders as ONE line with the newline collapsed; normal paths byte-identical.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "a newline-bearing bundle path cannot produce more than one prompt line",
+      "normal paths render byte-identical to today"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "substantive": "path sanitization plus tests"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-ssh-2",
+    "outcome": "bundle paths pass one_line (cap 200) before joining the worker prompt; newline-bearing filename renders one collapsed line; normal paths byte-identical",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [
+      "sweep of the sibling joins at prepare.rs ~391-405 found only static string literals - no raw-path interpolation there, no change needed"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-11T03:01:16.122Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-11T02:46:57.577Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T03:01:04.380Z"
+  }
+}
