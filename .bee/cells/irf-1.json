@@ -1,0 +1,60 @@
+{
+  "id": "irf-1",
+  "feature": "island-read-filter",
+  "title": "Island cell reads filter to the granted feature",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs"
+  ],
+  "action": "PBI p-9c48a67c read-side residue: .bee/cells/** is git-tracked, so a fresh granted worktree's island store legitimately holds every other feature's cell files on disk (ips-1 forbade pruning tracked files); those foreign cells then pollute island READS — status counts, cells list/ready output, claim-next scans and open-work derivations show another feature's cells as local work. Fix: at the shared cell-enumeration layer (find the one read path the consumers share — read.rs's listing functions are the hypothesis; if several enumerators exist, filter at the lowest shared seam, never per-consumer copies), when the resolved store root is a GRANTED worktree island (the grant identity is resolvable — see how registry.rs/roots resolve the granted feature for a worktree root), a cell file whose feature field names a DIFFERENT feature is skipped from enumeration. Tracked foreign files stay on disk untouched. The MAIN checkout's reads are byte-identical (no grant = no filter). Archived cells: same rule. TDD red-first: island fixture holding cells of features A (granted) and B -> list/ready/status counts show only A (red today); main-store fixture with several features shows all (pin byte-identical); claim-next in the island never offers B's cell.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "an island's cell reads show only the granted feature's cells",
+      "main-checkout reads are byte-identical",
+      "the filter lives at one shared seam, not per-consumer copies"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/read.rs",
+        "substantive": "granted-feature read filter plus tests (or the real shared seam, named in the trace)"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-irf-1",
+    "outcome": "island reads scope to the granted feature at both enumerators (cells/read.rs list_cells, status_full list+archive door); main reads pinned byte-identical; 9 new tests red-first",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/read.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [
+      "two enumerators exist (cells/read.rs and status_full/cells.rs), filtered at each lowest seam reusing read_worktree_feature; cells list/ready/claim-next CLI still refuse-delegate for granted worktrees at root resolution - widening those doors is a separate ask"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-11T04:36:32.585Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-11T04:18:10.641Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T04:36:20.809Z"
+  }
+}
