@@ -734,3 +734,24 @@
 {"ts":"2026-08-11T02:32:01.653Z","kind":"pbi","event":"status","id":"p-179bdcae","status":"declined"}
 {"ts":"2026-08-11T03:03:04.210Z","kind":"pbi","event":"status","id":"p-71d014e7","status":"done","feature":"state-swap-hygiene"}
 {"ts":"2026-08-11T03:25:25.424Z","type":"backlog-closed","title":"CI never runs on push or pull request, so main can sit red for up to 24h","detail":"Same-title tombstone per the erf-1 retire convention: push+pull_request triggers verified live in ci.yml/windows.yml (2026-08-10, backlog-closed row of that date has the evidence); this row clusters with the stale friction pair and retires it from the ranking.","severity":"P1","layer":"ci","feature":""}
+{"ts":"2026-08-11T03:47:25.120Z","kind":"pbi","event":"status","id":"p-4072163a","status":"done"}
+{"ts":"2026-08-11T03:47:25.138Z","kind":"pbi","event":"status","id":"p-81a97109","status":"done"}
+{"ts":"2026-08-11T03:47:25.144Z","kind":"pbi","event":"status","id":"p-c15fb6f5","status":"done"}
+{"ts":"2026-08-11T03:47:30.763Z","kind":"pbi","event":"status","id":"p-0530164c","status":"declined"}
+{"ts":"2026-08-11T03:47:30.782Z","kind":"pbi","event":"status","id":"p-063d7b18","status":"declined"}
+{"ts":"2026-08-11T03:47:30.788Z","kind":"pbi","event":"status","id":"p-34c37c1f","status":"declined"}
+{"ts":"2026-08-11T03:47:30.794Z","kind":"pbi","event":"status","id":"p-722dfd0a","status":"declined"}
+{"ts":"2026-08-11T03:47:30.800Z","kind":"pbi","event":"status","id":"p-759bd218","status":"declined"}
+{"ts":"2026-08-11T03:47:30.805Z","kind":"pbi","event":"status","id":"p-78448452","status":"declined"}
+{"ts":"2026-08-11T03:47:30.810Z","kind":"pbi","event":"status","id":"p-cb0e94e3","status":"declined"}
+{"ts":"2026-08-11T03:47:30.816Z","kind":"pbi","event":"status","id":"p-d4a5dcff","status":"declined"}
+{"ts":"2026-08-11T03:47:30.821Z","kind":"pbi","event":"status","id":"p-acc0e108","status":"declined"}
+{"ts":"2026-08-11T03:47:30.826Z","kind":"pbi","event":"status","id":"p-dbe8b1a5","status":"declined"}
+{"ts":"2026-08-11T03:47:38.267Z","kind":"pbi","event":"amend","id":"p-9d7b36fc","cos":"RE-SCOPED (2026-08-11 triage): the named e2e suite is gone with the mjs retirement; the behavior claim (repeat bash install rewrites managed files) needs a Rust-side regression check against installer_contracts.rs before this can rank again — as written, unactionable."}
+{"ts":"2026-08-11T03:47:38.285Z","kind":"pbi","event":"amend","id":"p-fb5764e6","cos":"RE-SCOPED (2026-08-11 triage): run_verify.mjs is retired; the silent-exit-0 concern must be re-stated against the live cargo-test chain (commands.test) if it still holds — as written, unactionable."}
+{"ts":"2026-08-11T03:50:19.868Z","kind":"pbi","event":"status","id":"p-3416fb38","status":"done"}
+{"ts":"2026-08-11T03:50:19.887Z","kind":"pbi","event":"status","id":"p-4f055a6f","status":"done"}
+{"ts":"2026-08-11T03:50:19.893Z","kind":"pbi","event":"amend","id":"p-726a4881","cos":"STALE AS WRITTEN (2026-08-11 triage): built on run_verify.mjs/impact_registry machinery retired with the Node port; the host-project verify-registry idea needs re-shaping against the cargo-era chain if revived."}
+{"ts":"2026-08-11T03:50:19.899Z","kind":"pbi","event":"status","id":"p-726a4881","status":"declined"}
+{"ts":"2026-08-11T03:50:19.904Z","kind":"pbi","event":"amend","id":"p-842955b5","cos":"STALE AS WRITTEN (2026-08-11 triage): test-economy D7a deferral built on retired mjs proof-tier machinery; re-shape against the live chain if the host-project need returns."}
+{"ts":"2026-08-11T03:50:19.910Z","kind":"pbi","event":"status","id":"p-842955b5","status":"declined"}
