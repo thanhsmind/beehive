@@ -1,0 +1,59 @@
+{
+  "id": "tr-1",
+  "feature": "timings-report",
+  "title": "A read-only verb ranks the self-timing log by slowest command",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "action": "PBI p-10caed3f (deferral named in docs/knowledge/areas/performance-log/cli-self-timing.md:37-39): record_timing (verbs/mod.rs:95-103) appends {command, ms, ts} lines to .bee/logs/timings.jsonl on every invocation, and nothing aggregates them. Build a read-only report verb: group lines by command name; per command emit count, total ms, median ms, p95 ms, max ms; sort slowest-median first; --limit N (default 15). Registry: check whether a perf group already exists in registry_payload.json — if yes the verb is perf report (or joins the existing perf naming); if no group fits, register timings report; follow the registry's real shape, declare flags (limit + json), keep tests/registry_contracts.rs green and bump the flag-vocabulary pin only if a genuinely new flag name is introduced (limit exists already). Missing or empty log = clean empty report, exit 0. Malformed lines are skipped and their count reported, never fatal. The verb writes nothing (its own record_timing self-line excepted, like every verb). TDD red-first: fixture log with three commands + one malformed line -> ranking order, stats math (median/p95 on known values), malformed count; empty/missing log clean; json and text renders pinned.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "the report ranks commands slowest-median-first with count/total/median/p95/max",
+      "missing or empty log yields a clean empty report exit 0",
+      "malformed lines are skipped and counted, never fatal"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "verb registered with flags; implementation plus tests in the real verb home, named in the trace"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-tr-1",
+    "outcome": "bee timings report ships: per-command count/total/median/p95/max ranked slowest-median-first, --limit default 15, fail-open jsonl parse with malformed count, wide-door root resolution; 9 tests",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/timings.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/roots.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "perf group exists but perf.report is a distinct unported Node command with an unrelated schema - joined the cell's fallback and registered the timings group, matching the spec's own deferral wording"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-11T05:27:37.640Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-11T05:16:20.125Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T05:27:25.542Z"
+  }
+}
