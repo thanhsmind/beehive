@@ -411,9 +411,29 @@ pub(crate) fn cap_cell_from_flags(root: &Path, test_root: &Path, f: &CapFlags, f
         };
         trace.insert("outcome".into(), outcome_value);
         trace.insert("capped_at".into(), Value::String(utc_now()));
-        // No producer since the E1 impact-registry check retired; the key
-        // stays so a capped cell's trace shape is unchanged.
-        trace.insert("warnings".into(), Value::Array(Vec::new()));
+        // fa-1: diff-vs-test advisory — the ONLY producer for this slot
+        // since the E1 impact-registry check retired. Scoped to `cells
+        // finish` alone (D6's own "finish only" posture): `cells cap`
+        // (finish == false) never shells out to git here. Every earlier
+        // door above (test-green, D6's commit-trailer check, the lane/
+        // worker checks) already let this cap through, so the block below
+        // can only ever ADD a line — it never refuses, and a git failure of
+        // any kind is a silent skip (finish_support.rs's
+        // diff_vs_test_advisory).
+        let mut warnings: Vec<Value> = Vec::new();
+        if finish {
+            let feature = match cell_map.get("feature") {
+                Some(Value::String(s)) if !s.is_empty() => Some(s.as_str()),
+                _ => None,
+            };
+            let advisory_root = commit_trailer_history_root(root, feature);
+            let threshold = advisory_untested_lines_threshold(&bstate::read_config_raw(root));
+            if let Some(line) = diff_vs_test_advisory(&advisory_root, id, threshold) {
+                eprintln!("{line}");
+                warnings.push(Value::String(line));
+            }
+        }
+        trace.insert("warnings".into(), Value::Array(warnings));
         match &tests_run {
             None => {
                 trace.insert("tests".into(), Value::String("undeclared".into()));
