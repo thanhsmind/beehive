@@ -1886,18 +1886,52 @@ fn cluster_entries(view: &Value) -> Vec<Cluster> {
     buckets
 }
 
+/// A cluster where any entry's normalized kind is "closed" (KIND_ALIASES:
+/// "backlog-closed" -> "closed") names a dead item. It never joins the
+/// ranked list — it is a retired cluster instead, carried in a separate
+/// array so nothing silently vanishes.
+fn cluster_has_closed_entry(c: &Cluster) -> bool {
+    c.entries
+        .iter()
+        .any(|e| e.get("kind").and_then(Value::as_str) == Some("closed"))
+}
+
+/// retired-cluster record: representative stored title (the first entry's
+/// title, not the normalized key) plus the entry count.
+fn retired_value(c: &Cluster) -> Value {
+    let title = c
+        .entries
+        .first()
+        .and_then(|e| e.get("title"))
+        .and_then(Value::as_str)
+        .unwrap_or(&c.key)
+        .to_string();
+    let mut m = Map::new();
+    m.insert("title".into(), Value::String(title));
+    m.insert("count".into(), Value::from(c.entries.len() as u64));
+    Value::Object(m)
+}
+
 /// rankClusters: rank desc, then earliest first_seen asc, then key — the last
 /// two via JS `<`/`>` on strings, i.e. UTF-16 code-unit order (NOT ICU).
-fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
+/// Clusters carrying a closed entry are excluded from the ranked list and
+/// returned separately as `retired`; ranking arithmetic for the surviving
+/// clusters is unchanged.
+fn rank_clusters(clusters: Vec<Cluster>) -> (Vec<Value>, Vec<Value>) {
     struct Ranked {
         value: Value,
         rank: f64,
         first_seen: String,
         key: String,
     }
+    let mut retired: Vec<Value> = Vec::new();
     let mut ranked: Vec<Ranked> = clusters
         .into_iter()
-        .map(|c| {
+        .filter_map(|c| {
+            if cluster_has_closed_entry(&c) {
+                retired.push(retired_value(&c));
+                return None;
+            }
             let frequency = c.entries.len() as f64;
             let corroboration = c.repos.len() as f64;
             let rank = c.pain * frequency * corroboration;
@@ -1924,12 +1958,12 @@ fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
                 "first_seen".into(),
                 earliest.clone().map(Value::String).unwrap_or(Value::Null),
             );
-            Ranked {
+            Some(Ranked {
                 value: Value::Object(m),
                 rank,
                 first_seen: earliest.unwrap_or_default(),
                 key: c.key,
-            }
+            })
         })
         .collect();
     ranked.sort_by(|a, b| {
@@ -1939,7 +1973,7 @@ fn rank_clusters(clusters: Vec<Cluster>) -> Vec<Value> {
             .then_with(|| code_unit_cmp(&a.first_seen, &b.first_seen))
             .then_with(|| code_unit_cmp(&a.key, &b.key))
     });
-    ranked.into_iter().map(|r| r.value).collect()
+    (ranked.into_iter().map(|r| r.value).collect(), retired)
 }
 
 fn run_rank(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
@@ -1955,7 +1989,7 @@ fn run_rank(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
     };
     let drift = check_manifest_drift(&root);
     let digest = merge_digests(&root)?;
-    let ranked = rank_clusters(cluster_entries(&digest));
+    let (ranked, retired) = rank_clusters(cluster_entries(&digest));
     let top_word = match ranked.first() {
         None => "no clusters".to_string(),
         Some(top) => format!(
@@ -1967,13 +2001,23 @@ fn run_rank(parsed: &ParsedArgs, t0: Instant) -> Option<ExitCode> {
         ),
     };
     let plural = if ranked.len() == 1 { "" } else { "s" };
-    let text = format!("{} cluster{plural} — {top_word}.", ranked.len());
+    let mut text = format!("{} cluster{plural} — {top_word}.", ranked.len());
+    if !retired.is_empty() {
+        let rplural = if retired.len() == 1 { "" } else { "s" };
+        text.push_str(&format!(
+            " {} retired cluster{rplural} excluded (closed).",
+            retired.len()
+        ));
+    }
+    let mut result = Map::new();
+    result.insert("ranked".into(), Value::Array(ranked));
+    result.insert("retired".into(), Value::Array(retired));
     Some(emit_success(
         &root,
         "feedback rank",
         parsed.json,
         &drift,
-        &Value::Array(ranked),
+        &Value::Object(result),
         &text,
         t0,
     ))
@@ -2453,7 +2497,7 @@ mod tests {
                 {"kind":"friction","title":"alpha","first_seen":"2024-03-01","pain":3.0},
             ]
         });
-        let ranked = rank_clusters(cluster_entries(&view));
+        let (ranked, retired) = rank_clusters(cluster_entries(&view));
         assert_eq!(ranked.len(), 3);
         // pain 3 x frequency 2 x corroboration 1 = 6
         assert_eq!(ranked[0]["key"], "same thing");
@@ -2464,7 +2508,48 @@ mod tests {
         // rank 3 tie, same first_seen -> key order (code units, not ICU).
         assert_eq!(ranked[1]["key"], "alpha");
         assert_eq!(ranked[2]["key"], "zulu");
+        assert!(retired.is_empty()); // no closed entries anywhere
         // An empty view never throws.
-        assert!(rank_clusters(cluster_entries(&json!({}))).is_empty());
+        let (ranked_empty, retired_empty) = rank_clusters(cluster_entries(&json!({})));
+        assert!(ranked_empty.is_empty());
+        assert!(retired_empty.is_empty());
+    }
+
+    #[test]
+    fn rank_clusters_retires_cluster_with_closed_entry() {
+        // The digest view already carries normalized kinds (buildEntry stores
+        // `normalize_kind`'s output), so the fixture uses "closed" directly —
+        // the "backlog-closed" -> "closed" alias is covered by
+        // normalize_kind_aliases_and_idempotence.
+        let view = json!({
+            "repo_label": "r",
+            "entries": [
+                {"kind":"friction","title":"widget breaks","first_seen":"2024-01-01","pain":2.0},
+                {"kind":"closed","title":"Widget   Breaks","first_seen":"2024-01-05","pain":1.0},
+                {"kind":"friction","title":"other issue","first_seen":"2024-02-01","pain":1.0},
+            ]
+        });
+        let (ranked, retired) = rank_clusters(cluster_entries(&view));
+        // The closed-linked cluster never ranks — only the unrelated cluster does.
+        assert_eq!(ranked.len(), 1);
+        assert_eq!(ranked[0]["key"], "other issue");
+        assert_eq!(retired.len(), 1);
+        assert_eq!(retired[0]["title"], "widget breaks"); // representative stored title
+        assert_eq!(retired[0]["count"], 2);
+    }
+
+    #[test]
+    fn rank_clusters_retires_closed_only_cluster() {
+        let view = json!({
+            "repo_label": "r",
+            "entries": [
+                {"kind":"closed","title":"solo closed","first_seen":"2024-01-01","pain":1.0},
+            ]
+        });
+        let (ranked, retired) = rank_clusters(cluster_entries(&view));
+        assert!(ranked.is_empty());
+        assert_eq!(retired.len(), 1);
+        assert_eq!(retired[0]["title"], "solo closed");
+        assert_eq!(retired[0]["count"], 1);
     }
 }
