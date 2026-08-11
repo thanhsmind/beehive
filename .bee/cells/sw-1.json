@@ -1,0 +1,38 @@
+{
+  "id": "sw-1",
+  "feature": "shaping-wayfinding",
+  "lane": "tiny",
+  "title": "Add edge-of-the-map discipline to shaping interview craft",
+  "action": "In skills/bee-shaping/references/shaping-reference.md add a compact section after When to stop: pull-to-build stop signal, fog test for deferrals, one-decision-redraw. Run regen chain (render-skill-trees, release-manifest write/check) inside this cell; skip onboard --apply per decision on plugin 2.4.0 mismatch.",
+  "goal": "Explore handles fuzzy asks by understanding more instead of charging into build; craft lives because every vague request already routes through Explore.",
+  "verify": "commands.test green; bee dev release-manifest --check",
+  "files": [
+    "skills/bee-shaping/references/shaping-reference.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": "Added edge-of-the-map section (pull-to-build stop signal, fog test, lock-then-retriage) to shaping interview craft; trees re-rendered, manifest 209",
+    "files_changed": [
+      "skills/bee-shaping/references/shaping-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T08:07:09.002Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+    "claimed_at": "2026-08-11T08:06:29.526Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T08:06:57.178Z"
+  }
+}

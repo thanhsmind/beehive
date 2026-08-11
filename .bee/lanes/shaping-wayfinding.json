@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "feature": "shaping-wayfinding",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"shaping-wayfinding\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"shaping-wayfinding\" (lane).",
+  "created_at": "2026-08-11T08:05:51.582Z"
+}
