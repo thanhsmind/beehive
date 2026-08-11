@@ -1,0 +1,54 @@
+{
+  "id": "ghf-1",
+  "feature": "guard-heredoc-fencing",
+  "title": "Write-guard tokenizer fences heredoc bodies out of target extraction",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "action": "Friction row 570 residue (verified: guards.rs has zero heredoc handling; the /dev/null redirect half is already fixed at guards.rs:436-439): a Bash command carrying a heredoc (git commit -F - <<'EOF' ... EOF, cat > x <<EOF, sed <<-END) has its BODY text tokenized as ordinary shell tokens, so a body word can land on the tee/mv/cp/redirect target-collection branches (guards.rs:449-549) and the guard denies real work naming a word from the content (live incident: the word 'it' inside a heredoc refused a cells add). Fix in the tokenizer/extraction path: recognize heredoc redirection operators << and <<- with quoted ('EOF', \"EOF\") and unquoted terminators, support several heredocs on one command line (bash queues bodies in operator order), and skip every body line up to each matching terminator line before target extraction runs. The heredoc OPERATOR's neighboring real redirect targets (e.g. the > x in cat > x <<EOF) and every token outside the bodies keep byte-identical extraction. Malformed/unterminated heredoc: fail SAFE for the guard's purpose — treat the rest of the text as body (skip it), never as targets, and never panic. TDD red-first: (a) heredoc body containing 'mv /etc/passwd /tmp' and a bare word 'it' produces zero targets from the body (red today); (b) cat > out.txt <<EOF still extracts out.txt; (c) two heredocs on one line both fenced; (d) quoted and <<- forms fenced; (e) unterminated heredoc extracts nothing from the tail and does not panic; (f) the existing tokenize/extraction suite stays green byte-identical.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "heredoc body text can never become a write-guard target",
+      "real redirect targets on the same command keep byte-identical extraction",
+      "unterminated heredocs fail safe without panic"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+        "substantive": "heredoc fencing plus tests, no TODO stubs"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-ghf-1",
+    "outcome": "fence_heredocs wired before tokenize_deep: <<//<<- with quoted/unquoted/dash terminators, multi-heredoc per line, unterminated fails safe, <<< untouched; body content can never become a guard target",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T03:56:46.753Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-11T03:51:08.760Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T03:56:35.087Z"
+  }
+}
