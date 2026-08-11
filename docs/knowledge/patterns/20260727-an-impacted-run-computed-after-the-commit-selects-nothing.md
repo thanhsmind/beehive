@@ -47,6 +47,6 @@ exercised the code path it was meant to prove, because the run's *selection*
 the canonical source resolved an import the vendored copy could not; here,
 the post-commit diff resolved to bookkeeping noise instead of the real
 change. Also related:
-[[pattern-20260723-a-scan-scope-set-from-assumption-passes-green]]
+[[pattern-20260723-a-scan-scope-set-from-assumption-passes-green-while-hiding-the-bug]]
 — a scope computed from assumption rather than measurement is the general
 case this defect instantiates for test selection specifically.

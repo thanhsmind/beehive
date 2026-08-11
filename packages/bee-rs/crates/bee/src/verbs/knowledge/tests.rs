@@ -1301,6 +1301,86 @@ use std::time::Instant;
         assert!(clean.ok);
     }
 
+    /// A body `[text](target.md)` link resolves against the CONTAINING
+    /// file's directory, must stay inside the bundle, and only a relative
+    /// `.md` target is even a candidate: http(s), mailto, absolute (`/…`)
+    /// and anchor-only (`#…`) targets never warn (dangling_md_link).
+    #[test]
+    fn dangling_md_link_warns_only_for_the_unresolvable_relative_target() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "areas/overview.md", Cx::new("demo-overview").ty("bee.area"));
+        put(
+            &dir,
+            "patterns/linked.md",
+            Cx::new("linked").body(
+                "See [overview](../areas/overview.md), a [ghost](../areas/ghost.md) link, \
+                 an [anchor](#skip), an [absolute](/etc/passwd.md), \
+                 a [mail link](mailto:person@example.com), and a [site](https://example.com/readme.md).",
+            ),
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        let dangling = of_code(&report.warnings, "dangling_md_link");
+        assert_eq!(
+            dangling.len(),
+            1,
+            "only the ghost relative .md target may warn — external/anchor/absolute/mailto never do: {:?}",
+            report.warnings
+        );
+        assert_eq!(dangling[0]["file"], "patterns/linked.md");
+        assert!(
+            msg(dangling[0]).contains("../areas/ghost.md"),
+            "the unresolved target must be named: {}",
+            msg(dangling[0])
+        );
+        assert!(report.ok, "a warning alone must not fail un-strict");
+    }
+
+    /// A body `[[target]]` wiki link resolves when `target`, or `target`
+    /// minus an optional `pattern-` prefix, matches the stem of any `.md` in
+    /// the bundle (dangling_wiki_link).
+    #[test]
+    fn dangling_wiki_link_warns_only_for_the_unresolvable_target() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "areas/overview.md", Cx::new("demo-overview").ty("bee.area"));
+        put(
+            &dir,
+            "patterns/linked.md",
+            Cx::new("linked").body("See [[overview]], also [[pattern-overview]], and a [[ghost]] link."),
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        let dangling = of_code(&report.warnings, "dangling_wiki_link");
+        assert_eq!(
+            dangling.len(),
+            1,
+            "the bare stem and the pattern- prefixed stem must both resolve silently: {:?}",
+            report.warnings
+        );
+        assert_eq!(dangling[0]["file"], "patterns/linked.md");
+        assert!(msg(dangling[0]).contains("ghost"), "the unresolved target must be named: {}", msg(dangling[0]));
+        assert!(report.ok, "a warning alone must not fail un-strict");
+    }
+
+    /// Quoted syntax is not linkage: a `[[target]]` or `](x.md)` inside an
+    /// inline backtick span or a fenced code block never feeds the link
+    /// extractors (strip_code_regions).
+    #[test]
+    fn code_quoted_link_syntax_never_warns() {
+        let (_tmp, dir) = bundle();
+        put(
+            &dir,
+            "patterns/quoting.md",
+            Cx::new("quoting").body(
+                "A `[[target]]` form and a `[x](ghost.md)` form are quoted.\n\n```\n[[fenced-ghost]] and [y](fenced-ghost.md)\n```\n\nBut [[real-ghost]] still warns.",
+            ),
+        );
+        let report = check_bundle(&dir, false).unwrap();
+        let wiki = of_code(&report.warnings, "dangling_wiki_link");
+        let md = of_code(&report.warnings, "dangling_md_link");
+        assert_eq!(md.len(), 0, "code-quoted md links must stay silent: {:?}", report.warnings);
+        assert_eq!(wiki.len(), 1, "only the prose wiki link may warn: {:?}", report.warnings);
+        assert!(msg(wiki[0]).contains("real-ghost"), "the prose target must be named: {}", msg(wiki[0]));
+    }
+
     /// Node: 'profile warning: dangling supersedes id; a resolving id stays
     /// silent' (l.300).
     #[test]
@@ -2148,4 +2228,42 @@ use std::time::Instant;
             ManifestOut::Thrown(msg) => panic!("a history anchor must report zero_signal, never throw it: {msg}"),
             ManifestOut::NeedsNode => panic!("unexpected delegation"),
         }
+    }
+
+    // ═══ host repo docs/knowledge bundle: real-bundle link integrity ═══════
+
+    /// This crate is vendored into other repos by onboarding (AGENTS.md), so
+    /// a checkout that carries no `docs/knowledge` bundle is a normal
+    /// outside-repo posture, never a failure — the walk from
+    /// CARGO_MANIFEST_DIR up through its ancestors either finds the host
+    /// repo's bundle or the test skips with a named reason.
+    #[test]
+    fn repo_docs_knowledge_bundle_carries_no_dangling_body_links() {
+        let start = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let Some(bundle_dir) = start.ancestors().map(|a| a.join("docs/knowledge")).find(|p| p.is_dir()) else {
+            eprintln!(
+                "skip: no docs/knowledge bundle found walking up from {} — this checkout carries no host repo docs (crate runs outside the bee repo)",
+                start.display()
+            );
+            return;
+        };
+        let report = check_bundle(&bundle_dir, false)
+            .expect("the host repo's own docs/knowledge bundle must not need Node delegation");
+        let mut dangling: Vec<&Value> = of_code(&report.warnings, "dangling_md_link");
+        dangling.extend(of_code(&report.warnings, "dangling_wiki_link"));
+        assert!(
+            dangling.is_empty(),
+            "docs/knowledge carries {} dangling body link(s):\n{}",
+            dangling.len(),
+            dangling
+                .iter()
+                .map(|f| format!(
+                    "  {} [{}]: {}",
+                    f["file"].as_str().unwrap_or("?"),
+                    f["code"].as_str().unwrap_or("?"),
+                    msg(f)
+                ))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
     }
