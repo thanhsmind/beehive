@@ -8,6 +8,7 @@ use crate::fsutil::{ensure_dir, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state::read_config_raw;
+use crate::verbs::knowledge;
 use crate::verbs::reservations::{
     finish, js_is_ws, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
 };
@@ -274,7 +275,7 @@ pub(crate) fn bundle_learned_lines(
     cell: &Value,
     read_first: &HashSet<String>,
 ) -> D<Vec<String>> {
-    let Some(dir) = kctx::bundle_dir(root) else { return Err(Delegate) };
+    let Some(dir) = knowledge::bundle_dir(root) else { return Err(Delegate) };
     let budget = lane_budget(vget(cell, "lane"));
     let work = match vget(cell, "feature") {
         Some(Value::String(s)) => s.clone(),
@@ -285,14 +286,14 @@ pub(crate) fn bundle_learned_lines(
     let manifest = if work.is_empty() {
         None
     } else {
-        match kctx::build_context_manifest(&dir, &work, budget, &kctx::num(budget)) {
-            kctx::ManifestOut::Built(m) => Some(m),
-            kctx::ManifestOut::Thrown(_) => None, // caught by dispatch-prepare's try
-            kctx::ManifestOut::NeedsNode => return Err(Delegate),
+        match knowledge::build_context_manifest(&dir, &work, budget, &knowledge::num(budget)) {
+            knowledge::ManifestOut::Built(m) => Some(m),
+            knowledge::ManifestOut::Thrown(_) => None, // caught by dispatch-prepare's try
+            knowledge::ManifestOut::NeedsNode => return Err(Delegate),
         }
     };
     if let Some(manifest) = manifest {
-        let Some(concepts) = kctx::collect_concepts(&dir) else { return Err(Delegate) };
+        let Some(concepts) = knowledge::collect_concepts(&dir) else { return Err(Delegate) };
         // `new Map(...)`: last write wins per key (never hit for a real bundle,
         // where paths are unique).
         let mut titles: Vec<(String, Option<String>)> = Vec::new();
@@ -356,20 +357,20 @@ pub(crate) fn bundle_learned_lines(
 /// least one non-reserved markdown file must parse as a strict OKF concept
 /// carrying a non-empty string `type`.
 pub(crate) fn bundle_mode(root: &Path) -> D<bool> {
-    let Some(dir) = kctx::bundle_dir(root) else { return Err(Delegate) };
+    let Some(dir) = knowledge::bundle_dir(root) else { return Err(Delegate) };
     match std::fs::metadata(&dir) {
         Ok(m) if m.is_dir() => {}
         _ => return Ok(false),
     }
-    let Some(rels) = kctx::list_bundle_markdown(&dir) else { return Err(Delegate) };
+    let Some(rels) = knowledge::list_bundle_markdown(&dir) else { return Err(Delegate) };
     for rel in rels {
         let base = rel.rsplit('/').next().unwrap_or(&rel);
-        if kctx::is_reserved_basename(base) {
+        if knowledge::is_reserved_basename(base) {
             continue;
         }
-        let Ok(text) = kctx::read_file_lossy(&kctx::join_rel(&dir, &rel)) else { continue };
-        match kctx::parse_frontmatter(&text) {
-            kctx::Fm::Parsed { data, .. } => {
+        let Ok(text) = knowledge::read_file_lossy(&knowledge::join_rel(&dir, &rel)) else { continue };
+        match knowledge::parse_frontmatter(&text) {
+            knowledge::Fm::Parsed { data, .. } => {
                 if matches!(data.get("type"), Some(Value::String(t)) if !t.is_empty()) {
                     return Ok(true);
                 }
