@@ -374,19 +374,32 @@ pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
 }
 
 /// wl-3 (docs/history/workflow-lessons/plan.md): the closing feature's
-/// route — the SAME `mode` field the lane record's own gate doors already
-/// key off (state_group/set_gate.rs, cells/handlers_close.rs lane checks)
-/// — read via the fail-open display read `scribing_debt` above already
-/// uses, so a corrupt or missing lane record reads as "no route" rather
-/// than throwing. `None` covers both: no lane record at all (a feature
-/// closed without ever going through shape/gate) and a lane record whose
-/// `mode` is absent or non-string.
+/// route — read via `route.lane`, the SAME field the write-guard and
+/// orient doors already key off (hooks/write_guard/hook_local.rs:524-530,
+/// status_full/orient.rs:89-92), never `lane["mode"]` (that field carries
+/// the workflow's own mode — `"feature"` for the live shape — not the
+/// lane classification, so keying off it left the door silently absent on
+/// every real store). Read via the fail-open display read `scribing_debt`
+/// above already uses, so a corrupt or missing lane record reads as "no
+/// route" rather than throwing. When the lane record carries no `route`
+/// of its own, fall back to the default state's `route.lane` — the same
+/// top-level field the write-guard/orient precedents read directly.
+/// `None` covers every remaining case: no lane record and no default-state
+/// route (a feature closed without ever going through shape/gate), or a
+/// route whose `lane` is absent or non-string.
 pub(crate) fn feature_route(root: &Path, feature: &str) -> D<Option<String>> {
+    let route_lane = |v: &Value| -> Option<String> {
+        match vget(v, "lane") {
+            Some(Value::String(s)) => Some(s.clone()),
+            _ => None,
+        }
+    };
     let lane = crate::verbs::workflow_store::read_lane_display(root, feature).map_err(|_| Delegate)?;
-    Ok(lane.and_then(|l| match l.get("mode") {
-        Some(Value::String(s)) => Some(s.clone()),
-        _ => None,
-    }))
+    if let Some(from_lane) = lane.as_ref().and_then(|l| l.get("route")).and_then(route_lane) {
+        return Ok(Some(from_lane));
+    }
+    let state = read_state(root)?;
+    Ok(state.get("route").and_then(route_lane))
 }
 
 /// wl-3: every capped `behavior_change` cell that carries NO judge record

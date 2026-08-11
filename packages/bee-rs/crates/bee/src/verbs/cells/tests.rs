@@ -1233,7 +1233,9 @@ use std::time::Instant;
     fn judge_debt_door_blocks_a_standard_lane_feature_with_an_unjudged_cell() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_lane_record(root, "demo", "execution", Some("standard"), true);
+        // The live shape: `mode: "feature"` with the lane classification
+        // under `route.lane` — this DOES grow the door.
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
         write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
 
         let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
@@ -1250,7 +1252,7 @@ use std::time::Instant;
     fn judge_debt_door_clears_once_a_judge_verdict_is_recorded() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_lane_record(root, "demo", "execution", Some("standard"), true);
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
         write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", true));
 
         let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
@@ -1265,7 +1267,7 @@ use std::time::Instant;
     fn judge_debt_door_is_absent_for_a_tiny_lane_feature() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        write_lane_record(root, "demo", "execution", Some("tiny"), true);
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
         write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
 
         let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
@@ -1284,6 +1286,24 @@ use std::time::Instant;
         assert!(doors.iter().find(|d| d.door == "judge-debt").is_none());
     }
 
+    /// wfl-5: `route.lane` absent EVERYWHERE — the lane record exists
+    /// (`mode: "feature"`) but carries no `route`, and there is no
+    /// default-state `route.lane` to fall back to either — still reads as
+    /// "no route", same absent-door treatment as the no-lane-record case.
+    #[test]
+    fn judge_debt_door_is_absent_when_route_lane_is_missing_everywhere() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", None, true);
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        assert!(
+            doors.iter().find(|d| d.door == "judge-debt").is_none(),
+            "a lane record with no route.lane, and no default-state route, must stay door-free"
+        );
+    }
+
     /// End to end: `bee close` on a standard-lane feature with an unjudged
     /// `behavior_change` cell refuses even with tests GREEN, names the cell,
     /// and states both remedy commands.
@@ -1298,7 +1318,7 @@ use std::time::Instant;
             r#"{"commands":{"test":"echo suite-green"}}"#,
         )
         .unwrap();
-        write_lane_record(root, "demo", "execution", Some("standard"), true);
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
         // Past D1: a scribing run recorded after the cap clears the
         // scribing-debt door, so the judge-debt refusal is the one that
         // actually surfaces.
@@ -2310,6 +2330,27 @@ use std::time::Instant;
             "feature": feature,
             "phase": phase,
             "mode": mode,
+            "approved_gates": {"execution": execution},
+        });
+        std::fs::write(dir.join(format!("{feature}.json")), jsjson::stringify_pretty(&body)).unwrap();
+    }
+
+    /// wfl-5 (docs/history/workflow-lessons/plan.md): the live lane-record
+    /// shape carries the workflow's own mode fixed at `"feature"` and the
+    /// lane CLASSIFICATION (tiny/small/standard/high-risk) under
+    /// `route.lane` (state_group/workflows.rs `state route --set`), never
+    /// under the top-level `mode` field `write_lane_record` above writes
+    /// for the docs-exemption checks. This fixture matches that live shape
+    /// for the judge-debt door tests below.
+    fn write_lane_record_routed(root: &Path, feature: &str, phase: &str, route_lane: Option<&str>, execution: bool) {
+        let dir = lanes_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let route = route_lane.map(|l| json!({"lane": l}));
+        let body = json!({
+            "feature": feature,
+            "phase": phase,
+            "mode": "feature",
+            "route": route,
             "approved_gates": {"execution": execution},
         });
         std::fs::write(dir.join(format!("{feature}.json")), jsjson::stringify_pretty(&body)).unwrap();

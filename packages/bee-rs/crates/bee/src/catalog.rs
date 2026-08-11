@@ -304,7 +304,16 @@ mod tests {
         // invocation can carry directly; `--friction` names a distinct
         // concept (a trigger-fired note, not a named deviation). None of
         // those is "one deviation line, inline" — `--deviation` is new.
-        const PINNED_FLAG_COUNT: usize = 146;
+        // 146 -> 147 (workflow-lessons wfl-5): `cells.finish` already parsed
+        // `--report` (wfl-1, handlers_close.rs CAP_FLAGS) but the registry
+        // entry never named it, so it was undiscoverable through
+        // `bee --help --json`/catalog lookups even though the flag worked.
+        // Checked first: no existing flag names "the worker Result form as
+        // JSON" — `--outcome` is a plain one-line string, `--files` a
+        // comma-separated list, neither the structured five-key object
+        // `--report` carries. This bump documents the flag, it invents
+        // nothing new at the CLI surface.
+        const PINNED_FLAG_COUNT: usize = 147;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
