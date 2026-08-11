@@ -323,5 +323,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-11T03:58:55.877Z"
+  },
+  "revision-deadlock-visibility": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-11T04:17:23.720Z"
   }
 }

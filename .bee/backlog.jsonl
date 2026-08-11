@@ -755,3 +755,4 @@
 {"ts":"2026-08-11T03:50:19.899Z","kind":"pbi","event":"status","id":"p-726a4881","status":"declined"}
 {"ts":"2026-08-11T03:50:19.904Z","kind":"pbi","event":"amend","id":"p-842955b5","cos":"STALE AS WRITTEN (2026-08-11 triage): test-economy D7a deferral built on retired mjs proof-tier machinery; re-shape against the live chain if the host-project need returns."}
 {"ts":"2026-08-11T03:50:19.910Z","kind":"pbi","event":"status","id":"p-842955b5","status":"declined"}
+{"ts":"2026-08-11T04:17:11.893Z","kind":"pbi","event":"status","id":"p-808487c4","status":"done","feature":"revision-deadlock-visibility"}
