@@ -129,8 +129,13 @@ fn sha256_of(bytes: &[u8]) -> String {
     format!("{:x}", h.finalize())
 }
 
-/// The four mechanical rows. Every one of them reads an artifact that exists;
-/// a row with nothing to read reports not_ok, never ok-by-absence.
+/// The four mechanical rows, plus a fifth that exists only in a bee SOURCE
+/// checkout (`binary_freshness_row`, appended below — see its own doc). Every
+/// one of the first four reads an artifact that exists; a row with nothing to
+/// read reports not_ok, never ok-by-absence. The fifth is the one deliberate
+/// exception: a missing installed binary is not_ok on `hook_handler` already,
+/// so `binary_freshness` reports unknown there rather than repeating the
+/// same verdict under a second name.
 fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
     let mut rows = Vec::new();
 
@@ -249,7 +254,174 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
         }
     });
 
+    if let Some(row) = binary_freshness_row(root) {
+        rows.push(row);
+    }
+
     rows
+}
+
+/// Source that ships without reinstalling the binary the hooks call is
+/// inert — a pattern this repo has paid for more than once (four features
+/// shipped to main in one session with `.bee/bin/bee` never rebuilt). This
+/// row gives that pattern a machine owner.
+///
+/// It exists ONLY in a bee SOURCE checkout, detected the same neighbourhood
+/// `devtools::SOURCE_CHECKOUT_DEV_VERBS` gates on: `packages/bee-rs/Cargo.toml`
+/// present under the repo root. A host project carries no such tree, so the
+/// row is absent there entirely — never a false alarm from a distributed
+/// binary that never had source to lag.
+///
+/// In a source checkout it is not_ok when either (a) the installed binary's
+/// own `rs-info` version disagrees with the source workspace version, or (b)
+/// any source input — `packages/bee-rs/crates/**/*.rs`,
+/// `packages/bee-rs/**/Cargo.toml`, `packages/bee/prompts/*.md` — is newer by
+/// mtime than the installed binary. Read-only throughout: it only stats and
+/// reads files and spawns the installed binary to ask its own version, never
+/// builds, copies, or writes anything.
+fn binary_freshness_row(root: &Path) -> Option<Row> {
+    const KEY: &str = "binary_freshness";
+    const REMEDY: &str = "FIX: cargo build --release --manifest-path packages/bee-rs/Cargo.toml \
+        -p bee --bin bee, then copy target/release/bee to .bee/bin/bee.";
+
+    let workspace_cargo = root.join("packages/bee-rs/Cargo.toml");
+    let source_version = std::fs::read_to_string(&workspace_cargo)
+        .ok()
+        .and_then(|text| parse_workspace_version(&text))?;
+
+    // Missing binary is `hook_handler`'s verdict to give; repeating not_ok
+    // here under a second name would just be noise, so this reports unknown.
+    let Some(bin) = host_binary(root) else {
+        return Some(Row {
+            key: KEY,
+            ok: None,
+            detail: "no installed binary to check for freshness (see hook_handler)".to_string(),
+        });
+    };
+
+    if let Some(installed_version) = installed_binary_version(&bin) {
+        if installed_version != source_version {
+            return Some(Row {
+                key: KEY,
+                ok: Some(false),
+                detail: format!(
+                    "installed binary reports version {installed_version}, source \
+                     (packages/bee-rs/Cargo.toml) is {source_version}. {REMEDY}"
+                ),
+            });
+        }
+    }
+
+    if let Ok(bin_mtime) = std::fs::metadata(&bin).and_then(|m| m.modified()) {
+        let mut newest: Option<(PathBuf, std::time::SystemTime)> = None;
+        for path in source_inputs(root) {
+            let Ok(mtime) = std::fs::metadata(&path).and_then(|m| m.modified()) else { continue };
+            if mtime > bin_mtime && newest.as_ref().is_none_or(|(_, t)| mtime > *t) {
+                newest = Some((path, mtime));
+            }
+        }
+        if let Some((path, mtime)) = newest {
+            let rel = path.strip_prefix(root).unwrap_or(&path);
+            return Some(Row {
+                key: KEY,
+                ok: Some(false),
+                detail: format!(
+                    "{} was modified {} (binary is {}). {REMEDY}",
+                    rel.display(),
+                    fmt_system_time(mtime),
+                    fmt_system_time(bin_mtime)
+                ),
+            });
+        }
+    }
+
+    Some(Row {
+        key: KEY,
+        ok: Some(true),
+        detail: format!(
+            "installed binary matches source (version {source_version}), no source input newer \
+             than the binary"
+        ),
+    })
+}
+
+/// `version = "…"` under `[workspace.package]` in `packages/bee-rs/Cargo.toml`
+/// — a deliberately narrow line scanner, the same idiom `version.rs` uses for
+/// the plugin manifest, over a file this repo controls the exact shape of.
+fn parse_workspace_version(cargo_toml_text: &str) -> Option<String> {
+    let mut in_section = false;
+    for line in cargo_toml_text.lines() {
+        let trimmed = line.trim();
+        if let Some(name) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+            in_section = name == "workspace.package";
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        let Some(rest) = trimmed.strip_prefix("version") else { continue };
+        let Some(rest) = rest.trim_start().strip_prefix('=') else { continue };
+        return Some(rest.trim().trim_matches('"').to_string());
+    }
+    None
+}
+
+/// The installed binary's own answer to what version it was built from —
+/// `bee rs-info`'s `version` field, which is `env!("CARGO_PKG_VERSION")` at
+/// that binary's build time. A probe, never a mutation: this only spawns and
+/// reads stdout.
+fn installed_binary_version(bin: &Path) -> Option<String> {
+    let out = std::process::Command::new(bin).arg("rs-info").output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let value: Value = serde_json::from_slice(&out.stdout).ok()?;
+    value.get("version").and_then(Value::as_str).map(str::to_string)
+}
+
+/// The freshness inputs: every `.rs` file and `Cargo.toml` under
+/// `packages/bee-rs/crates`, the workspace `packages/bee-rs/Cargo.toml`
+/// itself, and every `.md` prompt directly under `packages/bee/prompts`. The
+/// walk stays inside `crates/` rather than all of `packages/bee-rs` on
+/// purpose — the sibling `target/` build directory lives at the workspace
+/// root, not under `crates/`, and a doctor row must never wander into it.
+fn source_inputs(root: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    walk_files(&root.join("packages/bee-rs/crates"), &mut out);
+    out.retain(|p| {
+        p.extension().is_some_and(|e| e == "rs") || p.file_name().is_some_and(|n| n == "Cargo.toml")
+    });
+
+    let workspace_cargo = root.join("packages/bee-rs/Cargo.toml");
+    if workspace_cargo.is_file() {
+        out.push(workspace_cargo);
+    }
+
+    if let Ok(entries) = std::fs::read_dir(root.join("packages/bee/prompts")) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() && path.extension().is_some_and(|e| e == "md") {
+                out.push(path);
+            }
+        }
+    }
+    out
+}
+
+fn walk_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            walk_files(&path, out);
+        } else {
+            out.push(path);
+        }
+    }
+}
+
+fn fmt_system_time(t: std::time::SystemTime) -> String {
+    chrono::DateTime::<chrono::Utc>::from(t).format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
 /// Codex's trust rows. The contract calls them structurally unknown: Codex
