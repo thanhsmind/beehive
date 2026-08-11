@@ -174,3 +174,134 @@ fn unproven_argv_shapes_defer_to_the_catalog() {
     assert!(try_native(&osv(&["doctor", "--wat"])).is_none());
     assert!(try_native(&osv(&["status"])).is_none(), "doctor must not claim another verb");
 }
+
+// ─── binary_freshness ───────────────────────────────────────────────────
+
+/// A minimal bee SOURCE checkout: `packages/bee-rs/Cargo.toml` (the
+/// workspace version marker that makes the row exist at all), a `.rs` file
+/// under `crates/` (a freshness input), and a `.md` prompt (another input).
+/// `.bee/bin/bee` is deliberately not written here — each test below
+/// controls its content and mtime itself.
+fn source_checkout(tmp: &Path, workspace_version: &str) -> PathBuf {
+    let root = tmp.join("repo");
+    std::fs::create_dir_all(root.join(".bee/bin")).unwrap();
+    std::fs::create_dir_all(root.join("packages/bee-rs/crates/bee/src")).unwrap();
+    std::fs::write(
+        root.join("packages/bee-rs/Cargo.toml"),
+        format!(
+            "[workspace]\nresolver = \"2\"\nmembers = [\"crates/bee\"]\n\n\
+             [workspace.package]\nversion = \"{workspace_version}\"\nedition = \"2024\"\n"
+        ),
+    )
+    .unwrap();
+    std::fs::write(root.join("packages/bee-rs/crates/bee/src/main.rs"), "fn main() {}\n").unwrap();
+    std::fs::create_dir_all(root.join("packages/bee/prompts")).unwrap();
+    std::fs::write(root.join("packages/bee/prompts/one.md"), "# one\n").unwrap();
+    root
+}
+
+/// A real, executable `.bee/bin/bee` stand-in that answers `rs-info` with a
+/// chosen version — enough for `installed_binary_version` to probe it
+/// exactly the way it probes the real binary.
+#[cfg(unix)]
+fn write_executable_binary(path: &Path, rs_info_version: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let script = format!(
+        "#!/bin/sh\nif [ \"$1\" = \"rs-info\" ]; then\n  echo '{{\"version\":\"{rs_info_version}\"}}'\nfi\n"
+    );
+    std::fs::write(path, script).unwrap();
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+/// Present, version-matched, and newest on disk: nothing to report.
+#[cfg(unix)]
+#[test]
+fn binary_freshness_is_ok_when_matched_and_newest() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "9.9.9");
+    let bin = root.join(".bee/bin/bee");
+    write_executable_binary(&bin, "9.9.9");
+
+    let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
+    let older = filetime::FileTime::from_system_time(bin_time - std::time::Duration::from_secs(60));
+    for path in source_inputs(&root) {
+        filetime::set_file_mtime(&path, older).unwrap();
+    }
+
+    let row = binary_freshness_row(&root).expect("the row exists in a source checkout");
+    assert_eq!(row.ok, Some(true), "{}", row.detail);
+}
+
+/// A source input newer than the binary is not_ok, and the detail names the
+/// exact offending path plus the rebuild remedy.
+#[cfg(unix)]
+#[test]
+fn binary_freshness_reports_not_ok_on_a_newer_source_input() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "9.9.9");
+    let bin = root.join(".bee/bin/bee");
+    write_executable_binary(&bin, "9.9.9");
+
+    let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
+    let newer = filetime::FileTime::from_system_time(bin_time + std::time::Duration::from_secs(60));
+    let stale_input = root.join("packages/bee-rs/crates/bee/src/main.rs");
+    filetime::set_file_mtime(&stale_input, newer).unwrap();
+
+    let row = binary_freshness_row(&root).unwrap();
+    assert_eq!(row.ok, Some(false));
+    assert!(
+        row.detail.contains("packages/bee-rs/crates/bee/src/main.rs"),
+        "{}",
+        row.detail
+    );
+    assert!(row.detail.contains("cargo build"), "{}", row.detail);
+}
+
+/// A version mismatch is not_ok, naming both versions and the remedy — even
+/// when every source mtime is older than the binary, so the mtime leg alone
+/// could never have caught it.
+#[cfg(unix)]
+#[test]
+fn binary_freshness_reports_not_ok_on_a_version_mismatch() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "9.9.9");
+    let bin = root.join(".bee/bin/bee");
+    write_executable_binary(&bin, "1.2.3");
+
+    let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
+    let older = filetime::FileTime::from_system_time(bin_time - std::time::Duration::from_secs(60));
+    for path in source_inputs(&root) {
+        filetime::set_file_mtime(&path, older).unwrap();
+    }
+
+    let row = binary_freshness_row(&root).unwrap();
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("1.2.3"), "{}", row.detail);
+    assert!(row.detail.contains("9.9.9"), "{}", row.detail);
+    assert!(row.detail.contains("cargo build"), "{}", row.detail);
+}
+
+/// No binary installed is `hook_handler`'s not_ok to report; this row stays
+/// unknown rather than repeating the same verdict under a second name.
+#[test]
+fn binary_freshness_is_unknown_without_an_installed_binary() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "9.9.9");
+    let row = binary_freshness_row(&root).expect("the row exists in a source checkout");
+    assert_eq!(row.ok, None, "{}", row.detail);
+}
+
+/// A host project — no `packages/bee-rs/Cargo.toml` — never sees this row at
+/// all, never a false not_ok from a distributed binary with no source to lag.
+#[test]
+fn binary_freshness_is_absent_outside_a_source_checkout() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = repo(tmp.path(), true, true, None);
+    assert!(binary_freshness_row(&root).is_none());
+    assert!(
+        rows_of(&root, Runtime::Claude).iter().all(|(k, _)| k != "binary_freshness"),
+        "a host project must never carry the binary_freshness row"
+    );
+}

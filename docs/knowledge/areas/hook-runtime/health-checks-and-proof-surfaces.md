@@ -35,6 +35,18 @@ against isolated fixtures, asserting that a denied action changed nothing.
   are version-scoped; the command performs zero writes, including the
   dispatcher's manifest-hash cache (codex-native-runtime-v2, cnr2-13).
 
+- The `binary_freshness` row exists only in a bee SOURCE checkout
+  (`packages/bee-rs/Cargo.toml` present) and is absent — never a false
+  not_ok — in a host project (doctor-binary-freshness dbf-1, 2026-08-11). It
+  reads not_ok when the installed `.bee/bin/bee` reports a different version
+  (`bee rs-info`) than the workspace `Cargo.toml`, or when any source input
+  (`packages/bee-rs/crates/**/*.rs`, `packages/bee-rs/**/Cargo.toml`,
+  `packages/bee/prompts/*.md`) is newer by mtime than the binary; the detail
+  names the two versions or the offending path plus the rebuild remedy. No
+  binary installed reads `unknown`, leaving absence to the host-binary rows.
+  This gives the "source that ships without reinstalling the binary the hooks
+  call is inert" pattern a machine owner instead of a doc line.
+
 - Doctor's overall verdict is THREE-STATE (gh22-completion g22-3, supersedes
   the binary ready/not_ready): `blocked` = a mechanical blocking row is
   not-ok (hooks file missing, baseline drift, handlers unresolvable, skills
