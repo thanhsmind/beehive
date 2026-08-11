@@ -4365,3 +4365,140 @@ use std::time::Instant;
             json!({"cycles": [], "unsatisfiable_deps": [], "empty_files": []})
         );
     }
+
+    // ══ wfl-4 — `bee dispatch wave`: the current schedule wave, claimed and
+    // prepared in one call ═════════════════════════════════════════════════
+    //
+    // `run_dispatch_wave` (verbs/drivers/prepare.rs) resolves its store root
+    // AND its hold topology off `std::env::current_dir()` — process-global —
+    // so it is exercised out-of-process via a `#[ignore]`d child, the same
+    // isolation `cells_update_behavior_child` (above) uses for its own
+    // process-global seam.
+
+    const DISPATCH_WAVE_CHILD: &str = "verbs::cells::tests::wfl4_dispatch_wave_child";
+
+    /// Runs ONLY as a child of the tests below — drives the REAL `bee
+    /// dispatch wave --runtime claude --json` CLI door over whatever cells
+    /// are on disk at its cwd.
+    #[test]
+    #[ignore = "spawned by the dispatch_wave_* tests"]
+    fn wfl4_dispatch_wave_child() {
+        let (flags, use_json) =
+            rsv::parse_flags(&["--runtime", "claude", "--json"]).expect("well-formed fixture argv");
+        crate::verbs::drivers::run_dispatch_wave(flags, use_json, Instant::now());
+    }
+
+    /// A store root with the one marker `resolve_store_root` requires, plus
+    /// an optional `models` config `prepare_dispatch` reads to resolve a
+    /// tier — the same two-file recipe `dispatch_prepare_claim_payload_pins_
+    /// worker_registered_true`'s `repo()` fixture (drivers/tests.rs) uses for
+    /// the identical claim+prepare seam.
+    fn wfl4_wave_root(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        let dir = root.join(".bee");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(dir.join("config.json"), config).unwrap();
+        root
+    }
+
+    /// Spawns `wfl4_dispatch_wave_child` with `root` as its cwd and returns
+    /// the parsed `{wave, skipped, economics}` payload — sliced out of the
+    /// raw stdout by its outermost braces (the libtest banner surrounds it;
+    /// `--nocapture` is what makes a PASSING test's own stdout visible at
+    /// all), the same tolerant slice `dispatch_prepare_claim_payload_pins_
+    /// worker_registered_true` (drivers/tests.rs) uses for the identical
+    /// seam.
+    fn wfl4_dispatch_wave_run(root: &Path) -> Value {
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = std::process::Command::new(&exe);
+        cmd.args(["--exact", DISPATCH_WAVE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.current_dir(root);
+        let out = cmd.output().expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let start =
+            stdout.find('{').unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap_or_else(|| {
+            panic!("no JSON payload in child stdout:\n{stdout}")
+        });
+        serde_json::from_str(&stdout[start..end])
+            .unwrap_or_else(|e| panic!("child stdout was not valid JSON ({e}):\n{stdout}"))
+    }
+
+    /// must-have: "Each payload equals what per-cell prepare would emit" —
+    /// two disjoint, ready, open cells in the current wave each earn a full
+    /// claim+reserve+payload envelope, never a shared/second copy of
+    /// `dispatch prepare --claim`'s own per-cell path.
+    #[test]
+    fn dispatch_wave_returns_a_payload_per_disjoint_ready_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        let mut a = cell("wa-1", "open", "f", json!([]));
+        a["files"] = json!(["docs/wa-1.md"]);
+        a["tier"] = json!("generation");
+        write_cell_fixture(&root, "wa-1", &a);
+        let mut b = cell("wa-2", "open", "f", json!([]));
+        b["files"] = json!(["docs/wa-2.md"]);
+        b["tier"] = json!("generation");
+        write_cell_fixture(&root, "wa-2", &b);
+
+        let payload = wfl4_dispatch_wave_run(&root);
+        let wave = payload["wave"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(wave.len(), 2, "payload: {payload}");
+        assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
+        for item in wave {
+            assert_eq!(item["claimed"], json!(true), "payload: {payload}");
+            assert_eq!(item["tool"], json!("Agent"), "payload: {payload}");
+            assert_eq!(item["payload"]["subagent_type"], json!("bee-build"), "payload: {payload}");
+            assert!(!item["reserved"].as_array().unwrap().is_empty(), "payload: {payload}");
+        }
+        let economics = payload["economics"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        let mut ids: Vec<&str> = economics.iter().map(|e| e["id"].as_str().unwrap()).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["wa-1", "wa-2"], "payload: {payload}");
+    }
+
+    /// must-have: "one refusal never poisons the batch" — a cell already
+    /// claimed by another worker still occupies its wave slot (schedulable
+    /// covers open AND claimed), the wave batch attempts it through the SAME
+    /// claim door `dispatch prepare --claim` uses, and the door's own typed
+    /// "not open" refusal lands the cell in `skipped` with a typed reason
+    /// rather than aborting the call.
+    #[test]
+    fn dispatch_wave_skips_a_foreign_claimed_cell_with_a_typed_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        let mut c = cell("wb-1", "claimed", "f", json!([]));
+        c["trace"] = json!({"worker": "someone-else"});
+        write_cell_fixture(&root, "wb-1", &c);
+
+        let payload = wfl4_dispatch_wave_run(&root);
+        assert_eq!(payload["wave"], json!([]), "payload: {payload}");
+        assert_eq!(payload["economics"], json!([]), "payload: {payload}");
+        let skipped = payload["skipped"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(skipped.len(), 1, "payload: {payload}");
+        assert_eq!(skipped[0]["id"], json!("wb-1"));
+        assert_eq!(skipped[0]["reason"], json!("already_claimed"));
+        assert!(
+            skipped[0]["detail"].as_str().unwrap().contains("not \"open\""),
+            "payload: {payload}"
+        );
+    }
+
+    /// must-have: an empty schedule (no schedulable cells at all) returns
+    /// every array empty rather than an absent/null key.
+    #[test]
+    fn dispatch_wave_over_an_empty_store_returns_empty_arrays() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, "{}");
+
+        let payload = wfl4_dispatch_wave_run(&root);
+        assert_eq!(payload, json!({"wave": [], "skipped": [], "economics": []}));
+    }

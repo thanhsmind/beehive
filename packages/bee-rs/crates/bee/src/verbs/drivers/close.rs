@@ -1560,16 +1560,18 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
             run_close(flags, use_json, t0)
         }
         "dispatch" => {
-            if args.get(1)?.to_str()? != "prepare" {
-                return None;
-            }
+            let sub = args.get(1)?.to_str()?;
             let toks: Vec<&str> =
                 args[2..].iter().map(|a| a.to_str()).collect::<Option<Vec<_>>>()?;
             if toks.iter().any(|t| *t == "--help") {
                 return None;
             }
             let (flags, use_json) = parse_flags(&toks)?;
-            run_dispatch_prepare(flags, use_json, t0)
+            match sub {
+                "prepare" => run_dispatch_prepare(flags, use_json, t0),
+                "wave" => run_dispatch_wave(flags, use_json, t0),
+                _ => None,
+            }
         }
         _ => None,
     }
