@@ -466,6 +466,23 @@ mod tests {
         );
     }
 
+    /// D1 (opencode-support oc-4): the marker value round-trips through both
+    /// `classify_marker_line` (via `RENDER_RUNTIMES`) and `render_skill_bytes`
+    /// exactly like the two pre-existing runtimes.
+    #[test]
+    fn opencode_marker_label_is_accepted_and_filters_like_the_others() {
+        let src = "head\n<!-- bee:only opencode -->\nOPENCODE\n<!-- bee:end -->\n<!-- bee:only claude -->\nCLAUDE\n<!-- bee:end -->\ntail\n";
+        assert!(validate_skill_markers(src).is_empty());
+        assert_eq!(
+            String::from_utf8(render_skill_bytes(src.as_bytes(), "opencode")).unwrap(),
+            "head\nOPENCODE\ntail\n"
+        );
+        assert_eq!(
+            String::from_utf8(render_skill_bytes(src.as_bytes(), "claude")).unwrap(),
+            "head\nCLAUDE\ntail\n"
+        );
+    }
+
     #[test]
     fn marker_grammar_errors_match_node_wording() {
         assert!(validate_skill_markers("plain\n").is_empty());
@@ -475,7 +492,7 @@ mod tests {
         assert_eq!(
             e,
             vec![
-                "unknown runtime label \"rust\" (expected claude or codex) at line 1",
+                "unknown runtime label \"rust\" (expected claude or codex or opencode) at line 1",
                 "stray bee:end with no open block at line 3"
             ]
         );

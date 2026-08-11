@@ -1,10 +1,13 @@
 // bee dev render-skill-trees.
 //
 // The marker-grammar and sidecar primitives below (RENDER_RUNTIMES,
-// RENDER_SCHEMA, RENDER_SIDECAR, validate_skill_markers, render_skill_bytes,
-// manifest_fingerprint, skill_digest, build_render_sidecar) are RE-DERIVED
-// here rather than shared with the `onboard/` module: a dev tool that cannot
-// regenerate the committed trees on its own is not a real check.
+// MARKER_RUNTIMES, RENDER_SCHEMA, RENDER_SIDECAR, validate_skill_markers,
+// render_skill_bytes, manifest_fingerprint, skill_digest,
+// build_render_sidecar) are RE-DERIVED here rather than shared with the
+// `onboard/` module: a dev tool that cannot regenerate the committed trees
+// on its own is not a real check. MARKER_RUNTIMES (grammar-valid labels) and
+// RENDER_RUNTIMES (trees this pipeline actually writes) deliberately differ
+// by one value, "opencode" — see the constants' doc comments (D1 / plan.md E2).
 // `render_matches_the_committed_trees` below re-renders the REAL skills/ tree
 // and byte-compares it against the committed projections, which is the pin
 // that catches either copy drifting.
@@ -31,7 +34,19 @@ use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+/// The runtimes THIS pipeline renders a plugin tree for. `opencode`
+/// deliberately does NOT join this list — no marketplace equivalent exists
+/// for it (named exclusion, not an omission; plan.md E2 / CONTEXT.md D1).
+/// Content scoped to opencode via `<!-- bee:only opencode -->` is still
+/// valid grammar (see MARKER_RUNTIMES below) — it is simply stripped from
+/// both trees this pipeline produces, same as any other off-runtime block.
 const RENDER_RUNTIMES: [&str; 2] = ["claude", "codex"];
+/// Runtime labels the `<!-- bee:only RUNTIME -->` marker grammar accepts —
+/// a strict superset of RENDER_RUNTIMES. `opencode` is a valid marker label
+/// (the ONBOARDING SYNC PATH renders an opencode target from this same
+/// canonical `skills/` source) even though this pipeline never emits an
+/// opencode tree of its own.
+const MARKER_RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
 /// Sidecar schema id (bee-render/2, D7).
 const RENDER_SCHEMA: &str = "bee-render/2";
 const RENDER_SIDECAR: &str = ".bee-render.json";
@@ -39,8 +54,21 @@ const RENDER_SIDECAR: &str = ".bee-render.json";
 const TMP_STALE_MS: f64 = 5.0 * 60.0 * 1000.0;
 const SWAP_DIR_PREFIXES: [&str; 2] = ["tmp-", "old-"];
 
+/// The ONE exhaustive runtime→target-dir mapping this pipeline writes into.
+/// Was a string-keyed `if runtime == "claude" {..} else {..}` (silently
+/// sending any other runtime, including a future "opencode", into the codex
+/// tree) — now every caller shares this table, and an unknown runtime
+/// refuses loudly instead of guessing a plugin tree.
 fn target_root(root: &Path, runtime: &str) -> PathBuf {
-    let dir = if runtime == "claude" { ".claude-plugin" } else { ".codex-plugin" };
+    let dir = match runtime {
+        "claude" => ".claude-plugin",
+        "codex" => ".codex-plugin",
+        other => panic!(
+            "target_root: unknown runtime \"{other}\" (expected {}) — refusing rather than \
+             silently rendering into an existing plugin tree",
+            RENDER_RUNTIMES.join(" or ")
+        ),
+    };
     root.join(dir).join("skills")
 }
 
@@ -96,10 +124,10 @@ fn classify_marker_line(line: &str) -> MarkerClass {
         if let Some(label) = inner.strip_suffix(" -->") {
             // `\S+`: at least one char, none of them whitespace.
             if !label.is_empty() && !label.chars().any(char::is_whitespace) {
-                if !RENDER_RUNTIMES.contains(&label) {
+                if !MARKER_RUNTIMES.contains(&label) {
                     return MarkerClass::Error(format!(
                         "unknown runtime label \"{label}\" (expected {})",
-                        RENDER_RUNTIMES.join(" or ")
+                        MARKER_RUNTIMES.join(" or ")
                     ));
                 }
                 return MarkerClass::Only(label.to_string());
@@ -728,10 +756,13 @@ mod tests {
     fn classify_pins_the_three_outcomes() {
         assert!(matches!(classify_marker_line("<!-- bee:only claude -->"), MarkerClass::Only(r) if r == "claude"));
         assert!(matches!(classify_marker_line("<!-- bee:only codex -->  "), MarkerClass::Only(r) if r == "codex"));
+        // opencode is a valid marker LABEL even though RENDER_RUNTIMES (this
+        // pipeline's own two committed trees) never includes it — D1/E2.
+        assert!(matches!(classify_marker_line("<!-- bee:only opencode -->"), MarkerClass::Only(r) if r == "opencode"));
         assert!(matches!(classify_marker_line("<!-- bee:end -->"), MarkerClass::End));
         match classify_marker_line("<!-- bee:only python -->") {
             MarkerClass::Error(e) => {
-                assert_eq!(e, "unknown runtime label \"python\" (expected claude or codex)")
+                assert_eq!(e, "unknown runtime label \"python\" (expected claude or codex or opencode)")
             }
             _ => panic!("expected an unknown-runtime error"),
         }
@@ -784,7 +815,7 @@ mod tests {
         assert_eq!(
             validate_skill_markers("<!-- bee:only python -->\n<!-- bee:end -->\n"),
             [
-                "unknown runtime label \"python\" (expected claude or codex) at line 1",
+                "unknown runtime label \"python\" (expected claude or codex or opencode) at line 1",
                 "stray bee:end with no open block at line 2"
             ]
         );
@@ -834,6 +865,44 @@ mod tests {
         assert_eq!(
             String::from_utf8(render_skill_bytes(crlf.as_bytes(), "claude")).unwrap(),
             "a\r\nb\r\nc"
+        );
+    }
+
+    /// The wrong-target probe (plan.md E2 risk map: "string fan-out sends
+    /// opencode output to a codex tree / HIGH"). `render_skill_bytes` is
+    /// generic on `runtime` (the onboarding sync path calls it with
+    /// "opencode" for real), but THIS pipeline's own two committed trees must
+    /// never carry opencode-only content: a block scoped to it is dropped
+    /// from both renders it actually produces, same as any other off-runtime
+    /// block.
+    #[test]
+    fn opencode_only_content_never_lands_in_either_committed_tree() {
+        let src = "shared\n<!-- bee:only opencode -->\nOPENCODE ONLY\n<!-- bee:end -->\ntail\n";
+        for runtime in RENDER_RUNTIMES {
+            let rendered = String::from_utf8(render_skill_bytes(src.as_bytes(), runtime)).unwrap();
+            assert_eq!(rendered, "shared\ntail\n");
+            assert!(!rendered.contains("OPENCODE ONLY"));
+        }
+        // And render_skill_bytes itself proves the marker round-trips when a
+        // caller DOES render for "opencode" (the onboarding sync path).
+        assert_eq!(
+            String::from_utf8(render_skill_bytes(src.as_bytes(), "opencode")).unwrap(),
+            "shared\nOPENCODE ONLY\ntail\n"
+        );
+    }
+
+    /// The other half of the wrong-target probe: before this cell,
+    /// `target_root`'s `if runtime == "claude" {..} else {..}` silently sent
+    /// ANY other runtime label — including "opencode" — into `.codex-plugin/`.
+    /// The exhaustive match must refuse instead of guessing a tree.
+    #[test]
+    fn target_root_refuses_an_unknown_runtime_instead_of_defaulting_to_a_tree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        let result = std::panic::catch_unwind(move || target_root(&root, "opencode"));
+        assert!(
+            result.is_err(),
+            "an unknown runtime must refuse loudly, never silently render into .codex-plugin/ or .claude-plugin/"
         );
     }
 

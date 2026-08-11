@@ -1,0 +1,5 @@
+interface:
+  display_name: "Bee Hive"
+  short_description: "Route the bee workflow: session start, the next skill, gates, and onboarding. Use when starting or resuming any bee session, choosing the next bee skill, running go mode, checking onboarding state, enforcing workflow gates, or setting/checking the gate-bypass level (off/normal/full/total)."
+policy:
+  allow_implicit_invocation: true

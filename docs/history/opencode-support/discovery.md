@@ -427,3 +427,95 @@ oc-2's write/edit/bash proofs). What was attempted and confirmed instead:
   paid-provider credentials exist on this machine), or if a future
   OpenCode version exposes `apply_patch` to the default agent, re-run this
   probe to get the live deny transcript this cell could not obtain.
+
+## Discovery: opencode plumbed through both render pipelines (oc-4)
+
+**Date:** 2026-08-11
+**Scope:** oc-4 — S2 (plan.md E2). Marker grammar gains the `opencode`
+value in both render sites (`onboard/render.rs`,
+`devtools/skill_trees.rs`); `devtools/skill_trees.rs`'s string-keyed
+target-dir pick becomes one exhaustive runtime→target mapping that refuses
+an unknown runtime instead of silently rendering into `.codex-plugin/`; the
+ONBOARDING SYNC PATH's already-runtime-agnostic writer
+(`apply_sync_skill`/`render_skill_bytes`) is driven once against the real
+checkout to produce `.opencode/skills/`.
+
+### Two render pipelines, one intentional asymmetry
+
+- `devtools/skill_trees.rs` (`bee dev render-skill-trees`): `RENDER_RUNTIMES`
+  stays `["claude", "codex"]` — **no** opencode root. No marketplace
+  equivalent exists for it (named exclusion, not an omission). A NEW,
+  separate `MARKER_RUNTIMES = ["claude", "codex", "opencode"]` constant
+  governs what the `<!-- bee:only RUNTIME -->` grammar accepts as a valid
+  label — a strict superset of `RENDER_RUNTIMES` — so skill-source authors
+  can scope content to opencode even though this pipeline never emits an
+  opencode tree; an `opencode`-only block is simply stripped from both
+  trees this pipeline actually writes, proven by
+  `opencode_only_content_never_lands_in_either_committed_tree`.
+- `onboard/skills.rs` + `onboard/render.rs` (the onboarding sync path):
+  `onboard/templates.rs`'s `RENDER_RUNTIMES` (consumed only by
+  `render.rs::classify_marker_line` — confirmed by a repo-wide grep before
+  editing it) gained `"opencode"` outright, because this path DOES render a
+  real opencode target. `apply_sync_skill`/`compute_skill_items` already
+  took `runtime: &str` with no closed validation (proven pre-existing by the
+  `codex_target_renders_the_codex_arm` test) — no core logic change was
+  needed there, only the marker-label acceptance list.
+- `onboard/templates.rs::REPO_SKILL_TARGETS` (the table `skill_sync_targets`
+  in `onboard/source.rs` builds from, and what `bee onboard --apply` wires
+  through `onboard/apply.rs`) deliberately did **not** gain an `opencode`
+  entry in this cell — that CLI wiring (`--opencode` flag, `bee onboard`
+  target, doctor version-pin drift check) is plan.md E5 (S5), a later slice.
+  This cell proves the render primitives and produces the tree by calling
+  them directly (see below), not by extending the onboarding CLI surface.
+
+### The wrong-target probe (plan.md E2 risk map: HIGH)
+
+Two tests in `devtools/skill_trees.rs` close the risk the plan named
+("string fan-out sends opencode output to a codex tree"):
+
+- `target_root_refuses_an_unknown_runtime_instead_of_defaulting_to_a_tree` —
+  the exhaustive `match` (was `if runtime == "claude" {..} else {..}`) panics
+  on `target_root(root, "opencode")` instead of silently returning
+  `.codex-plugin/skills`.
+- `opencode_only_content_never_lands_in_either_committed_tree` — a skill
+  source file with an `<!-- bee:only opencode -->` block renders identically
+  (block stripped) for both `"claude"` and `"codex"`, and — as a
+  complementary round-trip proof — renders the block IN when the runtime
+  actually is `"opencode"` (the shape the onboarding sync path uses).
+
+### `.opencode/skills/` — the rendered-root inventory (this checkout)
+
+Produced by running `apply_sync_skill(skills/, .opencode/skills/, <name>,
+"opencode")` once per canonical skill directory, then writing the
+`bee-render/2` sidecar via `build_render_sidecar`/`source_skill_digest_entries`
+— the same primitives `onboard/apply.rs` uses for the claude/codex targets,
+driven directly (`onboard::skills::tests::regen_opencode_skills_tree`,
+`#[ignore]`d — the interim regen entry point until E5 wires this through
+`bee onboard --apply`). A permanent pinned test,
+`opencode_projection_matches_the_committed_tree`, re-renders `skills/` for
+`"opencode"` on every `cargo test` run and byte-compares against this
+committed tree, the same drift check
+`devtools::skill_trees::render_matches_the_committed_trees` runs for the
+other two runtimes' committed trees.
+
+| Skill | Rendered at |
+|---|---|
+| bee-capturing | `.opencode/skills/bee-capturing/` |
+| bee-grooming | `.opencode/skills/bee-grooming/` |
+| bee-herding | `.opencode/skills/bee-herding/` |
+| bee-hive | `.opencode/skills/bee-hive/` |
+| bee-planning | `.opencode/skills/bee-planning/` |
+| bee-researching | `.opencode/skills/bee-researching/` |
+| bee-reviewing | `.opencode/skills/bee-reviewing/` |
+| bee-shaping | `.opencode/skills/bee-shaping/` |
+| bee-swarming | `.opencode/skills/bee-swarming/` |
+
+9 skills, matching the canonical `skills/` source root's own count exactly
+(unlike `.agents/skills/`, which independently carries 16 top-level entries
+— legacy/extra content out of this cell's scope). Sidecar at
+`.opencode/skills/.bee-render.json`: `{"schema": "bee-render/2",
+"target_runtime": "opencode", "skills": [...9 entries, name + sha256...]}`
+— `bee-render/2` because that is the schema version already in force
+everywhere else in this codebase (`onboard/templates.rs::RENDER_SCHEMA`,
+`devtools/skill_trees.rs::RENDER_SCHEMA`); the plan text's `bee-render/1`
+citation is stale against the code, not a locked decision to reproduce.

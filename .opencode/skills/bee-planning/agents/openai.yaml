@@ -1,0 +1,5 @@
+interface:
+  display_name: "Bee Planning"
+  short_description: "Shape approved-scope work into an executable plan — classify the lane, research just enough, draft the smallest honest shape, gate it, and prepare current-slice cells. Use when shaping has locked CONTEXT.md, or a clear-scope task needs a lane and a work shape before execution."
+policy:
+  allow_implicit_invocation: true
