@@ -55,9 +55,15 @@ hardening from rph-2: `worktree register` validates `--feature` against the same
 `ls-files` line means prune-nothing, never the empty-set prune-everything branch; a prune that
 removed anything names the pruned files in the bootstrap report; and `worktree new` prints the
 cellsSync skip note `register` already printed (review D-P2-1: the refusal used to be invisible
-on the primary entry point). The original confusion problem (foreign
-tracked cells visible in island reads) therefore remains for a read-side filter, not a disk
-prune — reopened on the PBI.
+on the primary entry point). The read-side filter shipped
+(island-read-filter cell irf-1, 2026-08-11, closing PBI p-9c48a67c): inside a granted island,
+cell ENUMERATION scopes to the granted feature at both read seams (the cells listing and the
+status/archive-aware listing) — foreign tracked files stay on disk but stop appearing as work
+in status counts, ready lists, and claim scans; an ungranted or main-checkout read is
+byte-identical, the filter never engages there. Known residue, named on the cell: the
+`cells list/ready/claim-next` CLI verbs still refuse-and-delegate from a granted worktree at
+root resolution, so the filter is live through `status`/`orient`/`finish` today and unit-level
+for the rest until those doors widen.
 
 ## Where it lives (reading map)
 
