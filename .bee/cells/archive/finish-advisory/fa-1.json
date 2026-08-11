@@ -1,0 +1,50 @@
+{
+  "id": "fa-1",
+  "feature": "finish-advisory",
+  "lane": "small",
+  "title": "Advisory diff-vs-test warning at green cells finish",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+  ],
+  "action": "Add an advisory producer at the green-cap path of cells finish: when the checkout has git and the HEAD commit body carries the finishing cell id (the one-commit-per-cell convention; silently skip when it does not), read that commit numstat; when total changed lines exceed a threshold (config key finish.advisory_untested_lines, default 150, value 0 disables — follow existing config get/set plumbing precedent) AND zero changed paths look like tests (path segment test/tests, filename tests.rs, *_test.*, *.test.*), print exactly one advisory line to stderr naming the line count and threshold, and append it to trace.warnings (slot exists — prior producer retired, see finish_support.rs comment near line 568). Never changes exit code or cap outcome; every git failure is silent skip. Unit tests: test-path heuristic table, threshold boundary, disabled-by-zero, missing-git silent skip.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A red or refused finish never gains the advisory (green path only)",
+      "Advisory never alters exit code, cap, or JSON success shape beyond trace.warnings",
+      "Config 0 disables; git absence is a silent skip",
+      "One stderr line, never composited away"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "fa1",
+    "outcome": "Added a diff-vs-test advisory to cells finish's green-cap path (trace.warnings + one stderr line), config-gated and silent on any git failure",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T11:17:07.244Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d9663ee4-1552-489a-a52a-cb6633b67dc1",
+    "claimed_at": "2026-08-11T11:06:26.162Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T11:16:55.532Z"
+  }
+}

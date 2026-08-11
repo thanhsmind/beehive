@@ -1,0 +1,52 @@
+{
+  "id": "el-2",
+  "feature": "evidence-ladder",
+  "lane": "small",
+  "title": "Backfill bee.evidence on patterns whose prose names a shipped enforcement",
+  "behavior_change": false,
+  "files": [
+    "docs/knowledge/patterns/"
+  ],
+  "read_first": [
+    "docs/knowledge/index.md"
+  ],
+  "action": "Walk docs/knowledge/patterns/*.md. Where the pattern prose explicitly names an enforcement that exists in the shipped tree (a hook denial, guard, doctor check, or test — verify the named artifact exists before annotating), add bee.evidence: wired (enforced at runtime) or exercised (a test covers it) plus bee.evidence_ref naming the artifact path or test name. Patterns without a verifiable named enforcement stay untouched (default present). Frontmatter edits must stay canonical (emitter round-trip clean — run bee knowledge check after edits; the vendored .bee/bin/bee needs building first, see worktree note). Depends on el-1.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Every annotation cites an artifact verified to exist",
+      "No pattern annotated on prose alone",
+      "knowledge check stays clean (no not_canonical, no invalid_evidence_state)"
+    ]
+  },
+  "deps": [
+    "el-1"
+  ],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "el2",
+    "outcome": "Backfilled bee.evidence on 5 patterns whose prose names a verified, shipped enforcement; knowledge check clean (0 not_canonical, 0 invalid_evidence_state introduced)",
+    "files_changed": [
+      "docs/knowledge/patterns/20260713-a-guard-that-tests-one-state-is-a.md",
+      "docs/knowledge/patterns/20260806-a-new-enforcement-door-treats-absent-evidence-as-silence.md",
+      "docs/knowledge/patterns/20260806-a-sweeping-consolidation-eats-the-call-site-that-was-different-on-purpose.md",
+      "docs/knowledge/patterns/20260806-scope-a-gating-counter-to-the-actor-who-can-clear-it.md",
+      "docs/knowledge/patterns/20260807-fix-the-fan-out-not-the-cell-of-it-that-was-reported.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T11:38:08.860Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d9663ee4-1552-489a-a52a-cb6633b67dc1",
+    "claimed_at": "2026-08-11T11:28:38.684Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T11:37:56.058Z"
+  }
+}
