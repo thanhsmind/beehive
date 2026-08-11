@@ -373,5 +373,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-11T11:00:10.061Z"
+  },
+  "compounding-escalation": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-11T11:05:18.402Z"
   }
 }
