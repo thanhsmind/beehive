@@ -10,12 +10,7 @@ never a generation timestamp or any other wall-clock value.
 
 | ID | Story | CoS | Status | Feature |
 |----|-------|-----|--------|---------|
-| p-19b21cf2 | Doc-link integrity test for docs/knowledge: every relative md link and [[wiki-link]] must resolve, enforced in cargo test | A test walks docs/knowledge/ (and index.md), resolves every relative .md link and [[name]] reference against existing files/slugs, and fails naming each dangling link. Runs inside the standard cargo test command so CI enforces it. Inspired by better-harness doc-link-graph test. | proposed | — |
-| p-4d735567 | Add evidence-state ladder to knowledge patterns (Present/Wired/Exercised) so written-only patterns are visible risk | Each critical pattern in docs/knowledge/ carries an evidence state: present (doc only), wired (hook/guard/doctor check enforces it), exercised (test covers it). Index or knowledge report surfaces the state per pattern. A written-only state is queryable so grooming can flag important patterns stuck at present. Inspired by better-harness evidence ceilings (configured != observed). | proposed | — |
-| p-df2c0284 | Advisory diff-vs-test check at cells finish: large diff with zero changed test files prints a non-blocking warning | cells finish computes changed-line count and changed-test-file count for the cell's commit range. Above a threshold (configurable, default ~150 changed lines) with zero test files changed, it prints one advisory line; never blocks the cap. Deterministic, offline, no network. Inspired by better-harness change-test-evidence Stop-hook source. | proposed | — |
-| p-e0efd4fe | Longitudinal validation for bee-evolving: a friction fix counts done only when the next comparable run stays clean | An evolving-run fix records a watch entry (friction signature + validation route). The entry closes only when a later feedback digest shows the signature absent over a defined window, or reopens as a finding when it recurs. Merge alone never closes the entry. Inspired by better-harness repair-verdict vs loop-effectiveness separation. | proposed | — |
 | p-ead9b2d4 | A bundle-only handover is proven: an area is rebuilt from its concepts alone, with no runtime and no source tree | Pick one mid-size area; hand its docs/knowledge concepts (Pointers stripped) to a fresh session on another stack; the rebuild reproduces the documented behaviors; gaps found feed back as spec fixes. This is P69's last clause, isolated so it ranks on its own. | proposed | knowledge-handover-proof |
-| p-f5e682e7 | bee-compounding rule: a pattern that recurs escalates to a durable owner (hook/guard/test), not another doc line | bee-compounding skill text gains an explicit escalation rule: on second occurrence of the same pattern, the capture step must answer 'can this become a hook, guard, doctor check, or test?' and record the chosen durable owner or a named reason why doc-only stays. Inspired by better-harness Loop Discovery / F0-F4 enforcement ladder. | proposed | — |
 
 ## Done / Declined
 
@@ -24,6 +19,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-0aa807b9] run_verify --impacted gains --level 1: direct-edge-only selection for the dev loop, transitive closure reserved for wave-close/merge — done
 - [p-10caed3f] timings report verb: aggregate .bee/logs/timings.jsonl into slowest-command ranking — done
 - [p-10e22a70] knowledge check bat con tro chet: path trong frontmatter sources/body Integration Points tro file khong ton tai — lop ri set lam ks-2 BLOCKED (bee-executing khai tu) — done
+- [p-19b21cf2] Doc-link integrity test for docs/knowledge: every relative md link and [[wiki-link]] must resolve, enforced in cargo test — done
 - [p-21583c96] Cua kiem luc close: solution co pham pattern da biet khong — check nhe truoc khi cap/close doi chieu diff voi critical patterns cua area cham toi — done
 - [p-3416fb38] multisession-native slice 2: workflow-first state (D1/D6/D7) — done
 - [p-355d4740] Nhan 'critical' loang: 85/101 pattern (84%) gan critical — digest 4 dong chon tu tap gan-toan-bo, mat gia tri loc — done
@@ -31,6 +27,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-4072163a] Widen decisions * verbs from the narrow door to the wide door so a granted feature worktree can read/write its own workspace-local decision store — done
 - [p-47d864b5] Do tai pham: KPI that cua knowledge la incident cung loai khong lap lai — dem va bao cao repeat-incident rate theo pattern — done
 - [p-4ae119b0] Port worktree-concurrency-guard onto bee 1.18.2's new packages/bee layout and controlRoot architecture — done
+- [p-4d735567] Add evidence-state ladder to knowledge patterns (Present/Wired/Exercised) so written-only patterns are visible risk — done
 - [p-4f055a6f] multisession-native slice 5: integration queue + 15-invariant closure — done
 - [p-50de38d7] Ship visibility: draft PR on first cap, walking-skeleton slice 1, evidence-based lane demotion, progress ticks (spec ak/plans/reports/spec-260727-1632-bee-ship-visibility.md) — done
 - [p-50f3af4d] bee cells schedule should detect shared regen-obligation side-effects, not rely solely on declared cell files — done
@@ -57,9 +54,12 @@ never a generation timestamp or any other wall-clock value.
 - [p-ccc558a0] Installer verify fails: bee.mjs status reports drift=true post-apply when repo-copy sync leaves an orphaned extra lib file — done
 - [p-d494b04b] Bootstrap bundle mot lenh cho host repo: goglbe khong co docs/knowledge nen khong digest/pattern/search — can duong dung bundle re tu specs hien co — done
 - [p-d7c88155] Duong keo giua dong: bee knowledge search — tra pattern/area theo trieu chung (error string, hanh vi sai, ten co che) ngay giua luc solve, khong chi 2 diem bom co dinh — done
+- [p-df2c0284] Advisory diff-vs-test check at cells finish: large diff with zero changed test files prints a non-blocking warning — done
+- [p-e0efd4fe] Longitudinal validation for bee-evolving: a friction fix counts done only when the next comparable run stays clean — done
 - [p-e20d82c9] multisession-native slice 3: sharded leases + handoff mailboxes (D4/D5) — done
 - [p-e8a153e2] Validation speedup: delta validation, merged review wave, deferred presentation (spec ak/plans/reports/spec-260727-1610-bee-validation-speedup.md) — done
 - [p-ed2de0d0] multisession-native slice 4: workspace isolation by default (D2/D3) — done
+- [p-f5e682e7] bee-compounding rule: a pattern that recurs escalates to a durable owner (hook/guard/test), not another doc line — done
 - [p-f893dcba] Ap suat flush cho capture queue: qua nguong (vd 5 stub hoac 7 ngay) thi close/preamble chuyen tu nhac nhe sang ep manh, va flush chay duoc tu session thuong — done
 - [p-fa847e3a] Parallel-by-default doctrine: cells in a slice run concurrently on disjoint ownership; serial names its conflict; wave-barrier regen — done
 - [P1] A greenfield repo with no build gets an init lane on its first onboard — done
