@@ -945,7 +945,11 @@ use std::process::ExitCode;
         deny("results.log");
         deny(".rel9999_stress_debug.sh");
         deny("scripts/scratch-notes.tmp");
-        deny("scripts/probe-foo.mjs");
+        // A probe-/verdict-/digest- prefixed name is a real source file, not
+        // a scratch payload, once its extension marks it code.
+        allow("scripts/probe-foo.mjs");
+        allow("src/probe-runner.rs");
+        deny("probe-results.json");
         // decisions ledger append stays allowed
         let e = expect_done(bash("printf \"x\" >> .bee/decisions.jsonl"), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
@@ -1245,6 +1249,29 @@ use std::process::ExitCode;
         );
         assert_eq!(s.code, 2);
         assert!(s.stderr.contains("bee scout guard"));
+    }
+
+    #[test]
+    fn credentials_extension_exemption() {
+        let fx = build_fixture("swarming", true);
+        let deny = |p: &str| {
+            let e = expect_done(json!({"tool_name":"Read","tool_input":{"file_path":p}}), &fx.root);
+            assert_eq!(e.code, 2, "expected deny for {p}: {}", e.stderr);
+            assert!(e.stderr.contains("bee privacy guard"), "{p}");
+        };
+        let allow = |p: &str| {
+            let e = expect_done(json!({"tool_name":"Read","tool_input":{"file_path":p}}), &fx.root);
+            assert_eq!(e.code, 0, "expected allow for {p}: {}", e.stderr);
+        };
+        // "credentials*" without a recognized source extension stays secret.
+        deny("credentials");
+        deny("credentials.json");
+        deny("credentials.csv");
+        deny("credentials.yaml");
+        // A real source file merely named "credentials*" is not a secret.
+        allow("src/credentials.rs");
+        allow("credentials_test.go");
+        allow("credentials.py");
     }
 
     // ── shared nested-checkout guard (wcg rows 71/72/78/80) ────────────────
