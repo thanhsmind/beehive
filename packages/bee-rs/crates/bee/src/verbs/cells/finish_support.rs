@@ -568,6 +568,153 @@ pub(crate) fn release_reservations_for_agent(
 // filtering left to advise about. `trace.warnings` keeps its slot (existing
 // capped cells carry it) but this producer no longer exists.
 
+// ─── fa-1: diff-vs-test advisory ────────────────────────────────────────────
+// A NEW producer for the `trace.warnings` slot the E1 retirement above left
+// empty: a large commit that touches no test-shaped path is worth a nudge.
+// Runs at the GREEN-cap path of `cells finish` alone (the caller gates this
+// on `finish`, mirroring D6's own "finish only" scoping) — every earlier
+// door (test-green, commit-trailer, lane/worker checks) already let the cap
+// through by the time this producer runs, so it can only ever ADD a line to
+// `trace.warnings` and print that SAME line once to stderr; it never touches
+// the exit code, the cap outcome, or any other part of the result shape.
+// Every git failure — no git on PATH, HEAD's body doesn't carry THIS cell's
+// own `cell: <id>` trailer, numstat unreadable — is a silent skip: this is
+// best-effort telemetry, never a second gate alongside D6's real one.
+
+/// The default for config key `finish.advisory_untested_lines` —
+/// `{finish: {advisory_untested_lines: N}}` in `.bee/config.json`, the same
+/// nested-object shape `guards.write_policy`
+/// (write_guard/checks.rs `resolve_write_policy_mode`) already establishes
+/// for a dotted doc-facing key name. `0` is the documented disable, never a
+/// "run always" typo — the producer checks for it explicitly before doing
+/// any git work.
+pub(crate) const DEFAULT_ADVISORY_UNTESTED_LINES: u64 = 150;
+
+/// advisoryUntestedLinesThreshold — absent/null/non-numeric/negative all
+/// fall back to the default silently (`resolve_write_policy_mode`'s own
+/// posture for a single-scalar nested key, not `capture_queue_threshold`'s
+/// warn-and-fallback: a malformed advisory threshold is worth exactly one
+/// nudge line, never a stderr warning of its own).
+pub(crate) fn advisory_untested_lines_threshold(config: &Map<String, Value>) -> u64 {
+    match config.get("finish").and_then(|f| f.get("advisory_untested_lines")) {
+        Some(Value::Number(n)) => match n.as_u64() {
+            Some(v) => v,
+            None => DEFAULT_ADVISORY_UNTESTED_LINES,
+        },
+        _ => DEFAULT_ADVISORY_UNTESTED_LINES,
+    }
+}
+
+/// headCommitCarriesTrailer — unlike [`commit_trailer_present`]'s
+/// `COMMIT_TRAILER_WINDOW`-commit scan (D6 only needs to prove a qualifying
+/// commit exists SOMEWHERE near HEAD), the advisory describes the diff of
+/// the ONE commit the one-commit-per-cell convention names as THIS cell's
+/// own: HEAD, and HEAD alone. A HEAD whose body does not carry the exact
+/// trailer line (an unrelated commit landed on top, `--commit-pending`
+/// escaped D6's own check entirely, this checkout has no commits yet, git
+/// itself is missing) answers `false` — the producer only ever describes a
+/// commit it is confident belongs to `id`.
+pub(crate) fn head_commit_carries_trailer(cwd: &Path, id: &str) -> bool {
+    let out = crate::verbs::worktree::run_git(cwd, &["log", "-1", "--format=%B"]);
+    if out.status != Some(0) {
+        return false;
+    }
+    let trailer = cell_commit_trailer(id);
+    out.stdout.unwrap_or_default().lines().any(|line| js_trim(line) == trailer)
+}
+
+/// One `git show --numstat` row: `<added>\t<deleted>\t<path>`.
+pub(crate) struct NumstatRow {
+    pub(crate) added: u64,
+    pub(crate) deleted: u64,
+    pub(crate) path: String,
+}
+
+/// headCommitNumstat — `git show -1 --numstat --format=` HEAD: one row per
+/// changed path, no commit-message preamble (`--format=` empty — the same
+/// "spawn once, parse exactly what was asked for" posture
+/// [`commit_trailer_present`]'s `%B`-only spawn already takes, rather than a
+/// second ad-hoc parse of git's default log format). A binary file's
+/// `-\t-\tpath` row parses both fields as `0`: line counts are not
+/// observable for it, and treating the dash as "large" would be a false
+/// positive this producer has no way to justify. `None` on any non-zero git
+/// exit (no git, no HEAD, a detached/empty repo) — the caller treats that
+/// exactly like every other silent-skip path.
+pub(crate) fn head_commit_numstat(cwd: &Path) -> Option<Vec<NumstatRow>> {
+    let out = crate::verbs::worktree::run_git(cwd, &["show", "-1", "--numstat", "--format="]);
+    if out.status != Some(0) {
+        return None;
+    }
+    let mut rows = Vec::new();
+    for line in out.stdout.unwrap_or_default().lines() {
+        let line = line.trim_end_matches('\r');
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(3, '\t');
+        let (Some(added), Some(deleted), Some(path)) = (parts.next(), parts.next(), parts.next()) else {
+            continue; // an unparsable row is skipped, not fatal to the whole read
+        };
+        rows.push(NumstatRow {
+            added: added.parse().unwrap_or(0),
+            deleted: deleted.parse().unwrap_or(0),
+            path: path.to_string(),
+        });
+    }
+    Some(rows)
+}
+
+/// pathLooksLikeTest — four shapes, any one of which qualifies a changed
+/// path as test-shaped: a path SEGMENT (a `/`-split component, so
+/// `contest/a.rs` and `latest.rs` never false-positive on a `test`
+/// substring) named exactly `test` or `tests`; the bare filename
+/// `tests.rs`; or a filename carrying `_test.` / `.test.` anywhere before
+/// its extension (`foo_test.rs`, `foo.test.ts`).
+pub(crate) fn path_looks_like_test(path: &str) -> bool {
+    let normalized = path.replace('\\', "/");
+    let segments: Vec<&str> = normalized.split('/').collect();
+    if segments.iter().any(|s| *s == "test" || *s == "tests") {
+        return true;
+    }
+    let filename = segments.last().copied().unwrap_or("");
+    filename == "tests.rs" || filename.contains("_test.") || filename.contains(".test.")
+}
+
+/// advisoryUntestedLinesLine — the ONE stderr line this producer ever
+/// prints, and byte-identical to the ONE line appended to `trace.warnings`
+/// (a single representation, never a stderr copy plus a differently-worded
+/// trace copy).
+pub(crate) fn advisory_untested_lines_line(total_lines: u64, threshold: u64) -> String {
+    format!(
+        "advisory: this cap's commit changes {total_lines} line(s) (over the {threshold}-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    )
+}
+
+/// diffVsTestAdvisory — the producer itself. `None` on every silent-skip
+/// path: the threshold is `0` (disabled), HEAD doesn't carry `id`'s own
+/// trailer, numstat is unreadable, at least one changed path already looks
+/// test-shaped, or the total changed-line count does not exceed the
+/// threshold. `Some(line)` is the one line the caller both prints to
+/// stderr and appends to `trace.warnings` — this function has no other
+/// side effect and never returns an `Err`.
+pub(crate) fn diff_vs_test_advisory(cwd: &Path, id: &str, threshold: u64) -> Option<String> {
+    if threshold == 0 {
+        return None;
+    }
+    if !head_commit_carries_trailer(cwd, id) {
+        return None;
+    }
+    let rows = head_commit_numstat(cwd)?;
+    if rows.iter().any(|r| path_looks_like_test(&r.path)) {
+        return None;
+    }
+    let total: u64 = rows.iter().map(|r| r.added + r.deleted).sum();
+    if total <= threshold {
+        return None;
+    }
+    Some(advisory_untested_lines_line(total, threshold))
+}
+
 // ─── delegation pre-scans ──────────────────────────────────────────────────
 // The mutators must never return None after an output or a write, so the
 // JS-exotic store shapes that still delegate (an array where a record is
