@@ -1,0 +1,56 @@
+{
+  "id": "rdv-1",
+  "feature": "revision-deadlock-visibility",
+  "title": "Claim refusal names a revision-reopened dependency and its sanctioned escapes",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/read.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs"
+  ],
+  "action": "Friction row 618: a NEEDS_REVISION judge verdict reopens a cell to status open (handlers_meta.rs:264-291); a dependent repair cell then refuses to claim on unmet deps (deps_all_capped_is_empty, read.rs:198) with a generic message, and nothing tells the orchestrator the sanctioned road — the pattern reads as a permanent deadlock. Fix (visibility only, NO law change — deps still require capped, nothing becomes claimable-through): where the claim refusal for unmet deps is rendered (follow the real refusal site from deps_all_capped_is_empty's consumers — read.rs is a hypothesis), when an unmet dep is open AND carries a NEEDS_REVISION judge verdict on its record, the refusal names that dep, quotes the verdict kind, and states both sanctioned roads: (a) claim and re-cap the reopened dep itself first, or (b) cells update the dependent's deps with a recorded reason. Deps unmet for ordinary reasons keep today's message byte-identical. TDD red-first: fixture dep reopened via the real judge-record path -> claim of dependent refuses with the verdict named + both roads (red today: generic text); ordinary unmet dep message byte-identical; claim-next skip behavior unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "a claim refused over a revision-reopened dep names the dep, the verdict, and both sanctioned roads",
+      "ordinary unmet-dep refusals are byte-identical to today",
+      "no dependency law changes — capped is still required"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/read.rs",
+        "substantive": "refusal enrichment plus tests (or the real refusal site, named in the trace)"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-rdv-1",
+    "outcome": "claim refusal over a revision-reopened dep names the dep, quotes NEEDS_REVISION, states both sanctioned roads; ordinary unmet-dep text byte-identical; new CLI-driven integration suite",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/tests/revision_deadlock_visibility.rs"
+    ],
+    "deviations": [
+      "real refusal site is handlers_write.rs claimCell closure, not read.rs (read.rs only filters ready/claim-next); tests live in a new tests/revision_deadlock_visibility.rs binary because the CLI handlers root off current_dir"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-11T04:14:24.427Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-11T03:59:54.447Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T04:14:12.731Z"
+  }
+}

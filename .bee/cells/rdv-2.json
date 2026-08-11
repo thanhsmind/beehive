@@ -1,0 +1,52 @@
+{
+  "id": "rdv-2",
+  "feature": "revision-deadlock-visibility",
+  "title": "Session-close mid-phase warning names the capture-stub exit",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs"
+  ],
+  "action": "PBI p-808487c4 (verified open): the session-close mid-phase warning at hooks/session_close/mod.rs:266-271 names only two exits — finish-and-cap, or write HANDOFF.json and release reservations — omitting the third sanctioned exit decision 0017 defined: record a capture stub for what settled (bee capture add) and close cleanly. Fix: add the third remedy line naming the capture-stub road in the same voice and format as the existing two; nothing else about the warning's trigger or shape changes. TDD: pin the three-remedy rendering (red today on the third line); existing session-close tests stay green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "the mid-phase warning renders three sanctioned exits including the capture-stub road",
+      "warning trigger conditions unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+        "substantive": "third remedy line plus test"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-rdv-2",
+    "outcome": "mid-phase session-close warning renders the third sanctioned exit (decision-0017 capture stub via bee capture add) beside finish-and-cap and handoff",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T04:14:44.169Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-11T03:59:54.451Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T04:14:32.433Z"
+  }
+}
