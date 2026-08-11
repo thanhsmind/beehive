@@ -119,3 +119,4 @@
 {"id":"955d5ec4-aa54-42b8-9119-5db6d2d3e4b0","type":"candidate","date":"2026-08-11T12:00:23.582Z","feature":"evidence-ladder","head":"6856c21f165d2bfcbad250b3c6d84e1e68bc148a","mode":"small","baseline":null,"cells":[]}
 {"id":"8d0735ed-1a1b-41e8-bf74-f53d3bfb0cc6","type":"candidate","date":"2026-08-11T12:00:23.587Z","feature":"evolving-watch","head":"6856c21f165d2bfcbad250b3c6d84e1e68bc148a","mode":"small","baseline":null,"cells":[]}
 {"id":"3cdcedda-0f39-4a55-9096-9ecda1af4248","type":"candidate","date":"2026-08-11T14:55:00.564Z","feature":"workflow-lessons","head":"387a01e03ab8b4df5ed4d1bdf18ecaf1dce36eb8","mode":"standard","baseline":null,"cells":[]}
+{"id":"e1455a66-c07d-41ba-bc3c-902eba75630b","type":"candidate","date":"2026-08-11T15:34:43.909Z","feature":"doctor-binary-freshness","head":"a69077dd1dc6c4b6f771b4d6547f21069046f75b","mode":"small","baseline":null,"cells":[]}
