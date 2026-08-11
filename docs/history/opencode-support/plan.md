@@ -1,7 +1,7 @@
 ---
 artifact_contract: bee-plan/v1
 mode: high-risk
-# approved_gate2: <unset until approval; then a date stamp — the only permitted post-approval write>
+approved_gate2: 2026-08-11
 ---
 
 # Plan: OpenCode Support

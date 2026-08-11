@@ -25,6 +25,7 @@ a silent edit.
 | D2 | Enforcement is real blocking, delivered as an OpenCode TypeScript plugin mapping bee's guard hooks onto `tool.execute.before`/`tool.execute.after` (abort-capable). OpenCode's experimental config hooks (`file_edited`, `session_completed`) cannot block tools and are not an acceptable enforcement vehicle. | Write-gate and secret guards must stop the action, not advise. |
 | D3 | The beehive repo itself is the first consumer: render and install OpenCode support locally, verify with an OpenCode session on this repo. Host-project onboarding follows, not leads. | Picks the test bed and work order. |
 | D4 | Swarming must work under OpenCode — worker dispatch equivalent to bee-build/bee-gather. The concrete mechanism (OpenCode's subagent/agent API) is a planning research question, not a shaping decision. | Single-session-only was offered and declined. |
+| D5 | (amends D4, user-approved at Gate 2, 2026-08-11) Sequential-only worker dispatch is accepted for now — OpenCode's task-tool dispatch runs workers one at a time (upstream anomalyco/opencode #29638). D4's "equivalent" means functional equivalence, not concurrency equivalence; parallelism returns when upstream lands it. | Unblocks E4 without weakening the worker contract. |
 
 ### Agent's Discretion
 
