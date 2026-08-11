@@ -772,7 +772,17 @@ from zero, inside the cargo suite `commands.test` already runs.
 
 ### Runner design
 
-Two parts, four `#[test]` functions:
+**Amended by oc-9 (below):** this section originally described two parts,
+four `#[test]` functions. oc-9 closed four false-green paths the S3 judge
+found in that original design (F1, F3, F4, F5) and added a third part, a
+fifth `#[test]` function, and a shared discovery.md-scoping helper reused by
+two of the five — see "Discovery: parity suite's false-green paths closed
+(oc-9)" below for what changed and why. What follows is updated to describe
+the CURRENT shape; the "Skipped-environment behavior" and "Verified on this
+machine" subsections below it are oc-7's own point-in-time run, left as a
+historical record of what was true before oc-9's fixes.
+
+Three parts, five `#[test]` functions:
 
 1. **Fixture tests over the real plugin.** A tiny, never-checked-in
    `node` harness (a Rust string constant, written fresh into a tempdir per
@@ -839,12 +849,42 @@ Two parts, four `#[test]` functions:
    silent`, closes the other half of the coverage-gate contract: every
    ADVISORY rule the catalog carries that `bee-guard.ts` does NOT wire
    (derived by parsing its `runAdvisoryHook(directory, "...")` call sites)
-   must be documented as a named gap in THIS file (`discovery.md`) — today
-   that is exactly `codex-subagent-audit` (a `NAMED EXCLUSION` — see oc-6's
-   table above) and `chain-nudge` (the `Deferred: chain-nudge` section
-   above). A future catalog change that adds an ADVISORY hook the plugin
-   silently fails to wire, with no matching write-up here, fails this test
-   by name rather than shipping unnoticed.
+   must be documented as a named gap in THIS file (`discovery.md`), ON ITS
+   OWN LINE (oc-9's F5 fix — see below) — today that is exactly
+   `codex-subagent-audit` (a `NAMED EXCLUSION` — see oc-6's table above) and
+   `chain-nudge` (the `Deferred: chain-nudge` section above). A future
+   catalog change that adds an ADVISORY hook the plugin silently fails to
+   wire, with no matching same-line write-up here, fails this test by name
+   rather than shipping unnoticed.
+
+3. **The tool-registry coverage gate** (oc-9,
+   `every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_
+   as_a_gap`) closes F4: part 2's belt checks only ask whether `mapToolCall`
+   routes AT LEAST ONE tool to a given hook, and part 1's `pairs.len() >= 9`
+   floor only checks `mapToolCall` against ITSELF — neither can catch a
+   registered OpenCode tool `mapToolCall`'s `default: return null` arm lets
+   through unguarded, the exact `apply_patch` defect class oc-3 closed by
+   hand. This test instead derives the REGISTERED tool inventory from the
+   installed `opencode` binary's own text (a Bun-bundled standalone
+   executable — no plain JS source to read directly, but its minified JS
+   payload is still greppable ASCII inside it, exactly as oc-1/oc-3 already
+   established) via two anchors: a 14-element tool-id `Set` literal
+   (values-based, so it survives the surrounding minified variable name
+   changing on a rebuild) plus three further ids (`invalid`, `plan_exit`,
+   `lsp`) each confirmed by their own independent registration-body anchor.
+   For every derived id `mapToolCall` does not map, the same binary text is
+   scanned for a `filePath` parameter within a bounded window after that
+   id's own anchor — confirmed non-file-capable ids (`webfetch`,
+   `websearch`, `todowrite`, `skill`, `invalid`, `plan_exit`, `execute` —
+   none carry `filePath`) need no further coverage; a confirmed-or-
+   unclassifiable id (`lsp` — confirmed; nothing else fell in this bucket
+   when oc-9 ran) must be EITHER mapped by `mapToolCall` OR named as a gap
+   in discovery.md on its own line, reusing F5's fixed
+   `discovery_doc_names_as_a_gap` helper. See "Discovery: parity suite's
+   false-green paths closed (oc-9)" below for what this derivation actually
+   found (`lsp` unmapped, confirmed; `list` unmapped, named but NOT
+   mechanically derivable by this test — a real, disclosed limit, not a
+   silent one).
 
 ### Skipped-environment behavior
 
@@ -948,3 +988,174 @@ with empty stdout, denies, crashes, or is absent), so this cell's new
 parsing branches are exercised by the direct-invocation proof above, not
 by that suite; the not-yet-covered repair/ask/unparseable shapes are named
 here for oc-9 to pick up as fixture cases, not silently assumed covered.
+
+## Discovery: parity suite's false-green paths closed (oc-9)
+
+**Date:** 2026-08-11
+**Scope:** oc-9 — S3 judge fixes F1, F3, F4, F5. `.opencode/plugins/
+bee-guard.ts` is unchanged by this cell (out of scope — any defect the new
+assertions revealed is recorded here, not fixed in the plugin). The suite
+now has **five** `#[test]` functions (was four); the "Runner design" section
+above is updated in place to describe the current shape.
+
+### F1 — a node-incapable shell could no longer produce a false green
+
+`node_or_skip!` used to `eprintln!` its reason and `return` unconditionally
+on any node/TS-capability failure — a shell with a pre-v24 system `node`
+ahead of nvm on PATH (no override) got 4 green tests and ZERO enforcement
+coverage exercised, indistinguishable in the test summary from a fully-
+proved run. Fixed: a new `BEE_OPENCODE_SUITE_ALLOW_SKIP` env var is the
+suite's one opt-out surface. **Unset (the default): an absent or
+TS-incapable `node` (and, for oc-9's new tool-registry test, an absent
+`opencode` binary) is now a hard FAIL, not a skip.** Set: the same absence
+degrades to a named SKIP, matching `hook_contracts.rs`'s own `ran_native`
+convention. The reason string always reaches stderr first (cargo test never
+captures stderr, only stdout), so it reaches the default, captured output on
+a PASS *and* a FAIL alike — never only visible after the fact.
+
+**Decision, recorded per the cell's own instruction to match how this
+project treats environment-gated proof elsewhere:** default-FAIL-unless-
+opted-out was chosen over default-SKIP-unless-required, because a coverage
+suite whose only job is to prove enforcement is real must never look green
+when it proved nothing — the same reasoning `.bee/config.json`'s own
+`commands.test`/`commands.verify` posture and this repo's CI already apply
+to every OTHER cargo test (a red is surfaced, never silently downgraded).
+
+**Real, disclosed consequence for CI:** `.github/workflows/ci.yml`'s R6-
+cutover comment confirms the Node runtime/matrix was deleted outright when
+this repo went all-Rust — the `verify` job installs no Node toolchain at
+all. Whether `ubuntu-latest`'s ambient `node` (if any is on PATH without an
+explicit `actions/setup-node` step) is TS-capable is NOT verified here. If
+it is not, this suite's two node-dependent tests (and the tool-registry test
+below, which needs a real installed `opencode` binary CI also does not
+provision) will go from a silent, unnoticed skip to a **loud, named FAIL on
+the next CI run** — an intended consequence of closing F1, not an accident,
+but one CI itself does not yet accommodate. Named gap for a later cell:
+either provision a TS-capable `node` (and an installed `opencode` binary) in
+`ci.yml`, or set `BEE_OPENCODE_SUITE_ALLOW_SKIP=1` there deliberately (with
+its own comment explaining CI intentionally runs this belt degraded) — not
+decided here, since this cell's `files` do not include `ci.yml`.
+
+### F3 — every mapped row now asserts the exact payload bee receives
+
+Every stub `.bee/bin/bee` used to swallow stdin (`cat >/dev/null`) and every
+fixture sent a generic `{"probe": tool, "value": "x"}` body — a field-name
+mistranslation in `mapToolCall` (a renamed, dropped, or mis-shaped field)
+would fail OPEN and stay green, since nothing ever inspected what bee
+actually received. Fixed: `write_stub_bee` now captures stdin verbatim to
+`last_stdin.json` next to the stub; a new `opencode_call_fixture(tool)`
+table pairs a REAL, live-verified `output.args` shape per tool (field names
+matching oc-2/oc-3/oc-6's own field-shape tables) with the EXACT bee-shaped
+`tool_input` (+ `tool_name`, `cwd`, `session_id`) `mapToolCall`'s translation
+must produce; the ALLOW scenario of
+`every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary`
+now asserts the captured payload equals that expectation exactly, for every
+one of the 9 mapped rows. The same test also gained three D6 scenarios per
+row (oc-8's exit-0 repair/ask/unparseable handling, previously proved only
+by oc-8's own one-off direct-invocation script, never by this suite): a
+`Repair` stub proves `updatedInput` lands on `output.args`; an `Ask` stub
+proves a `permissionDecision: "ask"` verdict throws with the reason intact;
+an `UnparseableVerdict` stub proves non-JSON exit-0 stdout still throws
+fail-closed.
+
+### F4 — the tool-registry inventory is now derived, not hand-floored
+
+`opencode_tool_hook_pairs`'s `pairs.len() >= 9` floor and the three-belt
+parity test's "at least one tool routes to this hook" both only checked
+`mapToolCall` against ITSELF — the exact anti-pattern
+`docs/knowledge/patterns/20260722-a-coverage-gate-derives-ground-truth-it-
+never-compares-two-hand-lists.md` warns about, and the reason `apply_patch`
+slipped through unmapped until oc-3 caught it by hand. A new fifth test,
+`every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_
+as_a_gap`, derives the REGISTERED tool inventory from the installed
+`opencode` binary's own text (`resolve_opencode_binary` / `opencode_binary_
+text` — the same "compiled binary, still-greppable embedded JS" fact oc-1's
+Blockers section and oc-3's "Static binary read" already established), via:
+
+- a 14-element tool-id `Set` literal OpenCode's own icon-lookup helper
+  builds (`bash, glob, read, grep, webfetch, websearch, write, edit, task,
+  apply_patch, todowrite, question, skill, execute`) — values-based, so it
+  survives the surrounding minified variable name changing on a rebuild;
+- three further ids the Set omits, each confirmed by its own independent
+  registration-body anchor: `invalid` (`V("invalid",s.succeed({description:
+  "Do not use"` — the "unregistered tool" sentinel), `plan_exit` (the
+  build-agent handoff prompt), `lsp` (**this cell's finding** — an LSP query
+  tool whose registration body carries a `filePath` parameter, confirmed
+  live via `rg -a` against the real installed binary, not just the `strings`
+  dump).
+
+For every derived id `mapToolCall` does not map, the same binary text is
+scanned (bounded 500-byte window past that id's own anchor) for a `filePath`
+parameter. Re-verified directly against the real installed
+`opencode-ai@1.18.16` binary at
+`~/.nvm/versions/node/v24.14.1/lib/node_modules/opencode-ai/bin/opencode.exe`
+(not only the `strings`-dumped copy this investigation started from):
+`webfetch`, `websearch`, `todowrite`, `skill`, `invalid`, `plan_exit`, and
+`execute` all confirmed FALSE (no `filePath` in their own body — network-,
+session-, or catalog-scoped, never an arbitrary caller-supplied path) and
+need no further coverage; **`lsp` confirmed TRUE** and is neither mapped nor
+(until this line) documented — running the new test against the unmodified
+plugin fails exactly this one row, by name:
+
+```
+"lsp": registered by the installed opencode binary, not mapped by
+mapToolCall, and not documented on its own line as a named gap in
+docs/history/opencode-support/discovery.md (filepath_evidence=Some(true))
+```
+
+**`lsp` — NAMED GAP.** The installed `opencode-ai@1.18.16` binary registers
+an `lsp` tool (`V("lsp",s.gen(function*(){...filePath:n...`, asking
+permission `"lsp"`) that returns file content (via LSP operations —
+`hover`/`documentSymbol`/etc.) for an arbitrary caller-supplied `filePath`,
+exactly the read-capable shape `read`/`grep`/`glob` already route through
+write-guard — but `mapToolCall`'s `default: return null` arm lets it through
+unguarded today, the SAME defect class `apply_patch` was before oc-3. Not
+fixed in this cell (`.opencode/plugins/bee-guard.ts` is out of scope here);
+a follow-up cell should add an `"lsp"` case to `mapToolCall` (routing to
+write-guard's `Read` shape, translating `filePath` -> `file_path`) the same
+way oc-3 added `apply_patch`.
+
+**`list` — named gap, NOT mechanically derivable by this test.** The S3
+judge's finding also named a second unmapped registered tool, `list`
+(discovery.md's oc-3 tool-registry table already shows 13 tools from a LIVE
+`tool.definition` probe, which oc-9's finding calls incomplete). oc-9's own
+investigation could not locate any static registration anchor for a `list`
+tool anywhere in the installed binary's text — the judge's evidence for it
+was almost certainly a live probe (oc-1/oc-3's OTHER, non-static evidence
+source: a scratch project with a `tool.definition`-hooking plugin run
+against a real `opencode run` session), which a `cargo test` cannot
+reproduce deterministically offline (no model access, no network). Recorded
+here as a real, disclosed limit — `derive_opencode_tool_registry` does not
+claim coverage for `list`, and the new test's silence about it is NOT proof
+it is safe. A follow-up cell with live-probe evidence (mirroring oc-3's
+"Live probe" + "Static binary read" two-source method) should confirm its
+field shape and either add it to `mapToolCall` or replace this paragraph
+with a binary-derivable anchor.
+
+### F5 — the named-gap check is now scoped to the rule's own line
+
+`advisory_gaps_the_plugin_does_not_wire_are_named_not_silent` used to AND a
+per-rule `DISCOVERY_DOC.contains(rule)` with a DOCUMENT-GLOBAL
+`DISCOVERY_DOC.contains("NAMED EXCLUSION") || DISCOVERY_DOC.contains(
+"Deferred")` — both marker literals are always present SOMEWHERE in this
+file (on `codex-subagent-audit`'s and `chain-nudge`'s own rows), so ANY rule
+name mentioned ANYWHERE in the document passed, whether or not that mention
+was actually tagged as a gap. Fixed: a new shared helper,
+`discovery_doc_names_as_a_gap(name, markers)`, requires the name and a
+marker to co-occur on the SAME LINE — every gap this file documents is
+already written that way (one markdown table row carries both), so this is
+a real narrowing, not a cosmetic one. The advisory-gap test now uses this
+helper; the new F4 tool-registry test (above) reuses the SAME helper (with
+an additional `"NAMED GAP"` marker for `lsp`'s own row) rather than
+re-implementing a second, possibly-differently-buggy scoping check.
+
+### Verified
+
+`PATH="$HOME/.cargo/bin:$PATH" cargo test --release --manifest-path
+packages/bee-rs/Cargo.toml --test opencode_plugin_contracts` — before
+adding `lsp`'s NAMED GAP line above: `4 passed; 1 failed` (the new
+tool-registry test failing exactly on `"lsp"`, by name, confirming F4 closes
+a REAL silent gap rather than manufacturing one). After adding the line:
+`5 passed; 0 failed`, ~5.5s, with the ambient `node` v24.14.1 and the
+installed `opencode-ai@1.18.16` binary both present on this machine (neither
+`BEE_OPENCODE_SUITE_ALLOW_SKIP` override needed here).

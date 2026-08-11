@@ -307,15 +307,52 @@ fn node_typescript_probe() -> Result<(), String> {
     }
 }
 
-/// Every test that drives the real plugin under `node` opens with this: an
-/// absent or TS-incapable `node` is a named, visible SKIP (matching
-/// `hook_contracts.rs`'s own `ran_native` skip convention), never a silent
-/// pass and never a panic.
+/// The one opt-out surface for every environment-gated capability this
+/// suite needs to prove REAL OpenCode-belt coverage (a TS-capable `node`
+/// here; the installed `opencode` binary itself for the tool-registry
+/// derivation further down). Unset — the default — an absent capability is
+/// a FAIL, never a silent skip: a shell whose `node` predates v24 (system
+/// node ahead of nvm on PATH, no override) used to yield 4 green tests and
+/// zero enforcement coverage (F1) — that is strictly worse than a red
+/// suite, because a green suite stops getting looked at. Set, the same
+/// absence degrades to a named, visible SKIP for an environment that
+/// deliberately carries neither: this repo's own CI is exactly that
+/// environment today — `.github/workflows/ci.yml`'s R6-cutover comment
+/// confirms the Node matrix was deleted outright, so `ubuntu-latest`'s
+/// ambient `node` (if any) is not guaranteed TS-capable — recorded as a
+/// real, intended behavior change for that pipeline in discovery.md's oc-9
+/// section, not silently assumed away here.
+const ALLOW_SKIP_ENV: &str = "BEE_OPENCODE_SUITE_ALLOW_SKIP";
+
+fn env_allows_skip() -> bool {
+    std::env::var_os(ALLOW_SKIP_ENV).is_some()
+}
+
+/// Every test that drives the real plugin under `node` opens with this. The
+/// reason always reaches stderr first — cargo test only captures stdout, so
+/// this line reaches the default (captured) output on a PASS *and* a FAIL
+/// alike, never only on failure. What happens next depends on
+/// `BEE_OPENCODE_SUITE_ALLOW_SKIP` (unset by default): unset, an absent or
+/// TS-incapable `node` is a hard FAIL — a missing capability must never
+/// report this test green with zero enforcement actually exercised (F1);
+/// set, it is a named SKIP, matching `hook_contracts.rs`'s own `ran_native`
+/// skip convention.
 macro_rules! node_or_skip {
     ($test_name:expr) => {
         if let Err(reason) = node_typescript_probe() {
-            eprintln!("SKIP (env-limited: {reason}) — {}", $test_name);
-            return;
+            let allow = env_allows_skip();
+            eprintln!("{} (env-limited: {reason}) — {}", if allow { "SKIP" } else { "FAIL" }, $test_name);
+            if allow {
+                return;
+            }
+            panic!(
+                "{}: a `node` capable of stripping TypeScript natively is required to prove real \
+                 OpenCode enforcement coverage ({reason}) — refusing to report this test green \
+                 with zero enforcement actually exercised. Set {ALLOW_SKIP_ENV}=1 to explicitly \
+                 accept a degraded, unproven run in an environment that deliberately has no such \
+                 node.",
+                $test_name
+            );
         }
     };
 }
@@ -437,6 +474,21 @@ enum StubBehavior {
     Allow,
     Crash,
     Missing,
+    /// D6 (oc-8): an exit-0 verdict carrying a `hookSpecificOutput.
+    /// updatedInput` repair — write-guard's `AskUserQuestion` header fix and
+    /// model-guard's dispatch-label/`subagent_type` fix both ride this exact
+    /// shape on the wire. The repaired field name is deliberately generic
+    /// (`repairedField`) since the real repair target differs per rule; this
+    /// fixture only proves `runBlockingHook` applies whatever `updatedInput`
+    /// carries onto `output.args`, not a specific rule's own repair
+    /// semantics.
+    Repair,
+    /// D6: an exit-0 verdict carrying `permissionDecision: "ask"` — bee's
+    /// own "ask, never allow" verdict (write_guard/main.rs:389-394).
+    Ask(String),
+    /// D6: exit-0 stdout that is non-empty but not valid JSON — undecidable,
+    /// and undecidable must stay fail-closed on the BLOCKING path.
+    UnparseableVerdict,
 }
 
 /// Writes (or, for `Missing`, deliberately does NOT write) a stub
@@ -444,16 +496,39 @@ enum StubBehavior {
 /// fresh `tempfile::tempdir()` already is, since it defaults to the system
 /// temp root) so the plugin's git-common-dir fallback can never accidentally
 /// resolve to this repo's real binary and mask the scenario under test.
+///
+/// F3: every non-`Missing` stub now CAPTURES the exact stdin bee received
+/// (to `last_stdin.json` next to the stub itself, via `$(dirname "$0")` —
+/// stable regardless of which fixture tempdir this run uses) before
+/// producing its verdict. The old `cat >/dev/null` swallowed stdin entirely,
+/// so a field-name mistranslation in `mapToolCall` (a renamed, dropped, or
+/// mis-shaped field) failed OPEN and stayed green — see
+/// `read_captured_stdin` and
+/// docs/knowledge/patterns/20260710-a-boundary-that-lists-field-names-will-
+/// leak.md.
 #[cfg(unix)]
 fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
     use std::os::unix::fs::PermissionsExt;
     let StubBehavior::Missing = behavior else {
         let bin_dir = root.join(".bee").join("bin");
         std::fs::create_dir_all(&bin_dir).expect("failed to create .bee/bin");
+        let capture = "cat > \"$(dirname \"$0\")/last_stdin.json\"";
         let script = match behavior {
-            StubBehavior::Deny(reason) => format!("#!/bin/sh\ncat >/dev/null\necho \"{reason}\" >&2\nexit 2\n"),
-            StubBehavior::Allow => "#!/bin/sh\ncat >/dev/null\nexit 0\n".to_string(),
-            StubBehavior::Crash => "#!/bin/sh\ncat >/dev/null\necho \"stub crash\" >&2\nexit 17\n".to_string(),
+            StubBehavior::Deny(reason) => format!("#!/bin/sh\n{capture}\necho \"{reason}\" >&2\nexit 2\n"),
+            StubBehavior::Allow => format!("#!/bin/sh\n{capture}\nexit 0\n"),
+            StubBehavior::Crash => format!("#!/bin/sh\n{capture}\necho \"stub crash\" >&2\nexit 17\n"),
+            StubBehavior::Repair => {
+                let stdout =
+                    json!({"hookSpecificOutput": {"updatedInput": {"repairedField": "repaired-value"}}}).to_string();
+                format!("#!/bin/sh\n{capture}\nprintf '%s' '{stdout}'\nexit 0\n")
+            }
+            StubBehavior::Ask(reason) => {
+                let stdout =
+                    json!({"hookSpecificOutput": {"permissionDecision": "ask", "permissionDecisionReason": reason}})
+                        .to_string();
+                format!("#!/bin/sh\n{capture}\nprintf '%s' '{stdout}'\nexit 0\n")
+            }
+            StubBehavior::UnparseableVerdict => format!("#!/bin/sh\n{capture}\nprintf '%s' 'not-json{{{{{{'\nexit 0\n"),
             StubBehavior::Missing => unreachable!(),
         };
         let path = bin_dir.join("bee");
@@ -462,6 +537,105 @@ fn write_stub_bee(root: &Path, behavior: &StubBehavior) {
             .expect("failed to make the stub bee binary executable");
         return;
     };
+}
+
+/// Reads back the payload the stub `bee` binary actually received on stdin
+/// (see `write_stub_bee`'s capture line) — the ground truth F3's assertions
+/// compare against, never the `output.args` OpenCode sees (which is on the
+/// OTHER side of the translation this test exists to check).
+fn read_captured_stdin(root: &Path) -> Value {
+    let path = root.join(".bee").join("bin").join("last_stdin.json");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("stub bee never captured stdin at {}: {e}", path.display()));
+    serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("captured stdin at {} was not valid JSON: {e}\ntext={text}", path.display()))
+}
+
+/// The REAL `output.args` shape a live OpenCode session sends per tool
+/// (field names verified live against discovery.md's field-shape tables:
+/// oc-2's write/edit/bash table, oc-6's glob/grep/question/task table, and
+/// oc-3's apply_patch `patchText` finding), paired with the EXACT bee-shaped
+/// `tool_input` object `mapToolCall`'s translation is supposed to produce,
+/// and the exact `tool_name` literal it emits. Hand-authored domain
+/// knowledge, the same way `helper_deny_payload` below already hand-authors
+/// its own known-denying SHAPE per rule — deriving the expected translation
+/// from the same source under test would prove nothing (F3): a field this
+/// table gets wrong is a bug in THIS test, a field `mapToolCall` gets wrong
+/// is the defect this test exists to catch, and only a fixed, independent
+/// expectation can tell the two apart.
+fn opencode_call_fixture(tool: &str) -> (Value, Value, &'static str) {
+    match tool {
+        "write" => (
+            json!({"filePath": "/tmp/oc-fixture/target.txt", "content": "hello"}),
+            json!({"file_path": "/tmp/oc-fixture/target.txt", "content": "hello"}),
+            "Write",
+        ),
+        "edit" => (
+            json!({"filePath": "/tmp/oc-fixture/target.txt", "oldString": "a", "newString": "b"}),
+            json!({"file_path": "/tmp/oc-fixture/target.txt", "old_string": "a", "new_string": "b"}),
+            "Edit",
+        ),
+        "bash" => (json!({"command": "ls -la /tmp"}), json!({"command": "ls -la /tmp"}), "Bash"),
+        "apply_patch" => (
+            json!({"patchText": "*** Begin Patch\n*** Add File: x.txt\n+hi\n*** End Patch"}),
+            json!({"patch": "*** Begin Patch\n*** Add File: x.txt\n+hi\n*** End Patch"}),
+            "apply_patch",
+        ),
+        "read" => (
+            json!({"filePath": "/tmp/oc-fixture/target.txt", "offset": 5, "limit": 100}),
+            json!({"file_path": "/tmp/oc-fixture/target.txt", "offset": 5, "limit": 100}),
+            "Read",
+        ),
+        "grep" => (
+            json!({"path": "/tmp/oc-fixture", "pattern": "needle", "include": "*.rs"}),
+            json!({"path": "/tmp/oc-fixture", "pattern": "needle", "include": "*.rs"}),
+            "Grep",
+        ),
+        "glob" => (
+            json!({"path": "/tmp/oc-fixture", "pattern": "*.rs"}),
+            json!({"path": "/tmp/oc-fixture", "pattern": "*.rs"}),
+            "Glob",
+        ),
+        "question" => {
+            let q = json!({
+                "questions": [{
+                    "question": "Pick one",
+                    "header": "Choice",
+                    "options": [{"label": "A", "description": "desc a"}],
+                    "multiple": false,
+                }]
+            });
+            (q.clone(), q, "AskUserQuestion")
+        }
+        "task" => {
+            let t = json!({
+                "description": "probe dispatch",
+                "prompt": "[bee-tier: generation] probe",
+                "subagent_type": "bee-build",
+            });
+            (t.clone(), t, "Task")
+        }
+        other => panic!(
+            "no payload fixture defined for OpenCode tool \"{other}\" — mapToolCall routes it but \
+             this test's field-shape table (opencode_call_fixture) does not cover it yet; add a row \
+             before trusting payload coverage for this tool (F3 / docs/knowledge/patterns/20260710-a-\
+             boundary-that-lists-field-names-will-leak.md)"
+        ),
+    }
+}
+
+/// The full payload `bee-guard.ts`'s `runBlockingHook` sends on stdin for a
+/// `tool.execute.before` call — `hook_event_name`/`session_id`/`cwd` are the
+/// same for every mapped row; `tool_name`/`tool_input` are per-row (see
+/// `opencode_call_fixture`).
+fn expected_opencode_payload(session_id: &str, cwd: &Path, tool_name: &str, tool_input: &Value) -> Value {
+    json!({
+        "hook_event_name": "PreToolUse",
+        "session_id": session_id,
+        "cwd": cwd.to_string_lossy(),
+        "tool_name": tool_name,
+        "tool_input": tool_input,
+    })
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -482,14 +656,16 @@ fn every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary(
     let mut failures: Vec<String> = Vec::new();
 
     for (tool, hook) in &pairs {
-        let args = json!({ "probe": tool, "value": "x" });
+        let (args, expected_tool_input, expected_tool_name) = opencode_call_fixture(tool);
+        let session_id = format!("sess-{tool}");
+        let call_payload = json!({"tool": tool, "sessionID": session_id, "args": args});
 
         // (a) deny — a distinct, per-row reason must reach the thrown Error.
         {
             let fx = tempfile::tempdir().expect("tempdir");
             let reason = format!("stub-deny for {hook} via {tool}");
             write_stub_bee(fx.path(), &StubBehavior::Deny(reason.clone()));
-            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &json!({"tool": tool, "args": args}));
+            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &call_payload);
             if !(r.threw && r.message.as_deref().is_some_and(|m| m.contains(&reason))) {
                 failures.push(format!(
                     "{tool} -> {hook}: DENY did not throw the stub's reason (threw={}, message={:?})",
@@ -498,11 +674,15 @@ fn every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary(
             }
         }
 
-        // (b) allow — no throw, and output.args passes through unchanged.
+        // (b) allow — no throw, output.args passes through unchanged, AND
+        // (F3) the EXACT payload bee received matches the translated
+        // field-name shape — never the old generic probe body, which would
+        // stay green even if mapToolCall renamed, dropped, or mis-shaped a
+        // field, tool_name, cwd, or session_id.
         {
             let fx = tempfile::tempdir().expect("tempdir");
             write_stub_bee(fx.path(), &StubBehavior::Allow);
-            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &json!({"tool": tool, "args": args}));
+            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &call_payload);
             let args_after = r.output.as_ref().and_then(|o| o.get("args")).cloned();
             if r.threw || args_after.as_ref() != Some(&args) {
                 failures.push(format!(
@@ -511,13 +691,21 @@ fn every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary(
                     r.threw, args_after
                 ));
             }
+            let captured = read_captured_stdin(fx.path());
+            let expected = expected_opencode_payload(&session_id, fx.path(), expected_tool_name, &expected_tool_input);
+            if captured != expected {
+                failures.push(format!(
+                    "{tool} -> {hook}: payload bee received does not match the translated shape \
+                     (F3) — expected {expected}, got {captured}"
+                ));
+            }
         }
 
         // (c) crash — a nonzero, non-2 exit must still throw (fail closed).
         {
             let fx = tempfile::tempdir().expect("tempdir");
             write_stub_bee(fx.path(), &StubBehavior::Crash);
-            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &json!({"tool": tool, "args": args}));
+            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &call_payload);
             if !(r.threw && r.message.as_deref().is_some_and(|m| m.contains("did not return a verdict"))) {
                 failures.push(format!(
                     "{tool} -> {hook}: CRASH must throw a \"did not return a verdict\" Error \
@@ -531,11 +719,68 @@ fn every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary(
         {
             let fx = tempfile::tempdir().expect("tempdir");
             write_stub_bee(fx.path(), &StubBehavior::Missing);
-            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &json!({"tool": tool, "args": args}));
+            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &call_payload);
             if !(r.threw && r.message.as_deref().is_some_and(|m| m.contains("could not find the bee binary"))) {
                 failures.push(format!(
                     "{tool} -> {hook}: MISSING BINARY must throw a \"could not find the bee binary\" Error \
                      (threw={}, message={:?})",
+                    r.threw, r.message
+                ));
+            }
+        }
+
+        // (e) D6 repair — exit-0 verdict carrying `hookSpecificOutput.
+        // updatedInput`: must not throw, and `output.args` must gain the
+        // repaired field via `Object.assign` (oc-8's F2 fix).
+        {
+            let fx = tempfile::tempdir().expect("tempdir");
+            write_stub_bee(fx.path(), &StubBehavior::Repair);
+            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &call_payload);
+            let args_after = r.output.as_ref().and_then(|o| o.get("args")).cloned();
+            let repaired_ok = args_after
+                .as_ref()
+                .and_then(|a| a.get("repairedField"))
+                .and_then(Value::as_str)
+                == Some("repaired-value");
+            if r.threw || !repaired_ok {
+                failures.push(format!(
+                    "{tool} -> {hook}: D6 repair must not throw and must apply updatedInput onto \
+                     output.args (threw={}, args_after={:?})",
+                    r.threw, args_after
+                ));
+            }
+        }
+
+        // (f) D6 ask — exit-0 verdict carrying `permissionDecision: "ask"`:
+        // must throw, carrying the reason verbatim. write-guard's own "ask,
+        // never allow" (write_guard/main.rs:389-394) is bee's DOMINANT
+        // enforcement path for a repaired AskUserQuestion call — treating it
+        // as an allow would silently defeat it on OpenCode specifically
+        // (oc-8's F2 finding).
+        {
+            let fx = tempfile::tempdir().expect("tempdir");
+            let reason = format!("stub-ask for {hook} via {tool}");
+            write_stub_bee(fx.path(), &StubBehavior::Ask(reason.clone()));
+            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &call_payload);
+            if !(r.threw && r.message.as_deref().is_some_and(|m| m.contains(&reason))) {
+                failures.push(format!(
+                    "{tool} -> {hook}: D6 ask verdict must throw the stub's reason (threw={}, message={:?})",
+                    r.threw, r.message
+                ));
+            }
+        }
+
+        // (g) D6 unparseable — exit-0 stdout that is non-empty but not valid
+        // JSON: undecidable, and undecidable stays fail-closed on the
+        // BLOCKING path, never a silent allow.
+        {
+            let fx = tempfile::tempdir().expect("tempdir");
+            write_stub_bee(fx.path(), &StubBehavior::UnparseableVerdict);
+            let r = run_harness(&harness, &plugin, fx.path(), "tool.execute.before", &call_payload);
+            if !(r.threw && r.message.as_deref().is_some_and(|m| m.contains("could not parse"))) {
+                failures.push(format!(
+                    "{tool} -> {hook}: D6 unparseable exit-0 verdict must throw a \"could not \
+                     parse\" Error (threw={}, message={:?})",
                     r.threw, r.message
                 ));
             }
@@ -791,13 +1036,33 @@ fn three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode()
     );
 }
 
+/// True iff `name` and one of `markers` co-occur on the SAME LINE of
+/// `discovery.md` — never merely "both appear somewhere in the document".
+///
+/// F5: the previous version of this check ANDed a per-rule `contains(rule)`
+/// with a DOCUMENT-GLOBAL `contains("NAMED EXCLUSION") ||
+/// contains("Deferred")` — but both marker literals are always present
+/// SOMEWHERE in this file (on `codex-subagent-audit`'s and `chain-nudge`'s
+/// own rows), so ANY rule name mentioned anywhere in the document passed,
+/// whether or not that specific mention was actually tagged as a gap. Every
+/// gap this file documents today is already written with its name and its
+/// marker on the SAME line (each is one markdown table row, e.g.
+/// `| codex-subagent-audit | n/a | NAMED EXCLUSION — ... |`), so scoping to
+/// one line is a real narrowing, not a cosmetic one — see
+/// docs/knowledge/patterns/20260722-a-coverage-gate-derives-ground-truth-it-
+/// never-compares-two-hand-lists.md.
+fn discovery_doc_names_as_a_gap(name: &str, markers: &[&str]) -> bool {
+    DISCOVERY_DOC.lines().any(|line| line.contains(name) && markers.iter().any(|m| line.contains(m)))
+}
+
 /// The parity test above only requires BLOCKING rules to hit all three
 /// belts. ADVISORY rules the OpenCode plugin does not wire
 /// (`codex-subagent-audit`, `chain-nudge`) are allowed to be missing — but
 /// ONLY if that gap is already a NAMED, documented exclusion, never a
 /// silent one. This is the coverage-gate half of the contract: any future
 /// ADVISORY hook the catalog gains that the plugin does not wire, and that
-/// discovery.md does not name, fails here rather than shipping silently.
+/// discovery.md does not name (on that rule's own line — F5), fails here
+/// rather than shipping silently.
 #[test]
 fn advisory_gaps_the_plugin_does_not_wire_are_named_not_silent() {
     let catalog = derive_catalog();
@@ -813,13 +1078,13 @@ fn advisory_gaps_the_plugin_does_not_wire_are_named_not_silent() {
         if wired.contains(rule) {
             continue; // covered live by `advisory_surfaces_never_throw_regardless_of_the_bee_binarys_behavior`
         }
-        // Not wired — must be named in discovery.md, not silently dropped.
-        let documented = DISCOVERY_DOC.contains(rule)
-            && (DISCOVERY_DOC.contains("NAMED EXCLUSION") || DISCOVERY_DOC.contains("Deferred"));
-        if !documented {
+        // Not wired — must be named in discovery.md ON ITS OWN LINE (F5),
+        // not silently dropped and not merely co-mentioned with an unrelated
+        // gap's marker elsewhere in the document.
+        if !discovery_doc_names_as_a_gap(rule, &["NAMED EXCLUSION", "Deferred"]) {
             unnamed_gaps.push(format!(
-                "{rule}: not wired by bee-guard.ts's runAdvisoryHook AND not documented as a named \
-                 gap in docs/history/opencode-support/discovery.md"
+                "{rule}: not wired by bee-guard.ts's runAdvisoryHook AND not documented on its own \
+                 line as a named gap in docs/history/opencode-support/discovery.md"
             ));
         }
     }
@@ -829,5 +1094,235 @@ fn advisory_gaps_the_plugin_does_not_wire_are_named_not_silent() {
         "silent ADVISORY coverage gap(s) — every hook the opencode belt does not wire must be a \
          NAMED exclusion in discovery.md:\n{}",
         unnamed_gaps.join("\n")
+    );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// PART 3 — F4: the tool-registry coverage gate. `pairs.len() >= 9` (part 1
+// above) and "at least one tool routes to this hook" (part 2 above) both
+// only check mapToolCall's OWN claims about itself — a hand-authored floor
+// compared against the hand-authored switch statement it is meant to police
+// proves internal consistency, never coverage (docs/knowledge/patterns/
+// 20260722-a-coverage-gate-derives-ground-truth-it-never-compares-two-hand-
+// lists.md). oc-3 closed exactly this gap for `apply_patch`, which the
+// installed binary registered under its own write-permission group while
+// mapToolCall's `default: return null` arm let it through as a TypeScript-
+// side allow. This section derives the REGISTERED tool inventory from the
+// installed opencode binary itself, so that defect class cannot recur
+// silently for the NEXT unmapped write- or read-capable tool.
+// ═════════════════════════════════════════════════════════════════════════
+
+/// Resolves the real, installed `opencode` binary this machine's PATH
+/// points `opencode` at — never a hardcoded machine-specific path — via the
+/// shell's own `command -v`, then canonicalized to follow the nvm-managed
+/// symlink chain down to the real compiled executable (oc-1's Install
+/// section: `~/.nvm/.../bin/opencode` -> `.../opencode-ai/bin/opencode.exe`).
+fn resolve_opencode_binary() -> Result<PathBuf, String> {
+    let out = Command::new("sh")
+        .arg("-c")
+        .arg("command -v opencode")
+        .output()
+        .map_err(|e| format!("failed to run `command -v opencode`: {e}"))?;
+    if !out.status.success() {
+        return Err("`opencode` not found on PATH".to_string());
+    }
+    let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if raw.is_empty() {
+        return Err("`command -v opencode` produced no path".to_string());
+    }
+    std::fs::canonicalize(&raw).map_err(|e| format!("could not canonicalize \"{raw}\": {e}"))
+}
+
+/// Reads the resolved opencode binary's own bytes as text. The installed
+/// binary is a compiled, per-platform executable with no plain JS source to
+/// read directly (oc-1's Blockers section) — but it is a Bun-bundled
+/// standalone executable, so its own minified JS payload (tool
+/// registrations included) is still present as plain, greppable ASCII text
+/// INSIDE it, exactly the fact oc-3's "Static binary read" already
+/// established and relied on for `apply_patch`. Lossy UTF-8 is fine: every
+/// literal this derivation searches for is plain ASCII.
+fn opencode_binary_text() -> Result<String, String> {
+    let path = resolve_opencode_binary()?;
+    let bytes = std::fs::read(&path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// The 14-element tool-id `Set` OpenCode's own icon-lookup helper builds
+/// (`var Ea=new Set([...]);function Ia(U){return Ea.has(U)?U:"generic"}` in
+/// the installed `opencode-ai@1.18.16` binary) — a VALUES-based literal, so
+/// it survives the surrounding minified variable name (`Ea`) changing on a
+/// rebuild. This is the primary derivation anchor: every element is a real,
+/// binary-confirmed OpenCode tool id.
+const TOOL_SET_LITERAL: &str =
+    "[\"bash\",\"glob\",\"read\",\"grep\",\"webfetch\",\"websearch\",\"write\",\"edit\",\"task\",\"apply_patch\",\"todowrite\",\"question\",\"skill\",\"execute\"]";
+
+/// Three further registered tool ids the `Set` above omits, each confirmed
+/// by ITS OWN independent literal anchor from that tool's registration body
+/// in the same binary (`V("<id>",s.gen(function*(){...` / `V("<id>",s.
+/// succeed(...`) — plus, for the ones `mapToolCall` does not already map,
+/// whether that same body reveals a caller-supplied `filePath` parameter
+/// (the exact shape `lsp` — this cell's finding — and `apply_patch` before
+/// oc-3 closed it, both carry).
+///
+/// `id` and `anchor` are independent binary evidence; `filepath_evidence`
+/// records whether a scan of the text FOLLOWING `anchor` (bounded, since
+/// tool bodies sit back-to-back in the bundle) found `filePath` — `Some(true
+/// /false)` when the anchor was found, `None` when it was not (treated as
+/// "unknown", never silently exempted).
+struct AdditionalToolAnchor {
+    id: &'static str,
+    anchor: &'static str,
+}
+
+const ADDITIONAL_TOOL_ANCHORS: &[AdditionalToolAnchor] = &[
+    AdditionalToolAnchor { id: "invalid", anchor: "V(\"invalid\",s.succeed({description:\"Do not use\"" },
+    AdditionalToolAnchor { id: "plan_exit", anchor: "V(\"plan_exit\",s.gen" },
+    AdditionalToolAnchor { id: "lsp", anchor: "V(\"lsp\",s.gen" },
+];
+
+/// For the tool ids inside `TOOL_SET_LITERAL` that `mapToolCall` does not
+/// map, the anchor this derivation locates that id's OWN registration body
+/// through (each tool uses its own real `permission:"<id>"` Effect
+/// `.ask()` call as a stable, values-based anchor — confirmed present for
+/// every one of these five in the installed binary).
+const UNMAPPED_SET_TOOL_ANCHORS: &[(&str, &str)] = &[
+    ("webfetch", "permission:\"webfetch\""),
+    ("websearch", "permission:\"websearch\""),
+    ("todowrite", "permission:\"todowrite\""),
+    ("skill", "permission:\"skill\""),
+    ("execute", "Script body executed by the confined interpreter"),
+];
+
+/// How far past an anchor this derivation looks for a `filePath` parameter
+/// before giving up — wide enough to cover every tool body actually
+/// observed in the installed binary (the longest, `lsp`'s, needed under 200
+/// chars), narrow enough that it cannot walk into the NEXT tool's body and
+/// misattribute its `filePath`.
+const FILEPATH_SCAN_WINDOW: usize = 500;
+
+/// True iff `anchor` is found in `text`, AND `filePath` appears within
+/// `FILEPATH_SCAN_WINDOW` bytes after it. `None` when the anchor itself was
+/// not found (an unlocatable body is "unknown", not "safe" — see the
+/// exemption reasoning below).
+fn anchor_body_contains_filepath(text: &str, anchor: &str) -> Option<bool> {
+    let idx = text.find(anchor)?;
+    let window_end = (idx + anchor.len() + FILEPATH_SCAN_WINDOW).min(text.len());
+    Some(text[idx..window_end].contains("filePath"))
+}
+
+/// The tool-registry ground truth: every OpenCode tool id this cell could
+/// mechanically confirm the installed binary registers, mapped to whether
+/// this derivation found evidence it is write- or read-capable (reads/
+/// writes an arbitrary caller-supplied file path) — `true`/`false` when
+/// classified, `None` when the binary text gave no evidence either way
+/// (treated as REQUIRING coverage below, never silently exempted — absence
+/// of evidence is not evidence of safety).
+///
+/// `list` — the S3 judge's OTHER named finding alongside `lsp` — has NO
+/// located static anchor in this binary: the judge's own evidence for it
+/// was almost certainly a live `tool.definition` probe (oc-1/oc-3's OTHER,
+/// non-static evidence source, exactly like oc-3's live-probe half), which
+/// a `cargo test` cannot reproduce deterministically offline (no model
+/// access, no network). It is recorded as a manually-confirmed gap in
+/// discovery.md instead of a derived one here — named, never silently
+/// assumed covered by this derivation's silence on it.
+fn derive_opencode_tool_registry(text: &str) -> Result<BTreeMap<String, Option<bool>>, String> {
+    if !text.contains(TOOL_SET_LITERAL) {
+        return Err(format!(
+            "the installed opencode binary's tool-id Set literal ({TOOL_SET_LITERAL}) was not \
+             found — has the installed opencode-ai version changed shape? this derivation needs \
+             updating rather than silently reporting zero tools"
+        ));
+    }
+    let mut registry: BTreeMap<String, Option<bool>> = BTreeMap::new();
+    for id in TOOL_SET_LITERAL.trim_start_matches('[').trim_end_matches(']').split(',') {
+        let id = id.trim_matches('"');
+        registry.insert(id.to_string(), None); // classified below only for unmapped ones
+    }
+    for (id, anchor) in UNMAPPED_SET_TOOL_ANCHORS {
+        registry.insert((*id).to_string(), anchor_body_contains_filepath(text, anchor));
+    }
+    for extra in ADDITIONAL_TOOL_ANCHORS {
+        let found = text.contains(extra.anchor);
+        assert!(found, "opencode binary: additional tool anchor for \"{}\" not found — {}", extra.id, extra.anchor);
+        registry.insert(extra.id.to_string(), anchor_body_contains_filepath(text, extra.anchor));
+    }
+    assert!(
+        registry.len() >= 15,
+        "derived opencode tool registry found only {} id(s) — expected at least 15 (14 from the \
+         Set literal plus \"lsp\"); the derivation likely broke: {:?}",
+        registry.len(),
+        registry.keys().collect::<Vec<_>>()
+    );
+    Ok(registry)
+}
+
+/// F4: `mapToolCall`'s own `pairs.len() >= 9` floor and the three-belt
+/// parity test's "at least one tool routes to this hook" both only check
+/// mapToolCall against ITSELF. This test instead derives the REGISTERED
+/// tool inventory from the installed opencode binary and requires every
+/// write- or read-capable one to be EITHER mapped by `mapToolCall` OR
+/// documented, on its own line, as a named gap in discovery.md (F5's fixed
+/// `discovery_doc_names_as_a_gap`, reused here rather than a second
+/// document-global check) — the exact discipline that would have caught
+/// `apply_patch` before oc-3, and now catches the next such tool by name.
+#[test]
+fn every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap() {
+    let text = match opencode_binary_text() {
+        Ok(t) => t,
+        Err(reason) => {
+            let allow = env_allows_skip();
+            eprintln!(
+                "{} (env-limited: could not read the installed opencode binary: {reason}) — \
+                 every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap",
+                if allow { "SKIP" } else { "FAIL" }
+            );
+            if allow {
+                return;
+            }
+            panic!(
+                "a readable, installed `opencode` binary is required to derive its real tool \
+                 registry ({reason}) — refusing to report this test green with zero registry \
+                 coverage actually derived. Set {ALLOW_SKIP_ENV}=1 to explicitly accept a \
+                 degraded, unproven run in an environment with no opencode install."
+            );
+        }
+    };
+
+    let registry = derive_opencode_tool_registry(&text)
+        .unwrap_or_else(|reason| panic!("opencode tool-registry derivation broke: {reason}"));
+
+    let mapped: BTreeSet<String> = opencode_tool_hook_pairs().into_iter().map(|(tool, _)| tool).collect();
+
+    // Tool ids this derivation positively confirmed do NOT touch an
+    // arbitrary caller-supplied file path (no `filePath` found within their
+    // own registration body — `anchor_body_contains_filepath` returned
+    // `Some(false)`) never need bee coverage; they are excluded from the
+    // gap requirement below without needing a discovery.md mention.
+    let mut gaps: Vec<String> = Vec::new();
+    for (id, filepath_evidence) in &registry {
+        if mapped.contains(id) {
+            continue; // covered live by part 1's per-row fixtures above
+        }
+        if *filepath_evidence == Some(false) {
+            continue; // confirmed non-file-capable by this derivation itself
+        }
+        // Either confirmed file-capable (`Some(true)`, e.g. `lsp`) or
+        // unclassifiable (`None`) — both REQUIRE coverage: either a mapping
+        // (absent, or this branch would not run) or a named gap.
+        if !discovery_doc_names_as_a_gap(id, &["NAMED GAP", "NAMED EXCLUSION", "Deferred"]) {
+            gaps.push(format!(
+                "\"{id}\": registered by the installed opencode binary, not mapped by \
+                 mapToolCall, and not documented on its own line as a named gap in \
+                 docs/history/opencode-support/discovery.md (filepath_evidence={filepath_evidence:?})"
+            ));
+        }
+    }
+
+    assert!(
+        gaps.is_empty(),
+        "silent write/read-capable OpenCode tool-registry gap(s) — the exact defect class \
+         apply_patch was before oc-3 closed it:\n{}",
+        gaps.join("\n")
     );
 }
