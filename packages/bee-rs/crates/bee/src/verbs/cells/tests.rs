@@ -21,6 +21,7 @@ use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -1198,6 +1199,137 @@ use std::time::Instant;
         assert_eq!(derive_model_independence(Some("a"), Some("pinned"), Some("b"), Some("pinned")), "confirmed");
         assert_eq!(derive_model_independence(Some("a"), Some("pinned"), Some("a"), Some("pinned")), "same-model");
         assert_eq!(derive_model_independence(Some("a"), Some("pinned"), None, None), "unverified");
+    }
+
+    // ── wl-3: judge close door (docs/history/workflow-lessons/plan.md) ─────
+    //
+    // `bee close` gains a blocking judge-debt door for standard/high-risk
+    // routes: a capped `behavior_change` cell with no recorded judge verdict
+    // (`trace.semantic_judge`) refuses close, exactly like the D1
+    // scribing-debt door refuses on uncaptured capture. The door itself
+    // lives in verbs/drivers/close.rs; these tests exercise it here,
+    // alongside the rest of the judge surface.
+
+    fn capped_behavior_change_cell(feature: &str, id: &str, judged: bool) -> Value {
+        let trace = if judged {
+            json!({
+                "behavior_change": true,
+                "capped_at": "2026-08-10T00:00:00.000Z",
+                "semantic_judge": [{"schema": "judge-verdict/1", "verdict": "PASS", "checks": []}],
+            })
+        } else {
+            json!({
+                "behavior_change": true,
+                "capped_at": "2026-08-10T00:00:00.000Z",
+            })
+        };
+        json!({"id": id, "feature": feature, "status": "capped", "trace": trace})
+    }
+
+    /// A standard-lane feature with an unjudged capped `behavior_change`
+    /// cell grows a BLOCKING judge-debt door naming the cell id, with a
+    /// remedy command stated on the door itself.
+    #[test]
+    fn judge_debt_door_blocks_a_standard_lane_feature_with_an_unjudged_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let judge_door = doors.iter().find(|d| d.door == "judge-debt").expect("door must exist for a standard route");
+        assert!(judge_door.blocking, "an unjudged behavior_change cell must block");
+        assert!(judge_door.detail.contains("demo-1"), "{}", judge_door.detail);
+        assert_eq!(judge_door.command, Some("bee cells judge-record"));
+    }
+
+    /// The same cell, once a judge verdict is recorded on its trace, clears
+    /// the door — still present (the route is still standard/high-risk),
+    /// but no longer blocking.
+    #[test]
+    fn judge_debt_door_clears_once_a_judge_verdict_is_recorded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", true));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let judge_door = doors.iter().find(|d| d.door == "judge-debt").expect("door must exist for a standard route");
+        assert!(!judge_door.blocking);
+        assert_eq!(judge_door.detail, "clear");
+    }
+
+    /// A tiny-lane feature never grows the judge-debt door at all — not
+    /// merely non-blocking — even with the very same unjudged cell.
+    #[test]
+    fn judge_debt_door_is_absent_for_a_tiny_lane_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record(root, "demo", "execution", Some("tiny"), true);
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        assert!(doors.iter().find(|d| d.door == "judge-debt").is_none(), "tiny lane must never grow this door");
+    }
+
+    /// A feature with no lane record at all (never went through shape/gate)
+    /// reads as "no route" — same absent-door treatment as tiny/small.
+    #[test]
+    fn judge_debt_door_is_absent_with_no_lane_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        assert!(doors.iter().find(|d| d.door == "judge-debt").is_none());
+    }
+
+    /// End to end: `bee close` on a standard-lane feature with an unjudged
+    /// `behavior_change` cell refuses even with tests GREEN, names the cell,
+    /// and states both remedy commands.
+    #[test]
+    fn close_refuses_judge_debt_for_a_standard_lane_feature() {
+        let Some(shell) = crate::shell::posix_shell() else { return }; // pub in shell.rs
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("config.json"),
+            r#"{"commands":{"test":"echo suite-green"}}"#,
+        )
+        .unwrap();
+        write_lane_record(root, "demo", "execution", Some("standard"), true);
+        // Past D1: a scribing run recorded after the cap clears the
+        // scribing-debt door, so the judge-debt refusal is the one that
+        // actually surfaces.
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("logs").join("scribing-runs.jsonl"),
+            "{\"feature\":\"demo\",\"ts\":\"2026-08-11T00:00:00.000Z\"}\n",
+        )
+        .unwrap();
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+
+        let declared = crate::verbs::drivers::declared_test_commands(root).unwrap();
+        let Out::Emit(result, text, code) =
+            crate::verbs::drivers::close_handler(root, "demo", false, declared, Some(shell), &HashMap::new())
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1, "judge debt refuses even though tests are green");
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert!(
+            lines[0].starts_with(crate::verbs::drivers::CLOSE_JUDGE_DEBT_PREFIX),
+            "refusal headline must start with the pinned prefix: {}",
+            lines[0]
+        );
+        assert!(lines[0].contains("demo-1"), "{}", lines[0]);
+        assert!(lines[1].contains("bee cells judge"), "{}", lines[1]);
+        assert!(lines[1].contains("bee cells judge-record"), "{}", lines[1]);
+        assert!(lines[2].starts_with("next:"));
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(doors.iter().find(|d| d["door"] == "judge-debt").unwrap()["blocking"], json!(true));
     }
 
     // ── schedule ──────────────────────────────────────────────────────────

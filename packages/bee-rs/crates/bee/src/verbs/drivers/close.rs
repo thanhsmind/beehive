@@ -40,6 +40,11 @@ pub(crate) const CLOSE_TESTS_UNDECLARED_DETAIL: &str = "no commands.test declare
 /// D1 (c2a7bd4f item 1).
 pub(crate) const CLOSE_CAPTURE_DEBT_PREFIX: &str = "Capture debt for";
 
+/// wl-3: pinned prefix of the judge-debt refusal headline (message-contract
+/// tests live in verbs/cells/tests.rs, alongside the rest of the judge
+/// surface). docs/history/workflow-lessons/plan.md wl-3.
+pub(crate) const CLOSE_JUDGE_DEBT_PREFIX: &str = "Judge debt for";
+
 /// provenance: test-runner.mjs declaredTestCommands + state.mjs
 /// normalizeCommands (verbs/test_runner.rs:184 declared_test_commands).
 /// `None` == JS `null` (undeclared).
@@ -368,6 +373,45 @@ pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     Ok(DebtSummary { count: ids.len(), ids })
 }
 
+/// wl-3 (docs/history/workflow-lessons/plan.md): the closing feature's
+/// route — the SAME `mode` field the lane record's own gate doors already
+/// key off (state_group/set_gate.rs, cells/handlers_close.rs lane checks)
+/// — read via the fail-open display read `scribing_debt` above already
+/// uses, so a corrupt or missing lane record reads as "no route" rather
+/// than throwing. `None` covers both: no lane record at all (a feature
+/// closed without ever going through shape/gate) and a lane record whose
+/// `mode` is absent or non-string.
+pub(crate) fn feature_route(root: &Path, feature: &str) -> D<Option<String>> {
+    let lane = crate::verbs::workflow_store::read_lane_display(root, feature).map_err(|_| Delegate)?;
+    Ok(lane.and_then(|l| match l.get("mode") {
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => None,
+    }))
+}
+
+/// wl-3: every capped `behavior_change` cell that carries NO judge record
+/// (`trace.semantic_judge` empty or absent) counts as judge debt. A cell
+/// capped with a NEEDS_REVISION verdict is unreachable here — `cells cap`
+/// already refuses that cap unless it carries an audited
+/// `judge_overrides` entry (handlers_close.rs), so every capped cell's
+/// `semantic_judge`, once non-empty, ended on a verdict cap itself already
+/// accepted. Same archive-inclusive read `scribing_debt` uses above, for
+/// the same reason: an auto-archived cell must still count.
+pub(crate) fn judge_debt(root: &Path, feature: &str) -> D<DebtSummary> {
+    let mut ids = Vec::new();
+    for cell in list_cells_including_archive(root, feature, "capped")? {
+        let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
+        if !matches!(vget(&trace, "behavior_change"), Some(Value::Bool(true))) {
+            continue;
+        }
+        let judged = matches!(vget(&trace, "semantic_judge"), Some(Value::Array(a)) if !a.is_empty());
+        if !judged {
+            ids.push(vget(&cell, "id").cloned().unwrap_or(Value::Null));
+        }
+    }
+    Ok(DebtSummary { count: ids.len(), ids })
+}
+
 /// provenance: capture.mjs pendingCaptureStubs + captureQueue
 /// (verbs/status_full.rs:2382) — only the COUNT used to reach close's door
 /// text (localeCompare sort therefore never mattered); U3 (docs/history/
@@ -557,6 +601,30 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
         detail: capture_queue_door_detail(root, queue, oldest_ms),
         command: None,
     });
+
+    // wl-3: the judge-debt door exists ONLY for a standard/high-risk
+    // closing route — a tiny/small feature never grows this door at all
+    // (AGENTS.md's own judge-on-smell carve-out for those lanes), not
+    // merely a non-blocking one, so `doors.iter().find(|d| d.door ==
+    // "judge-debt")` returns `None` below `standard`.
+    if matches!(feature_route(root, feature)?.as_deref(), Some("standard") | Some("high-risk")) {
+        let judge = judge_debt(root, feature)?;
+        let judge_blocking = judge.count > 0;
+        doors.push(Door {
+            door: "judge-debt",
+            blocking: judge_blocking,
+            detail: if judge.count == 0 {
+                "clear".to_string()
+            } else {
+                format!(
+                    "{} behavior_change cell(s) capped with no judge record ({}); run bee cells judge to check, then bee cells judge-record to record a verdict",
+                    judge.count,
+                    js_join(&judge.ids, ", ")
+                )
+            },
+            command: if judge_blocking { Some("bee cells judge-record") } else { None },
+        });
+    }
     Ok(doors)
 }
 
@@ -941,6 +1009,34 @@ pub(crate) fn close_handler(
             ),
             format!("remedy: run bee-capturing to record the capture, or log a decision tagged capture-deferral naming \"{feature}\" to defer it."),
             format!("next: settle the capture debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // ── wl-3: refuse on judge debt for a standard/high-risk closing route ──
+    //
+    // Runs only here — tests GREEN (or undeclared) and past the D1 capture-
+    // debt refusal above. The judge-debt door only EXISTS for a standard or
+    // high-risk closing route (build_close_report_doors omits it entirely
+    // below `standard`), so a tiny/small feature can never reach this
+    // refusal — matching AGENTS.md's own judge-on-smell carve-out for those
+    // lanes. Same "reads the door's own verdict, never recomputes it"
+    // discipline the scribing-debt refusal above already established.
+    if doors.iter().any(|d| d.door == "judge-debt" && d.blocking) {
+        let debt = judge_debt(root, feature)?;
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
+        result.insert("tests".into(), tests_result_value(&run));
+        let lines = vec![
+            format!(
+                "{CLOSE_JUDGE_DEBT_PREFIX} \"{feature}\" — close stops at the judge-debt door: {} behavior_change cell(s) capped with no judge record ({}).",
+                debt.count,
+                js_join(&debt.ids, ", ")
+            ),
+            "remedy: run bee cells judge to check, then bee cells judge-record to record a verdict for each cell above.".to_string(),
+            format!("next: settle the judge debt above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
