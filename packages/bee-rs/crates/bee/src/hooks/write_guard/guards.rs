@@ -393,6 +393,137 @@ fn expand_wrappers(tokens: Vec<String>, depth: usize, truncated: &mut bool) -> V
     out
 }
 
+// ─── heredoc fencing ─────────────────────────────────────────────────────
+//
+// `tokenize` has no notion of a heredoc: `<<EOF ... EOF` hands the shell a
+// multi-line BODY that is not command syntax at all — it is data the target
+// command reads on stdin. Without fencing, a body word lands on the same
+// tee/mv/cp/redirect branches that classify real command arguments, and the
+// guard denies real work naming a word that only ever appeared as heredoc
+// CONTENT (e.g. the bare word "it" inside a `git commit -F - <<'EOF'` body).
+//
+// `fence_heredocs` runs before tokenization and removes every heredoc body
+// (through its terminator line) from the text, leaving every token outside
+// a body — including a real redirect that sits next to the operator, as in
+// `cat > out.txt <<EOF` — byte-identical to what `tokenize` would have seen
+// without this pass. `<<<` (here-string) is a single token already inert
+// for target extraction and is left untouched; only `<<` and `<<-` are
+// heredoc operators.
+pub(crate) fn fence_heredocs(command: &str) -> String {
+    let chars: Vec<char> = command.chars().collect();
+    let n = chars.len();
+    let mut out = String::with_capacity(command.len());
+    let mut i = 0usize;
+    // Pending heredoc terminators for the current line, in operator order —
+    // bash queues bodies after the newline in the order the operators
+    // appeared on the command line.
+    let mut pending: Vec<(String, bool)> = Vec::new();
+
+    while i < n {
+        let ch = chars[i];
+        if ch == '"' || ch == '\'' {
+            let close = chars[i + 1..].iter().position(|&c| c == ch).map(|p| p + i + 1);
+            let end = close.map(|e| e + 1).unwrap_or(n);
+            out.extend(&chars[i..end]);
+            i = end;
+            continue;
+        }
+        if ch == '\\' && i + 1 < n {
+            out.push(ch);
+            out.push(chars[i + 1]);
+            i += 2;
+            continue;
+        }
+        if ch == '<' {
+            // Count the run of consecutive `<` so a here-string (`<<<`, or
+            // longer) is consumed whole rather than re-scanned two chars at
+            // a time — otherwise the trailing pair of a 3-`<` run would be
+            // mistaken for a fresh `<<` heredoc operator.
+            let mut run_end = i;
+            while run_end < n && chars[run_end] == '<' {
+                run_end += 1;
+            }
+            let run_len = run_end - i;
+            if run_len != 2 {
+                out.extend(&chars[i..run_end]);
+                i = run_end;
+                continue;
+            }
+            let op_start = i;
+            let mut j = i + 2;
+            let strip_tabs = chars.get(j) == Some(&'-');
+            if strip_tabs {
+                j += 1;
+            }
+            while j < n && (chars[j] == ' ' || chars[j] == '\t') {
+                j += 1;
+            }
+            let mut term = String::new();
+            let mut has_term = false;
+            if j < n && (chars[j] == '\'' || chars[j] == '"') {
+                let q = chars[j];
+                let close = chars[j + 1..].iter().position(|&c| c == q).map(|p| p + j + 1);
+                let end = close.unwrap_or(n);
+                term = chars[j + 1..end.min(n)].iter().collect();
+                j = if end < n { end + 1 } else { n };
+                has_term = true;
+            } else {
+                let start = j;
+                while j < n && !chars[j].is_whitespace() && !matches!(chars[j], ';' | '&' | '|') {
+                    j += 1;
+                }
+                if j > start {
+                    term = chars[start..j].iter().collect();
+                    has_term = true;
+                }
+            }
+            // The operator and its terminator word ride through unchanged —
+            // `<<` itself is already inert for redirect matching, so leaving
+            // it in the token stream cannot create a spurious target.
+            out.extend(&chars[op_start..j]);
+            i = j;
+            if has_term {
+                pending.push((term, strip_tabs));
+            }
+            continue;
+        }
+        if ch == '\n' {
+            out.push('\n');
+            i += 1;
+            if !pending.is_empty() {
+                let ops = std::mem::take(&mut pending);
+                for (term, strip_tabs) in ops {
+                    loop {
+                        if i >= n {
+                            // Unterminated heredoc: fail safe — nothing left
+                            // to consume, nothing left to extract from.
+                            break;
+                        }
+                        let line_start = i;
+                        let mut k = i;
+                        while k < n && chars[k] != '\n' {
+                            k += 1;
+                        }
+                        let line: String = chars[line_start..k].iter().collect();
+                        let compare: &str =
+                            if strip_tabs { line.trim_start_matches('\t') } else { &line };
+                        let is_term_line = compare == term;
+                        let ran_out = k >= n;
+                        i = if ran_out { k } else { k + 1 };
+                        if is_term_line || ran_out {
+                            break;
+                        }
+                    }
+                }
+            }
+            continue;
+        }
+        out.push(ch);
+        i += 1;
+    }
+    out
+}
+
 // ─── bash target extraction (provenance: guards.mjs extractBashTargets) ────
 
 pub(crate) struct BashTargets {
@@ -427,7 +558,8 @@ pub(crate) fn has_git_short_flag(tokens: &[String], letter: char) -> bool {
 }
 
 pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
-    let deep = tokenize_deep(command);
+    let fenced = fence_heredocs(command);
+    let deep = tokenize_deep(&fenced);
     let tokens = deep.tokens;
     let mut paths: Vec<String> = Vec::new();
     // A wrapper nested past the depth bound could hide a redirect we cannot

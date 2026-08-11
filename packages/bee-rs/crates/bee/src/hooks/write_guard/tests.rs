@@ -1456,6 +1456,59 @@ use std::process::ExitCode;
         assert_eq!(tokenize("\"a b"), vec!["a b"]);
     }
 
+    // ── heredoc fencing (ghf-1) ──────────────────────────────────────────────
+    // A heredoc BODY is data the target command reads on stdin, never command
+    // syntax — a body word must never be tokenized into a redirect target.
+
+    #[test]
+    fn heredoc_body_never_becomes_a_target() {
+        let cmd = "git commit -F - <<'EOF'\nmv /etc/passwd /tmp\nit\nEOF";
+        let t = extract_bash_targets(cmd);
+        assert!(t.paths.is_empty(), "{:?}", t.paths);
+        assert!(!t.broad_write, "{:?}", t.paths);
+    }
+
+    #[test]
+    fn heredoc_real_redirect_before_the_operator_still_extracts() {
+        let cmd = "cat > out.txt <<EOF\nsome body content\nEOF";
+        let t = extract_bash_targets(cmd);
+        assert_eq!(t.paths, vec!["out.txt"]);
+    }
+
+    #[test]
+    fn two_heredocs_on_one_line_are_both_fenced() {
+        let cmd = "cmd <<A <<B\nmv x y\nA\ntee z\nB";
+        let t = extract_bash_targets(cmd);
+        assert!(t.paths.is_empty(), "{:?}", t.paths);
+    }
+
+    #[test]
+    fn quoted_and_dash_terminator_forms_are_fenced() {
+        let single_quoted = "cat <<'EOF'\nrm -rf /\nEOF";
+        assert!(extract_bash_targets(single_quoted).paths.is_empty());
+        let double_quoted = "cat <<\"EOF\"\nrm -rf /\nEOF";
+        assert!(extract_bash_targets(double_quoted).paths.is_empty());
+        // `<<-` strips leading tabs from the body AND the terminator line.
+        let dash_form = "sed <<-END\n\tcp a b\n\tEND";
+        assert!(extract_bash_targets(dash_form).paths.is_empty());
+    }
+
+    #[test]
+    fn unterminated_heredoc_yields_nothing_from_the_tail_and_does_not_panic() {
+        let cmd = "cat <<EOF\nmv /etc/passwd /tmp\ntee /root/.ssh/authorized_keys";
+        let t = extract_bash_targets(cmd);
+        assert!(t.paths.is_empty(), "{:?}", t.paths);
+    }
+
+    #[test]
+    fn here_string_is_not_a_heredoc_and_is_left_as_is() {
+        // `<<<` is a here-string, not a heredoc — no body follows on later
+        // lines, so fencing must not swallow anything after it.
+        let cmd = "cat <<< \"hello\" > out.txt";
+        let t = extract_bash_targets(cmd);
+        assert_eq!(t.paths, vec!["out.txt"]);
+    }
+
     // ── tokenize_deep / find_git_invocations (gpd-1) ────────────────────────
 
     #[test]
