@@ -1015,6 +1015,28 @@ pub(crate) fn claim_cell_from_flags_ex(
     }
 }
 
+/// Visibility helper for rdv-1 (friction row 618): does `dep_cell` sit
+/// "open" because a semantic-judge NEEDS_REVISION verdict reopened it (the
+/// only writer of this shape is `run_judge_record`, handlers_meta.rs, which
+/// flips a capped cell back to "open" exactly when its newest verdict is
+/// "NEEDS_REVISION" — see its `reopened` branch)? Returns the quoted verdict
+/// kind when true, so a claim refusal can name the real cause instead of
+/// reading as a generic, permanent deadlock. This is read-only: it changes
+/// no law — an uncapped dep is still uncapped either way.
+fn revision_reopened_verdict(dep_cell: &Value) -> Option<String> {
+    let is_open = matches!(dep_cell.get("status"), Some(Value::String(s)) if s == "open");
+    if !is_open {
+        return None;
+    }
+    let entries = dep_cell.get("trace").and_then(|t| t.get("semantic_judge"))?;
+    let Value::Array(entries) = entries else { return None };
+    let latest = entries.last()?;
+    match latest.get("verdict") {
+        Some(Value::String(s)) if s == "NEEDS_REVISION" => Some(s.clone()),
+        _ => None,
+    }
+}
+
 /// claimCellCrossSession's typed outcome. Node returns `{ok:false, code,
 /// reason}`; each CLI caller prefixes it with its own verb word (`claim: …`
 /// / `claim-next: …`), so the refusal stays typed until then.
@@ -1181,28 +1203,48 @@ pub(crate) fn claim_cell_cross_session_ex(
                         js_string_or_undefined(cell.get("status"))
                     )));
                 }
-                // depsAllCapped (cells.mjs flavor — collects misses).
+                // depsAllCapped (cells.mjs flavor — collects misses). Also
+                // notes which misses are a NEEDS_REVISION reopen (visibility
+                // only, D2/rdv-1: the LAW is unchanged — deps still must be
+                // capped — this only names a dep that is "open" because a
+                // judge sent it back, not stuck for the ordinary reason.
                 let mut uncapped: Vec<Value> = Vec::new();
+                let mut revision_reopened: Vec<(String, String)> = Vec::new();
                 if let Some(deps) = cell.get("deps") {
                     if js_truthy(deps) {
                         let Value::Array(deps) = deps else { return Err(Fail::Delegate) };
                         for dep in deps {
                             let dep_id = jsjson::js_to_string(dep);
-                            let capped = match read_cell_norm(&root, &dep_id)? {
-                                Some(dep_cell) => {
-                                    matches!(dep_cell.get("status"), Some(Value::String(s)) if s == "capped")
-                                }
+                            let dep_cell = read_cell_norm(&root, &dep_id)?;
+                            let capped = match &dep_cell {
+                                Some(dc) => matches!(dc.get("status"), Some(Value::String(s)) if s == "capped"),
                                 None => false,
                             };
                             if !capped {
                                 uncapped.push(dep.clone());
+                                if let Some(dc) = &dep_cell {
+                                    if let Some(verdict) = revision_reopened_verdict(dc) {
+                                        revision_reopened.push((dep_id.clone(), verdict));
+                                    }
+                                }
                             }
                         }
                     }
                 }
                 if !uncapped.is_empty() {
+                    if revision_reopened.is_empty() {
+                        return Err(Fail::Thrown(format!(
+                            "claimCell: cell \"{cell_id}\" has uncapped deps: {} — deps must be capped first.",
+                            js_join(&uncapped, ", ")
+                        )));
+                    }
+                    let named = revision_reopened
+                        .iter()
+                        .map(|(id, verdict)| format!("\"{id}\" (reopened by a \"{verdict}\" judge verdict)"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
                     return Err(Fail::Thrown(format!(
-                        "claimCell: cell \"{cell_id}\" has uncapped deps: {} — deps must be capped first.",
+                        "claimCell: cell \"{cell_id}\" has uncapped deps: {} — deps must be capped first. {named} is not stuck for the ordinary reason — this is not a permanent deadlock. Two sanctioned roads: (a) claim and re-cap the reopened dependency yourself first; (b) run `bee cells update` on \"{cell_id}\" to change its deps, recording a reason.",
                         js_join(&uncapped, ", ")
                     )));
                 }
