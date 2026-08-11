@@ -378,5 +378,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-11T11:05:18.402Z"
+  },
+  "finish-advisory": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-11T11:18:47.763Z"
   }
 }
