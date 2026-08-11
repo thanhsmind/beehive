@@ -1,0 +1,44 @@
+{
+  "id": "dpu-1",
+  "feature": "doc-path-not-url",
+  "lane": "tiny",
+  "title": "Name docs by bare repo-relative path, drop the viewer-URL instruction",
+  "action": "AGENTS.md, packages/bee/AGENTS.block.md, skills/bee-hive/references/routing-and-contracts.md: replace the doc_viewer viewer-URL wording with bare repo-relative path; then regen chain: render-skill-trees, onboard --apply, release-manifest --write.",
+  "goal": "Agent prose points at docs as repo paths (docs/...), never a host-specific viewer URL.",
+  "verify": "bee dev release-manifest --check green; rg finds no doc_viewer viewer-URL instruction in the three files; commands.test green.",
+  "files": [
+    "AGENTS.md",
+    "packages/bee/AGENTS.block.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": "viewer-URL instruction removed from AGENTS.block.md + bee-hive contract; docs named by bare repo path; decision c9ac77cd supersedes 4205835b",
+    "files_changed": [
+      "AGENTS.md",
+      "packages/bee/AGENTS.block.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "tiny lane: no CONTEXT.md - rule locked as decision c9ac77cd superseding 4205835b; Gates 1-2 auto-approved under bypass normal"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-11T09:32:56.945Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "80e38425-1b74-4cd6-acb9-0c54c717f644",
+    "claimed_at": "2026-08-11T09:31:39.611Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T09:32:45.013Z"
+  }
+}
