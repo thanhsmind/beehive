@@ -318,5 +318,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-11T03:26:29.350Z"
+  },
+  "guard-heredoc-fencing": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-11T03:58:55.877Z"
   }
 }
