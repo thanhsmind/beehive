@@ -329,6 +329,7 @@
     "verify-pipeline",
     "cross-platform",
     "okf-profile",
-    "feedback"
+    "feedback",
+    "workflow-skills"
   ]
 }
