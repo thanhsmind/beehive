@@ -29,6 +29,23 @@ interview should go, never ask "anything else?", and never pad with
 questions whose answers would not change scope, UX, data shape, or
 acceptance criteria.
 
+## Edge of the map
+
+A fuzzy ask shrinks decision by decision, not by charging at the whole
+destination.
+
+- **The pull to build is a stop signal.** A mid-interview urge to "just
+  implement it and find out" marks the edge of what is understood — turn
+  it into the next question or a named Open Question, never into code.
+  The SEE mock stays the one exception.
+- **Fog test for deferrals.** Defer to the backlog only what can be
+  stated precisely right now — one sentence, a nameable outcome. What
+  cannot be stated yet is fog: hold it as an Open Question where it
+  sits; a premature backlog row fakes clarity and poisons later triage.
+- **Each locked answer redraws the map.** Re-triage what is still gray
+  after every lock before choosing the next question — an answer often
+  dissolves questions that seemed essential a turn ago.
+
 ## Materiality test
 
 Every candidate question passes three checks before it is asked:

@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "6debd40c048fa78113ecfd70789ed0803661a8167a60eca7ca547213d2808104",
+      "sha256": "2dae6ef708ae41cdc0d32c377a9922bc8b8aba0da625ddfa2a06d80cf3f78d04",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -451,7 +451,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-shaping/references/shaping-reference.md",
-      "sha256": "a7c5e989ea019037de80bec916a2639e05b013689d4b15d5ca3047702e3325e7",
+      "sha256": "f3717083a7015901ae2dd9d239a90f4d543a1d18061f433fea71ca7c6a027f4f",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-shaping/references/shaping-reference.md"
@@ -507,7 +507,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "e44f5499c77019876dd7136f9f8bced6f2b361610fc314e6cbb78df586eca244",
+      "sha256": "5c88040fd56ac0ca48a9b1e03a8c6c6c85d57b00d314b27c5d6630c840adfaea",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -822,7 +822,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-shaping/references/shaping-reference.md",
-      "sha256": "a7c5e989ea019037de80bec916a2639e05b013689d4b15d5ca3047702e3325e7",
+      "sha256": "f3717083a7015901ae2dd9d239a90f4d543a1d18061f433fea71ca7c6a027f4f",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-shaping/references/shaping-reference.md"
@@ -1390,7 +1390,7 @@
     },
     {
       "path": "skills/bee-shaping/references/shaping-reference.md",
-      "sha256": "a7c5e989ea019037de80bec916a2639e05b013689d4b15d5ca3047702e3325e7",
+      "sha256": "f3717083a7015901ae2dd9d239a90f4d543a1d18061f433fea71ca7c6a027f4f",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-shaping/references/shaping-reference.md"
