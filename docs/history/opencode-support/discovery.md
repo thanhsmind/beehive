@@ -750,3 +750,118 @@ worktree.
   here because nothing in the installed package's `.d.ts` files or the
   built-in `customize-opencode` skill names this constraint — a future
   OpenCode version could change or drop it silently.
+
+## Discovery: three-belt parity test authored from zero (oc-7)
+
+**Date:** 2026-08-11
+**Scope:** oc-7 — plan.md E3's parity proof. `docs/06-runtime-integration.md:143`
+names a two-belt parity test that does not exist in this tree — it died with
+the Node runtime at the R6 cutover (commit 5c62cad0). There was nothing to
+port for the OpenCode belt specifically; the new suite,
+`packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs`, is authored
+from zero, inside the cargo suite `commands.test` already runs.
+
+### Runner design
+
+Two parts, four `#[test]` functions:
+
+1. **Fixture tests over the real plugin.** A tiny, never-checked-in
+   `node` harness (a Rust string constant, written fresh into a tempdir per
+   test run — the same pattern `hook_contracts.rs`'s `fixture()` already
+   uses for its `.bee/onboarding.json` marker) dynamically imports the real
+   `.opencode/plugins/bee-guard.ts` by path, calls its default export to get
+   the `Hooks` object, and invokes exactly one named surface
+   (`tool.execute.before` / `chat.message` / `event` / `tool.execute.after`)
+   against a STUB `.bee/bin/bee` binary that can deny (exit 2), allow (exit
+   0), crash (any other nonzero exit), or be absent. `node`'s native
+   TypeScript type-stripping (Node 22.6+, unflagged by default from 23.6+;
+   confirmed live on the installed `v24.14.1`) runs the `.ts` file directly —
+   no build step, no `ts-node`, matching how OpenCode itself loads the file.
+   `every_blocking_mapped_row_denies_allows_crashes_and_reports_a_missing_binary`
+   drives all 9 rows `mapToolCall` routes (write/edit/bash/apply_patch/
+   read/grep/glob/question/task — every one maps to a BLOCKING hook, since
+   `mapToolCall` only ever returns `write-guard` or `model-guard`) through
+   all four stub behaviors, asserting throw-on-deny (with the stub's own
+   reason text reaching the thrown `Error`), allow passes `output.args`
+   through unchanged, crash throws `"did not return a verdict"`, and a
+   missing binary throws `"could not find the bee binary"`.
+   `advisory_surfaces_never_throw_regardless_of_the_bee_binarys_behavior`
+   drives every surface the plugin wires an ADVISORY hook onto through the
+   same four stub behaviors, asserting none of them ever throw.
+
+2. **The three-belt parity test**
+   (`three_belt_parity_every_blocking_rule_hits_helper_claude_codex_and_opencode`)
+   derives the guard-rule inventory from the catalog of record — the two
+   checked-in, GENERATED hook manifests `packages/bee/hooks/claude-hooks.json`
+   and `packages/bee/hooks/hooks.json` (both `hook_manifests.rs`'s `CATALOG`
+   rendered to disk, drift-checked byte-for-byte by that module's own
+   `hook_manifests_match_disk`) — never a hand-authored list, per
+   `docs/knowledge/patterns/20260722-a-coverage-gate-derives-ground-truth-it-
+   never-compares-two-hand-lists.md`. A rule is BLOCKING iff it is wired
+   under a `PreToolUse` event in either projection (today: `write-guard`,
+   `model-guard`); every other event this catalog uses is advisory-only by
+   construction. For each BLOCKING rule the test asserts four independent
+   signals, failing with a message naming the rule AND the belt that missed
+   it if any is absent:
+   - **helper level** — `bee hook <rule>` itself denies a known-denying
+     payload (the shared FIRST belt every runtime's translation layer calls
+     into — plan.md: "helpers stay the FIRST belt on every runtime"), run
+     with `BEE_HOOK_NO_DELEGATE=1` so a Node delegation can never pass
+     silently;
+   - **claude belt** — the rule is wired under `PreToolUse` in
+     `claude-hooks.json` AND `hook_contracts.rs`'s own source (embedded at
+     compile time via `include_str!`, scanned function-by-function) contains
+     a deny fixture using one of claude's own matcher-derived tool names;
+   - **codex belt** — the rule is wired under `PreToolUse` in
+     `packages/bee/hooks/hooks.json`. Codex has no separate translation
+     layer to fixture-test beyond that wiring: its `PreToolUse` command execs
+     `bee hook <rule>` directly, the exact call the helper-level check above
+     already proves denies (the only difference from claude is the matcher
+     token — `spawn_agent` vs `Agent|Task` — a named, approved difference in
+     `hook_manifests.rs`'s own `ALLOWED_DIFFERENCES`);
+   - **opencode belt** — `bee-guard.ts`'s `mapToolCall` actually routes at
+     least one real tool to this hook, derived by parsing the plugin's own
+     `switch (tool)` statement (never hand-listed) — the deny/allow/crash/
+     missing PROOF for every such row lives in part 1 above; this is the
+     routing-exists cross-check that keeps part 1 from going vacuous if a
+     row's `hook:` literal ever changes.
+
+   A companion test, `advisory_gaps_the_plugin_does_not_wire_are_named_not_
+   silent`, closes the other half of the coverage-gate contract: every
+   ADVISORY rule the catalog carries that `bee-guard.ts` does NOT wire
+   (derived by parsing its `runAdvisoryHook(directory, "...")` call sites)
+   must be documented as a named gap in THIS file (`discovery.md`) — today
+   that is exactly `codex-subagent-audit` (a `NAMED EXCLUSION` — see oc-6's
+   table above) and `chain-nudge` (the `Deferred: chain-nudge` section
+   above). A future catalog change that adds an ADVISORY hook the plugin
+   silently fails to wire, with no matching write-up here, fails this test
+   by name rather than shipping unnoticed.
+
+### Skipped-environment behavior
+
+"Node is absent" is not the only way the fixture belt (part 1 above) is
+unrunnable — a live probe proved a `node` that IS on PATH but too old to
+strip TypeScript natively is functionally the same gap, and a naive
+existence check (`node --version` succeeds) does NOT catch it: with the
+ambient PATH deliberately narrowed to put a system `node` v18.19.1 ahead of
+nvm's v24.14.1, every harness spawn died with
+`TypeError [ERR_UNKNOWN_FILE_EXTENSION]` on the real `bee-guard.ts` — a hard
+panic, not a clean skip. Fixed by replacing the existence check with a real
+capability probe, `node_typescript_probe()`: it writes a one-line `.ts` file
+to a tempdir and runs it directly, exactly how the harness loads the real
+plugin. On failure (node absent OR TS-incapable) both fixture tests print a
+named `SKIP (env-limited: ...)` line (matching `hook_contracts.rs`'s own
+`ran_native` skip convention) and return early — reconfirmed live with the
+same narrowed-PATH probe, which now reports `SKIP (env-limited: \`node\`
+(v18.19.1) cannot run a minimal .ts file directly ...)` and passes, instead
+of panicking. The catalog-derivation tests (both belong to part 2) do not
+depend on `node` at all and always run.
+
+Verified on this machine: `cargo test --release --manifest-path
+packages/bee-rs/Cargo.toml --test opencode_plugin_contracts` — `4 passed`
+with the ambient PATH (nvm's `node` v24.14.1 first, every fixture actually
+exercised, ~3.2s); `4 passed` again with PATH narrowed to put system `node`
+v18.19.1 first (both node-dependent tests print the named SKIP line above
+and return early, ~0.1s) — the suite never goes red on an incompatible
+`node`, and it never goes silently green either: the SKIP line names
+exactly which test degraded and why.
