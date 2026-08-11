@@ -47,6 +47,15 @@ is the other way a unit's record moves without a mutator having asked it to.
 
 ## Behaviors & Operations
 
+**Judge-debt close door (workflow-lessons wfl-3, 2026-08-11).** When the
+closing feature's route lane is standard or high-risk, every capped
+`behavior_change` cell must carry a recorded semantic-judge verdict
+(`trace.semantic_judge`, written by `cells judge-record`); missing verdicts
+make a BLOCKING `judge-debt` door naming the offending cell ids, remedy `bee
+cells judge` / `bee cells judge-record`. Tiny/small routes never grow the door
+— judge-on-smell stays their rule. Judgment moved from instructed to enforced
+for the lanes where a missed smell costs most.
+
 **B30 — Completing a unit requires proof scaled to how risky its change class
 and lane are, not one hard door for behavior change and advisory everywhere
 else.** Trigger: completing a unit whose change is classified — explicitly,

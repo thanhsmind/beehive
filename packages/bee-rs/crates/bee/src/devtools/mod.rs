@@ -61,11 +61,12 @@ use std::process::ExitCode;
 /// returns None without it. `statusline` is deliberately absent: it renders a
 /// HOST repo's status line and works anywhere, so guarding it would refuse a
 /// call that succeeds today.
-const SOURCE_CHECKOUT_DEV_VERBS: [&str; 4] = [
+const SOURCE_CHECKOUT_DEV_VERBS: [&str; 5] = [
     "render-skill-trees",
     "render-prompt",
     "release-manifest",
     "render-hook-manifests",
+    "regen",
 ];
 
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
@@ -99,7 +100,184 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "plugin-distribution" => plugin_distribution::run(flags),
         "install-support" => install_support::run(flags),
         "render-hook-manifests" => hook_manifests::run(flags),
+        "regen" => regen::run(flags),
         _ => None,
+    }
+}
+
+// ─── `bee dev regen` — the three-step regen chain, one deterministic verb ──
+//
+// Replaces the prose the REGEN_OBLIGATION refusal used to dictate directly
+// (verbs/cells/obligation.rs's `RegenGuardDef.regen`): "run render-skill-trees,
+// then onboard --apply, then release-manifest --write, in that order" is now
+// one command instead of three a cold reader has to sequence by hand.
+//
+// Every step is called through the SAME in-process entry point its own `bee
+// dev <name>` argv would reach — never a spawned self-invocation — so there is
+// exactly one implementation per step and the chain can never drift from what
+// running the three commands by hand would do.
+//
+// `run_chain` is deliberately the ONLY place that knows the fixed order and
+// the stop-on-first-red rule; it takes the steps as data (name + in-process
+// call) and returns what to print rather than printing itself, so the
+// sequencing — order held, a red stops the chain naming the step, nothing
+// after it silently skipped — is provable with fake steps, without touching
+// the real checkout the three real steps mutate.
+mod regen {
+    use super::{release_manifest, skill_trees};
+    use std::ffi::OsString;
+    use std::process::ExitCode;
+
+    /// One link of the chain: its name (for the ✓/✗ lines and the refusal),
+    /// and how to run it in-process — the same call `try_native` would make
+    /// for `bee dev <name>` (or, for onboard, `bee onboard`).
+    pub(super) struct Step {
+        pub(super) name: &'static str,
+        pub(super) invoke: Box<dyn Fn() -> Option<ExitCode>>,
+    }
+
+    /// The fixed chain, in the REGEN_OBLIGATION order: render-skill-trees,
+    /// then onboard --apply, then release-manifest --write.
+    fn chain() -> [Step; 3] {
+        [
+            Step { name: "render-skill-trees", invoke: Box::new(|| skill_trees::run(&[])) },
+            Step { name: "onboard --repo-root . --apply", invoke: Box::new(onboard_apply) },
+            Step {
+                name: "release-manifest --write",
+                invoke: Box::new(|| release_manifest::run(&["--write"])),
+            },
+        ]
+    }
+
+    /// `bee onboard --repo-root . --apply`, called through the same
+    /// `try_native` entry point the front door dispatches to — never a
+    /// spawned self-invocation.
+    fn onboard_apply() -> Option<ExitCode> {
+        let argv: Vec<OsString> =
+            ["onboard", "--repo-root", ".", "--apply"].iter().map(OsString::from).collect();
+        crate::onboard::try_native(&argv)
+    }
+
+    /// What the chain decided: the lines already earned (one `✓` per green
+    /// step, plus a final summary line when every step is green), the
+    /// refusal to print when a step stopped the chain, and the exit code.
+    pub(super) struct Outcome {
+        pub(super) lines: Vec<String>,
+        pub(super) stop_reason: Option<String>,
+        pub(super) code: ExitCode,
+    }
+
+    /// Run `steps` in order. A step that declines (`None` — its own
+    /// precondition was not met) or fails (`Some(code)` where `code` is not
+    /// success) stops the chain right there: the failure named, nothing after
+    /// it invoked. Every step that already ran earns its own `✓` line, kept
+    /// even when a later step turns the run red, so a partial chain still
+    /// says how far it got.
+    pub(super) fn run_chain(steps: &[Step]) -> Outcome {
+        let total = steps.len();
+        let mut lines = Vec::new();
+        for (i, step) in steps.iter().enumerate() {
+            let n = i + 1;
+            match (step.invoke)() {
+                None => {
+                    return Outcome {
+                        lines,
+                        stop_reason: Some(format!(
+                            "bee dev regen: step {n}/{total} ({}) declined — its own precondition \
+                             was not met (see the output above, if any). Steps after it did not \
+                             run. FIX the precondition, then re-run `bee dev regen`.",
+                            step.name
+                        )),
+                        code: ExitCode::FAILURE,
+                    };
+                }
+                Some(code) if code != ExitCode::SUCCESS => {
+                    return Outcome {
+                        lines,
+                        stop_reason: Some(format!(
+                            "bee dev regen: step {n}/{total} ({}) failed — see the error above. \
+                             Steps after it did not run. FIX the failure, then re-run \
+                             `bee dev regen`.",
+                            step.name
+                        )),
+                        code,
+                    };
+                }
+                Some(_) => lines.push(format!("✓ step {n}/{total}: {}", step.name)),
+            }
+        }
+        lines.push(format!("bee dev regen: all {total} steps green."));
+        Outcome { lines, stop_reason: None, code: ExitCode::SUCCESS }
+    }
+
+    /// `bee dev regen` — no flags; the chain and its order are fixed.
+    pub(super) fn run(args: &[&str]) -> Option<ExitCode> {
+        if !args.is_empty() {
+            return None;
+        }
+        let outcome = run_chain(&chain());
+        for line in &outcome.lines {
+            println!("{line}");
+        }
+        if let Some(reason) = &outcome.stop_reason {
+            eprintln!("{reason}");
+        }
+        Some(outcome.code)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn fake(name: &'static str, code: Option<ExitCode>) -> Step {
+            Step { name, invoke: Box::new(move || code) }
+        }
+
+        #[test]
+        fn every_step_green_prints_one_summary_line_per_step_plus_a_final_line() {
+            let steps =
+                [fake("a", Some(ExitCode::SUCCESS)), fake("b", Some(ExitCode::SUCCESS)), fake(
+                    "c",
+                    Some(ExitCode::SUCCESS),
+                )];
+            let outcome = run_chain(&steps);
+            assert!(outcome.stop_reason.is_none());
+            assert_eq!(
+                outcome.lines,
+                vec![
+                    "✓ step 1/3: a".to_string(),
+                    "✓ step 2/3: b".to_string(),
+                    "✓ step 3/3: c".to_string(),
+                    "bee dev regen: all 3 steps green.".to_string(),
+                ]
+            );
+        }
+
+        #[test]
+        fn a_red_step_stops_the_chain_naming_the_step_and_nothing_after_it_runs() {
+            let steps = [
+                fake("a", Some(ExitCode::SUCCESS)),
+                fake("b", Some(ExitCode::FAILURE)),
+                fake("c", Some(ExitCode::SUCCESS)),
+            ];
+            let outcome = run_chain(&steps);
+            // Step a already earned its line; step c never ran, so it has none.
+            assert_eq!(outcome.lines, vec!["✓ step 1/3: a".to_string()]);
+            let reason = outcome.stop_reason.expect("a red step must name itself");
+            assert!(reason.contains("step 2/3 (b) failed"), "{reason}");
+            assert!(reason.contains("bee dev regen"), "{reason}");
+            assert!(!reason.contains("step 3/3"), "step c must never be named: {reason}");
+        }
+
+        #[test]
+        fn a_declined_first_step_stops_before_any_line_is_printed() {
+            let steps =
+                [fake("a", None), fake("b", Some(ExitCode::SUCCESS)), fake("c", Some(ExitCode::SUCCESS))];
+            let outcome = run_chain(&steps);
+            assert!(outcome.lines.is_empty());
+            let reason = outcome.stop_reason.expect("a declined step must name itself");
+            assert!(reason.contains("step 1/3 (a) declined"), "{reason}");
+        }
     }
 }
 

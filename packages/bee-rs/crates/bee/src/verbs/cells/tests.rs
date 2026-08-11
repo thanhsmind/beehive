@@ -21,6 +21,7 @@ use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -1200,6 +1201,157 @@ use std::time::Instant;
         assert_eq!(derive_model_independence(Some("a"), Some("pinned"), None, None), "unverified");
     }
 
+    // ── wl-3: judge close door (docs/history/workflow-lessons/plan.md) ─────
+    //
+    // `bee close` gains a blocking judge-debt door for standard/high-risk
+    // routes: a capped `behavior_change` cell with no recorded judge verdict
+    // (`trace.semantic_judge`) refuses close, exactly like the D1
+    // scribing-debt door refuses on uncaptured capture. The door itself
+    // lives in verbs/drivers/close.rs; these tests exercise it here,
+    // alongside the rest of the judge surface.
+
+    fn capped_behavior_change_cell(feature: &str, id: &str, judged: bool) -> Value {
+        let trace = if judged {
+            json!({
+                "behavior_change": true,
+                "capped_at": "2026-08-10T00:00:00.000Z",
+                "semantic_judge": [{"schema": "judge-verdict/1", "verdict": "PASS", "checks": []}],
+            })
+        } else {
+            json!({
+                "behavior_change": true,
+                "capped_at": "2026-08-10T00:00:00.000Z",
+            })
+        };
+        json!({"id": id, "feature": feature, "status": "capped", "trace": trace})
+    }
+
+    /// A standard-lane feature with an unjudged capped `behavior_change`
+    /// cell grows a BLOCKING judge-debt door naming the cell id, with a
+    /// remedy command stated on the door itself.
+    #[test]
+    fn judge_debt_door_blocks_a_standard_lane_feature_with_an_unjudged_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // The live shape: `mode: "feature"` with the lane classification
+        // under `route.lane` — this DOES grow the door.
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let judge_door = doors.iter().find(|d| d.door == "judge-debt").expect("door must exist for a standard route");
+        assert!(judge_door.blocking, "an unjudged behavior_change cell must block");
+        assert!(judge_door.detail.contains("demo-1"), "{}", judge_door.detail);
+        assert_eq!(judge_door.command, Some("bee cells judge-record"));
+    }
+
+    /// The same cell, once a judge verdict is recorded on its trace, clears
+    /// the door — still present (the route is still standard/high-risk),
+    /// but no longer blocking.
+    #[test]
+    fn judge_debt_door_clears_once_a_judge_verdict_is_recorded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", true));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let judge_door = doors.iter().find(|d| d.door == "judge-debt").expect("door must exist for a standard route");
+        assert!(!judge_door.blocking);
+        assert_eq!(judge_door.detail, "clear");
+    }
+
+    /// A tiny-lane feature never grows the judge-debt door at all — not
+    /// merely non-blocking — even with the very same unjudged cell.
+    #[test]
+    fn judge_debt_door_is_absent_for_a_tiny_lane_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("tiny"), true);
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        assert!(doors.iter().find(|d| d.door == "judge-debt").is_none(), "tiny lane must never grow this door");
+    }
+
+    /// A feature with no lane record at all (never went through shape/gate)
+    /// reads as "no route" — same absent-door treatment as tiny/small.
+    #[test]
+    fn judge_debt_door_is_absent_with_no_lane_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        assert!(doors.iter().find(|d| d.door == "judge-debt").is_none());
+    }
+
+    /// wfl-5: `route.lane` absent EVERYWHERE — the lane record exists
+    /// (`mode: "feature"`) but carries no `route`, and there is no
+    /// default-state `route.lane` to fall back to either — still reads as
+    /// "no route", same absent-door treatment as the no-lane-record case.
+    #[test]
+    fn judge_debt_door_is_absent_when_route_lane_is_missing_everywhere() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", None, true);
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        assert!(
+            doors.iter().find(|d| d.door == "judge-debt").is_none(),
+            "a lane record with no route.lane, and no default-state route, must stay door-free"
+        );
+    }
+
+    /// End to end: `bee close` on a standard-lane feature with an unjudged
+    /// `behavior_change` cell refuses even with tests GREEN, names the cell,
+    /// and states both remedy commands.
+    #[test]
+    fn close_refuses_judge_debt_for_a_standard_lane_feature() {
+        let Some(shell) = crate::shell::posix_shell() else { return }; // pub in shell.rs
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("config.json"),
+            r#"{"commands":{"test":"echo suite-green"}}"#,
+        )
+        .unwrap();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        // Past D1: a scribing run recorded after the cap clears the
+        // scribing-debt door, so the judge-debt refusal is the one that
+        // actually surfaces.
+        std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("logs").join("scribing-runs.jsonl"),
+            "{\"feature\":\"demo\",\"ts\":\"2026-08-11T00:00:00.000Z\"}\n",
+        )
+        .unwrap();
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+
+        let declared = crate::verbs::drivers::declared_test_commands(root).unwrap();
+        let Out::Emit(result, text, code) =
+            crate::verbs::drivers::close_handler(root, "demo", false, declared, Some(shell), &HashMap::new())
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1, "judge debt refuses even though tests are green");
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert!(
+            lines[0].starts_with(crate::verbs::drivers::CLOSE_JUDGE_DEBT_PREFIX),
+            "refusal headline must start with the pinned prefix: {}",
+            lines[0]
+        );
+        assert!(lines[0].contains("demo-1"), "{}", lines[0]);
+        assert!(lines[1].contains("bee cells judge"), "{}", lines[1]);
+        assert!(lines[1].contains("bee cells judge-record"), "{}", lines[1]);
+        assert!(lines[2].starts_with("next:"));
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(doors.iter().find(|d| d["door"] == "judge-debt").unwrap()["blocking"], json!(true));
+    }
+
     // ── schedule ──────────────────────────────────────────────────────────
     #[test]
     fn compute_schedule_waves_and_diagnostics() {
@@ -2183,6 +2335,27 @@ use std::time::Instant;
         std::fs::write(dir.join(format!("{feature}.json")), jsjson::stringify_pretty(&body)).unwrap();
     }
 
+    /// wfl-5 (docs/history/workflow-lessons/plan.md): the live lane-record
+    /// shape carries the workflow's own mode fixed at `"feature"` and the
+    /// lane CLASSIFICATION (tiny/small/standard/high-risk) under
+    /// `route.lane` (state_group/workflows.rs `state route --set`), never
+    /// under the top-level `mode` field `write_lane_record` above writes
+    /// for the docs-exemption checks. This fixture matches that live shape
+    /// for the judge-debt door tests below.
+    fn write_lane_record_routed(root: &Path, feature: &str, phase: &str, route_lane: Option<&str>, execution: bool) {
+        let dir = lanes_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let route = route_lane.map(|l| json!({"lane": l}));
+        let body = json!({
+            "feature": feature,
+            "phase": phase,
+            "mode": "feature",
+            "route": route,
+            "approved_gates": {"execution": execution},
+        });
+        std::fs::write(dir.join(format!("{feature}.json")), jsjson::stringify_pretty(&body)).unwrap();
+    }
+
     fn write_default_state(root: &Path, feature: &str, phase: &str, mode: Option<&str>, execution: bool) {
         let dir = root.join(".bee");
         std::fs::create_dir_all(&dir).unwrap();
@@ -2368,6 +2541,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
+            report: None,
         };
         let cell_body = |id: &str| {
             json!({
@@ -2431,6 +2605,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
+            report: None,
         }
     }
 
@@ -2491,6 +2666,138 @@ use std::time::Instant;
         let flags = cap_flags_frd("frd-1c", Vec::new(), None);
         let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
         assert_eq!(capped["trace"]["deviations"], json!([]));
+    }
+
+    // ══ wfl-1 — `--report <json>` on cells cap/finish ══════════════════════
+    //
+    // The structured counterpart to the worker Result form
+    // (packages/bee/prompts/worker-cell.md): --report validated against
+    // exactly REPORT_KEYS before any write, then stored verbatim as
+    // trace.report. Absent --report never touches trace.report — the same
+    // "add a flag, prove the old path unchanged" posture frd-1's own
+    // omitting_deviation test takes above.
+
+    fn cap_flags_report(id: &str, report: Option<&str>) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: report.map(str::to_string),
+        }
+    }
+
+    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"green","deviations":[]}"#;
+
+    #[test]
+    fn valid_report_is_validated_and_stored_on_trace() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r1", &cell("wfl-r1", "claimed", "f", json!([])));
+
+        let flags = cap_flags_report("wfl-r1", Some(VALID_REPORT));
+        let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["report"],
+            json!({
+                "outcome": "did the thing",
+                "commit": "abc123",
+                "files": ["a.rs"],
+                "tests": "green",
+                "deviations": [],
+            })
+        );
+    }
+
+    #[test]
+    fn malformed_report_json_is_refused_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r2", &cell("wfl-r2", "claimed", "f", json!([])));
+        let before = std::fs::read_to_string(cell_file(root, "wfl-r2")).unwrap();
+
+        let flags = cap_flags_report("wfl-r2", Some("{not json"));
+        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        assert!(
+            refusal.contains("--report") && refusal.contains("not valid JSON"),
+            "{refusal}"
+        );
+        let after = std::fs::read_to_string(cell_file(root, "wfl-r2")).unwrap();
+        assert_eq!(before, after, "a malformed --report writes nothing");
+        let after_norm = read_cell_norm(root, "wfl-r2").ok().unwrap().unwrap();
+        assert_eq!(after_norm.get("status"), Some(&json!("claimed")));
+    }
+
+    #[test]
+    fn report_with_an_unknown_key_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r3", &cell("wfl-r3", "claimed", "f", json!([])));
+
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"green","deviations":[],"extra":"nope"}"#;
+        let flags = cap_flags_report("wfl-r3", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        assert!(
+            refusal.contains("unknown key \"extra\""),
+            "refusal must name the offending key: {refusal}"
+        );
+    }
+
+    #[test]
+    fn report_missing_a_required_key_is_refused_by_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r4", &cell("wfl-r4", "claimed", "f", json!([])));
+
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"green"}"#; // no "deviations"
+        let flags = cap_flags_report("wfl-r4", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        assert!(
+            refusal.contains("missing required key \"deviations\""),
+            "refusal must name the missing key: {refusal}"
+        );
+    }
+
+    #[test]
+    fn report_tests_key_must_be_green_or_red() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r5", &cell("wfl-r5", "claimed", "f", json!([])));
+
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"maybe","deviations":[]}"#;
+        let flags = cap_flags_report("wfl-r5", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        assert!(
+            refusal.contains("\"tests\" must be the string \"green\" or \"red\""),
+            "{refusal}"
+        );
+    }
+
+    #[test]
+    fn omitting_report_is_byte_identical_to_before_the_flag_existed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r6", &cell("wfl-r6", "claimed", "f", json!([])));
+
+        let flags = cap_flags_report("wfl-r6", None);
+        let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
+        assert!(
+            capped["trace"].get("report").is_none(),
+            "absent --report must never add a trace.report key"
+        );
     }
 
     // ══ D6 — the cell commit trailer (docs/history/hook-teeth/CONTEXT.md) ══
@@ -2569,6 +2876,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: commit_pending.map(str::to_string),
             inline_reason: None,
+            report: None,
         }
     }
 
@@ -2684,6 +2992,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: inline_reason.map(str::to_string),
+            report: None,
         }
     }
 
@@ -3524,6 +3833,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
+            report: None,
         }
     }
 
@@ -4095,4 +4405,141 @@ use std::time::Instant;
             payload["diagnostics"],
             json!({"cycles": [], "unsatisfiable_deps": [], "empty_files": []})
         );
+    }
+
+    // ══ wfl-4 — `bee dispatch wave`: the current schedule wave, claimed and
+    // prepared in one call ═════════════════════════════════════════════════
+    //
+    // `run_dispatch_wave` (verbs/drivers/prepare.rs) resolves its store root
+    // AND its hold topology off `std::env::current_dir()` — process-global —
+    // so it is exercised out-of-process via a `#[ignore]`d child, the same
+    // isolation `cells_update_behavior_child` (above) uses for its own
+    // process-global seam.
+
+    const DISPATCH_WAVE_CHILD: &str = "verbs::cells::tests::wfl4_dispatch_wave_child";
+
+    /// Runs ONLY as a child of the tests below — drives the REAL `bee
+    /// dispatch wave --runtime claude --json` CLI door over whatever cells
+    /// are on disk at its cwd.
+    #[test]
+    #[ignore = "spawned by the dispatch_wave_* tests"]
+    fn wfl4_dispatch_wave_child() {
+        let (flags, use_json) =
+            rsv::parse_flags(&["--runtime", "claude", "--json"]).expect("well-formed fixture argv");
+        crate::verbs::drivers::run_dispatch_wave(flags, use_json, Instant::now());
+    }
+
+    /// A store root with the one marker `resolve_store_root` requires, plus
+    /// an optional `models` config `prepare_dispatch` reads to resolve a
+    /// tier — the same two-file recipe `dispatch_prepare_claim_payload_pins_
+    /// worker_registered_true`'s `repo()` fixture (drivers/tests.rs) uses for
+    /// the identical claim+prepare seam.
+    fn wfl4_wave_root(tmp: &tempfile::TempDir, config: &str) -> PathBuf {
+        let root = tmp.path().to_path_buf();
+        let dir = root.join(".bee");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(dir.join("config.json"), config).unwrap();
+        root
+    }
+
+    /// Spawns `wfl4_dispatch_wave_child` with `root` as its cwd and returns
+    /// the parsed `{wave, skipped, economics}` payload — sliced out of the
+    /// raw stdout by its outermost braces (the libtest banner surrounds it;
+    /// `--nocapture` is what makes a PASSING test's own stdout visible at
+    /// all), the same tolerant slice `dispatch_prepare_claim_payload_pins_
+    /// worker_registered_true` (drivers/tests.rs) uses for the identical
+    /// seam.
+    fn wfl4_dispatch_wave_run(root: &Path) -> Value {
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = std::process::Command::new(&exe);
+        cmd.args(["--exact", DISPATCH_WAVE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.current_dir(root);
+        let out = cmd.output().expect("spawn the test binary");
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let start =
+            stdout.find('{').unwrap_or_else(|| panic!("no JSON payload in child stdout:\n{stdout}"));
+        let end = stdout.rfind('}').map(|i| i + 1).unwrap_or_else(|| {
+            panic!("no JSON payload in child stdout:\n{stdout}")
+        });
+        serde_json::from_str(&stdout[start..end])
+            .unwrap_or_else(|e| panic!("child stdout was not valid JSON ({e}):\n{stdout}"))
+    }
+
+    /// must-have: "Each payload equals what per-cell prepare would emit" —
+    /// two disjoint, ready, open cells in the current wave each earn a full
+    /// claim+reserve+payload envelope, never a shared/second copy of
+    /// `dispatch prepare --claim`'s own per-cell path.
+    #[test]
+    fn dispatch_wave_returns_a_payload_per_disjoint_ready_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        let mut a = cell("wa-1", "open", "f", json!([]));
+        a["files"] = json!(["docs/wa-1.md"]);
+        a["tier"] = json!("generation");
+        write_cell_fixture(&root, "wa-1", &a);
+        let mut b = cell("wa-2", "open", "f", json!([]));
+        b["files"] = json!(["docs/wa-2.md"]);
+        b["tier"] = json!("generation");
+        write_cell_fixture(&root, "wa-2", &b);
+
+        let payload = wfl4_dispatch_wave_run(&root);
+        let wave = payload["wave"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(wave.len(), 2, "payload: {payload}");
+        assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
+        for item in wave {
+            assert_eq!(item["claimed"], json!(true), "payload: {payload}");
+            assert_eq!(item["tool"], json!("Agent"), "payload: {payload}");
+            assert_eq!(item["payload"]["subagent_type"], json!("bee-build"), "payload: {payload}");
+            assert!(!item["reserved"].as_array().unwrap().is_empty(), "payload: {payload}");
+        }
+        let economics = payload["economics"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        let mut ids: Vec<&str> = economics.iter().map(|e| e["id"].as_str().unwrap()).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["wa-1", "wa-2"], "payload: {payload}");
+    }
+
+    /// must-have: "one refusal never poisons the batch" — a cell already
+    /// claimed by another worker still occupies its wave slot (schedulable
+    /// covers open AND claimed), the wave batch attempts it through the SAME
+    /// claim door `dispatch prepare --claim` uses, and the door's own typed
+    /// "not open" refusal lands the cell in `skipped` with a typed reason
+    /// rather than aborting the call.
+    #[test]
+    fn dispatch_wave_skips_a_foreign_claimed_cell_with_a_typed_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        let mut c = cell("wb-1", "claimed", "f", json!([]));
+        c["trace"] = json!({"worker": "someone-else"});
+        write_cell_fixture(&root, "wb-1", &c);
+
+        let payload = wfl4_dispatch_wave_run(&root);
+        assert_eq!(payload["wave"], json!([]), "payload: {payload}");
+        assert_eq!(payload["economics"], json!([]), "payload: {payload}");
+        let skipped = payload["skipped"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(skipped.len(), 1, "payload: {payload}");
+        assert_eq!(skipped[0]["id"], json!("wb-1"));
+        assert_eq!(skipped[0]["reason"], json!("already_claimed"));
+        assert!(
+            skipped[0]["detail"].as_str().unwrap().contains("not \"open\""),
+            "payload: {payload}"
+        );
+    }
+
+    /// must-have: an empty schedule (no schedulable cells at all) returns
+    /// every array empty rather than an absent/null key.
+    #[test]
+    fn dispatch_wave_over_an_empty_store_returns_empty_arrays() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, "{}");
+
+        let payload = wfl4_dispatch_wave_run(&root);
+        assert_eq!(payload, json!({"wave": [], "skipped": [], "economics": []}));
     }

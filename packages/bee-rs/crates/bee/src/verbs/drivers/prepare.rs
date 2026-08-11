@@ -1233,3 +1233,247 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     };
     finish(&ctx, out)
 }
+
+// ═══ dispatch wave ══════════════════════════════════════════════════════════
+//
+// `bee dispatch wave` — no bee.mjs counterpart (workflow-lessons wfl-4): the
+// current schedule wave (`cells::compute_schedule`, the SAME door `cells
+// schedule` reads), claimed and prepared in one call instead of one `dispatch
+// prepare --cell <id> --worker <name> --claim` per cell. Every cell in the
+// wave runs through the identical shared doors `dispatch prepare --claim`
+// uses — `claim_and_reserve_for_dispatch` then `prepare_dispatch` — so a
+// wave payload is byte-identical to what the single-cell command would have
+// emitted for that cell; this command only saves the orchestrator the
+// per-cell round trips. One cell's refusal (already claimed, a reservation
+// conflict) never aborts the rest of the wave — it is recorded in `skipped`
+// with a typed reason and the loop continues.
+
+/// The worker nickname `dispatch wave` claims each cell under when the
+/// caller does not hand one down: derived from the cell id alone, so two
+/// runs against the same still-open cell (or a human reading the claim
+/// trace) see a stable, self-explaining name — never a counter that drifts
+/// with call order.
+pub(crate) fn auto_wave_worker_name(cell_id: &str) -> String {
+    format!("w-{cell_id}")
+}
+
+/// Classifies a `claim_and_reserve_for_dispatch` refusal string into the two
+/// named `skipped` reasons the cell calls out — "already claimed" and "a
+/// reservation conflict" — falling back to a generic `claim_refused` for any
+/// other typed refusal that door can produce (budget caps, an unapproved
+/// execution gate, and the like). Message-sniffing is the one option here:
+/// the door returns a rendered String, not a typed enum, by the same design
+/// `dispatch prepare --claim`'s own single-cell caller already accepts.
+pub(crate) fn wave_skip_reason(message: &str) -> &'static str {
+    if message.contains("reservation conflict") {
+        "reservation_conflict"
+    } else if message.contains("not \"open\"") {
+        "already_claimed"
+    } else {
+        "claim_refused"
+    }
+}
+
+fn wave_skip(id: &str, reason: &'static str, detail: String) -> Value {
+    let mut s = Map::new();
+    s.insert("id".into(), Value::String(id.to_string()));
+    s.insert("reason".into(), Value::String(reason.to_string()));
+    s.insert("detail".into(), Value::String(detail));
+    Value::Object(s)
+}
+
+/// Best-effort unwind for the one unreachable-in-practice shape this loop
+/// still guards: a claim+reserve that SUCCEEDED, immediately followed by a
+/// `prepare_dispatch` that failed to build a payload over the very cell it
+/// just loaded (kind is always "cell", the worker is always non-empty, and
+/// ownership always matches the claim this same call just took — see
+/// `prepare_dispatch`'s Thrown arms). Mirrors `claim_and_reserve_for_
+/// dispatch`'s own unwind (reservations first, then the claim, in reverse),
+/// with `force_ownership` on the unclaim since this call is undoing its own,
+/// still-fresh claim rather than resolving a contested one.
+fn unwind_wave_claim(
+    root: &Path,
+    topo: Option<(&Path, &str)>,
+    worker: &str,
+    id: &str,
+    reserved: &[Value],
+) -> String {
+    let mut note = "the claim and its reservations were unwound".to_string();
+    let release_failed = if !reserved.is_empty() {
+        match release_reservations_for_agent(topo, root.to_str().unwrap_or(""), worker, Some(id)) {
+            Ok(Out::Thrown(m)) => Some(m),
+            Err(_) => Some("release_reservations_for_agent hit an unproven shape".to_string()),
+            Ok(_) => None,
+        }
+    } else {
+        None
+    };
+    let unclaim_failed = match crate::verbs::cells::unclaim_cell(root, id, None, true) {
+        Ok(_) => None,
+        Err(crate::verbs::cells::Fail::Delegate) => {
+            Some("unclaim_cell hit an unproven shape".to_string())
+        }
+        Err(crate::verbs::cells::Fail::Thrown(m)) => Some(m),
+    };
+    if release_failed.is_some() || unclaim_failed.is_some() {
+        note = format!(
+            "UNWIND FAILED (release: {}; unclaim: {}) — restore by hand: bee reservations release --agent {worker} --cell {id} --json ; bee cells unclaim --id {id} --force-ownership --json",
+            release_failed.as_deref().unwrap_or("ok"),
+            unclaim_failed.as_deref().unwrap_or("ok"),
+        );
+    }
+    note
+}
+
+/// provenance: none — new native command (workflow-lessons wfl-4).
+pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !crate::verbs::reservations::keys_known(&flags, &["runtime", "feature", "session-id"]) {
+        return None;
+    }
+    let runtime = flags.req_str("runtime")?.to_string();
+    if !DISPATCH_RUNTIMES.contains(&runtime.as_str()) {
+        return None; // validate()'s enum message equivalent
+    }
+    let feature = flags.truthy_str("feature").map(str::to_string);
+    let session_flag = flags.truthy_str("session-id").map(str::to_string);
+
+    let cwd = std::env::current_dir().ok()?;
+    let root = match resolve_store_root(&cwd) {
+        Roots::Ordinary(r) => r,
+        Roots::Unsupported(why) => {
+            return Some(emit_unsupported_root(&cwd, "dispatch wave", use_json, t0, &why));
+        }
+        Roots::None => {
+            return Some(emit_no_root_error(&cwd, "dispatch wave", use_json, t0));
+        }
+    };
+    // Every wave cell renders the "worker-cell" prompt (kind is always
+    // "cell") — the same skew guard `dispatch prepare --claim` applies.
+    if !prompts_match_disk(&root, "worker-cell") {
+        return None;
+    }
+    let classification = if runtime == "codex" {
+        Some(native_transport_classification(&root).ok()?)
+    } else {
+        None
+    };
+    // Claiming is not optional for `dispatch wave` (there is no read-only
+    // mode), so the hold topology is always resolved up front — the same
+    // narrow-door check `dispatch prepare --claim` makes.
+    let topology: Option<(PathBuf, String)> =
+        match crate::roots::resolve_store_root_worktree(&cwd) {
+            crate::roots::RootsWt::Go(r) => r.hold_topology(),
+            _ => return None,
+        };
+
+    let ctx = match prelude("dispatch wave", use_json, t0)? {
+        Pre::Go(c) => c,
+        Pre::Emitted(code) => return Some(code),
+    };
+
+    let cells = match crate::verbs::cells::list_cells(&ctx.root, feature.as_deref(), None) {
+        Ok(cells) => cells,
+        Err(crate::verbs::cells::Delegate) => return finish(&ctx, Err(Err2::Ex)),
+    };
+    // Same exotic-id guard `cells schedule` applies before scheduling.
+    for cell in &cells {
+        let schedulable =
+            matches!(cell.get("status"), Some(Value::String(s)) if s == "open" || s == "claimed");
+        if schedulable && !matches!(cell.get("id"), Some(Value::String(_))) {
+            return finish(&ctx, Err(Err2::Ex));
+        }
+    }
+    let schedule = crate::verbs::cells::compute_schedule(&cells);
+    let wave_ids: Vec<String> = schedule.waves.first().cloned().unwrap_or_default();
+
+    let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
+    let mut wave_payloads: Vec<Value> = Vec::new();
+    let mut skipped: Vec<Value> = Vec::new();
+    let mut economics: Vec<Value> = Vec::new();
+
+    for id in &wave_ids {
+        let worker = auto_wave_worker_name(id);
+        match claim_and_reserve_for_dispatch(&ctx.root, topo, id, &worker, session_flag.as_deref())
+        {
+            Err(_) => {
+                skipped.push(wave_skip(
+                    id,
+                    "unsupported",
+                    format!(
+                        "cell \"{id}\" hit an unproven shape mid-wave — run \
+                         `bee dispatch prepare --cell {id} --worker {worker} --runtime {runtime} --claim` \
+                         for it directly."
+                    ),
+                ));
+            }
+            Ok(Err(message)) => {
+                let reason = wave_skip_reason(&message);
+                skipped.push(wave_skip(id, reason, message));
+            }
+            Ok(Ok((_cell, reserved, worker_registered, registration_error))) => {
+                match prepare_dispatch(
+                    &ctx.root,
+                    &runtime,
+                    "cell",
+                    Some(id.as_str()),
+                    Some(worker.as_str()),
+                    false,
+                    classification,
+                    None,
+                    true,
+                ) {
+                    Ok(Prepared::Value(result)) => {
+                        let mut m = match result {
+                            Value::Object(m) => m,
+                            // kind "cell" always renders an object envelope
+                            // (either the full payload or a typed refusal);
+                            // this arm is unreached in practice.
+                            other => {
+                                wave_payloads.push(other);
+                                continue;
+                            }
+                        };
+                        m.insert("claimed".into(), Value::Bool(true));
+                        m.insert("reserved".into(), Value::Array(reserved));
+                        m.insert("worker_registered".into(), Value::Bool(worker_registered));
+                        if let Some(err) = &registration_error {
+                            m.insert("registration_error".into(), Value::String(err.clone()));
+                        }
+                        if let Some(Value::Object(econ)) = m.get("economics") {
+                            let mut e = econ.clone();
+                            e.insert("id".into(), Value::String(id.clone()));
+                            economics.push(Value::Object(e));
+                        }
+                        wave_payloads.push(Value::Object(m));
+                    }
+                    Ok(Prepared::Thrown(msg)) => {
+                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id, &reserved);
+                        skipped.push(wave_skip(
+                            id,
+                            "prepare_failed",
+                            format!("cell \"{id}\": {msg} — {note}"),
+                        ));
+                    }
+                    Err(Delegate) => {
+                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id, &reserved);
+                        skipped.push(wave_skip(
+                            id,
+                            "prepare_failed",
+                            format!(
+                                "cell \"{id}\": prepare_dispatch hit an unproven shape mid-wave — {note}"
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    let mut result = Map::new();
+    result.insert("wave".into(), Value::Array(wave_payloads));
+    result.insert("skipped".into(), Value::Array(skipped));
+    result.insert("economics".into(), Value::Array(economics));
+    let result = Value::Object(result);
+    let text = jsjson::stringify_pretty(&result);
+    finish(&ctx, Ok(Out::Emit(result, text, 0)))
+}

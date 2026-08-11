@@ -23,7 +23,7 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 11] = [
+pub(crate) const CAP_FLAGS: [&str; 12] = [
     "id",
     "outcome",
     "files",
@@ -35,6 +35,7 @@ pub(crate) const CAP_FLAGS: [&str; 11] = [
     "force-ownership",
     "commit-pending",
     "inline-reason",
+    "report",
 ];
 
 /// resolveDeclaredBehaviorChange (E6).
@@ -98,6 +99,12 @@ pub(crate) struct CapFlags {
     /// worker check below for a small+ cell and is recorded on the capped
     /// cell's own `trace.inline_reason`.
     pub(crate) inline_reason: Option<String>,
+    /// wfl-1: `--report <json-string>`, RAW — `None` = not passed. Validated
+    /// against the worker Result-form shape (finish_support.rs's
+    /// `parse_report_flag`) before any write, then stored verbatim as
+    /// `trace.report`. Absent leaves `trace.report` untouched — byte-
+    /// identical to before this flag existed.
+    pub(crate) report: Option<String>,
 }
 
 /// wp-1: is `worker` (the cap's own `trace.worker`) a REGISTERED worker for
@@ -169,6 +176,14 @@ pub(crate) fn cap_cell_from_flags(root: &Path, test_root: &Path, f: &CapFlags, f
             )));
         }
     }
+
+    // wfl-1: `--report` shape check, BEFORE the (possibly long) test run and
+    // before any write — same "refuse before doing real work" posture as
+    // `--deviation` above. `None` when the flag was not passed at all.
+    let report_value: Option<Value> = match &f.report {
+        Some(raw) => Some(parse_report_flag(raw)?),
+        None => None,
+    };
 
     // The one test door (test-simple, decision 412e9b3a).
     let declared = commands
@@ -405,6 +420,12 @@ pub(crate) fn cap_cell_from_flags(root: &Path, test_root: &Path, f: &CapFlags, f
         if let Some(reason) = &f.inline_reason {
             trace.insert("inline_reason".into(), Value::String(reason.clone()));
         }
+        // wfl-1: the validated --report object, when passed — stored
+        // verbatim (`parse_report_flag` already proved the exact five keys).
+        // Absent --report never touches this key at all.
+        if let Some(report) = &report_value {
+            trace.insert("report".into(), report.clone());
+        }
         let outcome_value = match &f.outcome {
             Some(o) if !js_trim(o).is_empty() => Value::String(o.clone()),
             _ => trace.get("outcome").cloned().unwrap_or(Value::Null),
@@ -489,6 +510,10 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         Some(s) if !js_trim(&s).is_empty() => Some(js_trim(&s).to_string()),
         _ => None,
     };
+    // wfl-1: raw (untrimmed, unparsed) on purpose — `cap_cell_from_flags`
+    // owns the actual validation via `parse_report_flag`, same split
+    // `--deviation`'s own probe takes above.
+    let report = opt_string_flag(flags, "report")?;
     Some(CapFlags {
         id,
         outcome,
@@ -501,6 +526,7 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         force_ownership,
         commit_pending,
         inline_reason,
+        report,
     })
 }
 

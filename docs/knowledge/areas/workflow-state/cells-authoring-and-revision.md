@@ -24,6 +24,14 @@ revisable at all once its gate is granted.
 
 ## Behaviors & Operations
 
+**One-verb regen chain (workflow-lessons wfl-2, 2026-08-11).** `bee dev regen`
+runs the three-step regen chain (render-skill-trees → onboard --repo-root .
+--apply → release-manifest --write) in fixed order through the in-process
+entry points, stopping at the first red with that step named; the
+REGEN_OBLIGATION refusal text routes to the verb (three steps kept in
+parentheses for cold readers). The remembered-sequence failure mode — source
+shipped without the chain — is closed by construction.
+
 **B7 — Cell plans are revisable in place, execution records never.** A unit of
 work's PLAN fields (title, action, scope files, reading list, dependencies,
 cited decisions, acceptance contracts, verify command, lane, behavior flag)

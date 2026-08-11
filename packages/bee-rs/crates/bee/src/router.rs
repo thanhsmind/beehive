@@ -77,6 +77,8 @@ pub const PORTED: &[&str] = &[
     // R3 wave 3
     "close (incl. --dry-run; lane and non-lane features alike)",
     "dispatch prepare (all kinds; --claim still delegated)",
+    "dispatch wave --runtime <claude|codex> [--feature F] [--session-id S] \
+     (the current schedule wave, claimed + reserved + prepared in one call)",
     "worktree list|register|unregister",
     // R4 dev surface
     "onboard [--repo-root R] [--apply] [--json] [--repo-hooks] [--plugin-source] \
@@ -85,6 +87,8 @@ pub const PORTED: &[&str] = &[
     "dev render-prompt <name> [--var K=V]",
     "dev statusline",
     "dev release-manifest --write|--check|--selftest",
+    "dev regen (render-skill-trees -> onboard --repo-root . --apply -> \
+     release-manifest --write, stops on the first red)",
     // R6a — the bee-herding cockpit's executable helpers, ported off Node
     "herding classify-lane <PBI-ID>",
     "herding interlock [--main-root PATH]",

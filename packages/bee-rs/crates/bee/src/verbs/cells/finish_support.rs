@@ -177,6 +177,92 @@ pub(crate) fn first_failure_line(run: &TestsRun) -> Option<String> {
         .map(str::to_string)
 }
 
+// ─── wfl-1 (docs/history/workflow-lessons/plan.md) — the structured worker
+// Result form ─────────────────────────────────────────────────────────────
+// `bee cells finish --report <json-string>` — the machine-readable
+// counterpart to worker-cell.md's Result-form block, so tending reads the
+// form instead of parsing prose. Exactly REPORT_KEYS, each required; an
+// unknown key or a missing one is refused by name (frd-1's own "name the
+// flag" posture). Absent `--report` never touches `trace.report` at all —
+// old finish behavior stays byte-identical.
+
+/// The Result form's five keys, in the order worker-cell.md documents them.
+pub(crate) const REPORT_KEYS: [&str; 5] = ["outcome", "commit", "files", "tests", "deviations"];
+
+/// parseReportFlag — `--report`'s raw JSON string validated against the
+/// worker Result-form shape. `outcome`/`commit` are non-empty strings;
+/// `files`/`deviations` are arrays (their own element shape is the
+/// worker's business, not this gate's); `tests` is the literal string
+/// `"green"` or `"red"`. Every refusal names the offending key so a cold
+/// reader fixes it without re-deriving the shape from this function.
+pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
+    let parsed: Value = serde_json::from_str(raw)
+        .map_err(|e| Fail::Thrown(format!("cells finish: --report is not valid JSON: {e}")))?;
+    let Value::Object(map) = parsed else {
+        return Err(Fail::Thrown(format!(
+            "cells finish: --report must be a JSON object with keys {}.",
+            REPORT_KEYS.join(", ")
+        )));
+    };
+    for key in map.keys() {
+        if !REPORT_KEYS.contains(&key.as_str()) {
+            return Err(Fail::Thrown(format!(
+                "cells finish: --report has unknown key \"{key}\" — only {} are allowed.",
+                REPORT_KEYS.join(", ")
+            )));
+        }
+    }
+    for key in REPORT_KEYS {
+        if !map.contains_key(key) {
+            return Err(Fail::Thrown(format!(
+                "cells finish: --report is missing required key \"{key}\"."
+            )));
+        }
+    }
+    match map.get("outcome") {
+        Some(Value::String(s)) if !js_trim(s).is_empty() => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"outcome\" must be a non-empty string.".to_string(),
+            ))
+        }
+    }
+    match map.get("commit") {
+        Some(Value::String(s)) if !js_trim(s).is_empty() => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"commit\" must be a non-empty string.".to_string(),
+            ))
+        }
+    }
+    match map.get("files") {
+        Some(Value::Array(_)) => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"files\" must be an array.".to_string(),
+            ))
+        }
+    }
+    match map.get("deviations") {
+        Some(Value::Array(_)) => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"deviations\" must be an array.".to_string(),
+            ))
+        }
+    }
+    match map.get("tests") {
+        Some(Value::String(s)) if s == "green" || s == "red" => {}
+        _ => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"tests\" must be the string \"green\" or \"red\"."
+                    .to_string(),
+            ))
+        }
+    }
+    Ok(Value::Object(map))
+}
+
 // ─── D6 (docs/history/hook-teeth/CONTEXT.md) — the cell commit trailer ────
 //
 // `cells finish` refuses to cap a cell whose files_changed is non-empty
