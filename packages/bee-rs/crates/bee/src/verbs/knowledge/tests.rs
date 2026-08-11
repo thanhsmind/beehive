@@ -1418,6 +1418,54 @@ use std::time::Instant;
         assert!(report.ok, "a duplicate id alone stays green un-strict");
     }
 
+    // ═══ profile warning: invalid_evidence_state (el-1) ════════════════════
+
+    /// The three enum states are silent; absent is likewise silent and reads
+    /// as `present` (never guessed at a higher rung).
+    #[test]
+    fn evidence_states_and_absence_are_silent() {
+        let (_tmp, dir) = bundle();
+        put(&dir, "patterns/present.md", Cx::new("present-one").bee("evidence", json!("present")));
+        put(&dir, "patterns/wired.md", Cx::new("wired-one").bee("evidence", json!("wired")));
+        put(&dir, "patterns/exercised.md", Cx::new("exercised-one").bee("evidence", json!("exercised")));
+        put(&dir, "patterns/absent.md", Cx::new("absent-one")); // no bee.evidence at all
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(
+            of_code(&report.warnings, "invalid_evidence_state").is_empty(),
+            "every enum value and absence must stay silent: {:?}",
+            report.warnings
+        );
+        assert!(report.ok);
+        assert!(check_bundle(&dir, true).unwrap().ok, "--strict must not invent a failure here either");
+    }
+
+    /// A non-enum value warns by file and value, never errors the bundle;
+    /// the OKF layer never sees it either — a profile SHOULD, not a MUST.
+    #[test]
+    fn invalid_evidence_state_warns_by_file_and_value_never_errors() {
+        for bad in [json!("doc-only"), json!(""), json!(true), json!(["present"])] {
+            let (_tmp, dir) = bundle();
+            put(&dir, "patterns/bad.md", Cx::new("bad-one").bee("evidence", bad.clone()));
+            let report = check_bundle(&dir, false).unwrap();
+            assert!(report.okf_errors.is_empty(), "{bad}: never an OKF error: {:?}", report.okf_errors);
+            assert!(report.profile_errors.is_empty(), "{bad}: never a profile error: {:?}", report.profile_errors);
+            let warns = of_code(&report.warnings, "invalid_evidence_state");
+            assert_eq!(warns.len(), 1, "{bad}: {:?}", report.warnings);
+            assert_eq!(warns[0]["file"], "patterns/bad.md");
+            let m = msg(warns[0]);
+            assert!(m.contains("present|wired|exercised"), "{bad}: {m}");
+            assert!(report.ok, "{bad}: a warning alone must not fail un-strict");
+            assert!(!check_bundle(&dir, true).unwrap().ok, "{bad}: --strict promotes the warning to failing");
+        }
+        // The value itself must be traceable in the message for the string case.
+        let (_tmp, dir) = bundle();
+        put(&dir, "patterns/typo.md", Cx::new("typo-one").bee("evidence", json!("doc-only")));
+        let report = check_bundle(&dir, false).unwrap();
+        let warns = of_code(&report.warnings, "invalid_evidence_state");
+        assert_eq!(warns.len(), 1);
+        assert!(msg(warns[0]).contains("doc-only"), "the bad value must be named: {}", msg(warns[0]));
+    }
+
     // ═══ profile ERRORS (G14 layer 3 / cell f3-3) ══════════════════════════
 
     /// Node: 'profile ERROR: duplicate bee.authoritative_for FAILS the chain'

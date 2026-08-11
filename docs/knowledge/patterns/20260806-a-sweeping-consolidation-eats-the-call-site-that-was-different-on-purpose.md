@@ -12,6 +12,8 @@ bee:
   sources: ["js-parity-cleanup cell jp-5 (seven duplicated helpers plus three inline copies folded into one module across eighteen files; trace .bee/cells/jp-5.json, 2026-08-04 — 1004 passed, 0 failed)", "js-parity-cleanup cell jp-9 (the guard restored, the rationale corrected; trace .bee/cells/jp-9.json, 2026-08-04 — 1006 passed, 0 failed)", "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs:155-161 (the restored call site, with the reason written beside it)", docs/knowledge/areas/rust-runtime/text-measurement-and-the-two-counting-units.md]
   polarity: pitfall
   critical: false
+  evidence: wired
+  evidence_ref: "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs (the AskUserQuestion header-length guard, measured in utf16 code units to match the external Claude Code validator)"
 ---
 
 # A sweeping consolidation eats the call site that was different on purpose

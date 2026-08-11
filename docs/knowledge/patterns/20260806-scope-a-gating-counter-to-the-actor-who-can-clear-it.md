@@ -12,6 +12,8 @@ bee:
   sources: ["counter-teeth cell ct-5 (per-(feature, session) counter under the control root, bumped only after a successful claim; trace .bee/cells/ct-5.json, commits 4a0d1b82 and 95ec0639, 2026-08-04 — cells 75 passed, concurrency 13 passed, full suite green)", "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:723-815 (the counter's key, path, and bump site)", "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:1081-1113 (the ordering comment: a real race loser must see the contention refusal, never this one)"]
   polarity: practice
   critical: false
+  evidence: exercised
+  evidence_ref: packages/bee-rs/crates/bee/src/verbs/cells/tests.rs (no_route_claim_count_is_per_feature_and_session_and_monotonic)
 ---
 
 # Scope a gating counter to the actor who can clear the fault
