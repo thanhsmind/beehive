@@ -70,6 +70,8 @@ Profile-warning codes — reported always, failing only under `--strict`:
 | `dangling_required_context` | A `bee.required_context` entry does not resolve to a real file inside the bundle. |
 | `dangling_supersedes` | A `bee.supersedes` id matches no concept's `bee.id` in the bundle. |
 | dangling source (knowledge-usable U2, cell ku-2, 2026-08-10) | A `bee.sources` entry that names an in-repo file path resolving to no file on disk is reported, so a concept citing code a later port retired degrades visibly instead of silently. |
+| `dangling_md_link` (knowledge-link-check klc-1, 2026-08-11) | A relative body link ending in `.md` (external `http(s)`/`mailto`, absolute paths, and anchor-only links are skipped) resolved against the containing file's directory does not exist or escapes the bundle. |
+| `dangling_wiki_link` (knowledge-link-check klc-1, 2026-08-11) | A `[[target]]` body reference where neither `target` nor `target` minus an optional `pattern-` prefix matches the stem of any `.md` in the bundle. A host-repo integration test keeps the shipped bundle clean of both link codes. |
 
 **B3 — Emitter-first parsing, zero dependencies (D12).** `knowledge.mjs` ships its own frontmatter
 codec covering exactly the YAML subset its own emitter can produce; anything outside that subset
