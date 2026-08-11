@@ -22,8 +22,12 @@ one. `bee orient` shows which move the work needs.
 
 ## Explore (interactive)
 
-The craft is interviewing, not writing. Scout the code lightly, then
-triage the request — default: effort follows the signal, not a fixed script:
+The craft is interviewing, not writing. Scout lightly, then triage the
+request. With a bundle, the scout starts at the touched area's
+`docs/knowledge/areas/<area>/index.md` and its Open Gaps (no bundle:
+`docs/specs/<area>.md` when present): settled rules get cited, never
+re-asked, and Open Gaps are ready-made interview questions. Default:
+effort follows the signal, not a fixed script:
 
 | Request | Signal | Next step |
 |---|---|---|
@@ -66,7 +70,9 @@ proceed into planning or must wait for a human. No questions are asked
 on this path; everything unresolved is written down, never guessed.
 
 1. Gather real evidence first — the item's text, the code and docs it
-   touches. Never judge from the row alone.
+   touches, and the touched area's knowledge concepts
+   (`docs/knowledge/areas/<area>/`; no bundle: `docs/specs/<area>.md`).
+   Never judge from the row alone.
 2. Risk territory (auth, data loss, security, external providers,
    validation removal) parks at any confidence — risk is a property of
    the change, not of the assessor's certainty.

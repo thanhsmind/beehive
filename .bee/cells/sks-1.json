@@ -1,0 +1,33 @@
+{
+  "id": "sks-1",
+  "feature": "shaping-knowledge-scout",
+  "lane": "tiny",
+  "title": "Add knowledge-bundle read step to bee-shaping scout",
+  "action": "Edit skills/bee-shaping/SKILL.md: Explore scout sentence gains a bundle-read step (touched area index.md + Open Gaps; fallback docs/specs/<area>.md), Qualify evidence step 1 names the same concepts; then regen chain in order: bee dev render-skill-trees, bee onboard --repo-root . --apply, bee dev release-manifest --write; commit source + projections + manifest.",
+  "goal": "Exploring reads settled area knowledge before interviewing so locked rules are cited, never re-asked, and Open Gaps seed interview questions.",
+  "verify": "bee dev release-manifest --check green; re-running bee dev render-skill-trees leaves git diff clean; commands.test green.",
+  "files": [
+    "skills/bee-shaping/SKILL.md",
+    ".claude-plugin/skills/bee-shaping/SKILL.md",
+    ".codex-plugin/skills/bee-shaping/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "80e38425-1b74-4cd6-acb9-0c54c717f644",
+    "claimed_at": "2026-08-11T06:50:42.604Z"
+  }
+}
