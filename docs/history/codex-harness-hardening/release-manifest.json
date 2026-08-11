@@ -877,7 +877,7 @@
     },
     {
       "path": "expertise/architecture.md",
-      "sha256": "b71c018f47c78a0b5e1c55f9cb2ae4450281e1c4d3a625e87c1da096f1f50cca",
+      "sha256": "a5cf1eddea09eed19e44b18841e58d91780070cf3cf9ebf13c6cd1c61aeb44c0",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -889,7 +889,7 @@
     },
     {
       "path": "expertise/debugging.md",
-      "sha256": "14eda3a2ea6b797963f3abb8d5a987a77d5b0fb02c5beb3ef7d290caa36ff957",
+      "sha256": "6ae9c24b07cd2a39c411fa705e1ee2397f8c8c22421a7eb5156a3758de33db03",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -913,13 +913,19 @@
     },
     {
       "path": "expertise/INDEX.md",
-      "sha256": "352d0df184d49bbee660e89eeaf2c067dfef4cef4b21c6dc31c8a47a0f9367bf",
+      "sha256": "35b7797f402b1928553d8d43f6a82727b330ba53a8beb80ebe3d2806a3ac0026",
       "mode": "644",
       "role": "expertise_guide"
     },
     {
       "path": "expertise/knowledge.md",
       "sha256": "958da265dd957b2fa80647f331862e9aec374086890fce858fa332d05a2c5717",
+      "mode": "644",
+      "role": "expertise_guide"
+    },
+    {
+      "path": "expertise/merges.md",
+      "sha256": "bca07c0dce2296d5d1b1b4b5d2714bd92085371589de6383037ca13d4277af1d",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -937,7 +943,7 @@
     },
     {
       "path": "expertise/planning.md",
-      "sha256": "41e02da1232203b6289add90524b045146e916d8bce6d3d1179bdf9ac32a00b9",
+      "sha256": "a4a68351d5680aacb6078f622d39bd1500adb73c286720aeb7a07e7111b133ad",
       "mode": "644",
       "role": "expertise_guide"
     },
@@ -961,7 +967,7 @@
     },
     {
       "path": "expertise/tests.md",
-      "sha256": "ec9b33a859c151619dbf661bc1b6ce45fa42c073f1e9aca5c8b094ff82ee670b",
+      "sha256": "0af0c1fb29dff993c0328dc04c8d850967d3fe2b911c63b6ded568d62c74da49",
       "mode": "644",
       "role": "expertise_guide"
     },

@@ -7,6 +7,7 @@
 | Judging whether a test is worth writing | Confidence, not coverage |
 | About to write a test for a change | The coverage audit |
 | Deciding what a test may assert | Test behavior, not structure |
+| Choosing where an expected value comes from | The independent-oracle rule |
 | Naming a test, or it needs "and" in its name | One behavior, named after it |
 | Choosing unit vs integration vs end-to-end | Pick the cheapest level that can fail |
 | Two systems must agree on a shared interface | Pick the cheapest level that can fail |
@@ -98,6 +99,32 @@ exponentially — those properties are the observable behavior, and asserting
 them is correct even though they describe "how." Assert the property (the
 output order, the eviction victim, the delay sequence), still not the
 private call graph.
+
+## The independent-oracle rule
+
+An expected value must come from a source the implementation cannot
+influence — a known literal, a hand-worked example, the written spec.
+Never recompute the expected value the same way the code under test
+computes it: a test whose assertion mirrors the implementation's own
+arithmetic passes by construction, because a bug shared by both sides
+cancels itself out. When the code and the test derive the answer
+through the same steps, the test cannot catch a mistake in those steps
+— it can only catch a disagreement between the code and itself, which
+never happens. Name this the **tautological test**: it moves the
+coverage number without buying any confidence.
+
+```rust
+// Bad — the expected value is recomputed the way the code computes it.
+// A bug in the summing logic ships inside both sides, and the test
+// stays green no matter what the bug does.
+let items = vec![Item { price: 10 }, Item { price: 5 }];
+let expected: u32 = items.iter().map(|i| i.price).sum();
+assert_eq!(calculate_total(&items), expected);
+
+// Good — the expected value is an independent, known literal.
+let items = vec![Item { price: 10 }, Item { price: 5 }];
+assert_eq!(calculate_total(&items), 15);
+```
 
 ## One behavior, named after it
 

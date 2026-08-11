@@ -14,6 +14,8 @@ amount of careful coding can recover. This guide is about choosing well.
 | Tempted to give risky work a lighter shape | De-escalate on evidence, not optimism |
 | Breaking a plan into pickable, provable pieces | What makes a good unit of work |
 | Ordering units; deciding what to verify first | Build order versus discovery order |
+| An interface is genuinely open on a standard or high-risk shape | Design it twice |
+| A discovery-order unit needs a written answer before others proceed | Spike craft |
 | Deciding how much detail later phases get | Plan the current slice; headline the rest |
 | Starting anything user-visible | The walking skeleton |
 | About to present a plan | The smaller-path question |
@@ -70,6 +72,46 @@ evidence, never with optimism. "The migration is additive and no query
 filters on this column — verified by search" earns a lighter shape. "It's
 probably fine" earns nothing.
 
+## Design it twice
+
+When a standard or high-risk shape has an interface that is genuinely
+open — no locked decision and no existing pattern already dictates it →
+do not commit to the first idea. Fan out 2-3 parallel read-only workers,
+each forced into a radically different constraint, so the results
+disagree instead of converging on the same shape three times:
+
+- **Minimize the interface.** Fewest entry points, most leverage per
+  call.
+- **Optimize the common case.** Make the default caller trivial; push
+  complexity onto the rare path.
+- **Ports and adapters.** Design around the seam so the far side can be
+  swapped without touching callers.
+
+Each worker returns the same four things, so the comparison is apples to
+apples: an interface sketch, a usage example, what it hides behind the
+seam, and its tradeoffs.
+
+Compare the three by **depth** (how much a caller gets per call),
+**locality** (where a future change would concentrate), and **seam
+placement** (what actually sits behind the boundary) — then recommend
+one, with a stated reason. An opinionated read beats a menu; three
+options with no verdict just moves the decision instead of making it.
+
+Skip the move entirely when the interface is not actually open — a
+locked decision or an existing pattern already dictates the shape, and
+running three workers to confirm what is already fixed just spends the
+fan-out for nothing.
+
+Example: an order-export module's public surface could return raw rows,
+a formatted string, or a writer that takes a destination. Worker A
+minimizes to `exportOrders(filter) -> Csv`; worker B optimizes the
+common case with `exportOrdersToFile(filter, path)` plus a second,
+rarely-used `exportOrdersToStream` for the one caller that needs it;
+worker C designs an `ExportWriter` port so a future format is a new
+adapter, not a new function. Recommendation: B — the common case is one
+call with zero setup, and the rare stream caller costs one extra
+function rather than architecture every caller pays for.
+
 ## What makes a good unit of work
 
 A unit of work is the atom of a plan: one thing a person or agent picks up,
@@ -111,6 +153,41 @@ you find at unit 4 that invalidates units 1 through 3.
 **No edges means parallel.** Draw the dependency edges explicitly, then
 look for what is *not* there: units with no edges between them can proceed
 in parallel, and pretending otherwise serializes work for no reason.
+
+## Spike craft
+
+The section above names the spike as the unit that answers an unverified
+fact before the units depending on it proceed. This is its craft.
+
+A spike answers exactly **one named question** — write the question down
+before touching code. A spike that starts without a written question is
+not a spike; it is unstructured exploration that happens to produce a
+diff, and it will not be obvious afterward whether it answered anything.
+
+The question's shape decides the spike's shape:
+
+- **A logic or state question** — "does this reducer handle X then Y,"
+  "can this data model represent the case where..." → build the smallest
+  pure module that embodies the model, plus the thinnest runnable shell
+  that can exercise it end to end. The module is the part worth keeping;
+  the shell exists only to drive it.
+- **A UI or shape question** — "what should this look like" → build 2-3
+  structurally different variants: different layout, different
+  information hierarchy, different primary affordance. Variants that
+  differ only in color or copy answer nothing — that is a tweak wearing
+  a spike's clothes.
+
+Both shapes share the same restraint: no tests, no error handling beyond
+what keeps the thing runnable, no abstractions. A spike exists to learn
+one thing fast; polish spent on code about to be thrown away is waste,
+and an abstraction built on a model nobody has validated yet is a guess
+wearing architecture's clothes.
+
+On completion, capture the validated decision — the answer and the
+question it settled — in the decision log or CONTEXT.md, and fold the
+decision into real work. The spike itself never merges: it stays under
+`.bee/spikes/` or a throwaway branch, cited afterward as a primary
+source rather than reconstructed from memory.
 
 ## Plan the current slice; headline the rest
 

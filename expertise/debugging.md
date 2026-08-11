@@ -5,6 +5,7 @@
 | Situation / goal | Entry |
 |---|---|
 | A bug report just arrived | Reproduce first |
+| No red-capable command exists yet to trigger it on demand | Build the feedback loop first |
 | The failing input is large or noisy | Minimize the repro |
 | An error or stack trace is on screen | Read the error before forming theories |
 | You know where it crashed, not why | Crash site versus fault site |
@@ -29,6 +30,73 @@ purpose — not a theory about why it might.
 **The repro is also your finish line.** "I changed something and the
 report stopped coming in" is not a verified fix; "the repro failed before
 the change and passes after it" is.
+
+## Build the feedback loop first
+
+Reproduce first gets the failure happening once. This step turns that
+one-off into a command: something you can run over and over, that goes
+red on this bug and green once it's fixed. Before any hypothesis work,
+build that command — bisection, instrumentation, and hypothesis-testing
+all just consume it; without it, none of them converge.
+
+Rank the ways to build one and pick the cheapest that still reaches the
+bug:
+
+1. A **failing test** at whatever seam the bug reaches — unit,
+   integration, end-to-end.
+2. A **direct HTTP call** — curl or a small client script — against a
+   running server.
+3. A **CLI run diffed against a fixture** — invoke the tool with a known
+   input and compare its output to a saved known-good snapshot.
+4. **Replaying a captured trace** — save the real request, payload, or
+   event log to disk, then replay it through the code path in isolation.
+5. A **throwaway harness** — the smallest slice of the system, one
+   process with mocked dependencies, that reaches the bug in one call.
+6. A **property or fuzz loop** — run hundreds of random inputs and watch
+   for the failure shape, when the bug is "sometimes wrong" rather than
+   "wrong on this one input."
+7. A **bisection harness** — script "boot at state X, check, report" so
+   `git bisect run` can drive it unattended.
+8. A **differential run** — the same input through the old version and
+   the new one (or two configs), diffing the two outputs.
+9. A **human-in-the-loop script**, last resort, only when one step
+   genuinely needs a human hand — the script still drives every step
+   around that click, so the loop stays structured instead of becoming a
+   manual retest.
+
+Judge whatever you build against four bars: **red-capable** (it can
+actually go red on *this* bug, not merely "sometimes errors"),
+**deterministic** (same verdict every run), **fast** (seconds, not
+minutes), and **runnable by you alone**, unattended.
+
+**Hard gate: no red-capable command, no hypothesis work.** If you catch
+yourself reading code to build a theory before this command exists,
+stop — that is the exact failure this step prevents. "State the
+hypothesis before the fix" and "Instrument before guessing" both assume
+the loop already exists; they consume it, they do not replace it. If you
+genuinely cannot build one after working down the ladder, say so
+explicitly — do not quietly start guessing instead.
+
+**Flaky bugs get a rate, not a repro.** When the failure is
+non-deterministic, the target is not one clean trigger but a
+reproduction rate high enough to debug against: run the loop many times,
+add stress, narrow timing windows, and raise the rate until it's usable.
+A loop that fails 1% of the time is not a loop yet; one that fails 50%
+of the time is.
+
+**Tag every temporary probe.** Give every log line, print, or breakpoint
+added for this investigation one unique prefix, e.g. `[DEBUG-a4f2]` — so
+cleanup (see "Cleanup" below) becomes a single grep for that prefix
+instead of a manual re-read of the diff.
+
+Example: a report says "the export sometimes drops rows." A failing
+test can't reach it — rows only drop under load. Ladder rungs 1–4 don't
+fit; rung 6 does: a property loop running the exporter against 500
+randomly-sized inputs and asserting `output.length == input.length`
+catches the drop about 8% of the time — not debuggable yet. Adding
+concurrency to the loop (run the export while another job writes the
+same table) raises the rate to 60%. That command is now the loop: run
+it, watch it go red, and test every hypothesis against it in seconds.
 
 ## Minimize the repro
 
@@ -237,7 +305,11 @@ others.
 Debugging leaves debris: print statements, commented-out blocks, hardcoded
 test values, loosened timeouts, disabled checks, temporary files. Before
 finishing, remove all of it — diff your working tree against where you
-started and justify every remaining line as part of the fix. A hardcoded
+started and justify every remaining line as part of the fix. If every
+temporary probe carried its `[DEBUG-xxxx]` prefix ("Build the feedback
+loop first"), start with a single grep for that prefix — it should
+return nothing — then confirm the diff read catches anything untagged.
+A hardcoded
 "user-123" or a check disabled "just while testing" that ships is not
 residue; it is the next bug, planted by the person best positioned to
 prevent it.
