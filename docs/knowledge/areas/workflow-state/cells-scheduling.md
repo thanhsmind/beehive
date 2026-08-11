@@ -31,7 +31,16 @@ declared record — dependency layering first (a dependency on a completed unit
 counts as satisfied), then collision packing (declared-path overlap within a
 layer defers the colliding unit to a later wave, in deterministic id order) —
 and answered as numbered waves plus diagnostics: dependency cycles, unsatisfiable
-dependencies with their reasons, and units declaring no paths. The query never
+dependencies with their reasons, and units declaring no paths. Collision
+packing also weighs the REGEN OBLIGATION since schedule-regen-awareness cells
+sra-1/sra-2 (2026-08-11, PBI p-50f3af4d): two units whose declared paths are
+disjoint but which both trigger a regeneration obligation over the same
+obligated root — derived through the very same derivation the authoring
+refusal uses, never a hand-kept list — conflict exactly like a path overlap
+and serialize into different waves, because the shared regeneration chain is
+a whole-tree side effect two parallel workers cannot both run. The schedule
+names each such split (deferred unit, blocking unit, shared root) in its
+payload and its text, so the orchestrator sees why the wave broke. The query never
 writes anything. What each consumer observes: the orchestrator dispatches wave
 by wave and deviates only with a stated reason; feasibility validation of a
 multi-unit slice requires the diagnostics to be clean before execution is
