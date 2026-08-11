@@ -10,7 +10,7 @@
   "commands": {
     "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"
   },
-  "gate_bypass": "total",
+  "gate_bypass": "normal",
   "models": {
     "claude": {
       "extraction": "haiku",

@@ -1,0 +1,58 @@
+{
+  "id": "frd-1",
+  "feature": "finish-records-deviations",
+  "title": "cells finish accepts --deviation lines written to trace.deviations",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs"
+  ],
+  "action": "Friction (2026-08-11): worker deviations narrated in prose never reach trace.deviations, so bee knowledge promote's pattern-candidate mining (which reads only trace.deviations and failure signatures) always reports zero — four real deviations in one day were invisible. Fix: `bee cells finish` (and `cells cap` if finish routes through it — follow the real cap-record writer in handlers_close.rs; declared file is a hypothesis, name the real site) accepts a repeatable `--deviation \"<one line>\"` flag; each non-empty value is appended to the cell's trace.deviations array at cap time. Empty/whitespace-only values are refused naming the flag. No flag = today's behavior byte-identical (trace.deviations absent or unchanged). Declare the flag in registry_payload.json for both finish and (if it takes it) cap, so the dispatcher accepts it and per-command help shows it; keep tests/registry_contracts.rs green. Verify the mining side actually sees it: one test caps a cell with two --deviation lines then runs the promote mining path (or its unit — find where trace.deviations is read in verbs/knowledge/promote.rs) asserting the deviations surface as pattern candidates. TDD red-first: flag writes the array; empty refused; no-flag byte-identical; mining surfaces it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "finish --deviation lands each line in trace.deviations and promote mining surfaces them",
+      "empty deviation refused naming the flag",
+      "a finish without the flag is byte-identical to today"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "substantive": "flag plumbing plus tests (or the real cap-record site, named in the trace)"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-frd-1",
+    "outcome": "cap/finish accept --deviation (single line per call; batch via pre-existing --deviations-file) appended to trace.deviations; empty refused pre-write; registry + vocabulary ratchet updated with reason; mining proof drives build_promotion end-to-end",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T02:40:55.813Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-11T02:27:15.951Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T02:40:41.741Z"
+  }
+}
