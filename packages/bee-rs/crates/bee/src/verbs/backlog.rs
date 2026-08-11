@@ -193,6 +193,22 @@ pub(crate) fn fold_pbi_records(root: &Path) -> Option<Vec<Value>> {
     Some(fold.order.iter().filter_map(|id| fold.items.get(id)).map(pbi_value).collect())
 }
 
+/// backlog-anchor D1 (a98e27c2): the folded PBI row whose `id` or `feature`
+/// field WHOLE-matches `work` — the data source for `resolve_anchor`'s
+/// fourth and last arm (`Anchor::Backlog`, verbs/knowledge/anchor.rs). Walks
+/// the same first-add-wins fold `fold_pbi_records` exposes, in fold order,
+/// so the first matching row wins deterministically. `None` when no row
+/// matches or the store folds empty (an absent backlog.jsonl folds to zero
+/// rows, never an error — same discipline `fold_pbis` already holds).
+pub(crate) fn backlog_row_for_work(root: &Path, work: &str) -> Option<Value> {
+    let fold = fold_pbis(root);
+    fold.order.iter().find_map(|id| {
+        let pbi = fold.items.get(id)?;
+        let matches = pbi.id == work || pbi.feature.as_deref() == Some(work);
+        matches.then(|| pbi_value(pbi))
+    })
+}
+
 /// localeCompare-safe id guard: within ^p-[0-9a-f]+$ (lowercase hex after a
 /// fixed "p-" prefix) ICU collation and byte order provably agree.
 fn id_sort_safe(id: &str) -> bool {

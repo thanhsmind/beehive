@@ -731,7 +731,7 @@
     };
     let work_concept: Option<&Concept> = match &anchor {
         Anchor::WorkItem(c) => Some(*c),
-        Anchor::History { .. } | Anchor::Ledger { .. } => None,
+        Anchor::History { .. } | Anchor::Ledger { .. } | Anchor::Backlog { .. } => None,
     };
 
     let mut ranked: Vec<(String, String)> = Vec::new(); // (rel, reason)
@@ -797,7 +797,9 @@
         .collect();
     let (query_meta, query_body): (String, String) = match &anchor {
         Anchor::WorkItem(c) => (meta_text_of(c), concept_body(dir, &c.path).unwrap_or_default()),
-        Anchor::History { meta, body, .. } | Anchor::Ledger { meta, body, .. } => (meta.clone(), body.clone()),
+        Anchor::History { meta, body, .. } | Anchor::Ledger { meta, body, .. } | Anchor::Backlog { meta, body, .. } => {
+            (meta.clone(), body.clone())
+        }
     };
     let query_tags: HashSet<String> = match work_concept {
         Some(c) => match c.data.get("tags") {
@@ -941,6 +943,16 @@
             sized.push(Sized {
                 repo_rel,
                 reason: "ledger anchor".to_string(),
+                bytes: *bytes,
+                est: (*bytes as f64 / 4.0).ceil(),
+                floor: false,
+            });
+        }
+        Anchor::Backlog { paths, bytes, .. } => {
+            let repo_rel = paths.join(" + ");
+            sized.push(Sized {
+                repo_rel,
+                reason: "backlog anchor".to_string(),
                 bytes: *bytes,
                 est: (*bytes as f64 / 4.0).ceil(),
                 floor: false,

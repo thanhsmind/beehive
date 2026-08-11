@@ -224,7 +224,7 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
     };
     let work_concept: Option<&Concept> = match &anchor {
         Anchor::WorkItem(c) => Some(*c),
-        Anchor::History { .. } | Anchor::Ledger { .. } => None,
+        Anchor::History { .. } | Anchor::Ledger { .. } | Anchor::Backlog { .. } => None,
     };
 
     let mut ranked: Vec<(String, String)> = Vec::new(); // (rel, reason)
@@ -290,7 +290,9 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         .collect();
     let (query_meta, query_body): (String, String) = match &anchor {
         Anchor::WorkItem(c) => (meta_text_of(c), concept_body(dir, &c.path).unwrap_or_default()),
-        Anchor::History { meta, body, .. } | Anchor::Ledger { meta, body, .. } => (meta.clone(), body.clone()),
+        Anchor::History { meta, body, .. } | Anchor::Ledger { meta, body, .. } | Anchor::Backlog { meta, body, .. } => {
+            (meta.clone(), body.clone())
+        }
     };
     let query_tags: HashSet<String> = match work_concept {
         Some(c) => match c.data.get("tags") {
@@ -409,14 +411,14 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
         est: f64,
         floor: bool,
     }
-    // A history or ledger anchor is not a bundle concept: `select()` never
-    // carries it into `ranked` (by_path only holds docs/knowledge/
-    // concepts), and sizing off `join_rel(dir, ...)` would measure a
-    // docs/knowledge/ path that does not exist. It is sized here directly,
-    // off its own bytes, and prepended so it lands as entry rank 1 — the
-    // same slot the work item's own bundle file occupies under that arm —
-    // so `rank_one_cost` below reserves budget against the anchor, not the
-    // top critical (D8 discovery).
+    // A history, ledger, or backlog anchor is not a bundle concept:
+    // `select()` never carries it into `ranked` (by_path only holds
+    // docs/knowledge/ concepts), and sizing off `join_rel(dir, ...)` would
+    // measure a docs/knowledge/ path that does not exist. It is sized here
+    // directly, off its own bytes, and prepended so it lands as entry rank 1
+    // — the same slot the work item's own bundle file occupies under that
+    // arm — so `rank_one_cost` below reserves budget against the anchor, not
+    // the top critical (D8 discovery).
     let mut sized: Vec<Sized> = Vec::new();
     match &anchor {
         Anchor::History { paths, bytes, .. } => {
@@ -434,6 +436,16 @@ pub(crate) fn build_context_manifest(dir: &Path, work: &str, budget: f64, budget
             sized.push(Sized {
                 repo_rel,
                 reason: "ledger anchor".to_string(),
+                bytes: *bytes,
+                est: (*bytes as f64 / 4.0).ceil(),
+                floor: false,
+            });
+        }
+        Anchor::Backlog { paths, bytes, .. } => {
+            let repo_rel = paths.join(" + ");
+            sized.push(Sized {
+                repo_rel,
+                reason: "backlog anchor".to_string(),
                 bytes: *bytes,
                 est: (*bytes as f64 / 4.0).ceil(),
                 floor: false,

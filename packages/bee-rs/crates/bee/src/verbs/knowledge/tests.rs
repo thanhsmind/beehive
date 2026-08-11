@@ -680,6 +680,80 @@ use std::time::Instant;
         assert_eq!(anchor.paths(), vec!["docs/history/other-1/notes.md".to_string()]);
     }
 
+    /// backlog-anchor D1 (a98e27c2): neither a work-item concept, a
+    /// docs/history/<work>/ file, nor any ledger-arm signal exists, but a
+    /// folded `.bee/backlog.jsonl` PBI row whose id whole-matches `work`
+    /// does — the fourth and last arm fires: `meta` is the row's title,
+    /// `body` its cos, `kind()` "backlog", `paths()` the store file alone.
+    #[test]
+    fn resolve_anchor_resolves_a_backlog_row_when_no_other_arm_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("backlog.jsonl"),
+            "{\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"bl-1\",\"title\":\"Backlog Row Title\",\"cos\":\"cos text\",\"status\":\"proposed\"}\n",
+        )
+        .unwrap();
+
+        let concepts: Vec<Concept> = Vec::new();
+        let anchor = resolve_anchor(&concepts, root, "bl-1")
+            .expect("a matching backlog row alone must resolve an anchor (D1)");
+        assert_eq!(anchor.kind(), "backlog");
+        assert_eq!(anchor.paths(), vec![".bee/backlog.jsonl".to_string()]);
+        match &anchor {
+            Anchor::Backlog { meta, body, .. } => {
+                assert_eq!(meta, "Backlog Row Title");
+                assert_eq!(body, "cos text");
+            }
+            other => panic!("expected the backlog arm, got kind {}", other.kind()),
+        }
+    }
+
+    /// backlog-anchor D1: arm priority stays WorkItem > History > Ledger >
+    /// Backlog — a present ledger signal (here, a bare lane record, U5)
+    /// still wins over a backlog row that ALSO matches the same work id,
+    /// since the backlog row is the thinnest text and the last resort.
+    #[test]
+    fn ledger_anchor_still_wins_over_a_present_backlog_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee").join("lanes")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("lanes").join("bl-2.json"),
+            r#"{"schema_version":"1.0","feature":"bl-2","mode":"small","phase":"shaping","approved_gates":{"context":false,"shape":false,"execution":false,"review":false},"summary":"","created_at":"2026-08-10T00:00:00.000Z"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join(".bee").join("backlog.jsonl"),
+            "{\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"bl-2\",\"title\":\"Backlog Row Title\",\"cos\":\"cos text\",\"status\":\"proposed\"}\n",
+        )
+        .unwrap();
+
+        let concepts: Vec<Concept> = Vec::new();
+        let anchor = resolve_anchor(&concepts, root, "bl-2")
+            .expect("a present ledger signal must resolve an anchor");
+        assert_eq!(anchor.kind(), "ledger");
+    }
+
+    /// backlog-anchor D1: a backlog.jsonl row for a DIFFERENT work id does
+    /// not resolve an anchor for an unrelated one — unknown_work still
+    /// refuses exactly as before this arm existed.
+    #[test]
+    fn unknown_work_still_refuses_with_an_unrelated_backlog_row_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(
+            root.join(".bee").join("backlog.jsonl"),
+            "{\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"bl-3\",\"title\":\"Backlog Row Title\",\"cos\":\"cos text\",\"status\":\"proposed\"}\n",
+        )
+        .unwrap();
+
+        let concepts: Vec<Concept> = Vec::new();
+        assert!(resolve_anchor(&concepts, root, "ghost").is_none());
+    }
+
     /// D34ccf18d keeps its place as the LAST arm: a docs/history/ file for
     /// the feature wins over its own scribing-ledger entry, and a
     /// bee.work-item concept wins over both.
