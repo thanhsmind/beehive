@@ -1217,6 +1217,39 @@ use std::time::Instant;
         assert_eq!(s.unsatisfiable, vec![("e".to_string(), "ghost".to_string(), "missing")]);
         assert_eq!(s.empty_files, vec!["e".to_string()]);
         assert!(s.cycles.is_empty());
+        assert!(s.obligation_conflicts.is_empty()); // none of x/y/z/w touch a regen-obligated root
+    }
+
+    #[test]
+    fn compute_schedule_serializes_cells_sharing_a_regen_obligation_root() {
+        // ra/rb declare disjoint files (skills/a.md vs skills/b.md — never
+        // literally overlapping) but both fall under the "skills" root
+        // INVENTORY_ROOTS obligates (release_manifest::INVENTORY_ROOTS,
+        // read through the SAME derive_regen_guards() the cells-add
+        // REGEN_OBLIGATION refusal uses — never a hand-kept root list).
+        // Wave placement must serialize them exactly like a file overlap
+        // would, and name the shared root.
+        let cells = vec![
+            json!({"id": "ra", "status": "open", "deps": [], "files": ["skills/a.md"]}),
+            json!({"id": "rb", "status": "open", "deps": [], "files": ["skills/b.md"]}),
+        ];
+        let s = compute_schedule(&cells);
+        assert_eq!(s.waves, vec![vec!["ra".to_string()], vec!["rb".to_string()]]);
+        assert_eq!(s.obligation_conflicts, vec![("rb".to_string(), "ra".to_string(), "skills".to_string())]);
+    }
+
+    #[test]
+    fn compute_schedule_keeps_wave_placement_for_disjoint_cells_with_no_shared_obligation() {
+        // Disjoint files, neither under any derived regen-obligation root:
+        // placement is byte-identical to the pre-fix behavior — same wave,
+        // no conflict recorded.
+        let cells = vec![
+            json!({"id": "p", "status": "open", "deps": [], "files": ["docs/readme.md"]}),
+            json!({"id": "q", "status": "open", "deps": [], "files": ["notes.txt"]}),
+        ];
+        let s = compute_schedule(&cells);
+        assert_eq!(s.waves, vec![vec!["p".to_string(), "q".to_string()]]);
+        assert!(s.obligation_conflicts.is_empty());
     }
 
     // ── test runner ───────────────────────────────────────────────────────

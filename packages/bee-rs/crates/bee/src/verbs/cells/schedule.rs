@@ -29,11 +29,43 @@ pub(crate) struct Schedule {
     pub(crate) cycles: Vec<Vec<String>>,
     pub(crate) unsatisfiable: Vec<(String, String, &'static str)>, // (cell, dep, reason)
     pub(crate) empty_files: Vec<String>,
+    /// (deferred cell, cell it was serialized behind, shared obligated root)
+    /// for every pair placement had to split across waves for sharing a
+    /// regen-obligation root — even though their declared `files` never
+    /// literally overlapped. Named here so the orchestrator sees WHY.
+    pub(crate) obligation_conflicts: Vec<(String, String, String)>,
+}
+
+/// Roots the cell's declared files fall under, per the SAME derivation
+/// obligation.rs (the cells-add REGEN_OBLIGATION check) uses — never a
+/// hand-kept list (D2). Deliberately independent of `regen_obligation_ack`:
+/// the ack only waives the add-time refusal (D1); it does not change which
+/// files actually share a regen root at write time, which is what wave
+/// placement must not collide on.
+fn obligated_roots_of(files: &[String], guards: &[ActiveGuard]) -> Vec<String> {
+    let mut roots: Vec<String> = Vec::new();
+    for file in files {
+        let normalized = normalize_cell_path(file);
+        for guard in guards {
+            if let Some(root) = guard.roots.iter().find(|r| path_under_root(&normalized, r)) {
+                if !roots.contains(root) {
+                    roots.push(root.clone());
+                }
+            }
+        }
+    }
+    js_default_sort(&mut roots);
+    roots
 }
 
 pub(crate) fn compute_schedule(cells: &[Value]) -> Schedule {
     let by_id = ids_by_id(cells);
     let cycles = detect_cycles(cells);
+    // A blind guard (empty derived roots) is a compiled-in defect the
+    // obligation module already refuses loudly on its own call path;
+    // scheduling degrades to "no known obligated roots" rather than
+    // panicking on a read-only diagnostic.
+    let guards = derive_regen_guards().unwrap_or_default();
 
     let mut empty_files: Vec<String> = cells
         .iter()
@@ -142,6 +174,7 @@ pub(crate) fn compute_schedule(cells: &[Value]) -> Schedule {
     let mut remaining = in_degree;
     let mut placed: Vec<String> = Vec::new();
     let mut waves: Vec<Vec<String>> = Vec::new();
+    let mut obligation_conflicts: Vec<(String, String, String)> = Vec::new();
     loop {
         let mut ready: Vec<String> = nodes
             .iter()
@@ -161,14 +194,29 @@ pub(crate) fn compute_schedule(cells: &[Value]) -> Schedule {
         let mut wave: Vec<String> = Vec::new();
         for id in &ready {
             let cell_files = lookup(id).map(schedule_files_of).unwrap_or_default();
-            let overlaps = wave.iter().any(|placed_id| {
+            let cell_roots = obligated_roots_of(&cell_files, &guards);
+            let mut conflict: Option<(String, String)> = None; // (other id, shared root; "" = literal file overlap)
+            for placed_id in &wave {
                 let placed_files = lookup(placed_id).map(schedule_files_of).unwrap_or_default();
-                placed_files
+                let file_overlap = placed_files
                     .iter()
-                    .any(|a| cell_files.iter().any(|b| rsv::paths_overlap(a, b)))
-            });
-            if !overlaps {
-                wave.push(id.clone());
+                    .any(|a| cell_files.iter().any(|b| rsv::paths_overlap(a, b)));
+                if file_overlap {
+                    conflict = Some((placed_id.clone(), String::new()));
+                    break;
+                }
+                let placed_roots = obligated_roots_of(&placed_files, &guards);
+                if let Some(shared) = cell_roots.iter().find(|r| placed_roots.contains(r)) {
+                    conflict = Some((placed_id.clone(), shared.clone()));
+                    break;
+                }
+            }
+            match conflict {
+                None => wave.push(id.clone()),
+                Some((other, root)) if !root.is_empty() => {
+                    obligation_conflicts.push((id.clone(), other, root));
+                }
+                Some(_) => {} // literal file overlap: deferred, already covered by existing behavior
             }
         }
         for id in &wave {
@@ -189,7 +237,7 @@ pub(crate) fn compute_schedule(cells: &[Value]) -> Schedule {
         waves.push(wave);
     }
 
-    Schedule { waves, cycles, unsatisfiable, empty_files }
+    Schedule { waves, cycles, unsatisfiable, empty_files, obligation_conflicts }
 }
 
 // ─── state/lane gate reads (state.mjs readState / readLane*) ───────────────
