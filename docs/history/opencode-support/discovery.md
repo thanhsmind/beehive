@@ -519,3 +519,234 @@ other two runtimes' committed trees.
 everywhere else in this codebase (`onboard/templates.rs::RENDER_SCHEMA`,
 `devtools/skill_trees.rs::RENDER_SCHEMA`); the plan text's `bee-render/1`
 citation is stale against the code, not a locked decision to reproduce.
+
+## Discovery: full guard-hook mapping table implemented (oc-6)
+
+**Date:** 2026-08-11
+**Scope:** oc-6 — S3 (plan.md E3). Extend `.opencode/plugins/bee-guard.ts`
+from write-guard-only (oc-2/oc-3) to the full hook-mapping table plan.md's
+Approach section names: model-guard on the `task` tool, the read-shaped
+tools (`read`/`grep`/`glob`/`question`) through write-guard, and four
+advisory surfaces (session-init/prompt-context, state-sync, session-close,
+tools-logger) — each wired per the exact contract listed in oc-6's action
+text, never guessed.
+
+### Bottom line
+
+Every row is implemented with exactly two failure policies, never a third:
+BLOCKING (`tool.execute.before` only — write-guard, model-guard) throws on
+deny and fails CLOSED on any OpenCode-side spawn failure; ADVISORY (every
+other surface) NEVER throws — a missing binary, a crash, or a non-zero exit
+is swallowed and logged to `console.error`, matching bee's own
+`emit_undecidable` fail-open-and-say-so posture one level up (this plugin's
+advisory wrapper fails open even for failures that never reach bee's native
+code at all, e.g. a missing binary). Live `opencode run` transcripts in this
+checkout proved: the new read-size deny routes through write-guard exactly
+like Claude's belt, and the new model-guard deny routes through the `task`
+tool exactly like Claude's `Task` tool, with zero crash-log lines in either
+worktree's `.bee/logs/hooks.jsonl` across the whole session.
+
+### Implemented hook → OpenCode surface table
+
+| bee hook | OpenCode surface | Failure policy | Status |
+|---|---|---|---|
+| write-guard | `tool.execute.before` on `write`/`edit`/`bash`/`apply_patch` (oc-2/oc-3) **+ new:** `read`/`grep`/`glob`/`question` | BLOCKING — throw on deny, fail closed | Live-proved: read-size deny (below); write/edit/bash/apply_patch already proved in oc-2/oc-3 |
+| model-guard | `tool.execute.before` on `task` | BLOCKING — throw on deny, fail closed (same policy, same before-hook, as write-guard) | Live-proved: Task deny (below) |
+| session-init | `chat.message`, ONCE per `sessionID` (in-memory `Set`, process-lifetime only) | ADVISORY — swallow + log, never throws | Live-proved: no crash across the whole session; digest text observed reaching the model (AGENTS.md-preamble-style content, distinct from AGENTS.md's own auto-load) |
+| prompt-context | `chat.message`, every message | ADVISORY — swallow + log, never throws | Live-proved: same run, no crash |
+| state-sync | `event` on `file.edited` and `session.idle` | ADVISORY — swallow + log, never throws | Wired; no crash observed. Live per-call proof not separately captured (advisory, always-silent-stdout by design — see tools_logger.rs-style comment in state_sync.rs) |
+| session-close | `event` on `session.idle` and `session.deleted` | ADVISORY — swallow + log, never throws | Wired; no crash observed |
+| tools-logger | `tool.execute.after`, every tool call | ADVISORY — swallow + log, never throws | Live-proved: new `"tool_name":"Read"` / `"tool_name":"Task"` entries in this worktree's `.bee/logs/tools.jsonl`, `agent_id`/`agent_type`/`duration_ms` all `null`/absent (see gap below) |
+| codex-subagent-audit | n/a | NAMED EXCLUSION — codex-specific; no OpenCode session ever carries Codex SubagentStart/SubagentStop evidence | Not wired (unchanged from oc-2/oc-3) |
+| chain-nudge | plan.md names `event: session.idle` | **NOT WIRED in this cell** — see "Deferred: chain-nudge" below | Deferred |
+
+### Field-shape confirmations (live probes, scratch project outside the repo)
+
+A probe plugin (`/tmp/.../scratchpad/oc-probe3/`, never this repo) hooking
+`tool.definition` + `tool.execute.before` + `chat.message` + `event`,
+run against `opencode run "Use the glob tool ... then use the grep tool
+..."`, confirmed the field shapes oc-2's table did not yet cover:
+
+| OpenCode tool | `input.tool` | `output.args` shape (live, not just schema) |
+|---|---|---|
+| Glob | `"glob"` | `{ pattern: <string> }` (`path` omitted when unset — confirmed live, not just from the schema) |
+| Grep | `"grep"` | `{ pattern: <string> }` (`path`/`include` likewise omitted when unset) |
+| Question | `"question"` | schema only (not exercised live — see gap below): `{ questions: [{ question, header, options: [{ label, description }], multiple? }] }` |
+| Task | `"task"` | schema only for the exact field list (live-proved for `description`/`prompt`/`subagent_type` — see the Task deny transcript below): `{ description, prompt, subagent_type, task_id?, command?, background? }` |
+
+Two of these need ZERO field-name translation — a genuine finding, not an
+oversight: OpenCode's `question` args already match
+`write_guard/detectors.rs::check_ask_user_question`'s expected keys exactly
+(`questions[].header`, `.options[].label`, `.options[].description`), and
+OpenCode's `task` args already match the three fields
+`model_guard.rs::evaluate_claude_dispatch` reads
+(`description`/`prompt`/`subagent_type`, model_guard.rs:516-524) exactly.
+`mapToolCall` passes both through untouched.
+
+### (a) Read-size deny — thrown Error, live transcript (new: `read` routed through write-guard)
+
+```
+$ opencode run "Use the read tool to read
+  packages/bee-rs/crates/bee/src/hooks/model_guard.rs with NO offset and NO
+  limit arguments (do not set them). Report exactly what happened,
+  including any error verbatim."
+
+✗ Read packages/bee-rs/crates/bee/src/hooks/model_guard.rs failed
+Error: bee read-size guard: "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+is 1565 lines (threshold: 800) and this Read has neither `offset` nor
+`limit` — reading it unbounded would load the whole file into context. FIX:
+pass `limit` (and optionally `offset`) to read a slice, or dispatch a
+`bee-extract` worker to read the whole file.
+```
+
+Byte-for-byte bee's own `check_read_size_denial` reason
+(write_guard/main.rs:121-131), proving the plugin's new `Read` branch
+reaches the exact same native check the Claude belt's `PreToolUse` matcher
+(`Edit|Write|MultiEdit|Bash|Read|Glob|Grep|AskUserQuestion`) does. A
+bounded read (`opencode run "Use the read tool ... with limit=1 ..."` from
+the earlier AGENTS.md-preamble proof, see below) succeeded cleanly with no
+denial — the presence/absence of `offset`/`limit` on the OpenCode side
+correctly reaches bee's own presence check, not just a truthiness check.
+
+### (b) Task dispatch deny — thrown Error, live transcript (new: `task` routed through model-guard)
+
+```
+$ opencode run "Use the task tool with subagent_type set to
+  general-purpose, description 'probe dispatch', and prompt
+  '[bee-tier: generation] probe prompt for guard test'. Report exactly what
+  happened, including any error verbatim."
+
+✗ probe dispatch failed
+Error: bee-model-guard: [bee-tier: generation] dispatched with
+subagent_type "general-purpose", and the generation tier carries TWO
+rendered agents — the guard will not guess which.
+FIX: name the one you mean. subagent_type "bee-build" executes a cell
+(reserves, writes, commits, caps); subagent_type "bee-gather" reads and
+reports (never writes).
+```
+
+This is the exact `generic-type-denied` deny model-guard's Claude belt
+gives an ambiguous `[bee-tier: generation]` + `subagent_type:
+"general-purpose"` dispatch (model_guard.rs:526-549) — proving the
+`task` → `Task` mapping reaches the real native dispatch-tier logic, not a
+stub. The corresponding audit line landed in this worktree's own
+`.bee/logs/hooks.jsonl` (this worktree carries its own `.bee/onboarding.json`,
+so the native `bee_installed` gate resolves locally rather than to the main
+worktree — see the store-root note below):
+
+```
+{"ts":"2026-08-11T15:10:09.549Z","hook":"model-guard","event":"deny","tool_name":"Task","tool_input_keys":["description","prompt","subagent_type"]}
+```
+
+### (c) tools-logger — live entries, new tool names, gap made visible
+
+This worktree's `.bee/logs/tools.jsonl` (not the main worktree's — see
+below) gained, among Claude-belt entries from this very execution session:
+
+```
+{"ts":"2026-08-11T15:08:51.697Z","tool_name":"Read","agent_id":null,"agent_type":null}
+```
+
+`agent_id`/`agent_type`/`duration_ms` all absent or `null` — OpenCode's
+`tool.execute.after` payload (`input: {tool, sessionID, callID, args}`,
+`output: {title, output, metadata}`) carries none of them, unlike Claude's
+richer PostToolUse payload. `tools_logger.rs` already treats all four as
+optional (tools_logger.rs:20-35), so this degrades gracefully rather than
+crashing — named gap, not a silent loss of a required field.
+
+### Store-root note (a fact this cell's live testing surfaced, not a bug)
+
+This feature's own linked worktree (`beehive--wt--opencode-support`)
+carries its OWN `.bee/onboarding.json` (distinct from oc-2's "no vendored
+`.bee/bin/bee`" finding, which is about the BINARY specifically, not the
+onboarding marker or the store). Every hook whose native activation gate
+checks `crate::hooks::adapter::bee_installed(&ctx.root)` — i.e. the WORK
+root, not the store root — activates and writes LOCALLY to this worktree's
+own `.bee/logs/*.jsonl` and `.bee/state.json`, not the main worktree's.
+write-guard and model-guard's activation gates check the STORE root instead
+(`write_guard/main.rs:83`, resolved via grants), which is why oc-2's proofs
+and this cell's proofs both correctly exercised the MAIN worktree's guard
+rules even while their audit/log side effects (model-guard's
+`dispatch.jsonl`/`hooks.jsonl` deny line, tools-logger's `tools.jsonl`) land
+in the LOCAL worktree's `.bee/` tree. Not a defect in this cell's plugin —
+a pre-existing asymmetry in which root each native hook's OWN activation
+gate reads, equally true of the Claude belt run from inside this same
+worktree.
+
+### Named gaps (unservable or deliberately deferred — not silent omissions)
+
+- **model-guard's model-param check is hardcoded to `models.claude`.**
+  `evaluate_claude_dispatch`'s strict-equality model-param check calls
+  `resolve_tier(models, t, "claude")` unconditionally (model_guard.rs:570,
+  625, 650, 665) — there is no `models.opencode` key in `normalize_models`
+  at all (model_guard.rs:314-316 only loops `["claude", "codex"]"`). In
+  practice this does not misfire today: OpenCode's `task` tool has no
+  `model` argument at all (confirmed by the live probe's `tool.definition`
+  schema — see the field-shape table above), so `model_param` is always
+  `None` and that branch never fires; only the runtime-agnostic
+  tier-marker + `subagent_type` checks run (proved live in (b) above). A
+  real `models.opencode` config key is E4/S4's job (plan.md), not this
+  cell's.
+- **`question`/`apply_patch` still have no live deny transcript in this
+  feature.** Same class of gap oc-3 already recorded for `apply_patch`: this
+  installation's default `build` agent + free `opencode/*` provider does not
+  offer the model a `question` tool call either — a live probe confirmed it
+  (`"The question tool is not available in this session... available tools
+  are: bash, edit, glob, grep, read, skill, task, todowrite, webfetch,
+  websearch, write."`). The mapping is implemented and its field shapes are
+  confirmed via the schema (see the field-shape table above), but the
+  live-transcript proof this cell's action wants is not obtainable without
+  a different agent/model configuration than is available on this machine —
+  named gap for a later slice, exactly as oc-3 named for `apply_patch`.
+- **On-allow stdout repairs are not read back into `output.args`.**
+  write-guard's `AskUserQuestion` header-truncation auto-fix and
+  model-guard's dispatch-label/`subagent_type` auto-fix (both emitted as
+  `hookSpecificOutput.updatedInput` JSON on a verdict-carrying exit 0,
+  main.rs:385-411, model_guard.rs:130-155) are not parsed or merged back
+  into OpenCode's mutable `output.args` — the call is let through
+  unmodified, exactly as an ordinary allow would be, rather than with the
+  repair applied. Doing so would need a reverse field-name mapping (the
+  mirror image of `mapToolCall`) for each repaired shape — out of this
+  cell's scope, named rather than silently dropped.
+- **`file.edited` carries no `sessionID`.** `EventFileEdited.properties` is
+  `{ file: string }` only (verified against the installed
+  `@opencode-ai/sdk@1.18.16` type declarations) — state-sync still runs on
+  this event, but its session-heartbeat-renewal half is natively skipped
+  (`get_session_id` returns `None`, state_sync.rs:131-136); only the
+  `.bee/state.json` cell-count rebuild half fires. `session.idle` DOES
+  carry a `sessionID` (`EventSessionIdle.properties.sessionID`) and gets
+  the full behavior.
+- **session-close's Stop-continuation block has no OpenCode enforcement
+  equivalent.** session-close's native Stop path can emit
+  `{"decision":"block","reason":...}` (the "GitHub-#18 bypass net" —
+  session_close/mod.rs's header comment) to force a Claude session to keep
+  going. OpenCode's `event` hook on `session.idle` has no analogous power to
+  refuse a session going idle; this plugin only logs whatever session-close
+  returns via `runAdvisoryHook`'s swallow-and-log path, it never enforces
+  it. Advisory in the literal sense here, not just in name.
+- **Deferred: chain-nudge.** plan.md's Approach section names
+  `event: session.idle` as chain-nudge's OpenCode surface, but oc-6's action
+  text does not enumerate it among the advisory hooks to wire (it lists
+  session-init/prompt-context, state-sync, session-close, tools-logger, and
+  codex-subagent-audit as a named exclusion — eight of the nine
+  `HOOK_NAMES`, deliberately). chain-nudge's own payload contract wants
+  subagent-completion IDENTITY (`agent_name`/`subagent_type`/`session_id`
+  scoped to the ONE subagent that just stopped — chain_nudge.rs:179-195),
+  which Claude's `SubagentStop` event gives natively (fired scoped to the
+  exact subagent) but a bare OpenCode `session.idle` does not (it fires on
+  ANY session going idle, top-level or dispatched, with no signal
+  distinguishing the two without additional plumbing this cell was not
+  asked to build). Left unwired rather than wired with guessed identity —
+  E4/S4 (worker dispatch parity, plan.md) is the natural home for getting
+  this right, since it already owns the subagent-dispatch mechanics
+  chain-nudge depends on.
+- **Undocumented OpenCode part-id schema, discovered live.** Pushing a
+  synthetic `chat.message` text part with a bare `randomUUID()` id crashed
+  the whole call server-side: `SchemaError: Expected a string starting with
+  "prt", got "<uuid>"` (inside `Session.updatePart`), which OpenCode surfaced
+  to the CLI as an opaque `UnknownError` (`ref: err_...`) with no other
+  detail — not documented anywhere in `@opencode-ai/plugin@1.18.16`'s type
+  declarations. Fixed by prefixing generated part ids with `prt_`. Recorded
+  here because nothing in the installed package's `.d.ts` files or the
+  built-in `customize-opencode` skill names this constraint — a future
+  OpenCode version could change or drop it silently.
