@@ -131,8 +131,28 @@ rule. It says nothing whatever about whether the rule was then obeyed
   by cutting correct text elsewhere. What survives as a standing guard is
   meaning — that no rule vanished, and that a rendered copy still matches its
   master — never size (budget-fence-removal D1).
+- **R7** — External craft enters the instruction layer only through gap
+  analysis and only with a live caller. An import must cover ground the
+  existing layer does not (audit the layer first; duplication is the
+  failure), be rewritten in the layer's own voice rather than copied, and
+  attach to a moment the workflow already routes through — a probe menu, a
+  hunt checklist, a red test. Craft with no caller is dead text however good
+  it reads (c722ed5b).
+- **R8** — The plugin-root craft masters and a repo's installed copy are one
+  content, master-first. An addition that lands only in the installed copy
+  does not exist for deployment and is reverted by the next onboarding
+  apply; the sync to the plugin-root masters is part of the same change,
+  never a follow-up (65357b01).
 
 ## Edge Cases Settled
+
+- **An older deployed copy can silently revert a newer master's content.**
+  Running the onboarding apply step while the installed plugin lagged the
+  repo overwrote freshly written craft files with the plugin's older
+  versions — one new file deleted, four files stripped of their additions —
+  with no error and a green-looking run. When a sync step's source is older
+  than its target, applying it is a rollback wearing a refresh's name: the
+  regen chain skips that step and names the version gap instead (b1490ac4).
 
 - **A perfectly written rule can be perfectly ineffective.** The delegation rule
   was fully specified, and cited by every workflow stage, for its entire life

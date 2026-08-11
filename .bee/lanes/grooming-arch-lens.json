@@ -2,14 +2,30 @@
   "schema_version": "1.0",
   "feature": "grooming-arch-lens",
   "mode": null,
-  "phase": "exploring",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
     "review": false
   },
-  "summary": "Feature \"grooming-arch-lens\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"grooming-arch-lens\" (lane).",
-  "created_at": "2026-08-11T08:13:25.566Z"
+  "summary": "closed 2026-08-11: cells capped, merged, spec synced, learnings at docs/history/expertise-transplant/learnings.md",
+  "next_action": "none",
+  "created_at": "2026-08-11T08:13:25.566Z",
+  "last_scribing_run": {
+    "feature": "grooming-arch-lens",
+    "date": "2026-08-11",
+    "at": "2026-08-11T08:50:40.838Z",
+    "areas_synced": [
+      "doctrine-layer"
+    ],
+    "next_action": "compounding-run"
+  },
+  "last_compounding_run": {
+    "feature": "grooming-arch-lens",
+    "date": "2026-08-11",
+    "at": "2026-08-11T08:50:40.850Z",
+    "learnings": "docs/history/expertise-transplant/learnings.md",
+    "next_action": null
+  }
 }
