@@ -228,12 +228,14 @@ fn plan_on_an_empty_repo_lists_the_whole_install() {
         ]
     );
 
-    // Both in-repo skill roots are resolved, in stable order, fresh.
+    // All three in-repo skill roots are resolved, in stable order, fresh.
     let targets = p["skills"]["targets"].as_array().unwrap();
-    assert_eq!(targets.len(), 2);
+    assert_eq!(targets.len(), 3);
     assert_eq!(targets[0]["kind"], "repo-claude");
     assert_eq!(targets[0]["mode"], "fresh");
     assert_eq!(targets[1]["kind"], "repo-agents");
+    assert_eq!(targets[2]["kind"], "repo-opencode");
+    assert_eq!(targets[2]["mode"], "fresh");
     assert_eq!(targets[0]["versions"]["source"], VERSION);
     assert_eq!(targets[0]["versions"]["host_helpers"], "absent");
     assert_eq!(targets[0]["versions"]["installed_skills"], "absent");
@@ -293,8 +295,8 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
         "tests guide\n"
     );
 
-    // Skills mirrored into both roots, each with its stamp + sidecar.
-    for rel in [".claude/skills", ".agents/skills"] {
+    // Skills mirrored into all three roots, each with its stamp + sidecar.
+    for rel in [".claude/skills", ".agents/skills", ".opencode/skills"] {
         let root = super::util::join_rel(&fx.repo, rel);
         assert!(root.join("bee-hive").join("SKILL.md").exists(), "{rel}");
         assert!(root.join("bee-hive").join("references").join("r.md").exists(), "{rel}");
@@ -314,6 +316,13 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
         )
         .unwrap()["target_runtime"],
         "codex"
+    );
+    assert_eq!(
+        serde_json::from_str::<Value>(
+            &std::fs::read_to_string(fx.repo.join(".opencode").join("skills").join(".bee-render.json")).unwrap()
+        )
+        .unwrap()["target_runtime"],
+        "opencode"
     );
 
     // The ledger.
@@ -366,6 +375,52 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
         assert_eq!(after.iter().find(|(p, _)| p == path).map(|(_, b)| b), Some(body), "{path}");
     }
     assert_eq!(before.len(), after.len());
+}
+
+// ── OpenCode guard plugin vendoring (opencode-support oc-13) ──────────────
+
+#[test]
+fn opencode_guard_plugin_installs_idempotently_and_repairs_drift() {
+    let fx = fixture();
+    write(&fx.root.join(".opencode").join("plugins").join("bee-guard.ts"), "// guard v1\n");
+
+    let p = plan(&fx, &[]);
+    assert_eq!(paths_for(&p, "plan", "copy_opencode_plugin"), vec![".opencode/plugins/bee-guard.ts"]);
+
+    let a = apply(&fx, &[]);
+    assert_eq!(a["status"], "applied");
+    assert_eq!(
+        std::fs::read_to_string(fx.repo.join(".opencode").join("plugins").join("bee-guard.ts")).unwrap(),
+        "// guard v1\n"
+    );
+
+    // IDEMPOTENT: a settled repo plans and applies nothing further.
+    let p2 = plan(&fx, &[]);
+    assert!(!actions(&p2, "plan").contains(&"copy_opencode_plugin".to_string()));
+    let a2 = apply(&fx, &[]);
+    assert!(!actions(&a2, "applied").contains(&"copy_opencode_plugin".to_string()));
+
+    // DRIFT: a hand-edited plugin file is repaired on the next apply, same as
+    // any other vendored helper.
+    write(&fx.repo.join(".opencode").join("plugins").join("bee-guard.ts"), "tampered\n");
+    let p3 = plan(&fx, &[]);
+    assert_eq!(paths_for(&p3, "plan", "copy_opencode_plugin"), vec![".opencode/plugins/bee-guard.ts"]);
+    apply(&fx, &[]);
+    assert_eq!(
+        std::fs::read_to_string(fx.repo.join(".opencode").join("plugins").join("bee-guard.ts")).unwrap(),
+        "// guard v1\n"
+    );
+}
+
+#[test]
+fn a_source_checkout_with_no_opencode_plugin_plans_nothing_for_it() {
+    // The ordinary fixture() never writes .opencode/plugins/ under fx.root —
+    // this is the "not every source checkout carries it yet" case, and it
+    // must stay silent rather than erroring or fabricating a directory.
+    let fx = fixture();
+    let p = plan(&fx, &[]);
+    assert!(!actions(&p, "plan").contains(&"copy_opencode_plugin".to_string()));
+    assert!(!fx.repo.join(".opencode").join("plugins").exists());
 }
 
 /// (relative path, content) for every file under a repo, sorted.

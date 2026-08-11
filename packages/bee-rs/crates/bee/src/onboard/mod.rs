@@ -18,6 +18,17 @@
 // which walkSkillTree uses instead). Plan mode emits the same action list and
 // the same JSON payload, key order included.
 //
+// opencode-support D1/D3 (oc-13, S5): OpenCode is bee's third first-class
+// runtime, at parity with claude/codex for onboarding specifically —
+// `--apply` installs `.opencode/skills/` (a third `REPO_SKILL_TARGETS`
+// entry, synced by the same runtime-agnostic writer as the other two roots)
+// AND the guard plugin at `.opencode/plugins/bee-guard.ts` (vendored from
+// this checkout's own installed copy — D3: the beehive repo is the first
+// consumer). Both are copy-when-missing-or-drifted, unconditional on
+// `--runtime` (that flag governs the claude/codex HOOK belt only; OpenCode's
+// belt is a separate, third mechanism — see hook_manifests.rs's NAMED
+// EXCLUSION comment).
+//
 // ── routing ────────────────────────────────────────────────────────────────
 // `try_native` serves `onboard` only when it can locate the bee source
 // checkout (see source::Engine::locate). Without one there is nothing
@@ -77,7 +88,10 @@ mod plan;
 mod render;
 mod skills;
 mod source;
-mod templates;
+// opencode-support oc-14: pub(crate) so status_full::store's drift check can
+// read AGENT_TIER_DEFAULTS_OPENCODE directly — the same ground truth
+// agents.rs renders from, never a second hand-kept copy of the defaults.
+pub(crate) mod templates;
 mod util;
 
 #[cfg(test)]

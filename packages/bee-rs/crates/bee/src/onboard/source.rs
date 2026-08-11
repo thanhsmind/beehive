@@ -36,6 +36,13 @@ pub struct Engine {
     /// The Windows shell section, appended INSIDE the managed block when the
     /// resolved host shell is PowerShell (`merge::host_shell_is_powershell`).
     pub agents_windows_template: PathBuf,
+    /// opencode-support D3/oc-13: the OpenCode guard belt is a checked-in
+    /// TypeScript plugin, not a rendered manifest — this checkout's OWN
+    /// installed `.opencode/plugins/` tree IS the vendoring source (the
+    /// beehive repo is the first consumer per D3), so a host project's
+    /// onboard copies it from here rather than from a `packages/bee/`
+    /// template directory.
+    pub opencode_plugin_dir: PathBuf,
 }
 
 impl Engine {
@@ -51,6 +58,7 @@ impl Engine {
             expertise_dir: plugin_root.join("expertise"),
             agents_block_template: templates_dir.join("AGENTS.block.md"),
             agents_windows_template: templates_dir.join("AGENTS.windows.md"),
+            opencode_plugin_dir: plugin_root.join(".opencode").join("plugins"),
             templates_dir,
             plugin_root,
         }

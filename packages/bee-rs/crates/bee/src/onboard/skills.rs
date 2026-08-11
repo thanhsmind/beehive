@@ -1023,6 +1023,31 @@ mod tests {
         assert_eq!(compute_skill_items(&src, &target, "claude").len(), 1);
     }
 
+    /// D1 (opencode-support oc-4): the ONBOARDING SYNC PATH's per-target
+    /// writer was already generic on `runtime` (proven above for "codex");
+    /// this pins that "opencode" is a real third arm, not just an
+    /// unvalidated string that happened to fall through.
+    #[test]
+    fn opencode_target_renders_the_opencode_arm() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("skills");
+        write(
+            &src.join("bee-hive").join("SKILL.md"),
+            "x\n<!-- bee:only claude -->\nC\n<!-- bee:end -->\n<!-- bee:only opencode -->\nO\n<!-- bee:end -->\n",
+        );
+        let target = dir.path().join("opencode-skills");
+        assert_eq!(apply_sync_skill(&src, &target, "bee-hive", "opencode"), None);
+        assert_eq!(
+            std::fs::read_to_string(target.join("bee-hive").join("SKILL.md")).unwrap(),
+            "x\nO\n"
+        );
+        assert!(compute_skill_items(&src, &target, "opencode").is_empty());
+        // Neither claude nor codex would have rendered the opencode-only
+        // block, so a runtime-mismatched compare still shows drift.
+        assert_eq!(compute_skill_items(&src, &target, "claude").len(), 1);
+        assert_eq!(compute_skill_items(&src, &target, "codex").len(), 1);
+    }
+
     #[test]
     fn host_lib_downgrade_guard_states() {
         let older = VersionState::Resolved("1.0.0".into());
@@ -1055,5 +1080,98 @@ mod tests {
             .unwrap();
         assert_eq!(agg.reason, "[repo-claude] r1; [repo-agents] r2");
         assert!(!agg.forceable, "one non-forceable target makes the aggregate non-forceable");
+    }
+
+    // ── the real .opencode/skills/ projection (oc-4) ────────────────────────
+    //
+    // Mirrors devtools::skill_trees's committed-tree pin: re-render the
+    // canonical skills/ source for "opencode" and byte-compare against the
+    // tree this cell committed, catching future drift the same way that
+    // pipeline's own pin catches drift in `.claude-plugin/`/`.codex-plugin/`.
+
+    fn repo_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..").join("..")
+    }
+
+    fn opencode_sidecar_bytes(source_root: &Path) -> Vec<u8> {
+        let entries = super::super::render::source_skill_digest_entries(source_root, "opencode");
+        let sidecar = super::super::render::build_render_sidecar("opencode", &entries);
+        format!("{}\n", crate::jsjson::stringify_pretty(&sidecar)).into_bytes()
+    }
+
+    /// Regen entry point for `.opencode/skills/` (oc-4, S2). `bee onboard
+    /// --apply` (oc-13, S5: `REPO_SKILL_TARGETS`'s `repo-opencode` entry) now
+    /// drives this same runtime-agnostic writer for real host repos,
+    /// including this checkout itself — running it from inside a bee source
+    /// checkout is the ordinary regen path. This test remains as the
+    /// lower-ceremony one-liner for regenerating the COMMITTED tree below
+    /// without going through the full CLI plan/apply cycle. `#[ignore]`d
+    /// because it writes the REAL checkout: run explicitly with `cargo test
+    /// --manifest-path packages/bee-rs/Cargo.toml
+    /// onboard::skills::tests::regen_opencode_skills_tree -- --ignored`
+    /// whenever the canonical `skills/` source changes.
+    #[test]
+    #[ignore]
+    fn regen_opencode_skills_tree() {
+        let root = repo_root();
+        let source_root = root.join("skills");
+        assert!(source_root.is_dir(), "not a bee source checkout");
+        let target_root = root.join(".opencode").join("skills");
+        std::fs::create_dir_all(&target_root).unwrap();
+        for entry in list_bee_skill_entries(&source_root) {
+            if entry.is_symlink || !entry.is_dir {
+                continue;
+            }
+            let skipped = apply_sync_skill(&source_root, &target_root, &entry.name, "opencode");
+            assert_eq!(skipped, None, "opencode sync skipped {}: {skipped:?}", entry.name);
+        }
+        super::super::util::write_file_atomic(
+            &target_root.join(super::super::templates::RENDER_SIDECAR),
+            &opencode_sidecar_bytes(&source_root),
+        )
+        .unwrap();
+        // oc-13: real `bee onboard --apply` also stamps SKILLS_VERSION_STAMP
+        // (apply.rs's "D9/D7 provenance stamps" section) — without it, the
+        // three-version preflight cannot resolve `installed_skills` for this
+        // target and blocks EVERY future `--apply` against this checkout
+        // with "version unresolvable ... refusing (never forceable)". The
+        // interim regen path skipped it; a real onboard apply never would.
+        let engine = super::super::source::Engine::from_plugin_root(root.clone());
+        let version = super::super::source::read_source_release_identity(&engine).version;
+        let payload = serde_json::json!({
+            "version": version.as_ref().map(|v| serde_json::json!(v)).unwrap_or(serde_json::Value::Null)
+        });
+        super::super::util::write_file_atomic(
+            &target_root.join(super::super::templates::SKILLS_VERSION_STAMP),
+            format!("{}\n", crate::jsjson::stringify_pretty(&payload)).as_bytes(),
+        )
+        .unwrap();
+    }
+
+    /// THE PIN: re-renders skills/ for "opencode" and byte-compares against
+    /// the committed `.opencode/skills/` tree.
+    #[test]
+    fn opencode_projection_matches_the_committed_tree() {
+        let root = repo_root();
+        let source_root = root.join("skills");
+        if !source_root.is_dir() {
+            return; // not a source checkout
+        }
+        let target_root = root.join(".opencode").join("skills");
+        assert!(
+            target_root.is_dir(),
+            ".opencode/skills/ must exist — run `regen_opencode_skills_tree` (see its doc comment)"
+        );
+        assert!(
+            compute_skill_items(&source_root, &target_root, "opencode").is_empty(),
+            ".opencode/skills/ has drifted from skills/ — re-run the opencode regen"
+        );
+        let committed_sidecar =
+            std::fs::read(target_root.join(super::super::templates::RENDER_SIDECAR)).expect("sidecar");
+        assert_eq!(
+            committed_sidecar,
+            opencode_sidecar_bytes(&source_root),
+            "opencode sidecar drifted"
+        );
     }
 }

@@ -314,6 +314,18 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
             format_slot(claude.and_then(|c| vget(c, "extraction"))),
             format_slot(claude.and_then(|c| vget(c, "review"))),
         ));
+        // opencode-support oc-13/oc-14: printed unconditionally, same as
+        // claude's line above — opencode now carries a built-in default too
+        // (the free `opencode/*` provider names baked into every rendered
+        // `.opencode/agent/bee-*.md`, oc-14), so an unconfigured repo has a
+        // real answer to print, not an all-null line nobody asked for.
+        let opencode = s("models").and_then(|m| vget(m, "opencode"));
+        lines.push(format!(
+            "Models (opencode): generation={} extraction={} review={}",
+            format_slot(opencode.and_then(|o| vget(o, "generation"))),
+            format_slot(opencode.and_then(|o| vget(o, "extraction"))),
+            format_slot(opencode.and_then(|o| vget(o, "review"))),
+        ));
     }
     {
         let tm = s("tier_mix");

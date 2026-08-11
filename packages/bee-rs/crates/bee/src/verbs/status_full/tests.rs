@@ -345,6 +345,14 @@ use crate::version::BEE_VERSION;
         assert_eq!(lines[9], "Active workers: 0");
         assert_eq!(lines[10], "Critical patterns file: absent");
         assert!(lines[11].starts_with("Models (claude): generation=sonnet extraction=haiku review=opus"));
+        // opencode-support oc-14: opencode now carries a built-in default
+        // too (the free `opencode/*` provider names oc-14 bakes into every
+        // rendered `.opencode/agent/bee-*.md`), so its line prints even
+        // unconfigured — same as claude's line above.
+        assert_eq!(
+            lines[12],
+            "Models (opencode): generation=opencode/big-pickle extraction=opencode/ling-3.0-tiny-free review=opencode/nemotron-3-ultra-free"
+        );
         // Idle repo with no next_action override -> defaultState's line.
         assert_eq!(
             *lines.last().unwrap(),
@@ -355,6 +363,31 @@ use crate::version::BEE_VERSION;
         assert_eq!(status.get("gate_bypass_level"), Some(&json!("normal")));
         assert_eq!(status.get("ship_visibility"), Some(&json!("off")));
         assert_eq!(status.get("pbi"), Some(&Value::Null));
+    }
+
+    /// opencode-support oc-13: a configured `models.opencode` prints its own
+    /// line right after claude's, same slot order, no ceiling note (ceiling
+    /// is a claude-specific concept — decisions 0012/0015/0021).
+    #[test]
+    fn status_text_renderer_prints_a_configured_opencode_models_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/config.json",
+            r#"{"commands":{"test":"npm t"},"models":{"opencode":{"generation":"opencode/big-pickle"}}}"#,
+        );
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let text = render_status_text(&status);
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert!(lines[10].starts_with("Models (claude): generation=sonnet extraction=haiku review=opus"));
+        assert_eq!(
+            lines[11],
+            "Models (opencode): generation=opencode/big-pickle extraction=opencode/ling-3.0-tiny-free review=opencode/nemotron-3-ultra-free"
+        );
     }
 
     #[test]
@@ -2218,6 +2251,85 @@ use crate::version::BEE_VERSION;
         let root = tmp.path();
         write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet");
         assert!(validate_agent_files_drift(&ctx_for(root), None).is_empty());
+    }
+
+    fn write_opencode_agent_file(root: &Path, agent: &str, frontmatter: &str) {
+        write(
+            root,
+            &format!(".opencode/agent/{agent}.md"),
+            &format!("---\n{frontmatter}\n---\n\nBody text, not parsed by the drift check.\n"),
+        );
+    }
+
+    /// opencode-support oc-13/oc-14: `.opencode/agent/` joins `.claude/agents/`
+    /// in the same drift check, checked against `models.opencode` instead of
+    /// `models.claude`. Before oc-14 the two roots needed different
+    /// unconfigured-slot wording — opencode's files were hand-authored (oc-11),
+    /// so "re-run onboarding" would have been a promise bee could not keep.
+    /// oc-14 renders `.opencode/agent/` the same way `.claude/agents/` is
+    /// rendered, so both roots now share one verdict shape (see the drift
+    /// check's own doc comment).
+    #[test]
+    fn opencode_agent_file_drift_findings() {
+        // (a) no models.opencode config at all -> clean: the file's declared
+        // model matches the built-in default (AGENT_TIER_DEFAULTS_OPENCODE),
+        // same reasoning that already applied to claude's haiku/sonnet/opus.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        assert!(validate_agent_files_drift(&ctx_for(root), None).is_empty());
+        assert!(
+            validate_agent_files_drift(&ctx_for(root), Some(&json!({"models": {}}))).is_empty()
+        );
+
+        // (b) a REAL configured mismatch is still caught, worded the same as
+        // the claude side now — the file IS onboarding-rendered (oc-14).
+        let cfg = json!({"models": {"opencode": {"generation": "opencode/deepseek-v4-flash-free"}}});
+        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
+        assert_eq!(codes(&problems), vec!["agent-file-drift"]);
+        assert_eq!(problems[0].agent, Some("bee-gather"));
+        assert!(problems[0].message.contains("model: \"opencode/big-pickle\""));
+        assert!(problems[0].message.contains("is \"opencode/deepseek-v4-flash-free\""));
+        assert!(problems[0].message.contains("re-run onboarding to re-render it"));
+        assert!(!problems[0].message.contains("hand-authored"));
+
+        // (c) matching config across all three opencode agents -> clean.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        write_opencode_agent_file(root, "bee-extract", "model: opencode/ling-3.0-tiny-free");
+        write_opencode_agent_file(root, "bee-review", "model: opencode/nemotron-3-ultra-free");
+        let cfg = json!({"models": {"opencode": {
+            "generation": "opencode/big-pickle",
+            "extraction": "opencode/ling-3.0-tiny-free",
+            "review": "opencode/nemotron-3-ultra-free"
+        }}});
+        assert!(validate_agent_files_drift(&ctx_for(root), Some(&cfg)).is_empty());
+
+        // (d) claude and opencode roots are checked independently — a claude
+        // drift never contaminates a clean opencode root and vice versa.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: opus");
+        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        let cfg = json!({"models": {
+            "claude": {"generation": "sonnet"},
+            "opencode": {"generation": "opencode/big-pickle"}
+        }});
+        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
+        assert_eq!(codes(&problems), vec!["agent-file-drift"]);
+        assert!(problems[0].message.starts_with(".claude/agents/bee-gather.md"));
+
+        // (e) a stale opencode file under a now cli-shaped slot is flagged
+        // too — the same "this file should not exist" verdict claude's (d)
+        // case proves, now symmetric across both rendered roots.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_opencode_agent_file(root, "bee-gather", "model: opencode/big-pickle");
+        let cfg = json!({"models": {"opencode": {"generation": {"kind": "cli", "command": "opencode run -"}}}});
+        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
+        assert_eq!(codes(&problems), vec!["agent-file-drift"]);
+        assert!(problems[0].message.contains("cli-shaped or unconfigured"));
     }
 
     /// The point of the cell (scripts/tests/test_config_validate.mjs header):

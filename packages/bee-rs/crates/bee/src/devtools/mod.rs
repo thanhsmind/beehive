@@ -526,11 +526,40 @@ mod tests {
 /// The hooks manifest this binary renders for a runtime's REPO target, by
 /// name. `doctor` compares a host's wiring against it byte for byte, and it
 /// has no business knowing hook_manifests' enums to ask that question.
+///
+/// `opencode` is a recognized runtime label here — accepted, not refused —
+/// but always answers None: hook_manifests::Runtime carries a NAMED
+/// exclusion for it (see that enum's doc comment), because OpenCode's hook
+/// belt is the checked-in `.opencode/plugins/bee-guard.ts` plugin, not a
+/// rendered JSON manifest this function could produce. A caller (e.g.
+/// `doctor`) reads None the same way it already does for any runtime with
+/// nothing to byte-compare.
 pub fn render_projection_text_for(runtime: &str) -> Option<String> {
     let r = match runtime {
         "claude" => hook_manifests::Runtime::Claude,
         "codex" => hook_manifests::Runtime::Codex,
+        // "opencode" is recognized, not merely unmatched — see the doc
+        // comment above — but it shares None with every other unknown
+        // label because there is nothing to render either way.
+        "opencode" => return None,
         _ => return None,
     };
     Some(hook_manifests::render_projection_text(r, hook_manifests::Target::Repo))
+}
+
+#[cfg(test)]
+mod render_projection_text_for_tests {
+    use super::render_projection_text_for;
+
+    #[test]
+    fn claude_and_codex_render_something_opencode_recognized_but_none() {
+        assert!(render_projection_text_for("claude").is_some());
+        assert!(render_projection_text_for("codex").is_some());
+        // Recognized runtime label, but hook_manifests::Runtime names an
+        // exclusion for it (opencode's belt is a TS plugin, not a rendered
+        // manifest) — same None an unknown label would get, for a different,
+        // documented reason.
+        assert_eq!(render_projection_text_for("opencode"), None);
+        assert_eq!(render_projection_text_for("emacs"), None);
+    }
 }

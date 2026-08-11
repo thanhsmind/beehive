@@ -26,7 +26,12 @@ use std::time::Instant;
 
 pub(crate) const EFFORT_LEVELS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 
-pub(crate) const RUNTIMES: [&str; 2] = ["claude", "codex"];
+// opencode-support E4/S4: opencode joins claude/codex as a real `models.<rt>`
+// key (docs/config-reference.md) rather than the silently-ignored third key
+// it used to be — every function below is already keyed generically off this
+// list (`models.get(rt)`, no struct field per runtime), so widening it is the
+// whole fix for this reader.
+pub(crate) const RUNTIMES: [&str; 3] = ["claude", "codex", "opencode"];
 
 /// CONFIGURABLE_SLOTS = [...CONFIGURABLE_TIERS, 'review'].
 pub(crate) const CONFIGURABLE_SLOTS: [&str; 3] = ["extraction", "generation", "review"];

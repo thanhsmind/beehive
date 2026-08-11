@@ -445,7 +445,15 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
     }
 }
 
-/// state.mjs DEFAULT_MODELS + normalizeModels.
+/// state.mjs DEFAULT_MODELS + normalizeModels. opencode-support oc-13/oc-14:
+/// a third `opencode` entry joins claude/codex. Unlike codex (defaulted
+/// null, no built-in model name), opencode DOES carry a built-in default —
+/// the free `opencode/*` provider names `onboard::templates::
+/// AGENT_TIER_DEFAULTS_OPENCODE` bakes into every `.opencode/agent/bee-*.md`
+/// render (oc-14) — because those files pin a real model regardless of
+/// `models.opencode` config (structural model-guard enforcement, per
+/// plan.md's fallback row), not something resolved per dispatch call the way
+/// claude/codex's own model params are.
 pub(crate) fn normalize_models(raw: Option<&Value>) -> JMap {
     let mut claude = JMap::new();
     claude.insert("extraction".into(), json!("haiku"));
@@ -455,9 +463,14 @@ pub(crate) fn normalize_models(raw: Option<&Value>) -> JMap {
     codex.insert("extraction".into(), Value::Null);
     codex.insert("generation".into(), Value::Null);
     codex.insert("review".into(), Value::Null);
+    let mut opencode = JMap::new();
+    for (slot, model) in crate::onboard::templates::AGENT_TIER_DEFAULTS_OPENCODE {
+        opencode.insert((*slot).into(), json!(model));
+    }
     let mut out = JMap::new();
     out.insert("claude".into(), Value::Object(claude));
     out.insert("codex".into(), Value::Object(codex));
+    out.insert("opencode".into(), Value::Object(opencode));
     if let Some(Value::Object(m)) = raw {
         for rt in RUNTIMES {
             let Some(Value::Object(src)) = m.get(rt) else { continue };
@@ -849,61 +862,81 @@ pub(crate) fn read_agent_file_model(file: &Path) -> (bool, Option<String>) {
     (true, None)
 }
 
-/// state.mjs validateAgentFilesDrift.
+/// state.mjs validateAgentFilesDrift. opencode-support oc-13/oc-14: a second
+/// runtime root joins `.claude/agents/` — `.opencode/agent/` (singular
+/// "agent", per discovery.md's verified on-disk layout), checked against
+/// `models.opencode` instead of `models.claude`. Same three read-only agents
+/// on both roots; `bee-build` carries no tier check on either (AGENT_FILE_TIER's
+/// existing scope, unchanged). Before oc-14 the two roots needed different
+/// verdict wording — opencode's files were hand-authored, so "re-run
+/// onboarding" was a promise bee could not keep. oc-14 renders
+/// `.opencode/agent/` from the same template source `.claude/agents/` uses
+/// (`onboard::agents::compute_opencode_agent_file_plan`), so both roots now
+/// share one verdict shape below.
 pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) -> Vec<Problem> {
     const AGENT_FILE_TIER: [(&str, &str); 3] = [
         ("bee-gather", "generation"),
         ("bee-extract", "extraction"),
         ("bee-review", "review"),
     ];
+    const AGENT_FILE_ROOTS: [(&str, &str, &str); 2] =
+        [("claude", ".claude", "agents"), ("opencode", ".opencode", "agent")];
     let mut problems = Vec::new();
     let raw_models = raw_config.and_then(|c| match c {
         Value::Object(m) => m.get("models"),
         _ => None,
     });
     let models = normalize_models(raw_models);
-    for (agent_name, slot) in AGENT_FILE_TIER {
-        let file = ctx.root.join(".claude").join("agents").join(format!("{agent_name}.md"));
-        let (found, file_model) = read_agent_file_model(&file);
-        if !found {
-            continue;
-        }
-        let Some(file_model) = file_model else {
-            problems.push(Problem {
-                code: "agent-file-malformed",
-                runtime: None,
-                slot: Some(slot),
-                message: format!(".claude/agents/{agent_name}.md has no readable \"model:\" frontmatter line — cannot check drift; re-run onboarding to re-render it."),
-                agent: Some(agent_name),
-            });
-            continue;
-        };
-        let claude = models.get("claude").and_then(|v| v.as_object());
-        let mut value = claude.and_then(|c| c.get(slot));
-        if nullish(value) && slot == "review" {
-            value = claude.and_then(|c| c.get("generation"));
-        }
-        let expected: Option<String> = match value {
-            Some(Value::String(s)) => Some(s.clone()),
-            Some(Value::Object(o)) => o.get("model").and_then(|m| m.as_str()).map(str::to_string),
-            _ => None,
-        };
-        match expected {
-            None => problems.push(Problem {
-                code: "agent-file-drift",
-                runtime: None,
-                slot: Some(slot),
-                message: format!(".claude/agents/{agent_name}.md declares model: \"{file_model}\" but the {slot} slot is now cli-shaped or unconfigured (no model name) — re-run onboarding to remove the stale file."),
-                agent: Some(agent_name),
-            }),
-            Some(expected) if expected != file_model => problems.push(Problem {
-                code: "agent-file-drift",
-                runtime: None,
-                slot: Some(slot),
-                message: format!(".claude/agents/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — re-run onboarding to re-render it."),
-                agent: Some(agent_name),
-            }),
-            _ => {}
+    for (runtime, dir, subdir) in AGENT_FILE_ROOTS {
+        let rel_prefix = format!("{dir}/{subdir}");
+        for (agent_name, slot) in AGENT_FILE_TIER {
+            let file = ctx.root.join(dir).join(subdir).join(format!("{agent_name}.md"));
+            let (found, file_model) = read_agent_file_model(&file);
+            if !found {
+                continue;
+            }
+            let Some(file_model) = file_model else {
+                problems.push(Problem {
+                    code: "agent-file-malformed",
+                    runtime: None,
+                    slot: Some(slot),
+                    message: format!("{rel_prefix}/{agent_name}.md has no readable \"model:\" frontmatter line — cannot check drift; re-run onboarding to re-render it."),
+                    agent: Some(agent_name),
+                });
+                continue;
+            };
+            let rt_models = models.get(runtime).and_then(|v| v.as_object());
+            let mut value = rt_models.and_then(|c| c.get(slot));
+            if nullish(value) && slot == "review" {
+                value = rt_models.and_then(|c| c.get("generation"));
+            }
+            let expected: Option<String> = match value {
+                Some(Value::String(s)) => Some(s.clone()),
+                Some(Value::Object(o)) => o.get("model").and_then(|m| m.as_str()).map(str::to_string),
+                _ => None,
+            };
+            // Both roots are onboarding-rendered now (oc-14), so both carry a
+            // non-null built-in default and share one verdict shape: `None`
+            // only happens when config explicitly opted the slot OUT (a
+            // cli-shaped or literal-null-with-no-fallback override) — a real
+            // "this file should not exist" signal on either runtime.
+            match expected {
+                None => problems.push(Problem {
+                    code: "agent-file-drift",
+                    runtime: None,
+                    slot: Some(slot),
+                    message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the {slot} slot is now cli-shaped or unconfigured (no model name) — re-run onboarding to remove the stale file."),
+                    agent: Some(agent_name),
+                }),
+                Some(expected) if expected != file_model => problems.push(Problem {
+                    code: "agent-file-drift",
+                    runtime: None,
+                    slot: Some(slot),
+                    message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — re-run onboarding to re-render it."),
+                    agent: Some(agent_name),
+                }),
+                _ => {}
+            }
         }
     }
     problems

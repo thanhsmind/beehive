@@ -41,6 +41,15 @@ use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+/// NAMED EXCLUSION (hook-runtime R1: every per-runtime difference is a named
+/// export, never drift) — OpenCode is a first-class runtime (opencode-support
+/// D1) but does NOT join this enum. Its hook belt is a checked-in TypeScript
+/// plugin at `.opencode/plugins/bee-guard.ts` (opencode-support D2: OpenCode's
+/// `tool.execute.before` throw is the only documented block path, so the
+/// guard is hand-written TypeScript calling `.bee/bin/bee hook <name>`, not a
+/// rendered JSON manifest sharing this catalog's `Entry`/`Group` rows). Adding
+/// `Runtime::Opencode` here would imply a fourth generated-manifest
+/// projection that does not exist; the plugin file is the projection.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Runtime {
     Claude,

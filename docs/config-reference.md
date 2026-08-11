@@ -26,7 +26,7 @@ the old `--key guards.idle_gate` dot-notation reached are just nested objects in
 
 There are three tiers, but **you only configure the two cheaper ones.** The **ceiling** (strongest) tier is **never configured — it is always the model you are running the session on** (decision 0015). So if you run the session on Fable, ceiling work runs on Fable; run it on Opus, ceiling is Opus. bee doesn't pick it; it inherits your session model.
 
-You configure only `generation` and `extraction`, under **`models`**, keyed by runtime (Claude Code vs Codex name models differently). Beside the two tiers sit two configurable **roles**, `review` and `advisor`:
+You configure only `generation` and `extraction`, under **`models`**, keyed by runtime (Claude Code, Codex, and OpenCode name models differently). Beside the two tiers sit two configurable **roles**, `review` and `advisor`:
 
 ```jsonc
 {
@@ -75,9 +75,25 @@ You configure only `generation` and `extraction`, under **`models`**, keyed by r
   You **cannot pin an exact sub-version** for a Claude Code subagent — the model param is family-alias only, and it tracks the latest of each family as Anthropic ships new ones. (For **Codex**, the `codex` tiers take the runtime's real model ids, e.g. `"gpt-5"`, because that runtime addresses models by id.)
 - `bee_status` prints the active map (`Models (claude): generation=… extraction=… · ceiling = the session model`), and warns if too many cells sit on the ceiling tier — the point is to keep the strong (session) model scarce.
 
-### Runtimes: Claude Code and Codex — and everything else (OpenCode, agy, …)
+### Runtimes: Claude Code, Codex, and OpenCode — and everything else (agy, …)
 
-`models` accepts exactly **two runtime keys: `claude` and `codex`** — the two harnesses bee ships hooks and dispatch transports for. Any other top-level runtime key (e.g. `"opencode"`, `"gemini"`) is **silently ignored**: not an error, just dead config that never resolves.
+`models` accepts **three runtime keys: `claude`, `codex`, and `opencode`** — the three first-class runtimes bee ships hooks, rendered skills, and worker agents for (opencode-support D1). Any other top-level runtime key (e.g. `"gemini"`) is still **silently ignored**: not an error, just dead config that never resolves.
+
+- **OpenCode** names models as `provider/model` ids (e.g. `"opencode/big-pickle"` on the zero-config `opencode/*` free provider this machine ships out of the box) — a real catalog id, the same way Codex takes its real model ids, never a Claude-style family alias. There is no per-call model override on OpenCode's dispatch (`task`) tool, so `models.opencode.{extraction,generation,review}` is consumed **structurally**: each `.opencode/agent/bee-{build,gather,extract,review}.md` worker file pins its tier's model directly in that file's own `model:` frontmatter (today hand-authored to match this key, not yet rendered by a `bee dev` generator the way `.claude/agents/*.md` is), so a wrong-tier dispatch is unrepresentable rather than caught after the fact. Example:
+
+  ```jsonc
+  {
+    "models": {
+      "opencode": {
+        "extraction": "opencode/ling-3.0-tiny-free",  // bee-extract
+        "generation": "opencode/big-pickle",           // bee-build, bee-gather
+        "review": "opencode/nemotron-3-ultra-free"     // bee-review
+      }
+    }
+  }
+  ```
+
+  Named constraint: the free `opencode/*` provider carries no documented quality tiering, so the mapping above is a size-name heuristic ("tiny" → extraction, "ultra" → review), not an empirically verified capability ladder — swap in real provider/model ids once a paid provider is configured.
 
 That does *not* mean other CLIs are unusable — they plug in through the **external-executor slot shape** on whichever runtime you actually run the session in. Example, routing the review tier of a Claude Code session through OpenCode:
 

@@ -1,0 +1,42 @@
+{
+  "schema": "bee-render/2",
+  "target_runtime": "opencode",
+  "skills": [
+    {
+      "name": "bee-capturing",
+      "sha256": "384435d2cb6f72d06c09c30799a3ac3b8d2ad0b0939b53dab583863c3058df16"
+    },
+    {
+      "name": "bee-grooming",
+      "sha256": "89904a5d6ced1ab5ad19d595e42b1957a001993bb72957c9d85f876e3901b0e5"
+    },
+    {
+      "name": "bee-herding",
+      "sha256": "c19fab1e5def68aa3ec428357e428907ca51343c2aebd97de04cecc384c41b34"
+    },
+    {
+      "name": "bee-hive",
+      "sha256": "043e8930f09f2b869d9e4715f171020be2291b16408a2004735d2ea28514a030"
+    },
+    {
+      "name": "bee-planning",
+      "sha256": "9be7d72ab203ed7c7a01966b72cf0d30cb291bc56eb66b75f34c0b92786eb8d7"
+    },
+    {
+      "name": "bee-researching",
+      "sha256": "b77592777a6219259ca17c914a2a540939cdf873381cc460afe09ef091275db5"
+    },
+    {
+      "name": "bee-reviewing",
+      "sha256": "3a0f37fe90cedb028a871cf41d4fa6713ade2841bc0968e267f4b4cfbf5f49a5"
+    },
+    {
+      "name": "bee-shaping",
+      "sha256": "400a8b7ffc27a8cec2c156afb6ad1499f6b0304e064377d995c6c19ba2a4612d"
+    },
+    {
+      "name": "bee-swarming",
+      "sha256": "4476479800fa9d00fd8856710f2e5020791d3819a0cded683d43537dbfa96bbc"
+    }
+  ]
+}
