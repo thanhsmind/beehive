@@ -1,0 +1,45 @@
+{
+  "id": "dmr-1",
+  "feature": "docs-mermaid-rule",
+  "lane": "tiny",
+  "title": "Always draw a Mermaid section for flow-shaped behavior in docs",
+  "action": "expertise/documentation.md gains a craft section (draw what is drawable); skills/bee-capturing/references/area-spec.md template gains a Diagrams section + per-section rule; skills/bee-capturing/SKILL.md Scribe paragraph gains the one-line rule; then regen chain in order: bee dev render-skill-trees, bee onboard --repo-root . --apply, bee dev release-manifest --write.",
+  "goal": "Docs writing always renders a Mermaid diagram section when the behavior is drawable (states, sequence, containment, routing) - diagrams become a first-class spec section, not decoration.",
+  "verify": "bee dev release-manifest --check green; re-running bee dev render-skill-trees leaves git diff clean; commands.test green.",
+  "files": [
+    "expertise/documentation.md",
+    "skills/bee-capturing/SKILL.md",
+    "skills/bee-capturing/references/area-spec.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": "Mermaid-mandatory rule for flow-shaped behavior landed in documentation.md, area-spec template, bee-capturing SKILL.md; projections + manifest regenerated",
+    "files_changed": [
+      "expertise/documentation.md",
+      "skills/bee-capturing/SKILL.md",
+      "skills/bee-capturing/references/area-spec.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "render writes four committed projection trees, not only the two declared plugin trees - all committed",
+      "tiny lane: no CONTEXT.md - the locked rule lives in the decisions ledger (2cf0674e); Gates 1-2 auto-approved under bypass normal"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-11T09:27:41.620Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "80e38425-1b74-4cd6-acb9-0c54c717f644",
+    "claimed_at": "2026-08-11T09:26:13.870Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T09:27:28.960Z"
+  }
+}
