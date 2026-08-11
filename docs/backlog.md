@@ -10,12 +10,8 @@ never a generation timestamp or any other wall-clock value.
 
 | ID | Story | CoS | Status | Feature |
 |----|-------|-----|--------|---------|
-| P43 | Installer upgrades never split the release version across Codex, Claude, runtime, or project skills | Both top-level installers fail closed on a mixed release tuple and prove greenfield plus brownfield end to end before reporting success; 1.3.1 released 2026-07-16 with the Linux half proven (Bash E2E 15 cases as mandatory verify suite; read-only pre-confirm, rollback, status-gated refusals; plugin-first tuple coverage; managed-set cleanup fencing) and all 9 hosts onboarded to 1.3.1; Windows/PowerShell E2E remains the open half (owner request 2026-07-16; decisions 55ff17ef, 09b776b5, fc76ce41) | in-flight | installer-version-parity-1-3-1 |
-| P69 | Every bee skill reads and writes the knowledge bundle instead of loose markdown | NARROWED (2026-08-11): three of five clauses shipped earlier; the compounding-promote clause is satisfied by the close-time auto-mined promote proposals converging into the capture queue (R80/R83) with bee-capturing as the reader; the ONE remaining clause is the bundle-only handover proof — rebuild an area from its concepts alone with no runtime — still unstarted. | in-flight | okf-switchover-f3 + okf-integration-close-f4 (3 of 5 clauses — see Delivered/Remaining) |
 | p-10caed3f | timings report verb: aggregate .bee/logs/timings.jsonl into slowest-command ranking |  | proposed | — |
-| p-9d7b36fc | repeat bash install rewrites managed files (timestamp churn) | RE-SCOPED (2026-08-11 triage): the named e2e suite is gone with the mjs retirement; the behavior claim (repeat bash install rewrites managed files) needs a Rust-side regression check against installer_contracts.rs before this can rank again — as written, unactionable. | proposed | verify-red-triage |
-| p-c6e61dfb | P7 stage-instruction offload: self-contained pipeline stages (exploring/scribing/compounding) run in workers loading their own skill; orchestrator keeps hive+swarming+gates only | Cumulative orchestrator instruction load ~halved on top of P1-P6; dispatch topology decision spec'd and approved | proposed | — |
-| P48 | Lane and session records stop being freely hand-writable gate inputs | Gate decisions read lane/session records that any process can hand-edit — a forged record can flip a gate or force compounding-complete. Decide the integrity mechanism (checksums, CLI-only writes like decisions.jsonl, or hook-guarded paths) and close the hole (source: v0.1.44 review finding, security + architecture, promoted from machine backlog 2026-07-17) | proposed | — |
+| p-ead9b2d4 | A bundle-only handover is proven: an area is rebuilt from its concepts alone, with no runtime and no source tree | Pick one mid-size area; hand its docs/knowledge concepts (Pointers stripped) to a fresh session on another stack; the rebuild reproduces the documented behaviors; gaps found feed back as spec fixes. This is P69's last clause, isolated so it ranks on its own. | proposed | knowledge-handover-proof |
 
 ## Done / Declined
 
@@ -47,6 +43,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-91ceee70] Foundation fixes: workflow close transition kills state-clobber zombies; Windows suite split kills 600s timeout — done
 - [p-94ecc5a2] bee state gate does not reject an unknown gate name or a non-boolean --approved — done
 - [p-9c48a67c] bee worktree new/register copies ALL .bee/cells files into a new worktree, including other features' stale uncapped claimed cells — done
+- [p-9d7b36fc] repeat bash install rewrites managed files (timestamp churn) — done
 - [p-b11732c2] bee worktree new must require --with-companion (or refuse) when a live concurrent session touches a shared companion checkout — done
 - [p-b595a094] Main-verifies: feature-level verify by the orchestrator; workers implement+commit+report only; cap pending path + close-door gate — done
 - [p-c15fb6f5] As a doctrine author, I want the pointer checks to read a citation naming more than one heading, so its target file and every heading it names are verified instead of the citation being skipped. — done
@@ -88,10 +85,12 @@ never a generation timestamp or any other wall-clock value.
 - [P39] Parallel cells stop politely waiting: the scheduler computes waves from declared files+deps — done
 - [P4] Gates 2–3 are reviewed on a single human-readable implement plan — done
 - [P42] Codex subagent waits do not spam empty completion panels — done
+- [P43] Installer upgrades never split the release version across Codex, Claude, runtime, or project skills — done
 - [P44] A single session fans work into independent-feature git worktrees, each with its own gates, merged back as event-sourced state — done
 - [P45] Exploring asks fewer, batched rounds instead of one question per message — done
 - [P46] Git/VCS commands are exempt from the intake gate — done
 - [P47] A claim wedged by a hard crash frees itself — done
+- [P48] Lane and session records stop being freely hand-writable gate inputs — done
 - [P49] `--force-downgrade` names its blast radius before acting — done
 - [P5] Capture-mode engages in-flight, not only when a human remembers — done
 - [P52] Small work starts from an executable work packet, not a shrunken feature plan — done
@@ -106,6 +105,7 @@ never a generation timestamp or any other wall-clock value.
 - [P66] Every area spec becomes small typed concepts, and the legacy docs tree is retired — done
 - [P67] Finishing work promotes knowledge instead of accumulating it — done
 - [P68] Stale, dangling, and self-contradicting knowledge is found by machine, not by memory — done
+- [P69] Every bee skill reads and writes the knowledge bundle instead of loose markdown — done
 - [P7] Keep the strong model scarce, measurably — done
 - [P70] A Codex session runs bee with the same experience as Claude Code — done
 - [P71] A session that gets compacted lands back on the work it was doing — done
@@ -125,6 +125,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-842955b5] verify_policy deferred cho host project — cap nhận targeted-run, full chain thuần CI — declined
 - [p-86f2bfc1] compact-check mutates .bee/ across consecutive runs — declined
 - [p-acc0e108] Test-prune đợt 2: race-harness scaffold chung cho 6 suite race (argVal/spawnRacer trùng byte-for-byte, ~250-350 dòng) — declined
+- [p-c6e61dfb] P7 stage-instruction offload: self-contained pipeline stages (exploring/scribing/compounding) run in workers loading their own skill; orchestrator keeps hive+swarming+gates only — declined
 - [p-cb0e94e3] Test-prune đợt 2: cắt scripts/test_worktree_store.mjs phần grants trùng test_worktree_cli, giữ replayLog; đổi tên tránh trùng basename với templates/tests/test_worktree_store.mjs — declined
 - [p-d4a5dcff] Test-prune đợt 2: gộp test_bypass_matrix + test_gate_bypass_doctrine thành một doctrine gate table-driven (~150 dòng) — declined
 - [p-dbe8b1a5] reservationStoreCorrupt still checks the legacy reservations.json file — declined
