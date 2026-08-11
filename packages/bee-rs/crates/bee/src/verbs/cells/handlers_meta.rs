@@ -348,8 +348,20 @@ pub(crate) fn run_schedule(flags: rsv::Flags, use_json: bool, t0: Instant) -> Op
         if !schedule.empty_files.is_empty() {
             lines.push(format!("Empty files: {}", schedule.empty_files.join(", ")));
         }
+        for (deferred, blocking, root) in &schedule.obligation_conflicts {
+            lines.push(format!("{deferred} waits for {blocking} — shared regen root {root}"));
+        }
         let result = json!({
             "waves": schedule.waves,
+            "obligation_conflicts": schedule
+                .obligation_conflicts
+                .iter()
+                .map(|(deferred, blocking, root)| json!({
+                    "deferred": deferred,
+                    "blocking": blocking,
+                    "root": root,
+                }))
+                .collect::<Vec<_>>(),
             "diagnostics": {
                 "cycles": schedule.cycles,
                 "unsatisfiable_deps": schedule

@@ -1217,6 +1217,39 @@ use std::time::Instant;
         assert_eq!(s.unsatisfiable, vec![("e".to_string(), "ghost".to_string(), "missing")]);
         assert_eq!(s.empty_files, vec!["e".to_string()]);
         assert!(s.cycles.is_empty());
+        assert!(s.obligation_conflicts.is_empty()); // none of x/y/z/w touch a regen-obligated root
+    }
+
+    #[test]
+    fn compute_schedule_serializes_cells_sharing_a_regen_obligation_root() {
+        // ra/rb declare disjoint files (skills/a.md vs skills/b.md — never
+        // literally overlapping) but both fall under the "skills" root
+        // INVENTORY_ROOTS obligates (release_manifest::INVENTORY_ROOTS,
+        // read through the SAME derive_regen_guards() the cells-add
+        // REGEN_OBLIGATION refusal uses — never a hand-kept root list).
+        // Wave placement must serialize them exactly like a file overlap
+        // would, and name the shared root.
+        let cells = vec![
+            json!({"id": "ra", "status": "open", "deps": [], "files": ["skills/a.md"]}),
+            json!({"id": "rb", "status": "open", "deps": [], "files": ["skills/b.md"]}),
+        ];
+        let s = compute_schedule(&cells);
+        assert_eq!(s.waves, vec![vec!["ra".to_string()], vec!["rb".to_string()]]);
+        assert_eq!(s.obligation_conflicts, vec![("rb".to_string(), "ra".to_string(), "skills".to_string())]);
+    }
+
+    #[test]
+    fn compute_schedule_keeps_wave_placement_for_disjoint_cells_with_no_shared_obligation() {
+        // Disjoint files, neither under any derived regen-obligation root:
+        // placement is byte-identical to the pre-fix behavior — same wave,
+        // no conflict recorded.
+        let cells = vec![
+            json!({"id": "p", "status": "open", "deps": [], "files": ["docs/readme.md"]}),
+            json!({"id": "q", "status": "open", "deps": [], "files": ["notes.txt"]}),
+        ];
+        let s = compute_schedule(&cells);
+        assert_eq!(s.waves, vec![vec!["p".to_string(), "q".to_string()]]);
+        assert!(s.obligation_conflicts.is_empty());
     }
 
     // ── test runner ───────────────────────────────────────────────────────
@@ -3765,4 +3798,138 @@ use std::time::Instant;
             "an already-armed door must stay armed when change_class moves away from behavior: {updated}"
         );
         assert_eq!(updated["change_class"], json!("bugfix"));
+    }
+
+    // ══ sra-2 — `cells schedule` renders the obligation conflicts it
+    // computes ═══════════════════════════════════════════════════════════
+    //
+    // `run_schedule` (handlers_meta.rs) resolves its store root off
+    // `std::env::current_dir()` — process-global — so it is exercised
+    // out-of-process via a `#[ignore]`d child, the same isolation
+    // `cells_update_behavior_child` (above) uses for its own process-global
+    // seam, rather than mutating this binary's shared cwd under every other
+    // test in the suite.
+
+    const CELLS_SCHEDULE_JSON_CHILD: &str = "verbs::cells::tests::cells_schedule_behavior_child_json";
+    const CELLS_SCHEDULE_TEXT_CHILD: &str = "verbs::cells::tests::cells_schedule_behavior_child_text";
+
+    /// Runs ONLY as a child of the tests below — drives the REAL `cells
+    /// schedule --json` CLI door over whatever cells are on disk at its cwd.
+    #[test]
+    #[ignore = "spawned by the cells schedule behavior-door tests"]
+    fn cells_schedule_behavior_child_json() {
+        let (flags, use_json) = rsv::parse_flags(&["--json"]).expect("well-formed fixture argv");
+        run_schedule(flags, use_json, Instant::now());
+    }
+
+    /// Runs ONLY as a child of the tests below — drives the REAL `cells
+    /// schedule` (text render) CLI door over whatever cells are on disk at
+    /// its cwd.
+    #[test]
+    #[ignore = "spawned by the cells schedule behavior-door tests"]
+    fn cells_schedule_behavior_child_text() {
+        let (flags, use_json) = rsv::parse_flags(&[]).expect("well-formed fixture argv");
+        run_schedule(flags, use_json, Instant::now());
+    }
+
+    /// Spawns the named schedule child with `root` as its cwd, runs it under
+    /// `--nocapture` (otherwise libtest swallows a PASSING test's own
+    /// stdout), and strips the surrounding libtest banner
+    /// (`running 1 test` / `test <name> ... ok` / `test result: ...`),
+    /// returning exactly the command's own stdout (JSON payload or text
+    /// render) — nothing else.
+    fn cells_schedule_run(root: &Path, child: &str) -> String {
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = std::process::Command::new(&exe);
+        cmd.args(["--exact", child, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.current_dir(root);
+        let out = cmd.output().expect("spawn the test binary");
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8(out.stdout).unwrap();
+        let prefix = format!("test {child} ... ");
+        let start = stdout.find(&prefix).expect("libtest status line") + prefix.len();
+        let suffix = "ok\n\ntest result:";
+        let end = stdout[start..].find(suffix).expect("libtest result banner") + start;
+        stdout[start..end].to_string()
+    }
+
+    /// must-have: `skills/a.md` and `skills/b.md` never literally overlap,
+    /// but both fall under the "skills" regen-obligation root, so wave
+    /// placement defers "rb" behind "ra" (proven by
+    /// `compute_schedule_serializes_cells_sharing_a_regen_obligation_root`
+    /// above). The `cells schedule` COMMAND must render that WHY, driven
+    /// through the real handler — not just the computation it calls.
+    #[test]
+    fn schedule_command_json_renders_the_obligation_conflict_it_computes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        bp28_repo(root);
+        let mut ra = cell("ra", "open", "sched-conflict", json!([]));
+        ra["files"] = json!(["skills/a.md"]);
+        write_cell_fixture(root, "ra", &ra);
+        let mut rb = cell("rb", "open", "sched-conflict", json!([]));
+        rb["files"] = json!(["skills/b.md"]);
+        write_cell_fixture(root, "rb", &rb);
+
+        let stdout = cells_schedule_run(root, CELLS_SCHEDULE_JSON_CHILD);
+        let payload: Value = serde_json::from_str(&stdout).unwrap();
+        assert_eq!(payload["waves"], json!([["ra"], ["rb"]]));
+        assert_eq!(
+            payload["obligation_conflicts"],
+            json!([{"deferred": "rb", "blocking": "ra", "root": "skills"}])
+        );
+    }
+
+    #[test]
+    fn schedule_command_text_renders_one_line_per_obligation_conflict() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        bp28_repo(root);
+        let mut ra = cell("ra", "open", "sched-conflict", json!([]));
+        ra["files"] = json!(["skills/a.md"]);
+        write_cell_fixture(root, "ra", &ra);
+        let mut rb = cell("rb", "open", "sched-conflict", json!([]));
+        rb["files"] = json!(["skills/b.md"]);
+        write_cell_fixture(root, "rb", &rb);
+
+        let stdout = cells_schedule_run(root, CELLS_SCHEDULE_TEXT_CHILD);
+        assert_eq!(stdout, "Wave 1: ra\nWave 2: rb\nrb waits for ra — shared regen root skills\n");
+    }
+
+    /// must-have: cells that never share a regen-obligation root render
+    /// BYTE-IDENTICAL to the pre-sra-2 command — no empty `obligation_conflicts`
+    /// noise in the text render, and an empty array (never omitted, never
+    /// null) in the JSON payload.
+    #[test]
+    fn schedule_command_with_no_conflicts_renders_byte_identical_to_before() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        bp28_repo(root);
+        write_cell_fixture(root, "p", &{
+            let mut p = cell("p", "open", "sched-plain", json!([]));
+            p["files"] = json!(["docs/readme.md"]);
+            p
+        });
+        write_cell_fixture(root, "q", &{
+            let mut q = cell("q", "open", "sched-plain", json!([]));
+            q["files"] = json!(["notes.txt"]);
+            q
+        });
+
+        let text_stdout = cells_schedule_run(root, CELLS_SCHEDULE_TEXT_CHILD);
+        assert_eq!(text_stdout, "Wave 1: p, q\n");
+
+        let json_stdout = cells_schedule_run(root, CELLS_SCHEDULE_JSON_CHILD);
+        let payload: Value = serde_json::from_str(&json_stdout).unwrap();
+        assert_eq!(payload["waves"], json!([["p", "q"]]));
+        assert_eq!(payload["obligation_conflicts"], json!([]));
+        assert_eq!(
+            payload["diagnostics"],
+            json!({"cycles": [], "unsatisfiable_deps": [], "empty_files": []})
+        );
     }
