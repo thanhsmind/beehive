@@ -54,5 +54,5 @@ or the copy is not a guard at all — narrow the denial to values genuinely
 outside the enum, so legitimate-but-unhandled members keep their existing
 behaviour.
 
-See also [[pattern-20260722-a-guard-that-tests-one-state-is-a-law-with-a-hole]]
-and [[pattern-20260723-a-coverage-gate-derives-its-ground-truth]].
+See also [[pattern-20260713-a-guard-that-tests-one-state-is-a]]
+and [[pattern-20260722-a-coverage-gate-derives-ground-truth-it-never-compares-two-hand-lists]].

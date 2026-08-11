@@ -45,6 +45,7 @@ A test suite whose entire dependency closure is byte-identical to the last green
 - A run reports each skipped suite visibly ("CACHED green … closure unchanged") and summarizes run-vs-cached counts — a cached skip is never silent.
 - Editing any closure file re-runs exactly the suites whose closures contain it; unrelated entries stay cached.
 - The first green run after a red executes for real (red was never cached, so there is nothing to skip against).
+- Diff-vs-test advisory at green cap (finish-advisory fa-1, 2026-08-11): when HEAD's commit body carries the finishing cell's `cell: <id>` trailer and the commit changes more than `finish.advisory_untested_lines` lines (default 150; 0 disables) with no test-shaped path touched, `cells finish` prints one stderr advisory line and appends it to `trace.warnings`. Green path only; never alters exit code or cap outcome; any git failure is a silent skip.
 
 ## Business Rules
 

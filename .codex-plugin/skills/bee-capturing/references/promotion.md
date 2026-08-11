@@ -117,6 +117,14 @@ the root cause, the check that would have caught it earlier).
    cannot ship in-feature.
 3. Not mechanizable (judgment, taste, product intent) → promote as
    prose per the format below.
+4. Recurrence escalation: an ALREADY-promoted pattern whose violation
+   happens again despite the doc never takes another doc line as the
+   answer. Re-ask question 2 against the fresh evidence — can this
+   recurrence become a hook denial, guard, doctor check, or test? Yes
+   → that durable owner is the promotion, filed as a tiny/small cell
+   when it cannot ship in-feature. No → prose survives only with a
+   one-line recorded reason (in the learnings file or a decision log
+   line) naming why no mechanical owner exists yet.
 
 ## Critical Promotion Format
 

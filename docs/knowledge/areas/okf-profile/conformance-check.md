@@ -70,6 +70,8 @@ Profile-warning codes — reported always, failing only under `--strict`:
 | `dangling_required_context` | A `bee.required_context` entry does not resolve to a real file inside the bundle. |
 | `dangling_supersedes` | A `bee.supersedes` id matches no concept's `bee.id` in the bundle. |
 | dangling source (knowledge-usable U2, cell ku-2, 2026-08-10) | A `bee.sources` entry that names an in-repo file path resolving to no file on disk is reported, so a concept citing code a later port retired degrades visibly instead of silently. |
+| `dangling_md_link` (knowledge-link-check klc-1, 2026-08-11) | A relative body link ending in `.md` (external `http(s)`/`mailto`, absolute paths, and anchor-only links are skipped) resolved against the containing file's directory does not exist or escapes the bundle. |
+| `dangling_wiki_link` (knowledge-link-check klc-1, 2026-08-11) | A `[[target]]` body reference where neither `target` nor `target` minus an optional `pattern-` prefix matches the stem of any `.md` in the bundle. Code fences and inline backtick spans are stripped first — quoted syntax never warns. A host-repo integration test keeps the shipped bundle clean of both link codes. |
 | `invalid_evidence_state` (evidence-ladder el-1, 2026-08-11) | A `bee.evidence` value outside present/wired/exercised, named by file and value. Absent stays valid and reads as present; `bee.evidence_ref` names the enforcing hook/guard/doctor check/test. `bee knowledge report` surfaces the ladder — per-state counts over patterns plus the present-only list — so a doc-only pattern is visible risk, never a silent default. |
 
 **B3 — Emitter-first parsing, zero dependencies (D12).** `knowledge.mjs` ships its own frontmatter

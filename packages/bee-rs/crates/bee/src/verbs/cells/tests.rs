@@ -2790,6 +2790,169 @@ use std::time::Instant;
         assert_eq!(capped["status"], json!("capped"));
     }
 
+    // ══ fa-1 — diff-vs-test advisory (finish's green-cap-only nudge) ══════
+    //
+    // `trace.warnings`' new (and only) producer since the E1 impact-registry
+    // check retired (finish_support.rs, near the RETIRED comment): a commit
+    // that changes more than `finish.advisory_untested_lines` lines and
+    // touches no test-shaped path earns exactly one stderr line and one
+    // `trace.warnings` entry — never a refusal, never a change to the cap's
+    // own exit code or JSON success shape.
+
+    #[test]
+    fn path_looks_like_test_heuristic_table() {
+        let cases: &[(&str, bool)] = &[
+            ("packages/bee-rs/crates/bee/src/verbs/cells/tests.rs", true),
+            ("crates/bee/src/hooks/write_guard/tests.rs", true),
+            ("test/fixtures/a.rs", true),
+            ("tests/fixtures/a.rs", true),
+            ("src/foo_test.rs", true),
+            ("src/foo.test.ts", true),
+            ("src/tests.rs", true),
+            // never a false positive on a mere substring.
+            ("src/contest/a.rs", false),
+            ("src/latest.rs", false),
+            ("src/testament.rs", false),
+            ("src/main.rs", false),
+            ("docs/README.md", false),
+        ];
+        for (path, expected) in cases {
+            assert_eq!(path_looks_like_test(path), *expected, "path: {path}");
+        }
+    }
+
+    #[test]
+    fn advisory_untested_lines_threshold_reads_the_nested_config_key() {
+        let default = advisory_untested_lines_threshold(&Map::new());
+        assert_eq!(default, DEFAULT_ADVISORY_UNTESTED_LINES);
+
+        let configured = advisory_untested_lines_threshold(
+            json!({"finish": {"advisory_untested_lines": 42}}).as_object().unwrap(),
+        );
+        assert_eq!(configured, 42);
+
+        // 0 is the documented disable, not a "run always" typo — the
+        // config reader just passes it through; diff_vs_test_advisory is
+        // the one that treats 0 specially.
+        let zero = advisory_untested_lines_threshold(
+            json!({"finish": {"advisory_untested_lines": 0}}).as_object().unwrap(),
+        );
+        assert_eq!(zero, 0);
+
+        // A malformed value (string instead of number) falls back to the
+        // default silently, matching resolve_write_policy_mode's own
+        // posture for a single-scalar nested key.
+        let malformed = advisory_untested_lines_threshold(
+            json!({"finish": {"advisory_untested_lines": "lots"}}).as_object().unwrap(),
+        );
+        assert_eq!(malformed, DEFAULT_ADVISORY_UNTESTED_LINES);
+    }
+
+    /// Stages ONLY `file` (never `-A`, which would also sweep in a cell
+    /// fixture some of these tests write into `root/.bee/cells/` — this
+    /// repo doubles as the cell store) — the numstat total each test
+    /// asserts on must describe exactly the one file it wrote.
+    fn commit_lines(root: &Path, file: &str, lines: usize, message: &str) {
+        let content = (0..lines).map(|i| format!("line {i}\n")).collect::<String>();
+        std::fs::write(root.join(file), content).unwrap();
+        git_ok(root, &["add", "--", file]);
+        git_ok(root, &["commit", "-qm", message]);
+    }
+
+    #[test]
+    fn diff_vs_test_advisory_missing_git_is_a_silent_skip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path(); // deliberately not a git repo at all
+        assert_eq!(diff_vs_test_advisory(root, "fa-x", 150), None);
+    }
+
+    #[test]
+    fn diff_vs_test_advisory_disabled_by_a_zero_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        commit_lines(root, "big.rs", 500, "Do a lot\n\ncell: fa-z");
+        // Would fire at any positive threshold — 0 disables it outright.
+        assert_eq!(diff_vs_test_advisory(root, "fa-z", 0), None);
+    }
+
+    #[test]
+    fn diff_vs_test_advisory_threshold_boundary() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+
+        // Exactly at the threshold — "exceeds" means strictly over, so
+        // this must NOT fire.
+        commit_lines(root, "at.rs", 10, "Small change\n\ncell: fa-b");
+        assert_eq!(diff_vs_test_advisory(root, "fa-b", 10), None);
+    }
+
+    #[test]
+    fn diff_vs_test_advisory_fires_over_threshold_with_no_test_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        commit_lines(root, "over.rs", 11, "Bigger change\n\ncell: fa-c");
+        let line = diff_vs_test_advisory(root, "fa-c", 10).expect("must fire over threshold");
+        assert!(line.contains("11 line"), "{line}");
+        assert!(line.contains("10-line"), "{line}");
+    }
+
+    #[test]
+    fn diff_vs_test_advisory_skips_when_a_changed_path_looks_like_a_test() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        std::fs::write(root.join("tests.rs"), "x").unwrap();
+        git_ok(root, &["add", "--", "tests.rs"]);
+        commit_lines(root, "over.rs", 50, "Big change with a test file too\n\ncell: fa-d");
+        // over.rs alone exceeds the threshold, but tests.rs is present in
+        // the SAME commit — the advisory must stay silent.
+        assert_eq!(diff_vs_test_advisory(root, "fa-d", 10), None);
+    }
+
+    #[test]
+    fn diff_vs_test_advisory_skips_when_head_does_not_carry_this_cells_trailer() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        commit_lines(root, "over.rs", 50, "No trailer here at all");
+        assert_eq!(diff_vs_test_advisory(root, "fa-e", 10), None);
+    }
+
+    #[test]
+    fn finish_caps_and_appends_one_advisory_line_to_trace_warnings_over_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        write_bee_config(root, &json!({"finish": {"advisory_untested_lines": 5}}));
+        write_cell_fixture(root, "fa-f", &cell_body_d6("fa-f"));
+        commit_lines(root, "big.rs", 20, "Wire the thing\n\ncell: fa-f");
+
+        let capped =
+            cap_cell_from_flags(root, root, &cap_flags_d6("fa-f", vec!["big.rs"], None), true).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        let warnings = capped["trace"]["warnings"].as_array().unwrap();
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].as_str().unwrap().contains("20 line"), "{warnings:?}");
+    }
+
+    #[test]
+    fn cap_without_finish_never_gains_the_advisory_even_over_threshold() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        commit_history_repo(root);
+        write_bee_config(root, &json!({"finish": {"advisory_untested_lines": 5}}));
+        write_cell_fixture(root, "fa-g", &cell_body_d6("fa-g"));
+        // No trailer commit needed: `cells cap` never runs D6's own
+        // trailer check OR this advisory (finish == false gates both).
+        let capped =
+            cap_cell_from_flags(root, root, &cap_flags_d6("fa-g", vec!["a.rs"], None), false).unwrap();
+        assert_eq!(capped["status"], json!("capped"));
+        assert_eq!(capped["trace"]["warnings"], json!([]));
+    }
+
     // ══ adoption + fencing (claims.mjs, msn-12 D4/D9 invariant 10) ═════════
     //
     // Ported from test_claims.mjs. Before this cell nothing in the Rust tree

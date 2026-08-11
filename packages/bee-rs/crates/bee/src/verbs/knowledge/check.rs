@@ -151,6 +151,131 @@ pub(crate) fn dangling_source_candidate(entry: &str) -> Option<String> {
 
 pub(crate) const EVIDENCE_STATES: [&str; 3] = ["present", "wired", "exercised"];
 
+// ─── body link scanning (dangling_md_link / dangling_wiki_link) ───────────
+//
+// A concept body is free prose, not a spec grammar — these two extractors
+// are lightweight bracket scans (matching dangling_source_candidate's
+// token-first-then-filter style above), never a full CommonMark engine.
+
+/// Every `[text](target)` link destination in a body, in appearance order.
+/// A `<target>` angle-bracket wrapper is unwrapped; a space-separated
+/// `"title"` suffix is dropped — only the destination itself is a candidate.
+pub(crate) fn markdown_link_targets(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+    while let Some(rel_start) = body[cursor..].find('[') {
+        let bracket = cursor + rel_start;
+        let after_bracket = bracket + 1;
+        let Some(rel_close) = body[after_bracket..].find(']') else { break };
+        let close = after_bracket + rel_close;
+        let paren_start = close + 1;
+        if body.as_bytes().get(paren_start) == Some(&b'(') {
+            let after_paren = paren_start + 1;
+            if let Some(rel_end) = body[after_paren..].find(')') {
+                let end = after_paren + rel_end;
+                let inner = body[after_paren..end].trim();
+                let inner = inner.strip_prefix('<').and_then(|s| s.strip_suffix('>')).unwrap_or(inner);
+                let target = inner.split_whitespace().next().unwrap_or("");
+                if !target.is_empty() {
+                    out.push(target.to_string());
+                }
+                cursor = end + 1;
+                continue;
+            }
+        }
+        cursor = after_bracket;
+    }
+    out
+}
+
+/// A link target is a dangling_md_link CANDIDATE only when it is relative
+/// and names a `.md` file: http(s)/mailto schemes, absolute (`/…`) paths and
+/// anchor-only (`#…`) targets are never a repo path and are never flagged. A
+/// trailing `#fragment` is dropped before the `.md` check, matching
+/// dangling_source's fragment handling.
+pub(crate) fn md_link_candidate(target: &str) -> Option<String> {
+    let target = target.trim();
+    if target.is_empty()
+        || target.starts_with("http://")
+        || target.starts_with("https://")
+        || target.starts_with("mailto:")
+        || target.starts_with('/')
+        || target.starts_with('#')
+    {
+        return None;
+    }
+    let path = target.split('#').next().unwrap_or("");
+    if path.is_empty() || !path.ends_with(".md") {
+        return None;
+    }
+    Some(path.to_string())
+}
+
+/// Every `[[target]]` wiki link target in a body, in appearance order. A
+/// `[[target|display]]` or `[[target#anchor]]` form only offers the leading
+/// token as the target candidate.
+pub(crate) fn wiki_link_targets(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+    while let Some(rel_start) = body[cursor..].find("[[") {
+        let start = cursor + rel_start + 2;
+        let Some(rel_end) = body[start..].find("]]") else { break };
+        let end = start + rel_end;
+        let target = body[start..end].trim().split(['|', '#']).next().unwrap_or("").trim();
+        if !target.is_empty() {
+            out.push(target.to_string());
+        }
+        cursor = end + 2;
+    }
+    out
+}
+
+/// Code regions are quotation, not linkage: a fenced block (``` / ~~~) or an
+/// inline backtick span quoting `[[syntax]]` or `](file.md)` must never feed
+/// the link extractors. Fenced lines are dropped whole; inline spans are
+/// blanked to spaces so byte offsets elsewhere stay honest.
+pub(crate) fn strip_code_regions(body: &str) -> String {
+    let mut out = String::with_capacity(body.len());
+    let mut in_fence = false;
+    for line in body.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            in_fence = !in_fence;
+            out.push('\n');
+            continue;
+        }
+        if in_fence {
+            out.push('\n');
+            continue;
+        }
+        let mut in_span = false;
+        for c in line.chars() {
+            if c == '`' {
+                in_span = !in_span;
+                out.push(' ');
+            } else if in_span {
+                out.push(' ');
+            } else {
+                out.push(c);
+            }
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// A wiki link resolves when `target`, or `target` minus an optional
+/// `pattern-` prefix, matches the file stem of any `.md` in the bundle.
+pub(crate) fn wiki_link_resolves(target: &str, stems: &[&str]) -> bool {
+    if stems.contains(&target) {
+        return true;
+    }
+    match target.strip_prefix("pattern-") {
+        Some(stripped) => stems.contains(&stripped),
+        None => false,
+    }
+}
+
 pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
     let mut errors: Vec<Value> = Vec::new();
     let mut warnings: Vec<Value> = Vec::new();
@@ -160,6 +285,16 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
     // (unlike `required_context`, which is bundle-relative, D19).
     let repo_root = dir.parent().and_then(Path::parent);
     let files = list_bundle_markdown(dir)?;
+    // Wiki-link resolution target set: every `.md` file's bare stem, reserved
+    // files (index.md/log.md) included — "any .md in the bundle" (not just
+    // concepts).
+    let md_stems: Vec<&str> = files
+        .iter()
+        .map(|f| {
+            let base = f.rsplit('/').next().unwrap_or(f);
+            base.strip_suffix(".md").unwrap_or(base)
+        })
+        .collect();
     let mut parsed_concepts: Vec<Concept> = Vec::new();
     let mut concept_count = 0usize;
 
@@ -187,7 +322,7 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
 
         concept_count += 1;
         let parsed = parse_frontmatter(&text);
-        let (data, block) = match parsed {
+        let (data, block, body) = match parsed {
             Fm::Absent => {
                 errors.push(finding(
                     rel,
@@ -205,7 +340,7 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
                 ));
                 continue;
             }
-            Fm::Parsed { data, block, .. } => (data, block),
+            Fm::Parsed { data, block, body } => (data, block, body),
         };
 
         match data.get("type") {
@@ -283,6 +418,45 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
                     format!(
                         "bee.evidence \"{}\" is not one of present|wired|exercised (absent reads as present)",
                         jsjson::js_to_string(value)
+                    ),
+                ));
+            }
+        }
+
+        // ── D4-style body link checks (dangling_md_link / dangling_wiki_link) ──
+        // Quoted syntax is not linkage: code fences and inline spans are
+        // stripped before extraction (strip_code_regions).
+        let scannable = strip_code_regions(&body);
+        for target in markdown_link_targets(&scannable) {
+            let Some(candidate) = md_link_candidate(&target) else { continue };
+            // Resolved against the CONTAINING FILE's directory, not the
+            // bundle root — a body link is authored relative to where it
+            // lives, exactly like a filesystem link would be.
+            let file_dir = dir_of(rel);
+            let combined =
+                if file_dir.is_empty() { candidate.clone() } else { format!("{file_dir}/{candidate}") };
+            let resolved = match resolve_inside_bundle(dir, &combined) {
+                Ok(r) => r,
+                Err(()) => return None,
+            };
+            let exists = resolved.map(|p| p.exists()).unwrap_or(false);
+            if !exists {
+                warnings.push(finding(
+                    rel,
+                    "dangling_md_link",
+                    format!(
+                        "body link target \"{target}\" does not resolve to an existing file inside the bundle"
+                    ),
+                ));
+            }
+        }
+        for target in wiki_link_targets(&scannable) {
+            if !wiki_link_resolves(&target, &md_stems) {
+                warnings.push(finding(
+                    rel,
+                    "dangling_wiki_link",
+                    format!(
+                        "wiki link target \"[[{target}]]\" matches no concept's file stem in the bundle"
                     ),
                 ));
             }
