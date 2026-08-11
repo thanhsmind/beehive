@@ -22,6 +22,10 @@ is about a known trade-off rather than taste.
 | The same fact lives in two places | Single Source of Truth |
 | Code is littered with "this can't happen" checks | Make Illegal States Unrepresentable |
 | Tempted to extract on the second occurrence | The Rule of Three |
+| Judging whether a suspect module earns its complexity | The Deletion Test |
+| Wrapping a dependency behind an interface "just in case" | One Adapter, Two Adapters |
+| Deciding how to test a module against its dependencies | Dependency Taxonomy Drives Test Strategy |
+| Old unit tests break after deepening a module they used to cover | Replace, Don't Layer |
 | A structure smells wrong but lacks a name | Anti-patterns to Name on Sight |
 
 ## Principles
@@ -185,6 +189,74 @@ than sharing duplicated code. Extract on the third occurrence, when
 the invariant part has shown itself. And when an existing
 abstraction already fits badly, inline it back into its callers,
 delete what each does not use, and re-extract from what remains.
+
+### The Deletion Test
+
+When judging whether a suspect module earns its complexity → imagine
+deleting it and inlining its behavior at every call site. If the
+complexity it held reappears at each of the N call sites, the module
+was doing real work and earned its keep — deleting it would only move
+the complexity, not remove it. If the complexity simply vanishes with
+no trace at any call site, the module was a pass-through: an
+interface wrapped around nothing, paying the cost of indirection for
+no behavior. A three-line `OrderValidator` wrapping one if-check
+disappears cleanly on deletion — inline it and remove the module. A
+`RetryingClient` wrapping a flaky network call does not: delete it,
+and each of its five callers now needs to write its own backoff loop
+— it was earning its keep.
+
+### One Adapter, Two Adapters
+
+When deciding whether a dependency needs a port and an adapter behind
+it → count how many concrete adapters would actually exist. One
+adapter — a single production implementation with no real test
+double swapped in at that seam — is a hypothetical seam: the
+interface exists for a variation that has not arrived, which is
+Speculative Generality under another name. Two adapters — a
+production implementation and a real stand-in used in tests, or two
+live implementations that genuinely differ — makes the seam real,
+because something actually varies across it. Wait to introduce the
+port until the second adapter is actually needed, never because a
+second one is merely imaginable. Wrapping a single Postgres call
+behind a `Store` trait "in case we swap databases later" is one
+adapter — delete the trait, call Postgres directly. Wrapping the same
+call behind `Store` to run real Postgres in production and an
+in-memory store in tests is two adapters — the trait earns its place.
+
+### Dependency Taxonomy Drives Test Strategy
+
+When a module depends on something outside itself → classify the
+dependency before deciding how to test it, because the category
+decides the strategy, not habit:
+
+- **In-process** — pure computation, in-memory state, no I/O. No
+  adapter needed; test the module directly.
+- **Local-substitutable** — a real, local stand-in exists (an
+  in-memory filesystem, an embedded database). Test against the
+  stand-in; the seam stays internal, with no port at the module's
+  external interface.
+- **Remote-but-owned** — your own service across a network boundary.
+  Define a port at the seam: an in-memory adapter drives the tests,
+  the real transport drives production, and the logic stays in one
+  deep module even though it is deployed across a wire.
+- **True external** — a third party you do not control (a payment
+  processor, an SMS gateway). Inject the dependency as a port and
+  mock only that port at the seam; never mock a collaborator you own.
+
+### Replace, Don't Layer
+
+When a module is deepened behind a wider interface → delete the old
+shallow unit tests that targeted its former pieces once interface-level
+tests cover the same behavior through the new interface. Keeping both
+is layering, not extra safety: two suites now assert overlapping
+ground, and the old ones sit behind the new interface where a
+legitimate internal refactor — reordering a step, renaming a helper —
+turns them red with no behavior change. That red is the diagnosis: the
+old tests were testing past the interface, and the fix is deletion,
+not a rewrite. A module split into `helper()` and `validate()` with
+their own unit tests, then merged behind one deep function: once tests
+against the merged function's interface cover the same ground, delete
+the two old unit tests the same day the replacement lands.
 
 ## Anti-patterns to Name on Sight
 
