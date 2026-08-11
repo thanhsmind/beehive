@@ -336,6 +336,7 @@
     "finish",
     "advisory",
     "runtime",
-    "opencode"
+    "opencode",
+    "capture-deferral"
   ]
 }
