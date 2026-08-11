@@ -327,8 +327,15 @@ pub(crate) fn bundle_learned_lines(
                     Some(p) => path[p + 1..].to_string(),
                     None => path.clone(),
                 });
+            // The manifest path is a raw filesystem-derived string: a
+            // crafted bundle filename could carry a newline and forge extra
+            // bullet lines inside the worker prompt's "Learned context"
+            // block, so it gets the same whitespace-collapsing treatment as
+            // the title (a generous cap — paths are not expected to be
+            // long, but never truncate a real one in practice).
             lines.push(format!(
-                "- {path} — {}",
+                "- {} — {}",
+                one_line(Some(&Value::String(path.clone())), 200),
                 one_line(Some(&Value::String(title)), 140)
             ));
         }
