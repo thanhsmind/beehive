@@ -384,9 +384,35 @@ pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
 /// route" rather than throwing. When the lane record carries no `route`
 /// of its own, fall back to the default state's `route.lane` — the same
 /// top-level field the write-guard/orient precedents read directly.
-/// `None` covers every remaining case: no lane record and no default-state
-/// route (a feature closed without ever going through shape/gate), or a
-/// route whose `lane` is absent or non-string.
+///
+/// hpf-1 (review-p1-fixes, 2026-08-12, P1): the default-state route is
+/// GLOBAL — one session's most recent `state route --set` — so reading it
+/// unconditionally let ANY feature's close inherit whatever OTHER feature
+/// last routed. Live and refusing today: `bee close --feature <small
+/// feature>` was blocked by a `judge-debt` door that belonged to an
+/// unrelated high-risk feature's route. The default-state route is now
+/// taken only when it names THIS feature — same identity check as
+/// `gated_add_refusal` (verbs/cells/handlers_write.rs:119,133-142),
+/// implemented via `route_belongs_to_feature`
+/// (verbs/state_group/workflows.rs:683, rti-1), which already exists to
+/// stop a route from a PRIOR feature being mistaken for this one's own.
+/// When the state route names another feature (or none), the lane
+/// record's own `mode` field is the last fallback — but ONLY when it
+/// happens to name a lane class (`ROUTE_LANE_VALUES`,
+/// verbs/state_group/workflows.rs:289-290: docs/tiny/small/spike/
+/// standard/high-risk). `mode` usually carries the WORKFLOW class instead
+/// (`ROUTE_CLASS_VALUES`, same file:287-288 — "feature" is the live
+/// shape's constant value there), which is not a lane at all; reading it
+/// unconditionally would misread an ordinary "feature"-mode lane as lane
+/// "feature". `None` covers every remaining case: no lane record, no
+/// state route owned by this feature, and no lane `mode` that happens to
+/// spell a lane class.
+///
+/// Mirrors `ROUTE_LANE_VALUES` (verbs/state_group/workflows.rs:289-290)
+/// without importing it: that const is module-private there, and this
+/// cell's file scope does not extend to changing its visibility.
+const FEATURE_ROUTE_LANE_CLASSES: [&str; 6] = ["docs", "tiny", "small", "spike", "standard", "high-risk"];
+
 pub(crate) fn feature_route(root: &Path, feature: &str) -> D<Option<String>> {
     let route_lane = |v: &Value| -> Option<String> {
         match vget(v, "lane") {
@@ -399,8 +425,30 @@ pub(crate) fn feature_route(root: &Path, feature: &str) -> D<Option<String>> {
         return Ok(Some(from_lane));
     }
     let state = read_state(root)?;
-    Ok(state.get("route").and_then(route_lane))
+    if let Some(Value::Object(route)) = state.get("route") {
+        let feature_value = Value::String(feature.to_string());
+        if crate::verbs::state_group::route_belongs_to_feature(route, &feature_value) {
+            if let Some(from_state) = route_lane(&Value::Object(route.clone())) {
+                return Ok(Some(from_state));
+            }
+        }
+    }
+    let mode_is_lane_class = lane
+        .as_ref()
+        .and_then(|l| l.get("mode"))
+        .and_then(Value::as_str)
+        .filter(|m| FEATURE_ROUTE_LANE_CLASSES.contains(m));
+    Ok(mode_is_lane_class.map(str::to_string))
 }
+
+/// hpf-1 (review-p1-fixes, 2026-08-12, P1): the day the judge-debt door
+/// itself shipped (wfl-3, docs/history/workflow-lessons/plan.md). At that
+/// moment the live store already held 122 capped `behavior_change` cells,
+/// only 10 of them judged — a door that counted every one of those 112 as
+/// debt would block every legacy feature's close on cells that predate
+/// the requirement entirely; that is not a migration path, it is a wall.
+/// Only a cell capped AT OR AFTER this stamp owes the door anything.
+pub(crate) const JUDGE_DOOR_INTRODUCED_AT: &str = "2026-08-11T00:00:00.000Z";
 
 /// wl-3: every capped `behavior_change` cell that carries NO judge record
 /// (`trace.semantic_judge` empty or absent) counts as judge debt. A cell
@@ -410,12 +458,21 @@ pub(crate) fn feature_route(root: &Path, feature: &str) -> D<Option<String>> {
 /// `semantic_judge`, once non-empty, ended on a verdict cap itself already
 /// accepted. Same archive-inclusive read `scribing_debt` uses above, for
 /// the same reason: an auto-archived cell must still count.
+///
+/// hpf-1: grandfathered by `JUDGE_DOOR_INTRODUCED_AT` — a cell whose
+/// `trace.capped_at` is missing, unparseable, or earlier than that stamp
+/// predates the door and is never counted as debt, judged or not.
 pub(crate) fn judge_debt(root: &Path, feature: &str) -> D<DebtSummary> {
+    let cutoff = date_parse(Some(&Value::String(JUDGE_DOOR_INTRODUCED_AT.to_string())));
     let mut ids = Vec::new();
     for cell in list_cells_including_archive(root, feature, "capped")? {
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
         if !matches!(vget(&trace, "behavior_change"), Some(Value::Bool(true))) {
             continue;
+        }
+        let capped_at = date_parse(vget(&trace, "capped_at"));
+        if !(capped_at.is_finite() && capped_at >= cutoff) {
+            continue; // pre-door (or no capped_at at all): grandfathered, not debt
         }
         let judged = matches!(vget(&trace, "semantic_judge"), Some(Value::Array(a)) if !a.is_empty());
         if !judged {
@@ -423,6 +480,23 @@ pub(crate) fn judge_debt(root: &Path, feature: &str) -> D<DebtSummary> {
         }
     }
     Ok(DebtSummary { count: ids.len(), ids })
+}
+
+/// hpf-1: mirrors `has_capture_deferral_decision` below — a logged decision
+/// tagged `judge-deferral` naming the feature lifts the judge-debt
+/// refusal, the same escape D1 gave the scribing-debt door.
+pub(crate) fn has_judge_deferral_decision(root: &Path, feature: &str) -> D<bool> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    let filtered = crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some("judge-deferral".to_string()),
+            feature: Some(feature.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| Delegate)?;
+    Ok(!filtered.is_empty())
 }
 
 /// provenance: capture.mjs pendingCaptureStubs + captureQueue
@@ -622,12 +696,50 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
     // "judge-debt")` returns `None` below `standard`.
     if matches!(feature_route(root, feature)?.as_deref(), Some("standard") | Some("high-risk")) {
         let judge = judge_debt(root, feature)?;
-        let judge_blocking = judge.count > 0;
+        // hpf-1: mirrors the scribing-debt escape above — a logged
+        // `judge-deferral` decision naming this feature clears the door
+        // without touching the count.
+        let judge_deferred = if judge.count > 0 { has_judge_deferral_decision(root, feature)? } else { false };
+        let judge_blocking = judge.count > 0 && !judge_deferred;
+        // hpf-1: `cells judge-record` refuses an archived cell outright
+        // (verbs/cells/util.rs assert_not_archived) — when an offending id
+        // only resolves under the archive, the remedy must name the
+        // unarchive step FIRST or it sends the reader straight into that
+        // refusal.
+        let archived_ids: Vec<&str> = judge
+            .ids
+            .iter()
+            .filter_map(|id| id.as_str())
+            .filter(|id| {
+                !crate::verbs::cells::cell_file(root, id).exists()
+                    && crate::verbs::cells::resolve_cell_file(root, id).is_some()
+            })
+            .collect();
+        let judge_command = if !judge_blocking {
+            None
+        } else if archived_ids.is_empty() {
+            Some("bee cells judge-record")
+        } else {
+            Some("bee cells unarchive")
+        };
         doors.push(Door {
             door: "judge-debt",
             blocking: judge_blocking,
             detail: if judge.count == 0 {
                 "clear".to_string()
+            } else if judge_deferred {
+                format!(
+                    "deferred — {} behavior_change cell(s) capped with no judge record ({}); a logged judge-deferral decision names \"{feature}\"",
+                    judge.count,
+                    js_join(&judge.ids, ", ")
+                )
+            } else if !archived_ids.is_empty() {
+                format!(
+                    "{} behavior_change cell(s) capped with no judge record ({}); {} archived — run bee cells unarchive --feature {feature} first, then bee cells judge to check, then bee cells judge-record to record a verdict",
+                    judge.count,
+                    js_join(&judge.ids, ", "),
+                    archived_ids.len(),
+                )
             } else {
                 format!(
                     "{} behavior_change cell(s) capped with no judge record ({}); run bee cells judge to check, then bee cells judge-record to record a verdict",
@@ -635,7 +747,7 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
                     js_join(&judge.ids, ", ")
                 )
             },
-            command: if judge_blocking { Some("bee cells judge-record") } else { None },
+            command: judge_command,
         });
     }
     Ok(doors)
@@ -1042,13 +1154,27 @@ pub(crate) fn close_handler(
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
         result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
         result.insert("tests".into(), tests_result_value(&run));
+        // hpf-1: `cells judge-record` refuses an archived cell outright, so
+        // an offending id that only resolves under the archive owes the
+        // unarchive step FIRST, named ahead of the judge commands.
+        let archived_ids = debt.ids.iter().any(|id| {
+            id.as_str().is_some_and(|id| {
+                !crate::verbs::cells::cell_file(root, id).exists()
+                    && crate::verbs::cells::resolve_cell_file(root, id).is_some()
+            })
+        });
+        let remedy = if archived_ids {
+            format!("remedy: some of the cells above are archived — run bee cells unarchive --feature {feature} first, then bee cells judge to check, then bee cells judge-record to record a verdict for each cell.")
+        } else {
+            "remedy: run bee cells judge to check, then bee cells judge-record to record a verdict for each cell above.".to_string()
+        };
         let lines = vec![
             format!(
                 "{CLOSE_JUDGE_DEBT_PREFIX} \"{feature}\" — close stops at the judge-debt door: {} behavior_change cell(s) capped with no judge record ({}).",
                 debt.count,
                 js_join(&debt.ids, ", ")
             ),
-            "remedy: run bee cells judge to check, then bee cells judge-record to record a verdict for each cell above.".to_string(),
+            remedy,
             format!("next: settle the judge debt above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
