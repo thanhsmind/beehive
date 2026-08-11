@@ -60,6 +60,10 @@ What you are hunting:
   into a table-driven test or deleting a provably dead case, never a
   raw line-count cut — and every touched suite must show green after
   the prune, in the same batch
+- structural debt — shallow modules, concept smear, leaking seams —
+  hunted only in hot spots and judged with the deletion test
+  (`references/grooming-reference.md` ("Architecture lens"),
+  `.bee/expertise/architecture.md`)
 
 ## Propose
 
@@ -69,6 +73,12 @@ pain × impact and present the top few — never the full dump. Approval
 is per-candidate and mandatory: no recorded approval, no kill, however
 obvious the candidate looks, and approving one kill never covers its
 "related" neighbors.
+
+When the round carries three or more candidates, or any structural
+one, render the proposal report
+(`references/grooming-reference.md` ("Proposal report")) and hand the
+user its viewer URL — the report is for looking, never for deciding:
+every approval still happens per-candidate in the conversation.
 
 ## Execute
 
