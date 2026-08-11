@@ -1,0 +1,53 @@
+{
+  "id": "sra-2",
+  "feature": "schedule-regen-awareness",
+  "title": "cells schedule renders the obligation conflicts it computes",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs"
+  ],
+  "action": "Completes sra-1: Schedule.obligation_conflicts (deferred_cell, blocking_cell, shared_root) is computed and tested but the cells schedule command never renders it. Wire it into the command's JSON payload (an obligation_conflicts array of {deferred, blocking, root}) and the text render (one line per conflict: '<deferred> waits for <blocking> - shared regen root <root>'), in the real handler (handlers_meta.rs is the hypothesis - follow the real cells schedule handler). Empty conflicts = byte-identical output to today. TDD: payload and text pinned for one conflict; empty case pinned byte-identical.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "cells schedule output names every obligation conflict with both cells and the shared root",
+      "no-conflict output byte-identical to today"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+        "substantive": "render wiring plus tests (or the real handler, named in the trace)"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-sra-2",
+    "outcome": "cells schedule renders obligation conflicts: json obligation_conflicts array + one text line per conflict naming both cells and the shared root; empty case byte-identical; command-level tests out-of-process",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_meta.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T04:54:47.442Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-11T04:44:57.752Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T04:54:35.355Z"
+  }
+}

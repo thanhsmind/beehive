@@ -1,0 +1,56 @@
+{
+  "id": "sra-1",
+  "feature": "schedule-regen-awareness",
+  "title": "Wave computation serializes cells sharing a regen-obligation root",
+  "lane": "small",
+  "tier": "generation",
+  "change_class": "behavior",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/obligation.rs"
+  ],
+  "action": "PBI p-50f3af4d (verified: compute_schedule at schedule.rs:34-100 groups purely by declared schedule_files_of; obligation.rs derives regen obligations but scheduling never consults it; recurred 3x as write-time conflicts): two cells whose declared files are disjoint but which BOTH trigger a regen obligation over the same obligated root (e.g. both touch skills/ subtrees -> both owe the render-trees/onboard-apply/manifest chain) land in the same wave and then collide on the whole-tree regen. Fix in schedule.rs: when computing overlap for wave placement, derive each cell's obligated regen roots through the SAME derivation obligation.rs/cells-add uses (reuse the function — never a hand-kept root list), and treat two cells sharing at least one obligated root as conflicting exactly like a file overlap, so they auto-serialize into different waves. Cells with disjoint files and no shared obligation keep byte-identical wave placement. The schedule output's conflict reason names the shared obligated root (so the orchestrator sees WHY they serialized). TDD red-first: two cells with disjoint files both touching manifest-hashed roots land in different waves with the root named (red today: same wave); disjoint cells without shared obligations pin byte-identical waves; cycle detection unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "two disjoint-file cells sharing an obligated regen root serialize into different waves with the root named",
+      "cells without shared obligations keep byte-identical wave placement",
+      "obligated roots derive from the existing obligation derivation, never a hand list"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs",
+        "substantive": "obligation-aware conflict computation plus tests"
+      }
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "exec-sra-1",
+    "outcome": "compute_schedule derives obligated roots via derive_regen_guards (the cells-add authority) and serializes shared-root cells like file overlaps; obligation_conflicts recorded on the Schedule struct",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/schedule.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "conflict rendering in the cells schedule command was out of the declared file scope - completed by follow-up cell sra-2"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-11T04:54:29.218Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fc02b769-ae5f-447c-b93c-43c8cbb495bc",
+    "claimed_at": "2026-08-11T04:38:52.143Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T04:54:17.208Z"
+  }
+}
