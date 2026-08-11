@@ -10,7 +10,6 @@ never a generation timestamp or any other wall-clock value.
 
 | ID | Story | CoS | Status | Feature |
 |----|-------|-----|--------|---------|
-| p-10caed3f | timings report verb: aggregate .bee/logs/timings.jsonl into slowest-command ranking |  | proposed | — |
 | p-ead9b2d4 | A bundle-only handover is proven: an area is rebuilt from its concepts alone, with no runtime and no source tree | Pick one mid-size area; hand its docs/knowledge concepts (Pointers stripped) to a fresh session on another stack; the rebuild reproduces the documented behaviors; gaps found feed back as spec fixes. This is P69's last clause, isolated so it ranks on its own. | proposed | knowledge-handover-proof |
 
 ## Done / Declined
@@ -18,6 +17,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-0a0fda78] 22 promote-proposals.md la kenh chet: bee close sinh proposal moi feature nhung 0/22 delivery draft duoc apply — duong promote thuc te la capture-queue — done
 - [p-0a47ea8d] Per-check filter in suite harness (BEE_CHECK_ONLY): cell verify runs only relevant checks, full suite stays at slice tail + CI — done
 - [p-0aa807b9] run_verify --impacted gains --level 1: direct-edge-only selection for the dev loop, transitive closure reserved for wave-close/merge — done
+- [p-10caed3f] timings report verb: aggregate .bee/logs/timings.jsonl into slowest-command ranking — done
 - [p-10e22a70] knowledge check bat con tro chet: path trong frontmatter sources/body Integration Points tro file khong ton tai — lop ri set lam ks-2 BLOCKED (bee-executing khai tu) — done
 - [p-21583c96] Cua kiem luc close: solution co pham pattern da biet khong — check nhe truoc khi cap/close doi chieu diff voi critical patterns cua area cham toi — done
 - [p-3416fb38] multisession-native slice 2: workflow-first state (D1/D6/D7) — done

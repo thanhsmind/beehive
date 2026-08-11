@@ -34,9 +34,12 @@ authority:
 - **R1** — Timing runs only on direct CLI runs, never when the dispatcher is
   imported (tests import it without side effects).
 - **R2** — The log is analysis material, not ceremony: its purpose is finding
-  slow commands to optimize. The aggregation verb (`timings report`,
-  slowest-command ranking) is deferred as PBI p-10caed3f; until it lands, the
-  JSONL is read directly.
+  slow commands to optimize. The aggregation verb SHIPPED as `bee timings
+  report` (timings-report cell tr-1, 2026-08-11, closing PBI p-10caed3f):
+  per-command count, total, median, p95, and max ms, ranked slowest-median
+  first, `--limit` defaulting to 15; a missing or empty log is a clean empty
+  report, malformed lines are skipped and counted, and the verb resolves its
+  store through the wide door so it answers from a granted worktree too.
 - **R3** — Failures are recorded too (`ok:false`), so slowness and breakage
   in the same command are visible in one place.
 - **R4 — Telemetry is exempt from state-integrity hashes (release-1-15-0
