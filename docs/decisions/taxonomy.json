@@ -337,6 +337,7 @@
     "advisory",
     "runtime",
     "opencode",
-    "capture-deferral"
+    "capture-deferral",
+    "promote-proposal"
   ]
 }
