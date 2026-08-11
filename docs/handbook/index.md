@@ -2,7 +2,10 @@
 
 The routing backbone. Start here, pick the **stage** your change concerns, open
 its page, then cross-reference [register.md](register.md) for the state it touches.
-New to the system? Read [overview.md](overview.md) first.
+New to the system? Read [overview.md](overview.md) first, then
+[architecture-map.md](architecture-map.md) — the whole harness in six Mermaid
+diagrams: what contains what, the lifecycle and gates, one feature end to end,
+lane routing, the memory loop, and the guard layer.
 
 ## Stages (the chain, in order)
 

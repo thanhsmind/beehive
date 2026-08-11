@@ -198,20 +198,23 @@ docs/
 
 ## The chain (stages)
 
+```mermaid
+flowchart LR
+    HIVE["bee-hive<br/>route"] --> EXP["exploring<br/>(bee-shaping)"]
+    EXP -->|"Gate 1<br/>approve CONTEXT.md"| PLAN["planning<br/>(bee-planning)"]
+    PLAN -->|"Gate 2<br/>merged shape+execution"| SWARM["swarming<br/>(bee-swarming)"]
+    SWARM --> EXEC["executing<br/>(bee-swarming 'Execute')"]
+    EXEC --> CLOSE["bee close<br/>(green)"]
+    CLOSE -.->|"deferred,<br/>owner's pace"| SCRIBE["scribing"]
+    SCRIBE -.-> COMP["compounding"]
+    SCRIBE & COMP -.- CAPNOTE(["one skill: bee-capturing<br/>'Scribe' + 'Compound'"])
+    CLOSE -.->|"on user<br/>request only"| REV["reviewing"]
+    REV -->|"Gate 3<br/>approve merge"| MERGE["merge"]
 ```
-bee-hive  ─ route ─▶  exploring  ─[Gate 1]─▶  planning  ─[Gate 2]─▶  swarming
-                     (bee-shaping)          (bee-planning)        (bee-swarming)
-                                                                          │
-                                                                     executing
-                                                                          │
-                                                            bee close (green)
-                                                                          │
-        deferred, at the owner's pace:  scribing  ─▶  compounding
-                                        └──── one skill: bee-capturing ───┘
-                                              ("Scribe")     ("Compound")
-                                                                          │
-   on user request only:  reviewing  ─[Gate 3]─▶  merge
-```
+
+The same picture at full depth — components, lifecycle, sequence, lanes,
+memory loop, guards — is drawn in
+[architecture-map.md](architecture-map.md).
 
 Stage names are the machine's phases; skill names are what you invoke. Capture
 is the one place they differ most: **`bee-capturing` runs both** stage 5
