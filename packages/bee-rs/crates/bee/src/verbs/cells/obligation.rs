@@ -76,7 +76,7 @@ pub(crate) const REGEN_GUARDS: [RegenGuardDef; 2] = [
         covers: "the release manifest hashes",
         required: "bee dev release-manifest --check",
         command: "bee dev release-manifest --check",
-        regen: "bee dev render-skill-trees, then bee onboard --repo-root . --apply, then bee dev release-manifest --write (in that order)",
+        regen: "bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order)",
         derive: derive_manifest_scope,
     },
     RegenGuardDef {
@@ -272,4 +272,38 @@ pub(crate) fn read_commands_slice(root: &Path) -> MR<CommandsSlice> {
 /// retired, so `commands.test: "none"` is the one way to declare a no-test repo.
 pub(crate) fn is_no_test_repo(commands: &CommandsSlice) -> bool {
     matches!(&commands.test, Some(list) if list.len() == 1 && list[0] == NO_TEST_SENTINEL)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// wfl-2: the manifest guard's FIX used to spell out the three regen
+    /// commands by hand; a cold reader now gets routed to the one verb that
+    /// runs them in order, with the steps kept in parentheses for anyone who
+    /// wants to see what it does without running it.
+    #[test]
+    fn manifest_guard_regen_text_names_the_verb_and_keeps_the_steps_for_cold_readers() {
+        let regen = REGEN_GUARDS[0].regen;
+        assert!(regen.starts_with("bee dev regen"), "{regen}");
+        assert!(regen.contains("render-skill-trees"), "{regen}");
+        assert!(regen.contains("onboard --repo-root . --apply"), "{regen}");
+        assert!(regen.contains("release-manifest --write"), "{regen}");
+        assert!(regen.contains("in that order"), "{regen}");
+    }
+
+    /// The refusal text itself (not just the guard's raw field) routes to the
+    /// verb — the FIX a cell author actually reads.
+    #[test]
+    fn regen_obligation_refusal_fix_names_the_regen_verb() {
+        let cell = json!({
+            "id": "r-1",
+            "files": ["skills/bee-hive/SKILL.md"],
+            "verify": "echo ok",
+        });
+        let refusal = regen_obligation_refusal(cell.as_object().unwrap(), "addCell")
+            .unwrap()
+            .expect("must refuse");
+        assert!(refusal.contains("bee dev regen"), "{refusal}");
+    }
 }

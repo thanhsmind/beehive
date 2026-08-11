@@ -85,6 +85,8 @@ pub const PORTED: &[&str] = &[
     "dev render-prompt <name> [--var K=V]",
     "dev statusline",
     "dev release-manifest --write|--check|--selftest",
+    "dev regen (render-skill-trees -> onboard --repo-root . --apply -> \
+     release-manifest --write, stops on the first red)",
     // R6a — the bee-herding cockpit's executable helpers, ported off Node
     "herding classify-lane <PBI-ID>",
     "herding interlock [--main-root PATH]",
