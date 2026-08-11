@@ -1,0 +1,57 @@
+{
+  "id": "oc-5",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Accept the opencode runtime across the CLI dispatch and plugin-state surface",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs",
+    "packages/bee-rs/crates/bee/src/devtools/install_support.rs",
+    "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+    "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/plan.md",
+    "docs/history/opencode-support/CONTEXT.md"
+  ],
+  "action": "Per plan.md (E2) and CONTEXT.md D1: parse_runtime (plugin_distribution.rs:1057-1063) accepts `opencode` alongside claude/codex/both and its error message names the full set; merge-plugin-state (install_support.rs:40-67) gains a third --opencode flag mirroring the existing pair (generalizing to --runtime k=v was rejected in the plan — cite it, do not do it); hook_manifests.rs's `Runtime` enum stays Claude|Codex with a NAMED exclusion comment: opencode's hook belt is the checked-in TypeScript plugin (.opencode/plugins/bee-guard.ts), not a rendered JSON manifest — a doc-comment naming that difference per hook-runtime R1 (every per-runtime difference is a named export, never drift); mod.rs's render_projection_text_for and the `bee dev` verb dispatch accept opencode wherever a runtime label is parsed, refusing with the full accepted set elsewhere. Update or add the matching unit tests beside each touched site. Do not touch the skills render pipelines — oc-4 owns onboard/skills.rs, onboard/render.rs, skill_trees.rs.",
+  "verify": "rg -n \"opencode\" packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs packages/bee-rs/crates/bee/src/devtools/install_support.rs",
+  "must_haves": {
+    "truths": [
+      "parse_runtime accepts opencode and every refusal message names the real accepted set",
+      "merge-plugin-state takes --opencode as a third mirrored flag with test coverage",
+      "The Runtime enum's opencode exclusion is a named, written difference (R1), not an omission",
+      "No changes land in oc-4's files"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-3"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-cli",
+    "outcome": "opencode accepted in parse_runtime, merge-plugin-state's --opencode flag, and mod.rs's runtime-label parsing; hook_manifests' Runtime enum keeps a named R1 exclusion",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/devtools/plugin_distribution.rs",
+      "packages/bee-rs/crates/bee/src/devtools/install_support.rs",
+      "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+      "packages/bee-rs/crates/bee/src/devtools/mod.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T14:35:28.984Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T14:29:00.078Z",
+    "commit_pending": "worktree-local commit dc87ddb3 not visible to trailer lookback from main checkout",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T14:35:17.219Z"
+  }
+}

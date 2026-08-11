@@ -1,0 +1,60 @@
+{
+  "id": "oc-4",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Teach the skills render pipelines the opencode runtime and render .opencode/skills/",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+    "packages/bee-rs/crates/bee/src/onboard/render.rs",
+    "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/plan.md",
+    "docs/history/opencode-support/discovery.md",
+    "docs/knowledge/areas/hook-runtime/catalog-projections-and-activation.md"
+  ],
+  "action": "Per plan.md (E2) and CONTEXT.md D1: the ONBOARDING SYNC PATH gains an `opencode` runtime target rendering canonical skills/ into .opencode/skills/ with the standard .bee-render.json provenance sidecar ({schema:\"bee-render/1\", target_runtime:\"opencode\"}). The marker grammar gains the `opencode` value (<!-- bee:only opencode -->) in BOTH render sites — onboard/render.rs and devtools/skill_trees.rs — and every refusal/expectation message that says 'expected claude or codex' (skill_trees.rs:734 area, onboard/render.rs:478 area, plus their tests around skill_trees.rs:785-790) is updated to name the real accepted set. RENDER_RUNTIMES / render-skill-trees deliberately gains NO opencode root — no marketplace equivalent exists; make that a NAMED exclusion in code comment or a single mapping table, not a silent string fallthrough. Replace the string-keyed target-dir picks (skill_trees.rs:42-45 `if runtime == \"claude\" {..} else {..}`) with one exhaustive runtime→targets mapping so an unknown runtime is a refusal, never a silent wrong-tree render. Author the wrong-target probe test: rendering opencode must never write into .codex-plugin/ or .claude-plugin/. Run the regen in this cell so .opencode/skills/ actually exists in this checkout, and append the rendered-root inventory to discovery.md.",
+  "verify": "rtk proxy cat .opencode/skills/.bee-render.json",
+  "must_haves": {
+    "truths": [
+      "An unknown runtime label refuses the render — no silent else-branch into a codex or claude tree",
+      "The wrong-target probe test exists and passes: opencode render writes only under .opencode/",
+      ".opencode/skills/ exists in this checkout with a bee-render/1 sidecar naming target_runtime opencode",
+      "The opencode marker value round-trips in both render sites and their tests"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-3"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-render",
+    "outcome": "Taught both skill-render pipelines the opencode runtime: opencode joins the marker grammar in both render sites, skill_trees.rs's target-dir pick is now an exhaustive mapping that refuses unknown runtimes, and .opencode/skills/ is rendered in this checkout with its bee-render/2 sidecar.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/skills.rs",
+      "packages/bee-rs/crates/bee/src/onboard/render.rs",
+      "packages/bee-rs/crates/bee/src/devtools/skill_trees.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "docs/history/opencode-support/discovery.md",
+      ".opencode/skills/"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T14:45:22.848Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T14:29:00.050Z",
+    "commit_pending": "worktree-local commit 651201e (cells finish trailer lookback cannot see worktree commits, per orchestrator env note)",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T14:45:10.862Z"
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "id": "wfl-5",
+  "feature": "workflow-lessons",
+  "lane": "standard",
+  "title": "Fix judge-debt door to key off route.lane, not lane.mode (fail-open P1)",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "P1 from the slice semantic judge: close.rs feature_route (~line 384-390) reads lane[\"mode\"], but the live lane record carries mode:\"feature\" and the lane classification lives in route.lane — the judge-debt door is silently absent on real stores (fail-open), including workflow-lessons itself. Fix: read route.lane from the lane record (precedent: hooks/write_guard/hook_local.rs:524-530 and status_full/orient.rs:89-92), falling back to the default state route when the lane record lacks one; correct the provenance comment at close.rs:377-383 (the cited handlers_close.rs precedent keys off the CELL lane, not lane.mode). Update the wfl-3 tests: fixture lane records must carry the live shape ({mode:\"feature\", route:{lane:\"standard\"}}), plus one test proving mode:\"feature\"+route.lane:\"standard\" DOES grow the door and one that route.lane absent everywhere stays door-free. Also add the --report flag to the cells.finish registry entry in registry_payload.json (string surgery per wfl-2/wfl-4 precedent) so the wfl-1 flag is discoverable.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "mode:feature with route.lane:standard grows the door (the live workflow-lessons shape)",
+      "Comment cites a precedent that actually exists",
+      "cells.finish registry names --report"
+    ]
+  },
+  "deps": [
+    "wfl-3"
+  ],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w5",
+    "outcome": "Fixed judge-debt door to key off route.lane instead of lane.mode, fixed wfl-3 fixtures to the live lane-record shape, and documented --report on the cells.finish registry entry",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T14:48:20.896Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d9663ee4-1552-489a-a52a-cb6633b67dc1",
+    "claimed_at": "2026-08-11T14:39:34.786Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T14:48:08.126Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "route_lane_with_default_state_fallback",
+            "status": "PASS",
+            "evidence": "close.rs:390-403 lane route.lane first then read_state route.lane; missing state reads as empty map, fail-open"
+          },
+          {
+            "id": "live_shape_fixtures_actually_exercised",
+            "status": "PASS",
+            "evidence": "tests.rs:2338-2358 fixture pins mode feature + route.lane; standard-route door test fails against the old lane-mode read"
+          },
+          {
+            "id": "route_absent_stays_door_free",
+            "status": "PASS",
+            "evidence": "tests.rs:1289-1305 route-lane-missing-everywhere test; pre-existing no-lane-record test still green"
+          },
+          {
+            "id": "registry_documents_report",
+            "status": "PASS",
+            "evidence": "registry cells.finish gains report property; live cells finish --help prints --report:str"
+          },
+          {
+            "id": "pinned_flag_count_bumped_with_reason",
+            "status": "PASS",
+            "evidence": "catalog.rs:305-316 146 to 147 with recorded reason; catalog suite 9 passed"
+          },
+          {
+            "id": "no_regression_to_door_mechanics",
+            "status": "PASS",
+            "evidence": "4be176bf diff is feature_route + comment only; full suite 1573 passed, 8 ignored"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-11T14:52:21.697Z"
+      }
+    ]
+  }
+}

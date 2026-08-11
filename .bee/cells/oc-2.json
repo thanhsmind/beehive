@@ -1,0 +1,53 @@
+{
+  "id": "oc-2",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Prove throw-blocking write guard in a live OpenCode session",
+  "behavior_change": true,
+  "files": [
+    ".opencode/plugins/bee-guard.ts",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/plan.md",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "action": "Hand-write the minimal .opencode/plugins/bee-guard.ts: an async Plugin export whose tool.execute.before maps write/edit/bash tool payloads onto `.bee/bin/bee hook write-guard` stdin payloads and throws an Error carrying the guard's deny message when the guard denies; no rule logic in TypeScript. Then run a live opencode session in this checkout and prove: (a) a guard-denied write (secret-shaped or unreserved guarded target) is refused via the thrown Error, (b) an allowed write on a plain file passes, (c) bee skills are discovered by the session, (d) the AGENTS.md preamble loads. Append the transcript excerpts and the verified layout names to discovery.md — these feed S2.",
+  "verify": "rg -n \"tool.execute.before\" .opencode/plugins/bee-guard.ts",
+  "must_haves": {
+    "truths": [
+      "The plugin holds zero guard rules — every decision comes from .bee/bin/bee hook write-guard",
+      "A crash or missing bee binary throws (fail-closed), shown in the plugin code path",
+      "Deny and allow transcript excerpts are both recorded in discovery.md",
+      "Skills discovery and AGENTS.md load are recorded facts from the live session"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-guard",
+    "outcome": "Hand-wrote the throw-blocking OpenCode write-guard plugin and proved deny/allow/fail-closed/skills/AGENTS.md live in this checkout",
+    "files_changed": [
+      ".opencode/plugins/bee-guard.ts",
+      "docs/history/opencode-support/discovery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T14:07:29.360Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T13:49:56.630Z",
+    "commit_pending": "worktree-local commit c288e2ba not visible to the trailer lookback from the store's HEAD (same class as oc-1)",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T14:07:17.585Z"
+  }
+}

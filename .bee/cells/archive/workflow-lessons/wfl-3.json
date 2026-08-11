@@ -1,0 +1,100 @@
+{
+  "id": "wfl-3",
+  "feature": "workflow-lessons",
+  "lane": "standard",
+  "title": "Judge becomes a blocking close door for standard and high-risk routes",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "In bee close doors: when the closing feature route lane is standard or high-risk, every capped behavior_change cell must carry a judge record (see cells judge-record storage — find the trace/store field it writes). Missing records make a blocking door judge-debt whose detail lists the offending cell ids and whose command names bee cells judge / bee cells judge-record. Other lanes: door absent (not merely non-blocking). Dry-run shows it like existing doors. Tests: standard-lane feature with unjudged behavior_change cell blocks and names it, judged one passes, tiny lane never grows the door.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Door exists only for standard/high-risk routes",
+      "Detail names each unjudged cell id",
+      "Remedy command is stated in the door"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w3",
+    "outcome": "Add a judge-debt close door for standard/high-risk routes; unjudged capped behavior_change cells refuse close, judge-on-smell lanes never grow the door",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T13:58:51.205Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d9663ee4-1552-489a-a52a-cb6633b67dc1",
+    "claimed_at": "2026-08-11T13:48:17.870Z",
+    "verify_command": null,
+    "verified_at": null,
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T13:58:38.882Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "door_keys_off_route_lane",
+            "status": "PASS",
+            "evidence": "close.rs:390-403 feature_route reads lane route.lane then default-state route.lane; live workflow-lessons record (mode feature, route.lane standard) resolves standard (as fixed by wfl-5, 4be176bf)"
+          },
+          {
+            "id": "blocks_on_capped_unjudged_behavior_change",
+            "status": "PASS",
+            "evidence": "close.rs:413-424 counts capped behavior_change cells with empty/absent trace.semantic_judge; close.rs:1029-1045 exit 1 before further work"
+          },
+          {
+            "id": "detail_names_cell_ids_and_remedies",
+            "status": "PASS",
+            "evidence": "close.rs:616-624 door detail lists ids + both remedy commands; refusal repeats them; tests.rs:1240-1243, 1291-1345"
+          },
+          {
+            "id": "tiny_small_never_grow_the_door",
+            "status": "PASS",
+            "evidence": "close.rs:610 only standard|high-risk; tests.rs:1265-1278, 1280-1287, 1289-1305 assert absence"
+          },
+          {
+            "id": "reads_the_field_judge_record_writes",
+            "status": "PASS",
+            "evidence": "writer handlers_meta.rs:254-260 appends trace.semantic_judge; reader close.rs:420"
+          },
+          {
+            "id": "fixtures_match_the_live_record_shape",
+            "status": "PASS",
+            "evidence": "tests.rs:2338-2358 write_lane_record_routed emits mode feature + route.lane; judge_debt suite 6 passed"
+          },
+          {
+            "id": "provenance_comment_is_accurate",
+            "status": "PASS",
+            "evidence": "close.rs:376-389 cites hook_local.rs:524-530 and orient.rs:89-92, both real route.lane readers"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-11T14:52:16.493Z"
+      }
+    ]
+  }
+}

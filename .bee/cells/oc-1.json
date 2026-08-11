@@ -1,0 +1,62 @@
+{
+  "id": "oc-1",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Install OpenCode pinned and record the capability baseline",
+  "behavior_change": false,
+  "files": [
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/plan.md",
+    "docs/history/opencode-support/CONTEXT.md"
+  ],
+  "action": "Install the OpenCode CLI (npm i -g opencode-ai@latest, or the curl installer if npm fails) and start docs/history/opencode-support/discovery.md: record the exact installed version as the pin beside the `opencode --version` output, the install method, the provider/auth state (which providers are configured, whether a live `opencode run` is possible on this machine), and the real on-disk layout names OpenCode uses for plugins/skills/agents dirs (create a scratch probe under the scratchpad, never in the repo). Any gap that blocks a live session is recorded as a named blocker, never guessed around. No source edits.",
+  "verify": "opencode --version",
+  "must_haves": {
+    "truths": [
+      "The pin is recorded in discovery.md beside fresh `opencode --version` output",
+      "Provider/auth state is named — live-session feasibility is a recorded fact, not an assumption",
+      "Plugin/skills/agent directory names are verified on disk, not quoted from docs",
+      "Blockers, if any, are named in discovery.md"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-installer",
+    "outcome": "Installed opencode-ai@1.18.16 via npm, confirmed no third-party provider auth but a live opencode/* free-model session works, and verified plugin/skill/agent on-disk layout via a scratch probe",
+    "files_changed": [
+      "docs/history/opencode-support/discovery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T13:48:11.161Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T13:37:10.746Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-11T13:46:02.788Z",
+        "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+        "claimed_at": "2026-08-11T13:38:53.597Z",
+        "acquired_at": "2026-08-11T13:37:10.745Z",
+        "worker": "oc-installer",
+        "verdict": "tests-red",
+        "failure_signature": "f77f756b8e84",
+        "note": "ggestions)"
+      }
+    ],
+    "commit_pending": "commit e44ce690 on branch wt/opencode-support (this worktree) carries the 'cell: oc-1' trailer; the finish command's git-log lookback resolves repo root from the invoked binary's own path (main checkout), not this worktree's cwd, so it cannot see worktree-local commits",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T13:47:59.355Z"
+  }
+}

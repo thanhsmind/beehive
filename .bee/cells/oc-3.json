@@ -1,0 +1,53 @@
+{
+  "id": "oc-3",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Close the apply_patch bypass in bee-guard.ts",
+  "behavior_change": true,
+  "files": [
+    ".opencode/plugins/bee-guard.ts",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/discovery.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs"
+  ],
+  "action": "Slice judge found OpenCode 1.18.16 registers a fourth write-capable tool, apply_patch (write-group [\"edit\",\"write\",\"apply_patch\"] in the installed binary), which bee-guard.ts's switch never forwards — default: return null is a TypeScript-side allow, violating the every-decision-from-bee rule. Add the apply_patch case: tool id apply_patch, payload field patchText mapped onto the patch-body key bee's detectors read (tool_input keys [\"input\",\"patch\",\"command\"], detectors.rs:18-27; write_guard/main.rs:65 already matches the apply_patch name). Also: enumerate the installed binary's full write-capable tool registry in discovery.md so coverage claims rest on the registry, not on probe transcripts; fix discovery.md's 'forwarded verbatim' wording (it translates field names); soften the bee-guard.ts header comment that overstates undecidable-as-fail-closed (bee's own could-not-decide is fail-open by design, mod.rs:60-68). Live-probe an apply_patch deny in an opencode run session if the free provider cooperates; otherwise record the attempt and why it could not run.",
+  "verify": "rg -n \"apply_patch\" .opencode/plugins/bee-guard.ts",
+  "must_haves": {
+    "truths": [
+      "apply_patch reaches bee hook write-guard — no write-capable registered tool falls through to a TypeScript allow",
+      "The write-capable tool registry of the installed binary is recorded in discovery.md",
+      "The verbatim-forwarding wording and the fail-closed overstatement are corrected",
+      "An apply_patch deny probe ran, or its failure to run is recorded with the reason"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-2"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-patchfix",
+    "outcome": "Mapped apply_patch to bee write-guard in bee-guard.ts; recorded the write-capable tool registry and corrected discovery.md wording",
+    "files_changed": [
+      ".opencode/plugins/bee-guard.ts",
+      "docs/history/opencode-support/discovery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T14:27:05.490Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T14:17:00.333Z",
+    "commit_pending": "worktree-local commit 6d55e67c not visible to main-checkout trailer lookback (per orchestrator env note)",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T14:26:51.990Z"
+  }
+}

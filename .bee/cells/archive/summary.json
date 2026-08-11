@@ -393,5 +393,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-11T11:47:29.305Z"
+  },
+  "workflow-lessons": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-08-11T14:52:52.732Z"
   }
 }
