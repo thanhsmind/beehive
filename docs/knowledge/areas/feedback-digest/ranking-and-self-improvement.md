@@ -39,6 +39,16 @@ each group is scored and the groups are returned most-pressing-first.
   observation, then by the comparison form — so the same records always rank in the same order.
 - **A group whose entries carry no severity scores at the floor value (one), never at zero** — a
   hole in the data must not bury a group.
+- **A group containing any CLOSED-kind entry retires from the ranking (evolving-rank-freshness
+  cell erf-1, 2026-08-11).** Retired groups leave the ranked list entirely and are reported in a
+  separate `retired` list (representative stored title + entry count) so nothing silently
+  vanishes; the text render names the retired count in its header. The retire convention is
+  append-only and needs no linkage field: appending a closed-kind row bearing the SAME title as
+  the group it retires lands in that group by the normalized-title comparison above and
+  tombstones it. Motivation: the loop's own top-ranked item was a P1 fixed and closed days
+  earlier — closed rows existed under different titles, so the dead item kept topping the agenda.
+  NOTE the payload shape change that rode this: the machine-readable ranking is now an object
+  `{ranked, retired}`, no longer a bare array.
 
 **What blocks it:** nothing new — it consumes only the already-validated collected view (B2) and
 reads nothing itself.
