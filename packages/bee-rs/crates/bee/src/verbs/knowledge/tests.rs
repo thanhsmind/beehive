@@ -773,6 +773,66 @@ use std::time::Instant;
         assert_eq!(cells_out[1]["trace_path"], ".bee/cells/w2-2.json");
     }
 
+    /// frd-1 mining proof: `cells cap/finish --deviation "<one line>"` writes
+    /// through the REAL cap path (`crate::verbs::cells::cap_cell_from_flags`,
+    /// handlers_close.rs) rather than a hand-authored trace fixture, and the
+    /// line it wrote is what `build_promotion`'s pattern-candidate mining
+    /// (`capped_cell_from_file` reading `trace.deviations`, this file's own
+    /// "pattern candidates" section) surfaces — the loop the WHY names as
+    /// broken end to end, not just the write half or the read half alone.
+    #[test]
+    fn deviation_flag_written_by_cap_reaches_pattern_candidate_mining() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let kn = root.join("docs").join("knowledge");
+        std::fs::create_dir_all(kn.join("work")).unwrap();
+        std::fs::write(
+            kn.join("work").join("frd-mine.md"),
+            "---\ntype: bee.work-item\ntitle: frd-1 mining\ndescription: proves --deviation reaches promote\ntags: []\nbee:\n  id: frd-mine\n  lifecycle: active\n---\n\n# frd-1 mining\n",
+        )
+        .unwrap();
+        let cells = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&cells).unwrap();
+        std::fs::write(
+            cells.join("frd-mine-1.json"),
+            r#"{"id":"frd-mine-1","feature":"frd-mine","title":"t","action":"a","verify":"echo ok","lane":"tiny","status":"claimed","deps":[],"files":[],"trace":{}}"#,
+        )
+        .unwrap();
+
+        // `--deviations-file` line first, then the new `--deviation` line —
+        // both land in `trace.deviations`, in that order.
+        let flags = crate::verbs::cells::CapFlags {
+            id: "frd-mine-1".to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: vec![json!("dev-file-line")],
+            deviation: Some("  dev-flag-line  ".to_string()),
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+        };
+        crate::verbs::cells::cap_cell_from_flags(root, root, &flags, false)
+            .expect("cap through --deviation must succeed");
+
+        let Some(Promo::Ok(p)) = build_promotion(root, &kn, "frd-mine") else {
+            panic!("expected a proposal");
+        };
+        let cands = p["pattern_candidates"].as_array().unwrap();
+        assert_eq!(cands.len(), 1, "the capped cell's two deviation lines mine one candidate");
+        assert_eq!(cands[0]["cell"], "frd-mine-1");
+        assert_eq!(
+            cands[0]["evidence"],
+            json!([
+                {"kind": "deviation", "text": "dev-file-line"},
+                {"kind": "deviation", "text": "dev-flag-line"},
+            ]),
+            "both the file line and the --deviation flag's (trimmed) line reach mining"
+        );
+    }
+
     /// Reach two: when the resolved work item declares no bee.areas — a
     /// history anchor never carries one — the feature's most recent
     /// .bee/logs/scribing-runs.jsonl entry supplies the area list instead,

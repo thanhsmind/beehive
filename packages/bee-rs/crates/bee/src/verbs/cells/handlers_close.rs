@@ -23,11 +23,12 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 10] = [
+pub(crate) const CAP_FLAGS: [&str; 11] = [
     "id",
     "outcome",
     "files",
     "deviations-file",
+    "deviation",
     "friction",
     "override-judge",
     "session-id",
@@ -75,6 +76,16 @@ pub(crate) struct CapFlags {
     pub(crate) friction: Option<String>,      // flags.friction ? String : null
     pub(crate) files_changed: Vec<Value>,
     pub(crate) deviations: Vec<Value>,
+    /// frd-1: `--deviation "<one line>"`, RAW (untrimmed) — `None` = not
+    /// passed. Validated (refused if it trims to empty) and trimmed at cap
+    /// time in `cap_cell_from_flags`, then appended to `deviations` above so
+    /// `trace.deviations` carries it into the pattern-candidate mining
+    /// `verbs/knowledge/promote.rs` reads. The flag parser (`rsv::Flags`,
+    /// mirroring `--did` on `capture add`) is single-value — a repeated
+    /// `--deviation` keeps only the LAST occurrence — so this carries one
+    /// line per cap/finish call, same discipline as every other value flag
+    /// here.
+    pub(crate) deviation: Option<String>,
     pub(crate) override_reason: String,       // trimmed; '' = none
     pub(crate) session_flag: Option<String>,
     pub(crate) force_ownership: bool,
@@ -146,6 +157,18 @@ pub(crate) fn cap_cell_from_flags(root: &Path, test_root: &Path, f: &CapFlags, f
         _ => {}
     }
     delegate_only(merge_trace(existing_map.get("trace")))?;
+
+    // frd-1: `--deviation` shape check, BEFORE the (possibly long) test run
+    // and before any write — an empty or whitespace-only value is refused by
+    // name; nothing is written on refusal, matching `--files a.js,b.js`-style
+    // required-value checks elsewhere in this function.
+    if let Some(raw) = &f.deviation {
+        if js_trim(raw).is_empty() {
+            return Err(Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — --deviation requires a non-empty value (a blank or whitespace-only line records nothing to trace.deviations)."
+            )));
+        }
+    }
 
     // The one test door (test-simple, decision 412e9b3a).
     let declared = commands
@@ -354,7 +377,17 @@ pub(crate) fn cap_cell_from_flags(root: &Path, test_root: &Path, f: &CapFlags, f
         }
         cell_map.insert("status".into(), Value::String("capped".into()));
         trace.insert("files_changed".into(), Value::Array(f.files_changed.clone()));
-        trace.insert("deviations".into(), Value::Array(f.deviations.clone()));
+        // frd-1: `--deviations-file` first (unchanged order), then the
+        // single `--deviation` line, already validated non-empty above —
+        // both may be passed together, each contributes its own lines.
+        let mut deviations = f.deviations.clone();
+        if let Some(raw) = &f.deviation {
+            let trimmed = js_trim(raw);
+            if !trimmed.is_empty() {
+                deviations.push(Value::String(trimmed.to_string()));
+            }
+        }
+        trace.insert("deviations".into(), Value::Array(deviations));
         trace.insert(
             "friction".into(),
             f.friction.clone().map(Value::String).unwrap_or(Value::Null),
@@ -421,6 +454,10 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         None => String::new(),
     };
     let session_flag = opt_string_flag(flags, "session-id")?;
+    // frd-1: raw (untrimmed) on purpose — `cap_cell_from_flags` refuses a
+    // whitespace-only value by name instead of this probe silently treating
+    // it as absent.
+    let deviation = opt_string_flag(flags, "deviation")?;
     let force_ownership = bool_flag(flags, "force-ownership")?;
     // D2's --fix-first convention: trimmed; empty/absent = None.
     let commit_pending = match opt_string_flag(flags, "commit-pending")? {
@@ -438,6 +475,7 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         friction,
         files_changed,
         deviations: Vec::new(), // filled inside dispatch (file read may throw)
+        deviation,
         override_reason,
         session_flag,
         force_ownership,

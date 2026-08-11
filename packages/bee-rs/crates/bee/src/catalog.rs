@@ -295,7 +295,16 @@ mod tests {
         // — none of those is this concept, so reusing one would have hidden
         // an array-of-targets flag behind a singular-id name (or vice
         // versa). `--supersedes` is new.
-        const PINNED_FLAG_COUNT: usize = 145;
+        // 145 -> 146 (finish-records-deviations frd-1): `cells.cap`/
+        // `cells.finish` gained `--deviation`, ONE prose line appended to
+        // `trace.deviations` at cap time. Checked first: `--deviations-file`
+        // already exists on both commands but names a PATH to a list (JSON
+        // array or newline text) read from disk — the concept this cell adds
+        // is a single inline line with no file, the shape a worker's own cap
+        // invocation can carry directly; `--friction` names a distinct
+        // concept (a trigger-fired note, not a named deviation). None of
+        // those is "one deviation line, inline" — `--deviation` is new.
+        const PINNED_FLAG_COUNT: usize = 146;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

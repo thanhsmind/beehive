@@ -2329,6 +2329,7 @@ use std::time::Instant;
             friction: None,
             files_changed: Vec::new(),
             deviations: Vec::new(),
+            deviation: None,
             override_reason: String::new(),
             session_flag: None,
             force_ownership: false,
@@ -2373,6 +2374,90 @@ use std::time::Instant;
         let after = read_cell_norm(root2, "nt-2").ok().unwrap().unwrap();
         assert_eq!(after.get("status"), Some(&json!("claimed")), "a red run never caps");
         assert!(test_results_path(root2).exists(), "the red run IS recorded");
+    }
+
+    // ══ frd-1 — `--deviation "<one line>"` on cells cap/finish ══
+    //
+    // Worker deviations narrated in prose never reached `trace.deviations`,
+    // so `bee knowledge promote`'s pattern-candidate mining (reads only
+    // `trace.deviations` + failure signatures) always reported zero. A
+    // repeated `--deviation` only keeps the LAST occurrence (`rsv::Flags`'s
+    // own `insert`, mirroring `--did` on `capture add`) — the flag carries
+    // one line per cap/finish call, same as every other value flag here.
+
+    fn cap_flags_frd(id: &str, deviations: Vec<&str>, deviation: Option<&str>) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: deviations.into_iter().map(|d| json!(d)).collect(),
+            deviation: deviation.map(str::to_string),
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+        }
+    }
+
+    #[test]
+    fn deviation_flag_appends_a_line_to_trace_deviations() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "frd-1a", &cell("frd-1a", "claimed", "f", json!([])));
+
+        // A `--deviations-file` line and the new `--deviation` line both
+        // land in the same array, in that order — --deviation appends, it
+        // never replaces.
+        let flags = cap_flags_frd("frd-1a", vec!["from the file"], Some("  from the flag  "));
+        let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["deviations"],
+            json!(["from the file", "from the flag"]),
+            "the flag's value is trimmed and appended after the file's own lines"
+        );
+    }
+
+    #[test]
+    fn deviation_flag_blank_or_whitespace_only_is_refused_and_writes_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "frd-1b", &cell("frd-1b", "claimed", "f", json!([])));
+        let before = std::fs::read_to_string(cell_file(root, "frd-1b")).unwrap();
+
+        for bad in ["", "   ", "\t\n "] {
+            let flags = cap_flags_frd("frd-1b", Vec::new(), Some(bad));
+            let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+            assert!(
+                refusal.contains("--deviation") && refusal.contains("non-empty"),
+                "refusal must name the flag: {refusal}"
+            );
+        }
+        let after = std::fs::read_to_string(cell_file(root, "frd-1b")).unwrap();
+        assert_eq!(before, after, "nothing was written on refusal — the cell file is untouched");
+        let after_norm = read_cell_norm(root, "frd-1b").ok().unwrap().unwrap();
+        assert_eq!(
+            after_norm.get("status"),
+            Some(&json!("claimed")),
+            "a refused --deviation caps nothing — the cell stays exactly as claimed"
+        );
+    }
+
+    #[test]
+    fn omitting_deviation_is_byte_identical_to_before_the_flag_existed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "frd-1c", &cell("frd-1c", "claimed", "f", json!([])));
+
+        // No --deviation, no --deviations-file: trace.deviations is the
+        // same empty array cap has always written.
+        let flags = cap_flags_frd("frd-1c", Vec::new(), None);
+        let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["deviations"], json!([]));
     }
 
     // ══ D6 — the cell commit trailer (docs/history/hook-teeth/CONTEXT.md) ══
@@ -2445,6 +2530,7 @@ use std::time::Instant;
             friction: None,
             files_changed: files.into_iter().map(|f| json!(f)).collect(),
             deviations: Vec::new(),
+            deviation: None,
             override_reason: String::new(),
             session_flag: None,
             force_ownership: false,
@@ -2559,6 +2645,7 @@ use std::time::Instant;
             friction: None,
             files_changed: files.into_iter().map(|f| json!(f)).collect(),
             deviations: Vec::new(),
+            deviation: None,
             override_reason: String::new(),
             session_flag: None,
             force_ownership: false,
@@ -3235,6 +3322,7 @@ use std::time::Instant;
             friction: None,
             files_changed: Vec::new(),
             deviations: Vec::new(),
+            deviation: None,
             override_reason: String::new(),
             session_flag: None,
             force_ownership: false,
