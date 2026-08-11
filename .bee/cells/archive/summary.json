@@ -328,5 +328,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-11T04:17:23.720Z"
+  },
+  "island-read-filter": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-11T04:38:04.269Z"
   }
 }
