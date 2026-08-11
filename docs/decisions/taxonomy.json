@@ -328,6 +328,7 @@
     "worktree-orphan-verdict",
     "verify-pipeline",
     "cross-platform",
-    "okf-profile"
+    "okf-profile",
+    "feedback"
   ]
 }
