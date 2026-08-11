@@ -72,7 +72,11 @@ on this path; everything unresolved is written down, never guessed.
 1. Gather real evidence first — the item's text, the code and docs it
    touches, and the touched area's knowledge concepts
    (`docs/knowledge/areas/<area>/`; no bundle: `docs/specs/<area>.md`).
-   Never judge from the row alone.
+   Never judge from the row alone. A bug-shaped item gets its claim
+   verified by reproducing it, or by recording the failed reproduction
+   attempt as evidence, before any verdict. Check for redundancy or
+   duplication by searching decisions and the backlog for the same
+   domain concept, never by matching the request's wording.
 2. Risk territory (auth, data loss, security, external providers,
    validation removal) parks at any confidence — risk is a property of
    the change, not of the assessor's certainty.

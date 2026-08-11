@@ -79,6 +79,29 @@ Do not auto-resume. Ever.
 2. On success, present the adopted cell, its verify command, and its lane as a start-now instruction — no wait, no confirmation prompt.
 3. On a failed adoption (claim lost the race, handoff already cleared), fall back to the pause presentation above — never fabricate a start-now instruction.
 
+## Phase-Boundary Moves
+
+At a phase boundary — never mid-phase — weigh five moves in order; the
+first yes wins:
+
+1. **Continue in-session** when the next phase needs this one as a
+   primary source, or budget remains. Costs nothing, loses nothing —
+   rule it out first.
+2. **Fresh start** when everything in-session is disposable. Cheapest
+   move on the board — and an irreversible discard.
+3. **Handoff** only for a genuinely new place or person: a new session
+   boundary, a new checkout, or another agent. That list is the whole
+   clause.
+4. **Subagent** when the piece is scoped enough to run
+   away-from-keyboard.
+5. **Compact last.** Every move but continue turns a primary source
+   into a lossy summary, and compaction's failure mode is a fresh
+   session confidently wrong about a decision the summary flattened.
+
+This is the procedure behind the 65%-context handoff rule (AGENTS.md,
+"Care for the session"): that rule says when to stop, this tree says
+which move to make.
+
 ## Scout Contract (just-enough reading)
 
 Lives in `scout-and-ticks.md` — the scout matrix, the route record, the
