@@ -675,6 +675,126 @@ use crate::version::BEE_VERSION;
             .contains_key("worktree"));
     }
 
+    // ── irf-1 (PBI p-9c48a67c read-side residue) — `bee status` counts scope
+    //    to the granted island's own feature ───────────────────────────────
+    //
+    // `git worktree add` checks out `.bee/cells` in FULL (it is
+    // git-tracked), and ips-1's prune-on-register pass only ever removes
+    // UNTRACKED foreign-feature files — a TRACKED one legitimately rides
+    // along on disk forever. `list_cells`/`list_cells_including_archive`
+    // must never surface it in a status count.
+
+    /// A cell fixture written straight into `.bee/cells/<id>.json`.
+    fn write_status_cell(root: &Path, id: &str, feature: &str, status: &str) {
+        write(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &format!(r#"{{"id":"{id}","feature":"{feature}","status":"{status}","title":"t"}}"#),
+        );
+    }
+
+    /// RED before irf-1: a fresh granted island legitimately holds another
+    /// feature's tracked cell file — `list_cells` (the shared enumerator
+    /// every status count reads through, `build.rs`'s own `list_cells(ctx,
+    /// None, None)`) must scope it out with no explicit feature filter.
+    #[test]
+    fn list_cells_in_a_granted_island_never_surfaces_a_foreign_features_residue() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_main, granted, _ungranted) = worktree_fixture(tmp.path());
+        write(&granted, ".bee/runtime/worktree-identity.json", "{\"feature\":\"feat-a\"}");
+        write_status_cell(&granted, "a-1", "feat-a", "open");
+        write_status_cell(&granted, "b-1", "feat-b", "open");
+
+        let ids: Vec<String> = list_cells(&ctx_at(&granted), None, None)
+            .unwrap()
+            .iter()
+            .map(|c| tpl(vget(c, "id")))
+            .collect();
+        assert_eq!(ids, vec!["a-1"], "feature B's residue must never be counted from the island");
+    }
+
+    /// Same residue, the archive-aware door (`list_cells_including_archive`,
+    /// the debt-door counters' own read) — "Archived cells: same rule".
+    #[test]
+    fn list_cells_including_archive_in_a_granted_island_scopes_to_its_own_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_main, granted, _ungranted) = worktree_fixture(tmp.path());
+        write(&granted, ".bee/runtime/worktree-identity.json", "{\"feature\":\"feat-a\"}");
+        write_status_cell(&granted, "a-1", "feat-a", "capped");
+        write_status_cell(&granted, "b-1", "feat-b", "capped");
+        write(
+            &granted,
+            ".bee/cells/archive/feat-a/a-arch.json",
+            r#"{"id":"a-arch","feature":"feat-a","status":"capped","title":"t"}"#,
+        );
+        write(
+            &granted,
+            ".bee/cells/archive/feat-b/b-arch.json",
+            r#"{"id":"b-arch","feature":"feat-b","status":"capped","title":"t"}"#,
+        );
+
+        let ids: Vec<String> = list_cells_including_archive(&ctx_at(&granted), None, Some("capped"))
+            .unwrap()
+            .iter()
+            .map(|c| tpl(vget(c, "id")))
+            .collect();
+        let mut ids = ids;
+        ids.sort();
+        assert_eq!(ids, vec!["a-1", "a-arch"], "feature B's live AND archived cells stay hidden");
+    }
+
+    /// The whole `bee status` cell-count payload agrees: only feature A's
+    /// counts show from inside its own granted island.
+    #[test]
+    fn status_cell_counts_from_a_granted_island_never_include_a_foreign_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_main, granted, _ungranted) = worktree_fixture(tmp.path());
+        write(&granted, ".bee/runtime/worktree-identity.json", "{\"feature\":\"feat-a\"}");
+        write_status_cell(&granted, "a-1", "feat-a", "open");
+        write_status_cell(&granted, "b-1", "feat-b", "open");
+        write_status_cell(&granted, "b-2", "feat-b", "open");
+
+        let mut ctx = ctx_at(&granted);
+        let status = build_status(&mut ctx, false).expect("status");
+        assert_eq!(status.get("cells").and_then(|c| c.get("open")), Some(&json!(1)));
+    }
+
+    /// The UNGRANTED worktree shares main's store (`root == main_root`) —
+    /// unfiltered, byte-identical to before this filter existed.
+    #[test]
+    fn list_cells_in_an_ungranted_worktree_stays_unscoped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, _granted, ungranted) = worktree_fixture(tmp.path());
+        write_status_cell(&main, "a-1", "feat-a", "open");
+        write_status_cell(&main, "b-1", "feat-b", "open");
+
+        let ids: Vec<String> = list_cells(&ctx_at(&ungranted), None, None)
+            .unwrap()
+            .iter()
+            .map(|c| tpl(vget(c, "id")))
+            .collect();
+        assert_eq!(ids, vec!["a-1", "b-1"]);
+    }
+
+    /// The MAIN store itself, several features at once — pinned
+    /// byte-identical: `island_feature_scope` never engages outside a
+    /// GRANTED worktree island.
+    #[test]
+    fn list_cells_at_the_main_store_shows_every_feature_unfiltered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_status_cell(root, "a-1", "feat-a", "open");
+        write_status_cell(root, "b-1", "feat-b", "open");
+        write_status_cell(root, "c-1", "feat-c", "open");
+
+        let ids: Vec<String> = list_cells(&ctx_for(root), None, None)
+            .unwrap()
+            .iter()
+            .map(|c| tpl(vget(c, "id")))
+            .collect();
+        assert_eq!(ids, vec!["a-1", "b-1", "c-1"]);
+    }
+
     // ── recovery (recovery.mjs) ────────────────────────────────────────────
     //
     // Ported from packages/bee/tests/test_recovery.mjs. The Node oracle

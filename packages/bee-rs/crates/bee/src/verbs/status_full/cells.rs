@@ -151,9 +151,21 @@ pub(crate) fn id_pattern_ok(id: &str) -> bool {
     chars.all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
 }
 
+/// PBI p-9c48a67c / ips-1 read-side residue (irf-1): mirrors
+/// `verbs::cells::read::island_feature_scope` for this ctx-based
+/// enumerator — same grant test, already resolved ONCE into `ctx.linked`
+/// (see `Ctx::granted_worktree`), same creation-identity read
+/// (`read_worktree_feature`, this module). `None` for anything that is not
+/// a granted worktree island; reads on those checkouts stay byte-identical.
+fn island_feature_scope(ctx: &Ctx) -> Option<String> {
+    ctx.granted_worktree()?;
+    read_worktree_feature(&ctx.root.to_string_lossy())
+}
+
 /// cells.mjs listCells (includeArchived always false on the status path).
 /// feature/status filters use JS strict !==; sort by id, numeric 'en'.
 pub(crate) fn list_cells(ctx: &Ctx, feature: Option<&Value>, status: Option<&str>) -> R<Vec<Value>> {
+    let island_feature = island_feature_scope(ctx);
     let dir = cells_dir(ctx);
     let mut cells: Vec<Value> = Vec::new();
     if let Ok(entries) = std::fs::read_dir(&dir) {
@@ -168,6 +180,11 @@ pub(crate) fn list_cells(ctx: &Ctx, feature: Option<&Value>, status: Option<&str
             let Some(cell) = rj(ctx, &entry.path())? else { continue };
             if !matches!(cell, Value::Object(_) | Value::Array(_)) {
                 continue; // `typeof cell !== 'object'` (null already skipped)
+            }
+            if let Some(scope) = island_feature.as_deref() {
+                if !str_eq(vget(&cell, "feature"), scope) {
+                    continue; // foreign-feature residue in a granted island — never surfaced
+                }
             }
             if let Some(f) = feature {
                 if truthy(f) && !strict_eq(vget(&cell, "feature"), Some(f)) {
@@ -207,6 +224,7 @@ pub(crate) fn list_cells_including_archive(
     feature: Option<&Value>,
     status: Option<&str>,
 ) -> R<Vec<Value>> {
+    let island_feature = island_feature_scope(ctx);
     let mut cells = list_cells(ctx, feature, status)?;
     let mut seen_ids: HashSet<String> = cells.iter().map(|c| tpl(vget(c, "id"))).collect();
     let archive_root = cells_dir(ctx).join(ARCHIVE_DIR_NAME);
@@ -236,6 +254,11 @@ pub(crate) fn list_cells_including_archive(
             let Some(cell) = rj(ctx, &entry.path())? else { continue };
             if !matches!(cell, Value::Object(_) | Value::Array(_)) {
                 continue; // `typeof cell !== 'object'` (null already skipped)
+            }
+            if let Some(scope) = island_feature.as_deref() {
+                if !str_eq(vget(&cell, "feature"), scope) {
+                    continue; // foreign-feature residue in a granted island — never surfaced
+                }
             }
             if let Some(f) = feature {
                 if truthy(f) && !strict_eq(vget(&cell, "feature"), Some(f)) {
