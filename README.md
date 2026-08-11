@@ -522,13 +522,13 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 | [04-skills-spec.md](docs/04-skills-spec.md) | You are about to write a SKILL.md — per-skill specifications |
 | [06-runtime-integration.md](docs/06-runtime-integration.md) | Hook automation on both runtimes + the Codex parity matrix |
 | [07-contracts.md](docs/07-contracts.md) | You are implementing or extending v0.1 — lib API, CLI surface, hook behaviors |
-| [decisions/](docs/decisions/) | Why bee is shaped the way it is — one record per load-bearing choice (0001–0016) |
+| [decisions/](docs/decisions/) | Why bee is shaped the way it is — one record per load-bearing choice (0001–0025) |
 
 ---
 
 ## Status
 
-**v0.1.15.** Core built and green: the skills, the 9-script hook automation skeleton, 4 vendored helpers over a shared `lib/`, onboarding for both runtimes, and the lib/onboarding test suites — smoke-tested end to end (onboard → gate-locked claim → verify-gated cap → hook denials).
+**v2.4.2** (versioned by git tag; the Rust workspace's `Cargo.toml` version is decoupled from release numbering). Core built and green on the Rust CLI: the skills, hook automation on both runtimes, onboarding, and the full `cargo test` suite — exercised end to end (onboard → gate-locked claim → verify-gated cap → hook denials).
 
 Recent additions, each gated by a decision record:
 
@@ -544,18 +544,3 @@ Recent additions, each gated by a decision record:
 **Known debt before 1.0** (recorded per skill in `docs/decisions/skills/*-creation-log.md`): the newer skills and the two most recent decisions have not yet been dogfooded/pressure-tested per bee's own Iron Law; the gate-bypass safety floor in particular wants RED-baseline testing on a real high-risk feature.
 
 Try it: onboard a repo, scout with `bee_status`, then ask the agent for a tiny fix and watch it route.
-
-## Grep Tool
-sudo apt update
-sudo apt install ripgrep
-sudo apt install fd-find
-# Tạo liên kết hệ thống để đổi fdfind -> fd
-sudo ln -s $(which fdfind) /usr/local/bin/fd
-
-## Claude.md
-# Search Commands Instructions
-When exploring the codebase or searching for information, DO NOT use `grep` or `find`. 
-Instead, strictly use the following modern alternatives which are already installed on this system:
-
-- Use `rg` (ripgrep) to search for text/content inside files.
-- Use `fd` to search for filenames and directory paths.
