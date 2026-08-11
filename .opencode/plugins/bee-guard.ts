@@ -6,20 +6,31 @@
 //   1. locates the bee binary (mirrors claude-hooks.json's project-then-
 //      main-worktree search, since a linked worktree checkout has no
 //      vendored .bee/bin/bee of its own);
-//   2. maps OpenCode's write/edit/bash `tool.execute.before` payloads onto
-//      the JSON shape bee's write-guard hook already reads on stdin;
+//   2. maps every write-capable OpenCode tool this plugin routes
+//      (write/edit/bash/apply_patch) `tool.execute.before` payload onto the
+//      JSON shape bee's write-guard hook already reads on stdin — this is a
+//      field-name translation, not a verbatim pass-through (see
+//      mapToolCall below and discovery.md's field-shape table); and
 //   3. turns bee's documented DENY verdict (exit code 2, reason on stderr)
 //      into a thrown Error — the only documented block path for
-//      `tool.execute.before` (no abort field exists on `output`); and
-//   4. turns every OTHER failure to reach a verdict — missing binary, a
-//      spawn error, a crash, a signal kill, an unexpected exit code — into a
-//      thrown Error too. Undecidable is fail-closed here, never a silent
-//      allow: a fail-open host would swallow a fail-closed throw right back
-//      into an allow, which is the one failure mode this file must never
-//      have.
+//      `tool.execute.before` (no abort field exists on `output`).
 //
-// Proof (deny + allow transcripts, skills discovery, AGENTS.md load) lives
-// in docs/history/opencode-support/discovery.md.
+// Undecidable here means this plugin's own TypeScript-side failure to reach
+// ANY verdict from the bee binary — missing binary, a spawn error, a crash,
+// a signal kill, an exit code other than 0 or 2 — and that case is fail
+// CLOSED (thrown Error), never a silent allow: a fail-open host would
+// swallow that fail-closed throw right back into an allow, which is the one
+// failure mode this file must never have. This is a narrower claim than
+// "bee never fails open": bee's OWN could-not-decide outcome (a hook that
+// cannot judge the payload it was given) is fail-open BY DESIGN — exit 0
+// with a diagnostic on stderr (packages/bee-rs/crates/bee/src/hooks/mod.rs
+// `emit_undecidable`, :60-68). This plugin passes that verdict through as an
+// allow; it does not, and must not be read to, turn bee's own fail-open
+// design into a fail-closed one.
+//
+// Proof (deny + allow transcripts, skills discovery, AGENTS.md load, the
+// full write-capable tool registry) lives in
+// docs/history/opencode-support/discovery.md.
 
 import type { Plugin } from "@opencode-ai/plugin"
 import { execFileSync } from "node:child_process"
@@ -69,7 +80,16 @@ type MappedCall = { tool_name: string; tool_input: Record<string, unknown> }
 /** The only "rule" in this file: which OpenCode tools bee's write-guard
  * cares about, and the field-name translation into the PreToolUse shape bee
  * already reads (packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs).
- * Every actual allow/deny decision still comes from the bee binary. */
+ * Every actual allow/deny decision still comes from the bee binary.
+ *
+ * This must cover every write-capable tool the installed OpenCode binary
+ * registers, not just the ones a given session happens to expose to a
+ * model — a registered write-capable tool that falls through to `default`
+ * is a TypeScript-side allow, which is the one bypass this file exists to
+ * close. See discovery.md's "write-capable tool registry" table for how
+ * this list was enumerated (`tool.definition` hook probe + the installed
+ * binary's own permission grouping) and for `apply_patch`'s current
+ * exposure status. */
 function mapToolCall(tool: string, args: any): MappedCall | null {
   switch (tool) {
     case "write":
@@ -81,6 +101,14 @@ function mapToolCall(tool: string, args: any): MappedCall | null {
       }
     case "bash":
       return { tool_name: "Bash", tool_input: { command: args?.command } }
+    case "apply_patch":
+      // OpenCode's built-in apply_patch tool args shape is
+      // `{ patchText: string }` (confirmed against the installed
+      // opencode-ai@1.18.16 binary's own PatchSchema — see discovery.md).
+      // bee's write-guard reads the patch body from tool_input.input,
+      // .patch, or .command (detectors.rs apply_patch_text) — "patch" is
+      // the field name that carries it here.
+      return { tool_name: "apply_patch", tool_input: { patch: args?.patchText } }
     default:
       return null // not a write-capable tool bee's write-guard gates — no rule here, just routing
   }

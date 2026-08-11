@@ -116,14 +116,15 @@ blocks/allows in a real `opencode run` session on this checkout.
 ### Bottom line
 
 The plugin holds zero guard rules. Every tool call it maps
-(`write`/`edit`/`bash`) is forwarded verbatim as a `bee hook write-guard`
-stdin payload; the verdict is read off the child process's exit code only
-(`2` → deny, anything else non-zero or a spawn failure → deny, `0` →
-allow). A live `opencode run` session in this checkout proved both the deny
-and the allow path in a single transcript, proved the fail-closed path when
-no bee binary is reachable, proved bee's rendered skills are discovered,
-and proved the AGENTS.md preamble loads into the session with zero tool
-calls.
+(`write`/`edit`/`bash`, and — as of oc-3 — `apply_patch`) is translated
+(field names renamed, never passed through untouched — see the field-shape
+table below) into a `bee hook write-guard` stdin payload; the verdict is
+read off the child process's exit code only (`2` → deny, anything else
+non-zero or a spawn failure → deny, `0` → allow). A live `opencode run`
+session in this checkout proved both the deny and the allow path in a
+single transcript, proved the fail-closed path when no bee binary is
+reachable, proved bee's rendered skills are discovered, and proved the
+AGENTS.md preamble loads into the session with zero tool calls.
 
 ### Exact plugin hook signature (Local — verified against the installed
 `@opencode-ai/plugin@1.18.16` type declarations, `npm pack` +
@@ -317,3 +318,112 @@ the global `~/.config/opencode/`).
 - Skills actually reaching OpenCode today: `.agents/skills/<name>/SKILL.md`
   (project, via onboarding sync) and the two global trees — `.opencode/skills/`
   does not exist yet in this checkout (S2's job).
+
+## Discovery: apply_patch bypass closed (oc-3)
+
+**Date:** 2026-08-11
+**Scope:** oc-3 — a slice judge found the installed OpenCode binary
+registers a fourth write-capable tool, `apply_patch`, that oc-2's
+`mapToolCall` switch did not forward — its `default: return null` arm made
+that tool a TypeScript-side allow, bypassing bee's write-guard entirely.
+This closes that gap and records the write-capable tool registry the
+coverage claim now rests on.
+
+### Write-capable tool registry (installed `opencode-ai@1.18.16` binary)
+
+Two independent sources, cross-checked, since the binary is compiled (no
+plain JS source to read directly — oc-1's constraint still holds):
+
+1. **Live probe** — a scratch project (`/tmp/.../scratchpad/oc-probe-tools/`,
+   never this repo) with a logging plugin hooking `tool.definition` (fires
+   once per tool the session actually registers, with its full parameter
+   schema) and `tool.execute.before` (fires on every real call), run against
+   `opencode run "say hi"`. Registered/exposed tool set observed:
+   `invalid, question, bash, read, glob, grep, edit, write, task, webfetch,
+   todowrite, websearch, skill` — 13 tools. Of these, the write-capable ones
+   are exactly the three oc-2 already mapped: `write`, `edit`, `bash`.
+   `apply_patch` did NOT appear in this list.
+2. **Static binary read** — `strings` against the resolved compiled
+   executable (`~/.nvm/.../lib/node_modules/opencode-ai/bin/opencode.exe`,
+   via its `~/.nvm/.../bin/opencode` symlink), grepped for `apply_patch`.
+   This surfaced the tool's real registration, independent of whether the
+   live session exposes it:
+   - `var Nf="apply_patch"` with its input schema
+     `Z.Struct({patchText:Z.String...})` — the tool ID is exactly
+     `"apply_patch"` and its ONE argument field is `patchText`, carrying the
+     full `*** Begin Patch ...` envelope as a single string (same shape
+     `bee`'s own `apply_patch_text` detector already expects, see
+     `detectors.rs:18-27`).
+   - `H.register({[Nf]:...}, "edit")` — the tool is registered into
+     OpenCode's tool catalog under the `"edit"` permission group.
+   - `let K=["edit","write","apply_patch"]` — OpenCode's own permission
+     module groups `apply_patch` with `edit`/`write` for its internal
+     allow/deny/visibility rules. This is the write-group the slice judge's
+     finding cited; it confirms `apply_patch` is treated as write-capable by
+     OpenCode itself, not just by inference.
+
+**Reconciling the two sources:** `apply_patch` is a real tool OpenCode
+1.18.16 registers in its binary-level catalog, grouped with `edit`/`write`
+for permission purposes, but it was NOT among the tools offered to the
+model in the default `build` agent / free `opencode/*`-provider session
+used for every proof in this feature. A direct live check confirms this
+from the model's own side:
+
+```
+$ opencode run "Use the apply_patch tool (not write or edit) to create a
+  new file named patchprobe.txt with the content: hello via apply_patch. ..."
+
+I don't have an `apply_patch` tool available in this session — my
+available tools are bash, edit, glob, grep, read, skill, task, todowrite,
+webfetch, websearch, and write.
+```
+
+No config key or agent-mode toggle for this was found by string search
+(`experimental_apply_patch`, `applyPatchEnabled`, etc. — no hits); the
+most likely explanation, unconfirmed, is that OpenCode reserves
+`apply_patch` for provider/model combinations that declare native
+apply-patch tool-call support (the binary separately defines
+`openai.apply_patch` schemas for the OpenAI Responses API surface) rather
+than exposing it by default to every model. This is a named gap, not a
+blocker: the coverage rule this cell enforces is "every write-capable tool
+the binary registers must reach bee's write-guard, not just the ones a
+given session happens to expose" — `mapToolCall` now covers `apply_patch`
+regardless of whether this installation's default agent currently offers
+it to a model.
+
+### apply_patch → bee write-guard mapping (added to `bee-guard.ts`)
+
+```
+case "apply_patch":
+  return { tool_name: "apply_patch", tool_input: { patch: args?.patchText } }
+```
+
+- `tool_name: "apply_patch"` matches bee's `is_apply` match arm exactly
+  (`"apply_patch" | "ApplyPatch"`, `write_guard/main.rs:65`).
+- `tool_input.patch` carries the full patch text — one of the three keys
+  bee's `apply_patch_text` detector checks (`["input","patch","command"]`,
+  `detectors.rs:18-27`), each read for a `"*** Begin Patch"` prefix.
+
+### Live apply_patch deny probe — attempted, could not run
+
+Per the reconciliation above, this installation's default session never
+offers the model an `apply_patch` tool call to make, so there is no live
+transcript of bee denying a real `apply_patch` call in this feature (unlike
+oc-2's write/edit/bash proofs). What was attempted and confirmed instead:
+
+- The live probe transcript above, proving the tool genuinely is not
+  reachable through the model in this default configuration (not merely
+  untried).
+- A direct `bee hook write-guard` stdin probe with a synthetic
+  `{"tool_name":"apply_patch","tool_input":{"patch":"*** Begin Patch\n***
+  Add File: scratch-probe.log\n+hi\n*** End Patch"}}` payload was
+  considered as a substitute proof of the Rust-side deny path, but the
+  live-transcript requirement in this cell's action is specifically about
+  proving it "in an opencode run session" — a stdin probe bypasses the
+  plugin entirely and proves nothing about `mapToolCall`'s new branch, so
+  it was not substituted for the missing live transcript.
+- Named gap for a later slice: if a paid provider/model with native
+  apply-patch support is configured (per oc-1's Blockers section — no
+  paid-provider credentials exist on this machine), or if a future
+  OpenCode version exposes `apply_patch` to the default agent, re-run this
+  probe to get the live deny transcript this cell could not obtain.
