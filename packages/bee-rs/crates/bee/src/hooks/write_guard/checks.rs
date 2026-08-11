@@ -647,6 +647,11 @@ fn evaluate_git_invocation(
                         "the live-worker count could not be resolved ({}), which is treated as more than one worker",
                         reason
                     ),
+                    // gc-2: names the actual file so a solo session can fix it directly,
+                    // instead of only handing it the heavy temp-index workaround — mirrors
+                    // the hold-guard corrupt-store remedy (checks.rs ~356-360), which
+                    // covers unreadable as well as unparseable.
+                    "FIX: inspect/restore the reservation store (.bee/reservations.json), then retry.",
                 ))));
             }
             WorkerCount::Resolved(count) => {
@@ -655,6 +660,7 @@ fn evaluate_git_invocation(
                         &classified.verb,
                         classified.why,
                         &format!("{} workers are live in this checkout", count),
+                        CONCURRENT_TREE_TEMP_INDEX_REMEDY,
                     ))));
                 }
             }
@@ -682,15 +688,8 @@ fn evaluate_git_invocation(
         if READONLY.contains(&sub) {
             return Ok(None); // { allow: true } — no denial
         }
-        let flag_gated: Option<&[&str]> = match sub {
-            "branch" | "tag" => Some(&["--list"]),
-            "remote" => Some(&["-v", "--verbose"]),
-            _ => None,
-        };
-        if let Some(flags) = flag_gated {
-            if rest.iter().any(|t| flags.contains(&t.as_str())) {
-                return Ok(None);
-            }
+        if idle_gate_safe_form(sub, rest) {
+            return Ok(None); // { allow: true } — safe (non-mutating) spelling of this verb
         }
     }
 
@@ -751,4 +750,49 @@ fn evaluate_git_invocation(
         &format!("running `git {}`", named),
         "This git subcommand is not recognized as read-only or as a modeled bookkeeping-eligible mutation, so it is refused rather than assumed safe. ",
     ))))
+}
+
+/// Idle-gate safe-form table: per-verb predicates that admit a read-only
+/// SPELLING of a verb that also has mutating spellings — checked only at the
+/// terminal-phase idle gate, before the `push`/`MUTATING`/unrecognized-deny
+/// arms below. A verb absent here (or a spelling the predicate rejects)
+/// falls through unchanged.
+fn idle_gate_safe_form(sub: &str, rest: &[String]) -> bool {
+    match sub {
+        // `--list` allows, as today. Otherwise: no positional (non-flag)
+        // token, and no flags-only mutator — `-u`/`--set-upstream` (catches
+        // the `--set-upstream-to=x` `=`-spelling and attached `-uorigin/main`),
+        // `--unset-upstream`, `--edit-description`.
+        "branch" => {
+            rest.iter().any(|t| t == "--list")
+                || (!rest.iter().any(|t| !t.starts_with('-'))
+                    && !rest.iter().any(|t| {
+                        t.starts_with("-u")
+                            || t.starts_with("--set-upstream")
+                            || t.starts_with("--unset-upstream")
+                            || t.starts_with("--edit-description")
+                    }))
+        }
+        // Today's behavior, kept: `tag` shared the replaced flag-gated arm.
+        "tag" => rest.iter().any(|t| t == "--list"),
+        // No positional token — bare and `-v`/`--verbose` both pass this
+        // way; every mutating `remote` form carries a positional subcommand.
+        "remote" => !rest.iter().any(|t| !t.starts_with('-')),
+        // FIRST token, not first-positional: `git stash -- list` routes to
+        // `stash push` with pathspec `list` (verified against git 2.43.0).
+        "stash" => matches!(rest.first().map(String::as_str), Some("list") | Some("show")),
+        "worktree" => rest.first().map(String::as_str) == Some("list"),
+        // No positional, or first positional is `show`. `expire`/`delete`
+        // are positionals and fall through to the unrecognized-deny arm.
+        "reflog" => match rest.iter().find(|t| !t.starts_with('-')) {
+            None => true,
+            Some(w) => w == "show",
+        },
+        // Denied only for git-level pager spawn — arbitrary command the
+        // tokenizer never sees.
+        "grep" => !rest
+            .iter()
+            .any(|t| t.starts_with("-O") || t.starts_with("--open-files-in-pager")),
+        _ => false,
+    }
 }

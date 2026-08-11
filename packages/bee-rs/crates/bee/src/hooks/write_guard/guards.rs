@@ -62,19 +62,23 @@ pub(crate) fn direct_edit_verb(normalized: &str) -> Option<&'static str> {
     }
 }
 
-/// provenance: guards.mjs HISTORY_CODE_EXTENSIONS / docsHistoryCodeDeny.
+/// provenance: guards.mjs HISTORY_CODE_EXTENSIONS — also the "is this a code
+/// file" test for the credentials-prefix secret arm and the scratch
+/// verdict-/probe-/digest- prefix rule, both of which must not fire on a
+/// real source file that merely starts with a matching word.
+pub(crate) const CODE_FILE_EXTENSIONS: [&str; 22] = [
+    ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd", ".mjs", ".cjs", ".js", ".jsx", ".ts",
+    ".tsx", ".py", ".rb", ".go", ".rs", ".java", ".php", ".pl", ".lua", ".r",
+];
+
+/// provenance: guards.mjs docsHistoryCodeDeny.
 pub(crate) fn docs_history_code_deny(normalized: &str) -> Option<String> {
     if !normalized.starts_with("docs/history/") {
         return None;
     }
     let dot = normalized.rfind('.')?;
     let ext = normalized[dot..].to_lowercase();
-    const EXTS: [&str; 20] = [
-        ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd", ".mjs", ".cjs", ".js", ".jsx",
-        ".ts", ".tsx", ".py", ".rb", ".go", ".rs", ".java", ".php", ".pl",
-    ];
-    const EXTS2: [&str; 2] = [".lua", ".r"];
-    if EXTS.contains(&ext.as_str()) || EXTS2.contains(&ext.as_str()) {
+    if CODE_FILE_EXTENSIONS.contains(&ext.as_str()) {
         Some(ext)
     } else {
         None
@@ -106,9 +110,16 @@ pub(crate) fn scratch_shape_deny(normalized: &str) -> Option<String> {
     {
         return Some("a dotfile named like a debug/stress/scratch script".to_string());
     }
-    // SCRATCH_PREFIX_RE: ^(?:verdict|probe|digest)- (i)
+    // SCRATCH_PREFIX_RE: ^(?:verdict|probe|digest)- (i), exempted when the
+    // extension marks it a real source file rather than a scratch payload.
     if lower.starts_with("verdict-") || lower.starts_with("probe-") || lower.starts_with("digest-") {
-        return Some("a verdict-/probe-/digest- style scratch payload".to_string());
+        let is_code_file = lower
+            .rfind('.')
+            .map(|dot| CODE_FILE_EXTENSIONS.contains(&&lower[dot..]))
+            .unwrap_or(false);
+        if !is_code_file {
+            return Some("a verdict-/probe-/digest- style scratch payload".to_string());
+        }
     }
     // SCRATCH_EXT_RE: \.(tmp|log|bak)$ (i), exempted in test/fixture dirs.
     let ext_hit = [".tmp", ".log", ".bak"].iter().any(|e| lower.ends_with(e));
@@ -146,8 +157,19 @@ pub(crate) fn is_secret_path(normalized: &str) -> bool {
     if lower.ends_with(".pem") || lower.ends_with(".key") || lower.ends_with(".p12") {
         return true;
     }
-    if base.starts_with("id_rsa") || base.starts_with("credentials") {
+    if base.starts_with("id_rsa") {
         return true;
+    }
+    // "credentials*" is secret unless the extension marks it a real source
+    // file (src/credentials.rs, credentials_test.go, credentials.py, ...).
+    if base.starts_with("credentials") {
+        let is_code_file = base
+            .rfind('.')
+            .map(|dot| CODE_FILE_EXTENSIONS.contains(&&base[dot..]))
+            .unwrap_or(false);
+        if !is_code_file {
+            return true;
+        }
     }
     // /(^|[\\/])secrets\.[^\\/]+$/i
     if let Some(rest) = base.strip_prefix("secrets.") {
