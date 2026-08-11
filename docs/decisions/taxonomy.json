@@ -334,6 +334,8 @@
     "expertise",
     "scoping",
     "finish",
-    "advisory"
+    "advisory",
+    "runtime",
+    "opencode"
   ]
 }
