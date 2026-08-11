@@ -1,0 +1,45 @@
+{
+  "id": "ba-1",
+  "feature": "backlog-anchor",
+  "lane": "small",
+  "title": "Anchor knowledge context from a backlog row",
+  "action": "In packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs add Anchor::Backlog{paths,meta,body,bytes} as the fourth, last resolver arm: a folded .bee/backlog.jsonl PBI row whose id or feature field whole-matches the requested work; meta=title, body=detail/cos, kind()=\"backlog\", paths=[\".bee/backlog.jsonl\"]. Expose a pub(crate) helper in verbs/backlog.rs that folds the store and returns the matching row (first-add-wins fold already exists). Mirror the arm in drivers/kctx.rs (hand-kept byte-parity port). Extend verbs/knowledge/tests.rs: backlog row anchors context when no work-item/history/ledger exists; ledger still wins over a present backlog row; unknown work still refuses.",
+  "goal": "bee knowledge context and the session-preamble invitation fire during exploring, before docs/history/<feature>/CONTEXT.md exists — the backlog row is the earliest artifact naming the work.",
+  "verify": "PATH cargo test --release green including the three new anchor tests; kctx parity suite green.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+    "packages/bee-rs/crates/bee/src/drivers/kctx.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "exec-ba-1",
+    "outcome": "Added Anchor::Backlog fourth resolver arm (backlog.jsonl PBI row anchoring) mirrored in kctx.rs, with 3 new tests",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T07:24:21.545Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "80e38425-1b74-4cd6-acb9-0c54c717f644",
+    "claimed_at": "2026-08-11T07:13:11.837Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T07:24:08.977Z"
+  }
+}
