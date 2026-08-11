@@ -1,0 +1,53 @@
+{
+  "id": "wgp-2",
+  "feature": "write-guard-precision",
+  "lane": "standard",
+  "title": "checks.rs idle-gate safe-form git table + gc-2 Unresolved remedy",
+  "action": "Replace flag-gated arm (checks.rs:685-694) with safe-form table per plan.md section 1: branch (no positional AND no -u/--set-upstream*/--unset-upstream/--edit-description token, or --list), tag (--list kept), remote (no positional), stash (rest[0] exactly list|show), worktree (first token list), reflog (no positional or first positional show), grep (allow unless any token starts with -O or --open-files-in-pager). concurrent_tree_refusal (paths.rs) gains per-arm remedy param; Unresolved arm names .bee/reservations.json and mirrors hold-guard remedy; count>1 arm keeps today text. Tests: allow six read-only forms; deny listed mutating siblings; assert Unresolved refusal names reservations store.",
+  "must_haves": {
+    "truths": [
+      "At idle: git branch, git remote, git stash list, git stash show, git worktree list, git reflog, git grep <pat> all allow",
+      "At idle: git stash pop, git stash -- list, git worktree add x, git reflog expire, git branch -D x, git branch --set-upstream-to=origin/main, git branch --unset-upstream, git remote add o u, git grep --open-files-in-pager=cmd x all still deny",
+      "git tag --list still allows (no regression from replaced arm)",
+      "Unresolved refusal names .bee/reservations.json and inspect/restore remedy",
+      "count>1 refusal text unchanged"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "slice": 1,
+  "deps": [
+    "wgp-1"
+  ],
+  "status": "capped",
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "exec-wgp-2",
+    "outcome": "idle-gate safe-form git table + gc-2 Unresolved remedy landed in worktree commit fbcc40d7; worker suite green (1422 passed unit binary, full run ok)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "reservations skipped: control-plane verbs refused inside granted worktree; single sequential worker, no sibling risk"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-11T10:25:17.375Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2d2391b7-dc3a-421c-ae87-92955414702d",
+    "claimed_at": "2026-08-11T10:15:43.639Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T10:25:04.300Z"
+  }
+}

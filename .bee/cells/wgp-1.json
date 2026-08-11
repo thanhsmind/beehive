@@ -1,0 +1,49 @@
+{
+  "id": "wgp-1",
+  "feature": "write-guard-precision",
+  "lane": "standard",
+  "title": "guards.rs precision: code-extension exemptions for secret-prefix and scratch-prefix",
+  "action": "Extract shared CODE_FILE_EXTENSIONS const from docs_history_code_deny (extract-only; docs_history keeps full-path extension extraction). is_secret_path: credentials-prefix match skips basenames with a code extension. scratch_shape_deny: verdict-/probe-/digest- prefix rule skips code-extension basenames. Tests: flip tests.rs:948 deny(scripts/probe-foo.mjs) to allow; add allow cases src/credentials.rs, credentials_test.go, src/probe-runner.rs; keep deny cases credentials, credentials.json, probe-results.json (tracked dir).",
+  "must_haves": {
+    "truths": [
+      "check_read(src/credentials.rs) allows without privacy marker",
+      "check_read(credentials.json at repo root) still denies with @@BEE_PRIVACY@@ marker",
+      "scratch_shape_deny(src/probe-runner.rs) returns None",
+      "scratch_shape_deny(probe-results.json) in a tracked dir still returns Some",
+      "docs_history_code_deny behavior byte-identical (existing tests stay green)"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "slice": 1,
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "exec-wgp-1",
+    "outcome": "guards.rs code-extension exemptions landed in worktree commit 23ad32e; worker suite green there (1529 passed, 7 ignored)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "reservations skipped: control-plane verbs refused inside granted worktree; single sequential worker, no sibling risk"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-11T10:15:36.990Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2d2391b7-dc3a-421c-ae87-92955414702d",
+    "claimed_at": "2026-08-11T10:04:51.262Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T10:15:25.005Z"
+  }
+}
