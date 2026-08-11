@@ -497,7 +497,12 @@ explicitly can close it, which is the deliberate escape.
 - Creation seam and retirement verb (R105): `ensure_workflow_record_for_feature`
   in `packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs:337-385`
   (idempotent by feature; refuses an empty slug), wired into the feature start
-  at `state_group/policy.rs:684`; `close_workflows_for_feature`
+  at `state_group/policy.rs:684` — and since state-swap-hygiene cell ssh-1
+  (2026-08-11) into the `state set --feature` SWAP path too (`run_set_body`,
+  after the C1 direct write and outside the mutation locks): a swap closes
+  every other live record and ensures the incoming feature's, so the
+  deliberate C1 write carve-out no longer orphans the outgoing record
+  (PBI p-71d014e7's residue; the start-feature half was wl-2); `close_workflows_for_feature`
   (`feature.rs:390-406`) closes each record under its own `workflow:<id>` lock,
   sequentially, never nested inside the `state` lock. The verb halves are
   `run_workflows_list` (`state_group/workflows.rs:38-71`) and
