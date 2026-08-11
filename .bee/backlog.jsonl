@@ -759,3 +759,5 @@
 {"ts":"2026-08-11T04:37:52.402Z","kind":"pbi","event":"status","id":"p-9c48a67c","status":"done","feature":"island-read-filter"}
 {"ts":"2026-08-11T04:38:13.427Z","type":"debt","title":"cells list/ready/claim-next still refuse-delegate from a granted worktree at root resolution","detail":"Found during irf-1: only status/orient/finish use the worktree-native door; the three listing verbs delegate, so the new island read-scope filter is unit-level for them until their doors widen. Named residue on cell irf-1.","severity":"P3","layer":"rust-runtime","feature":"island-read-filter"}
 {"ts":"2026-08-11T04:56:29.018Z","kind":"pbi","event":"status","id":"p-50f3af4d","status":"done","feature":"schedule-regen-awareness"}
+{"ts":"2026-08-11T05:11:14.583Z","kind":"pbi","event":"status","id":"p-e20d82c9","status":"done","feature":"multisession-native"}
+{"ts":"2026-08-11T05:11:14.601Z","kind":"pbi","event":"status","id":"p-ed2de0d0","status":"done","feature":"multisession-native"}
