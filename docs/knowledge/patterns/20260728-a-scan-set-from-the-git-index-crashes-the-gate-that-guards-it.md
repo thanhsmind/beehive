@@ -48,6 +48,6 @@ the same reconciliation, because a gate that dies on its own stale input is
 strictly worse than no gate — it consumes the budget of a check while
 delivering the signal of a skip.
 
-See also [[pattern-20260722-a-scan-scope-set-from-assumption-passes-green-while-hiding-the-very-bug]]
-and [[pattern-20260723-a-coverage-gate-derives-its-ground-truth]]: those cover
+See also [[pattern-20260723-a-scan-scope-set-from-assumption-passes-green-while-hiding-the-bug]]
+and [[pattern-20260722-a-coverage-gate-derives-ground-truth-it-never-compares-two-hand-lists]]: those cover
 a scan scope that is *wrong*; this one covers a scan scope that is *fatal*.

@@ -2208,3 +2208,41 @@ use std::time::Instant;
             ManifestOut::NeedsNode => panic!("unexpected delegation"),
         }
     }
+
+    // ═══ host repo docs/knowledge bundle: real-bundle link integrity ═══════
+
+    /// This crate is vendored into other repos by onboarding (AGENTS.md), so
+    /// a checkout that carries no `docs/knowledge` bundle is a normal
+    /// outside-repo posture, never a failure — the walk from
+    /// CARGO_MANIFEST_DIR up through its ancestors either finds the host
+    /// repo's bundle or the test skips with a named reason.
+    #[test]
+    fn repo_docs_knowledge_bundle_carries_no_dangling_body_links() {
+        let start = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let Some(bundle_dir) = start.ancestors().map(|a| a.join("docs/knowledge")).find(|p| p.is_dir()) else {
+            eprintln!(
+                "skip: no docs/knowledge bundle found walking up from {} — this checkout carries no host repo docs (crate runs outside the bee repo)",
+                start.display()
+            );
+            return;
+        };
+        let report = check_bundle(&bundle_dir, false)
+            .expect("the host repo's own docs/knowledge bundle must not need Node delegation");
+        let mut dangling: Vec<&Value> = of_code(&report.warnings, "dangling_md_link");
+        dangling.extend(of_code(&report.warnings, "dangling_wiki_link"));
+        assert!(
+            dangling.is_empty(),
+            "docs/knowledge carries {} dangling body link(s):\n{}",
+            dangling.len(),
+            dangling
+                .iter()
+                .map(|f| format!(
+                    "  {} [{}]: {}",
+                    f["file"].as_str().unwrap_or("?"),
+                    f["code"].as_str().unwrap_or("?"),
+                    msg(f)
+                ))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+    }
