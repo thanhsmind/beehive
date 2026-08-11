@@ -8,7 +8,7 @@ use crate::fsutil::{read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock;
 use crate::registry::check_manifest_drift;
-use crate::roots::{resolve_store_root, Roots};
+use crate::roots::{resolve_store_root, resolve_store_root_worktree, Roots, RootsWt};
 use crate::state as bstate;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
@@ -81,6 +81,33 @@ pub(crate) fn warn_corrupt_json_once(file: &Path) {
     }
 }
 
+/// PBI p-9c48a67c / ips-1 read-side residue (irf-1): the single feature a
+/// GRANTED worktree island's `.bee/cells` reads are scoped to, or `None` for
+/// every other shape (an ordinary checkout, the main store, or an UNGRANTED
+/// worktree quietly sharing main's store — reads on those stay
+/// byte-identical). `git worktree add` checks out `.bee/cells` in FULL (it
+/// is git-tracked), and `ips-1`'s prune-on-register pass only ever removes
+/// UNTRACKED foreign-feature files (registry.rs's `sync_worktree_cells`), so
+/// a TRACKED foreign-feature cell legitimately rides along on disk forever —
+/// it must never surface in a listing, a ready scan, or a status count.
+///
+/// Resolved ONCE per caller, off the SAME grant-identity walk every other
+/// worktree-native verb already uses (`resolve_store_root_worktree` /
+/// `LinkedRoots::granted()`, roots.rs) and the SAME creation-identity read
+/// `bee status` / `bee orient` already use
+/// (`status_full::read_worktree_feature`) — no second implementation of
+/// either.
+pub(crate) fn island_feature_scope(root: &Path) -> Option<String> {
+    let RootsWt::Go(store_roots) = resolve_store_root_worktree(root) else {
+        return None;
+    };
+    let linked = store_roots.linked.as_ref()?;
+    if !linked.granted() {
+        return None;
+    }
+    crate::verbs::status_full::read_worktree_feature(&root.to_string_lossy())
+}
+
 /// lib/cells.mjs listCells(root, {feature, status}) — includeArchived is
 /// never passed by list/ready, so only the active .bee/cells/*.json scan is
 /// ported. Directory entries (the `archive` child) and non-.json names are
@@ -94,6 +121,7 @@ pub(crate) fn warn_corrupt_json_once(file: &Path) {
 /// and both runtimes enumerate the directory in the same OS order, so ids
 /// comparing equal (e.g. leading-zero variants) keep identical output order.
 pub(crate) fn list_cells(root: &Path, feature: Option<&str>, status: Option<&str>) -> Result<Vec<Value>, Delegate> {
+    let island_feature = island_feature_scope(root);
     let dir = cells_dir(root);
     let mut cells: Vec<Value> = Vec::new();
     let entries = match std::fs::read_dir(&dir) {
@@ -118,6 +146,11 @@ pub(crate) fn list_cells(root: &Path, feature: Option<&str>, status: Option<&str
             Value::Array(_) => return Err(Delegate), // JS-exotic: typeof [] === 'object'
             _ => continue,                           // primitives fail `typeof === 'object'`
         };
+        if let Some(scope) = island_feature.as_deref() {
+            if !matches!(map.get("feature"), Some(Value::String(s)) if s == scope) {
+                continue; // foreign-feature residue in a granted island — never surfaced
+            }
+        }
         if let Some(f) = feature {
             if !matches!(map.get("feature"), Some(Value::String(s)) if s == f) {
                 continue; // strict !==; absent/non-string never equals the filter

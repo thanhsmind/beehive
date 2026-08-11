@@ -3515,6 +3515,134 @@ use std::time::Instant;
         assert_eq!(result["released"], json!(["src/only.ts"]));
     }
 
+    // ══ irf-1 (PBI p-9c48a67c read-side residue) — a granted island's cell
+    //    reads scope to its own feature ═══════════════════════════════════
+    //
+    // `git worktree add` checks out `.bee/cells` in FULL (it is
+    // git-tracked), and ips-1's prune-on-register pass only ever removes
+    // UNTRACKED foreign-feature files — a TRACKED one legitimately rides
+    // along on disk forever. `list_cells`/`ready_cells` must never surface
+    // it: `bee cells list`, `bee cells ready`, `bee status` counts, and
+    // `claim-next` all read through this one native door.
+
+    /// `wf_worktree_fixture`'s own `granted` worktree, given the creation
+    /// identity `worktree register --feature <feature>` would have written
+    /// (`write_creation_identity`, registry.rs) — by hand, since this suite
+    /// exercises the READ side only.
+    fn write_worktree_identity(worktree_root: &Path, feature: &str) {
+        std::fs::create_dir_all(worktree_root.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            worktree_root.join(".bee").join("runtime").join("worktree-identity.json"),
+            format!("{{\"feature\":\"{feature}\"}}"),
+        )
+        .unwrap();
+    }
+
+    /// RED before irf-1: a fresh granted island legitimately holds another
+    /// feature's tracked cell file (the ips-1 residue) — `list_cells` must
+    /// scope it out, with no `--feature` flag needed to do it.
+    #[test]
+    fn list_cells_in_a_granted_island_never_surfaces_a_foreign_features_residue() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_main, granted, _ungranted) = wf_worktree_fixture(tmp.path());
+        write_worktree_identity(&granted, "feat-a");
+        // The residue: feature B's cell sitting in A's island (as a real
+        // `git worktree add` would carry a tracked foreign file), alongside
+        // A's own.
+        write_cell_fixture(&granted, "a-1", &cell("a-1", "open", "feat-a", json!([])));
+        write_cell_fixture(&granted, "b-1", &cell("b-1", "open", "feat-b", json!([])));
+
+        let ids: Vec<String> = list_cells(&granted, None, None)
+            .unwrap()
+            .iter()
+            .map(|c| js_string_or_undefined(c.get("id")))
+            .collect();
+        assert_eq!(ids, vec!["a-1"], "feature B's residue must never be listed from the island");
+
+        // An explicit `--feature` flag agrees, and never widens the scope.
+        let ids: Vec<String> = list_cells(&granted, Some("feat-b"), None)
+            .unwrap()
+            .iter()
+            .map(|c| js_string_or_undefined(c.get("id")))
+            .collect();
+        assert!(ids.is_empty(), "asking for feature B by name still finds nothing inside A's island");
+    }
+
+    /// Same residue, `bee cells ready`'s own door (`ready_cells`, which
+    /// wraps `list_cells`) — and claim-next's own read of it, with the
+    /// caller's own feature named explicitly, exactly as `run_claim_next`
+    /// always calls it.
+    #[test]
+    fn ready_cells_in_a_granted_island_never_offers_a_foreign_features_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_main, granted, _ungranted) = wf_worktree_fixture(tmp.path());
+        write_worktree_identity(&granted, "feat-a");
+        write_cell_fixture(&granted, "a-1", &cell("a-1", "open", "feat-a", json!([])));
+        write_cell_fixture(&granted, "b-1", &cell("b-1", "open", "feat-b", json!([])));
+
+        let ids: Vec<String> = ready_cells(&granted, None)
+            .unwrap()
+            .iter()
+            .map(|c| js_string_or_undefined(c.get("id")))
+            .collect();
+        assert_eq!(ids, vec!["a-1"]);
+
+        // claim-next's own call shape: always scoped to the requester's own
+        // feature already — pinned so this stays true across the fix.
+        let ids: Vec<String> = ready_cells(&granted, Some("feat-a"))
+            .unwrap()
+            .iter()
+            .map(|c| js_string_or_undefined(c.get("id")))
+            .collect();
+        assert_eq!(ids, vec!["a-1"]);
+        assert!(
+            ready_cells(&granted, Some("feat-b")).unwrap().is_empty(),
+            "claim-next must never offer feature B's cell from inside A's island"
+        );
+    }
+
+    /// Every production caller passes `list_cells` an already-resolved store
+    /// root (`resolve_store_root(cwd)`'s own `Ordinary(r)`), which for an
+    /// UNGRANTED worktree is always `main_root` itself — so this is really
+    /// the SAME case as the main-store test below. Defensively, though,
+    /// `island_feature_scope` must also read as unscoped if it were ever
+    /// handed the ungranted worktree's OWN raw directory directly:
+    /// `resolve_roots_core` there answers `store_root == main_root !=
+    /// worktree_root`, i.e. `granted() == false`.
+    #[test]
+    fn list_cells_at_an_ungranted_worktrees_own_path_stays_unscoped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_main, _granted, ungranted) = wf_worktree_fixture(tmp.path());
+        write_cell_fixture(&ungranted, "a-1", &cell("a-1", "open", "feat-a", json!([])));
+        write_cell_fixture(&ungranted, "b-1", &cell("b-1", "open", "feat-b", json!([])));
+
+        let ids: Vec<String> = list_cells(&ungranted, None, None)
+            .unwrap()
+            .iter()
+            .map(|c| js_string_or_undefined(c.get("id")))
+            .collect();
+        assert_eq!(ids, vec!["a-1", "b-1"], "an ungranted worktree's read is unfiltered, like main's");
+    }
+
+    /// The MAIN store itself, several features at once — pinned
+    /// byte-identical: `island_feature_scope` never engages outside a
+    /// GRANTED worktree island, so this is the exact pre-fix behavior.
+    #[test]
+    fn list_cells_at_the_main_store_shows_every_feature_unfiltered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, _granted, _ungranted) = wf_worktree_fixture(tmp.path());
+        write_cell_fixture(&main, "a-1", &cell("a-1", "open", "feat-a", json!([])));
+        write_cell_fixture(&main, "b-1", &cell("b-1", "open", "feat-b", json!([])));
+        write_cell_fixture(&main, "c-1", &cell("c-1", "open", "feat-c", json!([])));
+
+        let ids: Vec<String> = list_cells(&main, None, None)
+            .unwrap()
+            .iter()
+            .map(|c| js_string_or_undefined(c.get("id")))
+            .collect();
+        assert_eq!(ids, vec!["a-1", "b-1", "c-1"]);
+    }
+
     // ══ B-P2-8 — `cells update` arms the behavior door ═══════════════════
     //
     // `run_update` (handlers_write.rs) resolves its store root off
