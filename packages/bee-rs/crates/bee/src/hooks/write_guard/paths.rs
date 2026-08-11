@@ -359,17 +359,20 @@ pub(crate) fn classify_concurrent_tree_verb(subcommand: Option<&str>, rest: &[St
     None
 }
 
-pub(crate) fn concurrent_tree_refusal(verb: &str, why: &str, worker_clause: &str) -> String {
-    format!(
-        "bee concurrent-worker git guard: `git {verb}` is refused because {worker_clause}. {why} \
-FIX: inspection is always allowed — git status / git diff / git log. To land your own work, make ONE path-scoped \
+/// The `count > 1` arm's remedy — byte-identical to the text this function
+/// used to hard-code for both arms, now that each arm supplies its own via
+/// `concurrent_tree_refusal`'s `remedy` parameter.
+pub(crate) const CONCURRENT_TREE_TEMP_INDEX_REMEDY: &str =
+    "FIX: inspection is always allowed — git status / git diff / git log. To land your own work, make ONE path-scoped \
 commit through your OWN temp index instead of the shared one: \
 GIT_INDEX_FILE=<tmp> git read-tree HEAD, then GIT_INDEX_FILE=<tmp> git update-index --add <your paths>, \
 GIT_INDEX_FILE=<tmp> git write-tree, git commit-tree <tree> -p HEAD -m \"<msg>\", git update-ref HEAD <commit>. \
 For a path git does not track yet, `git add -N <path>` first (intent-to-add stages no content). \
 A genuinely path-scoped `git commit -- <your paths>` is allowed too. Never reset / stash / checkout / clean / \
-restore / revert across the shared tree while a sibling worker holds work in it — a file reservation cannot protect a tree."
-    )
+restore / revert across the shared tree while a sibling worker holds work in it — a file reservation cannot protect a tree.";
+
+pub(crate) fn concurrent_tree_refusal(verb: &str, why: &str, worker_clause: &str, remedy: &str) -> String {
+    format!("bee concurrent-worker git guard: `git {verb}` is refused because {worker_clause}. {why} {remedy}")
 }
 
 pub(crate) fn session_workspace_id(control_root: &str, session_id: &Value) -> R<String> {

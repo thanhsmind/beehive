@@ -687,6 +687,21 @@ use std::process::ExitCode;
         assert!(e2.stderr.contains("unreadable/corrupt"));
     }
 
+    // ── gc-2: concurrent-worker git guard, Unresolved arm ───────────────────
+
+    #[test]
+    fn concurrent_tree_guard_unresolved_arm_names_the_reservation_store() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(fx.root.join(".bee").join("reservations.json"), "{ not json").unwrap();
+        let e = expect_done(bash("git reset --hard"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee concurrent-worker git guard"));
+        // Names the actual file and the direct remedy, not just the
+        // temp-index recipe (which stays reserved for the `count > 1` arm).
+        assert!(e.stderr.contains(".bee/reservations.json"));
+        assert!(e.stderr.contains("inspect/restore the reservation store"));
+    }
+
     // ── linked-worktree matrix (rows 30-34) ────────────────────────────────
 
     struct Linked {
@@ -989,6 +1004,42 @@ use std::process::ExitCode;
         let fx = build_git_fixture("idle");
         assert_eq!(expect_done(bash("git status"), &fx.root).code, 0);
         assert_eq!(expect_done(bash("git log --oneline -5"), &fx.root).code, 0);
+    }
+
+    #[test]
+    fn git_idle_gate_safe_form_table() {
+        let fx = build_git_fixture("idle");
+        let allow = |cmd: &str| {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 0, "expected allow for {cmd:?}: {}", e.stderr);
+        };
+        let deny = |cmd: &str| {
+            let e = expect_done(bash(cmd), &fx.root);
+            assert_eq!(e.code, 2, "expected deny for {cmd:?}: {}", e.stderr);
+        };
+
+        // Safe (non-mutating) spellings — newly allowed.
+        allow("git branch");
+        allow("git remote");
+        allow("git stash list");
+        allow("git stash show");
+        allow("git worktree list");
+        allow("git reflog");
+        allow("git grep pattern");
+        allow("git tag --list");
+        allow("git branch --list");
+
+        // Mutating spellings of the SAME verbs — still denied at idle.
+        deny("git stash pop");
+        deny("git stash -- list"); // routes to `stash push` with pathspec "list"
+        deny("git worktree add x");
+        deny("git reflog expire");
+        deny("git branch -D x");
+        deny("git branch --set-upstream-to=origin/main");
+        deny("git branch --unset-upstream");
+        deny("git branch -uorigin/main");
+        deny("git remote add o u");
+        deny("git grep --open-files-in-pager=cmd x");
     }
 
     #[test]
