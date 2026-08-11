@@ -1190,3 +1190,277 @@ a REAL silent gap rather than manufacturing one). After adding the line:
 `5 passed; 0 failed`, ~5.5s, with the ambient `node` v24.14.1 and the
 installed `opencode-ai@1.18.16` binary both present on this machine (neither
 `BEE_OPENCODE_SUITE_ALLOW_SKIP` override needed here).
+
+## Discovery: a bee-build worker capped a real cell from inside a nested OpenCode session (oc-12)
+
+**Date:** 2026-08-11/12. **Scope:** oc-12 — S4 (plan.md E4), the D4/D5
+proof itself: does a bee worker actually run and cap a cell from inside an
+OpenCode session, not merely get defined (oc-11)? Method: a throwaway cell
+(`lv-1`, feature `opencode-support-proof`, added/claimed through the real
+`bee cells add`/`claim` CLI, never one of this feature's own `oc-*` cells)
+whose only job is to write one file and cap. Three live `opencode run`
+attempts, in order, each building on what the last one found.
+
+### Bottom line
+
+**Yes — proved live, twice over the failure mode the cell asked about.**
+A real `bee-build` OpenCode subagent, reached through the `task` tool (not
+an `--agent` flag — that path silently does NOT reach a `mode: subagent`
+agent, see the named gap below), wrote the file, committed it, and ran
+`bee cells finish --id lv-1` to completion inside its own nested OpenCode
+session — `capped lv-1 at 2026-08-11T17:32:09.802Z (tests: green)`,
+confirmed independently via `bee cells show --id lv-1` (`"status": "capped"`)
+and the OpenCode session database. Two real, worth-recording defects
+surfaced on the way, neither in scope to fix here (per this cell's own
+instruction): a reservation session-identity mismatch on nested dispatch
+(architectural, D3-relevant), and `opencode run --agent <subagent>` silently
+falling back to the default primary agent instead of the named subagent.
+The guard belt did not go missing anywhere in the nested path — it engaged
+correctly at every guarded surface it was exercised against, twice denying
+for real reasons and once allowing.
+
+### Attempt 1 — nested task-tool dispatch, denied by a real (mismatched) cross-session hold
+
+Outer prompt (`opencode run`, default `build` primary agent, model
+`opencode/big-pickle`, no `--agent`/`--model` flag): instructed to make
+exactly one `task` tool call with `subagent_type: "bee-build"`,
+`description: "cap cell lv-1"`, and a prompt carrying the full cell payload
+(nickname `oc-live`, cell JSON, environment paths) — mirroring the shape
+this very cell's own dispatch prompt used. The file had been pre-reserved
+by the orchestrator (this Claude session, `oc-live`) via
+`bee reservations reserve --agent oc-live --cell lv-1 --path
+docs/history/opencode-support/live-worker-proof.md` before dispatch, exactly
+as this cell's own `discovery.md` reservation was pre-made for it.
+
+Live transcript (verbatim, from the nested `bee-build` child session):
+
+```
+bee cross-session hold: "docs/history/opencode-support/live-worker-proof.md"
+is held by session "fd787469-f9f4-4ca3-bf5f-6d8820b24165" (agent oc-live,
+cell lv-1), expires 2026-08-11T18:16:07.274Z. Wait for the hold to expire or
+coordinate with that session — a cross-session hold is a hard block (D3).
+
+**Task result (verbatim from bee-build worker):**
+
+Diagnosis confirmed and complete. I cannot write the cell's file through any
+guarded surface — this is a genuine wiring gap, not a conflict I may resolve
+or write through.
+
+**[BLOCKED]**
+
+**Why:** Session-id namespace mismatch in the OpenCode guard plugin wiring:
+- The dispatcher reserved the file for me under session
+  `fd787469-f9f4-4ca3-bf5f-6d8820b24165` — this session's own
+  `CLAUDE_CODE_SESSION_ID`.
+- The OpenCode plugin (`.opencode/plugins/bee-guard.ts:402`) forwards
+  `session_id: input.sessionID` — OpenCode's own native `ses_…` id
+  (`ses_00e2b98d2ffebr3CO2Zj8FeXra`) — to bee's write-guard.
+- write-guard compares that id against the reservation holder's session ->
+  mismatch -> DENY exit 2.
+```
+
+The worker's own diagnosis is correct and independently verified: direct
+`bee reservations list` showed the reservation's holder session as
+`fd787469…` (this Claude session's `CLAUDE_CODE_SESSION_ID`, used implicitly
+by `bee reservations reserve` per `verbs/reservations/reserve.rs:103-109`
+when no `--session`/`BEE_SESSION_ID` is given), while `bee-guard.ts:402`
+forwards `input.sessionID` — OpenCode's own per-session id — as the
+write-guard payload's `session_id`. `write_guard/store.rs`'s
+`find_session_conflicts` (checks.rs:351-386) denies exactly when a
+reservation's `session` differs from the acting `session_id` — proving this
+is the SAME native cross-session-hold logic the Claude belt uses, reached
+correctly through the nested dispatch, not a stub.
+
+**This is the real, structural finding, not an artifact of Claude
+orchestrating an external CLI:** the OpenCode session DB (`sqlite3
+~/.local/share/opencode/opencode.db`, `session` table) confirms the child
+`bee-build` session (`ses_00e2b98d2ffebr3CO2Zj8FeXra`) has `parent_id`
+pointing at the OUTER primary session (`ses_00e2bb6ebffe7ChGPN8NDtvdap`) —
+parent and child are given DIFFERENT native `ses_…` ids. Any all-OpenCode
+orchestrator (a primary session reserving a file, then `task`-dispatching a
+`bee-build` child to write it) would hit this exact mismatch: the
+reservation carries whichever session made the CLI call, but write-guard
+checks the id of whichever session performs the actual write — and those
+are never the same session once a nested dispatch is involved. **Named gap,
+not fixed here (out of scope for this cell):** the reservation model assumes
+reservation-owner and actual-writer share one session identity, true for
+Claude's Task-tool nested subagents (they inherit the same
+`CLAUDE_CODE_SESSION_ID`) but false for OpenCode's `task`-tool nested
+subagents (each session, parent or child, gets its own distinct native id).
+A real S4/S5 follow-up needs either the plugin to forward a
+workspace-scoped identity instead of the raw per-session id, or the
+reservation CLI to accept the not-yet-known child id, or a documented
+convention that only the actually-dispatched session reserves for itself
+(see Attempt 3, which sidesteps the mismatch by never invoking it).
+
+**Guard-engagement fact, either way, as this cell asked for explicitly:**
+the write-guard belt DID engage inside the nested `bee-build` session — it
+did not go missing. It fired, evaluated the real cross-session-hold rule
+against real reservation-store state, and returned the same native deny
+text the Claude belt would. The belt is present and correct in nested
+dispatch; the defect is a session-identity plumbing mismatch between the
+reservation CLI's default identity source and the plugin's forwarded id, not
+an absent guard.
+
+**Model resolution, from the session DB, not from config:**
+
+```
+sqlite3 ~/.local/share/opencode/opencode.db "select id,parent_id,agent,model,title from session where id in ('ses_00e2bb6ebffe7ChGPN8NDtvdap','ses_00e2b98d2ffebr3CO2Zj8FeXra');"
+
+ses_00e2bb6ebffe7ChGPN8NDtvdap  (no parent)                      build      {"id":"big-pickle","providerID":"opencode"}  Live OpenCode worker proof
+ses_00e2b98d2ffebr3CO2Zj8FeXra  ses_00e2bb6ebffe7ChGPN8NDtvdap    bee-build  {"id":"big-pickle","providerID":"opencode"}  cap cell lv-1 (@bee-build subagent)
+```
+
+`bee-build`'s resolved model (`opencode/big-pickle`) matches
+`.opencode/agent/bee-build.md`'s pinned `model: opencode/big-pickle`
+frontmatter exactly — the per-agent model pin (plan.md's structural
+model-guard fallback) is real, live-verified, not assumed. The outer `build`
+primary agent resolved to the SAME free model, coincidentally: that is the
+workspace default, unrelated to per-tier pinning, and is recorded
+separately so the two are never conflated.
+
+**Wall-clock shape (D5 — sequential-only accepted):** dispatch started
+17:17:19Z, the outer `build` agent explored the repo on its own (13 Bash/
+Grep/Read calls — it was told to make exactly one `task` call and did not;
+see the free-model-behavior note below) before finally calling `task` at
+17:22:02Z, and the whole invocation (outer exploration + nested dispatch +
+deny + the worker's own diagnosis) returned at 17:22:15Z — **4m56s
+end-to-end for ONE cell, entirely serial**, consistent with D5's accepted
+sequential-only dispatch (upstream anomalyco/opencode #29638): there is no
+concurrent second dispatch to time against; the shape to record is simply
+that one nested dispatch fully blocks the outer session until it returns.
+
+### Attempt 2 — `opencode run --agent bee-build` does not reach the subagent; guard re-engaged on the retry anyway
+
+After releasing the stale reservation (`bee reservations release --agent
+oc-live --cell lv-1`; a reservation with no session field never conflicts —
+`find_session_conflicts`, store.rs:679-682 only treats a non-empty,
+non-matching session string as a conflict), a second attempt tried
+`opencode run --agent bee-build < prompt`, expecting to run AS the
+`bee-build` subagent directly. It did not:
+
+```
+! agent "bee-build" is a subagent, not a primary agent. Falling back to default agent
+> build · big-pickle
+```
+
+**Named gap:** `opencode run --agent <name>` silently falls back to the
+default primary agent when `<name>` is `mode: subagent` — a subagent is
+only reachable through the `task` tool (Attempt 1, Attempt 3), never
+directly from the CLI's `--agent` flag. Worth documenting for anyone
+scripting a direct single-worker OpenCode dispatch: it must go through a
+primary session's `task` call, there is no shortcut.
+
+Running as the (fallback) default `build` agent anyway, the write succeeded
+cleanly (no reservation now exists, so write-guard's cross-session-hold rule
+correctly no-ops — confirms the Attempt 1 defect was specifically the
+mismatched reservation, not a blanket nested-write deny). The
+concurrent-worker git guard then engaged for real, live, against actual
+concurrent swarm activity in this checkout (4 other workers registered at
+the time per `bee status`):
+
+```
+$ git add docs/history/opencode-support/live-worker-proof.md && git commit -m "..."
+bee concurrent-worker git guard: `git add` is refused because 4 workers are
+live in this checkout. it stages content into the SHARED index... FIX: ...
+GIT_INDEX_FILE=<tmp> git read-tree HEAD, then GIT_INDEX_FILE=<tmp> git
+update-index --add <your paths>, GIT_INDEX_FILE=<tmp> git write-tree, git
+commit-tree <tree> -p HEAD -m "<msg>", git update-ref HEAD <commit>.
+```
+
+The model read the FIX text and self-recovered without further guidance,
+running the temp-index sequence verbatim and landing a real commit
+(`96bb8f66152a452f9bf1bf3b08c152118285a802`, trailer `cell: lv-1`,
+confirmed via `git log -1 --format="%(trailers)"`). This is a second,
+independent live proof that write-guard's BLOCKING path engages correctly
+for a real worker doing real git operations inside an OpenCode session, and
+that its FIX text is actionable by a small free model without hand-holding.
+
+`bee cells finish --id lv-1` then refused for the reason this cell's own
+dispatch prompt named in advance: `cells finish trailer lookback cannot see
+worktree-local commits`:
+
+```
+capCell: cell "lv-1" refused — one commit per cell: no commit in the last 50
+commit(s) of /home/thanhsmind/projects/goglbe/beehive carries the trailer
+"cell: lv-1". ... — or pass --commit-pending "<reason>" to finish anyway.
+```
+
+The worker was not told about `--commit-pending` in this attempt's prompt
+(an oversight in the dispatch, not a plugin defect) and, rather than
+reporting `[BLOCKED]` with that exact refusal text, spent the rest of its
+turn reading bee's own Rust source in the MAIN checkout to self-diagnose —
+which triggered a real `permission requested: external_directory` ask that
+was auto-rejected (no interactive approver in a non-interactive `opencode
+run`), and the session ended there with no final status token. **Named,
+not fixed:** a free-tier worker without the exact recovery flag in its
+prompt will self-direct into exploration rather than stopping at
+`[BLOCKED]` — a real free-model-behavior characteristic worth carrying into
+any future OpenCode dispatch-prompt design (name the exact recovery command,
+never assume the worker will discover it).
+
+### Attempt 3 — nested dispatch, told about `--commit-pending`, capped clean
+
+Third `opencode run` (nested, `task` tool, `subagent_type: "bee-build"`),
+told the commit already existed and to run exactly one command:
+
+```
+$ /home/thanhsmind/projects/goglbe/beehive/.bee/bin/bee cells finish --id lv-1 \
+  --outcome "live OpenCode worker proof" \
+  --files docs/history/opencode-support/live-worker-proof.md \
+  --commit-pending "commit 96bb8f66 landed in the linked worktree; trailer lookback only scans the main checkout's history"
+```
+
+Live transcript (verbatim):
+
+```
+Capped lv-1 at 2026-08-11T17:32:09.802Z (tests: green).
+No active reservations to release.
+next: reply [DONE] with the one-line outcome, files touched, and the commit hash.
+[bee] cells finish 11780ms
+
+Status: [DONE]. Outcome: live OpenCode worker proof — file
+docs/history/opencode-support/live-worker-proof.md, commit
+96bb8f66152a452f9bf1bf3b08c152118285a802 (cell: lv-1).
+```
+
+Independently confirmed via `bee cells show --id lv-1`:
+`"status": "capped"`, `"capped_at": "2026-08-11T17:32:09.802Z"`,
+`"tests": "green"`, `"commit_pending": "commit 96bb8f66 landed in the linked
+worktree; trailer lookback only scans the main checkout's history"`. Session
+DB confirms the same shape as Attempt 1: child session `bee-build`, model
+`{"id":"big-pickle","providerID":"opencode"}`, `parent_id` pointing at a
+fresh outer `build` session — nested dispatch, real subagent, real model
+tier, real cap. Wall-clock: dispatch to return, 17:31:43Z to 17:32:17Z
+(34s) — the actual capping work inside `bee cells finish` itself took
+11.78s per its own reported duration; the rest is OpenCode session overhead.
+This is by far the fastest of the three runs, consistent with a
+single-command prompt leaving nothing for the free model to explore.
+
+### tools-logger inside nested dispatch — inconclusive, recorded honestly
+
+`.bee/logs/tools.jsonl` entries generated strictly during Attempt 1's
+`opencode run` window (17:17:19Z–17:22:15Z, isolated by timestamp since this
+orchestrating Claude session was blocked the whole time and could not be
+logging its own calls) all carry `agent_id: null, agent_type: null` — same
+shape oc-9 already documented for a non-nested probe. This run cannot tell
+whether that is because `tool.execute.after` never fires for a CHILD
+session's own tool calls (as distinct from the outer session's), or fires
+but the plugin still has no per-session agent metadata to forward (the
+already-documented gap). Not re-asserted as a new fact beyond what oc-9
+already named — recorded here only so a future S5 pass does not have to
+re-discover that this cell's own logs do not resolve it either.
+
+### Verified
+
+- `bee cells show --id lv-1` → `"status": "capped"`, `"capped_at":
+  "2026-08-11T17:32:09.802Z"`, `"tests": "green"` (live, this session).
+- `sqlite3 ~/.local/share/opencode/opencode.db` `session` table — the
+  concrete parent/child rows and `model` JSON quoted above (live, this
+  session; the DB is opencode's own, not bee's).
+- `git log -1 --format="%H %s%n%(trailers)"` in this worktree →
+  `96bb8f66152a452f9bf1bf3b08c152118285a802 Record a live OpenCode worker
+  proof touch` / `cell: lv-1` (live, this session).
+- `docs/history/opencode-support/live-worker-proof.md` exists in this
+  worktree with the required line, committed under `lv-1`'s own commit —
+  a throwaway proof artifact, not part of this feature's own file set.
