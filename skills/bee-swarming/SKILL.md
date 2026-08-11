@@ -33,18 +33,26 @@ cells up, state the one-line concurrency plan before dispatching.
 1. `bee cells schedule --json` sets dispatch order — override only with a
    stated reason. Overlapping-file cells are fixed by scope or
    reservations, never by "spawn both carefully".
-2. `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
-   claims the cell, reserves its files for the worker, and returns the
-   prompt payload in one verb. Judge and record the model tier first
-   (`bee cells tier`; rubric: `references/swarming-reference.md`).
-3. Spawn with exactly that payload. Never paste session history; never
-   hand a worker two cells.
-4. Tend: collect status tokens. Silence is not failure — inspect
+2. `bee dispatch wave --runtime <rt>` prepares the WHOLE current wave in
+   one call — claim, reserve, and payload per ready cell, refusals landing
+   in `skipped` with a typed reason instead of aborting the batch. One
+   cell, or a cell needing its own worker name, takes
+   `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
+   instead. Judge and record the model tier first (`bee cells tier`;
+   rubric: `references/swarming-reference.md`).
+3. Spawn with exactly that payload — a whole wave goes out in ONE message,
+   one tool call per cell. Never paste session history; never hand a
+   worker two cells.
+4. Tend: read each worker's Result form (the fenced
+   `{outcome, commit, files, tests, deviations}` block its prompt
+   requires), never its prose. Silence is not failure — inspect
    `bee cells list` and `bee reservations list` before assuming stuck.
 5. On `[DONE]`: the worker's word is never the evidence. Goal-check on
-   smell; `bee cells judge` for undeclared-file hits; at
-   `standard`/`high-risk`, one semantic judge per slice over its
-   `behavior_change` cells.
+   smell; `bee cells judge` for undeclared-file hits. At
+   `standard`/`high-risk` the semantic judge is not judgment but a door:
+   every `behavior_change` cell owes a `bee cells judge-record` verdict or
+   `bee close` refuses (`judge-debt`), so run the slice judge before you
+   reach for close.
 6. Slice clean: `bee close --feature <slug> --dry-run` names every
    remaining door with the command that settles it; the final slice runs
    `bee close --feature <slug>`, which re-runs the declared tests
@@ -90,12 +98,15 @@ outputs — when a verb refuses, its message names the fix.
    surfaces matching patterns and area concepts before you guess.
 4. Commit once: subject describes the change in imperative mood; the cell
    id rides the last line of the body.
-5. `bee finish --id <cell> --outcome "<one line>" --files <a,b>` —
-   cap and release in one verb. Finish runs the declared tests
-   (`commands.test`): green caps; a red refuses, and the refusal carries
-   the failing test excerpt — that red is now your work. Tests run at
-   finish; close re-runs them for the feature.
-6. Return exactly one token, first thing in your final message:
+5. `bee finish --id <cell> --outcome "<one line>" --files <a,b>
+   --report '<json>'` — cap and release in one verb, `--report` carrying
+   the same Result form you return (`{outcome, commit, files, tests,
+   deviations}`), which finish validates key-for-key onto the trace.
+   Finish runs the declared tests (`commands.test`): green caps; a red
+   refuses, and the refusal carries the failing test excerpt — that red is
+   now your work. Tests run at finish; close re-runs them for the feature.
+6. Return exactly one token, first thing in your final message, and the
+   Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
    diagnosis) · `[HANDOFF]` (the 65% handoff, AGENTS.md — handoff file
    written before the token) · `[NOOP]` (cell missing or already capped). Never wait
