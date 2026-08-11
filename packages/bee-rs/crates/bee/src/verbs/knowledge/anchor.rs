@@ -55,6 +55,23 @@ pub(crate) enum Anchor<'a, C: ConceptLike> {
         body: String,
         bytes: u64,
     },
+    /// backlog-anchor D1 (a98e27c2): the fourth and last arm — none of the
+    /// three above resolved, but a folded `.bee/backlog.jsonl` PBI row whose
+    /// `id` or `feature` field whole-matches `work` does
+    /// (`backlog::backlog_row_for_work`). `bee knowledge context` and the
+    /// session-preamble invitation (D3) need to fire during exploring,
+    /// before docs/history/<work>/CONTEXT.md exists — a backlog row is
+    /// often the earliest artifact naming the work. `meta` is the row's
+    /// title, `body` its cos, `bytes` sized off `body` the same way the
+    /// Ledger arm sizes its own composed text (no single backing file to
+    /// stat) — the same degraded ranking (no tags/areas of its own) the
+    /// History/Ledger arms already carry.
+    Backlog {
+        paths: Vec<String>,
+        meta: String,
+        body: String,
+        bytes: u64,
+    },
 }
 
 impl<'a, C: ConceptLike> Anchor<'a, C> {
@@ -63,6 +80,7 @@ impl<'a, C: ConceptLike> Anchor<'a, C> {
             Anchor::WorkItem(_) => "work-item",
             Anchor::History { .. } => "history",
             Anchor::Ledger { .. } => "ledger",
+            Anchor::Backlog { .. } => "backlog",
         }
     }
 
@@ -76,6 +94,7 @@ impl<'a, C: ConceptLike> Anchor<'a, C> {
             Anchor::WorkItem(c) => vec![format!("docs/knowledge/{}", c.concept_path())],
             Anchor::History { paths, .. } => paths.clone(),
             Anchor::Ledger { paths, .. } => paths.clone(),
+            Anchor::Backlog { paths, .. } => paths.clone(),
         }
     }
 }
@@ -276,11 +295,13 @@ fn read_ledger_anchor(root: &Path, work: &str) -> Option<(Vec<String>, String, S
     Some((paths, meta_parts.join(" "), body, bytes))
 }
 
-/// D5 then D1/D6, then D34ccf18d, widened by U5: a bee.work-item concept
-/// whose bee.id matches `work` always wins; otherwise docs/history/<work>/
-/// CONTEXT.md and plan.md, whichever exist, both when both do; otherwise the
-/// ledger arm (`read_ledger_anchor`, U5-widened); otherwise None — the
-/// caller's unknown_work refusal (D27).
+/// D5 then D1/D6, then D34ccf18d, widened by U5, then backlog-anchor D1
+/// (a98e27c2): a bee.work-item concept whose bee.id matches `work` always
+/// wins; otherwise docs/history/<work>/ CONTEXT.md and plan.md, whichever
+/// exist, both when both do; otherwise the ledger arm (`read_ledger_anchor`,
+/// U5-widened); otherwise a folded `.bee/backlog.jsonl` PBI row whose id or
+/// feature field whole-matches `work` (`Anchor::Backlog`); otherwise None —
+/// the caller's unknown_work refusal (D27).
 pub(crate) fn resolve_anchor<'a, C: ConceptLike>(concepts: &'a [C], root: &Path, work: &str) -> Option<Anchor<'a, C>> {
     if let Some(c) = concepts.iter().find(|c| matches_work_item(c.concept_data(), work)) {
         return Some(Anchor::WorkItem(c));
@@ -310,8 +331,20 @@ pub(crate) fn resolve_anchor<'a, C: ConceptLike>(concepts: &'a [C], root: &Path,
         });
     }
 
-    let (paths, meta, body, bytes) = read_ledger_anchor(root, work)?;
-    Some(Anchor::Ledger { paths, meta, body, bytes })
+    if let Some((paths, meta, body, bytes)) = read_ledger_anchor(root, work) {
+        return Some(Anchor::Ledger { paths, meta, body, bytes });
+    }
+
+    let row = crate::verbs::backlog::backlog_row_for_work(root, work)?;
+    let meta = row.get("title").and_then(Value::as_str).unwrap_or("").to_string();
+    let body = row.get("cos").and_then(Value::as_str).unwrap_or("").to_string();
+    let bytes = body.len() as u64;
+    Some(Anchor::Backlog {
+        paths: vec![".bee/backlog.jsonl".to_string()],
+        meta,
+        body,
+        bytes,
+    })
 }
 
 impl ConceptLike for Concept {

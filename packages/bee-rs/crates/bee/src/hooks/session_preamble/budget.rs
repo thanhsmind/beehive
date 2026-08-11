@@ -277,13 +277,16 @@ pub(crate) fn rank_critical_rows(
     // ever land on the History arm (docs/history/<work>/CONTEXT.md and/or
     // plan.md), the Ledger arm (U5: a scribing-ledger entry, a bare
     // .bee/lanes/<work>.json record, or another docs/history/<work>/ file),
-    // or None — never the WorkItem arm, which would need collect_concepts to
-    // find. That is the deliberate cheaper reading this digest takes (see
-    // the module's "may not edit that file" banner).
+    // the Backlog arm (backlog-anchor D1: a folded .bee/backlog.jsonl PBI
+    // row), or None — never the WorkItem arm, which would need
+    // collect_concepts to find. That is the deliberate cheaper reading this
+    // digest takes (see the module's "may not edit that file" banner).
     let empty: &[VerbsConcept] = &[];
     let anchor = verbs_resolve_anchor(empty, root, work).ok_or_else(|| format!("no anchor for \"{work}\""))?;
     let (meta, body) = match &anchor {
-        VerbsAnchor::History { meta, body, .. } | VerbsAnchor::Ledger { meta, body, .. } => (meta, body),
+        VerbsAnchor::History { meta, body, .. }
+        | VerbsAnchor::Ledger { meta, body, .. }
+        | VerbsAnchor::Backlog { meta, body, .. } => (meta, body),
         // Unreachable with an empty concepts slice: WorkItem needs
         // collect_concepts to match, which this digest never calls.
         VerbsAnchor::WorkItem(_) => return Err(format!("no anchor for \"{work}\"")),
