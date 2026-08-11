@@ -110,3 +110,4 @@
 {"id":"422a468c-e22a-4938-a68c-87ef414e56e3","type":"candidate","date":"2026-08-11T03:59:07.052Z","feature":"guard-heredoc-fencing","head":"560cc5f0d80081a5988207f50f4e782a750ed40a","mode":"small","baseline":null,"cells":["ghf-1"]}
 {"id":"d7120656-3ca4-42e6-a924-06431114c8e4","type":"candidate","date":"2026-08-11T04:17:30.775Z","feature":"revision-deadlock-visibility","head":"ba77cdde48a2f18b88872e3b81b7f1c69426e792","mode":"small","baseline":null,"cells":["rdv-1","rdv-2"]}
 {"id":"25ebe44a-f538-4cb5-8085-96dd873bb677","type":"candidate","date":"2026-08-11T04:38:13.375Z","feature":"island-read-filter","head":"51062989d0748086645945550e3d70f0920dff80","mode":"small","baseline":null,"cells":["irf-1"]}
+{"id":"a7dcc0ac-3bf9-41ce-924c-232842a18b62","type":"candidate","date":"2026-08-11T04:56:49.308Z","feature":"schedule-regen-awareness","head":"6498312f4ebf8d3937196fa6a0fd9af8ad670e4e","mode":"small","baseline":null,"cells":["sra-1","sra-2"]}
