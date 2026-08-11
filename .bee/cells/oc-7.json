@@ -1,0 +1,54 @@
+{
+  "id": "oc-7",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Author plugin fixtures and the three-belt parity test",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/plan.md",
+    "packages/bee-rs/crates/bee/tests/hook_contracts.rs",
+    ".opencode/plugins/bee-guard.ts"
+  ],
+  "action": "Per plan.md E3: the parity predecessor died with the Node runtime (R6) — author from zero, inside the declared cargo suite so commands.test runs it. New integration test file opencode_plugin_contracts.rs: (1) fixture tests that execute the real .opencode/plugins/bee-guard.ts under `node` (subprocess from the Rust test; skip-with-named-reason if node is absent) feeding recorded tool.execute.before payloads against a stub bee binary that can deny, allow, crash, and be absent — asserting throw-on-deny, allow passes args through, crash=>throw, missing-binary=>throw for every BLOCKING mapped row, and advisory rows never throw; (2) the three-belt parity test: derive the guard-rule inventory from the catalog of record (hook_manifests.rs rows / the hooks the CLI serves, see tests/hook_contracts.rs:37-47 — derived, never a hand list, per docs/knowledge/patterns/20260722-a-coverage-gate-derives-ground-truth-it-never-compares-two-hand-lists.md) and assert every blocking rule is exercised by BOTH a helper-level test and each runtime belt's fixture (claude hook fixtures exist in hook_contracts.rs; opencode rows point at the fixtures in (1); codex rows at its file-shipped hooks) — a rule missing a belt fails with a message naming rule and belt. Record the runner design and any skipped-environment behavior in discovery.md.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test opencode_plugin_contracts",
+  "must_haves": {
+    "truths": [
+      "The parity inventory is derived from the catalog of record, never a hand-authored list",
+      "Every blocking mapped row has crash=>deny and missing-binary=>deny fixtures",
+      "Advisory rows are asserted never to throw",
+      "The suite runs under commands.test (cargo), with any environment skip named in its output"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-6"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-parity",
+    "outcome": "Authored opencode_plugin_contracts.rs: fixture belt over the real bee-guard.ts (deny/allow/crash/missing for all 9 blocking mapped rows, never-throw for every advisory surface) plus a three-belt parity test deriving the guard-rule inventory from the checked-in hook manifests.",
+    "files_changed": [
+      "docs/history/opencode-support/discovery.md",
+      "packages/bee-rs/crates/bee/tests/opencode_plugin_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T15:32:43.752Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T15:16:04.546Z",
+    "commit_pending": "worktree-local commit 351daca9 not visible to trailer lookback from this checkout, per orchestrator environment note",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T15:32:30.879Z"
+  }
+}

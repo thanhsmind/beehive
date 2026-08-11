@@ -1,0 +1,54 @@
+{
+  "id": "oc-6",
+  "feature": "opencode-support",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "Implement the full guard-hook mapping table in the OpenCode plugin",
+  "behavior_change": true,
+  "files": [
+    ".opencode/plugins/bee-guard.ts",
+    "docs/history/opencode-support/discovery.md"
+  ],
+  "read_first": [
+    "docs/history/opencode-support/plan.md",
+    "docs/history/opencode-support/discovery.md",
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+  ],
+  "action": "Per plan.md's hook-mapping table (Approach section) and CONTEXT.md D2: extend .opencode/plugins/bee-guard.ts from write-guard-only to the full mapped set. Blocking (throw on deny, fail-closed on spawn failure) stays exclusive to tool.execute.before: keep write-guard; add model-guard on task-tool dispatch args, and route the read-shaped tools the Claude belt also gates (read/grep/glob/question — secret-read and read-size checks, see write_guard/main.rs:103-134) through the same before-hook. Advisory surfaces are fail-open BY DESIGN and must never throw: session-init/prompt-context via the chat.message hook injecting the bee preamble digest, state-sync via event file.edited/session.idle, session-close via event session.idle/session.deleted, tools-logger via tool.execute.after. codex-subagent-audit stays a named exclusion. Every verdict still comes from `.bee/bin/bee hook <name>` — zero rule logic in TypeScript; one spawn wrapper, two failure policies (blocking=throw, advisory=swallow+log). Record in discovery.md: the implemented hook→surface table with each row's failure policy, and any bee hook whose payload contract the CLI refused or could not serve from OpenCode's event data (named gap, not guessed around). Keep the plugin one file unless size forces a split; if split, every file stays under .opencode/plugins/.",
+  "verify": "rg -n \"chat.message|tool.execute.after|session.idle\" .opencode/plugins/bee-guard.ts",
+  "must_haves": {
+    "truths": [
+      "Blocking behavior exists only in tool.execute.before paths; advisory hooks swallow their own failures and never abort the session",
+      "Zero guard rules in TypeScript — every verdict is a bee CLI call",
+      "The implemented mapping table with failure policies is recorded in discovery.md",
+      "Unservable bee hooks are named gaps in discovery.md, not silent omissions"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "oc-3"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "oc-mapper",
+    "outcome": "Extended bee-guard.ts to the full guard-hook mapping table (model-guard on task, read-shaped tools through write-guard, four advisory surfaces), with live deny proofs and named payload-contract gaps recorded in discovery.md",
+    "files_changed": [
+      ".opencode/plugins/bee-guard.ts",
+      "docs/history/opencode-support/discovery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T15:15:42.927Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T14:54:30.009Z",
+    "commit_pending": "worktree-local commit 3b97bd85 not visible to main-worktree trailer lookback",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T15:15:30.988Z"
+  }
+}

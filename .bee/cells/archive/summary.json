@@ -398,5 +398,10 @@
     "capped": 5,
     "dropped": 0,
     "archived_at": "2026-08-11T14:52:52.732Z"
+  },
+  "doctor-binary-freshness": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-11T15:32:44.062Z"
   }
 }

@@ -1,0 +1,62 @@
+{
+  "id": "dbf-1",
+  "feature": "doctor-binary-freshness",
+  "lane": "small",
+  "title": "Doctor row: the installed bee binary must not lag the source checkout",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/doctor.rs",
+    "packages/bee-rs/crates/bee/src/doctor_tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/doctor.rs"
+  ],
+  "action": "Add one mechanical row binary-freshness to bee doctor (see mechanical_rows and the Row{key, ok, detail} shape). It exists ONLY in a bee SOURCE checkout — detect the same way devtools gates its source-only verbs (SOURCE_CHECKOUT_DEV_VERBS neighbourhood: presence of packages/bee-rs/Cargo.toml under the repo root); in a host project the row is absent entirely, never a not_ok. In a source checkout it reports not_ok when either (a) the installed .bee/bin/bee reports a different --version than the source Cargo.toml package version, or (b) any source input is NEWER by mtime than the installed binary — inputs are packages/bee-rs/crates/**/*.rs, packages/bee-rs/**/Cargo.toml, and packages/bee/prompts/*.md. Detail names the reason concretely: the two versions when they differ, else the newest offending path and both mtimes. Remedy sentence in the detail: cargo build --release --manifest-path packages/bee-rs/Cargo.toml -p bee --bin bee, then copy it to .bee/bin/bee. Missing binary stays the existing host-binary rows job — this row reports unknown when no binary is installed. Tests (find the doctor test module; the second file in files is a guess, use the real one and reserve it): fresh binary is ok, an mtime-newer source file makes it not_ok naming the path, a version mismatch makes it not_ok naming both versions, a non-source checkout omits the row.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Row absent in a host project, never a false alarm",
+      "not_ok detail names the offending path or the two versions, plus the rebuild remedy",
+      "No binary installed reads unknown, not not_ok",
+      "Read-only: the row never builds, copies, or writes anything"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "d1",
+    "outcome": "Added binary_freshness doctor row (source-checkout only): version-parity + mtime-freshness checks, unknown-without-binary, absent-on-host; 5 new tests",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T15:30:02.196Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d9663ee4-1552-489a-a52a-cb6633b67dc1",
+    "claimed_at": "2026-08-11T15:20:33.930Z",
+    "report": {
+      "outcome": "Added binary_freshness doctor row (source-checkout only): version-parity + mtime-freshness checks, unknown-without-binary, absent-on-host; 5 new tests",
+      "commit": "719c78df",
+      "files": [
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs"
+      ],
+      "tests": "green",
+      "deviations": [
+        "Second files entry in the cell (doctor_tests.rs) was a guess; the real test module is packages/bee-rs/crates/bee/src/doctor/tests.rs (doctor.rs already declares mod tests under doctor/) - reserved and edited that path instead, per the cell action note.",
+        "Version comparison uses bee rs-info's version field (CARGO_PKG_VERSION) since bee has no --version flag; the source side is packages/bee-rs/Cargo.toml's [workspace.package] version."
+      ]
+    },
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T15:29:50.331Z"
+  }
+}

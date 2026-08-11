@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "feature": "doctor-binary-freshness",
+  "mode": "feature",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"doctor-binary-freshness\" started at phase \"planning\" (lane).",
+  "next_action": "close and merge doctor-binary-freshness",
+  "created_at": "2026-08-11T15:20:08.214Z",
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 2,
+    "rationale": "doctor row comparing installed .bee/bin/bee against source checkout — additive, read-only check",
+    "updated_at": "2026-08-11T15:20:13.404Z",
+    "feature": "doctor-binary-freshness"
+  },
+  "last_scribing_run": {
+    "feature": "doctor-binary-freshness",
+    "date": "2026-08-11",
+    "at": "2026-08-11T15:32:31.009Z",
+    "areas_synced": [
+      "hook-runtime"
+    ],
+    "next_action": "close and merge doctor-binary-freshness"
+  }
+}
