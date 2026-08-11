@@ -528,7 +528,7 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 
 ## Status
 
-**v2.4.2** (versioned by git tag; the Rust workspace's `Cargo.toml` version is decoupled from release numbering). Core built and green on the Rust CLI: the skills, hook automation on both runtimes, onboarding, and the full `cargo test` suite — exercised end to end (onboard → gate-locked claim → verify-gated cap → hook denials).
+**v2.4.3** (versioned by git tag; the Rust workspace's `Cargo.toml` version is decoupled from release numbering). Core built and green on the Rust CLI: the skills, hook automation on both runtimes, onboarding, and the full `cargo test` suite — exercised end to end (onboard → gate-locked claim → verify-gated cap → hook denials).
 
 Recent additions, each gated by a decision record:
 

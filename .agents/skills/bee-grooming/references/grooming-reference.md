@@ -68,6 +68,43 @@ A probe finding is filed with its one-command fix named, never as an open-ended 
 
 **Superseded-but-still-cited decisions** — for each superseded decision, grep code comments, docs, and plans for its wording; stale citations are candidates.
 
+**Architecture lens** — hunt structural debt only where the code is
+alive: take the hot spots from recent `git log --oneline` (files
+changing often, or the area the user named) — a shallow module nobody
+touches costs nothing and is not debt. In those spots look for:
+
+- a concept smeared across several modules — every change to it touches all of them
+- a shallow module — its interface restates its implementation (a pass-through, a wrapper adding no decision)
+- pure functions extracted "for testability" that stranded their logic far from the one place using it
+- a seam that leaks — callers reach around the interface to internals, or two modules share knowledge the interface pretends to hide
+
+Judge every suspect with the deletion test and the adapter-count rule
+(`.bee/expertise/architecture.md`): delete it mentally — complexity
+reappearing at call sites means it earns its keep; vanishing means
+pass-through. Each finding is a deepening proposal (merge, inline,
+re-cut the interface), rides the normal kill-proposal shape at lane
+small, and carries a confidence badge: **strong** (deletion test
+positive, hot spot, tests reachable through the interface) /
+**worth exploring** (signal present, evidence partial) /
+**speculative** (pattern only — name it, never lead with it). Propose
+the re-cut, never design the new interface in the report — interface
+design happens after the user picks, in planning.
+
+## Proposal report
+
+When a proposal round has three or more candidates, or any
+architecture-lens finding, render it as one Markdown file the user can
+read visually: `docs/history/grooming/<date>-proposals.md`. Per
+candidate, one card — what dies or deepens, `file:line` evidence, pain
+/ predicted impact, risk lane, confidence badge, and for structural
+candidates a small Mermaid before/after of the module shape. End the
+file with exactly ONE top recommendation and its single reason. Present
+it as a viewer URL when the project has `doc_viewer` configured or the
+harness carries a markdown viewer; the bare path otherwise. The report
+is presentation only: approvals stay per-candidate in the
+conversation, and the file records the round — it is never edited into
+a decision log.
+
 **Slop patterns in recent diffs** — scan the last ~20 commits for:
 
 - empty or log-only `catch` blocks that swallow errors
