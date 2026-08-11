@@ -37,8 +37,14 @@ fn err(message: &str) -> Option<ExitCode> {
     Some(ExitCode::from(1))
 }
 
-/// `merge-plugin-state --claude <f> --codex <f> --out <f>`
-/// Two per-runtime plugin listings into one `{claude, codex}` document.
+/// `merge-plugin-state --claude <f> --codex <f> [--opencode <f>] --out <f>`
+/// Per-runtime plugin listings into one `{claude, codex[, opencode]}`
+/// document. `--opencode` mirrors the claude/codex pair (same flag shape,
+/// same merge — plan.md's `--runtime <k>=<v>` generalization was rejected as
+/// churn on a shipped surface for zero present need) but stays OPTIONAL: it
+/// is not yet wired to a caller in this cell, and OpenCode's bee plugin is a
+/// checked-in TypeScript file rather than a CLI-managed package, so there is
+/// no probe output to require here.
 fn merge_plugin_state(flags: &[&str]) -> Option<ExitCode> {
     let (Some(claude), Some(codex), Some(out)) =
         (flag(flags, "--claude"), flag(flags, "--codex"), flag(flags, "--out"))
@@ -46,7 +52,11 @@ fn merge_plugin_state(flags: &[&str]) -> Option<ExitCode> {
         return err("merge-plugin-state: --claude, --codex and --out are all required");
     };
     let mut doc = serde_json::Map::new();
-    for (key, path) in [("claude", claude), ("codex", codex)] {
+    let mut pairs = vec![("claude", claude), ("codex", codex)];
+    if let Some(opencode) = flag(flags, "--opencode") {
+        pairs.push(("opencode", opencode));
+    }
+    for (key, path) in pairs {
         let text = std::fs::read_to_string(path)
             .map_err(|e| format!("cannot read {path}: {e}"))
             .ok()?;
@@ -230,6 +240,28 @@ mod tests {
         let doc: Value = serde_json::from_slice(&std::fs::read(&out).unwrap()).unwrap();
         assert_eq!(doc["claude"][0]["name"], json!("bee"));
         assert_eq!(doc["codex"], json!([]));
+    }
+
+    #[test]
+    fn merge_opencode_is_a_third_optional_flag_mirroring_the_pair() {
+        let d = tempfile::tempdir().unwrap();
+        let c = tmp_json(d.path(), "c.json", &json!([]));
+        let x = tmp_json(d.path(), "x.json", &json!([]));
+        let o = tmp_json(d.path(), "o.json", &json!([{"name": "bee", "status": "enabled"}]));
+        let out = d.path().join("out.json").to_string_lossy().into_owned();
+        assert!(merge_plugin_state(&[
+            "--claude", &c, "--codex", &x, "--opencode", &o, "--out", &out,
+        ])
+        .is_some());
+        let doc: Value = serde_json::from_slice(&std::fs::read(&out).unwrap()).unwrap();
+        assert_eq!(doc["opencode"][0]["name"], json!("bee"));
+
+        // Omitting --opencode still yields the two-key document unchanged —
+        // it is optional, not a silently-required third leg.
+        let out2 = d.path().join("out2.json").to_string_lossy().into_owned();
+        assert!(merge_plugin_state(&["--claude", &c, "--codex", &x, "--out", &out2]).is_some());
+        let doc2: Value = serde_json::from_slice(&std::fs::read(&out2).unwrap()).unwrap();
+        assert!(doc2.get("opencode").is_none());
     }
 
     #[test]

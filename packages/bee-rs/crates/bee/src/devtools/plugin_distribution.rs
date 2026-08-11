@@ -1057,8 +1057,8 @@ fn parse_args(argv: &[&str]) -> R<Args> {
 fn parse_runtime(value: Option<&String>) -> R<Vec<String>> {
     match value.map(String::as_str) {
         Some("both") => Ok(vec!["claude".into(), "codex".into()]),
-        Some(v @ ("claude" | "codex")) => Ok(vec![v.to_string()]),
-        _ => fail("--runtime must be claude, codex, or both"),
+        Some(v @ ("claude" | "codex" | "opencode")) => Ok(vec![v.to_string()]),
+        _ => fail("--runtime must be claude, codex, opencode, or both"),
     }
 }
 
@@ -1580,6 +1580,13 @@ mod tests {
         assert_eq!(parse_runtime(Some(&"codex".to_string())).unwrap(), vec!["codex"]);
         assert!(parse_runtime(Some(&"emacs".to_string())).is_err());
         assert!(parse_runtime(None).is_err());
+    }
+
+    #[test]
+    fn runtime_accepts_opencode_and_names_the_full_set_on_refusal() {
+        assert_eq!(parse_runtime(Some(&"opencode".to_string())).unwrap(), vec!["opencode"]);
+        let err = parse_runtime(Some(&"emacs".to_string())).unwrap_err().0;
+        assert_eq!(err, "--runtime must be claude, codex, opencode, or both");
     }
 
     #[test]
