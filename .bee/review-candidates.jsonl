@@ -109,3 +109,4 @@
 {"id":"58ab4b65-520f-4844-9425-8d23708b017e","type":"candidate","date":"2026-08-11T03:26:49.721Z","feature":"evolving-rank-freshness","head":"e09f15f57619c199de56984bba005614785cf5e0","mode":"small","baseline":null,"cells":["erf-1"]}
 {"id":"422a468c-e22a-4938-a68c-87ef414e56e3","type":"candidate","date":"2026-08-11T03:59:07.052Z","feature":"guard-heredoc-fencing","head":"560cc5f0d80081a5988207f50f4e782a750ed40a","mode":"small","baseline":null,"cells":["ghf-1"]}
 {"id":"d7120656-3ca4-42e6-a924-06431114c8e4","type":"candidate","date":"2026-08-11T04:17:30.775Z","feature":"revision-deadlock-visibility","head":"ba77cdde48a2f18b88872e3b81b7f1c69426e792","mode":"small","baseline":null,"cells":["rdv-1","rdv-2"]}
+{"id":"25ebe44a-f538-4cb5-8085-96dd873bb677","type":"candidate","date":"2026-08-11T04:38:13.375Z","feature":"island-read-filter","head":"51062989d0748086645945550e3d70f0920dff80","mode":"small","baseline":null,"cells":["irf-1"]}
