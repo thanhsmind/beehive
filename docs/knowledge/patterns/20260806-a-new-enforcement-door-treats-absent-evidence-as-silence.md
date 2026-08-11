@@ -12,6 +12,8 @@ bee:
   sources: ["hook-teeth cells bh-1..bh-6 (traces in .bee/cells/, docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — full suite 1058 passed, 0 failed)", "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:665-720 (RedBaseStatus::Unknown warns instead of refusing)", "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:104-156 (a feature neither the lane nor the default record names is never refused)", "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs:347-366 (a session with no recorded start manner warns and proceeds)", "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:219 (a unit with no recorded file changes never reaches the commit-trailer scan)", "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs:174-206 (a default record naming another feature is no opinion, never approval)"]
   polarity: practice
   critical: false
+  evidence: wired
+  evidence_ref: "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs (red_base_refusal RedBaseStatus::Unknown warns not refuses; gated_add_refusal an unnamed feature is never refused); packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs (plan_freeze_shape_approved a mismatched default record is no opinion); packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs (handoff_adopt_source_refusal a missing source warns and proceeds); packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs (the commit-trailer scan is gated on files_changed being non-empty)"
 ---
 
 # A new enforcement door treats absent evidence as silence, not as violation

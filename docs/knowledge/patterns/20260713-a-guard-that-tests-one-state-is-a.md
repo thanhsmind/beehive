@@ -10,6 +10,8 @@ bee:
   sources: ["docs/history/learnings/critical-patterns.md#PAT31", "original feature: terminal-phase-gate"]
   polarity: pitfall
   critical: true
+  evidence: wired
+  evidence_ref: "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs (is_terminal_phase tests the SET {idle, compounding-complete}, never one state)"
 ---
 
 # A guard that tests one state is a law with a hole
