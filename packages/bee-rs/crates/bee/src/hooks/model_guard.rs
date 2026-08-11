@@ -248,6 +248,16 @@ struct Slots {
 struct Models {
     claude: Slots,
     codex: Slots,
+    // opencode-support E4/S4: parsed and resolvable exactly like claude/codex
+    // (docs/config-reference.md's models.<rt> schema). NOTE: the dispatch
+    // verdicts below (evaluate_claude_dispatch's model-param branches) still
+    // resolve against a literal "claude" — OpenCode's Task payload carries no
+    // runtime marker to key off of (confirmed live: its `task` tool has no
+    // `model` argument at all, so those branches never fire for an OpenCode
+    // dispatch either way). The structural half of OpenCode's model-guard
+    // mapping is the per-agent `model:` pin in each `.opencode/agent/bee-*.md`
+    // file, not a runtime switch here — see plan.md's model-guard fallback row.
+    opencode: Slots,
 }
 
 /// None means "undefined" (invalid shape, keep default).
@@ -309,11 +319,21 @@ fn normalize_models(raw: Option<&Value>) -> Models {
             review: Slot::Null,
             advisor: Slot::Unset,
         },
+        opencode: Slots {
+            extraction: Slot::Null,
+            generation: Slot::Null,
+            review: Slot::Null,
+            advisor: Slot::Unset,
+        },
     };
     let Some(Value::Object(raw)) = raw else { return out };
-    for rt in ["claude", "codex"] {
+    for rt in ["claude", "codex", "opencode"] {
         let Some(Value::Object(src)) = raw.get(rt) else { continue };
-        let dst = if rt == "claude" { &mut out.claude } else { &mut out.codex };
+        let dst = match rt {
+            "claude" => &mut out.claude,
+            "codex" => &mut out.codex,
+            _ => &mut out.opencode,
+        };
         for slot in ["extraction", "generation", "review", "advisor"] {
             let Some(value) = src.get(slot) else { continue };
             if let Some(v) = normalize_tier_value(value) {
@@ -352,7 +372,11 @@ fn resolve_tier(models: &Models, slot: &str, runtime: &str) -> Resolved {
     if slot == "ceiling" {
         return Resolved::Inherit;
     }
-    let slots = if runtime == "codex" { &models.codex } else { &models.claude };
+    let slots = match runtime {
+        "codex" => &models.codex,
+        "opencode" => &models.opencode,
+        _ => &models.claude,
+    };
     let s = if matches!(slot, "extraction" | "generation" | "review") { slot } else { "generation" };
     let mut value = match s {
         "extraction" => &slots.extraction,
@@ -372,7 +396,11 @@ fn resolve_tier(models: &Models, slot: &str, runtime: &str) -> Resolved {
 
 /// None = "no advisor".
 fn resolve_advisor(models: &Models, runtime: &str) -> Option<Resolved> {
-    let slots = if runtime == "codex" { &models.codex } else { &models.claude };
+    let slots = match runtime {
+        "codex" => &models.codex,
+        "opencode" => &models.opencode,
+        _ => &models.claude,
+    };
     match &slots.advisor {
         Slot::Unset | Slot::Null => None,
         Slot::Name(m) => Some(Resolved::Model(m.clone())),
@@ -953,6 +981,39 @@ mod tests {
 
     fn dispatch_log(root: &Path) -> PathBuf {
         root.join(".bee").join("logs").join("dispatch.jsonl")
+    }
+
+    // opencode-support E4/S4: models.opencode used to be silently dropped by
+    // this hook's own normalize_models (only ["claude", "codex"] were parsed)
+    // — docs/config-reference.md called that "dead config that never
+    // resolves". It is now a real third key, resolved exactly like
+    // claude/codex.
+    #[test]
+    fn opencode_models_block_is_parsed_and_resolved() {
+        let raw = json!({
+            "opencode": {
+                "extraction": "opencode/ling-3.0-tiny-free",
+                "generation": "opencode/big-pickle",
+                "review": "opencode/nemotron-3-ultra-free"
+            }
+        });
+        let models = normalize_models(Some(&raw));
+        assert_eq!(
+            resolve_tier(&models, "generation", "opencode"),
+            Resolved::Model("opencode/big-pickle".into())
+        );
+        assert_eq!(
+            resolve_tier(&models, "extraction", "opencode"),
+            Resolved::Model("opencode/ling-3.0-tiny-free".into())
+        );
+        assert_eq!(
+            resolve_tier(&models, "review", "opencode"),
+            Resolved::Model("opencode/nemotron-3-ultra-free".into())
+        );
+        // Unconfigured (no models.opencode key at all) resolves to Budget on
+        // every slot — same no-baked-in-default treatment codex gets.
+        let models = normalize_models(None);
+        assert_eq!(resolve_tier(&models, "generation", "opencode"), Resolved::Budget);
     }
 
     #[test]

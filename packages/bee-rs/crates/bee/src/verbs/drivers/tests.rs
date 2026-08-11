@@ -377,6 +377,41 @@ use std::time::Instant;
         );
     }
 
+    // opencode-support E4/S4: `models.opencode` used to be silently dropped
+    // (RUNTIMES only listed claude/codex) — docs/config-reference.md called
+    // this "dead config that never resolves". It is now a real third key.
+    #[test]
+    fn opencode_is_a_real_runtime_key_not_silently_ignored() {
+        // Unconfigured opencode defaults to Budget on every slot (same
+        // no-baked-in-default treatment codex gets — no established model
+        // naming convention to assume).
+        let m = models_from("{}");
+        assert_eq!(resolve_tier(&m, "generation", "opencode", false), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "extraction", "opencode", false), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "review", "opencode", true), Resolved::Budget);
+
+        // A configured models.opencode block resolves exactly like claude/codex do.
+        let m = models_from(
+            r#"{"opencode":{"extraction":"opencode/ling-3.0-tiny-free","generation":"opencode/big-pickle","review":"opencode/nemotron-3-ultra-free"}}"#,
+        );
+        assert_eq!(
+            resolve_tier(&m, "generation", "opencode", false),
+            Resolved::Model { model: "opencode/big-pickle".into(), effort: None }
+        );
+        assert_eq!(
+            resolve_tier(&m, "extraction", "opencode", false),
+            Resolved::Model { model: "opencode/ling-3.0-tiny-free".into(), effort: None }
+        );
+        assert_eq!(
+            resolve_tier(&m, "review", "opencode", true),
+            Resolved::Model { model: "opencode/nemotron-3-ultra-free".into(), effort: None }
+        );
+        // A sibling claude/codex block in the same config is untouched by
+        // opencode's presence (no cross-runtime leakage).
+        assert_eq!(resolve_tier(&m, "generation", "claude", false), Resolved::Model { model: "sonnet".into(), effort: None });
+        assert_eq!(resolve_tier(&m, "generation", "codex", false), Resolved::Budget);
+    }
+
     // ── economics ──────────────────────────────────────────────────────────
 
     #[test]
