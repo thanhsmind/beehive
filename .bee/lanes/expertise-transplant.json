@@ -2,15 +2,15 @@
   "schema_version": "1.0",
   "feature": "expertise-transplant",
   "mode": null,
-  "phase": "planning",
+  "phase": "swarming",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
     "review": false
   },
-  "summary": "Feature \"expertise-transplant\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"expertise-transplant\" (lane).",
+  "summary": "expertise-transplant merged to main (c095c81b); 5 cells capped green; capture stub queued for flush",
+  "next_action": "bee-capturing: flush capture queue (incl. expertise-transplant stub), then close lane via scribing-run/compounding-run",
   "created_at": "2026-08-11T07:30:09.597Z",
   "route": {
     "class": "feature",
