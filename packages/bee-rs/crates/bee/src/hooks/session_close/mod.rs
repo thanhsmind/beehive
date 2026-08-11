@@ -264,8 +264,9 @@ with no .bee/HANDOFF.json. You are about to leave the hive door open.",
             lines.push(format!("Active reservations: {rendered}."));
         }
         lines.push(
-            "Either finish and cap the work, or write .bee/HANDOFF.json and release \
-reservations so the next session can resume cleanly."
+            "Either finish and cap the work, write .bee/HANDOFF.json and release \
+reservations so the next session can resume cleanly, or record a capture \
+stub for what settled (bee capture add) and close cleanly."
                 .to_string(),
         );
         parts.push(lines.join("\n"));
