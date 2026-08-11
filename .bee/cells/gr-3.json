@@ -1,0 +1,36 @@
+{
+  "id": "gr-3",
+  "feature": "grooming-round-1",
+  "lane": "tiny",
+  "title": "Refresh README against repo reality",
+  "action": "README.md: Status section version v0.1.15 to 2.4.2 (source: latest release commit d491b0e8 and .bee/onboarding.json bee_version); decisions range 0001-0016 to 0001-0025 at README.md:525; delete the stray Grep Tool / Claude.md appendix at README.md:548-561 (accidental local pollution). Investigate where the released 2.4.2 version string actually lives (installer, onboarding, release manifest) — if packages/bee-rs/Cargo.toml version=0.1.0 is intentionally decoupled from release versioning, leave it and add one line to the commit body saying so; only bump it if the release chain actually reads it.",
+  "goal": "README stops lying about version and decision coverage; doc follows code.",
+  "verify": "README claims match repo reality; commands.test green.",
+  "files": [
+    "README.md"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": null,
+    "outcome": "README status matches reality: v2.4.2 via git tags, decisions 0001-0025, stray appendix removed; Cargo.toml left decoupled by design",
+    "files_changed": [
+      "README.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T08:30:18.980Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "commit_pending": "docs-lane cell committed on MAIN as 81daca50 with trailer cell: gr-3; the feature worktree only carries gr-1",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T08:30:07.053Z"
+  }
+}

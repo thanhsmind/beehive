@@ -1,0 +1,48 @@
+{
+  "id": "gr-1",
+  "feature": "grooming-round-1",
+  "lane": "small",
+  "title": "Fold kctx.rs byte-copy into the shared knowledge module",
+  "action": "Delete packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs by promoting its shared surface: widen visibility on the knowledge-module functions it duplicates (verbs/knowledge/anchor.rs, context.rs, promote.rs — the ranges named in drivers/mod.rs:194-217), point verbs/drivers/prepare.rs:277-295,359-372 and any other kctx callers at the knowledge module, remove the kctx mod declaration and the byte-parity test that compared the two copies (its purpose dies with the copy — record that in the commit body). Keep behavior identical: no logic changes, only visibility widening and call-site retargeting. The existing knowledge/kctx test suites are the proof.",
+  "goal": "One source of truth for the knowledge-context surface; the next Anchor arm is a single edit and the linter sees all of it.",
+  "verify": "PATH cargo test --release green, including knowledge tests; kctx.rs gone; no remaining references to drivers::kctx.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs"
+  ],
+  "trace": {
+    "worker": "exec-gr-1",
+    "outcome": "Deleted drivers/kctx.rs's byte-copy; prepare.rs now calls the pub(crate) knowledge module directly",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/kctx.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/anchor.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T08:38:38.605Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "506dadd6-ebcc-4a32-a927-80cca629f925",
+    "claimed_at": "2026-08-11T08:28:10.648Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T08:38:26.665Z"
+  }
+}

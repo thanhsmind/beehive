@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "feature": "grooming-round-1",
+  "mode": null,
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"grooming-round-1\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"grooming-round-1\" (lane).",
+  "created_at": "2026-08-11T08:27:21.863Z",
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 8,
+    "rationale": "grooming round: one small code fold (kctx) + two tiny cells; no risk flags apply",
+    "updated_at": "2026-08-11T08:28:41.517Z",
+    "feature": "grooming-round-1"
+  }
+}
