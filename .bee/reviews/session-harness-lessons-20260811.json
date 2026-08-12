@@ -456,9 +456,33 @@
   ],
   "uat": [],
   "decision": {
-    "status": "pending",
-    "review": null
+    "status": "approved",
+    "decided_by": "user",
+    "decided_at": "2026-08-12",
+    "summary": "Five-reviewer independent pass over the seven features landed 2026-08-11 (13 cells, baseline 8129f06e, head b369ab58). 3 P1, 17 P2, 4 delta findings recorded. All three P1s fixed in feature harness-p1-fixes (cells hpf-1/hpf-2/hpf-3, commits 642334ed, 5b21e0a8, 3ff822a), merged to main with verify green. An independent delta re-review returned Remaining P1 count: 0, and itself surfaced two P2s introduced by the hpf-2 fix, which hpf-3 closed before the feature closed.",
+    "acceptance": "No separate UAT walk was staged: the scope was already merged when the review ran, so acceptance rests on live read-only checks against the real store (judge-debt door present/absent per lane in both directions, doctor binary_freshness green after reinstall, dispatch wave scoped, release-manifest --check clean) plus the declared suite at 1619 passed, 9 ignored. Stated as a deviation rather than skipped silently.",
+    "residual": "21 P2/P3 findings filed to .bee/backlog.jsonl under layer harness-review; none block. Known filing defect: a diagnostic re-run appended 20 of them twice, so those cluster titles carry a doubled frequency in the feedback digest (relative order among them unchanged). The backlog is append-only and agents never hand-edit bee state, so the duplicates stand as recorded.",
+    "closes": "review session-harness-lessons-20260811 only; the seven reviewed features and harness-p1-fixes keep their own already-closed state",
+    "p1_resolutions": [
+      {
+        "finding": 0,
+        "cell": "hpf-1"
+      },
+      {
+        "finding": 1,
+        "cell": "hpf-1"
+      },
+      {
+        "finding": 2,
+        "cell": "hpf-2"
+      }
+    ],
+    "p1_resolution_notes": [
+      "close.rs feature_route now gates the default-state route on route ownership (route_belongs_to_feature) and falls back to a lane record's mode only when it names a lane class - confirmed live: a small feature no longer grows the judge-debt door, a standard feature with a fresh unjudged cell still blocks",
+      "The judge-debt door grandfathers caps before JUDGE_DOOR_INTRODUCED_AT (2026-08-11), accepts a recorded judge-deferral decision, and names bee cells unarchive before judge-record for an archived offender",
+      "bee dispatch wave resolves exactly one feature (flag, session lane, default record) and refuses by type when none resolves, with --limit bounding the batch and the unwind never forcing through a claim it did not take"
+    ]
   },
   "created_at": "2026-08-11T16:11:45.575Z",
-  "updated_at": "2026-08-11T23:42:44.564Z"
+  "updated_at": "2026-08-12T00:36:23.887Z"
 }
