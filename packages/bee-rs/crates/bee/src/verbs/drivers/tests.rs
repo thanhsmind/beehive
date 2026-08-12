@@ -1478,6 +1478,17 @@ use std::time::Instant;
     /// carrying a newline used to forge extra bullet lines inside the
     /// worker prompt's "Learned context" block; the path now gets the same
     /// whitespace-collapsing treatment.
+    ///
+    /// Unix-only, and not for convenience: the attack this pins needs a real
+    /// file whose NAME contains a newline, which Windows refuses outright
+    /// (`InvalidFilename`, OS error 123 — control characters are illegal in
+    /// NTFS names). The vector is unrepresentable on that platform, so the
+    /// end-to-end wiring is proved where it can exist; the collapsing rule
+    /// itself is pinned platform-independently by
+    /// `one_line_collapses_whitespace_and_ellipsises`. Before this gate the
+    /// Windows lane was red on every commit, which hid every other Windows
+    /// regression behind a failure no Windows user could ever hit.
+    #[cfg(unix)]
     #[test]
     fn learned_context_collapses_a_newline_smuggled_in_a_bundle_filename() {
         let tmp = tempfile::tempdir().unwrap();
