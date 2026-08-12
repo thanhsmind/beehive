@@ -269,6 +269,14 @@ pub(crate) fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams
         expires_at.clone().map(Value::String).unwrap_or(Value::Null),
     );
     record.insert("kind".into(), Value::String(kind));
+    // Reporting-only addition (D3, wtf-2): the same holder string the
+    // mirrored ledger row carries below (:331) — "main" for an ordinary
+    // checkout, the git-verified worktree id for a granted one. Omitted
+    // entirely for an ungranted linked worktree (topo is None there), so an
+    // old reader never sees a key it does not expect.
+    if let Some(t) = topo {
+        record.insert("holder".into(), Value::String(t.holder.to_string()));
+    }
 
     let lease_file = path_lease_file(&control_root, &p.path);
     if let Some(dir) = lease_file.parent() {
@@ -440,12 +448,26 @@ pub(crate) fn conflict_out(conflicts: &[Resv]) -> Out {
     let mut lines =
         vec!["Reservation CONFLICT — return [BLOCKED] to the orchestrator:".to_string()];
     for c in conflicts {
-        lines.push(format!(
-            "- {} holds \"{}\" (cell {})",
-            js_disp_opt(c.agent.as_ref()),
-            c.path,
-            js_disp_opt(c.cell.as_ref())
-        ));
+        // D3 (wtf-2): a lease carrying a holder names the checkout that holds
+        // it, same as the cross-worktree FOREIGN_HOLD refusal already does.
+        // No holder (pre-cell lease, or an ungranted linked worktree) — the
+        // line stays byte-for-byte what it always was.
+        let line = match &c.holder {
+            Some(h) => format!(
+                "- {} holds \"{}\" (cell {}, agent {})",
+                js_disp(h),
+                c.path,
+                js_disp_opt(c.cell.as_ref()),
+                js_disp_opt(c.agent.as_ref())
+            ),
+            None => format!(
+                "- {} holds \"{}\" (cell {})",
+                js_disp_opt(c.agent.as_ref()),
+                c.path,
+                js_disp_opt(c.cell.as_ref())
+            ),
+        };
+        lines.push(line);
     }
     let result = json!({
         "ok": false,

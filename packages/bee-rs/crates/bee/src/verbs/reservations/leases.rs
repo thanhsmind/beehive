@@ -222,6 +222,11 @@ pub(crate) struct Resv {
     pub(crate) reserved_at: Option<Value>,
     pub(crate) session: Option<Value>,
     pub(crate) kind: Value,
+    /// D3 (wtf-2) — a Rust-side addition with no JS parity: the checkout
+    /// that wrote this lease ("main", or a granted worktree's git-verified
+    /// id), absent on a lease written before this change or from an
+    /// ungranted linked worktree (no topology to report).
+    pub(crate) holder: Option<Value>,
 }
 
 pub(crate) fn lease_to_reservation(rec: &Map<String, Value>) -> Ex<Resv> {
@@ -254,6 +259,10 @@ pub(crate) fn lease_to_reservation(rec: &Map<String, Value>) -> Ex<Resv> {
         Some(v) if truthy(v) => v.clone(),
         _ => Value::String("lease".into()),
     };
+    // D3 (wtf-2): absent on any record written before this change, and on a
+    // reserve from an ungranted linked worktree — a plain key-absent read,
+    // same Option-and-omit pattern every other optional field here uses.
+    let holder = rec.get("holder").cloned();
     Ok(Resv {
         agent,
         cell: rec.get("workflow_id").cloned(),
@@ -262,6 +271,7 @@ pub(crate) fn lease_to_reservation(rec: &Map<String, Value>) -> Ex<Resv> {
         reserved_at: rec.get("acquired_at").cloned(),
         session,
         kind,
+        holder,
     })
 }
 
@@ -292,6 +302,11 @@ pub(crate) fn resv_to_value(r: &Resv) -> Value {
         m.insert("session".into(), s.clone());
     }
     m.insert("kind".into(), r.kind.clone());
+    // D3 (wtf-2): emitted only when present, so a pre-cell or ungranted-
+    // worktree reservation round-trips with no key at all.
+    if let Some(h) = &r.holder {
+        m.insert("holder".into(), h.clone());
+    }
     Value::Object(m)
 }
 
