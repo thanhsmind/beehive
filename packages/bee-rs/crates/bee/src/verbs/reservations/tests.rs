@@ -129,6 +129,9 @@ use std::time::Instant;
         assert_eq!(parsed["mode"], "write");
         assert_eq!(parsed["workspace_id"], "agent:worker-a");
         assert_eq!(parsed["session_id"], SESSIONLESS_SESSION_ID);
+        // D3 (wtf-2): the lease record itself now carries the writing
+        // checkout, same value the mirrored hold row already carried.
+        assert_eq!(parsed["holder"], "main");
         // Mirrored hold landed in the ledger.
         let ledger: Value =
             serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(tmp.path())).unwrap())
@@ -154,8 +157,11 @@ use std::time::Instant;
         assert_eq!(code, 1);
         assert_eq!(result["ok"], Value::Bool(false));
         assert_eq!(result["conflicts"][0]["agent"], "worker-a");
+        // D3 (wtf-2): the holding lease was written under main_topo, so the
+        // refusal now names the checkout, not just the agent.
+        assert_eq!(result["conflicts"][0]["holder"], "main");
         assert!(text.contains("Reservation CONFLICT"));
-        assert!(text.contains("- worker-a holds \"src/x.ts\" (cell cell-1)"));
+        assert!(text.contains("- main holds \"src/x.ts\" (cell cell-1, agent worker-a)"));
     }
 
     #[test]
@@ -506,6 +512,11 @@ use std::time::Instant;
         assert_eq!(ledger["holds"][0]["path"], "src/shared.ts");
         // The worktree's OWN store never gets a ledger.
         assert!(!holds_ledger_path(&granted).exists());
+        // D3 (wtf-2): the LEASE record itself (shared store, resolved to
+        // main via control_root_for) carries the same git-verified worktree
+        // id — not just the mirrored ledger row.
+        let rows = list_reservations(&g_root_s, true, now_ms()).ok().unwrap();
+        assert_eq!(rows[0].holder, Some(json!("wt-granted")));
 
         // MAIN now hits the foreign hold on the same path.
         let m = roots_at(&main);
@@ -553,6 +564,10 @@ use std::time::Instant;
         };
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].path, "src/only.ts");
+        // D3 (wtf-2): no topology means no holder value to report at all —
+        // the field is omitted, not written as some placeholder.
+        assert_eq!(rows[0].holder, None);
+        assert_eq!(resv_to_value(&rows[0]).get("holder"), None);
         let Ok(ctrl) = control_root_for(&root_s) else { panic!("control root") };
         assert_eq!(nrm(Path::new(&ctrl)), nrm(&main));
 
@@ -713,6 +728,41 @@ use std::time::Instant;
         };
         assert_eq!(result["released"], json!(0.0));
         assert_eq!(result["holds_released"], json!(0.0));
+    }
+
+    /// D3 (wtf-2): a lease record written before this change (no `holder`
+    /// key at all) round-trips unchanged through every reader — list,
+    /// conflict, release and sweep never see a key that is not there.
+    #[test]
+    fn a_pre_cell_lease_with_no_holder_key_still_reads_conflicts_and_releases() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        write_lease_file(&root_s, "src/old.ts", json!("2999-01-01T00:00:00.000Z"));
+
+        // Listing: the record parses, and holder is simply absent.
+        let rows = list_reservations(&root_s, true, now_ms()).ok().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].holder, None);
+        assert_eq!(resv_to_value(&rows[0]).get("holder"), None);
+
+        // Conflict: the refusal text falls back to the byte-for-byte old
+        // agent-only line — no holder anywhere to name.
+        let Ok(Out::Emit(result, text, 1)) =
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("worker-b", "cell-2", "src/old.ts"), 1)
+        else {
+            panic!("expected the conflict refusal");
+        };
+        assert_eq!(result["conflicts"][0]["agent"], "a");
+        assert!(result["conflicts"][0].get("holder").is_none());
+        assert!(text.contains("- a holds \"src/old.ts\" (cell c)"));
+
+        // Release still finds and removes it by agent/cell.
+        let Ok(Out::Emit(result, _, 0)) = release_exec(main_topo(tmp.path()), &root_s, "a", None, 1)
+        else {
+            panic!("expected a clean release");
+        };
+        assert_eq!(result["released"], json!(1.0));
+        assert!(!path_lease_file(&root_s, "src/old.ts").exists());
     }
 
     /// The single-resource echo of the oracle's "partial acquire rolls back
