@@ -1,0 +1,106 @@
+{
+  "id": "hpf-3",
+  "feature": "harness-p1-fixes",
+  "lane": "standard",
+  "title": "Wave unwind must distinguish a taken claim from an untaken one, and clear the worker row",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "action": "Delta re-review of hpf-2 found two P2s introduced by its own fix, plus one carried over. (1) The Err(_) arm at prepare.rs:1483 unwinds unconditionally, but that Err is a union of two states: the claim STOOD and a reservation failed mid-loop (prepare.rs:941), or the claim door never claimed at all (prepare.rs:919, Delegate arms in handlers_write.rs:901-915). unclaim_cell is called with force=true, so in the second case against an exotic cell record it can bypass guard_claim_ownership and return ANOTHER live agent cell to open — writing through a claim conflict, which bee never does. Fix: make claim_and_reserve_for_dispatch report whether the claim was taken (an explicit flag or a distinguishable error variant) and unwind ONLY when it was; never force through an ownership guard the wave does not own. (2) Same arm: when no claim was taken, unclaim refuses, unwind_failed becomes Some, and the skip is labelled unwind_failed telling the operator to force-unclaim a healthy cell — a false alarm. After fix (1) this path must report the real reason with no unwind note. (3) Carried over from the original review: unwind_wave_claim (prepare.rs:1327-1350) releases reservations and unclaims but never removes the workers[] row registered at prepare.rs:1021-1025, so a prepare_failed unwind (prepare.rs:1536,1544) leaves a running worker row pointing at an open cell; run_worker_remove (state_group/workers.rs:204) exists and is unused. Remove the row in the unwind. Tests: an untaken claim leaves the cell untouched and reports its real reason with no unwind note; a taken-claim unwind releases claim, reservations AND the worker row.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "The wave never force-unclaims a cell whose claim it did not take",
+      "A benign untaken-claim skip carries no unwind_failed label",
+      "A real unwind clears claim, reservations and the worker row"
+    ]
+  },
+  "deps": [
+    "hpf-2"
+  ],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "h3",
+    "outcome": "Fixed: dispatch wave never force-unclaims a claim it never took, and its unwind now clears the worker row too.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "docs/knowledge/areas/workflow-state/dispatch.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T23:59:15.945Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d9663ee4-1552-489a-a52a-cb6633b67dc1",
+    "claimed_at": "2026-08-11T23:41:12.028Z",
+    "report": {
+      "outcome": "Fixed the two P2s from the hpf-2 delta review plus the carried-over item: claim_and_reserve_for_dispatch now returns Result<Result<(...), String>, (Err2, bool)> where the bool reports whether the claim door itself took the claim before an unproven-shape failure; dispatch wave only calls the force-unclaim unwind when claim_taken is true, and an untaken claim is reported as claim_refused with no unwind note. unwind_wave_claim now also removes the dp-r1 worker row via a new unregister_worker_for_cell helper.",
+      "commit": "3ff822a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "docs/knowledge/areas/workflow-state/dispatch.md"
+      ],
+      "tests": "green",
+      "deviations": [
+        "a new pub(crate) unregister_worker_for_cell helper added in prepare.rs (worker_mutate is already re-exported crate-wide, no edit to workers.rs needed)",
+        "unwind_wave_claim made pub(crate) for direct test reachability",
+        "docs/knowledge/areas/workflow-state/dispatch.md updated per the dispatch context note, reserved before writing"
+      ]
+    },
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T23:58:57.044Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "claim_taken_is_reported_not_guessed",
+            "status": "PASS",
+            "evidence": "claim_and_reserve_for_dispatch now returns the claim-taken bool alongside its error, so the wave unwinds only a claim it actually took instead of inferring it from an error union"
+          },
+          {
+            "id": "never_forces_through_a_live_claim",
+            "status": "PASS",
+            "evidence": "test dispatch_wave_never_force_unclaims_a_claim_it_never_took: a foreign-claimed exotic-shape cell stands untouched and lands in skipped as claim_refused"
+          },
+          {
+            "id": "benign_skip_carries_no_false_alarm",
+            "status": "PASS",
+            "evidence": "same test asserts no UNWIND FAILED note on the untaken path, so the operator is never told to force-unclaim a healthy cell"
+          },
+          {
+            "id": "worker_row_cleared_on_unwind",
+            "status": "PASS",
+            "evidence": "new unregister_worker_for_cell helper called from unwind_wave_claim; test unwind_wave_claim_clears_the_claim_reservations_and_the_worker_row covers claim, reservation and row together"
+          },
+          {
+            "id": "suite_green",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml: 1619 passed, 9 ignored"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-12T00:00:09.344Z"
+      }
+    ]
+  }
+}

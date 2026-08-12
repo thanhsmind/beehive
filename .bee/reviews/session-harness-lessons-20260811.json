@@ -400,6 +400,58 @@
           "snippet": "see summary"
         }
       ]
+    },
+    {
+      "severity": "P2",
+      "title": "DELTA: wave Err-arm unwind cannot tell a taken claim from an untaken one and forces through the ownership guard",
+      "autofix_class": "manual",
+      "summary": "Introduced by the hpf-2 fix (5b21e0a8). The Err(_) arm unwinds unconditionally with unclaim_cell(force=true), but that Err unions 'claim stood, reservation failed mid-loop' with 'the claim door never claimed'. Against an exotic cell record the force flag bypasses guard_claim_ownership and can return another live agent's cell to open. The same arm also mislabels the benign untaken case as unwind_failed, telling the operator to force-unclaim a healthy cell. Fix cell hpf-3 filed and dispatched in the same session.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "line": 1483,
+          "snippet": "Err(_) arm unwinds unconditionally with force=true"
+        }
+      ]
+    },
+    {
+      "severity": "P3",
+      "title": "DELTA: the mode-fallback rationale is inverted against the live store",
+      "autofix_class": "manual",
+      "summary": "close.rs:403-405 and cells-completion-judge-and-archive.md both say mode 'usually carries the workflow class (feature), never a lane'. Measured across .bee/lanes/: 27 standard, 14 small, 6 high-risk, 1 tiny, 2 feature. The behavior is right (the fallback restores the door for ~33 lanes); the stated reason a future reader will act on is wrong.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "line": 403,
+          "snippet": "inverted mode rationale, repeated in the knowledge doc"
+        }
+      ]
+    },
+    {
+      "severity": "P3",
+      "title": "DELTA: FEATURE_ROUTE_LANE_CLASSES hand-duplicates ROUTE_LANE_VALUES with no test tying them together",
+      "autofix_class": "manual",
+      "summary": "close.rs:414 copies the module-private canonical list at workflows.rs:289-290. The comment names the duplication honestly, but nothing fails if the canonical list grows.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+          "line": 414,
+          "snippet": "duplicated lane-class list"
+        }
+      ]
+    },
+    {
+      "severity": "P3",
+      "title": "DELTA: --limit bounds cells attempted, not cells claimed",
+      "autofix_class": "manual",
+      "summary": "prepare.rs:1463-1466 truncates the wave before the loop, so a slot consumed by a cell that then lands in skipped still counts against n. router.rs:80 and dispatch.md say it caps cells actually claimed - true only as an upper bound.",
+      "evidence": [
+        {
+          "file": "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+          "line": 1463,
+          "snippet": "--limit truncates attempts, not successes"
+        }
+      ]
     }
   ],
   "uat": [],
@@ -408,5 +460,5 @@
     "review": null
   },
   "created_at": "2026-08-11T16:11:45.575Z",
-  "updated_at": "2026-08-11T16:32:03.688Z"
+  "updated_at": "2026-08-11T23:42:44.564Z"
 }

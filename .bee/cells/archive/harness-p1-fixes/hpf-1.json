@@ -1,0 +1,114 @@
+{
+  "id": "hpf-1",
+  "feature": "harness-p1-fixes",
+  "lane": "standard",
+  "title": "Judge-debt door: own its route, grandfather pre-door caps, offer a deferral, fix the archived remedy",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Three review P1/P2 fixes in one door. (1) ROUTE OWNERSHIP (P1): feature_route (close.rs:390-403) takes the default-state route only when it belongs to the closing feature — reuse route_belongs_to_feature (verbs/state_group/workflows.rs:683, rti-1) or compare state.route.feature; when the state route names another feature, fall back to the lane record own mode ONLY when that mode names a lane class (docs/tiny/small/spike/standard/high-risk — mode is usually \"feature\" and must then read as no opinion), else None. Precedent for the identity check: gated_add_refusal (verbs/cells/handlers_write.rs:119,133-142). (2) GRANDFATHER (P1): judge_debt (close.rs:405-426) counts only cells whose trace.capped_at is at or after a named constant JUDGE_DOOR_INTRODUCED_AT = \"2026-08-11T00:00:00.000Z\" with a comment stating why (the door shipped that day; 122 capped behavior_change cells predate it, 10 judged — blocking every legacy close is not a migration path). A cell with no capped_at counts as pre-door. (3) DEFERRAL + REMEDY (P2): mirror the scribing-debt escape (close.rs:583-588) — a logged decision tagged judge-deferral naming the feature clears the door, and the door detail says so; when an offending cell id resolves under archive, the detail names bee cells unarchive --feature <f> BEFORE the judge-record command (cells judge-record refuses archived cells, verbs/cells/util.rs:254). Tests: state route naming ANOTHER feature gives no opinion (both directions — a small feature must not grow the door, a standard feature must not lose it); lane mode \"feature\" is not a lane class; pre-door capped_at is not debt; post-door capped_at is; a judge-deferral decision clears it; an archived offender names unarchive first.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A route owned by another feature is never read as this feature route",
+      "Cells capped before the door shipped are not debt",
+      "A recorded judge-deferral decision clears the door",
+      "An archived offender the remedy names unarchive first",
+      "Existing wfl-3/wfl-5 door tests still pass or are updated with a stated reason"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "h1",
+    "outcome": "Judge-debt door owns its route (never reads another feature's state route), grandfathers cells capped before 2026-08-11, offers a judge-deferral decision escape, and names unarchive before judge-record for an archived offender",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T23:10:10.530Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d9663ee4-1552-489a-a52a-cb6633b67dc1",
+    "claimed_at": "2026-08-11T22:56:13.846Z",
+    "report": {
+      "outcome": "Judge-debt door owns its route (never reads another feature's state route), grandfathers cells capped before 2026-08-11, offers a judge-deferral decision escape, and names unarchive before judge-record for an archived offender",
+      "commit": "642334ed",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+      ],
+      "tests": "green",
+      "deviations": [
+        "Also updated docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md (reserved as an additional path, not in the cell's declared files) per the dispatch prompt's Inputs instruction to update the door's spec since the fix changes what it promises (route ownership, grandfather cutoff, deferral, archive remedy ordering)."
+      ]
+    },
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T23:09:51.545Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "route_ownership_closed",
+            "status": "PASS",
+            "evidence": "close.rs:428-435 gates the default-state route on route_belongs_to_feature (workflows.rs:683-685, strict equality, absent feature reads false); feature_route has exactly one caller (close.rs:697), verified by rg over src"
+          },
+          {
+            "id": "mode_fallback_is_lane_class_only",
+            "status": "PASS",
+            "evidence": "close.rs:436-441 filters to lane classes; ROUTE_CLASS_VALUES intersect ROUTE_LANE_VALUES is {docs, spike}, neither of which grows the door, so a workflow class can never be misread into a door"
+          },
+          {
+            "id": "grandfather_is_not_a_new_hole",
+            "status": "PASS",
+            "evidence": "cells cap unconditionally stamps trace.capped_at (handlers_close.rs:434, sole writer), so absent capped_at is reachable only by hand-edited state, already outside the CLI-only boundary; cutoff at close.rs:451 applied at :473-476"
+          },
+          {
+            "id": "deferral_matches_capture_deferral_discipline",
+            "status": "PASS",
+            "evidence": "has_judge_deferral_decision (close.rs:488-500) mirrors has_capture_deferral_decision (close.rs:588-600) line for line, same whole-token feature match (decisions/read.rs:383-385); a cross-feature decision proven not to lift the block at tests.rs:1526"
+          },
+          {
+            "id": "archive_remedy_is_accurate",
+            "status": "PASS",
+            "evidence": "judge-record really refuses archived cells (handlers_meta.rs:212) and bee cells unarchive --feature is the real flag shape (handlers_meta.rs:757-761)"
+          },
+          {
+            "id": "no_weakened_assertions",
+            "status": "PASS",
+            "evidence": "the capped_at fixture move (tests.rs:1227-1241) was forced by the new cutoff or the door tests would go vacuous; diff touches only timestamp literals, no assertion altered"
+          },
+          {
+            "id": "live_both_directions",
+            "status": "PASS",
+            "evidence": "run against the live store: bee close --feature linux-verify-green (small) no longer grows the door; bee close --feature harness-p1-fixes (standard, hpf-1 capped today, unjudged) blocks naming hpf-1"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-11T23:59:59.998Z"
+      }
+    ]
+  }
+}

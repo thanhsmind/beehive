@@ -1,0 +1,53 @@
+{
+  "id": "cmp-3",
+  "feature": "compounding-batch",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Merge the four surviving opencode-support proposal bullets",
+  "behavior_change": false,
+  "files": [
+    "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md",
+    "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "read_first": [
+    "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md",
+    "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "action": "A compounding triage of docs/history/opencode-support/promote-proposals.md found 20 of its 24 area bullets already stated in the bundle and the whole onboarding column a duplicate; four bullets survive and are yours to merge, each verified live at HEAD. (1) THE STAMP TRAP, highest value: a rendered skills root that exists WITHOUT its version stamp puts installation into a blocked state that refuses and is never forceable (onboard/skills.rs:420-458); R29 in release-identity-and-version-parity.md (around :154-166) today covers only the stamp-present and legacy-fallback cases — add the missing edge case as behavior, naming what a reader would otherwise hit as an unexplainable permanent refusal. A sibling cell is adding the guarding test; describe the behavior, not the test. (2) The shipped-frame inventory now carries the third runtime's guard-file role, so a release that loses that file fails its own manifest check instead of installing nothing (release_manifest.rs:82, :399-406) — one bullet where the manifest payload and its roles are described (around :222-232), which still names only two plugin roles. (3) R31 in repo-local-guardrails.md (around :118-124) names the four pinned helper identities but not their apply lifecycle: installation also REMOVES a helper's definition file when its tier model cannot be resolved (onboard/agents.rs:231-257) — add that clause, since a helper silently disappearing is exactly what a reader needs warned. (4) In health-checks-and-proof-surfaces.md, near the deep-inventory audit (around :75-80), one line: the marker labels a source may carry are a strict superset of the runtimes whose trees are written, and an unknown label is refused rather than defaulted into some other runtime's tree (skill_trees.rs:37-49, :59). Cite the opencode-support cells (oc-4, oc-13, oc-14) as sources. Do not restate anything the bundle already says — the triage found repetition to be the proposal's dominant failure mode. Nothing else from that proposal is merged; its delivery draft and all five pattern candidates were reviewed and declined.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "The stamp trap is readable as behavior — a stranger knows why installation refuses and that it cannot be forced",
+      "Each of the four bullets lands under the concept that owns it, never duplicated across areas",
+      "No bullet restates something the bundle already states",
+      "Every claim cites its source cell and traces to live code"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "cmp-docs",
+    "outcome": "Merged the four surviving opencode-support bullets (stamp trap, opencode_plugin manifest role, R31 apply lifecycle, marker-label superset) into three concept files; flushed both queued capture stubs",
+    "files_changed": [
+      "docs/knowledge/areas/onboarding/release-identity-and-version-parity.md",
+      "docs/knowledge/areas/onboarding/repo-local-guardrails.md",
+      "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T23:14:30.050Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T23:09:42.512Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T23:14:09.524Z"
+  }
+}

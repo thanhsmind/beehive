@@ -1,0 +1,52 @@
+{
+  "id": "cmp-1",
+  "feature": "compounding-batch",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Merge write-guard-precision's unmerged content into the bundle",
+  "behavior_change": false,
+  "files": [
+    "docs/knowledge/areas/hook-runtime/health-checks-and-proof-surfaces.md"
+  ],
+  "read_first": [
+    "docs/history/write-guard-precision/promote-proposals.md",
+    "docs/knowledge/areas/hook-runtime/index.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+  ],
+  "action": "A compounding triage found write-guard-precision is the only queued promote proposal with content the bundle does not already state; the other six were closed as already-stated. Its proposal has an empty area-sync section only because the work item declared no bee.areas — an authoring gap, not an absence of content. Merge the three behavioral claims, verified LIVE at HEAD: (a) the secret-prefix and scratch-prefix write guards exempt paths whose extension marks them as source code (guards.rs CODE_FILE_EXTENSIONS, is_secret_path, scratch_shape_deny) — precision over blanket strictness, so ordinary source work is not refused by a guard aimed at secrets and scratch files; (b) the idle-gate git allowlist admits a table of safe forms — bare branch, tag, remote, stash list/show, worktree list, reflog, grep — so inspection is never blocked while tree-rewriting verbs stay refused (checks.rs evaluate_git_invocation); (c) a refusal caused by an unresolvable worker count names its own remedy rather than failing opaquely (checks.rs WorkerCount::Unresolved). Ask the CLI for the write target and frontmatter (bee knowledge check, bee knowledge context, bee knowledge promote if a new concept is warranted) rather than assuming the file named in this cell is right — if guard precision belongs in its own concept under hook-runtime, promote one and record the deviation. Cite decision write-guard-precision D1 and the wgp-1/wgp-2 cells as sources. Do NOT merge the proposal's two pattern candidates: both restate a skipped-reservation deviation and are feature narration, failing all three promotion bars.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Each merged claim traces to the live code or to decision write-guard-precision D1",
+      "Guard precision is readable as behavior — a stranger with only the spec knows which paths a guard exempts and why",
+      "The two narration-only pattern candidates are not promoted",
+      "The CLI named the write target; any deviation from this cell's declared file is recorded"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "cmp-scribe",
+    "outcome": "Merged write-guard-precision's three guard-precision claims into a new hook-runtime concept (guard-precision-exemptions-and-remedies.md), flushed the queued capture stub, left the two narration-only pattern candidates unmerged",
+    "files_changed": [
+      "docs/knowledge/areas/hook-runtime/guard-precision-exemptions-and-remedies.md",
+      "docs/knowledge/areas/hook-runtime/index.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/index.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-11T23:08:33.518Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "fd787469-f9f4-4ca3-bf5f-6d8820b24165",
+    "claimed_at": "2026-08-11T23:00:35.738Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-11T23:08:13.273Z"
+  }
+}

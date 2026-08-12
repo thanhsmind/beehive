@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "harness-p1-fixes",
+  "mode": "feature",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"harness-p1-fixes\" started at phase \"planning\" (lane).",
+  "next_action": "close harness-p1-fixes and merge",
+  "created_at": "2026-08-11T22:55:38.238Z",
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change",
+      "public-contracts"
+    ],
+    "product_files": 5,
+    "rationale": "three P1s from review session-harness-lessons-20260811: door route ownership, door retroactivity, wave scope",
+    "updated_at": "2026-08-11T22:55:38.251Z",
+    "feature": "harness-p1-fixes"
+  },
+  "last_scribing_run": {
+    "feature": "harness-p1-fixes",
+    "date": "2026-08-12",
+    "at": "2026-08-12T00:00:23.123Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "close harness-p1-fixes and merge"
+  }
+}
