@@ -338,6 +338,7 @@
     "runtime",
     "opencode",
     "capture-deferral",
-    "promote-proposal"
+    "promote-proposal",
+    "worktrees"
   ]
 }
