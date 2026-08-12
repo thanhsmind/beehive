@@ -5041,3 +5041,175 @@ use std::time::Instant;
             "the reservation must be released by the unwind"
         );
     }
+
+    // ══ jo-2 — the judge obligation wired into the live `cells add` path ═══
+    //
+    // jo-1 built `assert_judge_obligation` and proved it at the function
+    // level only; `validate_new_cell` (validate.rs) now calls it beside
+    // `assert_regen_obligation`, so this exercises it through the SAME real
+    // `cells add` door the tests above use for `run_update`/`run_schedule`.
+    // `run_add` (handlers_write.rs) resolves its store root off
+    // `std::env::current_dir()` — process-global — so it is exercised
+    // out-of-process via a `#[ignore]`d child, the same isolation
+    // `cells_update_behavior_child` (above) uses for its own process-global
+    // seam.
+
+    const CELLS_ADD_JUDGE_CHILD: &str = "verbs::cells::tests::cells_add_judge_obligation_child";
+
+    /// Runs ONLY as a child of the tests below — drives the REAL `cells add
+    /// --json` CLI door over `cell.json` (a single object or a batch array)
+    /// left in its cwd by the parent, through the exact entry point
+    /// (`run_add`) `bee cells add` itself dispatches to.
+    #[test]
+    #[ignore = "spawned by the judge obligation end-to-end tests (jo-2)"]
+    fn cells_add_judge_obligation_child() {
+        let (flags, use_json) =
+            rsv::parse_flags(&["--file", "cell.json", "--json"]).expect("well-formed fixture argv");
+        run_add(flags, use_json, Instant::now());
+    }
+
+    /// Spawns `cells_add_judge_obligation_child` with `root` as its cwd and
+    /// `payload` (a single cell or a batch array) written to `cell.json`
+    /// there, and returns the child's raw stdout — the REAL `println!`
+    /// output `run_add`'s own `emit()`/`fail()` paths produce (a normalized
+    /// cell, a batch array, or `{"error": ...}`), sliced out of the libtest
+    /// banner the same way `cells_schedule_run` (above) does for its own
+    /// out-of-process seam.
+    fn cells_add_judge_obligation_run(root: &Path, payload: &Value) -> String {
+        std::fs::write(root.join("cell.json"), jsjson::stringify_pretty(payload)).unwrap();
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = std::process::Command::new(&exe);
+        cmd.args(["--exact", CELLS_ADD_JUDGE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
+        cmd.current_dir(root);
+        let out = cmd.output().expect("spawn the test binary");
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        let prefix = format!("test {CELLS_ADD_JUDGE_CHILD} ... ");
+        let start = stdout.find(&prefix).expect("libtest status line") + prefix.len();
+        let suffix = "ok\n\ntest result:";
+        let end = stdout[start..].find(suffix).expect("libtest result banner") + start;
+        stdout[start..end].to_string()
+    }
+
+    /// A `.bee` marker with nothing else declared — the same minimal root
+    /// `bp28_repo` (above) sets up for `run_update`'s own out-of-process
+    /// seam.
+    fn judge_root() -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        bp28_repo(tmp.path());
+        tmp
+    }
+
+    /// A well-formed cell whose `files` touch `JUDGE_REQUIRED_ROOTS`
+    /// (`packages/bee-rs/crates/bee/src/hooks`) — the judge-required root
+    /// `obligation.rs` declares.
+    fn judge_touching_cell(id: &str, lane: &str) -> Value {
+        let mut c = json!({
+            "id": id,
+            "feature": "jo2",
+            "title": format!("touches a guard ({id})"),
+            "action": "edit guard source",
+            "verify": "echo ok",
+            "lane": lane,
+            "files": ["packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"],
+        });
+        if lane == "standard" || lane == "high-risk" {
+            c["must_haves"] = json!({"truths": ["the guard still refuses the bad case"]});
+        }
+        c
+    }
+
+    /// must-have: the refusal fires through the REAL `cells add` path, not
+    /// just `judge_obligation_refusal` at the function level — a tiny cell
+    /// touching `packages/bee-rs/crates/bee/src/hooks` is refused, the
+    /// refusal names BOTH escapes (raise the lane, or set the ack), and
+    /// nothing lands on disk.
+    #[test]
+    fn cells_add_refuses_a_tiny_cell_touching_a_guard_root_naming_both_escapes() {
+        let tmp = judge_root();
+        let root = tmp.path();
+
+        let stdout = cells_add_judge_obligation_run(root, &judge_touching_cell("jo2-a", "tiny"));
+        assert!(stdout.contains("JUDGE_OBLIGATION"), "stdout: {stdout}");
+        assert!(
+            stdout.contains("raise this cell's lane to"),
+            "must name escape #1 (raise the lane): {stdout}"
+        );
+        assert!(
+            stdout.contains(JUDGE_ACK_FIELD),
+            "must name escape #2 (the ack field): {stdout}"
+        );
+        assert!(
+            read_cell_norm(root, "jo2-a").unwrap().is_none(),
+            "a refused add must write nothing: {stdout}"
+        );
+    }
+
+    /// must-have: the SAME cell at lane "standard" is accepted — the
+    /// close-time judge-debt door already owes the independent read at that
+    /// lane, so this authoring-time door steps aside (`JUDGE_DOOR_COVERED_
+    /// LANES`).
+    #[test]
+    fn cells_add_accepts_the_same_cell_at_lane_standard() {
+        let tmp = judge_root();
+        let root = tmp.path();
+
+        let stdout = cells_add_judge_obligation_run(root, &judge_touching_cell("jo2-b", "standard"));
+        assert!(!stdout.contains("JUDGE_OBLIGATION"), "stdout: {stdout}");
+        assert!(!stdout.contains("\"error\""), "must not refuse: {stdout}");
+        let stored = read_cell_norm(root, "jo2-b")
+            .unwrap()
+            .unwrap_or_else(|| panic!("cell must be written: {stdout}"));
+        assert_eq!(stored["lane"], json!("standard"), "stored: {stored}");
+    }
+
+    /// must-have: the same tiny cell carrying `judge_obligation_ack` is
+    /// accepted, and the ack is recorded on the stored cell — a named skip,
+    /// never a silent one.
+    #[test]
+    fn cells_add_accepts_a_tiny_cell_carrying_the_judge_obligation_ack() {
+        let tmp = judge_root();
+        let root = tmp.path();
+        let mut c = judge_touching_cell("jo2-c", "tiny");
+        c[JUDGE_ACK_FIELD] = json!("deliberately skipping the independent read for this tiny fix");
+
+        let stdout = cells_add_judge_obligation_run(root, &c);
+        assert!(!stdout.contains("JUDGE_OBLIGATION"), "stdout: {stdout}");
+        let stored = read_cell_norm(root, "jo2-c")
+            .unwrap()
+            .unwrap_or_else(|| panic!("cell must be written: {stdout}"));
+        assert_eq!(
+            stored[JUDGE_ACK_FIELD],
+            json!("deliberately skipping the independent read for this tiny fix"),
+            "stored: {stored}"
+        );
+    }
+
+    /// must-have: a batch where ONE cell trips the obligation refuses the
+    /// WHOLE batch and writes nothing — matching how the regen refusal
+    /// composes into the same whole-batch validation (every cell checked
+    /// before any is written, one call naming every problem;
+    /// `build_add_cells_report`).
+    #[test]
+    fn cells_add_batch_refuses_the_whole_batch_when_one_cell_trips_the_judge_obligation() {
+        let tmp = judge_root();
+        let root = tmp.path();
+        let batch = json!([addable("jo2-clean"), judge_touching_cell("jo2-tripped", "tiny")]);
+
+        let stdout = cells_add_judge_obligation_run(root, &batch);
+        assert!(stdout.contains("JUDGE_OBLIGATION"), "stdout: {stdout}");
+        assert!(stdout.contains("jo2-tripped"), "stdout: {stdout}");
+        assert!(
+            read_cell_norm(root, "jo2-clean").unwrap().is_none(),
+            "the clean cell in the same batch must not be written either: {stdout}"
+        );
+        assert!(
+            read_cell_norm(root, "jo2-tripped").unwrap().is_none(),
+            "the tripping cell must not be written: {stdout}"
+        );
+    }
