@@ -12,7 +12,8 @@ bee:
   sources: ["review session-harness-lessons-20260811 (.bee/reviews/session-harness-lessons-20260811.json): five independent reviewers, 3 P1 / 21 P2-P3", "cells wfl-3, wfl-5, hpf-1, hpf-2, hpf-3 (.bee/cells/archive/)", "measured 2026-08-11 over .bee/lanes/: 54 lane records — 27 standard, 14 small, 6 high-risk, 1 tiny, 2 feature; 40 carry no route at all", "suite green at every wrong step: 1569, 1573, 1617 passed"]
   polarity: pitfall
   critical: true
-  evidence: present
+  evidence: wired
+  evidence_ref: "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs (validate_new_cell calls assert_judge_obligation beside assert_regen_obligation; exercised end-to-end through the real `cells add` CLI door in packages/bee-rs/crates/bee/src/verbs/cells/tests.rs, jo-2)"
   signature: guard-fixture-shares-the-guards-own-assumption
 ---
 

@@ -233,6 +233,102 @@ pub(crate) fn assert_regen_obligation(cell: &Map<String, Value>, verb: &str) -> 
     }
 }
 
+// ─── judge obligation (pattern-20260812, cell jo-1) ────────────────────────
+//
+// pattern-20260812 (docs/knowledge/patterns/20260812-a-guard-and-its-tests-
+// are-one-model-so-green-proves-only-that-the-model-agrees-with-itself.md):
+// three consecutive fixes to two guards each shipped with a full green
+// suite and each was wrong, because the fixture was authored from the same
+// picture as the guard it tested. What found all three was never the
+// suite — it was an independent read against the live store's real shape
+// distribution. close.rs's judge-debt door (`build_close_report_doors`)
+// already owes that independent read for every standard/high-risk feature.
+// It does NOT own tiny/small: `feature_route(...) == Some("standard") |
+// Some("high-risk")` gates the door's very existence, so a tiny/small cell
+// that changes guard source — the exact code this pattern is about — never
+// meets it at all. This obligation gives that gap an authoring-time door,
+// the same shape REGEN_OBLIGATION gives the manifest/ledger gap above: a
+// refusal with two named escapes, never a silent skip.
+
+pub(crate) const JUDGE_ACK_FIELD: &str = "judge_obligation_ack";
+
+/// The lanes close.rs's judge-debt door already covers (`feature_route`
+/// against `Some("standard") | Some("high-risk")`, drivers/close.rs:697).
+/// A cell authored at one of these lanes owes nothing here — not because the
+/// obligation stops applying, but because the SAME independent read is
+/// already demanded once the feature closes; adding a second door at the
+/// same lanes would just duplicate the close-time one for no new coverage.
+const JUDGE_DOOR_COVERED_LANES: [&str; 2] = ["standard", "high-risk"];
+
+/// Judge-required roots: source whose defect the pattern is about — a
+/// machine guard. Declared BY HAND, like `INVENTORY_ROOTS`
+/// (devtools/release_manifest.rs) is, because unlike the regen guards above
+/// there is no single runtime authority to derive this from (no builder
+/// enumerates "every guard"); the source tree IS the authority instead. So
+/// the anti-rot property is pinned the other way, by two tests in this
+/// file's own `#[cfg(test)]` block: `every_judge_required_root_exists_on_disk`
+/// (a stale root goes red) and
+/// `every_guard_segment_directory_under_crate_src_is_covered_by_a_declared_root`
+/// (a new guard directory that ships outside this list goes red) — the same
+/// both-directions pin the REGEN_GUARDS note above describes, aimed at a
+/// filesystem walk instead of a compiled constant because that is what a
+/// "guard" actually is here: not one registry, a naming convention over a
+/// tree that keeps growing.
+pub(crate) const JUDGE_REQUIRED_ROOTS: &[&str] = &["packages/bee-rs/crates/bee/src/hooks"];
+
+/// judgeObligationRefusal — None when nothing is owed. Mirrors
+/// `regen_obligation_refusal`'s shape: an ack short-circuits first, then the
+/// files are scanned for a hit, then the offending file/root/reason/escapes
+/// are assembled into one refusal naming both ways out.
+pub(crate) fn judge_obligation_refusal(cell: &Map<String, Value>, verb: &str) -> Option<String> {
+    if let Some(ack) = cell.get(JUDGE_ACK_FIELD) {
+        if matches!(ack, Value::String(s) if !js_trim(s).is_empty()) {
+            return None; // named escape #2: a recorded one-line reason
+        }
+    }
+    let lane = match cell.get("lane") {
+        Some(Value::String(s)) => s.clone(),
+        _ => String::new(),
+    };
+    if JUDGE_DOOR_COVERED_LANES.contains(&lane.as_str()) {
+        return None; // named escape #1: the close-time judge-debt door already applies
+    }
+    let files: Vec<String> = match cell.get("files") {
+        Some(Value::Array(a)) => a
+            .iter()
+            .filter_map(|f| match f {
+                Value::String(s) if !js_trim(s).is_empty() => Some(normalize_cell_path(s)),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    if files.is_empty() {
+        return None;
+    }
+    let id = match cell.get("id") {
+        Some(Value::String(s)) if !s.is_empty() => s.clone(),
+        _ => "(unknown id)".to_string(),
+    };
+    let lane_display = if lane.is_empty() { "(no lane)".to_string() } else { lane };
+    for file in &files {
+        let Some(hit_root) = JUDGE_REQUIRED_ROOTS.iter().find(|r| path_under_root(file, r)) else {
+            continue;
+        };
+        return Some(format!(
+            "{verb}: JUDGE_OBLIGATION — cell \"{id}\" touches \"{file}\", which falls under \"{hit_root}\", a judge-required root (machine-guard source). A guard and tests written beside it by the same author are one model, so a green suite there proves only that the model agrees with itself (pattern-20260812); the close-time judge-debt door already demands an independent read for standard/high-risk work, but lane \"{lane_display}\" is below it. FIX: either raise this cell's lane to \"standard\" or \"high-risk\" (the existing close-time door then owes the independent read), or set \"{JUDGE_ACK_FIELD}\" on the cell to a one-line reason; it is recorded on the cell, so skipping the independent read is a named act rather than an oversight. The write is refused; nothing was written."
+        ));
+    }
+    None
+}
+
+pub(crate) fn assert_judge_obligation(cell: &Map<String, Value>, verb: &str) -> MR<()> {
+    match judge_obligation_refusal(cell, verb) {
+        Some(refusal) => Err(Fail::Thrown(refusal)),
+        None => Ok(()),
+    }
+}
+
 // ─── config slice (readConfig -> commands.test; `verify` retired) ─────────
 
 pub(crate) const NO_TEST_SENTINEL: &str = "none";
@@ -305,5 +401,82 @@ mod tests {
             .unwrap()
             .expect("must refuse");
         assert!(refusal.contains("bee dev regen"), "{refusal}");
+    }
+
+    // ── judge obligation: both-directions pin against the crate source tree ──
+
+    fn repo_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..").join("..")
+    }
+
+    /// Every path segment (case-insensitive) that contains "guard", under
+    /// `dir`, repo-relative and POSIX-separated. Recurses through ordinary
+    /// directories only — the crate's own `src` tree, so no `target`/`.git`
+    /// noise to skip.
+    fn guard_segment_dirs_under(repo_root: &Path, dir: &Path, out: &mut Vec<String>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if name.contains("guard") {
+                let rel = path
+                    .strip_prefix(repo_root)
+                    .expect("walked path must be under repo_root")
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.push(rel);
+            }
+            guard_segment_dirs_under(repo_root, &path, out);
+        }
+    }
+
+    /// Half one of the pin: a stale declared root (moved, renamed, deleted)
+    /// goes red rather than silently covering nothing.
+    #[test]
+    fn every_judge_required_root_exists_on_disk() {
+        let root = repo_root();
+        if !root.join("packages/bee-rs/crates/bee/src").is_dir() {
+            return; // not a source checkout (packaged build) — nothing to prove
+        }
+        for declared in JUDGE_REQUIRED_ROOTS {
+            assert!(
+                root.join(declared).exists(),
+                "JUDGE_REQUIRED_ROOTS declares \"{declared}\", which does not exist on disk — a \
+                 stale root that would never match a real cell file; drop it or fix the path."
+            );
+        }
+    }
+
+    /// Half two of the pin, the anti-rot direction the pattern is actually
+    /// about: a NEW guard module that lands anywhere under the crate's `src`
+    /// tree, outside every declared root, must turn this test red — the
+    /// silent-miss failure mode REGEN_GUARDS' note above (obligation.rs:50-72)
+    /// describes for the manifest/ledger guards, aimed here at a filesystem
+    /// walk because "every guard" has no single runtime enumerator to derive
+    /// the list from instead.
+    #[test]
+    fn every_guard_segment_directory_under_crate_src_is_covered_by_a_declared_root() {
+        let root = repo_root();
+        let crate_src = root.join("packages/bee-rs/crates/bee/src");
+        if !crate_src.is_dir() {
+            return; // not a source checkout (packaged build) — nothing to prove
+        }
+        let mut found = Vec::new();
+        guard_segment_dirs_under(&root, &crate_src, &mut found);
+        assert!(!found.is_empty(), "the live tree must contain at least one guard-segment directory");
+        let uncovered: Vec<&str> = found
+            .iter()
+            .map(String::as_str)
+            .filter(|dir| !JUDGE_REQUIRED_ROOTS.iter().any(|r| path_under_root(dir, r) || dir == r))
+            .collect();
+        assert!(
+            uncovered.is_empty(),
+            "found guard-segment director(ies) not covered by JUDGE_REQUIRED_ROOTS: {uncovered:?} — a \
+             new guard module shipped outside the declared roots, so the judge obligation would stop \
+             firing for cells that touch it silently. Add its root to JUDGE_REQUIRED_ROOTS."
+        );
     }
 }

@@ -185,7 +185,8 @@ pub(crate) fn validate_new_cell(root: &Path, cell: &Value) -> MR<()> {
     if read_cell_norm(root, &id)?.map(|v| js_truthy(&v)).unwrap_or(false) {
         return Err(Fail::Thrown(format!("addCell: cell \"{id}\" already exists.")));
     }
-    assert_regen_obligation(map, "addCell")
+    assert_regen_obligation(map, "addCell")?;
+    assert_judge_obligation(map, "addCell")
 }
 
 /// The shared behavior-door default (E6 / B-P2-8): a call that sets
