@@ -922,6 +922,26 @@ use std::process::ExitCode;
         assert_eq!(expect_done(edit("src/app.js"), &corrupt.root).code, 0);
     }
 
+    // wtf-4: a second independent read of aac9984f found the tiny-lane
+    // exemption sitting above BOTH arms — a feature that ALREADY holds a
+    // granted worktree could take a lane "tiny" source edit in main. That
+    // is precisely the drift worktree-first exists to stop: a tiny edit
+    // landing in main while its worktree is live is a merge conflict
+    // waiting at `bee worktree merge`. The exemption belongs to the
+    // no-grant arm only (tested in worktree_first_no_grant_arm_carve_outs_allow
+    // above); the granted arm must deny lane "tiny" exactly as it denies
+    // lane "standard", matching 96db1a33^ behavior.
+    #[test]
+    fn worktree_first_granted_arm_denies_lane_tiny_too() {
+        let wtf = build_worktree_first("swarming", "tiny", false);
+        let e = expect_done(edit("src/app.js"), &wtf.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("worktree-first"), "{}", e.stderr);
+        assert!(e.stderr.contains(&*wtf.wt_root.file_name().unwrap().to_string_lossy()), "{}", e.stderr);
+        assert!(e.stderr.contains(&format!("bee worktree merge --id {}", wtf.id)), "{}", e.stderr);
+        assert!(e.stderr.contains("\"demo\"") && e.stderr.contains("\"tiny\""), "{}", e.stderr);
+    }
+
     // wtf-3 (1): the pre-existing granted-worktree refusal predates the
     // "swarming" phase gate 96db1a33 hoisted above BOTH arms — it must stay
     // phase-independent, denying at every phase, not only "swarming".
@@ -1056,7 +1076,9 @@ use std::process::ExitCode;
 
     #[test]
     fn worktree_first_no_grant_arm_carve_outs_allow() {
-        // lane "tiny" never fires.
+        // lane "tiny" never fires — but only here, on the no-grant arm; the
+        // granted arm still denies lane "tiny" (see
+        // worktree_first_granted_arm_denies_lane_tiny_too below).
         let tiny = build_worktree_first_no_grant("swarming", Some("tiny"));
         assert_eq!(expect_done(edit("src/app.js"), &tiny.root).code, 0);
         // lane "docs" never fires.

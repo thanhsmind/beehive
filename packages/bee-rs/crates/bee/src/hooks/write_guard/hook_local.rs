@@ -560,10 +560,13 @@ pub(crate) fn worktree_first_exempt_rel(rel: &str) -> bool {
 /// the default state.json otherwise (the same resolution `check_write` uses
 /// via `resolve_write_record`); it is never the raw default state.json for a
 /// lane-bound session. Every carve-out below is a fail-open bound, narrowest
-/// first: lane "docs" and lane "tiny" never fire (AGENTS.md gives main
-/// integration, docs-lane, release work, and a solo tiny fix — see the tiny
-/// carve-out's own comment below for the "solo" gap), and a missing/empty
-/// route on the acting record is "no opinion" — never guessed at.
+/// first: lane "docs" never fires on EITHER arm (AGENTS.md gives main
+/// integration and docs-lane work), lane "tiny" never fires on the NEW
+/// no-grant arm only (AGENTS.md's solo tiny fix — see that arm's own
+/// carve-out comment below for the "solo" gap and why a feature already
+/// holding a granted worktree does not get this exemption), and a
+/// missing/empty route on the acting record is "no opinion" — never guessed
+/// at.
 ///
 /// The granted-worktree arm below is phase-independent — byte-for-byte the
 /// pre-existing refusal (git show 96db1a33^), which predates the "swarming"
@@ -592,16 +595,9 @@ pub(crate) fn check_worktree_first(
         },
         _ => return Ok(None),
     };
-    // The "tiny" half of this carve-out is unconditional here, wider than
-    // its own cited source: state_group/workflows.rs is_code_touching_lane
-    // only exempts lane "tiny" when no OTHER live session is present
-    // (`lane == "tiny" && !other_live_session`), via
-    // other_live_work_present's session-record + lane-display walk. That
-    // walk has no equivalent on this path without a new store dependency
-    // (a Path-rooted, Ex-returning session/lane reader this hook module
-    // does not carry) — left unconditional rather than guessed at. Gap
-    // named here per cell wtf-3; closing it is a separate cell.
-    if lane == "docs" || lane == "tiny" {
+    // "docs" is exempt on BOTH arms — it never becomes a source write in the
+    // first place, so it never needs a worktree, granted or not.
+    if lane == "docs" {
         return Ok(None);
     }
     let config = read_config(store_root)?;
@@ -640,8 +636,27 @@ worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded,
         FeatureWorktreeGrant::NotFound => {}
     }
     // From here the grant lookup is a clean, confident "no grant recorded
-    // for this feature" — the NEW arm (wtf-1), which needs its own three
+    // for this feature" — the NEW arm (wtf-1), which needs its own four
     // narrower gates before it may deny.
+    //
+    // "tiny" is exempt HERE, on the no-grant arm only — AGENTS.md's solo
+    // tiny fix in main, read as "this work is small enough not to need a
+    // worktree at all." A feature that already holds a granted worktree
+    // never reaches this arm (the granted arm above returns first), so this
+    // exemption can never rescue a tiny edit that collides with a live
+    // worktree — that case is exactly the drift worktree-first exists to
+    // stop. This carve-out is also wider than its own cited source:
+    // state_group/workflows.rs is_code_touching_lane only exempts lane
+    // "tiny" when no OTHER live session is present
+    // (`lane == "tiny" && !other_live_session`), via
+    // other_live_work_present's session-record + lane-display walk. That
+    // walk has no equivalent on this path without a new store dependency (a
+    // Path-rooted, Ex-returning session/lane reader this hook module does
+    // not carry) — left unconditional rather than guessed at. Gap named
+    // here per cell wtf-3; closing it is a separate cell.
+    if lane == "tiny" {
+        return Ok(None);
+    }
     let phase = match record.get("phase") {
         Some(Value::String(p)) => p.clone(),
         _ => String::new(),
