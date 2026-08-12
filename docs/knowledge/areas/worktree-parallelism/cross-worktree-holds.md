@@ -99,6 +99,15 @@ shared holds ledger closes that gap at WRITE time:
   classified-dead worktree, and `bee worktree unregister` all reach this release through the
   one shared teardown helper (`entering-creating-and-registering.md`, `returning-and-the-
   merge-gate.md`).
+- **A lease names the checkout that wrote it, so a conflict refusal is not anonymous
+  (cell wtf-2, commit 41556fb1, 2026-08-12).** A path lease record carries its writing
+  checkout — `main`, or a granted worktree's git-verified id, and the field is omitted for an
+  ungranted linked worktree, whose writes already live in the shared store. A conflict refusal
+  then names WHERE the holder sits instead of only which agent nickname holds it. Leases are
+  control-plane and shared across every checkout, so the record itself is the only place that
+  answer can come from — the refusing side cannot see the holder's filesystem. Reporting only:
+  conflict detection, release scoping, and sweep scoping are unchanged, and a lease written
+  before this still round-trips (a missing field reads as "unknown checkout", never as main).
 - **Failure discipline:** missing ledger = empty (byte-identical to pre-ledger behavior);
   unparseable ledger = typed deny (`worktree-holds-unreadable`, mirroring the reservation
   corrupt-store rule); unresolvable topology = fail-open with crash-log. Both runtime files

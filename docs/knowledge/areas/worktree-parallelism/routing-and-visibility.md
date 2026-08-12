@@ -48,6 +48,30 @@ names that worktree and both remedies instead of the generic containment text (m
 only — the deny itself is unchanged; any grants-read error falls back to the generic
 message, never an allow).
 
+## What the write guard actually judges (cells wtf-1, wtf-3, wtf-4, 2026-08-12)
+
+The routing rule is prose, but the main-checkout write guard is what makes it bite, and it
+now judges the record the acting session is really working under — the **lane record** for a
+lane-bound session, which is the shape almost every live session has, not the default
+pipeline's `state.json`, which routinely names a different feature entirely. Judging the
+wrong record let a code-touching write pass because some unrelated feature happened to sit on
+an exempt lane.
+
+The guard has two arms with different reach:
+
+- **The granted arm** — the acting feature already holds a worktree — is phase-independent and
+  exempts only docs-lane work. A source write in main while the feature's own worktree stands
+  is refused whatever the phase.
+- **The no-grant arm** — the acting feature holds no worktree at all — is the arm the guard
+  never had. It fires only during execution, only on a routed non-docs non-tiny lane, and only
+  in a real git checkout, so exploring, planning, docs and solo-tiny work in main are untouched.
+
+Both arms fail open rather than refuse with a remedy that would itself be refused: any grant
+the guard cannot resolve produces an allow, never a deny. That has a known cost — a single
+unresolvable entry anywhere in the grants registry disables the no-grant arm for **every**
+feature, not just the broken one. This is deliberate: a stale registry must never manufacture
+a false refusal on work that is legitimately in main.
+
 **Lane-first refinement — superseded (worktree-first, 2026-07-31):** cross-worktree-holds D7
 (2026-07-20) deferred the worktree grant to Gate 2's execution component (the old standalone
 execution gate, folded into Gate 2 — validation-diet D2) and took it only on genuine file overlap,

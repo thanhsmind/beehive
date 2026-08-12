@@ -196,6 +196,32 @@ overwritten by heartbeat's stale in-memory copy of the record) or resurrected
 now mutually exclusive, closing the session store's last lock-free
 read-modify-write (issue #56 3.8).
 
+**A lane binding is refused unless the lane already exists, and the guard that
+enforces bindings never blocks the escape from a bad one (cells lgd-1/lgd-2,
+2026-08-12).** Trigger: binding a session to a lane feature that has no lane
+record. What happens: the bind is refused at the door, before the sessions lock
+is taken, carrying the same lane-missing wording every other lane-resolving path
+already uses — the one that names starting the lane as the fix. Nothing is
+written. Before this, any well-formed lane id was accepted, which produced a
+session record every other seam was then obliged to reject.
+
+The second half of the rule is what made the first half urgent. The write
+guard's command check used to resolve the acting lane record *before* it looked
+at the command at all, so a binding that resolved to nothing refused **every**
+shell command the session ran — including the unbind that the refusal itself
+names as the remedy. A session could enter that state and not leave it; only a
+human running the command outside the session could break the deadlock. The
+check now reads the command first: a command that carries none of the version-control
+verbs this guard judges is not its business and resolves nothing. What each
+actor observes: a bad binding can no longer be created, and a session that
+somehow holds one can still run its own way out. What is unchanged: the
+version-control verbs the guard judges, and every file write, still refuse under
+an unresolvable binding.
+
+The durable rule behind both halves: **a refusal whose remedy names a command
+must leave that command runnable**, and a guard resolves shared state only for
+the inputs it actually judges.
+
 ### Closing a feature — the tail of the chain
 
 Closing is the one stretch of the pipeline where each step must *prove* the step
@@ -306,6 +332,16 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   store lock as heartbeat renewal around their own read-modify-write, with the
   same bounded-retry / typed `LOCK_BUSY` discipline; no path writes a session
   record without holding that lock (multisession-native D10a, issue #56 3.8).
+- R58 — A lane binding is written only for a lane that already exists: binding
+  to a feature with no lane record is refused before the store lock is taken,
+  with the shared lane-missing wording, and writes nothing (cell lgd-1,
+  2026-08-12).
+- R59 — A guard resolves shared state only for the inputs it judges, and a
+  refusal whose stated remedy names a command must leave that command runnable.
+  The write guard's command check therefore reads the command before resolving
+  the acting record: a command carrying none of the version-control verbs it
+  judges resolves nothing and is allowed, so an unresolvable lane binding can no
+  longer refuse the unbind that escapes it (cell lgd-2, 2026-08-12).
 - R60 — Active workers are always a computed join of live-heartbeat sessions
   with lane/workflow binding and cell claims, never the stored `workers`
   array; `startFeature`'s worker precondition (default and `--as-lane` paths
@@ -515,6 +551,13 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   runExample rows in `test_bee_cli.mjs`). Evidence: traces
   `.bee/cells/fsh-{3,4}.json`, commits 257d6b5, 6fa4f89;
   `docs/history/fresh-session-handoff/reports/validation-s2.md`.
+- Bind existence check (R58) and the guard's git-first scan (R59):
+  `bind_lane_missing` + the `lane_missing_refusal` reuse in
+  `packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs`;
+  `check_git_bash_command`'s `tokenize_deep` / `find_git_invocations` now ahead
+  of `resolve_write_record` in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs`. Evidence: cells
+  lgd-1/lgd-2, commits 896959ea, 0a5ec197, released in v2.4.8.
 - Lock-serialized bind/unbind (D10a): `bindSessionLane`/`unbindSessionLane`
   read-modify-write moved inside `acquireSessionsLock` in
   `packages/bee/lib/claims.mjs`, same bounded-retry/typed
