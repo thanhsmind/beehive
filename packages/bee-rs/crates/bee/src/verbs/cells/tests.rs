@@ -659,6 +659,82 @@ use std::time::Instant;
             .is_none());
     }
 
+    /// jo-1 (pattern-20260812): a tiny/small cell touching guard source is
+    /// refused, naming both named escapes; standard/high-risk is unaffected
+    /// (the close-time judge-debt door already owns it there); the ack skips
+    /// it as a recorded act; a cell touching no guard source is silent.
+    #[test]
+    fn judge_obligation_fires_below_the_covered_lanes_and_can_be_escaped_two_ways() {
+        let guard_file = "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs";
+
+        // A tiny cell touching guard source, with neither escape, refuses…
+        let cell = json!({
+            "id": "j-1",
+            "lane": "tiny",
+            "files": [guard_file],
+            "verify": "echo ok",
+        });
+        let refusal = judge_obligation_refusal(cell.as_object().unwrap(), "addCell")
+            .expect("must refuse");
+        assert!(
+            refusal.starts_with(&format!(
+                "addCell: JUDGE_OBLIGATION — cell \"j-1\" touches \"{guard_file}\""
+            )),
+            "{refusal}"
+        );
+        // Names WHY (pattern-20260812) and BOTH escapes.
+        assert!(refusal.contains("pattern-20260812"), "{refusal}");
+        assert!(refusal.contains("raise this cell's lane to \"standard\" or \"high-risk\""), "{refusal}");
+        assert!(refusal.contains(&format!("set \"{JUDGE_ACK_FIELD}\"")), "{refusal}");
+
+        // A small cell touching guard source refuses the same way.
+        let small = json!({"id": "j-2", "lane": "small", "files": [guard_file], "verify": "echo ok"});
+        assert!(judge_obligation_refusal(small.as_object().unwrap(), "addCell").is_some());
+
+        // …a standard cell touching the same file is unaffected — the
+        // close-time judge-debt door already owns it there.
+        let standard = json!({
+            "id": "j-3",
+            "lane": "standard",
+            "files": [guard_file],
+            "verify": "echo ok",
+        });
+        assert!(judge_obligation_refusal(standard.as_object().unwrap(), "addCell").is_none());
+
+        // …a high-risk cell too.
+        let high_risk = json!({
+            "id": "j-4",
+            "lane": "high-risk",
+            "files": [guard_file],
+            "verify": "echo ok",
+        });
+        assert!(judge_obligation_refusal(high_risk.as_object().unwrap(), "addCell").is_none());
+
+        // …the ack skips it, recorded on the cell as a named act…
+        let acked = json!({
+            "id": "j-1",
+            "lane": "tiny",
+            "files": [guard_file],
+            "verify": "echo ok",
+            "judge_obligation_ack": "authored red-first against a live-store sample, see decision X",
+        });
+        assert!(judge_obligation_refusal(acked.as_object().unwrap(), "addCell").is_none());
+
+        // …and a tiny cell touching nothing under a judge-required root is
+        // silent.
+        let unrelated = json!({
+            "id": "j-5",
+            "lane": "tiny",
+            "files": ["packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"],
+            "verify": "echo ok",
+        });
+        assert!(judge_obligation_refusal(unrelated.as_object().unwrap(), "addCell").is_none());
+
+        // assert_judge_obligation surfaces the same refusal as a thrown error.
+        assert!(assert_judge_obligation(cell.as_object().unwrap(), "addCell").is_err());
+        assert!(assert_judge_obligation(standard.as_object().unwrap(), "addCell").is_ok());
+    }
+
     // ── claims-store protocol ─────────────────────────────────────────────
     #[test]
     fn claim_cell_file_protocol_and_release() {

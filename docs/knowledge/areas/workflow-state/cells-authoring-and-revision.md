@@ -148,6 +148,29 @@ repository stays open. What each actor observes: units cannot be smuggled in
 ahead of the gate, while documentation-lane work is exempt outright, because
 that lane never gates on execution in the first place.
 
+**B52 — A unit whose scope touches guard source at a lane the close-time
+judge door does not cover cannot be authored without acknowledging it
+(pattern-20260812, cell jo-1).** Trigger: creating a unit of work whose
+declared files include a path under a judge-required root — machine-guard
+source: the hooks module tree, and any directory whose path carries a
+`guard` segment. What happens: a unit at the standard or high-risk lane is
+unaffected — the close-time judge-debt door already demands an independent
+read there; a unit at any other lane (tiny, small, spike, docs) touching a
+judge-required root is refused unless it carries a one-line recorded
+acknowledgement (`judge_obligation_ack`), the same escape shape B37 already
+gives the regen obligation. The reason this door exists at all: a guard and
+tests written beside it by the same author are one model, so a green suite
+only proves the model agrees with itself — three consecutive fixes to two
+guards shipped green and wrong before an independent read caught each one
+(pattern-20260812). The judge-required roots are pinned against the crate
+source tree itself, in both directions, by tests living beside the check —
+every declared root must exist on disk, and every guard-segment directory
+under the crate's source must fall under a declared root — so a new guard
+module shipped outside the list turns a test red instead of silently
+escaping the door. What each actor observes: a unit that never touches
+guard source is unaffected; one that does either raises its own lane or
+records why it is skipping the independent read.
+
 **B51 — The most expensive worker tier is a budget, and the budget refuses
 (counter-teeth D3, 2026-08-04).** Trigger: assigning a unit the highest-cost
 tier. What happens: the share that assignment would produce is computed across
@@ -221,6 +244,12 @@ silent.
   only and is measured after the assignment, cheaper tiers are never budgeted,
   and the sole escape is a stated reason persisted on the unit's trace
   (counter-teeth D3, cell ct-4, 2026-08-04).
+- R103 — A unit touching judge-required (guard) source at a lane below
+  standard/high-risk refuses authoring unless it records
+  `judge_obligation_ack`; the covered roots are pinned against the crate
+  source tree itself in both directions — a stale root and an uncovered new
+  guard directory each turn a test red — never hand-kept independent of it
+  (pattern-20260812, cell jo-1, 2026-08-12).
 
 ## Edge Cases Settled
 
@@ -291,3 +320,13 @@ silent.
   one gated row fails the batch and nothing is written. Lane precedence mirrors
   `plan_freeze_shape_approved`'s. Evidence: trace `.bee/cells/bh-3.json` (cells
   slice 83 passed, 2026-08-04).
+- Judge obligation for guard-touching units below standard/high-risk
+  (B52/R103): `judge_obligation_refusal` / `assert_judge_obligation`,
+  `JUDGE_REQUIRED_ROOTS`, and `JUDGE_ACK_FIELD` (`judge_obligation_ack`) in
+  `packages/bee-rs/crates/bee/src/verbs/cells/obligation.rs`. The covered-lane
+  check reads `JUDGE_DOOR_COVERED_LANES` (`["standard", "high-risk"]`),
+  mirroring close.rs's judge-debt door gate (drivers/close.rs:697). The
+  required-roots list is pinned against the crate source tree in both
+  directions by `every_judge_required_root_exists_on_disk` and
+  `every_guard_segment_directory_under_crate_src_is_covered_by_a_declared_root`
+  in the same file. Evidence: trace `.bee/cells/jo-1.json`.
