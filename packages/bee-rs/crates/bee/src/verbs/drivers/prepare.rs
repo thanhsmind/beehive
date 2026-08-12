@@ -904,126 +904,145 @@ pub(crate) fn native_transport_classification(root: &Path) -> D<&'static str> {
 /// Both doors are the SHARED ones (`cells::claim_cell_from_flags`,
 /// `reservations::reserve_path_atomic`), never a second copy — re-deriving
 /// them would fork the store-mutation logic C1 exists to protect.
+///
+/// The outer `Err` carries `(Err2, claim_taken)` — dispatch review delta
+/// (hpf-3): the claim door's own exotic-shape delegate fires BEFORE any
+/// claim mutation (`handlers_write.rs:904`/`915` — a truthy non-object cell
+/// or a truthy non-array `deps`, checked ahead of `claimCellCrossSession`),
+/// so `claim_taken` is `false` there always. Every OTHER `?`-propagated
+/// unproven shape below runs only after the claim door already returned
+/// `Ok`, so `claim_taken` is `true` there. A caller deciding whether to
+/// force-unclaim on refusal MUST read this flag first: forcing through an
+/// ownership guard over a claim this call never took would write straight
+/// through whatever the cell already held — open, or another live agent's
+/// claim.
 pub(crate) fn claim_and_reserve_for_dispatch(
     root: &Path,
     topo: Option<(&Path, &str)>,
     cell_id: &str,
     worker: &str,
     session_flag: Option<&str>,
-) -> R2<Result<(Value, Vec<Value>, bool, Option<String>), String>> {
+) -> Result<Result<(Value, Vec<Value>, bool, Option<String>), String>, (Err2, bool)> {
     use crate::verbs::cells;
     // ttl/isolate are structurally absent: bee.mjs builds `{id, worker}` plus
     // `session-id` only when one was passed.
     let door = match cells::claim_cell_from_flags(root, cell_id, worker, session_flag, None) {
         Ok(d) => d,
-        Err(cells::Fail::Delegate) => return Err(Err2::Ex),
+        Err(cells::Fail::Delegate) => return Err((Err2::Ex, false)),
         Err(cells::Fail::Thrown(m)) => return Ok(Err(m)),
     };
-    let cell = door.cell;
-    let claimed_id = match cell.get("id") {
-        Some(Value::String(s)) => s.clone(),
-        other => jsjson::js_to_string(other.unwrap_or(&Value::Null)),
-    };
-    // `Array.isArray(cell.files) ? cell.files.filter(f => typeof f === 'string' && f) : []`
-    let files: Vec<String> = match cell.get("files") {
-        Some(Value::Array(a)) => a
-            .iter()
-            .filter_map(|f| match f {
-                Value::String(s) if !s.is_empty() => Some(s.clone()),
-                _ => None,
-            })
-            .collect(),
-        _ => Vec::new(),
-    };
-
-    let mut reserved: Vec<Value> = Vec::new();
-    for file_path in &files {
-        let section = reserve_path_atomic(topo, root.to_str().ok_or(Err2::Ex)?, worker, &claimed_id, file_path)?;
-        let conflict_lines: Vec<String> = match section {
-            ReserveOutcome::Reserved(reservation) => {
-                // The NORMALIZED path off the lease record, not files[i].
-                reserved.push(reservation.get("path").cloned().unwrap_or(Value::Null));
-                continue;
-            }
-            ReserveOutcome::Thrown(m) => return Ok(Err(m)),
-            ReserveOutcome::ForeignHold(hold) => {
-                let or_unknown = |k: &str| match hold.get(k) {
-                    Some(v) if truthy(v) => jsjson::js_to_string(v),
-                    _ => "unknown".to_string(),
-                };
-                vec![format!(
-                    "- checkout \"{}\" holds \"{}\" (cross-worktree hold, feature {}, cell {})",
-                    hold.get("holder").map_or("undefined".into(), jsjson::js_to_string),
-                    hold.get("path").map_or("undefined".into(), jsjson::js_to_string),
-                    or_unknown("feature"),
-                    or_unknown("cell"),
-                )]
-            }
-            ReserveOutcome::Conflicts(conflicts) => conflicts
+    // The claim STANDS from here on — wrap the remainder so any further
+    // unproven-shape error reports `claim_taken: true`, never folded into
+    // the pre-claim `false` case above.
+    (move || -> R2<Result<(Value, Vec<Value>, bool, Option<String>), String>> {
+        let cell = door.cell;
+        let claimed_id = match cell.get("id") {
+            Some(Value::String(s)) => s.clone(),
+            other => jsjson::js_to_string(other.unwrap_or(&Value::Null)),
+        };
+        // `Array.isArray(cell.files) ? cell.files.filter(f => typeof f === 'string' && f) : []`
+        let files: Vec<String> = match cell.get("files") {
+            Some(Value::Array(a)) => a
                 .iter()
-                .map(|c| {
-                    format!(
-                        "- {} holds \"{}\" (cell {})",
-                        c.get("agent").map_or("undefined".into(), jsjson::js_to_string),
-                        c.get("path").map_or("undefined".into(), jsjson::js_to_string),
-                        c.get("cell").map_or("undefined".into(), jsjson::js_to_string),
-                    )
+                .filter_map(|f| match f {
+                    Value::String(s) if !s.is_empty() => Some(s.clone()),
+                    _ => None,
                 })
                 .collect(),
+            _ => Vec::new(),
         };
 
-        // Unwind, in reverse. Both rungs read stores this same call has
-        // already probed (reserve_prechecks, and the claim door's own
-        // prescans), so the Exotic arm below is unreachable in practice —
-        // recorded as this branch's one accepted residual.
-        let mut unwind_note = "the claim was unwound and state restored as found".to_string();
-        let unwound = (|| -> R2<Result<(), String>> {
-            if !reserved.is_empty() {
-                if let Out::Thrown(m) = release_reservations_for_agent(
-                    topo,
-                    root.to_str().ok_or(Err2::Ex)?,
-                    worker,
-                    Some(&claimed_id),
-                )? {
-                    return Ok(Err(m));
+        let mut reserved: Vec<Value> = Vec::new();
+        for file_path in &files {
+            let section =
+                reserve_path_atomic(topo, root.to_str().ok_or(Err2::Ex)?, worker, &claimed_id, file_path)?;
+            let conflict_lines: Vec<String> = match section {
+                ReserveOutcome::Reserved(reservation) => {
+                    // The NORMALIZED path off the lease record, not files[i].
+                    reserved.push(reservation.get("path").cloned().unwrap_or(Value::Null));
+                    continue;
                 }
-            }
-            match cells::unclaim_cell(root, &claimed_id, door.session_id.as_deref(), false) {
-                Ok(_) => Ok(Ok(())),
-                Err(cells::Fail::Delegate) => Err(Err2::Ex),
-                Err(cells::Fail::Thrown(m)) => Ok(Err(m)),
-            }
-        })()?;
-        if let Err(message) = unwound {
-            unwind_note = format!(
-                "UNWIND FAILED ({message}) — restore by hand: bee reservations release --agent {worker} --cell {claimed_id} --json ; bee cells unclaim --id {claimed_id} --json"
-            );
-        }
-        let mut lines = vec![format!(
-            "dispatch prepare --claim: reservation conflict on cell \"{claimed_id}\" — nothing dispatched; {unwind_note}:"
-        )];
-        lines.extend(conflict_lines);
-        return Ok(Err(lines.join("\n")));
-    }
+                ReserveOutcome::Thrown(m) => return Ok(Err(m)),
+                ReserveOutcome::ForeignHold(hold) => {
+                    let or_unknown = |k: &str| match hold.get(k) {
+                        Some(v) if truthy(v) => jsjson::js_to_string(v),
+                        _ => "unknown".to_string(),
+                    };
+                    vec![format!(
+                        "- checkout \"{}\" holds \"{}\" (cross-worktree hold, feature {}, cell {})",
+                        hold.get("holder").map_or("undefined".into(), jsjson::js_to_string),
+                        hold.get("path").map_or("undefined".into(), jsjson::js_to_string),
+                        or_unknown("feature"),
+                        or_unknown("cell"),
+                    )]
+                }
+                ReserveOutcome::Conflicts(conflicts) => conflicts
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "- {} holds \"{}\" (cell {})",
+                            c.get("agent").map_or("undefined".into(), jsjson::js_to_string),
+                            c.get("path").map_or("undefined".into(), jsjson::js_to_string),
+                            c.get("cell").map_or("undefined".into(), jsjson::js_to_string),
+                        )
+                    })
+                    .collect(),
+            };
 
-    // dp-r1: the claim (and every reservation) stands from here on — register
-    // the claiming worker against the cell it now owns, THE SAME record shape
-    // `bee state worker add --nickname <w> --cell <id> --tier <t> --status
-    // running` writes (state_group::register_worker_for_cell reuses that
-    // door's own write path). A registration failure never unwinds the claim
-    // — it is real state the caller already holds — it only travels back as
-    // `(worker_registered: false, Some(registration_error))` for the payload
-    // to name loudly.
-    let tier = match cell.get("tier") {
-        Some(Value::String(t)) if !t.is_empty() => Some(t.clone()),
-        _ => None,
-    };
-    let (worker_registered, registration_error) =
-        match crate::verbs::state_group::register_worker_for_cell(root, worker, &claimed_id, tier.as_deref()) {
-            Ok(()) => (true, None),
-            Err(message) => (false, Some(message)),
+            // Unwind, in reverse. Both rungs read stores this same call has
+            // already probed (reserve_prechecks, and the claim door's own
+            // prescans), so the Exotic arm below is unreachable in practice —
+            // recorded as this branch's one accepted residual.
+            let mut unwind_note = "the claim was unwound and state restored as found".to_string();
+            let unwound = (|| -> R2<Result<(), String>> {
+                if !reserved.is_empty() {
+                    if let Out::Thrown(m) = release_reservations_for_agent(
+                        topo,
+                        root.to_str().ok_or(Err2::Ex)?,
+                        worker,
+                        Some(&claimed_id),
+                    )? {
+                        return Ok(Err(m));
+                    }
+                }
+                match cells::unclaim_cell(root, &claimed_id, door.session_id.as_deref(), false) {
+                    Ok(_) => Ok(Ok(())),
+                    Err(cells::Fail::Delegate) => Err(Err2::Ex),
+                    Err(cells::Fail::Thrown(m)) => Ok(Err(m)),
+                }
+            })()?;
+            if let Err(message) = unwound {
+                unwind_note = format!(
+                    "UNWIND FAILED ({message}) — restore by hand: bee reservations release --agent {worker} --cell {claimed_id} --json ; bee cells unclaim --id {claimed_id} --json"
+                );
+            }
+            let mut lines = vec![format!(
+                "dispatch prepare --claim: reservation conflict on cell \"{claimed_id}\" — nothing dispatched; {unwind_note}:"
+            )];
+            lines.extend(conflict_lines);
+            return Ok(Err(lines.join("\n")));
+        }
+
+        // dp-r1: the claim (and every reservation) stands from here on — register
+        // the claiming worker against the cell it now owns, THE SAME record shape
+        // `bee state worker add --nickname <w> --cell <id> --tier <t> --status
+        // running` writes (state_group::register_worker_for_cell reuses that
+        // door's own write path). A registration failure never unwinds the claim
+        // — it is real state the caller already holds — it only travels back as
+        // `(worker_registered: false, Some(registration_error))` for the payload
+        // to name loudly.
+        let tier = match cell.get("tier") {
+            Some(Value::String(t)) if !t.is_empty() => Some(t.clone()),
+            _ => None,
         };
-    Ok(Ok((cell, reserved, worker_registered, registration_error)))
+        let (worker_registered, registration_error) =
+            match crate::verbs::state_group::register_worker_for_cell(root, worker, &claimed_id, tier.as_deref()) {
+                Ok(()) => (true, None),
+                Err(message) => (false, Some(message)),
+            };
+        Ok(Ok((cell, reserved, worker_registered, registration_error)))
+    })()
+    .map_err(|e| (e, true))
 }
 
 pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
@@ -1177,7 +1196,12 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                 registration_error = reg_err;
             }
             Ok(Err(message)) => return finish(&ctx, Ok(Out::Thrown(message))),
-            Err(e) => return finish(&ctx, Err(e)),
+            // The single-cell path never unwinds here either way (it simply
+            // delegates the whole command to Node on an unproven shape), so
+            // `claim_taken` carries no decision to make here — only the
+            // Err2 payload does, byte-identical to before this door started
+            // reporting it.
+            Err((e, _claim_taken)) => return finish(&ctx, Err(e)),
         }
     }
 
@@ -1247,6 +1271,19 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
 // per-cell round trips. One cell's refusal (already claimed, a reservation
 // conflict) never aborts the rest of the wave — it is recorded in `skipped`
 // with a typed reason and the loop continues.
+//
+// dispatch review P1: this door MUTATES the shared control plane (claims,
+// reservations, worker rows), unlike its read-only sibling `cells schedule`
+// — whose all-features default it had inherited by construction. The
+// resolved feature is exactly one of: an explicit `--feature`, the calling
+// session's bound lane, or the default record's own `feature` (the same
+// three-step `resolve_mutation_lock_scope` every mutating `state` verb
+// already resolves against); nothing resolving is a typed refusal, never a
+// silent every-feature grab. `--limit <n>` (a positive integer) caps how
+// many cells of the current wave are actually claimed — the rest of the
+// wave is simply left untouched, not reported — bounding a speculative
+// batch by what the caller can actually spawn workers for; omitted, the
+// whole wave stands as before.
 
 /// The worker nickname `dispatch wave` claims each cell under when the
 /// caller does not hand one down: derived from the cell id alone, so two
@@ -1257,15 +1294,25 @@ pub(crate) fn auto_wave_worker_name(cell_id: &str) -> String {
     format!("w-{cell_id}")
 }
 
-/// Classifies a `claim_and_reserve_for_dispatch` refusal string into the two
-/// named `skipped` reasons the cell calls out — "already claimed" and "a
-/// reservation conflict" — falling back to a generic `claim_refused` for any
-/// other typed refusal that door can produce (budget caps, an unapproved
-/// execution gate, and the like). Message-sniffing is the one option here:
-/// the door returns a rendered String, not a typed enum, by the same design
-/// `dispatch prepare --claim`'s own single-cell caller already accepts.
+/// Classifies a `claim_and_reserve_for_dispatch` refusal string into the
+/// named `skipped` reasons the cell calls out — "an unwind of that same
+/// refusal itself failed", "already claimed", and "a reservation conflict"
+/// — falling back to a generic `claim_refused` for any other typed refusal
+/// that door can produce (budget caps, an unapproved execution gate, and the
+/// like). Message-sniffing is the one option here: the door returns a
+/// rendered String, not a typed enum, by the same design `dispatch prepare
+/// --claim`'s own single-cell caller already accepts.
+///
+/// `UNWIND FAILED` is checked FIRST (review P2): the door's own reservation-
+/// conflict message already embeds its unwind note in the same string
+/// (`"...reservation conflict on cell ...; UNWIND FAILED (...)..."`), so a
+/// naive "reservation conflict" match alone would bury a leaked claim behind
+/// the ordinary, already-handled `reservation_conflict` reason instead of
+/// surfacing the worse, still-open state.
 pub(crate) fn wave_skip_reason(message: &str) -> &'static str {
-    if message.contains("reservation conflict") {
+    if message.contains("UNWIND FAILED") {
+        "unwind_failed"
+    } else if message.contains("reservation conflict") {
         "reservation_conflict"
     } else if message.contains("not \"open\"") {
         "already_claimed"
@@ -1282,32 +1329,65 @@ fn wave_skip(id: &str, reason: &'static str, detail: String) -> Value {
     Value::Object(s)
 }
 
-/// Best-effort unwind for the one unreachable-in-practice shape this loop
-/// still guards: a claim+reserve that SUCCEEDED, immediately followed by a
-/// `prepare_dispatch` that failed to build a payload over the very cell it
-/// just loaded (kind is always "cell", the worker is always non-empty, and
-/// ownership always matches the claim this same call just took — see
-/// `prepare_dispatch`'s Thrown arms). Mirrors `claim_and_reserve_for_
-/// dispatch`'s own unwind (reservations first, then the claim, in reverse),
-/// with `force_ownership` on the unclaim since this call is undoing its own,
-/// still-fresh claim rather than resolving a contested one.
-fn unwind_wave_claim(
-    root: &Path,
-    topo: Option<(&Path, &str)>,
-    worker: &str,
-    id: &str,
-    reserved: &[Value],
-) -> String {
-    let mut note = "the claim and its reservations were unwound".to_string();
-    let release_failed = if !reserved.is_empty() {
+/// dp-r1's registration counterpart: strips the `(nickname, cell)` worker
+/// row a wave claim registered, before `unwind_wave_claim` undoes the claim
+/// itself (dispatch review, carried: prepare.rs:1021-1025 registers this
+/// exact row, but the unwind never removed it). `state worker remove`
+/// (`state_group/workers.rs::run_worker_remove`) exists but is nickname-only
+/// — it would strip EVERY cell that nickname ever held, wrong here since a
+/// worker legitimately holding a different cell must be left standing — so
+/// this goes through the SAME `worker_mutate` lock+read+write frame
+/// `register_worker_for_cell` writes through, scoped to the exact
+/// `(nickname, cell)` pair a claim ever registers. Idempotent: a row that
+/// was never registered (the claim failed before dp-r1 ran) leaves nothing
+/// to remove, same as `release_reservations_for_agent` against an
+/// agent/cell pair holding no reservations — `None` on success either way.
+fn unregister_worker_for_cell(root: &Path, nickname: &str, cell: &str) -> Option<String> {
+    let nickname_v = Value::String(nickname.to_string());
+    let cell_v = Value::String(cell.to_string());
+    match crate::verbs::state_group::worker_mutate(root, move |workers| {
+        workers.retain(|w| {
+            !(truthy(w) && w.get("nickname") == Some(&nickname_v) && w.get("cell") == Some(&cell_v))
+        });
+        Ok(String::new())
+    }) {
+        Ok(_) => None,
+        Err(Err2::Msg(m)) => Some(m),
+        Err(Err2::Ex) => Some("removing the worker row hit an unsupported store shape".to_string()),
+    }
+}
+
+/// Best-effort unwind for a wave-loop claim that must be undone before its
+/// cell lands in `skipped`: either a claim+reserve that SUCCEEDED,
+/// immediately followed by a `prepare_dispatch` that failed to build a
+/// payload over the very cell it just loaded (kind is always "cell", the
+/// worker is always non-empty, and ownership always matches the claim this
+/// same call just took — see `prepare_dispatch`'s Thrown arms); or (review
+/// P2) a `claim_and_reserve_for_dispatch` call whose OWN internal unwind
+/// never ran because its failure propagated out through a bare `?` on
+/// `reserve_path_atomic`, mid-loop, after the claim itself already stood —
+/// the wave loop cannot see how many of that cell's files were reserved
+/// before the failure, so it cannot hand this function an accurate
+/// `reserved` list. Always attempts every step (release, unclaim, worker-row
+/// removal) regardless of what the caller can prove happened —
+/// `release_reservations_for_agent` and `unregister_worker_for_cell` are
+/// both no-ops when nothing matches, so calling them on a claim that never
+/// got that far costs nothing. Mirrors `claim_and_reserve_for_dispatch`'s
+/// own unwind (reservations first, then the claim, in reverse), with
+/// `force_ownership` on the unclaim since this call is undoing its own,
+/// still-fresh claim rather than resolving a contested one — the caller MUST
+/// only reach here when `claim_taken` is true (see
+/// `claim_and_reserve_for_dispatch`'s own doc comment); calling this over a
+/// claim the wave never took would force through an ownership guard it does
+/// not own.
+pub(crate) fn unwind_wave_claim(root: &Path, topo: Option<(&Path, &str)>, worker: &str, id: &str) -> String {
+    let mut note = "the claim, its reservations and its worker row were unwound".to_string();
+    let release_failed =
         match release_reservations_for_agent(topo, root.to_str().unwrap_or(""), worker, Some(id)) {
             Ok(Out::Thrown(m)) => Some(m),
             Err(_) => Some("release_reservations_for_agent hit an unproven shape".to_string()),
             Ok(_) => None,
-        }
-    } else {
-        None
-    };
+        };
     let unclaim_failed = match crate::verbs::cells::unclaim_cell(root, id, None, true) {
         Ok(_) => None,
         Err(crate::verbs::cells::Fail::Delegate) => {
@@ -1315,11 +1395,13 @@ fn unwind_wave_claim(
         }
         Err(crate::verbs::cells::Fail::Thrown(m)) => Some(m),
     };
-    if release_failed.is_some() || unclaim_failed.is_some() {
+    let worker_row_failed = unregister_worker_for_cell(root, worker, id);
+    if release_failed.is_some() || unclaim_failed.is_some() || worker_row_failed.is_some() {
         note = format!(
-            "UNWIND FAILED (release: {}; unclaim: {}) — restore by hand: bee reservations release --agent {worker} --cell {id} --json ; bee cells unclaim --id {id} --force-ownership --json",
+            "UNWIND FAILED (release: {}; unclaim: {}; worker row: {}) — restore by hand: bee reservations release --agent {worker} --cell {id} --json ; bee cells unclaim --id {id} --force-ownership --json ; bee state worker remove --nickname {worker} --json",
             release_failed.as_deref().unwrap_or("ok"),
             unclaim_failed.as_deref().unwrap_or("ok"),
+            worker_row_failed.as_deref().unwrap_or("ok"),
         );
     }
     note
@@ -1327,15 +1409,27 @@ fn unwind_wave_claim(
 
 /// provenance: none — new native command (workflow-lessons wfl-4).
 pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !crate::verbs::reservations::keys_known(&flags, &["runtime", "feature", "session-id"]) {
+    if !crate::verbs::reservations::keys_known(
+        &flags,
+        &["runtime", "feature", "session-id", "limit"],
+    ) {
         return None;
     }
     let runtime = flags.req_str("runtime")?.to_string();
     if !DISPATCH_RUNTIMES.contains(&runtime.as_str()) {
         return None; // validate()'s enum message equivalent
     }
-    let feature = flags.truthy_str("feature").map(str::to_string);
+    let feature_flag = flags.truthy_str("feature").map(str::to_string);
     let session_flag = flags.truthy_str("session-id").map(str::to_string);
+    // `--limit`: shape only here (a bare `--limit` with no value is
+    // unproven); the positive-integer value check waits for `ctx` below so
+    // a bad value gets the same typed refusal every other value-shape
+    // problem in this door gets, not a bare "unsupported command shape".
+    let limit_flag = match flags.get("limit") {
+        None => None,
+        Some(FlagV::S(s)) => Some(s.clone()),
+        Some(FlagV::Present) => return None,
+    };
 
     let cwd = std::env::current_dir().ok()?;
     let root = match resolve_store_root(&cwd) {
@@ -1371,7 +1465,47 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
         Pre::Emitted(code) => return Some(code),
     };
 
-    let cells = match crate::verbs::cells::list_cells(&ctx.root, feature.as_deref(), None) {
+    // dispatch review P1: resolve the ONE feature this wave targets — an
+    // explicit `--feature`, else the calling session's bound lane, else the
+    // default record's own `feature` — the identical three-step resolution
+    // `resolve_mutation_lock_scope` gives every mutating `state` verb.
+    // Nothing resolving is a typed refusal: a mutating wave never falls back
+    // to the read-only `cells schedule` default of every feature at once.
+    let scope = match crate::verbs::state_group::resolve_mutation_lock_scope(
+        &ctx.root,
+        feature_flag.as_deref(),
+        false,
+    ) {
+        Ok(s) => s,
+        Err(_) => return finish(&ctx, Err(Err2::Ex)),
+    };
+    let Some(feature) = scope.feature else {
+        return finish(
+            &ctx,
+            Err(Err2::Msg(
+                "dispatch wave: refused — no feature resolved (no --feature given, the \
+                 calling session has no bound lane, and the default record names none). \
+                 FIX: pass --feature <name> naming the pipeline to dispatch."
+                    .to_string(),
+            )),
+        );
+    };
+    let limit: Option<usize> = match &limit_flag {
+        None => None,
+        Some(raw) => match raw.trim().parse::<u64>() {
+            Ok(n) if n > 0 => Some(n as usize),
+            _ => {
+                return finish(
+                    &ctx,
+                    Err(Err2::Msg(
+                        "dispatch wave: --limit must be a positive integer.".to_string(),
+                    )),
+                );
+            }
+        },
+    };
+
+    let cells = match crate::verbs::cells::list_cells(&ctx.root, Some(feature.as_str()), None) {
         Ok(cells) => cells,
         Err(crate::verbs::cells::Delegate) => return finish(&ctx, Err(Err2::Ex)),
     };
@@ -1384,7 +1518,10 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
         }
     }
     let schedule = crate::verbs::cells::compute_schedule(&cells);
-    let wave_ids: Vec<String> = schedule.waves.first().cloned().unwrap_or_default();
+    let mut wave_ids: Vec<String> = schedule.waves.first().cloned().unwrap_or_default();
+    if let Some(n) = limit {
+        wave_ids.truncate(n);
+    }
 
     let topo = topology.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
     let mut wave_payloads: Vec<Value> = Vec::new();
@@ -1395,14 +1532,41 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
         let worker = auto_wave_worker_name(id);
         match claim_and_reserve_for_dispatch(&ctx.root, topo, id, &worker, session_flag.as_deref())
         {
-            Err(_) => {
+            Err((_e, claim_taken)) if claim_taken => {
+                // dispatch review P2: `claim_and_reserve_for_dispatch`'s own
+                // `?`-propagated Err never reaches ITS internal unwind, so
+                // the claim (and any reservations it already took) may
+                // still stand — best-effort undo it here rather than leak
+                // it, and name the cell in the detail either way.
+                let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
+                let unwind_failed = note.contains("UNWIND FAILED");
                 skipped.push(wave_skip(
                     id,
-                    "unsupported",
+                    if unwind_failed { "unwind_failed" } else { "unsupported" },
                     format!(
                         "cell \"{id}\" hit an unproven shape mid-wave — run \
                          `bee dispatch prepare --cell {id} --worker {worker} --runtime {runtime} --claim` \
-                         for it directly."
+                         for it directly. ({note})"
+                    ),
+                ));
+            }
+            Err((_e, _claim_taken)) => {
+                // dispatch review delta (hpf-3): the claim door itself never
+                // took this cell — an exotic-shape delegate fired ahead of
+                // the claim (handlers_write.rs:904/915), possibly over a
+                // cell ALREADY claimed by a live agent. Nothing here to
+                // unwind, and force-unclaiming would write straight through
+                // whatever the cell already held (open, or that other
+                // agent's claim) rather than something THIS call put there.
+                // Report the real reason; no unwind note — there is nothing
+                // to report an unwind of.
+                skipped.push(wave_skip(
+                    id,
+                    "claim_refused",
+                    format!(
+                        "cell \"{id}\" hit an unproven shape mid-wave before any claim was \
+                         taken — run `bee dispatch prepare --cell {id} --worker {worker} \
+                         --runtime {runtime} --claim` for it directly."
                     ),
                 ));
             }
@@ -1447,7 +1611,7 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                         wave_payloads.push(Value::Object(m));
                     }
                     Ok(Prepared::Thrown(msg)) => {
-                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id, &reserved);
+                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
                         skipped.push(wave_skip(
                             id,
                             "prepare_failed",
@@ -1455,7 +1619,7 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                         ));
                     }
                     Err(Delegate) => {
-                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id, &reserved);
+                        let note = unwind_wave_claim(&ctx.root, topo, &worker, id);
                         skipped.push(wave_skip(
                             id,
                             "prepare_failed",

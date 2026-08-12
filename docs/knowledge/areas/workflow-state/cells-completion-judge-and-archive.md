@@ -47,14 +47,38 @@ is the other way a unit's record moves without a mutator having asked it to.
 
 ## Behaviors & Operations
 
-**Judge-debt close door (workflow-lessons wfl-3, 2026-08-11).** When the
-closing feature's route lane is standard or high-risk, every capped
-`behavior_change` cell must carry a recorded semantic-judge verdict
-(`trace.semantic_judge`, written by `cells judge-record`); missing verdicts
-make a BLOCKING `judge-debt` door naming the offending cell ids, remedy `bee
-cells judge` / `bee cells judge-record`. Tiny/small routes never grow the door
-— judge-on-smell stays their rule. Judgment moved from instructed to enforced
-for the lanes where a missed smell costs most.
+**Judge-debt close door (workflow-lessons wfl-3, 2026-08-11; ownership,
+grandfather, deferral, and archive fixes review-p1-fixes hpf-1,
+2026-08-12).** When the closing feature's route lane is standard or
+high-risk, every capped `behavior_change` cell must carry a recorded
+semantic-judge verdict (`trace.semantic_judge`, written by
+`cells judge-record`); missing verdicts make a BLOCKING `judge-debt` door
+naming the offending cell ids, remedy `bee cells judge` /
+`bee cells judge-record`. Tiny/small routes never grow the door —
+judge-on-smell stays their rule. Judgment moved from instructed to enforced
+for the lanes where a missed smell costs most. The closing feature's route
+is read `route.lane` first from its own lane record, then — ONLY when that
+default-state route names THIS feature (`route.feature`, the same identity
+check `gated_add_refusal` already uses) — from the global default-state
+route; a route recorded for ANOTHER feature is never read as this feature's
+own (hpf-1, fixing a live bug where one feature's close inherited whatever
+OTHER feature last ran `state route --set`). A last-resort fallback reads
+the lane record's own `mode` field, but only when it happens to spell a
+lane class (docs/tiny/small/spike/standard/high-risk) — `mode` usually
+carries the workflow class ("feature" on the live shape), never a lane, so
+that ordinary value is never misread as one. The door also grandfathers
+cells capped before it existed: only a cell whose `trace.capped_at` is at
+or after `JUDGE_DOOR_INTRODUCED_AT` ("2026-08-11T00:00:00.000Z", the day
+the door shipped) counts as debt; a cell with no `capped_at` at all reads
+as pre-door. Without this, the 122 capped `behavior_change` cells already
+live the day the door shipped (only 10 judged) would have blocked every
+legacy feature's close — not a migration path. A logged decision tagged
+`judge-deferral` naming the feature clears the door without touching the
+underlying count, mirroring the scribing-debt door's `capture-deferral`
+escape. When an offending cell id resolves only under the archive,
+`cells judge-record` refuses it outright (`assert_not_archived`), so the
+door's remedy names `bee cells unarchive --feature <feature>` BEFORE the
+judge commands.
 
 **B30 — Completing a unit requires proof scaled to how risky its change class
 and lane are, not one hard door for behavior change and advisory everywhere

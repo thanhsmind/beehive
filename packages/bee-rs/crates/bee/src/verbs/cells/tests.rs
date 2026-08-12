@@ -35,6 +35,14 @@ use std::time::Instant;
         std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify_pretty(body)).unwrap();
     }
 
+    fn read_cell_fixture(root: &Path, id: &str) -> Value {
+        match read_json(&cells_dir(root).join(format!("{id}.json"))) {
+            ReadJson::Parsed(v) => v,
+            ReadJson::Missing => panic!("cell {id} fixture missing"),
+            ReadJson::Corrupt => panic!("cell {id} fixture corrupt"),
+        }
+    }
+
     fn cell(id: &str, status: &str, feature: &str, deps: Value) -> Value {
         json!({
             "id": id,
@@ -1210,17 +1218,23 @@ use std::time::Instant;
     // lives in verbs/drivers/close.rs; these tests exercise it here,
     // alongside the rest of the judge surface.
 
+    // hpf-1 (review-p1-fixes, 2026-08-12): `capped_at` moved from
+    // "2026-08-10" to a stamp AFTER `JUDGE_DOOR_INTRODUCED_AT`
+    // ("2026-08-11T00:00:00.000Z") — the grandfather clause this cell adds
+    // means a pre-door capped_at is never debt, so every fixture below that
+    // means to exercise the door itself must postdate it, or the door tests
+    // would silently stop testing anything.
     fn capped_behavior_change_cell(feature: &str, id: &str, judged: bool) -> Value {
         let trace = if judged {
             json!({
                 "behavior_change": true,
-                "capped_at": "2026-08-10T00:00:00.000Z",
+                "capped_at": "2026-08-12T00:00:00.000Z",
                 "semantic_judge": [{"schema": "judge-verdict/1", "verdict": "PASS", "checks": []}],
             })
         } else {
             json!({
                 "behavior_change": true,
-                "capped_at": "2026-08-10T00:00:00.000Z",
+                "capped_at": "2026-08-12T00:00:00.000Z",
             })
         };
         json!({"id": id, "feature": feature, "status": "capped", "trace": trace})
@@ -1321,11 +1335,12 @@ use std::time::Instant;
         write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
         // Past D1: a scribing run recorded after the cap clears the
         // scribing-debt door, so the judge-debt refusal is the one that
-        // actually surfaces.
+        // actually surfaces. hpf-1: the cell's own capped_at moved to
+        // "2026-08-12" (post judge-door), so this stamp moves past it too.
         std::fs::create_dir_all(root.join(".bee").join("logs")).unwrap();
         std::fs::write(
             root.join(".bee").join("logs").join("scribing-runs.jsonl"),
-            "{\"feature\":\"demo\",\"ts\":\"2026-08-11T00:00:00.000Z\"}\n",
+            "{\"feature\":\"demo\",\"ts\":\"2026-08-12T00:00:01.000Z\"}\n",
         )
         .unwrap();
         write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
@@ -1350,6 +1365,190 @@ use std::time::Instant;
         assert!(lines[2].starts_with("next:"));
         let doors = result.get("doors").unwrap().as_array().unwrap();
         assert_eq!(doors.iter().find(|d| d["door"] == "judge-debt").unwrap()["blocking"], json!(true));
+    }
+
+    // ── hpf-1 (review-p1-fixes, 2026-08-12): route ownership, grandfather,
+    // deferral, and the archived remedy ─────────────────────────────────────
+
+    fn write_default_state_with_route(root: &Path, route_feature: &str, route_lane: &str) {
+        let dir = root.join(".bee");
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = json!({"route": {"lane": route_lane, "feature": route_feature}});
+        std::fs::write(bstate::state_path(root), jsjson::stringify_pretty(&body)).unwrap();
+    }
+
+    /// P1: a default-state route recorded for a DIFFERENT (high-risk)
+    /// feature must never be read as THIS (small) feature's own route — the
+    /// live bug: a small feature's close was blocked by a judge-debt door
+    /// that belonged to someone else's route. No lane record at all here,
+    /// and the state route's owner is a stranger, so the door must not grow.
+    #[test]
+    fn feature_route_ignores_a_default_state_route_owned_by_another_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_default_state_with_route(root, "unrelated-high-risk-feature", "high-risk");
+        write_cell_fixture(root, "small-1", &capped_behavior_change_cell("small-feature", "small-1", false));
+
+        assert_eq!(
+            crate::verbs::drivers::feature_route(root, "small-feature").unwrap(),
+            None,
+            "a route owned by another feature must never be read as this one's own"
+        );
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "small-feature").unwrap();
+        assert!(
+            doors.iter().find(|d| d.door == "judge-debt").is_none(),
+            "a small feature must not grow the judge-debt door off someone else's route"
+        );
+    }
+
+    /// The other direction: a standard feature that legitimately OWNS the
+    /// default-state route (its own most recent `state route --set`) must
+    /// not lose its door just because the ownership check now exists.
+    #[test]
+    fn feature_route_reads_a_default_state_route_it_owns() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_default_state_with_route(root, "standard-feature", "standard");
+        write_cell_fixture(
+            root,
+            "standard-1",
+            &capped_behavior_change_cell("standard-feature", "standard-1", false),
+        );
+
+        assert_eq!(
+            crate::verbs::drivers::feature_route(root, "standard-feature").unwrap(),
+            Some("standard".to_string())
+        );
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "standard-feature").unwrap();
+        let judge_door =
+            doors.iter().find(|d| d.door == "judge-debt").expect("a standard feature must keep its own door");
+        assert!(judge_door.blocking);
+    }
+
+    /// wfl-5's live shape (`mode: "feature"`) must never be misread as lane
+    /// "feature" — that string is not a lane class, it is the workflow
+    /// class every ordinary lane record carries.
+    #[test]
+    fn feature_route_lane_mode_feature_is_not_a_lane_class() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // `mode: "feature"`, no `route` anywhere (lane or default state).
+        write_lane_record_routed(root, "demo", "execution", None, true);
+        assert_eq!(crate::verbs::drivers::feature_route(root, "demo").unwrap(), None);
+    }
+
+    /// A lane record's `mode` that genuinely happens to spell a lane class
+    /// (the last-resort fallback) IS honored once no route names this
+    /// feature anywhere.
+    #[test]
+    fn feature_route_falls_back_to_a_lane_mode_that_names_a_lane_class() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let dir = lanes_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let body = json!({"feature": "demo", "phase": "execution", "mode": "high-risk", "approved_gates": {"execution": true}});
+        std::fs::write(dir.join("demo.json"), jsjson::stringify_pretty(&body)).unwrap();
+        assert_eq!(crate::verbs::drivers::feature_route(root, "demo").unwrap(), Some("high-risk".to_string()));
+    }
+
+    /// A cell capped BEFORE `JUDGE_DOOR_INTRODUCED_AT` predates the door
+    /// entirely and is never debt, judged or not — the grandfather clause.
+    #[test]
+    fn judge_debt_grandfathers_cells_capped_before_the_door_shipped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        let mut cell = capped_behavior_change_cell("demo", "demo-1", false);
+        cell["trace"]["capped_at"] = json!("2026-08-05T00:00:00.000Z"); // predates the door
+        write_cell_fixture(root, "demo-1", &cell);
+
+        let debt = crate::verbs::drivers::judge_debt(root, "demo").unwrap();
+        assert_eq!(debt.count, 0, "a pre-door cap is grandfathered, never debt");
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let judge_door = doors.iter().find(|d| d.door == "judge-debt").unwrap();
+        assert!(!judge_door.blocking);
+    }
+
+    /// A cell with no `capped_at` at all reads as pre-door, not debt.
+    #[test]
+    fn judge_debt_treats_a_missing_capped_at_as_pre_door() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        let mut cell = capped_behavior_change_cell("demo", "demo-1", false);
+        cell["trace"].as_object_mut().unwrap().remove("capped_at");
+        write_cell_fixture(root, "demo-1", &cell);
+
+        let debt = crate::verbs::drivers::judge_debt(root, "demo").unwrap();
+        assert_eq!(debt.count, 0, "no capped_at at all counts as pre-door");
+    }
+
+    /// A cell capped AT OR AFTER the door's stamp counts as debt, exactly
+    /// as `capped_behavior_change_cell`'s fixture (post-door) already
+    /// exercises above — pinned here explicitly against the boundary.
+    #[test]
+    fn judge_debt_counts_a_cell_capped_at_the_door_stamp_itself() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        let mut cell = capped_behavior_change_cell("demo", "demo-1", false);
+        cell["trace"]["capped_at"] = json!(crate::verbs::drivers::JUDGE_DOOR_INTRODUCED_AT);
+        write_cell_fixture(root, "demo-1", &cell);
+
+        let debt = crate::verbs::drivers::judge_debt(root, "demo").unwrap();
+        assert_eq!(debt.count, 1, "capped exactly at the door's own stamp is debt (>=)");
+    }
+
+    /// A logged `judge-deferral` decision naming the feature clears the
+    /// door without touching the underlying count — mirrors the
+    /// scribing-debt door's `capture-deferral` escape.
+    #[test]
+    fn judge_debt_door_clears_with_a_logged_judge_deferral_decision() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        write_cell_fixture(root, "demo-1", &capped_behavior_change_cell("demo", "demo-1", false));
+        std::fs::write(
+            root.join(".bee").join("decisions.jsonl"),
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-12T00:00:00.000Z\",\"decision\":\"defer judge for demo\",\"rationale\":\"r\",\"tags\":[\"judge-deferral\"],\"scope\":\"repo\"}\n",
+        )
+        .unwrap();
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let judge_door = doors.iter().find(|d| d.door == "judge-debt").unwrap();
+        assert!(!judge_door.blocking, "a logged judge-deferral decision must clear the door");
+        assert!(judge_door.detail.contains("deferred"), "{}", judge_door.detail);
+        assert!(judge_door.detail.contains("demo-1"), "{}", judge_door.detail);
+        assert_eq!(judge_door.command, None);
+
+        // A judge-deferral decision naming a DIFFERENT feature never lifts
+        // THIS feature's block.
+        assert!(!crate::verbs::drivers::has_judge_deferral_decision(root, "elsewhere").unwrap());
+    }
+
+    /// When an offending cell id resolves only under the archive,
+    /// `cells judge-record` refuses it outright — the door's remedy must
+    /// name the unarchive step BEFORE the judge commands.
+    #[test]
+    fn judge_debt_door_names_unarchive_first_for_an_archived_offender() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_record_routed(root, "demo", "execution", Some("standard"), true);
+        let arch = cells_dir(root).join(ARCHIVE_DIR_NAME).join("demo");
+        std::fs::create_dir_all(&arch).unwrap();
+        std::fs::write(
+            arch.join("demo-1.json"),
+            jsjson::stringify_pretty(&capped_behavior_change_cell("demo", "demo-1", false)),
+        )
+        .unwrap();
+
+        let doors = crate::verbs::drivers::build_close_report_doors(root, "demo").unwrap();
+        let judge_door = doors.iter().find(|d| d.door == "judge-debt").unwrap();
+        assert!(judge_door.blocking);
+        let unarchive_at = judge_door.detail.find("bee cells unarchive").expect(&judge_door.detail);
+        let judge_record_at = judge_door.detail.find("bee cells judge-record").expect(&judge_door.detail);
+        assert!(unarchive_at < judge_record_at, "unarchive must be named before judge-record: {}", judge_door.detail);
+        assert_eq!(judge_door.command, Some("bee cells unarchive"));
     }
 
     // ── schedule ──────────────────────────────────────────────────────────
@@ -4420,12 +4619,18 @@ use std::time::Instant;
 
     /// Runs ONLY as a child of the tests below — drives the REAL `bee
     /// dispatch wave --runtime claude --json` CLI door over whatever cells
-    /// are on disk at its cwd.
+    /// are on disk at its cwd, plus whatever extra argv
+    /// `wfl4_dispatch_wave_run` relayed through `WFL4_WAVE_ARGS` (space-
+    /// joined; every caller's own tokens are plain flag/value pairs with no
+    /// embedded spaces, so a naive split is exact here).
     #[test]
     #[ignore = "spawned by the dispatch_wave_* tests"]
     fn wfl4_dispatch_wave_child() {
-        let (flags, use_json) =
-            rsv::parse_flags(&["--runtime", "claude", "--json"]).expect("well-formed fixture argv");
+        let extra = std::env::var("WFL4_WAVE_ARGS").unwrap_or_default();
+        let extra_toks: Vec<&str> = extra.split(' ').filter(|t| !t.is_empty()).collect();
+        let mut argv: Vec<&str> = vec!["--runtime", "claude", "--json"];
+        argv.extend(extra_toks);
+        let (flags, use_json) = rsv::parse_flags(&argv).expect("well-formed fixture argv");
         crate::verbs::drivers::run_dispatch_wave(flags, use_json, Instant::now());
     }
 
@@ -4443,18 +4648,23 @@ use std::time::Instant;
         root
     }
 
-    /// Spawns `wfl4_dispatch_wave_child` with `root` as its cwd and returns
-    /// the parsed `{wave, skipped, economics}` payload — sliced out of the
-    /// raw stdout by its outermost braces (the libtest banner surrounds it;
-    /// `--nocapture` is what makes a PASSING test's own stdout visible at
-    /// all), the same tolerant slice `dispatch_prepare_claim_payload_pins_
+    /// Spawns `wfl4_dispatch_wave_child` with `root` as its cwd and `extra`
+    /// relayed as additional argv (past the fixed `--runtime claude --json`)
+    /// via `WFL4_WAVE_ARGS`, and returns the parsed payload — sliced out of
+    /// the raw stdout by its outermost braces (the libtest banner surrounds
+    /// it; `--nocapture` is what makes a PASSING test's own stdout visible
+    /// at all), the same tolerant slice `dispatch_prepare_claim_payload_pins_
     /// worker_registered_true` (drivers/tests.rs) uses for the identical
-    /// seam.
-    fn wfl4_dispatch_wave_run(root: &Path) -> Value {
+    /// seam. A refusal's `{"error": ...}` envelope slices the same way, so
+    /// this same helper covers both the success and refusal shapes.
+    fn wfl4_dispatch_wave_run(root: &Path, extra: &[&str]) -> Value {
         let exe = std::env::current_exe().expect("test binary path");
         let mut cmd = std::process::Command::new(&exe);
         cmd.args(["--exact", DISPATCH_WAVE_CHILD, "--ignored", "--test-threads", "1", "--nocapture"]);
         cmd.current_dir(root);
+        if !extra.is_empty() {
+            cmd.env("WFL4_WAVE_ARGS", extra.join(" "));
+        }
         let out = cmd.output().expect("spawn the test binary");
         let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
         assert!(
@@ -4489,7 +4699,7 @@ use std::time::Instant;
         b["tier"] = json!("generation");
         write_cell_fixture(&root, "wa-2", &b);
 
-        let payload = wfl4_dispatch_wave_run(&root);
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
         let wave = payload["wave"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
         assert_eq!(wave.len(), 2, "payload: {payload}");
         assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
@@ -4520,7 +4730,7 @@ use std::time::Instant;
         c["trace"] = json!({"worker": "someone-else"});
         write_cell_fixture(&root, "wb-1", &c);
 
-        let payload = wfl4_dispatch_wave_run(&root);
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
         assert_eq!(payload["wave"], json!([]), "payload: {payload}");
         assert_eq!(payload["economics"], json!([]), "payload: {payload}");
         let skipped = payload["skipped"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
@@ -4540,6 +4750,218 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = wfl4_wave_root(&tmp, "{}");
 
-        let payload = wfl4_dispatch_wave_run(&root);
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
         assert_eq!(payload, json!({"wave": [], "skipped": [], "economics": []}));
+    }
+
+    // ══ dispatch review P1 — scope to one feature, bound the batch ═════════
+
+    /// must-have: "no resolvable feature is a typed refusal, never a silent
+    /// all-features grab" — no `--feature`, no session lane binding, and no
+    /// default-record `feature` leaves nothing to resolve; the door refuses
+    /// by name rather than falling back to `cells schedule`'s own
+    /// every-feature default.
+    #[test]
+    fn dispatch_wave_refuses_when_no_feature_resolves() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, "{}");
+
+        let payload = wfl4_dispatch_wave_run(&root, &[]);
+        let error = payload["error"].as_str().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert!(error.contains("no feature resolved"), "payload: {payload}");
+        assert!(error.contains("--feature"), "payload: {payload}");
+    }
+
+    /// must-have: "a wave never claims a cell outside the resolved feature"
+    /// — two features each have a ready, disjoint cell; `--feature f` claims
+    /// only `f`'s cell, and `g`'s cell never appears in `wave`, `skipped`,
+    /// or `economics`.
+    #[test]
+    fn dispatch_wave_never_spans_a_second_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        lane_with_route(&root, "g");
+        let mut f1 = cell("wc-1", "open", "f", json!([]));
+        f1["files"] = json!(["docs/wc-1.md"]);
+        f1["tier"] = json!("generation");
+        write_cell_fixture(&root, "wc-1", &f1);
+        let mut g1 = cell("wg-1", "open", "g", json!([]));
+        g1["files"] = json!(["docs/wg-1.md"]);
+        g1["tier"] = json!("generation");
+        write_cell_fixture(&root, "wg-1", &g1);
+
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
+        let wave = payload["wave"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(wave.len(), 1, "payload: {payload}");
+        assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
+        let economics = payload["economics"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        let ids: Vec<&str> = economics.iter().map(|e| e["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, vec!["wc-1"], "payload: {payload}");
+        // g-1 stands untouched — still open, never claimed by this wave.
+        let g_after = read_cell_fixture(&root, "wg-1");
+        assert_eq!(g_after["status"], json!("open"), "payload: {payload}");
+    }
+
+    /// must-have: "--limit bounds the claims" — two disjoint ready cells of
+    /// the same feature, `--limit 1` claims exactly one and leaves the other
+    /// untouched (open, unclaimed, absent from every returned array) rather
+    /// than reporting it `skipped`.
+    #[test]
+    fn dispatch_wave_limit_caps_the_claims() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        let mut a = cell("wl-1", "open", "f", json!([]));
+        a["files"] = json!(["docs/wl-1.md"]);
+        a["tier"] = json!("generation");
+        write_cell_fixture(&root, "wl-1", &a);
+        let mut b = cell("wl-2", "open", "f", json!([]));
+        b["files"] = json!(["docs/wl-2.md"]);
+        b["tier"] = json!("generation");
+        write_cell_fixture(&root, "wl-2", &b);
+
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f", "--limit", "1"]);
+        let wave = payload["wave"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(wave.len(), 1, "payload: {payload}");
+        assert_eq!(payload["skipped"], json!([]), "payload: {payload}");
+        // Exactly one of the two ready cells stands claimed; the other was
+        // never attempted at all (still open).
+        let economics = payload["economics"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(economics.len(), 1, "payload: {payload}");
+        let claimed_id = economics[0]["id"].as_str().unwrap_or_else(|| panic!("payload: {payload}"));
+        let untouched = if claimed_id == "wl-1" { "wl-2" } else { "wl-1" };
+        let untouched_after = read_cell_fixture(&root, untouched);
+        assert_eq!(untouched_after["status"], json!("open"), "payload: {payload}");
+    }
+
+    /// must-have: `wave_skip_reason` names an unwind failure by its own
+    /// reason rather than folding it back into `reservation_conflict` —
+    /// dispatch review P2. `claim_and_reserve_for_dispatch`'s own
+    /// reservation-conflict message already embeds its unwind note in the
+    /// SAME string, so the "UNWIND FAILED" check must win over the
+    /// "reservation conflict" substring it always co-occurs with here.
+    #[test]
+    fn wave_skip_reason_flags_a_failed_unwind_before_a_reservation_conflict() {
+        use crate::verbs::drivers::wave_skip_reason;
+        let ok_conflict = "dispatch prepare --claim: reservation conflict on cell \"x\" — \
+             nothing dispatched; the claim was unwound and state restored as found:";
+        assert_eq!(wave_skip_reason(ok_conflict), "reservation_conflict");
+        let failed_unwind = "dispatch prepare --claim: reservation conflict on cell \"x\" — \
+             nothing dispatched; UNWIND FAILED (release: ok; unclaim: boom) — restore by hand: ...:";
+        assert_eq!(wave_skip_reason(failed_unwind), "unwind_failed");
+    }
+
+    // ── dispatch review delta (hpf-3): a taken claim vs. an untaken one ────
+
+    /// must-have: "the wave never force-unclaims a cell whose claim it did
+    /// not take". `claim_cell_from_flags` can hit its own exotic-shape
+    /// delegate (a truthy, non-array `deps`, handlers_write.rs:915) BEFORE
+    /// it ever mutates the claim — even over a cell ALREADY claimed by a
+    /// live agent. The old wave unwind treated every `Err` alike and
+    /// force-unclaimed unconditionally, bypassing `guard_claim_ownership`
+    /// and handing that other agent's claim back to "open" — a write
+    /// straight through a claim conflict. The fix must leave the foreign
+    /// claim exactly as found and report a real, unwind-free reason.
+    #[test]
+    fn dispatch_wave_never_force_unclaims_a_claim_it_never_took() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = wfl4_wave_root(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        lane_with_route(&root, "f");
+        // `deps` truthy but not an array trips the claim door's own
+        // exotic-shape delegate — the SAME trigger a corrupt/foreign-
+        // authored cell record could hit for real — before any claim
+        // mutation, regardless of the cell's own status.
+        let mut c = cell("wu-1", "claimed", "f", json!("bogus"));
+        c["trace"] = json!({"worker": "someone-else"});
+        write_cell_fixture(&root, "wu-1", &c);
+
+        let payload = wfl4_dispatch_wave_run(&root, &["--feature", "f"]);
+        assert_eq!(payload["wave"], json!([]), "payload: {payload}");
+        assert_eq!(payload["economics"], json!([]), "payload: {payload}");
+        let skipped = payload["skipped"].as_array().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert_eq!(skipped.len(), 1, "payload: {payload}");
+        assert_eq!(skipped[0]["id"], json!("wu-1"), "payload: {payload}");
+        assert_eq!(skipped[0]["reason"], json!("claim_refused"), "payload: {payload}");
+        let detail = skipped[0]["detail"].as_str().unwrap_or_else(|| panic!("payload: {payload}"));
+        assert!(
+            !detail.contains("UNWIND FAILED"),
+            "a benign, never-taken claim must carry no unwind note: {detail}"
+        );
+
+        // The other agent's claim stands exactly as found — never force-
+        // unclaimed by a wave that never took it.
+        let after = read_cell_fixture(&root, "wu-1");
+        assert_eq!(after["status"], json!("claimed"), "payload: {payload}");
+        assert_eq!(after["trace"]["worker"], json!("someone-else"), "payload: {payload}");
+    }
+
+    /// must-have: "a real unwind clears claim, reservations and the worker
+    /// row" — the carried-over P2 item. `unwind_wave_claim` released
+    /// reservations and unclaimed the cell but never removed the
+    /// `workers[]` row `dp-r1` registered for the same claim, leaving a
+    /// `running` row against a cell the unwind just returned to `open`.
+    /// Exercises `claim_and_reserve_for_dispatch` + `unwind_wave_claim`
+    /// directly (both take `root` explicitly, no cwd dependency) — the same
+    /// real claim+register `dispatch wave`'s `prepare_failed` unwind undoes.
+    #[test]
+    fn unwind_wave_claim_clears_the_claim_reservations_and_the_worker_row() {
+        use crate::verbs::drivers::{claim_and_reserve_for_dispatch, unwind_wave_claim};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), "{}").unwrap();
+        // Gate 2 (execution) must read approved for the claim door to admit
+        // this cell at all — the same lane fixture the wave tests above use.
+        lane_with_route(&root, "f");
+        let mut c = cell("uw-1", "open", "f", json!([]));
+        c["files"] = json!(["docs/uw-1.md"]);
+        c["tier"] = json!("generation");
+        write_cell_fixture(&root, "uw-1", &c);
+
+        // A real claim: taken, one file reserved, worker row registered.
+        let outcome = claim_and_reserve_for_dispatch(&root, None, "uw-1", "w-uw-1", None)
+            .expect("the claim door itself must not delegate over a plain, well-formed cell")
+            .expect("a fresh, unreserved cell must not hit a reservation conflict");
+        let (_cell, reserved, worker_registered, registration_error) = outcome;
+        assert!(!reserved.is_empty(), "at least one declared file must have been reserved");
+        assert!(worker_registered, "registration_error: {registration_error:?}");
+        let claimed = read_cell_fixture(&root, "uw-1");
+        assert_eq!(claimed["status"], json!("claimed"), "cell: {claimed}");
+        let state_path = root.join(".bee").join("state.json");
+        let state_before: Value = serde_json::from_str(&std::fs::read_to_string(&state_path).unwrap()).unwrap();
+        let workers_before = state_before["workers"].as_array().unwrap();
+        assert!(
+            workers_before
+                .iter()
+                .any(|w| w["nickname"] == json!("w-uw-1") && w["cell"] == json!("uw-1")),
+            "state before unwind: {state_before}"
+        );
+
+        // Undo it, exactly as `dispatch wave`'s `prepare_failed` unwind
+        // would over its own, still-fresh claim.
+        let note = unwind_wave_claim(&root, None, "w-uw-1", "uw-1");
+        assert!(!note.contains("UNWIND FAILED"), "unwind note: {note}");
+
+        let after = read_cell_fixture(&root, "uw-1");
+        assert_eq!(after["status"], json!("open"), "cell: {after}");
+
+        let state_after: Value = serde_json::from_str(&std::fs::read_to_string(&state_path).unwrap()).unwrap();
+        let workers_after = state_after["workers"].as_array().unwrap();
+        assert!(
+            !workers_after
+                .iter()
+                .any(|w| w["nickname"] == json!("w-uw-1") && w["cell"] == json!("uw-1")),
+            "the worker row must be removed by the unwind: {state_after}"
+        );
+
+        let active = match rsv::list_reservations(root.to_str().unwrap(), true, rsv::now_ms()) {
+            Ok(v) => v,
+            Err(_) => panic!("list_reservations hit an unproven shape"),
+        };
+        assert!(
+            !active.iter().any(|r| matches!(&r.agent, Some(Value::String(s)) if s == "w-uw-1")),
+            "the reservation must be released by the unwind"
+        );
     }
