@@ -1,0 +1,105 @@
+{
+  "id": "jo-2",
+  "feature": "judge-obligation",
+  "lane": "standard",
+  "title": "Wire the judge obligation into the live cells add path",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs"
+  ],
+  "action": "jo-1 built assert_judge_obligation (obligation.rs:325) and tested it at the function level, but never called it from the live path — validate.rs:188 calls assert_regen_obligation only, so the guard is inert exactly the way pattern-20260805 (source that ships without being called) and the present rung of the evidence ladder describe. Call assert_judge_obligation beside assert_regen_obligation in the same validator, matching how the regen refusal composes into the whole-batch validation (every cell checked before any is written, one call naming every problem). Then prove it END TO END, not at the function level: a test that drives the real cells add entry point (the same out-of-process idiom the existing add tests use) with (a) a tiny cell touching packages/bee-rs/crates/bee/src/hooks and asserts the refusal names both escapes and writes nothing, (b) the same cell at lane standard and asserts it is accepted, (c) the same tiny cell carrying judge_obligation_ack and asserts it is accepted with the ack recorded on the stored cell, (d) a batch where one cell trips the obligation and asserts the WHOLE batch is refused with nothing written. Also raise the pattern rung: docs/knowledge/patterns/20260812-a-guard-and-its-tests-are-one-model-*.md gains bee.evidence wired plus bee.evidence_ref naming this guard, once the end-to-end tests are green (frontmatter key order matters: evidence and evidence_ref sit after critical and before signature; run bee knowledge check and expect no not_canonical on that file).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "The refusal fires through the real cells add path, not just the function",
+      "A tripped obligation refuses the whole batch and writes nothing",
+      "judge_obligation_ack is stored on the accepted cell",
+      "The pattern moves to evidence wired only after the end-to-end tests are green"
+    ]
+  },
+  "deps": [
+    "jo-1"
+  ],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "j2",
+    "outcome": "Wired assert_judge_obligation into validate_new_cell (beside assert_regen_obligation) and proved it end to end through the real cells add CLI door: refusal names both escapes and writes nothing, lane standard is accepted, the ack is recorded on the stored cell, and a tripped cell refuses the whole batch. Raised pattern-20260812 to evidence: wired.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "docs/knowledge/patterns/20260812-a-guard-and-its-tests-are-one-model-so-green-proves-only-that-the-model-agrees-with-itself.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-12T04:33:04.705Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d9663ee4-1552-489a-a52a-cb6633b67dc1",
+    "claimed_at": "2026-08-12T04:24:34.727Z",
+    "report": {
+      "outcome": "Wired assert_judge_obligation into validate_new_cell (beside assert_regen_obligation) and proved it end to end through the real cells add CLI door.",
+      "commit": "49634be6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "docs/knowledge/patterns/20260812-a-guard-and-its-tests-are-one-model-so-green-proves-only-that-the-model-agrees-with-itself.md"
+      ],
+      "tests": "green",
+      "deviations": [
+        "Two of the cell's declared files (validate.rs, tests.rs) already carry a cross-worktree hold from the main checkout naming jo-1 (capped) and jo-2 (this cell) — reserve refused per the known cross-worktree-hold defect named in the dispatch prompt; proceeded on the claim-time leases without retry."
+      ]
+    },
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-12T04:32:44.864Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "obligation_mirrors_regen_precedent",
+            "status": "PASS",
+            "evidence": "assert_judge_obligation (obligation.rs:325) sits beside REGEN_OBLIGATION in the same module and same voice, with both escapes (raise the lane, or record judge_obligation_ack) named in the refusal"
+          },
+          {
+            "id": "roots_pinned_both_directions",
+            "status": "PASS",
+            "evidence": "two pin tests: every declared root exists on disk, and every guard-segment directory under the crate src is covered; the worker proved the second by temporarily adding a fake guard directory outside the roots and watching the pin test go red, then green after removal"
+          },
+          {
+            "id": "wiring_gap_self_reported_and_closed",
+            "status": "PASS",
+            "evidence": "jo-1 capped with the honest deviation that validate.rs never called the new function - the guard was present, not wired; sibling cell jo-2 (commit 49634be6) wired it into validate_new_cell and proved it end to end"
+          },
+          {
+            "id": "live_refusal_fires",
+            "status": "PASS",
+            "evidence": "run against the real CLI from the main checkout: a tiny cell declaring packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs is refused with JUDGE_OBLIGATION naming the file, the root, the reason and both escapes; nothing written (dry-run reports 1 of 1 failed)"
+          },
+          {
+            "id": "suite_green",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml: 1623 passed, 9 ignored at jo-1; jo-2 green on top"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-12T04:34:10.574Z"
+      }
+    ]
+  }
+}

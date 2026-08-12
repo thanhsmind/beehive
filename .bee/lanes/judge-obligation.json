@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "feature": "judge-obligation",
+  "mode": "feature",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"judge-obligation\" started at phase \"planning\" (lane).",
+  "next_action": "close judge-obligation and merge",
+  "created_at": "2026-08-12T04:12:50.011Z",
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 3,
+    "rationale": "authoring-time judge obligation for guard-touching cells; closes the tiny/small gap in pattern-20260812",
+    "updated_at": "2026-08-12T04:12:50.030Z",
+    "feature": "judge-obligation"
+  },
+  "last_scribing_run": {
+    "feature": "judge-obligation",
+    "date": "2026-08-12",
+    "at": "2026-08-12T04:34:15.609Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "close judge-obligation and merge"
+  }
+}

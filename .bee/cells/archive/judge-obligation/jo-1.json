@@ -1,0 +1,94 @@
+{
+  "id": "jo-1",
+  "feature": "judge-obligation",
+  "lane": "standard",
+  "title": "Authoring-time judge obligation for cells that touch guard source",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/obligation.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/obligation.rs"
+  ],
+  "action": "Close the gap named by docs/knowledge/patterns/20260812-a-guard-and-its-tests-are-one-model-*.md and its backlog row: a cell that changes GUARD source at lane tiny or small never meets the judge-debt close door (close.rs pushes it only for standard/high-risk), so the change that most needs an independent read is the one that escapes it. Add a JUDGE OBLIGATION beside the existing REGEN_OBLIGATION in obligation.rs, same shape and same voice: cells add refuses a cell whose declared files touch a judge-required root UNLESS the cell lane is standard or high-risk (where the door already applies) or the cell carries judge_obligation_ack with a one-line reason (recorded on the cell, so skipping is a named act). The refusal names the offending file, why the rule exists in one clause, and BOTH escapes. Judge-required roots must not be a hand-kept list that rots — follow the REGEN_GUARDS discipline documented at obligation.rs:50-72 (the guard reads the same constant the authority uses, pinned in both directions by tests). Here the authority is the source tree: declare the roots as a constant (the hooks module dir plus any directory whose path carries a guard segment), and pin it BOTH ways — every declared root exists on disk, and every path under the crate src whose segment contains guard is covered by a declared root, so a new guard module outside the roots turns a test red. Sync the authoring spec (cells-authoring-and-revision.md) with the new obligation beside the regen one.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A tiny or small cell touching guard source is refused at authoring with both escapes named",
+      "A standard or high-risk cell touching guard source is accepted (the close door covers it)",
+      "judge_obligation_ack is recorded on the cell so the skip is auditable",
+      "A new guard directory outside the declared roots turns a test red",
+      "Cells touching no guard source are unaffected"
+    ]
+  },
+  "deps": [],
+  "tier": "generation",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "j1",
+    "outcome": "Added authoring-time JUDGE_OBLIGATION beside REGEN_OBLIGATION in obligation.rs: cells add refuses a cell whose files touch a judge-required guard root at lane tiny/small/spike/docs, unless the cell's lane is standard/high-risk (already covered by close.rs's judge-debt door) or it carries judge_obligation_ack with a one-line reason. Judge-required roots (JUDGE_REQUIRED_ROOTS) are pinned both ways against the crate source tree by two tests, proved red by temporarily adding a fake guard dir outside the roots then green again after removing it. Synced the authoring spec (B52/R103 + pointer). Not wired into validate_new_cell (validate.rs) since that file is outside this cell's declared files; that one-line follow-up call remains open.",
+    "files_changed": [
+      "docs/knowledge/areas/workflow-state/cells-authoring-and-revision.md",
+      "packages/bee-rs/crates/bee/src/verbs/cells/obligation.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "The 'reservations reserve' CLI call hit the documented known cross-worktree-hold defect (self-referential hold naming this same cell/session); per contract did not retry, and proceeded using the reservation leases already granted at claim time."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-12T04:23:48.814Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d9663ee4-1552-489a-a52a-cb6633b67dc1",
+    "claimed_at": "2026-08-12T04:13:15.677Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-12T04:23:28.845Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "obligation_mirrors_regen_precedent",
+            "status": "PASS",
+            "evidence": "assert_judge_obligation (obligation.rs:325) sits beside REGEN_OBLIGATION in the same module and same voice, with both escapes (raise the lane, or record judge_obligation_ack) named in the refusal"
+          },
+          {
+            "id": "roots_pinned_both_directions",
+            "status": "PASS",
+            "evidence": "two pin tests: every declared root exists on disk, and every guard-segment directory under the crate src is covered; the worker proved the second by temporarily adding a fake guard directory outside the roots and watching the pin test go red, then green after removal"
+          },
+          {
+            "id": "wiring_gap_self_reported_and_closed",
+            "status": "PASS",
+            "evidence": "jo-1 capped with the honest deviation that validate.rs never called the new function - the guard was present, not wired; sibling cell jo-2 (commit 49634be6) wired it into validate_new_cell and proved it end to end"
+          },
+          {
+            "id": "live_refusal_fires",
+            "status": "PASS",
+            "evidence": "run against the real CLI from the main checkout: a tiny cell declaring packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs is refused with JUDGE_OBLIGATION naming the file, the root, the reason and both escapes; nothing written (dry-run reports 1 of 1 failed)"
+          },
+          {
+            "id": "suite_green",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml: 1623 passed, 9 ignored at jo-1; jo-2 green on top"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-12T04:33:59.057Z"
+      }
+    ]
+  }
+}
