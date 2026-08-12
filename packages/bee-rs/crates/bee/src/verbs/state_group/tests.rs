@@ -791,6 +791,28 @@ use std::time::Instant;
         assert_eq!(projection_lock_name(s.lane, s.feature.as_deref()), "state");
     }
 
+    /// `session bind` is the door into the state every other lane seam
+    /// refuses on: a session bound to a lane with no record. It must refuse at
+    /// the door, with the SAME LANE_MISSING wording the other seams use, so
+    /// the binding that traps a session can never be written in the first
+    /// place.
+    #[test]
+    fn session_bind_refuses_a_lane_that_does_not_exist() {
+        let tmp = tmp_root();
+        assert!(ok(bind_lane_missing(tmp.path(), "ghost")));
+        assert_eq!(
+            lane_missing_refusal("session bind", "ghost"),
+            "session bind: refused — lane \"ghost\" does not exist (no .bee/lanes/ghost.json). FIX: start it first (\"state start-feature --feature ghost --as-lane\"), then retry."
+        );
+        // A started lane binds.
+        write_lane_file(tmp.path(), "real", r#"{"feature":"real","phase":"idle"}"#);
+        assert!(!ok(bind_lane_missing(tmp.path(), "real")));
+        // A present-but-corrupt record is readLaneStrict's own typed refusal,
+        // never flattened into "the lane does not exist".
+        write_lane_file(tmp.path(), "broken", "{nope");
+        assert!(matches!(bind_lane_missing(tmp.path(), "broken"), Err(Err2::Msg(_))));
+    }
+
     #[test]
     fn lane_resolution_refusals_are_byte_exact_and_never_guess_back() {
         let tmp = tmp_root();

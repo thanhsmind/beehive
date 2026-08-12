@@ -152,6 +152,14 @@ pub(crate) fn run_session_list(flags: Flags, use_json: bool, t0: Instant) -> Opt
 
 // ─── state session bind / unbind ───────────────────────────────────────────
 
+/// `true` when `lane` names no lane record — the one condition `session bind`
+/// refuses on. A present-but-unreadable record is NOT this condition:
+/// `read_lane_strict` raises its own typed refusal, which propagates unchanged
+/// rather than being flattened into "the lane does not exist".
+pub(crate) fn bind_lane_missing(root: &Path, lane: &str) -> Result<bool, Err2> {
+    Ok(read_lane_strict(root, lane)?.is_none())
+}
+
 pub(crate) fn run_session_bind(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !keys_known(&flags, &["session-id", "lane"]) {
         return None;
@@ -182,6 +190,16 @@ pub(crate) fn run_session_bind(flags: Flags, use_json: bool, t0: Instant) -> Opt
             Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
             Err(Err2::Ex) => return Err(Err2::Ex),
         };
+        // The lane a bind names must ALREADY exist. Every other lane-resolving
+        // seam refuses a binding that names no `.bee/lanes/<f>.json` (ledger's
+        // bound_lane_missing_refusal, the hook's own lane guard), so a bind
+        // that accepts one only writes a record the rest of the CLI is obliged
+        // to reject — and the guard then stands in front of the very unbind
+        // those refusals name as the FIX. Checked BEFORE the lock, so the
+        // refusal costs no lock and mutates nothing.
+        if bind_lane_missing(&ctx.root, &lane)? {
+            return Ok(Out::Thrown(lane_missing_refusal("session bind", &lane)));
+        }
         let Some(guard) = acquire_sessions_lock(&ctx.root) else {
             return Ok(Out::Thrown(format!(
                 "session bind: session \"{session}\" bind to lane \"{lane}\" could not acquire the sessions lock after 15 bounded attempts — never waited unboundedly."
