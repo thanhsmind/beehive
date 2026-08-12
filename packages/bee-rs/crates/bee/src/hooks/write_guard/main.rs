@@ -334,7 +334,13 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             // resolution, so denial.is_none() is already false by the time a
             // Fail would reach here — this arm has nothing to add on that
             // path and simply does not run.
-            let topo = resolve_write_topology(&root, control_root_s.as_deref())?;
+            //
+            // `&store_root`, not `&root`: check_write above resolves its own
+            // topology against `&store_root` (its own `root` parameter) —
+            // this call must feed resolve_write_topology the SAME value so
+            // the "same acting record" claim rests on code, not on the two
+            // never happening to diverge under `ordinary` today.
+            let topo = resolve_write_topology(&store_root, control_root_s.as_deref())?;
             if let RecordResolution::Ok { record, .. } =
                 resolve_write_record(&topo.control_root, &state, session_id.as_deref(), &mut emit)?
             {

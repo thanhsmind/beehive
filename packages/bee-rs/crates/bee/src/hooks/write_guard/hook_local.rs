@@ -493,16 +493,45 @@ pub(crate) fn worktree_grants_registry_corrupt(main_root: &str) -> bool {
     !matches!(serde_json::from_str::<Value>(&text), Ok(Value::Object(_)))
 }
 
+/// provenance: bee-write-guard.mjs findFeatureWorktreeGrant, split three ways
+/// (docs/knowledge/patterns/20260713-a-guard-that-tests-one-state-is-a.md —
+/// one None standing for three different states was exactly the hole here).
+/// `NotFound` is the only state the no-grant deny arm may act on: every
+/// registered id resolved cleanly and none of them named `feature`.
+/// `Unresolvable` covers the two states a caller must never read as "no
+/// grant" — a registered grant whose worktree directory no longer resolves
+/// (resolve_granted_worktree_root → None), and a worktree that DOES resolve
+/// but whose identity file is missing or unparseable
+/// (read_worktree_recorded_feature → None) — either could have been the
+/// grant for `feature`; the guard just can't tell, so it must not deny.
+pub(crate) enum FeatureWorktreeGrant {
+    Found(String, String),
+    NotFound,
+    Unresolvable,
+}
+
 /// provenance: bee-write-guard.mjs findFeatureWorktreeGrant.
-pub(crate) fn find_feature_worktree_grant(main_root: &str, feature: &str) -> R<Option<(String, String)>> {
+pub(crate) fn find_feature_worktree_grant(main_root: &str, feature: &str) -> R<FeatureWorktreeGrant> {
+    let mut unresolvable = false;
     for id in read_granted_worktree_ids(main_root) {
-        if let Some(worktree_root) = resolve_granted_worktree_root(main_root, &id)? {
-            if read_worktree_recorded_feature(&worktree_root).as_deref() == Some(feature) {
-                return Ok(Some((id, worktree_root)));
+        let worktree_root = match resolve_granted_worktree_root(main_root, &id)? {
+            Some(r) => r,
+            None => {
+                unresolvable = true;
+                continue;
             }
+        };
+        match read_worktree_recorded_feature(&worktree_root) {
+            Some(f) if f == feature => return Ok(FeatureWorktreeGrant::Found(id, worktree_root)),
+            Some(_) => {} // resolved and readable, definitively a different feature
+            None => unresolvable = true,
         }
     }
-    Ok(None)
+    if unresolvable {
+        Ok(FeatureWorktreeGrant::Unresolvable)
+    } else {
+        Ok(FeatureWorktreeGrant::NotFound)
+    }
 }
 
 /// provenance: bee-write-guard.mjs worktreeFirstExemptRel.
@@ -531,11 +560,17 @@ pub(crate) fn worktree_first_exempt_rel(rel: &str) -> bool {
 /// the default state.json otherwise (the same resolution `check_write` uses
 /// via `resolve_write_record`); it is never the raw default state.json for a
 /// lane-bound session. Every carve-out below is a fail-open bound, narrowest
-/// first: a phase other than "swarming" never fires (this guard exists for
-/// the live swarming lane only), lane "docs" and lane "tiny" never fire
-/// (AGENTS.md gives main integration, docs-lane, release work, and a solo
-/// tiny fix), and a missing/empty route on the acting record is "no
-/// opinion" — never guessed at.
+/// first: lane "docs" and lane "tiny" never fire (AGENTS.md gives main
+/// integration, docs-lane, release work, and a solo tiny fix — see the tiny
+/// carve-out's own comment below for the "solo" gap), and a missing/empty
+/// route on the acting record is "no opinion" — never guessed at.
+///
+/// The granted-worktree arm below is phase-independent — byte-for-byte the
+/// pre-existing refusal (git show 96db1a33^), which predates the "swarming"
+/// phase gate entirely. Only the NEW no-grant arm is phase-gated: it exists
+/// for the live swarming lane alone, so a phase other than "swarming" never
+/// takes it — everywhere else (reviewing, planning, scribing) the
+/// pre-existing granted refusal keeps firing exactly as it always did.
 pub(crate) fn check_worktree_first(
     worktree_resolution: &str,
     root: &str,
@@ -544,13 +579,6 @@ pub(crate) fn check_worktree_first(
     rel_paths: &[String],
 ) -> R<Option<String>> {
     if worktree_resolution != "ordinary" {
-        return Ok(None);
-    }
-    let phase = match record.get("phase") {
-        Some(Value::String(p)) => p.clone(),
-        _ => String::new(),
-    };
-    if phase != "swarming" {
         return Ok(None);
     }
     let feature = match record.get("feature") {
@@ -564,6 +592,15 @@ pub(crate) fn check_worktree_first(
         },
         _ => return Ok(None),
     };
+    // The "tiny" half of this carve-out is unconditional here, wider than
+    // its own cited source: state_group/workflows.rs is_code_touching_lane
+    // only exempts lane "tiny" when no OTHER live session is present
+    // (`lane == "tiny" && !other_live_session`), via
+    // other_live_work_present's session-record + lane-display walk. That
+    // walk has no equivalent on this path without a new store dependency
+    // (a Path-rooted, Ex-returning session/lane reader this hook module
+    // does not carry) — left unconditional rather than guessed at. Gap
+    // named here per cell wtf-3; closing it is a separate cell.
     if lane == "docs" || lane == "tiny" {
         return Ok(None);
     }
@@ -579,32 +616,61 @@ pub(crate) fn check_worktree_first(
         Some(m) => m,
         None => return Ok(None),
     };
-    let (grant_id, grant_root) = match find_feature_worktree_grant(&main_root, &feature)? {
-        Some(g) => g,
-        None if worktree_grants_registry_corrupt(&main_root) => return Ok(None),
-        None => {
-            // provenance: bee.mjs buildRouteWorktreeBlock's no-grant arm
-            // (state_group/workflows.rs route_worktree_block) — same command,
-            // same "code-touching ... MAIN checkout ... branches at feature
-            // start (worktree-first)" framing, ported to the write-guard
-            // refusal shape.
+    match find_feature_worktree_grant(&main_root, &feature)? {
+        FeatureWorktreeGrant::Found(grant_id, grant_root) => {
             return Ok(Some(format!(
-                "bee worktree-first guard: \"{offender}\" is a feature source write in the MAIN checkout, but the \
-active feature \"{feature}\" (lane \"{lane}\") holds no granted worktree — lane \"{lane}\" is code-touching and \
-this is the MAIN checkout — feature work branches at feature start (worktree-first). \
-FIX: run `bee worktree new --feature {feature}`, then open your session at the printed worktree path and make \
-this edit there. Deliberate override: set worktree_first: \"off\" in .bee/config.json to disable this refusal \
-(a recorded, visible choice)."
-            )));
-        }
-    };
-    Ok(Some(format!(
-        "bee worktree-first guard: \"{offender}\" is a feature source write in the MAIN checkout, but the active \
+                "bee worktree-first guard: \"{offender}\" is a feature source write in the MAIN checkout, but the active \
 feature \"{feature}\" (lane \"{lane}\") holds granted worktree \"{grant_id}\" — code-touching feature work \
 lives in its worktree from the start; main stays clean for integration, docs-lane, and release work \
 (docs/specs/worktree-first.md). FIX: open your session at {grant_root} and make this edit there, \
 then land it from main with `bee worktree merge --id {grant_id}`. Deliberate override: set \
 worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded, visible choice)."
+            )));
+        }
+        FeatureWorktreeGrant::Unresolvable => {
+            // One unreadable input must never become a confident refusal —
+            // the same principle worktree_grants_registry_corrupt already
+            // applies to the registry file, extended to a grant entry whose
+            // worktree directory or identity file can't be read. Fails
+            // open: this MIGHT be feature's own grant; the guard just can't
+            // prove it, so it never claims the feature "holds no granted
+            // worktree" — that claim would be factually false.
+            return Ok(None);
+        }
+        FeatureWorktreeGrant::NotFound => {}
+    }
+    // From here the grant lookup is a clean, confident "no grant recorded
+    // for this feature" — the NEW arm (wtf-1), which needs its own three
+    // narrower gates before it may deny.
+    let phase = match record.get("phase") {
+        Some(Value::String(p)) => p.clone(),
+        _ => String::new(),
+    };
+    if phase != "swarming" {
+        return Ok(None);
+    }
+    if worktree_grants_registry_corrupt(&main_root) {
+        return Ok(None);
+    }
+    // `bee worktree new` refuses with WORKTREE_CALLER_NOT_ORDINARY outside a
+    // git checkout (adapter.rs supports a .bee/onboarding.json root with no
+    // .git at all) — never name that remedy where it cannot run. Such a
+    // root can hold no grant either, so the granted arm above is unaffected.
+    if !Path::new(&main_root).join(".git").exists() {
+        return Ok(None);
+    }
+    // provenance: bee.mjs buildRouteWorktreeBlock's no-grant arm
+    // (state_group/workflows.rs route_worktree_block) — same command,
+    // same "code-touching ... MAIN checkout ... branches at feature
+    // start (worktree-first)" framing, ported to the write-guard
+    // refusal shape.
+    Ok(Some(format!(
+        "bee worktree-first guard: \"{offender}\" is a feature source write in the MAIN checkout, but the \
+active feature \"{feature}\" (lane \"{lane}\") holds no granted worktree — lane \"{lane}\" is code-touching and \
+this is the MAIN checkout — feature work branches at feature start (worktree-first). \
+FIX: run `bee worktree new --feature {feature}`, then open your session at the printed worktree path and make \
+this edit there. Deliberate override: set worktree_first: \"off\" in .bee/config.json to disable this refusal \
+(a recorded, visible choice)."
     )))
 }
 
