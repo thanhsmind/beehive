@@ -121,3 +121,4 @@
 {"id":"3cdcedda-0f39-4a55-9096-9ecda1af4248","type":"candidate","date":"2026-08-11T14:55:00.564Z","feature":"workflow-lessons","head":"387a01e03ab8b4df5ed4d1bdf18ecaf1dce36eb8","mode":"standard","baseline":null,"cells":[]}
 {"id":"e1455a66-c07d-41ba-bc3c-902eba75630b","type":"candidate","date":"2026-08-11T15:34:43.909Z","feature":"doctor-binary-freshness","head":"a69077dd1dc6c4b6f771b4d6547f21069046f75b","mode":"small","baseline":null,"cells":[]}
 {"id":"2562160f-5f4b-4930-8b4b-9ea662cbaa9a","type":"candidate","date":"2026-08-11T19:12:05.089Z","feature":"opencode-support","head":"48418855","mode":"high-risk","baseline":null,"cells":[]}
+{"id":"5fcc4f42-5578-4307-80d2-8fb2862607cc","type":"candidate","date":"2026-08-12T00:02:31.281Z","feature":"harness-p1-fixes","head":"a3c3846acc02c1757d2165d108c027f3acee3e4c","mode":"standard","baseline":null,"cells":[]}
