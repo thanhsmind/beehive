@@ -367,6 +367,27 @@ fn write_retry(path: &Path, text: &str) {
     panic!("could not write {} after 100 attempts", path.display());
 }
 
+/// The read-side twin of `write_retry`, and needed for the same reason: these
+/// controls write with `fs::write`, which TRUNCATES before it writes, so a
+/// racer reading the same path can observe a zero-byte file and fail to parse
+/// it. That torn read is filesystem contention — explicitly NOT the hazard
+/// these controls study (see `unguarded` below: the subject is last-writer-
+/// wins). Left unhandled it panicked the racer threads on Windows and made
+/// the DELIBERATE-RED detector report a failure that says nothing about the
+/// race it exists to demonstrate. Retrying keeps the detector honest: it
+/// still asserts every unguarded racer believed it won.
+fn read_json_retry(path: &Path) -> Value {
+    for _ in 0..100 {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            if let Ok(value) = serde_json::from_str::<Value>(&text) {
+                return value;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("could not read parseable JSON from {} after 100 attempts", path.display());
+}
+
 /// The shared shape of every DELIBERATE-RED control: N threads each take a
 /// snapshot, rendezvous so every read is PROVEN to happen-before every write,
 /// then commit their own stale snapshot. Writes are staggered by thread index
@@ -524,14 +545,12 @@ fn deliberate_red_an_unguarded_claim_lets_every_racer_believe_it_won() {
     let saw_open = unguarded(
         RACERS,
         |_| {
-            let text = std::fs::read_to_string(&cell_path).unwrap();
-            let cell: Value = serde_json::from_str(&text).unwrap();
+            let cell = read_json_retry(&cell_path);
             cell["status"] == "open"
         },
         |i, saw_open| {
             if *saw_open {
-                let text = std::fs::read_to_string(&cell_path).unwrap();
-                let mut cell: Value = serde_json::from_str(&text).unwrap();
+                let mut cell = read_json_retry(&cell_path);
                 cell["status"] = Value::String("claimed".into());
                 cell["trace"]["worker"] = Value::String(format!("worker-unsafe-{i}"));
                 write_retry(&cell_path, &cell.to_string());
