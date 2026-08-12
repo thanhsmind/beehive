@@ -585,6 +585,26 @@ pub(crate) fn check_git_bash_command(
     control_root_override: Option<&str>,
     emit: &mut Emit,
 ) -> R<Option<WV>> {
+    let deep = tokenize_deep(command);
+    if deep.truncated {
+        // A wrapper nested past the depth bound could hide a git verb this
+        // scan cannot see — fail open (delegate) rather than silently allow.
+        return Err(Nd);
+    }
+    let invocations = find_git_invocations(&deep.tokens);
+    if invocations.is_empty() {
+        // This guard judges git invocations and nothing else. Resolving the
+        // acting record first made a lane-resolution failure deny EVERY Bash
+        // command — including the `bee state session unbind` those very
+        // refusals name as the FIX, which left a session bound to a missing
+        // lane unable to run its own escape hatch. The token scan comes
+        // first, so a command with no git in it is simply not this guard's
+        // business. Nothing is weakened: file writes still resolve the same
+        // record through check_write, and every git invocation below still
+        // denies on a resolution failure.
+        return Ok(None);
+    }
+
     let topo = resolve_write_topology(root, control_root_override)?;
     let record = match resolve_write_record(&topo.control_root, state, session_id, emit)? {
         RecordResolution::Fail { reason } => return Ok(Some(WV::Deny(reason))),
@@ -595,18 +615,11 @@ pub(crate) fn check_git_bash_command(
         _ => Value::String("idle".into()),
     };
 
-    let deep = tokenize_deep(command);
-    if deep.truncated {
-        // A wrapper nested past the depth bound could hide a git verb this
-        // scan cannot see — fail open (delegate) rather than silently allow.
-        return Err(Nd);
-    }
-
     // S2: classify EVERY git invocation in the token list, not just the
     // first — the first REFUSING invocation wins, so an allowed leading
     // command (`git status &&`) can no longer shadow a denied one that
     // follows it (`&& git stash`).
-    for invocation in find_git_invocations(&deep.tokens) {
+    for invocation in invocations {
         if let Some(wv) = evaluate_git_invocation(
             root,
             &topo,
