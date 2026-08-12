@@ -1180,6 +1180,58 @@ use std::process::ExitCode;
         .unwrap();
     }
 
+    /// A session bound to a lane with no record is in the one state every
+    /// lane-resolving seam refuses on — and the refusals all name
+    /// `bee state session unbind` as the FIX. The lane guard therefore must
+    /// not stand in front of that command: it judges git invocations, so a
+    /// Bash command carrying none of them is not its business. What it does
+    /// judge keeps its teeth — a git verb still denies, and so does a file
+    /// write through check_write.
+    #[test]
+    fn the_lane_guard_holds_git_and_writes_but_never_the_unbind_that_escapes_it() {
+        let fx = build_fixture("swarming", true);
+        run_git(&fx.root, &["init", "-q"]);
+        write_session_lane(&fx.root, "sess-1", "ghost");
+        // No .bee/lanes/ghost.json — the binding resolves to nothing.
+
+        let allowed = |command: &str| {
+            let e = expect_done(
+                json!({"tool_name":"Bash","tool_input":{"command":command},"session_id":"sess-1"}),
+                &fx.root,
+            );
+            assert_eq!(e.code, 0, "expected {command} to be allowed: {}", e.stderr);
+            assert!(!e.stderr.contains("bee lane guard"), "{command}: {}", e.stderr);
+        };
+        // The escape hatch itself, and an ordinary read.
+        allowed("bee state session unbind --session-id sess-1");
+        allowed("ls -la");
+
+        // A git invocation under the same broken binding still denies.
+        let denied = expect_done(
+            json!({
+                "tool_name":"Bash",
+                "tool_input":{"command":"git commit -m wip"},
+                "session_id":"sess-1"
+            }),
+            &fx.root,
+        );
+        assert_eq!(denied.code, 2, "{}", denied.stderr);
+        assert!(denied.stderr.contains("bee lane guard"), "{}", denied.stderr);
+        assert!(denied.stderr.contains("\"ghost\""), "{}", denied.stderr);
+
+        // And so does a file write — check_write resolves the same record.
+        let write_denied = expect_done(
+            json!({
+                "tool_name":"Edit",
+                "tool_input":{"file_path":"src/app.js"},
+                "session_id":"sess-1"
+            }),
+            &fx.root,
+        );
+        assert_eq!(write_denied.code, 2, "{}", write_denied.stderr);
+        assert!(write_denied.stderr.contains("bee lane guard"), "{}", write_denied.stderr);
+    }
+
     #[test]
     fn worktree_first_judges_the_lane_bound_acting_record_not_state_json() {
         let dir = tempfile::tempdir().unwrap();
