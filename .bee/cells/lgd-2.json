@@ -1,0 +1,57 @@
+{
+  "id": "lgd-2",
+  "feature": "lane-guard-deadlock",
+  "lane": "standard",
+  "title": "Resolve the lane record only when a Bash command actually invokes git",
+  "action": "In packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs check_git_bash_command: move tokenize_deep and find_git_invocations ahead of resolve_write_record. Keep the truncated -> Err(Nd) fail-open arm first. When the token scan finds no git invocation, return Ok(None) without resolving the record, so a lane-guard Fail no longer denies every non-git Bash command - including the bee state session unbind the deny text itself names as the FIX. When at least one git invocation is present, resolve the record exactly as today and deny on RecordResolution::Fail. Add tests in hooks/write_guard/tests.rs: bound-to-missing-lane plus a non-git command allows; bound-to-missing-lane plus bee state session unbind allows; bound-to-missing-lane plus git commit still denies with the bee lane guard text.",
+  "goal": "The lane guard keeps its teeth where it judges (git verbs and every file write through check_write) and stops holding the escape hatch shut, so a broken binding is recoverable by the agent instead of by hand.",
+  "verify": "commands.test green",
+  "must_haves": {
+    "truths": [
+      "A session bound to a missing lane can run a non-git Bash command, including bee state session unbind",
+      "A session bound to a missing lane still gets the bee lane guard deny on a git invocation",
+      "check_write and the worktree-first guard keep denying file writes under the same broken binding"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No weakening of any git-invocation classification",
+      "No change to the deny text",
+      "The tokenize_deep truncated arm still fails open to Err(Nd)"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "deps": [],
+  "decisions": [],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": "check_git_bash_command tokenizes and finds git invocations before resolving the acting record; with no git invocation it returns without resolving, so a broken lane binding no longer denies the unbind that escapes it",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "Claimed after the edit, not before: the claim needed a route record, the route needed the lane bound, and the harness refused the control-plane call while the session was isolated in the worktree. Work, tests and commit were done first in the worktree, then the bookkeeping from main."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-12T09:48:49.699Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2eb5cb79-dcdc-4dc5-b3e1-99a3a233c2eb",
+    "claimed_at": "2026-08-12T09:48:22.384Z",
+    "inline_reason": "A dispatched worker inherits the orchestrator's cwd (main), where the worktree-first guard refuses this feature's source edits; the orchestrator entered the worktree and ran the cell inline.",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-12T09:48:29.296Z"
+  }
+}

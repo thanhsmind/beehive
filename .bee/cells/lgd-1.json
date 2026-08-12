@@ -1,0 +1,67 @@
+{
+  "id": "lgd-1",
+  "feature": "lane-guard-deadlock",
+  "lane": "standard",
+  "title": "Refuse session bind to a lane that does not exist",
+  "action": "In packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs run_session_bind: after require_id resolves the lane and BEFORE acquire_sessions_lock, read the lane record (read_lane_strict) and return Out::Thrown(lane_missing_refusal(\"session bind\", &lane)) when it is absent, so the bind is a zero-mutation refusal that never takes the lock. Add a unit test in verbs/state_group/tests.rs asserting bind to an unknown lane refuses and writes no lane key, and bind to a started lane still succeeds.",
+  "goal": "A session can no longer enter the state the lane guard refuses on: bind fails closed at the moment the bad lane is named, with the FIX text naming state start-feature --as-lane.",
+  "verify": "commands.test green",
+  "must_haves": {
+    "truths": [
+      "bind to a lane with no .bee/lanes/<f>.json refuses and the session record keeps no lane key",
+      "bind to a lane started with state start-feature --as-lane still succeeds",
+      "the refusal reuses lane_missing_refusal so its FIX names state start-feature --feature <f> --as-lane"
+    ],
+    "artifacts": [],
+    "key_links": [],
+    "prohibitions": [
+      "No change to run_session_unbind",
+      "No lock taken on the refusal path"
+    ]
+  },
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "deps": [],
+  "decisions": [],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": "session bind refuses a lane with no .bee/lanes record, before the sessions lock, reusing the shared LANE_MISSING wording",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-12T09:42:46.650Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2eb5cb79-dcdc-4dc5-b3e1-99a3a233c2eb",
+    "claimed_at": "2026-08-12T09:36:13.714Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-12T09:39:52.297Z",
+        "claim_session": "2eb5cb79-dcdc-4dc5-b3e1-99a3a233c2eb",
+        "claimed_at": "2026-08-12T09:36:13.713Z",
+        "acquired_at": "2026-08-12T09:36:13.713Z",
+        "worker": "orchestrator-inline",
+        "verdict": "tests-red",
+        "failure_signature": "e47ff85140fd",
+        "note": "1747 |         let _ = ok(start_default(root, \"feat-b\", Some(\"standard\"), \"shaping\", &[]));"
+      }
+    ],
+    "inline_reason": "A dispatched worker inherits the orchestrator's cwd (decision 2026-08-12), which is the MAIN checkout — the worktree-first guard refuses source edits there, so the worker could not touch this feature's files. The orchestrator entered the worktree itself and ran the cell inline.",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-12T09:42:25.717Z"
+  }
+}
