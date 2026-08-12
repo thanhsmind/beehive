@@ -423,5 +423,10 @@
     "capped": 4,
     "dropped": 0,
     "archived_at": "2026-08-12T07:18:57.578Z"
+  },
+  "lane-guard-deadlock": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-12T10:53:29.514Z"
   }
 }

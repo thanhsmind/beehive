@@ -124,3 +124,4 @@
 {"id":"5fcc4f42-5578-4307-80d2-8fb2862607cc","type":"candidate","date":"2026-08-12T00:02:31.281Z","feature":"harness-p1-fixes","head":"a3c3846acc02c1757d2165d108c027f3acee3e4c","mode":"standard","baseline":null,"cells":[]}
 {"id":"b2e699b4-8b4f-4aca-83b1-432381b80668","type":"candidate","date":"2026-08-12T04:36:17.716Z","feature":"judge-obligation","head":"0d1b0554e6019a2102bc354fc9e1722ae4bd23ec","mode":"standard","baseline":null,"cells":[]}
 {"id":"a5e1ba06-9fb0-48bd-862f-e52e169555b4","type":"candidate","date":"2026-08-12T07:20:52.989Z","feature":"worktree-first-teeth","head":"af6bb2ca","mode":"standard","baseline":"c862e445","cells":[]}
+{"id":"9f8e6101-eb5c-4af7-9a5f-9f167b52b97c","type":"candidate","date":"2026-08-12T10:53:00.779Z","feature":"lane-guard-deadlock","head":"b9dcee9dfa2a93fcf37f8370ac92f88f9f3d7611","mode":"standard","baseline":"cd716d83","cells":["lgd-1","lgd-2"]}
