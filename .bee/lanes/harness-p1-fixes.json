@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "harness-p1-fixes",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,7 +10,7 @@
     "review": false
   },
   "summary": "Feature \"harness-p1-fixes\" started at phase \"planning\" (lane).",
-  "next_action": "close harness-p1-fixes and merge",
+  "next_action": "review session-harness-lessons-20260811 closed; 21 residual findings in the backlog",
   "created_at": "2026-08-11T22:55:38.238Z",
   "route": {
     "class": "bugfix",
