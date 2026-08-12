@@ -64,6 +64,18 @@ jobs:
       - name: Build the binary
         run: cargo build --release --manifest-path packages/bee-rs/Cargo.toml
 
+      # The OpenCode belt's parity and registry gates derive their ground truth
+      # from the installed runtime itself — its real tool registry, its real
+      # plugin host. Without it here, those tests refuse to report green rather
+      # than certify coverage they never obtained, which is the whole point of
+      # the gate (a skip that reads as a pass is how a belt goes missing). So
+      # CI installs the runtime instead of setting the skip escape hatch.
+      # Pinned: the plugin API carries no stability guarantee and ships every
+      # day or two, so an unpinned install would make an upstream release able
+      # to turn this suite red with no change of ours.
+      - name: Install the OpenCode runtime (pinned) for the belt gates
+        run: npm i -g opencode-ai@1.18.16
+
       # This is .bee/config.json `commands.verify` verbatim — the single
       # source of truth for the verify chain, so CI can never drift from what
       # a local session runs. Output is teed so a red run has a tail to attach
