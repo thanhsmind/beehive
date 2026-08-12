@@ -922,6 +922,153 @@ use std::process::ExitCode;
         assert_eq!(expect_done(edit("src/app.js"), &corrupt.root).code, 0);
     }
 
+    // ── no-grant arm (wtf-1): the DOMINANT shape — a feature that never
+    // held a granted worktree at all — must now deny, not silently allow.
+
+    struct WtfNoGrant {
+        _dir: tempfile::TempDir,
+        root: PathBuf,
+    }
+
+    fn build_worktree_first_no_grant(phase: &str, lane_route: Option<&str>) -> WtfNoGrant {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        copy_lib(&root);
+        let mut state = json!({
+            "phase": phase, "mode": "standard", "feature": "demo",
+            "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+        });
+        if let Some(lane) = lane_route {
+            state["route"] = json!({
+                "class": "feature", "lane": lane, "flags": [], "product_files": 2,
+                "rationale": null, "updated_at": ms_to_iso(now_ms()).unwrap()
+            });
+        }
+        write_state(&root, &state);
+        // No .bee/runtime/worktree-grants.json at all — the dominant shape:
+        // this feature (indeed this repo) never granted a worktree.
+        WtfNoGrant { _dir: dir, root }
+    }
+
+    #[test]
+    fn worktree_first_denies_main_source_write_with_no_grant_at_all() {
+        let wtf = build_worktree_first_no_grant("swarming", Some("standard"));
+        let e = expect_done(edit("src/app.js"), &wtf.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("worktree-first"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee worktree new --feature demo"), "{}", e.stderr);
+        assert!(e.stderr.contains("MAIN checkout"), "{}", e.stderr);
+        assert!(e.stderr.contains("\"demo\"") && e.stderr.contains("\"standard\""), "{}", e.stderr);
+        assert!(e.stderr.contains("worktree_first: \"off\""), "{}", e.stderr);
+        // Bash-extracted target too.
+        let eb = expect_done(bash("printf x > src/app.js"), &wtf.root);
+        assert_eq!(eb.code, 2, "{}", eb.stderr);
+    }
+
+    #[test]
+    fn worktree_first_no_grant_arm_carve_outs_allow() {
+        // lane "tiny" never fires.
+        let tiny = build_worktree_first_no_grant("swarming", Some("tiny"));
+        assert_eq!(expect_done(edit("src/app.js"), &tiny.root).code, 0);
+        // lane "docs" never fires.
+        let docs = build_worktree_first_no_grant("swarming", Some("docs"));
+        assert_eq!(expect_done(edit("src/app.js"), &docs.root).code, 0);
+        // a phase other than "swarming" never fires ("idle" is skipped here:
+        // it trips the unrelated intake gate before reaching this check at
+        // all, which would prove nothing about worktree-first itself).
+        let planning = build_worktree_first_no_grant("planning", Some("standard"));
+        assert_eq!(expect_done(edit("src/app.js"), &planning.root).code, 0);
+        // a missing/empty route on the acting record is "no opinion".
+        let no_route = build_worktree_first_no_grant("swarming", None);
+        assert_eq!(expect_done(edit("src/app.js"), &no_route.root).code, 0);
+    }
+
+    fn write_session_lane(root: &Path, id: &str, lane: &str) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        let now = ms_to_iso(now_ms()).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": id, "lane": lane, "started_at": now, "last_heartbeat": now
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    fn write_lane_record(root: &Path, feature: &str, phase: &str, lane_route: &str) {
+        let dir = root.join(".bee").join("lanes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{feature}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "schema_version": "1.0",
+                    "feature": feature,
+                    "phase": phase,
+                    "route": {
+                        "class": "feature", "lane": lane_route, "flags": [], "product_files": 2,
+                        "rationale": null, "updated_at": ms_to_iso(now_ms()).unwrap()
+                    },
+                    "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn worktree_first_judges_the_lane_bound_acting_record_not_state_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        copy_lib(&root);
+        // state.json (the default pipeline record) names a DIFFERENT
+        // feature on an exempt lane ("docs") — if the guard mistakenly
+        // judged this file for a lane-bound session, it would silently
+        // allow, exactly the live 2026-08-12 incident.
+        write_state(
+            &root,
+            &json!({
+                "phase": "swarming", "mode": "standard", "feature": "other-feature",
+                "route": {
+                    "class": "feature", "lane": "docs", "flags": [], "product_files": 2,
+                    "rationale": null, "updated_at": ms_to_iso(now_ms()).unwrap()
+                },
+                "approved_gates": { "context": true, "shape": true, "execution": true, "review": false }
+            }),
+        );
+        // The session is bound to lane "hub-finished-compact" — its OWN
+        // lane record names a different feature and a code-touching lane,
+        // mirroring the live hub-finished-compact.json shape from that
+        // incident (phase swarming, route.lane small).
+        write_session_lane(&root, "sess-1", "hub-finished-compact");
+        write_lane_record(&root, "hub-finished-compact", "swarming", "small");
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"src/app.js"},"session_id":"sess-1"}),
+            &root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("worktree-first"), "{}", e.stderr);
+        assert!(e.stderr.contains("\"hub-finished-compact\""), "{}", e.stderr);
+        assert!(e.stderr.contains("\"small\""), "{}", e.stderr);
+        assert!(
+            e.stderr.contains("bee worktree new --feature hub-finished-compact"),
+            "{}",
+            e.stderr
+        );
+        assert!(!e.stderr.contains("other-feature"), "{}", e.stderr);
+    }
+
     // ── scratch-shape guard (rows 35-45) ───────────────────────────────────
 
     #[test]
