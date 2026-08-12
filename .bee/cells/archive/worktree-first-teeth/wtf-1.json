@@ -1,0 +1,62 @@
+{
+  "id": "wtf-1",
+  "feature": "worktree-first-teeth",
+  "lane": "standard",
+  "title": "Give the worktree-first guard the acting record and the missing no-grant arm",
+  "intent": "A live incident (beedashboard, 2026-08-12): a session working the hub-finished-compact lane did full feature work in the MAIN checkout and committed to main (c79e071), while the worktree-first guard allowed every write. Two defects: the guard reads state.json (which named a different feature) instead of the session's own lane record, and it only refuses when the feature ALREADY holds a worktree. 78 lane records live across the two repos against 2 default-pipeline state.json records, so the shape the guard cannot see is the dominant one.",
+  "action": "In packages/bee-rs/crates/bee/src/hooks/write_guard/: (1) main.rs:325-335 currently passes the raw read_state(store_root) value (main.rs:136) into check_worktree_first, while every other write check goes through resolve_write_record (checks.rs:45-146). Feed check_worktree_first the SAME resolved record — the lane record for a lane-bound session, the default state otherwise. Reuse the resolution already computed for check_write rather than resolving twice; if that value is not in scope at the call site, hoist it. A RecordResolution::Fail must NOT be swallowed into an allow — it already denies upstream, so the worktree-first call simply must not run on a failed resolution. (2) In hook_local.rs check_worktree_first (:510-558), add the arm that is missing at :546-549: when find_feature_worktree_grant returns None for the acting feature, deny instead of allowing, with the remedy `bee worktree new --feature <feature>` — the same command and framing route_worktree_block already prints at state_group/workflows.rs:663-672 (\"lane X is code-touching and this is the MAIN checkout — feature work branches at feature start (worktree-first)\"). Keep the existing granted-worktree arm's message byte-for-byte. The new arm is narrow and every bound below is load-bearing: it fires ONLY when the acting record's phase is \"swarming\"; lane \"docs\" and lane \"tiny\" never fire (AGENTS.md gives main integration, docs-lane, release work, and a solo tiny fix); a missing or empty route on the acting record stays fail-open (40 of 56 beehive lane records carry no route, and counter-teeth already gave route-less claims their own teeth at cells claim). Every existing carve-out stays byte-for-byte: worktree_first_exempt_rel (.md plus GATE_ALLOWED_PREFIXES), config worktree_first: \"off\", worktree_resolution != \"ordinary\", and a corrupt/missing grants registry failing open.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+    "docs/history/worktree-first-teeth/plan.md"
+  ],
+  "acceptance": [
+    "A lane-bound session whose lane record names feature F is judged against F, not against the feature state.json names — proven by a fixture built from the live hub-finished-compact.json shape (phase swarming, route.lane small, feature hub-finished-compact) while state.json names a different feature with a different lane.",
+    "A code-touching source write in the MAIN checkout at phase swarming, for a feature holding NO granted worktree, is denied and the reason names `bee worktree new --feature <feature>`.",
+    "The pre-existing granted-worktree arm still denies with its current message unchanged, including the `bee worktree merge --id <id>` remedy.",
+    "No-deny direction proven case by case: lane docs, lane tiny, a phase other than swarming, an acting record with no route, a .md path, a GATE_ALLOWED_PREFIXES path, config worktree_first: \"off\", a non-ordinary (linked worktree) checkout, and a corrupt grants registry — each allows.",
+    "cargo test --release --manifest-path packages/bee-rs/Cargo.toml is green."
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "The record check_worktree_first judges is the acting record: for a lane-bound session it is .bee/lanes/<lane>.json, never state.json.",
+      "A code-touching main-checkout source write at phase swarming is refused when the acting feature holds no granted worktree, and the refusal names `bee worktree new --feature <feature>`.",
+      "The granted-worktree arm's existing refusal text is unchanged.",
+      "Each carve-out still allows: lane docs, lane tiny, phase != swarming, no route on the acting record, .md and gate-allowed paths, worktree_first \"off\", non-ordinary checkout, corrupt grants registry."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-wtf-1",
+    "outcome": "Guard now judges the acting (lane-aware) record and denies a code-touching main-checkout write at phase swarming when the feature holds no granted worktree, naming bee worktree new --feature <feature>; corrupt registry still fails open",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-12T06:38:06.252Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c83d3c3d-938a-4f3c-a04d-8431c9daa0ea",
+    "claimed_at": "2026-08-12T06:18:09.960Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-12T06:37:46.660Z"
+  },
+  "tier": "generation"
+}

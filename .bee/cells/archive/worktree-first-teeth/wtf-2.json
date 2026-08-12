@@ -1,0 +1,63 @@
+{
+  "id": "wtf-2",
+  "feature": "worktree-first-teeth",
+  "lane": "standard",
+  "title": "Name the holding checkout on a reservation conflict",
+  "intent": "Leases are control-plane: control_root_for (leases.rs:98-162) resolves every checkout's lease directory to the MAIN store, so main and every worktree share one lease dir. conflict_out (reserve.rs:439-455) prints only agent and cell, so a refusal cannot say which checkout holds the file — the cross-worktree FOREIGN_HOLD refusal already names its holder, this one goes blind. Reporting only: the conflict rule itself does not change.",
+  "action": "In packages/bee-rs/crates/bee/src/verbs/reservations/: (1) reserve.rs — write a `holder` field onto the path lease record built at :256-271. The value is already in scope: roots.hold_topology() is called unconditionally at :51 and its holder string is the same one the cross-worktree hold row already carries at :331 (\"main\" for an ordinary checkout, the git-verified worktree id for a granted linked worktree). hold_topology() returns None for an UNGRANTED linked worktree — in that case write no holder field at all rather than inventing one. (2) leases.rs — carry holder on the Resv struct (:217-225), read it in lease_to_reservation (:227-266) with the same Option-and-omit pattern every other optional field uses, and emit it in resv_to_value (:271-296) only when present. (3) reserve.rs conflict_out (:439-455) — when a conflicting reservation carries a holder, the line reads `- <holder> holds \"<path>\" (cell <cell>, agent <agent>)`; with no holder it stays byte-for-byte as today. Do NOT change find_conflicts, is_hard_conflict, paths_overlap or any release/sweep scoping — this cell adds a reported fact, never a decision input. Leave lease_store.rs's generic acquire_leases writer (:534-544) alone; the integration-queue processor lease has no checkout to report.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs",
+    "packages/bee-rs/crates/bee/src/roots.rs",
+    "docs/history/worktree-first-teeth/plan.md"
+  ],
+  "acceptance": [
+    "A reserve from an ordinary checkout writes holder \"main\" on the lease record; a reserve from a granted linked worktree writes its git-verified worktree id — proven over the real `git worktree add` fixtures already in tests.rs (:392-604).",
+    "A reserve from an UNGRANTED linked worktree writes no holder field at all, and every reader still parses that record.",
+    "A conflicting reserve's refusal text names the holding checkout, and the JSON conflicts[] entries carry holder.",
+    "A lease file written before this change (no holder key) is still read, listed, released and swept unchanged — proven by a fixture record with the field absent.",
+    "find_conflicts, is_hard_conflict and release scoping are untouched: the pre-existing conflict, release and sweep tests pass without modification.",
+    "cargo test --release --manifest-path packages/bee-rs/Cargo.toml is green."
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A path lease record carries holder \"main\" from an ordinary checkout and the git-verified worktree id from a granted worktree; an ungranted linked worktree writes no holder at all.",
+      "A reservation conflict refusal names the holding checkout in both the text lines and the JSON conflicts[].",
+      "A pre-existing lease record with no holder key still parses, lists, releases and sweeps.",
+      "Conflict detection and release scoping are byte-for-byte unchanged."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-wtf-2",
+    "outcome": "Name the holding checkout on a reservation conflict",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-12T06:32:36.734Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c83d3c3d-938a-4f3c-a04d-8431c9daa0ea",
+    "claimed_at": "2026-08-12T06:18:09.998Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-12T06:32:10.946Z"
+  },
+  "tier": "generation"
+}

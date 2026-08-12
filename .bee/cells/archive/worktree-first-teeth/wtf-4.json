@@ -1,0 +1,56 @@
+{
+  "id": "wtf-4",
+  "feature": "worktree-first-teeth",
+  "lane": "standard",
+  "title": "Keep the tiny-lane exemption on the no-grant arm only",
+  "intent": "A second independent read of aac9984f found the tiny-lane exemption added in 96db1a33 sits above BOTH arms (hook_local.rs:604), so a feature that ALREADY holds a granted worktree can now take a lane-tiny source edit in the main checkout. The parent commit denied that (96db1a33^:hook_local.rs:531 exempted lane \"docs\" only). AGENTS.md gives main a solo tiny fix, but a feature whose worktree already exists is precisely the drift this guard exists to stop — a tiny edit landing in main while its worktree is live is a merge conflict waiting at bee worktree merge. The exemption belongs to the new no-grant arm, where it means \"this work is small enough not to need a worktree at all\".",
+  "action": "In packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs: narrow the lane exemption at :604 back to `lane == \"docs\"` for the granted-worktree arm, and keep `docs || tiny` on the new no-grant arm only. Restructure minimally — the docs exemption stays where it is; the tiny half moves down beside the no-grant arm's own phase gate (:645-651). Update the comment at :595-603 so it states which arm each exemption serves and why. In tests.rs: the existing case proving lane tiny allows must be split into two — lane tiny with NO grant still allows, lane tiny WITH a granted worktree now denies (the granted arm's existing message).",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "acceptance": [
+    "Lane tiny in the main checkout, with a granted worktree for the acting feature, is DENIED with the granted arm's existing message — matching 96db1a33^ behavior.",
+    "Lane tiny in the main checkout with NO grant for the acting feature still allows.",
+    "Lane docs allows on both arms, unchanged.",
+    "Every other test in the write_guard suite passes unchanged.",
+    "cargo test --release --manifest-path packages/bee-rs/Cargo.toml is green."
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "The granted-worktree arm exempts lane docs only, as it did before this feature.",
+      "The no-grant arm exempts lane docs and lane tiny.",
+      "Both directions are pinned by their own test."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-wtf-4",
+    "outcome": "Narrowed the tiny-lane worktree-first exemption to the no-grant arm; granted arm now denies lane tiny too",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-12T07:16:36.490Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c83d3c3d-938a-4f3c-a04d-8431c9daa0ea",
+    "claimed_at": "2026-08-12T07:12:30.560Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-12T07:16:16.834Z"
+  },
+  "tier": "generation"
+}

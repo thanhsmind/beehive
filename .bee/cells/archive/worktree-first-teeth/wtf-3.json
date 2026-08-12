@@ -1,0 +1,65 @@
+{
+  "id": "wtf-3",
+  "feature": "worktree-first-teeth",
+  "lane": "standard",
+  "title": "Restore the worktree-first arm the phase gate silenced and stop misreading an unresolvable grant",
+  "intent": "An independent read of wtf-1 (commit 96db1a33) found two regressions the green suite could not see, exactly the failure decision 0cd7bc46 describes. (1) The new phase gate was hoisted above BOTH arms, so the PRE-EXISTING deny — a feature whose worktree already exists, editing main — now fires only at phase swarming; at reviewing, planning and scribing main accepts edits it used to refuse. (2) find_feature_worktree_grant returns None for three different states, and the new arm treats all three as 'no worktree': a genuinely absent grant, a registered grant whose worktree directory no longer resolves, and a worktree whose identity file is unreadable. The last two now deny with text that is factually false and a remedy (bee worktree new) that refuses with WORKTREE_TARGET_EXISTS / WORKTREE_GRANT_EXISTS — a blocked agent with a dead-end fix.",
+  "action": "In packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs (plus main.rs and tests.rs): (1) Move the `phase != \"swarming\"` early return (:549-555) so it gates ONLY the new no-grant arm. The granted-worktree arm must go back to being phase-independent, exactly as it was before 96db1a33 — verify against `git show 96db1a33^:packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs`. (2) Split find_feature_worktree_grant's None (:497-506): distinguish NO grant recorded for this feature from a grant that IS recorded but whose root or recorded feature cannot be read (resolve_granted_worktree_root failing, or read_worktree_recorded_feature returning None at :450-475 for a present grant). Only the first may take the new deny arm. The unresolvable case fails OPEN, the same principle worktree_grants_registry_corrupt (:484-494) already applies to the registry file — one unreadable input must never become a confident refusal. Keep the granted arm unchanged for a grant that DOES resolve. (3) The new arm must not fire in a bee root that is not a git checkout at all (adapter.rs:108-118 supports a .bee/onboarding.json root with no .git). `bee worktree new` refuses there with WORKTREE_CALLER_NOT_ORDINARY, so the refusal would name an impossible remedy. Skip the arm when the root has no .git; the granted arm is unaffected because such a root can hold no grant. (4) The tiny carve-out at :567 is unconditional, but its cited source is_code_touching_lane (state_group/workflows.rs:587-595) exempts tiny only when no other live session exists (`lane == \"tiny\" && !other_live_session`). Either honor the solo condition using the same liveness signal the guard already reads for its other classes, or — if that read is not available on this path without a new store dependency — leave it unconditional and say so in one comment naming the gap and this cell. Do not leave the code and its own comment disagreeing. (5) main.rs:337-339 re-resolves topology against `&root` while check_write used `&store_root` (:306-307); they cannot diverge under `ordinary` today, but pass the same value and drop the second resolution so the 'same acting record' claim rests on code rather than coincidence.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/hooks/adapter.rs"
+  ],
+  "acceptance": [
+    "The granted-worktree arm denies at phase reviewing, planning and scribing again, not only at swarming — one test per phase, built from the granted fixture.",
+    "A grant recorded for the feature whose worktree directory no longer resolves ALLOWS (fails open) instead of denying with 'holds no granted worktree'.",
+    "A grant recorded for the feature whose worktree identity file is missing or unparseable ALLOWS instead of denying.",
+    "A bee root with .bee/onboarding.json and no .git never takes the new no-grant arm.",
+    "The no-grant deny is proven in a REAL git checkout fixture (git init, or the existing git-worktree fixture builder), not only in a non-git tempdir, and a present-but-empty {} grants registry — the live beedashboard shape — is one of the proven cases.",
+    "The tiny carve-out and its comment agree: either the solo condition is honored in code, or one comment names the gap and cites this cell.",
+    "Every carve-out already proven by wtf-1's tests still passes unchanged.",
+    "cargo test --release --manifest-path packages/bee-rs/Cargo.toml is green."
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "The pre-existing granted-worktree refusal is phase-independent again, byte-for-byte the behavior of 96db1a33^.",
+      "An unresolvable or unreadable grant fails open, never a confident 'holds no granted worktree' refusal.",
+      "The new deny arm never fires where `bee worktree new` cannot run.",
+      "The new deny arm is proven in a real git checkout, including the live {} registry shape."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-wtf-3",
+    "outcome": "Restored phase-independent worktree-first refusal and made unresolvable/unreadable grants fail open instead of falsely denying",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-12T07:03:14.562Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c83d3c3d-938a-4f3c-a04d-8431c9daa0ea",
+    "claimed_at": "2026-08-12T06:51:56.269Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-12T07:02:54.636Z"
+  },
+  "tier": "generation"
+}
