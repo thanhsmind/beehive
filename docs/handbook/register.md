@@ -301,7 +301,7 @@ top-level spellings still work. `bee --help --all [--json]` lists the full regis
 | `knowledge` | check · index · list · context · promote |
 | `worktree` | new · merge · list · register · unregister |
 | `intent` | set · show · advance · clear |
-| *other* | `dispatch prepare` · `tmp sweep` · `recovery scan/window` · `config.*` · `perf.*` · `herding.*` · `doctor attest` |
+| *other* | `dispatch prepare` · `tmp sweep` · `recovery scan` · `recovery window` · `config.*` · `perf.*` · `herding.*` · `doctor attest` |
 
 ### Maintenance surfaces (outside the registry)
 
@@ -370,7 +370,7 @@ Two notes on doors that are not refusals:
 
 ### Declared but not built
 
-21 registry entries have no implementation in the current binary — the R6 Node
+20 registry entries have no implementation in the current binary — the R6 Node
 deletion removed the only one they had. Each refuses by name, states that nothing
 ran and nothing changed, and names its fallback:
 
@@ -381,7 +381,7 @@ ran and nothing changed, and names its fallback:
 | `herding enable/disable/status` | 3 |
 | `state advisor-ref record/show` | 2 |
 | `state compact-capsule/check/log` | 3 |
-| `recovery scan/window` | 2 |
+| `recovery window` | 1 |
 
 Treat them as known gaps, not as verbs to route around: config changes go through
 the hand-edit exception above, and `bee doctor` (now ported) plus
