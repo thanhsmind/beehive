@@ -72,9 +72,32 @@ use std::time::Instant;
 /// sweep never writes across a store boundary — left untouched with the
 /// cell id and its worktree named on stderr and in a decision row when it is
 /// not. Either way, one best-effort decision row per removal.
-pub(crate) fn sweep_expired_claims(control: &Path, now: f64, caller_session: Option<&str>) -> MR<()> {
+///
+/// The three sets a caller needs to report what the sweep did (srd-1,
+/// sweep-recovery-door): `released` is every cell id whose claim file was
+/// actually removed, regardless of what the claimed->blocked verdict then
+/// found; `parked` is the subset the verdict reset to `blocked` (D4,
+/// `SweepResetOutcome::Blocked`); `unreachable` is the subset whose cell
+/// record could not be read in this store (D5, `SweepResetOutcome::
+/// Unreachable`). A `released` id absent from both `parked` and
+/// `unreachable` was left untouched by the verdict — a fresher claim already
+/// owned the cell (`SweepResetOutcome::Untouched`) — exactly as before this
+/// cell, silently and without a decision row.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub(crate) struct SweepSummary {
+    pub(crate) released: std::collections::BTreeSet<String>,
+    pub(crate) parked: std::collections::BTreeSet<String>,
+    pub(crate) unreachable: std::collections::BTreeSet<String>,
+}
+
+pub(crate) fn sweep_expired_claims(
+    control: &Path,
+    now: f64,
+    caller_session: Option<&str>,
+) -> MR<SweepSummary> {
+    let mut summary = SweepSummary::default();
     let dir = claims_dir(control);
-    let Ok(entries) = std::fs::read_dir(&dir) else { return Ok(()) };
+    let Ok(entries) = std::fs::read_dir(&dir) else { return Ok(summary) };
     let mut names: Vec<String> = Vec::new();
     for entry in entries.flatten() {
         names.push(entry.file_name().to_string_lossy().into_owned());
@@ -128,6 +151,7 @@ pub(crate) fn sweep_expired_claims(control: &Path, now: f64, caller_session: Opt
         release_gate(control, cell);
         gated?;
         let Some(swept) = swept_claim else { continue };
+        summary.released.insert(cell.to_string());
         let swept_session = nullish(swept.get("session"));
         let owner_disp = owner_display(&swept_session);
         // Best-effort below: the claim file above is already gone either
@@ -135,6 +159,7 @@ pub(crate) fn sweep_expired_claims(control: &Path, now: f64, caller_session: Opt
         // sweep itself having failed.
         match sweep_reset_cell(control, cell, &swept, now)? {
             SweepResetOutcome::Blocked => {
+                summary.parked.insert(cell.to_string());
                 let _ = log_decision(
                     control,
                     &format!(
@@ -145,6 +170,7 @@ pub(crate) fn sweep_expired_claims(control: &Path, now: f64, caller_session: Opt
                 );
             }
             SweepResetOutcome::Unreachable => {
+                summary.unreachable.insert(cell.to_string());
                 let worktree = worktree_clause(control, &swept);
                 eprintln!(
                     "sweep: cell \"{cell}\"'s claim was removed, but its cell record is not readable in this store — its half-finished work, if any, may be at {worktree}. Run \"bee cells reopen\" from a session that can reach it, once its store is reachable."
@@ -161,7 +187,7 @@ pub(crate) fn sweep_expired_claims(control: &Path, now: f64, caller_session: Opt
             SweepResetOutcome::Untouched => {} // status/claim_session mismatch — a fresher claim already owns it, silently
         }
     }
-    Ok(())
+    Ok(summary)
 }
 
 /// `claim.session ?? null` rendered for a decision row or a blocked reason:

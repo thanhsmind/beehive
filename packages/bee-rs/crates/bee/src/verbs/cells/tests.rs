@@ -2094,6 +2094,70 @@ use std::time::Instant;
         assert_eq!(rows2.lines().filter(|l| !l.trim().is_empty()).count(), 1);
     }
 
+    /// srd-1 (sweep-recovery-door): the summary `sweep_expired_claims`
+    /// returns must agree with the decision rows it logs for the same run —
+    /// `released` is every claim actually removed (including the Untouched
+    /// one, which logs no row at all), `parked` is exactly the Blocked ids,
+    /// and `unreachable` is exactly the Unreachable ids.
+    #[test]
+    fn sweep_summary_sets_agree_with_the_decision_rows_it_writes() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+
+        // (a) parked: expired claim, dead owner, cell still claimed BY THAT
+        // SESSION -> SweepResetOutcome::Blocked.
+        write_cell_fixture(
+            root,
+            "a1",
+            &json!({"id":"a1","status":"claimed","feature":"f","trace":{"worker":"w","claim_session":"dead"}}),
+        );
+        write_claim_fixture(root, "a1", Some("dead"), 60.0, OLD);
+        write_session_fixture(root, "dead", OLD, None);
+
+        // (b) released but untouched: expired claim, cell RE-claimed by
+        // another session -> SweepResetOutcome::Untouched, no decision row.
+        write_cell_fixture(
+            root,
+            "b1",
+            &json!({"id":"b1","status":"claimed","feature":"f","trace":{"worker":"w2","claim_session":"someone-else"}}),
+        );
+        write_claim_fixture(root, "b1", Some("dead"), 60.0, OLD);
+
+        // (c) unreachable: no cell fixture in this store at all.
+        write_claim_fixture_ws(root, "far-1", Some("dead"), 60.0, OLD, Some("wt-far"));
+        write_workspace_fixture(root, "wt-far", "/repos/wt-far");
+
+        let summary = sweep_expired_claims(root, now, None).ok().unwrap();
+
+        let expect_released: std::collections::BTreeSet<String> =
+            ["a1", "b1", "far-1"].iter().map(|s| s.to_string()).collect();
+        let expect_parked: std::collections::BTreeSet<String> =
+            ["a1"].iter().map(|s| s.to_string()).collect();
+        let expect_unreachable: std::collections::BTreeSet<String> =
+            ["far-1"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(summary.released, expect_released, "released: every claim actually removed");
+        assert_eq!(summary.parked, expect_parked, "parked: exactly the Blocked ids");
+        assert_eq!(summary.unreachable, expect_unreachable, "unreachable: exactly the Unreachable ids");
+
+        let rows = std::fs::read_to_string(decisions_path(root)).unwrap();
+        let lines: Vec<&str> = rows.lines().filter(|l| !l.trim().is_empty()).collect();
+        // Untouched (b1) logs no row at all; only the parked and unreachable
+        // ids each get exactly one decision row.
+        assert_eq!(lines.len(), summary.parked.len() + summary.unreachable.len());
+        assert!(!rows.contains("b1"), "b1 is released but untouched — no decision row: {rows}");
+        for id in &summary.parked {
+            assert!(
+                rows.contains(&format!("cell \\\"{id}\\\" reset claimed -> blocked")),
+                "parked id {id} must have a Blocked decision row: {rows}"
+            );
+        }
+        for id in &summary.unreachable {
+            assert!(rows.contains(id.as_str()), "unreachable id {id} must be named in a decision row: {rows}");
+            assert!(rows.contains("not readable in this store"), "{rows}");
+        }
+    }
+
     #[test]
     fn sweep_of_a_sessionless_claim_names_none_in_its_decision_row() {
         let tmp = cn_root();
