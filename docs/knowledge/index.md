@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 102 concept(s)
-- [patterns/](patterns/index.md) — 104 concept(s)
+- [patterns/](patterns/index.md) — 105 concept(s)
 - [work/](work/index.md) — 4 concept(s)
 
 ## Critical patterns
@@ -52,3 +52,4 @@ never a generation timestamp or any other wall-clock value.
 - [Fix the fan-out, not the one cell of it that was reported](patterns/20260807-fix-the-fan-out-not-the-cell-of-it-that-was-reported.md) — A rule stated over a grid gets patched one cell at a time: three fixes to one dispatch-label rule each touched a single runtime-kind-transport combination, and the untouched combinations never failed — they resurfaced weeks later as a screenshot.
 - [A guard and its tests are one model, so green proves only that the model agrees with itself](patterns/20260812-a-guard-and-its-tests-are-one-model-so-green-proves-only-that-the-model-agrees-with-itself.md) — Three consecutive fixes to two guards each shipped with a full green suite and each was wrong, because the author's fixture encoded the same assumption as the guard; every one was found by an independent read against the live store's real shape distribution, never by the suite.
 - [A refusal from one verb of a family does not speak for the verb the contract rests on](patterns/20260813-a-refusal-from-one-verb-of-a-family-does-not-speak-for-the-verb-the-contract-rests-on.md) — Four sibling verbs refused from a granted worktree, so the fifth was assumed to refuse too — and on that assumption a user-authored decision was superseded, a grant was dropped, and a defect was filed for a problem the dropped grant created. The one verb the worker contract actually depends on had been widened nine days earlier, and testing it would have cost one command.
+- [A drifted phase record is caught by the guard that counts things, never by the guard that reads state](patterns/20260814-a-phase-record-that-drifts-is-caught-by-the-guard-that-counts-things-not-the-one-that-reads-state.md) — A feature executed three cells, capped and merged them all while its phase record still said planning. Nothing that reads the phase objected — not the write guard, not dispatch, not the cells themselves. The close door caught it, because that door counts uncaptured behavior-change cells instead of asking the record what happened.
