@@ -1,0 +1,150 @@
+{
+  "id": "sad-2",
+  "feature": "sweep-at-every-door",
+  "title": "Add bee orient as the second sweep call site",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "sad-1"
+  ],
+  "decisions": [
+    "D1",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/sweep-at-every-door/CONTEXT.md",
+    "docs/history/sweep-at-every-door/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/recovery.rs"
+  ],
+  "action": "Call the sad-1 sweep from bee orient, and only from bee orient (per D1). One run() body serves both verbs (orient.rs:454-459 branches Verb::Status and Verb::Orient), so the call must sit inside the Verb::Orient branch and before the report is rendered at orient.rs:497 - attaching at :499, where record_timing sits, would make bee status sweep and would print the report from pre-sweep state. Resolve the caller session with resolve_session_flag_env (claims.rs:627-634, env BEE_SESSION_ID then CLAUDE_CODE_SESSION_ID) and then resolve_session_adopt (claims.rs:638-652); per D6, when both fail, report the count of expired claims detected and write nothing at all - resolve_session_adopt returns None exactly when several live sessions exist, which is the case this feature targets, and sweeping anonymously there would defeat sad-1's exclusion. Follow the prior art at status_full/recovery.rs:270-283, where detect_crash_candidates already excludes the current session by env id. Bridge the error types rather than unifying them: cells uses MR<T> = Result<T, Fail> (cells/util.rs:36) and status_full uses R<T> = Result<T, Ex> (status_full/mod.rs:157). orient's arg routing is a closed six-shape match at orient.rs:441-449 and gains no new shape - no --session-id flag. Finally correct the orient entry in src/generated/registry_payload.json, whose description still calls orient a 'Read-only session-start context packet' while it now sweeps; the payload is compiled in via include_str! (registry.rs:3-13) and renders --help, no regen chain covers it (bee dev regen is render-skill-trees, onboard --apply, release-manifest --write per router.rs:90-92), and src/generated is write-guarded at hooks/write_guard/guards.rs:216 - follow the remedy the guard's own denial names, never disable the guard. Note that orient already writes today (record_timing appends .bee/logs/timings.jsonl, verbs/mod.rs:99-107), so this is not the first write on the path. Judge existing coverage in status_full/tests.rs first; a binary-level test under packages/bee-rs/crates/bee/tests/ is the right home for an end-to-end orient invocation because orient::run reads std::env::current_dir() at orient.rs:455.",
+  "must_haves": {
+    "truths": [
+      "bee orient and bee orient --json sweep an expired claim whose owning session is heartbeat-stale",
+      "bee orient leaves a claim untouched when its owning session heartbeat is fresh",
+      "bee orient writes nothing and reports the detected expired-claim count when it cannot resolve its own caller session",
+      "bee status and bee status --lanes-full release nothing",
+      "the orient entry in registry_payload.json no longer describes the command as read-only"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "substantive": "the Verb::Orient branch resolves a caller session and calls the sweep before rendering; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "substantive": "tests pinning that orient sweeps, that status does not, and that an unresolvable caller declines"
+      }
+    ],
+    "key_links": [
+      "the Verb::Orient branch in orient.rs calls sweep_expired_claims with the resolved caller session",
+      "registry_payload.json's orient description matches the shipped behavior"
+    ],
+    "prohibitions": [
+      "bee status must not sweep",
+      "No --session-id flag added to orient",
+      "No change to orient's accepted arg shapes at orient.rs:441-449",
+      "The write guard on src/generated is never disabled"
+    ]
+  },
+  "trace": {
+    "worker": "sad2",
+    "outcome": "bee orient now sweeps expired claims (D1/D6), self-excluding its own caller and declining when unresolvable; registry text corrected",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-13T14:27:10.277Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f4158037-da59-46aa-a355-3acf7820af24",
+    "claimed_at": "2026-08-13T14:05:49.611Z",
+    "commit_pending": "cell \"sad-2\" refused — one commit per cell: no commit in the last 50 commit(s) of /home/thanhsmind/projects/goglbe/beehive carries the trailer \"cell: sad-2\" — this worktree is intentionally ungranted, so the finish-time commit-trailer scan cannot see commit 9081bf90 on wt/sweep-at-every-door; expected per the dispatch instructions.",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-13T14:26:49.582Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "orient_sweeps_an_expired_claim_whose_owner_is_heartbeat_stale (packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs:1231-1258) asserts the claim file is gone, the cell is blocked, and claimed count is 0 in the same packet; both orient shapes run one body at orient.rs:578-582, --json only changes rendering at :592-596"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "orient_leaves_a_claim_untouched_when_its_owner_heartbeat_is_fresh (packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs:1263-1283) asserts .bee/claims/c1.json still exists and the cell stays claimed"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "orient_declines_and_reports_the_count_when_its_caller_session_is_unresolvable (packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs:1289-1317) asserts the claim survives and the blocker line contains sweep declined and 1 expired claim; the decline path calls only the read-only count_expired_claims at orient.rs:262-271"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "status_never_sweeps_an_expired_claim (packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs:1322-1342) runs build_status with lanes_full false and true and asserts the expired claim file survives; run() serves Verb::Status from build_status alone at orient.rs:573-577"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "registry_payload.json orient description now reads Session-start context packet ... plus ONE write of its own (sweep-at-every-door D1/D6); the only remaining read-only phrase describes bee status, verified by parsing packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+          },
+          {
+            "id": "p1",
+            "status": "PASS",
+            "evidence": "the sweep is reachable only through sweep_on_orient called from build_orient (orient.rs:279), and build_orient has exactly one production caller, the Verb::Orient arm at orient.rs:579 (rg build_orient over src and tests); pinned by tests.rs:1322-1342"
+          },
+          {
+            "id": "p2",
+            "status": "PASS",
+            "evidence": "orient.rs:540-547 still matches the same six shapes with no session-id token; sweep_on_orient passes None to resolve_session_flag_env at orient.rs:259"
+          },
+          {
+            "id": "p3",
+            "status": "PASS",
+            "evidence": "git show 9081bf90 -- orient.rs contains no hunk touching the arg match; the six shapes at orient.rs:540-547 are unchanged (only shifted by the +98 lines added above them)"
+          },
+          {
+            "id": "p4",
+            "status": "PASS",
+            "evidence": "git diff --name-only ebc6f8cf..HEAD -- .bee .claude hooks write_guard returns nothing: no guard code, hook config, or bee config was touched while registry_payload.json changed"
+          },
+          {
+            "id": "dev-a",
+            "status": "PASS",
+            "evidence": "acceptable: build_orient is reached only from the Verb::Orient arm (orient.rs:579) and sweep_on_orient runs before build_status (orient.rs:279), so both intents hold - status does not sweep (tests.rs:1322) and the packet shows post-sweep counts (tests.rs:1253-1257)"
+          },
+          {
+            "id": "dev-b",
+            "status": "PASS",
+            "evidence": "acceptable: bee recovery scan is unbuilt this slice (CONTEXT D3, slice 2), while the substituted remedy exists and does sweep - claim-next accepts --session-id at handlers_select.rs:575,579 and calls sweep_expired_claims at :620; D6 requires only the count and no write, which tests.rs:1304-1316 pins"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "authority",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-13T14:35:02.910Z"
+      }
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"
+}
