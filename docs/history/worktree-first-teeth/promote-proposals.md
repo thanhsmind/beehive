@@ -12,8 +12,9 @@ timestamp: 2026-08-12
 bee:
   id: worktree-first-teeth-delivery
   lifecycle: active
+  areas: [worktree-parallelism]
   required_context: [docs/history/worktree-first-teeth/plan.md]
-  sources: [docs/history/worktree-first-teeth/plan.md, .bee/cells/wtf-1.json, .bee/cells/wtf-2.json, .bee/cells/wtf-3.json, .bee/cells/wtf-4.json]
+  sources: [docs/history/worktree-first-teeth/plan.md, .bee/cells/archive/worktree-first-teeth/wtf-1.json, .bee/cells/archive/worktree-first-teeth/wtf-2.json, .bee/cells/archive/worktree-first-teeth/wtf-3.json, .bee/cells/archive/worktree-first-teeth/wtf-4.json]
 ---
 
 # worktree-first-teeth — Delivery
@@ -44,7 +45,10 @@ Proposed by `bee knowledge promote --work worktree-first-teeth` from 4 capped ce
 
 (b) AREA UPDATES — candidate spec-sync bullets, each citing its cell
 
-None: the work item declares no bee.areas, so there is no area to sync (D19).
+areas: from the scribing stamp for "worktree-first-teeth" — .bee/logs/scribing-runs.jsonl's most recent entry (2026-08-12T10:49:17.949Z), the work item declares no bee.areas.
+
+area worktree-parallelism:
+  (no capped behavior_change cell exists for this feature)
 
 (c) PATTERN CANDIDATES — candidate bee.pattern concepts, bee.polarity pitfall
 

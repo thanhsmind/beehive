@@ -1,0 +1,135 @@
+{
+  "id": "sad-1",
+  "feature": "sweep-at-every-door",
+  "title": "Make the claim sweep caller-aware, store-safe, and blocked-verdict",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/sweep-at-every-door/CONTEXT.md",
+    "docs/history/sweep-at-every-door/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workspace_store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+  ],
+  "action": "Give sweep_expired_claims (handlers_select.rs:62) a caller-session parameter and skip every claim whose own session field equals it, applying the exclusion before the .adopting gate is acquired - the existing heartbeat-then-gate order is pinned by tests.rs:2266-2271 and must survive. Update the single production caller at handlers_select.rs:519 to pass the session it already resolved at :517. Then change sweep_reset_cell (handlers_select.rs:174) from the claimed->open reset to the claimed->blocked verdict (per D4): write status blocked and write the reason at trace.blocked_reason, the same key bee cells block writes (handlers_close.rs:782) and bee cells reopen clears (handlers_close.rs:914) - a top-level key would be invisible to reopen and to feedback.rs:1045. The reason names the dead session id and the worktree path, resolved from the claim's optional workspace_id (claims.rs:692-711) through workspace_store.rs:16,174 to its root; when the claim carries no workspace_id or the workspace record is missing, the reason states that explicitly instead of omitting the clause, and a sessionless claim keeps the existing 'none (sessionless)' spelling pinned at tests.rs:2084. Per D5 the sweep never writes across a store boundary: it always removes the qualifying claim, but it parks the cell only when the cell record is readable in the sweeping process's own store - when it is not, write no cell anywhere and name the cell id and the holding worktree in both the command output and the decision row. Rewrite the decision-row rationale at handlers_select.rs:120-127, whose tail still reads 'returned to open rather than left claimed-but-unclaimable forever', so it states the blocked verdict. Judge existing coverage first: verbs/cells/tests.rs already holds sweep_resets_only_the_claim_it_actually_removed (:2004), sweep_of_a_sessionless_claim_names_none_in_its_decision_row (:2084) and sweep_skips_a_gated_claim_and_leaks_no_gate_file (:2219); three of them assert the claimed->open outcome (:2053, :2098, :2260) plus the decision text at :2074, and four call sites (:2041, :2078, :2094, :2248) need the new signature. Author only the gap: self-exclusion, the unreachable-cell path, the missing-workspace reason, and the boundary cases in the plan's test matrix rows 1, 3, 5, 6, 8, 9. Correct the stale claimed->open doc comments at verbs/cells/mod.rs:43-44 and handlers_select.rs:34, :60, :170.",
+  "must_haves": {
+    "truths": [
+      "A claim owned by the calling session is never swept, even when its TTL is expired and its heartbeat is stale",
+      "A swept cell readable in the sweeper's own store becomes status blocked with trace.blocked_reason naming the dead session and the worktree path",
+      "A swept claim whose cell is not readable in the sweeper's own store still has its claim removed, has no cell record written in any store, and has its cell id and holding worktree named in the output and the decision row",
+      "A claim whose TTL is expired but whose owning session heartbeat is fresh is not swept, and the reverse is also not swept",
+      "bee cells reopen clears a blocked_reason written by the sweep"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+        "substantive": "sweep_expired_claims takes a caller session and excludes it; sweep_reset_cell writes the blocked verdict with trace.blocked_reason and skips unreachable cells; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "substantive": "existing sweep tests updated to the blocked verdict plus new cases for self-exclusion, the unreachable-cell path, and the missing-workspace reason"
+      }
+    ],
+    "key_links": [
+      "handlers_select.rs:519 passes the session resolved at :517 into sweep_expired_claims",
+      "the blocked reason is written at trace.blocked_reason, the key handlers_close.rs:914 clears"
+    ],
+    "prohibitions": [
+      "No write outside the sweeping process's own store",
+      "No change to src/lock.rs",
+      "No change to the claim fence-epoch mechanism in claims.rs:339-393",
+      "No new bee orient call site in this cell - that is sad-2"
+    ]
+  },
+  "trace": {
+    "worker": "sad1",
+    "outcome": "sweep is now caller-aware (D6 self-exclusion), writes the D4 blocked verdict with trace.blocked_reason, and never crosses the store boundary (D5)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-13T14:04:45.623Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f4158037-da59-46aa-a355-3acf7820af24",
+    "claimed_at": "2026-08-13T13:37:47.412Z",
+    "commit_pending": "commit 74b8cc6c on this worktree's own branch carries the 'cell: sad-1' trailer, but the main checkout's .bee/runtime/worktree-grants.json is empty ({}), so commit_trailer_history_root falls back to scanning main's HEAD instead of this granted worktree's HEAD and never sees it",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-13T14:04:26.462Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "sweep_never_takes_the_calling_sessions_own_claim (packages/bee-rs/crates/bee/src/verbs/cells/tests.rs:2174-2197) gives the calling session a claim with expired TTL AND stale heartbeat and asserts the claim file survives; the exclusion runs before every other gate at handlers_select.rs:85-90"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs:2057,2074-2082 assert cell a1 becomes blocked with trace.blocked_reason naming session dead; the reason is built from owner_display + worktree_clause at handlers_select.rs:307-315, whose resolved-worktree branch is proven at tests.rs:2286,2298"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "sweep_of_an_unreachable_cell_removes_the_claim_writes_no_cell_and_names_the_worktree (packages/bee-rs/crates/bee/src/verbs/cells/tests.rs:2279-2300) asserts claim removed, no cells/far-1.json written, decision row contains far-1 and /repos/wt-far; the stderr half is unconditional at handlers_select.rs:147-160"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs:2050-2051 assert c1 (TTL expired, owner heartbeat fresh) and d1 (TTL alive, owner heartbeat stale) both keep their claim files after the sweep"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "reopen_clears_the_blocked_reason_the_sweep_wrote (packages/bee-rs/crates/bee/src/verbs/cells/tests.rs:2368-2404) sweeps, then spawns the real run_reopen CLI door and asserts trace.blocked_reason is null"
+          },
+          {
+            "id": "p1",
+            "status": "PASS",
+            "evidence": "sweep_reset_cell reads and writes the identical path cells_dir(control)/<cell>.json (handlers_select.rs:273 and :317) and returns Unreachable with no write at :276; no other store root is written anywhere in the diff"
+          },
+          {
+            "id": "p2",
+            "status": "PASS",
+            "evidence": "git diff --stat ebc6f8cf..HEAD lists 6 files and none is packages/bee-rs/crates/bee/src/lock.rs"
+          },
+          {
+            "id": "p3",
+            "status": "PASS",
+            "evidence": "git diff --stat ebc6f8cf..HEAD lists no verbs/cells/claims.rs, so the fence-epoch mechanism at claims.rs:339-393 is unchanged"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "authority",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-13T14:34:58.131Z"
+      }
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"
+}
