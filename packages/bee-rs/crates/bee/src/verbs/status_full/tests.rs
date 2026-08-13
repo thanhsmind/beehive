@@ -17,6 +17,7 @@ use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -1314,6 +1315,10 @@ use crate::version::BEE_VERSION;
         let line = blockers[0].as_str().unwrap();
         assert!(line.contains("sweep declined"), "{line}");
         assert!(line.contains("1 expired claim"), "{line}");
+        // D6 repoint (sweep-recovery-door srd-3): the decline names the
+        // command that now runs, not the pre-recovery-scan `claim-next` text.
+        assert!(line.contains("bee recovery scan"), "{line}");
+        assert!(!line.contains("claim-next"), "{line}");
     }
 
     /// D1: `bee status` (and `--lanes-full`, the same `build_status` body
@@ -1339,6 +1344,268 @@ use crate::version::BEE_VERSION;
             "bee status must never sweep an expired claim"
         );
         assert_eq!(read_cell_status(root, "s1"), "claimed");
+    }
+
+    // ── `bee recovery scan` — the releasing door (sweep-recovery-door srd-2) ─
+    //
+    // `recovery_verb::run_scan` is exercised directly against a `Ctx`, the
+    // same discipline the sweep-door tests just above use for
+    // `sweep_on_orient` — no process-cwd mutation (unsafe under a parallel
+    // `cargo test`, `finish_support.rs`'s own note).
+
+    fn read_session_record(root: &Path, id: &str) -> Value {
+        let raw =
+            std::fs::read_to_string(root.join(".bee").join("sessions").join(format!("{id}.json")))
+                .unwrap();
+        serde_json::from_str(&raw).unwrap()
+    }
+
+    /// D6/R98: neither `BEE_SESSION_ID`/`CLAUDE_CODE_SESSION_ID` nor the
+    /// durable single-live-session fallback resolves — the door declines,
+    /// reports the counts it observed, and writes nothing at all: the
+    /// expired claim stays claimed, and the heartbeat-stale session record
+    /// it would have marked stays exactly as found.
+    #[test]
+    fn recovery_scan_declines_and_writes_nothing_when_its_caller_session_is_unresolvable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write_claimed_cell(root, "d1", "dead");
+        write_claim_fixture(root, "d1", Some("dead"), 60.0, SWEEP_OLD);
+        // The only session record on disk is itself stale, so the durable
+        // single-live-session fallback also finds nothing to adopt.
+        write_session_fixture(root, "dead", SWEEP_OLD);
+
+        let outcome =
+            with_session_env(None, None, || recovery_verb::run_scan(&mut ctx_for(root)).unwrap());
+
+        match outcome {
+            recovery_verb::ScanOutcome::Declined { expired_claims, stale_sessions } => {
+                assert_eq!(expired_claims, 1);
+                assert_eq!(stale_sessions, 1);
+            }
+            recovery_verb::ScanOutcome::Ran { .. } => panic!("expected a decline"),
+        }
+        assert!(
+            root.join(".bee/claims/d1.json").exists(),
+            "D6: no caller resolved -> the claim is left exactly as found"
+        );
+        assert_eq!(read_cell_status(root, "d1"), "claimed");
+        let record = read_session_record(root, "dead");
+        assert!(record.get("status").is_none(), "nothing marked either: {record:?}");
+        assert!(record.get("dead_at").is_none());
+    }
+
+    /// The three passes run and report as three DISTINCT sets (plan.md
+    /// "Approach"): RELEASE + MARK apply to every heartbeat-stale, TTL-
+    /// expired claim regardless of transcript shape (Discovery 1); REPORT
+    /// applies the clean-end-trio filter on top, so a cleanly-ended session
+    /// is released and marked but never a reported candidate. A session
+    /// that died holding no claim (D9) is still marked, never released.
+    #[test]
+    fn recovery_scan_runs_three_independent_passes_release_mark_and_report() {
+        // No outer `session_env_lock()` here — `with_session_env` below
+        // acquires that same (non-reentrant) mutex itself.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let now = now_ms();
+
+        // The caller: a fresh heartbeat, so `resolve_session_adopt` finds
+        // exactly one live record and adopts it.
+        write_session_fixture(root, "caller-x", &to_iso(now));
+
+        // dead1: a genuine crash — dirty (mid-turn) transcript tail, a
+        // non-terminal lane (an independent work signal, so REPORT still
+        // fires once RELEASE has already freed dead1's claim), an expired
+        // claim.
+        let dirty_transcript = root.join("transcripts").join("dead1.jsonl");
+        write_jsonl_file(&dirty_transcript, &dirty_end_events(now - 500_000.0));
+        write_session_record(
+            root,
+            "dead1",
+            &to_iso(now - 2_000_000.0),
+            &to_iso(now - 1_000_000.0),
+            Some("lane-1"),
+            Some(&dirty_transcript.to_string_lossy()),
+        );
+        write_lane_record(root, "lane-1", "swarming");
+        write_claim_fixture(root, "cell-dead1", Some("dead1"), 60.0, SWEEP_OLD);
+        write_claimed_cell(root, "cell-dead1", "dead1");
+
+        // dead2: cleanly ended (the stop/turn/last-prompt trio) — released
+        // and marked exactly like dead1, but MUST NOT be a reported
+        // candidate (Discovery 1: the trio check gates the report, never
+        // the release or mark criteria).
+        let clean_transcript = root.join("transcripts").join("dead2.jsonl");
+        write_jsonl_file(&clean_transcript, &clean_end_events(now - 500_000.0));
+        write_session_record(
+            root,
+            "dead2",
+            &to_iso(now - 2_000_000.0),
+            &to_iso(now - 1_000_000.0),
+            None,
+            Some(&clean_transcript.to_string_lossy()),
+        );
+        write_claim_fixture(root, "cell-dead2", Some("dead2"), 60.0, SWEEP_OLD);
+        write_claimed_cell(root, "cell-dead2", "dead2");
+
+        // dead3: died holding no claim at all (D9) — MARKED, never
+        // RELEASED or PARKED (there is nothing to release), and never a
+        // candidate (no transcript resolves for it).
+        write_session_fixture(root, "dead3", SWEEP_OLD);
+
+        let outcome =
+            with_session_env(None, None, || recovery_verb::run_scan(&mut ctx_for(root)).unwrap());
+
+        let (caller, released, parked, unreachable, marked_dead, candidates, candidates_degraded) =
+            match outcome {
+                recovery_verb::ScanOutcome::Ran {
+                    caller,
+                    released,
+                    parked,
+                    unreachable,
+                    marked_dead,
+                    candidates,
+                    candidates_degraded,
+                } => (caller, released, parked, unreachable, marked_dead, candidates, candidates_degraded),
+                recovery_verb::ScanOutcome::Declined { .. } => panic!("expected a run, not a decline"),
+            };
+
+        assert_eq!(caller, "caller-x");
+        let both: BTreeSet<String> =
+            ["cell-dead1".to_string(), "cell-dead2".to_string()].into_iter().collect();
+        assert_eq!(released, both, "RELEASE: every expired, heartbeat-stale claim, trio or not");
+        assert_eq!(parked, both, "both cells were still `claimed` in this store -> D4 blocked");
+        assert!(unreachable.is_empty());
+        let all_three: BTreeSet<String> =
+            ["dead1".to_string(), "dead2".to_string(), "dead3".to_string()].into_iter().collect();
+        assert_eq!(marked_dead, all_three, "MARK: independent of the claim pass (D9) — dead3 too");
+        assert!(!candidates_degraded);
+        assert_eq!(candidates.len(), 1, "REPORT: dead2's clean end excludes it — {candidates:?}");
+        assert_eq!(vget(&candidates[0], "session_id"), Some(&json!("dead1")));
+
+        // On-disk: claims gone, cells parked, sessions marked with dead_at,
+        // the caller's own record untouched.
+        assert!(!root.join(".bee/claims/cell-dead1.json").exists());
+        assert!(!root.join(".bee/claims/cell-dead2.json").exists());
+        assert_eq!(read_cell_status(root, "cell-dead1"), "blocked");
+        assert_eq!(read_cell_status(root, "cell-dead2"), "blocked");
+        for id in ["dead1", "dead2", "dead3"] {
+            let record = read_session_record(root, id);
+            assert_eq!(record.get("status"), Some(&json!("dead")), "{id}: {record:?}");
+            assert!(record.get("dead_at").is_some(), "{id}: {record:?}");
+        }
+        let caller_record = read_session_record(root, "caller-x");
+        assert!(caller_record.get("status").is_none(), "the caller's own record is untouched");
+    }
+
+    /// Authorization (R97's own rationale, applied to D9): `recovery scan`
+    /// never releases its own caller's claim and never marks its own
+    /// session dead — even when that caller resolved by explicit id
+    /// (`--session-id`/env) rather than the durable single-fresh-session
+    /// adopt, and even when its own record already reads heartbeat-stale
+    /// (a live session mid one long tool call emits no heartbeat while it
+    /// runs, R97's own scenario).
+    #[test]
+    fn recovery_scan_never_releases_or_marks_its_own_caller() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write_claimed_cell(root, "own-cell", "caller-y");
+        write_claim_fixture(root, "own-cell", Some("caller-y"), 60.0, SWEEP_OLD);
+        write_session_fixture(root, "caller-y", SWEEP_OLD);
+
+        let outcome = with_session_env(Some("caller-y"), None, || {
+            recovery_verb::run_scan(&mut ctx_for(root)).unwrap()
+        });
+
+        match outcome {
+            recovery_verb::ScanOutcome::Ran { caller, released, marked_dead, .. } => {
+                assert_eq!(caller, "caller-y");
+                assert!(released.is_empty(), "R97: never releases its own caller's claim");
+                assert!(marked_dead.is_empty(), "never marks its own caller's session dead");
+            }
+            recovery_verb::ScanOutcome::Declined { .. } => panic!("caller-y resolved by env"),
+        }
+        assert!(root.join(".bee/claims/own-cell.json").exists());
+        assert_eq!(read_cell_status(root, "own-cell"), "claimed");
+        let record = read_session_record(root, "caller-y");
+        assert!(record.get("status").is_none());
+    }
+
+    /// The mark-pass race (plan.md's own proof requirement): a session read
+    /// heartbeat-stale BEFORE the `sessions` lock is acquired, but whose
+    /// heartbeat lands (a fresh write) WHILE the mark pass is waiting on
+    /// that lock, is NOT marked — staleness is re-judged fresh, under the
+    /// lock, exactly as the claim sweep re-judges under its own gate.
+    #[test]
+    fn mark_pass_does_not_mark_a_session_whose_heartbeat_lands_before_the_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_session_fixture(root, "race1", SWEEP_OLD); // stale — passes the pre-check
+        let control = root.to_path_buf();
+
+        // Hold the exact `sessions` lock the mark pass itself acquires, so
+        // its bounded retry loop is forced to wait out this test's own
+        // window (15 attempts * 20ms = 300ms of budget).
+        let guard = match crate::lock::acquire_store_lock_once(&control, "sessions") {
+            crate::lock::AcquireOnce::Acquired(g) => g,
+            crate::lock::AcquireOnce::Busy { .. } => panic!("test setup: lock already held"),
+        };
+
+        let control2 = control.clone();
+        let handle = std::thread::spawn(move || {
+            recovery_verb::mark_stale_sessions(&control2, now_ms(), "caller-race")
+        });
+
+        // Give the pass time to run its pre-check (outside the lock, so
+        // unaffected by us holding it) and start retrying to acquire —
+        // THEN land the heartbeat while it waits.
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        write_session_fixture(root, "race1", &to_iso(now_ms())); // the race: heartbeat lands
+        drop(guard); // release — the pass's retry now succeeds and re-reads fresh
+
+        let marked = handle.join().unwrap().unwrap();
+        assert!(
+            !marked.contains("race1"),
+            "a heartbeat that lands before the lock must not be marked"
+        );
+        let record = read_session_record(root, "race1");
+        assert!(record.get("status").is_none(), "record must be untouched: {record:?}");
+    }
+
+    /// `verbs/timings.rs:46-58`'s own argv-matching discipline: exactly the
+    /// two served shapes, everything else — including every `recovery
+    /// window …` shape (D3: stays unbuilt) — falls through to `None` before
+    /// any output, so the catalog's `unavailable` refusal still answers it.
+    /// `registry_dispatch.rs` proves the served shape end to end; this pins
+    /// the local match arm cheaply, with no process spawned.
+    #[test]
+    fn try_native_matches_exactly_the_two_scan_shapes() {
+        let window: Vec<OsString> =
+            vec!["recovery".into(), "window".into(), "--session".into(), "x".into()];
+        let extra: Vec<OsString> = vec!["recovery".into(), "scan".into(), "--extra".into()];
+        let unrelated: Vec<OsString> = vec!["orient".into()];
+
+        // A non-matching argv returns None straight out of the match arm,
+        // before any root resolution or store I/O — safe to call from
+        // whatever directory the test happens to run in, no process-cwd
+        // mutation needed (unsafe under a parallel `cargo test`,
+        // `finish_support.rs`'s own note).
+        let t0 = Instant::now();
+        assert!(
+            recovery_verb::try_native(&window, t0).is_none(),
+            "recovery window falls through — D3 stays unbuilt"
+        );
+        assert!(
+            recovery_verb::try_native(&extra, t0).is_none(),
+            "an unmatched flag shape falls through, never guesses"
+        );
+        assert!(recovery_verb::try_native(&unrelated, t0).is_none());
     }
 
     /// test_recovery.mjs writeCappedCell.

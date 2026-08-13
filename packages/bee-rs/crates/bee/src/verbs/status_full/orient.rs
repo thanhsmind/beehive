@@ -190,8 +190,9 @@ fn capture_queue_blocker_line(ctx: &Ctx, cq: &Value) -> Option<String> {
 
 // ─── sweep door (sweep-at-every-door D1/D6) ────────────────────────────────
 //
-// `bee cells claim-next` (handlers_select.rs:620) is the sweep's ONLY
-// production caller today; D1 adds exactly one more door, `bee orient` —
+// `bee cells claim-next` (handlers_select.rs:620) and `bee orient` (below)
+// were the sweep's only production callers until `bee recovery scan`
+// (`recovery_verb.rs`) became a third (sweep-recovery-door D7/srd-2) —
 // `bee status` stays report-only, no other verb gains one.
 
 /// Bridges `sweep_cells::Fail` (`MR<T> = Result<T, Fail>`) into this module's
@@ -234,9 +235,11 @@ fn count_expired_claims(control: &Path, now: f64) -> sweep_cells::MR<usize> {
     Ok(count)
 }
 
-/// `bee orient`'s sweep door (D1) — the second call site on the existing
-/// sweep, `bee cells claim-next`'s (`handlers_select.rs:620`) being the
-/// first. Resolves orient's OWN caller session exactly the way `claim-next`
+/// `bee orient`'s sweep door (D1) — the second call site added to the
+/// existing sweep, `bee cells claim-next`'s (`handlers_select.rs:620`) being
+/// first; `bee recovery scan` (`recovery_verb.rs`) is now a third
+/// (sweep-recovery-door D7/srd-2). Resolves orient's OWN caller session
+/// exactly the way `claim-next`
 /// does: `resolve_session_flag_env` first (`orient` takes no `--session-id`
 /// flag — `orient.rs`'s six-shape arg match gains none — so the `flag`
 /// argument is always `None`, leaving the `BEE_SESSION_ID` /
@@ -265,7 +268,7 @@ fn sweep_on_orient(ctx: &Ctx) -> R<Option<String>> {
             return Ok(None);
         }
         return Ok(Some(format!(
-            "sweep declined: {count} expired claim(s) detected, but bee orient could not resolve its own caller session (BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID unset, and more than one live session exists to adopt) — pass --session-id to bee cells claim-next (which sweeps too) from an identified session to release them."
+            "sweep declined: {count} expired claim(s) detected, but bee orient could not resolve its own caller session (BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID unset, and more than one live session exists to adopt) — set BEE_SESSION_ID and run bee recovery scan from an identified session to release them."
         )));
     };
     sweep_cells::sweep_expired_claims(&control, now, Some(caller.as_str())).map_err(bridge_sweep_fail)?;

@@ -500,6 +500,13 @@ fn heartbeat_session(ctrl: &Path, sid: &str, now: &DateTime<Utc>) -> Result<(), 
                     return Ok(()); // SESSION_MISSING typed result
                 };
                 session.insert("last_heartbeat".to_string(), Value::String(iso_ms(now)));
+                // D8: a session that renews its heartbeat is no longer dead —
+                // clear the mark and stamp the revival (most recent only).
+                if session.get("status").and_then(Value::as_str) == Some("dead") {
+                    session.remove("status");
+                    session.remove("dead_at");
+                    session.insert("revived_at".to_string(), Value::String(iso_ms(now)));
+                }
                 let file = ctrl.join(".bee").join("sessions").join(format!("{sid}.json"));
                 write_json_atomic_retry(&file, &Value::Object(session))
             })();
@@ -1342,6 +1349,34 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(sessions.join("s1.json")).unwrap()).unwrap();
         assert_eq!(after["id"], json!("s1"));
         assert_eq!(after["lane"], json!("l1")); // untouched fields survive
+        assert_ne!(after["last_heartbeat"], json!("2020-01-01T00:00:00.000Z"));
+    }
+
+    #[test]
+    fn heartbeat_session_clears_dead_mark_and_stamps_revived_at() {
+        // D8: PostToolUse/SubagentStop/Stop heartbeat path clears a dead mark.
+        let tmp = setup_root();
+        let sessions = tmp.path().join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(
+            sessions.join("s1.json"),
+            serde_json::to_string(&json!({
+                "id": "s1",
+                "last_heartbeat": "2020-01-01T00:00:00.000Z",
+                "status": "dead",
+                "dead_at": "2020-01-01T00:05:00.000Z",
+                "lane": "l1"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        heartbeat_session(tmp.path(), "s1", &Utc::now()).unwrap();
+        let after: Value =
+            serde_json::from_str(&std::fs::read_to_string(sessions.join("s1.json")).unwrap()).unwrap();
+        assert_eq!(after["lane"], json!("l1")); // untouched fields survive
+        assert!(after.get("status").is_none(), "{after:?}");
+        assert!(after.get("dead_at").is_none(), "{after:?}");
+        assert!(after["revived_at"].as_str().is_some(), "{after:?}");
         assert_ne!(after["last_heartbeat"], json!("2020-01-01T00:00:00.000Z"));
     }
 

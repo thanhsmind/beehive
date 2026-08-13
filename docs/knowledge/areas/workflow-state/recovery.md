@@ -88,6 +88,25 @@ runtimes' conventions line up (hardening-1-7-10).
   unconfirmed capture stubs that still pass the normal flush, and recovery never
   resumes work or writes a pause record (transcript-recovery D1–D6, 2026-07-20).
 
+- R52 — Detection and reclaim answer different questions and are never fused.
+  Detection asks which sessions are worth investigating, and judges that from
+  transcript shape: a stale-heartbeat session whose transcript ends cleanly, or
+  whose transcript cannot be resolved at all, is not a candidate. Reclaim asks
+  which held work is free to take back, and judges that from claim age and
+  heartbeat age alone, never consulting a transcript. A session that ended
+  cleanly while still holding an expired claim therefore has that claim
+  reclaimed and its record marked, while never appearing among the sessions
+  offered for investigation. Presenting the two as one list would either strand
+  that work forever or invite mining where there is nothing to mine
+  (sweep-recovery-door D3, cell srd-2, 2026-08-14).
+
+- R53 — The recovery command reclaims on every invocation, with no confirming
+  flag. Its criteria are already conservative enough that a qualifying claim is
+  one no live session can still be working, and requiring a second gesture
+  would reintroduce the failure the command exists to remove: work left held
+  because nobody happened to run the thing that frees it (sweep-recovery-door
+  D3, 2026-08-14).
+
 ## Edge Cases Settled
 
 - A stale-heartbeat session whose transcript tail carries the clean-stop

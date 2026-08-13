@@ -49,6 +49,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if let Some(code) = status_full::try_native(args, t0) {
         return Some(code);
     }
+    if let Some(code) = status_full::recovery_verb::try_native(args, t0) {
+        return Some(code);
+    }
     if let Some(code) = cells::try_native(args, t0) {
         return Some(code);
     }

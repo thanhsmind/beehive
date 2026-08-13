@@ -328,6 +328,7 @@ mod topology;
 mod build;
 mod render;
 mod orient;
+pub(crate) mod recovery_verb;
 pub(crate) use self::jsval::*;
 pub(crate) use self::store::*;
 pub(crate) use self::cells::*;
