@@ -211,7 +211,8 @@ and proceeds rather than refusing, so missing history is never punished.
   registration in `packages/bee/hooks/bee-session-init.mjs`; pure kind-branch rendering in
   `lib/inject.mjs` (`handoffOutcome` param); `claimNextCell`/`claimCellCrossSession`
   in `lib/cells.mjs` + `featureBacklogRank` in `lib/backlog.mjs`; CLI
-  `cells.claim-next` (the production `sweepExpiredClaims` trigger); live-owner
+  `cells.claim-next` and `orient` (the two production `sweepExpiredClaims`
+  triggers; `status` shares `orient`'s run body but never sweeps); live-owner
   lane guard in the cross-lane fallback pool (`listSessionRecords` in
   `lib/claims.mjs` + `heartbeatStale` membership check in `claimNextCell`,
   GH #20, trace `.bee/cells/cnlg-1.json`). Evidence:

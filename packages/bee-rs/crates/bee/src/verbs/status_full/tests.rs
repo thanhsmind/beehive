@@ -1132,6 +1132,215 @@ use crate::version::BEE_VERSION;
         assert_eq!(orient_blockers(root), Vec::<String>::new());
     }
 
+    // ── sweep-at-every-door (D1/D6): bee orient's sweep door ────────────────
+    //
+    // `sweep_expired_claims` itself (TTL-expired-AND-heartbeat-stale, the
+    // claimed->blocked verdict, the store-boundary D5 report) is pinned in
+    // `verbs/cells/tests.rs` (`sweep_resets_only_the_claim_it_actually_removed`
+    // et al.) — sad-1. These pin only the DOOR: that `build_orient` calls it
+    // with orient's own resolved caller (self-excluded per D6), that a fresh
+    // heartbeat is left alone, that an unresolvable caller declines and
+    // reports rather than sweeping anonymously, and that `build_status` never
+    // calls it at all.
+
+    const SWEEP_OLD: &str = "2020-01-01T00:00:00.000Z";
+
+    fn write_claim_fixture(root: &Path, cell: &str, session: Option<&str>, ttl: f64, claimed_at: &str) {
+        let mut claim = Map::new();
+        claim.insert("cell".into(), json!(cell));
+        if let Some(s) = session {
+            claim.insert("session".into(), json!(s));
+        }
+        claim.insert("ttl_seconds".into(), json!(ttl));
+        claim.insert("claimed_at".into(), json!(claimed_at));
+        claim.insert("acquired_at".into(), json!(claimed_at));
+        write(
+            root,
+            &format!(".bee/claims/{cell}.json"),
+            &jsjson::stringify_pretty(&Value::Object(claim)),
+        );
+    }
+
+    fn write_session_fixture(root: &Path, id: &str, heartbeat: &str) {
+        write(
+            root,
+            &format!(".bee/sessions/{id}.json"),
+            &json!({"id": id, "started_at": heartbeat, "last_heartbeat": heartbeat}).to_string(),
+        );
+    }
+
+    fn write_claimed_cell(root: &Path, id: &str, session: &str) {
+        write(
+            root,
+            &format!(".bee/cells/{id}.json"),
+            &json!({
+                "id": id, "status": "claimed", "feature": "f",
+                "trace": {"worker": "w", "claim_session": session}
+            })
+            .to_string(),
+        );
+    }
+
+    fn read_cell_status(root: &Path, id: &str) -> String {
+        let raw =
+            std::fs::read_to_string(root.join(".bee").join("cells").join(format!("{id}.json")))
+                .unwrap();
+        let v: Value = serde_json::from_str(&raw).unwrap();
+        v.get("status").and_then(Value::as_str).unwrap().to_string()
+    }
+
+    /// Save/clear both session-id env vars under `session_env_lock`, run
+    /// `f`, then restore — the exact discipline `detect_crash_candidates`'s
+    /// own tests use (`session_env_lock`'s own doc comment), applied here
+    /// because `build_orient` now reads the same two vars too
+    /// (`resolve_session_flag_env`), and the ambient process environment
+    /// (e.g. a live `CLAUDE_CODE_SESSION_ID`) must never leak into what
+    /// these fixtures assert.
+    fn with_session_env<T>(bee: Option<&str>, claude: Option<&str>, f: impl FnOnce() -> T) -> T {
+        let _guard = session_env_lock();
+        let prev_bee = std::env::var_os("BEE_SESSION_ID");
+        let prev_claude = std::env::var_os("CLAUDE_CODE_SESSION_ID");
+        unsafe {
+            match bee {
+                Some(v) => std::env::set_var("BEE_SESSION_ID", v),
+                None => std::env::remove_var("BEE_SESSION_ID"),
+            }
+            match claude {
+                Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+            }
+        }
+        let out = f();
+        unsafe {
+            match prev_bee {
+                Some(v) => std::env::set_var("BEE_SESSION_ID", v),
+                None => std::env::remove_var("BEE_SESSION_ID"),
+            }
+            match prev_claude {
+                Some(v) => std::env::set_var("CLAUDE_CODE_SESSION_ID", v),
+                None => std::env::remove_var("CLAUDE_CODE_SESSION_ID"),
+            }
+        }
+        out
+    }
+
+    /// D1: `bee orient` sweeps an expired claim whose owning session's
+    /// heartbeat is stale — self-excluding its OWN caller (D6) — and the
+    /// verdict already shows up in the SAME orient packet (the door runs
+    /// before `build_status`'s cell counts are read).
+    #[test]
+    fn orient_sweeps_an_expired_claim_whose_owner_is_heartbeat_stale() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write_claimed_cell(root, "a1", "dead");
+        write_claim_fixture(root, "a1", Some("dead"), 60.0, SWEEP_OLD);
+        write_session_fixture(root, "dead", SWEEP_OLD);
+
+        let packet = with_session_env(Some("caller-1"), None, || {
+            build_orient(&mut ctx_for(root)).unwrap()
+        });
+
+        assert!(!root.join(".bee/claims/a1.json").exists(), "the expired, stale claim is swept");
+        assert_eq!(read_cell_status(root, "a1"), "blocked", "D4 verdict");
+        let work = packet.get("work").unwrap();
+        assert_eq!(
+            vget(work, "blockers"),
+            Some(&json!([])),
+            "caller resolved -> no D6 decline blocker"
+        );
+        assert_eq!(
+            vget(work, "cells").and_then(|c| vget(c, "claimed")),
+            Some(&json!(0)),
+            "the swept cell no longer counts as claimed in the SAME packet"
+        );
+    }
+
+    /// D1: a claim whose owning session's heartbeat is fresh is left alone —
+    /// even though its TTL has expired — exactly like `claim-next`'s own
+    /// sweep (`sweep_expired_claims` requires both).
+    #[test]
+    fn orient_leaves_a_claim_untouched_when_its_owner_heartbeat_is_fresh() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write_claimed_cell(root, "c1", "live");
+        write_claim_fixture(root, "c1", Some("live"), 60.0, SWEEP_OLD);
+        let fresh = to_iso(now_ms());
+        write_session_fixture(root, "live", &fresh);
+
+        with_session_env(Some("caller-2"), None, || {
+            build_orient(&mut ctx_for(root)).unwrap();
+        });
+
+        assert!(
+            root.join(".bee/claims/c1.json").exists(),
+            "a fresh-heartbeat owner is never swept"
+        );
+        assert_eq!(read_cell_status(root, "c1"), "claimed");
+    }
+
+    /// D6: when `bee orient` cannot resolve its OWN caller session — no
+    /// `BEE_SESSION_ID`/`CLAUDE_CODE_SESSION_ID`, and no single fresh session
+    /// record for the durable fallback to adopt — it writes nothing at all
+    /// and reports the count of expired claims it declined to touch.
+    #[test]
+    fn orient_declines_and_reports_the_count_when_its_caller_session_is_unresolvable() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write_claimed_cell(root, "u1", "dead");
+        write_claim_fixture(root, "u1", Some("dead"), 60.0, SWEEP_OLD);
+        // The only session record on disk is itself stale, so the durable
+        // single-live-session fallback also finds nothing to adopt.
+        write_session_fixture(root, "dead", SWEEP_OLD);
+
+        let packet =
+            with_session_env(None, None, || build_orient(&mut ctx_for(root)).unwrap());
+
+        assert!(
+            root.join(".bee/claims/u1.json").exists(),
+            "D6: no caller resolved -> the claim is left exactly as found"
+        );
+        assert_eq!(read_cell_status(root, "u1"), "claimed");
+        let blockers = vget(packet.get("work").unwrap(), "blockers")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        assert_eq!(blockers.len(), 1, "{blockers:?}");
+        let line = blockers[0].as_str().unwrap();
+        assert!(line.contains("sweep declined"), "{line}");
+        assert!(line.contains("1 expired claim"), "{line}");
+    }
+
+    /// D1: `bee status` (and `--lanes-full`, the same `build_status` body
+    /// with `lanes_full: true`) stays report-only — it must never reach the
+    /// sweep `bee orient` now calls.
+    #[test]
+    fn status_never_sweeps_an_expired_claim() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write_claimed_cell(root, "s1", "dead");
+        write_claim_fixture(root, "s1", Some("dead"), 60.0, SWEEP_OLD);
+        write_session_fixture(root, "dead", SWEEP_OLD);
+
+        with_session_env(Some("caller-3"), None, || {
+            build_status(&mut ctx_for(root), false).unwrap();
+            build_status(&mut ctx_for(root), true).unwrap();
+        });
+
+        assert!(
+            root.join(".bee/claims/s1.json").exists(),
+            "bee status must never sweep an expired claim"
+        );
+        assert_eq!(read_cell_status(root, "s1"), "claimed");
+    }
+
     /// test_recovery.mjs writeCappedCell.
     fn write_capped_cell(root: &Path, id: &str, feature: &str, capped_at: &str) {
         write(

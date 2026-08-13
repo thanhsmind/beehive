@@ -9,6 +9,14 @@ use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_worktree, LinkedRoots, RootsWt};
 use crate::state::{bypass_level, read_config_raw};
 use crate::textutil::{char_len, truncate_chars_head};
+// Aliased (not `use crate::verbs::cells::*`): `use super::*` above already
+// binds the name `cells` to THIS module's own sibling `status_full::cells`
+// (verbs/status_full/cells.rs) — a different module entirely. sweep-at-
+// every-door's D1/D6 door reuses the crate::verbs::cells sweep functions
+// without unifying the two crates' error types (cells::MR<T> = Result<T,
+// Fail>; status_full::R<T> = Result<T, Ex> just below) — see
+// `bridge_sweep_fail`.
+use crate::verbs::cells as sweep_cells;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::cell::RefCell;
@@ -180,8 +188,95 @@ fn capture_queue_blocker_line(ctx: &Ctx, cq: &Value) -> Option<String> {
     ))
 }
 
+// ─── sweep door (sweep-at-every-door D1/D6) ────────────────────────────────
+//
+// `bee cells claim-next` (handlers_select.rs:620) is the sweep's ONLY
+// production caller today; D1 adds exactly one more door, `bee orient` —
+// `bee status` stays report-only, no other verb gains one.
+
+/// Bridges `sweep_cells::Fail` (`MR<T> = Result<T, Fail>`) into this module's
+/// own `Ex` (`R<T> = Result<T, Ex>`, mod.rs:157) rather than unifying the two
+/// error types. `Ex` carries no message (mod.rs's error-plumbing note: `Bail`
+/// = JS-exotic input, `Thrown` = a caught-or-escaping exception) — both
+/// `Fail::Delegate` (JS-exotic claim/session data) and `Fail::Thrown` (an I/O
+/// failure inside the sweep's own write) become `Ex::Thrown`, the same
+/// "an exception escaped the attempt" outcome `orient_worktree_context`'s
+/// fail-open wrapper already uses for everything unexpected.
+fn bridge_sweep_fail(_: sweep_cells::Fail) -> Ex {
+    Ex::Thrown
+}
+
+/// D6 preview: counts, without removing, the claims `sweep_expired_claims`
+/// would take — TTL expired AND owning session heartbeat-stale — with no
+/// `.adopting` gate ever acquired. Used only on the decline path below, when
+/// `bee orient` cannot resolve its own caller session: it reports what it
+/// would have swept instead of sweeping with no self-exclusion, which would
+/// defeat D6 in exactly the multi-agent case this feature targets.
+fn count_expired_claims(control: &Path, now: f64) -> sweep_cells::MR<usize> {
+    let dir = sweep_cells::claims_dir(control);
+    let Ok(entries) = std::fs::read_dir(&dir) else { return Ok(0) };
+    let mut names: Vec<String> = Vec::new();
+    for entry in entries.flatten() {
+        names.push(entry.file_name().to_string_lossy().into_owned());
+    }
+    let mut count = 0usize;
+    for entry in names {
+        let Some(cell) = entry.strip_suffix(".json") else { continue };
+        let Some(claim) = sweep_cells::read_claim(control, cell)? else { continue };
+        if !sweep_cells::claim_expired(&claim, now)? {
+            continue;
+        }
+        if !sweep_cells::heartbeat_stale(sweep_cells::read_session_of_claim(control, &claim)?.as_ref(), now)? {
+            continue;
+        }
+        count += 1;
+    }
+    Ok(count)
+}
+
+/// `bee orient`'s sweep door (D1) — the second call site on the existing
+/// sweep, `bee cells claim-next`'s (`handlers_select.rs:620`) being the
+/// first. Resolves orient's OWN caller session exactly the way `claim-next`
+/// does: `resolve_session_flag_env` first (`orient` takes no `--session-id`
+/// flag — `orient.rs`'s six-shape arg match gains none — so the `flag`
+/// argument is always `None`, leaving the `BEE_SESSION_ID` /
+/// `CLAUDE_CODE_SESSION_ID` env chain), then the durable single-live-session
+/// fallback `resolve_session_adopt`. The resolved id is passed to
+/// `sweep_expired_claims` as `caller_session`, so orient's own caller's claim
+/// is never swept (D6), no matter how stale its TTL or heartbeat read.
+///
+/// D6: when NEITHER resolves — precisely the multi-agent case
+/// `resolve_session_adopt` returns `None` for by construction — this
+/// declines to sweep at all rather than sweep anonymously, and returns a
+/// blocker line naming the count of claims that qualified, untouched.
+///
+/// Called from `build_orient` BEFORE it reads cell counts (`build_status`),
+/// so a claim this pass frees — and the cell it parks `blocked` — shows up
+/// in the SAME orient packet, not a follow-up call. `bee status` never calls
+/// this function.
+fn sweep_on_orient(ctx: &Ctx) -> R<Option<String>> {
+    let control = sweep_cells::control_root(&ctx.root).map_err(bridge_sweep_fail)?;
+    let now = now_ms();
+    let caller = sweep_cells::resolve_session_flag_env(None)
+        .or_else(|| sweep_cells::resolve_session_adopt(&control).ok().flatten());
+    let Some(caller) = caller else {
+        let count = count_expired_claims(&control, now).map_err(bridge_sweep_fail)?;
+        if count == 0 {
+            return Ok(None);
+        }
+        return Ok(Some(format!(
+            "sweep declined: {count} expired claim(s) detected, but bee orient could not resolve its own caller session (BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID unset, and more than one live session exists to adopt) — pass --session-id to bee cells claim-next (which sweeps too) from an identified session to release them."
+        )));
+    };
+    sweep_cells::sweep_expired_claims(&control, now, Some(caller.as_str())).map_err(bridge_sweep_fail)?;
+    Ok(None)
+}
+
 /// bee.mjs buildOrient.
 pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
+    // D1 (sweep-at-every-door): orient's own sweep door, before anything
+    // below reads cell counts — see `sweep_on_orient`'s header.
+    let sweep_blocker = sweep_on_orient(ctx)?;
     let status = build_status(ctx, false)?;
     let feature = match status.get("feature") {
         None | Some(Value::Null) => Value::Null,
@@ -215,6 +310,9 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
         .map(|c| vget(c, "id").cloned().unwrap_or(Value::Null))
         .collect();
     let mut blockers: Vec<Value> = Vec::new();
+    if let Some(line) = sweep_blocker {
+        blockers.push(json!(line));
+    }
     if opt_truthy(status.get("handoff")) {
         blockers.push(json!("pending handoff — surface it to the user and wait"));
     }
