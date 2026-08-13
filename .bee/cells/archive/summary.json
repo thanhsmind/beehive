@@ -433,5 +433,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-13T15:10:09.992Z"
+  },
+  "sweep-recovery-door": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-13T17:38:55.756Z"
   }
 }
