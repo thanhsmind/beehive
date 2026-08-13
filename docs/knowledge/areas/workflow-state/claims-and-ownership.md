@@ -150,6 +150,44 @@ red.
   unreadable test record warns rather than refuses (hook-teeth D2, cell bh-2,
   2026-08-04).
 
+- R97 — A sweep never reclaims a claim owned by the session performing it, no
+  matter what that claim's lifetime and heartbeat report. Liveness is inferred
+  from heartbeat age alone, and a session busy inside one long operation emits
+  no heartbeat while it runs, so a live owner can read as stale to any concurrent
+  sweep. Excluding the caller removes the one case a sweeper can prove
+  (sweep-at-every-door D6, cell sad-1, 2026-08-13).
+
+- R98 — A caller that cannot establish its own identity does not sweep. It
+  reports how many expired claims it observed and changes nothing. Identity
+  resolution by sole-live-session fails precisely when several sessions are
+  live — the very condition under which R97's exclusion matters most — so an
+  anonymous sweep would drop the protection exactly where it is needed
+  (sweep-at-every-door D6, cell sad-2, 2026-08-13).
+
+- R99 — A reclaimed unit of work is parked, not reopened: it becomes blocked
+  carrying a reason that names the departed owner and the checkout holding its
+  unfinished work. The claim is freed for the coordination layer; the work
+  itself waits for a person, because a session that died mid-work may have left
+  half-written changes that a next worker would silently redo or overwrite. A
+  parked unit holds a feature start and keeps a feature close's archive step
+  waiting until someone reopens or discards it (sweep-at-every-door D4, cell
+  sad-1, 2026-08-13).
+
+- R100 — A sweep rewrites only units of work readable in its own store. The
+  qualifying claim is always removed, but when the claim points at a unit
+  belonging to another store the sweep writes nothing there and names the unit
+  and its holding checkout in both its output and its record of the reclaim.
+  Freeing a claim is a coordination-layer act and always safe; parking a unit is
+  a store-layer act and is only safe where the unit lives (sweep-at-every-door
+  D5, cell sad-1, 2026-08-13).
+
+- R101 — Reclaiming abandoned work has more than one trigger. Picking up
+  cross-session work runs a sweep, and so does the orientation command every
+  session runs when it routes, starts, or resumes work. Adding the second
+  trigger is what makes an abandoned claim free itself without anyone happening
+  to reach for new work; the status report deliberately stays a report and
+  reclaims nothing (sweep-at-every-door D1, cell sad-2, 2026-08-13).
+
 ## Edge Cases Settled
 
 - Project directories on network file systems are declared unsupported for
