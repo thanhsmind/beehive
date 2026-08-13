@@ -1315,6 +1315,10 @@ use crate::version::BEE_VERSION;
         let line = blockers[0].as_str().unwrap();
         assert!(line.contains("sweep declined"), "{line}");
         assert!(line.contains("1 expired claim"), "{line}");
+        // D6 repoint (sweep-recovery-door srd-3): the decline names the
+        // command that now runs, not the pre-recovery-scan `claim-next` text.
+        assert!(line.contains("bee recovery scan"), "{line}");
+        assert!(!line.contains("claim-next"), "{line}");
     }
 
     /// D1: `bee status` (and `--lanes-full`, the same `build_status` body
