@@ -1,0 +1,67 @@
+{
+  "id": "srd-3",
+  "feature": "sweep-recovery-door",
+  "title": "Clear the dead mark on both heartbeat paths and repoint the decline text",
+  "lane": "high-risk",
+  "status": "open",
+  "deps": [
+    "srd-2"
+  ],
+  "decisions": [
+    "D8"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/state_sync.rs",
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/sweep-recovery-door/CONTEXT.md",
+    "docs/history/sweep-recovery-door/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/state_sync.rs",
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+  ],
+  "action": "Per D8 the dead mark is reversible, and it must clear on BOTH heartbeat writers, not whichever is convenient. There are two, each with its own heartbeat_session taking the sessions lock and writing last_heartbeat: hooks/state_sync.rs:494 (PostToolUse, SubagentStop, Stop) and hooks/prompt_context.rs:1597 (UserPromptSubmit). A session that comes back by typing a prompt renews through the second one, so covering only the first ships a half-revival whose test still goes green. In each writer, inside the existing Acquired(guard) closure that already holds the sessions lock (state_sync.rs:498-505 and the matching block at prompt_context.rs:1597-1606), when the record being touched carries status dead: remove status and dead_at and set revived_at to the touch time. revived_at holds only the most recent revival. Add no new lock — the closure already holds the sessions lock — and change neither the throttle nor the fail-open Busy arm. Then repoint the D6 decline text: the user-visible string is the blockers line at orient.rs:268, which points at bee cells claim-next because bee recovery scan did not exist when it shipped; it now names bee recovery scan, and that command runs. Two comments repeat the same now-false claim that claim-next is the sweep's only trigger, at orient.rs:193 and orient.rs:238 — correct both, or the source keeps asserting something the code disproves. Write one test per heartbeat writer: a test that exercises only one path is not evidence for the other.",
+  "must_haves": {
+    "truths": [
+      "A record carrying status dead loses status and dead_at and gains revived_at when the PostToolUse/Stop heartbeat touches it",
+      "The same holds when the UserPromptSubmit heartbeat touches it, proved by its own test",
+      "The heartbeat throttle and the fail-open busy-lock arm are unchanged on both paths",
+      "orient's decline text names bee recovery scan, and that command runs",
+      "No comment in orient.rs still claims claim-next is the sweep's only trigger"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/state_sync.rs",
+        "substantive": "the clearing step inside the existing locked closure; no new lock"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "substantive": "the same clearing step in the second writer"
+      }
+    ],
+    "key_links": [
+      "both heartbeat_session implementations clear the mark inside the lock they already hold"
+    ],
+    "prohibitions": [
+      "No new lock acquisition on either heartbeat path",
+      "No change to the heartbeat throttle or to the fail-open busy arm",
+      "No FIX or blocker line naming a command that does not run"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

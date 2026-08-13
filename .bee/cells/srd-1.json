@@ -1,0 +1,63 @@
+{
+  "id": "srd-1",
+  "feature": "sweep-recovery-door",
+  "title": "Give the claim sweep a return value describing what it did",
+  "lane": "high-risk",
+  "status": "open",
+  "deps": [],
+  "decisions": [
+    "D3"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+  ],
+  "read_first": [
+    "docs/history/sweep-recovery-door/CONTEXT.md",
+    "docs/history/sweep-recovery-door/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs"
+  ],
+  "action": "sweep_expired_claims (handlers_select.rs:75) currently returns MR<()>, so everything it learns leaves only through log_decision (:141, :158) and one eprintln (:152), and the Unreachable arm prints nothing at all. Change the return type to carry three sets: the claims it released, the units it parked, and the units it could not reach in this store. Build them from the facts the function already has — the same values it writes into the decision rows at :141 and :158, and the SweepResetOutcome variants at :276. This cell changes the RETURN TYPE ONLY: the release criteria, the heartbeat-then-gate ordering, the under-gate re-judgement at :103-118, and every lock the function takes stay byte-equivalent in behavior. Migrate the two production call sites (handlers_select.rs:620 for claim-next and status_full/orient.rs:271 inside sweep_on_orient) and the 13 test call sites in verbs/cells/tests.rs (2045 through 2549). orient.rs must keep its observable behavior identical — it may now have the sets available but this cell does not change a single line of what orient prints; that belongs to srd-2's sibling work. Judge existing coverage first: the sweep tests in verbs/cells/tests.rs already pin the release criteria, the parked verdict and the unreachable path; author only the gap, which is that the returned sets agree with the decision rows the same run logs.",
+  "must_haves": {
+    "truths": [
+      "sweep_expired_claims returns the set of claims it released, the set of units it parked, and the set of units it could not reach",
+      "The returned sets agree, for the same run, with the decision rows the sweep writes",
+      "Release criteria, ordering and locking are unchanged: every existing sweep test still passes without its assertions being weakened",
+      "bee orient's observable output is byte-identical to before this cell"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+        "substantive": "sweep_expired_claims returns a summary of released, parked and unreachable units; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "substantive": "all 13 call sites migrated plus a new case asserting the returned sets match the logged decision rows"
+      }
+    ],
+    "key_links": [
+      "handlers_select.rs:620 and status_full/orient.rs:271 both compile against the new signature"
+    ],
+    "prohibitions": [
+      "No change to the release criteria",
+      "No change to the heartbeat-then-gate ordering or to any lock the sweep takes",
+      "No change to bee orient's printed output",
+      "No weakening of an existing sweep assertion to make a call site compile"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

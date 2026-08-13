@@ -1,0 +1,77 @@
+{
+  "id": "srd-2",
+  "feature": "sweep-recovery-door",
+  "title": "Serve bee recovery scan as the releasing door",
+  "lane": "high-risk",
+  "status": "open",
+  "deps": [
+    "srd-1"
+  ],
+  "decisions": [
+    "D3",
+    "D7",
+    "D9"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/recovery_verb.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "docs/handbook/register.md"
+  ],
+  "read_first": [
+    "docs/history/sweep-recovery-door/CONTEXT.md",
+    "docs/history/sweep-recovery-door/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/recovery.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/timings.rs",
+    "packages/bee-rs/crates/bee/src/roots.rs"
+  ],
+  "action": "Build the recovery verb group serving 'bee recovery scan'. Place the implementation at verbs/status_full/recovery_verb.rs, INSIDE the status_full module tree, and register it from verbs/mod.rs the way timings is registered. The nesting is deliberate and is a locked part of this plan: detect_crash_candidates (status_full/recovery.rs:264) takes a &mut status_full::Ctx whose four fields are private and which has no constructor (status_full/mod.rs:159-196), so a sibling module cannot build one; nesting is the smaller change than widening Ctx, which four other files depend on staying closed. Follow verbs/timings.rs:46-58 for argv matching, including --json. Resolve roots through the FULL door resolve_store_root_worktree (roots.rs:580) matched as RootsWt::Go — never resolve_store_root_any, which roots.rs:645-653 forbids to any verb reading sessions or claims. Derive the control root the way orient does, sweep_cells::control_root(&root) (claims.rs:42-45), not StoreRoots::main_root(). Resolve the caller with resolve_session_flag_env(None) then resolve_session_adopt(&control), exactly as orient.rs:260-261: R98 is NOT inherited from the sweep, which sweeps with no exclusion when handed None (cells/tests.rs:2045, 2092, 2226 prove it), so this door implements its own decline — when both resolvers fail, report the counts observed and write nothing at all, neither release nor mark. The command then makes three passes and reports them as three named sets, never merged: RELEASE by calling sweep_expired_claims with the resolved caller and reporting srd-1's returned sets; MARK by walking .bee/sessions/ and marking every heartbeat-stale record with status dead and dead_at (per D9 this pass is independent of the claim pass — a session that died holding no claim is still marked), re-judging staleness under the lock via cells::acquire_sessions_lock_bounded (handlers_select.rs:111) rather than the hooks' single-attempt fail-open helper, so a record read stale before the lock is not marked after its owner's heartbeat lands; REPORT by calling detect_crash_candidates and naming that trio-filtered set separately from the released set. Bridge cells::MR<T> into this module's error type the way orient.rs:205-207's bridge_sweep_fail does — map, never unify. Finally remove ONLY recovery.scan's unavailable marker from src/generated/registry_payload.json and correct its description, which still ends 'Cheap and side-effect-free — never triggers mining' and is falsified by this cell; recovery.window keeps its marker and its description untouched. Update the two docs/handbook/register.md rows at :304 and :384 so recovery scan leaves the declared-but-not-built list and recovery window stays on it. Note tests/registry_dispatch.rs:141 runs each served entry's first example verbatim and recovery.scan's is 'bee recovery scan --json', so the JSON surface is required, not optional.",
+  "must_haves": {
+    "truths": [
+      "bee recovery scan releases every claim the sweep criteria qualify, excluding the caller's own",
+      "bee recovery scan marks every heartbeat-stale session record dead with dead_at, including sessions that held no claim",
+      "A session whose heartbeat lands between the mark pass's read and its lock is not marked",
+      "bee recovery scan reports crash candidates as a set distinct from the released set: a cleanly-ended session holding an expired claim is released and marked but is not a reported candidate",
+      "bee recovery scan writes nothing when it cannot resolve its own caller session",
+      "bee recovery window still refuses",
+      "bee recovery scan --json runs and registry_dispatch.rs is green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/recovery_verb.rs",
+        "substantive": "the three passes, the FULL door, caller resolution with its decline, text and JSON shapes; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "substantive": "tests for the three-set contract, the decline, the mark race, and the granted-worktree door"
+      }
+    ],
+    "key_links": [
+      "verbs/mod.rs routes the recovery group to recovery_verb.rs",
+      "registry_payload.json's recovery.scan entry is served while recovery.window still refuses"
+    ],
+    "prohibitions": [
+      "No widening of status_full::Ctx's field or method visibility",
+      "recovery window must keep its unavailable marker and description",
+      "No write outside the sweeping process's own store",
+      "No change to the sweep's release criteria"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

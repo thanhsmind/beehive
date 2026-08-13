@@ -34,7 +34,8 @@ reinterpreted.
 | D2 | A heartbeat-stale session record is marked dead in place — `.bee/sessions/<id>.json` gains `status: "dead"` and `dead_at` — never deleted. No hard-stale deletion tier. | Carried from `sweep-at-every-door` (decision `5f8779d2`). The transcript pointer and lane on a dead session record are what recovery mines for unsettled work; deletion destroys that evidence. |
 | D3 | `bee recovery scan` is built as a releasing door: it releases every qualifying crashed-session claim on invocation. No `--release` flag, no confirmation step. `bee recovery window` stays unbuilt and keeps its registry marker. | Carried from `sweep-at-every-door` (decision `501fa7c5`). The qualifying criteria are already conservative, so a second gesture would reintroduce the "nobody happened to run it" failure the work exists to remove. |
 | D7 | Only `bee recovery scan` writes the dead mark. The sweep called from `bee orient` and `bee cells claim-next` keeps releasing claims and never touches a session record. | One writer, one door, one testable path. Accepted cost: the mark appears only when someone runs `recovery scan`. Acceptable because the mark aids a human reading the store — it is never a precondition of a release, and the release criteria stay heartbeat-age based and unchanged. Decision `dd4b5cba`. |
-| D8 | The dead mark is reversible. When the heartbeat hook touches a session record carrying `status: "dead"`, it clears `status` and `dead_at` and records `revived_at`. | Deadness is inferred from heartbeat age (900s), which a live but idle or long-running session crosses routinely; an irreversible mark would leave live sessions permanently mislabelled at every call site that reads the record. `revived_at` preserves the history that it was once judged dead. Decision `fcc83358`. |
+| D8 | The dead mark is reversible. When the heartbeat hook touches a session record carrying `status: "dead"`, it clears `status` and `dead_at` and records `revived_at`. This holds for **both** heartbeat writers — `hooks/state_sync.rs:494` (PostToolUse/Stop) and `hooks/prompt_context.rs:1597` (UserPromptSubmit) — not whichever one is convenient. | Deadness is inferred from heartbeat age (900s), which a live but idle or long-running session crosses routinely; an irreversible mark would leave live sessions permanently mislabelled at every call site that reads the record. Covering one writer only would leave a session that comes back by typing a prompt renewing its heartbeat under a stale dead mark. Decision `fcc83358`. |
+| D9 | `bee recovery scan` marks every heartbeat-stale session record dead, in a pass over the sessions directory that is independent of the claim pass. The two passes answer different questions: the sessions pass marks who is gone, the claims pass releases what they held. A session that died holding no claim is still marked. | D2's text is "a heartbeat-stale session record"; the release path iterates the claims directory only, so deriving the mark set from the release set would silently exclude every dead session that held no claim — most of them. Decision `922a0f34`. |
 
 ### Inherited constraints (from `sweep-at-every-door`, not restated as new decisions)
 
@@ -84,11 +85,15 @@ readable in its own store, naming the ones it cannot reach (D5/R100).
 - `packages/bee-rs/crates/bee/src/verbs/mod.rs` — one `pub mod` line plus one
   `try_native` chain entry for the new group.
 - `packages/bee-rs/crates/bee/src/generated/registry_payload.json` — the
-  `recovery scan` marker flip. Write-guarded
-  (`hooks/write_guard/guards.rs:216`) with no regen chain covering it
-  (`bee dev regen` is render-skill-trees, onboard --apply,
-  release-manifest --write, `router.rs:90-92`) — follow the guard's own
-  named remedy.
+  `recovery scan` marker flip. **Correction:** an earlier draft of this file
+  called the path write-guarded at `hooks/write_guard/guards.rs:216`. That is
+  false — `:216` sits inside `check_read` and denies *reads* under
+  `SCOUT_DIRS` (`guards.rs:183-186`), which does not include
+  `src/generated/`, and `direct_edit_verb` (`guards.rs:42-63`) has no entry
+  for it either. The only guard that fires on this path is the ordinary
+  execution-gate phase check. No regen chain covers the file (`bee dev regen`
+  is render-skill-trees, onboard --apply, release-manifest --write —
+  `router.rs:90-92`), so it is edited directly.
 - `packages/bee-rs/crates/bee/tests/registry_dispatch.rs` — the tripwire that
   walks every registry entry in both directions. It proves the flip and proves
   `recovery window` still refuses.
