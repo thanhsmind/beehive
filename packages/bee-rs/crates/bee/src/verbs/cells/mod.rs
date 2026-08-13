@@ -40,9 +40,11 @@
 // the sweep never half-runs:
 //   1. sweepExpiredClaims (claims.mjs): the per-claim `.adopting` gate, the
 //      `sessions` store lock around the heartbeat re-verify, the claim-file
-//      removal, the claimed->open reset under `cells:<id>` (trace stamped
-//      swept_at/swept_from_session), and one best-effort logDecision row per
-//      actual reset.
+//      removal, the caller-session self-exclusion (D6), the claimed->blocked
+//      verdict under `cells:<id>` (trace stamped
+//      swept_at/swept_from_session/blocked_reason, D4) written only when the
+//      cell is readable in this store (D5), and one best-effort logDecision
+//      row per verdict.
 //   2. resolvePipeline (state.mjs) — session -> bound lane -> default, with
 //      the four typed LANE_INVALID/LANE_MISSING/LANE_CORRUPT refusals.
 //   3. the pooling pass — readState + listLanes + listSessionRecords/

@@ -12,6 +12,7 @@ use crate::roots::{resolve_store_root, Roots};
 use crate::state as bstate;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
+use crate::verbs::workspace_store as ws;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Number, Value};
 use sha2::{Digest, Sha256};
@@ -31,8 +32,8 @@ use std::time::Instant;
 // verbs/backlog.rs and imported here).
 //
 // WHY THE SWEEP IS SAFE TO RUN NATIVELY. sweepExpiredClaims mutates (claim
-// files removed, claimed->open cell resets, one decision row per reset)
-// BEFORE selection reads anything, so the usual "return None and let Node
+// files removed, claimed->blocked cell verdicts — D4 — one decision row per
+// verdict) BEFORE selection reads anything, so the usual "return None and let Node
 // re-run" escape would ordinarily double-write. It does not here, because the
 // sweep removes its own trigger: every row it writes is gated on a claim FILE
 // that it then deletes, so a Node re-run finds `readClaim` null for exactly
@@ -53,13 +54,25 @@ use std::time::Instant;
 // (the same constant verbs/reservations.rs already documents), and
 // controlRootFor(root) === root.
 
-/// lib/claims.mjs sweepExpiredClaims (hardening-4b sweep-reset, rel180-2).
-/// TTL expired AND owner heartbeat stale, both re-verified under the claim's
-/// exclusive `<cell>.adopting` gate and — for a session-owned claim — under
-/// the same `sessions` store lock heartbeatSession itself holds. Every
-/// removal is followed by the claimed->open cell reset under
-/// `cells:<id>` and one best-effort decision row.
-pub(crate) fn sweep_expired_claims(control: &Path, now: f64) -> MR<()> {
+/// lib/claims.mjs sweepExpiredClaims (hardening-4b sweep-reset, rel180-2;
+/// sweep-at-every-door D4/D5/D6). TTL expired AND owner heartbeat stale, both
+/// re-verified under the claim's exclusive `<cell>.adopting` gate and — for a
+/// session-owned claim — under the same `sessions` store lock
+/// heartbeatSession itself holds.
+///
+/// `caller_session` (D6) is checked FIRST, before the gate is ever acquired:
+/// a claim whose own `session` field equals it is never swept, no matter how
+/// stale its TTL or heartbeat read — a live session mid a long tool call must
+/// never lose its own claim to its own sweep. `None` excludes nothing (a
+/// caller that cannot resolve its own identity is expected to decline to
+/// call this function at all, per D6 — that is each door's own decision).
+///
+/// Every removal is followed by the claimed->blocked verdict (D4) under
+/// `cells:<id>` when the cell is readable in THIS store, or — per D5, the
+/// sweep never writes across a store boundary — left untouched with the
+/// cell id and its worktree named on stderr and in a decision row when it is
+/// not. Either way, one best-effort decision row per removal.
+pub(crate) fn sweep_expired_claims(control: &Path, now: f64, caller_session: Option<&str>) -> MR<()> {
     let dir = claims_dir(control);
     let Ok(entries) = std::fs::read_dir(&dir) else { return Ok(()) };
     let mut names: Vec<String> = Vec::new();
@@ -69,6 +82,13 @@ pub(crate) fn sweep_expired_claims(control: &Path, now: f64) -> MR<()> {
     for entry in names {
         let Some(cell) = entry.strip_suffix(".json") else { continue };
         let Some(preview) = read_claim(control, cell)? else { continue }; // corrupt: never touch
+        // D6 self-exclusion — before ANY other gate (claim_expired,
+        // heartbeat, .adopting).
+        if let Some(caller) = caller_session {
+            if matches!(preview.get("session"), Some(Value::String(s)) if s == caller) {
+                continue;
+            }
+        }
         if !claim_expired(&preview, now)? {
             continue;
         }
@@ -109,26 +129,76 @@ pub(crate) fn sweep_expired_claims(control: &Path, now: f64) -> MR<()> {
         gated?;
         let Some(swept) = swept_claim else { continue };
         let swept_session = nullish(swept.get("session"));
-        let was_reset = sweep_reset_cell(control, cell, &swept_session, now)?;
-        if was_reset {
-            // Best-effort: the cell write above already committed, so a
-            // decision-log failure must never read as the reset having failed.
-            let owner_disp = if swept_session.is_null() {
-                "none (sessionless)".to_string()
-            } else {
-                jsjson::js_to_string(&swept_session)
-            };
-            let _ = log_decision(
-                control,
-                &format!(
-                    "\u{ab}sweep: cell \"{cell}\" reset claimed -> open \u{2014} swept session \"{owner_disp}\"'s expired, stale claim\u{bb}"
-                ),
-                "sweepExpiredClaims (hardening-4b) removed the abandoned claim file; the cell was still \"claimed\" by that exact session (trace.claim_session matched), so it is returned to open rather than left claimed-but-unclaimable forever.",
-                &["claims", "sweep"],
-            );
+        let owner_disp = owner_display(&swept_session);
+        // Best-effort below: the claim file above is already gone either
+        // way, so a decision-log or stderr failure must never read as the
+        // sweep itself having failed.
+        match sweep_reset_cell(control, cell, &swept, now)? {
+            SweepResetOutcome::Blocked => {
+                let _ = log_decision(
+                    control,
+                    &format!(
+                        "\u{ab}sweep: cell \"{cell}\" reset claimed -> blocked \u{2014} swept session \"{owner_disp}\"'s expired, stale claim\u{bb}"
+                    ),
+                    "sweepExpiredClaims (D4, sweep-at-every-door) removed the abandoned claim file; the cell was still \"claimed\" by that exact session (trace.claim_session matched), so it is parked \"blocked\" — trace.blocked_reason names the dead session and its worktree — rather than reopened, which would invite the next agent to redo half-finished work blind.",
+                    &["claims", "sweep"],
+                );
+            }
+            SweepResetOutcome::Unreachable => {
+                let worktree = worktree_clause(control, &swept);
+                eprintln!(
+                    "sweep: cell \"{cell}\"'s claim was removed, but its cell record is not readable in this store — its half-finished work, if any, may be at {worktree}. Run \"bee cells reopen\" from a session that can reach it, once its store is reachable."
+                );
+                let _ = log_decision(
+                    control,
+                    &format!(
+                        "\u{ab}sweep: cell \"{cell}\"'s claim removed, cell left untouched \u{2014} not readable in this store \u{2014} swept session \"{owner_disp}\"'s expired, stale claim; its worktree may be {worktree}\u{bb}"
+                    ),
+                    "sweepExpiredClaims (D5, sweep-at-every-door) never writes a cell record across a store boundary: the claim is control-plane and freed here, but the cell record itself lives in a store this process cannot read (most likely a granted worktree's own .bee/cells), so parking it \"blocked\" is left to a session — or a human — that can reach it.",
+                    &["claims", "sweep"],
+                );
+            }
+            SweepResetOutcome::Untouched => {} // status/claim_session mismatch — a fresher claim already owns it, silently
         }
     }
     Ok(())
+}
+
+/// `claim.session ?? null` rendered for a decision row or a blocked reason:
+/// `"none (sessionless)"` for a null session (rel180-2's own spelling,
+/// pinned by `sweep_of_a_sessionless_claim_names_none_in_its_decision_row`),
+/// otherwise the session id's JS string coercion.
+pub(crate) fn owner_display(session: &Value) -> String {
+    if session.is_null() {
+        "none (sessionless)".to_string()
+    } else {
+        jsjson::js_to_string(session)
+    }
+}
+
+/// The worktree half of D4's blocked reason and D5's unreachable report,
+/// resolved from the claim's OPTIONAL `workspace_id` (auto-looked-up at
+/// claim time, claims.rs:692-711) through the workspace registry
+/// (`workspace_store::read_workspace`) to its `root`. Every arm returns a
+/// full clause naming what is and is not known — never silently omitted, per
+/// the feature's "Agent's Discretion" note on the blocked-reason wording.
+pub(crate) fn worktree_clause(control: &Path, claim: &Map<String, Value>) -> String {
+    let workspace_id = match claim.get("workspace_id") {
+        Some(Value::String(w)) if !w.is_empty() => w.clone(),
+        _ => return "an unknown worktree (the claim carries no workspace_id)".to_string(),
+    };
+    match ws::read_workspace(control, &workspace_id) {
+        Ok(record) => match record.get("root") {
+            Some(Value::String(r)) if !r.is_empty() => {
+                format!("worktree \"{r}\" (workspace \"{workspace_id}\")")
+            }
+            _ => format!("an unknown worktree (workspace \"{workspace_id}\" has no root recorded)"),
+        },
+        Err(e) => format!(
+            "an unknown worktree (workspace \"{workspace_id}\" has no readable record: {})",
+            e.message()
+        ),
+    }
 }
 
 /// `value ?? null` for an optional JSON field (undefined AND null collapse).
@@ -167,25 +237,46 @@ pub(crate) fn acquire_sessions_lock_bounded(root: &Path) -> Option<lock::LockGua
     None
 }
 
-/// The sweep's claimed->open reset, under the SAME `cells:<id>` store lock
-/// every other cells.mjs mutator uses. `readCellForSweepReset` is claims.mjs's
-/// own minimal `.bee/cells/<id>.json` read/write (never cells.mjs's readCell —
-/// that would cycle), so it never consults the archive.
+/// The result of the sweep's per-cell verdict (D4/D5).
+pub(crate) enum SweepResetOutcome {
+    /// The cell was readable here, still `claimed` by the swept session, and
+    /// is now `blocked` with `trace.blocked_reason` naming the dead session
+    /// and its worktree.
+    Blocked,
+    /// The cell record exists in this store but does not match (not
+    /// `claimed`, or a fresher claim already owns it) — left exactly as
+    /// found. Pre-existing, silent behavior, unrelated to the store-boundary
+    /// case below.
+    Untouched,
+    /// D5: the cell record is not readable in THIS store — most likely a
+    /// granted worktree's own `.bee/cells` holds it instead. The claim is
+    /// already gone (the caller removed it before calling this function);
+    /// nothing is written here.
+    Unreachable,
+}
+
+/// The sweep's claimed->blocked verdict (D4), under the SAME `cells:<id>`
+/// store lock every other cells.mjs mutator uses. `readCellForSweepReset` is
+/// claims.mjs's own minimal `.bee/cells/<id>.json` read/write (never
+/// cells.mjs's readCell — that would cycle), so it never consults the
+/// archive — and, per D5, it never reaches past THIS store's own cells
+/// directory to find one.
 pub(crate) fn sweep_reset_cell(
     control: &Path,
     cell: &str,
-    swept_session: &Value,
+    swept_claim: &Map<String, Value>,
     now: f64,
-) -> MR<bool> {
+) -> MR<SweepResetOutcome> {
+    let swept_session = nullish(swept_claim.get("session"));
     let mut guard = acquire_named_lock(control, &format!("cells:{cell}"))?;
-    let outcome = (|| -> MR<bool> {
+    let outcome = (|| -> MR<SweepResetOutcome> {
         let file = cells_dir(control).join(format!("{cell}.json"));
         let record = match read_store_json(&file)? {
             Some(Value::Object(m)) => m,
-            _ => return Ok(false), // !cellRecord (or a non-object: .status is undefined)
+            _ => return Ok(SweepResetOutcome::Unreachable), // D5: not readable in this store
         };
         if !matches!(record.get("status"), Some(Value::String(s)) if s == "claimed") {
-            return Ok(false);
+            return Ok(SweepResetOutcome::Untouched);
         }
         // `(cellRecord.trace && cellRecord.trace.claim_session) ?? null`
         let current_session = match record.get("trace") {
@@ -194,13 +285,13 @@ pub(crate) fn sweep_reset_cell(
             Some(Value::Object(t)) => nullish(t.get("claim_session")),
             Some(_) => Value::Null, // truthy non-object: .claim_session is undefined
         };
-        if &current_session != swept_session {
-            return Ok(false); // a fresher claim already owns it
+        if current_session != swept_session {
+            return Ok(SweepResetOutcome::Untouched); // a fresher claim already owns it
         }
         let mut record = record;
-        record.insert("status".into(), Value::String("open".into()));
+        record.insert("status".into(), Value::String("blocked".into()));
         // `{ ...(cellRecord.trace || {}), worker: null, claimed_at: null,
-        //    claim_session: null, swept_at, swept_from_session }`
+        //    claim_session: null, swept_at, swept_from_session, blocked_reason }`
         let mut trace = Map::new();
         if let Some(Value::Object(old)) = record.get("trace") {
             spread_into(&mut trace, old);
@@ -213,11 +304,19 @@ pub(crate) fn sweep_reset_cell(
             Value::String(rsv::iso_from_ms(now).map_err(|_| Fail::Delegate)?),
         );
         trace.insert("swept_from_session".into(), swept_session.clone());
+        trace.insert(
+            "blocked_reason".into(),
+            Value::String(format!(
+                "swept by bee: session \"{}\"'s claim on this cell expired and its heartbeat went stale; its half-finished work, if any, may be at {}.",
+                owner_display(&swept_session),
+                worktree_clause(control, swept_claim)
+            )),
+        );
         record.insert("trace".into(), Value::Object(trace));
         let value = Value::Object(record);
         transient_fs_retry(|| crate::fsutil::write_json_atomic(&file, &value))
             .map_err(|e| Fail::Thrown(format!("{e}")))?;
-        Ok(true)
+        Ok(SweepResetOutcome::Blocked)
     })();
     guard.release();
     outcome
@@ -516,7 +615,9 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
         // ── claimNextCell ──────────────────────────────────────────────────
         let session = js_trim(&session_id).to_string();
         // Unconditional, first thing — the production sweep trigger (C10).
-        sweep_expired_claims(&control, rsv::now_ms())?;
+        // The just-resolved session is the sweep's own D6 self-exclusion:
+        // this claim-next call can never sweep its own claims.
+        sweep_expired_claims(&control, rsv::now_ms(), Some(session.as_str()))?;
 
         let (own_feature, own_approved) = match resolve_pipeline(&root, &control, &session)? {
             Pipeline::Refused { code, reason } => {

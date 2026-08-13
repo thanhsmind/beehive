@@ -17,6 +17,7 @@ use crate::roots::{resolve_store_root, resolve_store_root_worktree, Roots, Roots
 use crate::state as bstate;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
+use crate::verbs::workspace_store as ws;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Number, Value};
 use sha2::{Digest, Sha256};
@@ -2038,7 +2039,10 @@ use std::time::Instant;
         );
         write_claim_fixture(root, "d1", Some("dead"), 3600.0, &fresh);
 
-        sweep_expired_claims(root, now).ok().unwrap();
+        // `caller_session: None` — this pass has no caller to exclude, so it
+        // sweeps like the pre-D6 code (row 1's "caller with none" probe for
+        // the sweep itself: nothing is excluded, nothing else changes).
+        sweep_expired_claims(root, now, None).ok().unwrap();
 
         let gone = |id: &str| !claims_dir(root).join(format!("{id}.json")).exists();
         assert!(gone("a1"), "expired + stale owner is swept");
@@ -2050,12 +2054,13 @@ use std::time::Instant;
             Some(Value::Object(m)) => js_string_or_undefined(m.get("status")),
             _ => panic!("cell {id}"),
         };
-        assert_eq!(status("a1"), "open", "claimed -> open reset");
+        assert_eq!(status("a1"), "blocked", "claimed -> blocked verdict (D4)");
         assert_eq!(status("b1"), "claimed", "claim_session mismatch: never overwritten");
         assert_eq!(status("c1"), "claimed");
         assert_eq!(status("d1"), "claimed");
 
-        // The reset's trace carries the sweep stamps and clears the claim.
+        // The verdict's trace carries the sweep stamps, clears the claim,
+        // and names the dead session + worktree in blocked_reason.
         let a1 = read_cell_norm(root, "a1").ok().unwrap().unwrap();
         let trace = a1.get("trace").unwrap();
         assert_eq!(trace.get("worker"), Some(&Value::Null));
@@ -2066,16 +2071,25 @@ use std::time::Instant;
             trace.get("swept_at"),
             Some(&json!(rsv::iso_from_ms(now).ok().unwrap()))
         );
+        let blocked_reason = match trace.get("blocked_reason") {
+            Some(Value::String(s)) => s.clone(),
+            other => panic!("expected a string blocked_reason, got {other:?}"),
+        };
+        assert!(blocked_reason.contains("\"dead\""), "names the dead session: {blocked_reason}");
+        assert!(
+            blocked_reason.contains("no workspace_id"),
+            "a1's claim carries no workspace_id, so the worktree clause says so explicitly: {blocked_reason}"
+        );
 
         // Exactly ONE decision row — b1's skipped reset logs nothing.
         let rows = std::fs::read_to_string(decisions_path(root)).unwrap();
         let lines: Vec<&str> = rows.lines().filter(|l| !l.trim().is_empty()).collect();
         assert_eq!(lines.len(), 1);
-        assert!(lines[0].contains("sweep: cell \\\"a1\\\" reset claimed -> open"));
+        assert!(lines[0].contains("sweep: cell \\\"a1\\\" reset claimed -> blocked"));
         assert!(lines[0].contains("swept session \\\"dead\\\""));
 
         // Idempotent: a second pass has nothing left to trigger on.
-        sweep_expired_claims(root, now).ok().unwrap();
+        sweep_expired_claims(root, now, None).ok().unwrap();
         let rows2 = std::fs::read_to_string(decisions_path(root)).unwrap();
         assert_eq!(rows2.lines().filter(|l| !l.trim().is_empty()).count(), 1);
     }
@@ -2091,15 +2105,302 @@ use std::time::Instant;
             &json!({"id":"s1","status":"claimed","feature":"f","trace":{"worker":"w"}}),
         );
         write_claim_fixture(root, "s1", None, 60.0, OLD);
-        sweep_expired_claims(root, now).ok().unwrap();
+        sweep_expired_claims(root, now, None).ok().unwrap();
         let s1 = read_cell_norm(root, "s1").ok().unwrap().unwrap();
-        assert_eq!(s1.get("status"), Some(&json!("open")));
+        assert_eq!(s1.get("status"), Some(&json!("blocked")));
         assert_eq!(
             s1.get("trace").and_then(|t| t.get("swept_from_session")),
             Some(&Value::Null)
         );
+        let blocked_reason = match s1.get("trace").and_then(|t| t.get("blocked_reason")) {
+            Some(Value::String(s)) => s.clone(),
+            other => panic!("expected a string blocked_reason, got {other:?}"),
+        };
+        assert!(blocked_reason.contains("none (sessionless)"), "{blocked_reason}");
         let rows = std::fs::read_to_string(decisions_path(root)).unwrap();
         assert!(rows.contains("swept session \\\"none (sessionless)\\\""));
+    }
+
+    // ── sweep-at-every-door (E1): caller self-exclusion (D6), the
+    // claimed->blocked verdict's worktree resolution (D4), the store
+    // boundary (D5), and reopen clearing what the sweep wrote ────────────
+
+    fn write_claim_fixture_ws(
+        root: &Path,
+        id: &str,
+        session: Option<&str>,
+        ttl: f64,
+        at: &str,
+        workspace_id: Option<&str>,
+    ) {
+        let dir = claims_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut claim = Map::new();
+        claim.insert("cell".into(), json!(id));
+        if let Some(s) = session {
+            claim.insert("session".into(), json!(s));
+        }
+        if let Some(w) = workspace_id {
+            claim.insert("workspace_id".into(), json!(w));
+        }
+        claim.insert("ttl_seconds".into(), json!(ttl));
+        claim.insert("claimed_at".into(), json!(at));
+        claim.insert("acquired_at".into(), json!(at));
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            jsjson::stringify_pretty(&Value::Object(claim)),
+        )
+        .unwrap();
+    }
+
+    fn write_workspace_fixture(root: &Path, id: &str, worktree_root: &str) {
+        ws::register_workspace(
+            root,
+            ws::RegisterSpec {
+                id,
+                kind: "worktree",
+                root: worktree_root,
+                branch: None,
+                base_sha: None,
+            },
+            "2026-01-01T00:00:00.000Z",
+        )
+        .unwrap();
+    }
+
+    /// row 8: the E1 contract — a claim owned by the calling session is
+    /// never swept, even with both TTL and heartbeat stale.
+    #[test]
+    fn sweep_never_takes_the_calling_sessions_own_claim() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+        write_cell_fixture(
+            root,
+            "mine",
+            &json!({"id":"mine","status":"claimed","feature":"f","trace":{"worker":"w","claim_session":"me"}}),
+        );
+        write_claim_fixture(root, "mine", Some("me"), 60.0, OLD);
+        write_session_fixture(root, "me", OLD, None); // stale heartbeat too — still never swept
+
+        sweep_expired_claims(root, now, Some("me")).ok().unwrap();
+
+        assert!(
+            claims_dir(root).join("mine.json").exists(),
+            "the caller's own expired, stale claim survives (D6)"
+        );
+        let cell = read_cell_norm(root, "mine").ok().unwrap().unwrap();
+        assert_eq!(cell.get("status"), Some(&json!("claimed")));
+        assert!(
+            !decisions_path(root).exists()
+                || std::fs::read_to_string(decisions_path(root)).unwrap().trim().is_empty()
+        );
+    }
+
+    /// row 3: TTL and heartbeat are both `<=` comparisons — exactly-at-the-
+    /// boundary counts as due, not "not yet".
+    #[test]
+    fn sweep_treats_exact_ttl_and_heartbeat_boundaries_as_due() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+
+        let claimed_at = rsv::iso_from_ms(now - 60_000.0).ok().unwrap();
+        write_cell_fixture(
+            root,
+            "ttl-edge",
+            &json!({"id":"ttl-edge","status":"claimed","feature":"f","trace":{"worker":"w","claim_session":"dead"}}),
+        );
+        write_claim_fixture(root, "ttl-edge", Some("dead"), 60.0, &claimed_at);
+        write_session_fixture(root, "dead", OLD, None);
+
+        let hb_edge = rsv::iso_from_ms(now - HEARTBEAT_STALE_SECONDS * 1000.0).ok().unwrap();
+        write_cell_fixture(
+            root,
+            "hb-edge",
+            &json!({"id":"hb-edge","status":"claimed","feature":"f","trace":{"worker":"w","claim_session":"edge"}}),
+        );
+        write_claim_fixture(root, "hb-edge", Some("edge"), 60.0, OLD);
+        write_session_fixture(root, "edge", &hb_edge, None);
+
+        sweep_expired_claims(root, now, None).ok().unwrap();
+
+        let status = |id: &str| match read_cell_norm(root, id).ok().unwrap() {
+            Some(Value::Object(m)) => js_string_or_undefined(m.get("status")),
+            _ => panic!("cell {id}"),
+        };
+        assert_eq!(status("ttl-edge"), "blocked", "TTL exactly at its boundary counts as expired (<=)");
+        assert_eq!(status("hb-edge"), "blocked", "heartbeat exactly at 900s counts as stale (<=)");
+    }
+
+    /// row 5: `claimed -> blocked` is the ONLY transition the sweep may
+    /// make. A claim file that outlives its cell's `status` (open, capped,
+    /// dropped, already blocked) never moves that cell, and logs nothing —
+    /// this is the pre-existing, silent skip, unrelated to D5's report.
+    #[test]
+    fn sweep_never_moves_a_cell_that_is_not_claimed() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+        let fixtures = [("op", "open"), ("cp", "capped"), ("dr", "dropped"), ("bl", "blocked")];
+        for (id, status) in fixtures {
+            write_cell_fixture(
+                root,
+                id,
+                &json!({"id": id, "status": status, "feature": "f", "trace": {"worker": "w", "claim_session": "dead"}}),
+            );
+            write_claim_fixture(root, id, Some("dead"), 60.0, OLD);
+        }
+        write_session_fixture(root, "dead", OLD, None);
+
+        sweep_expired_claims(root, now, None).ok().unwrap();
+
+        for (id, status) in fixtures {
+            assert!(
+                !claims_dir(root).join(format!("{id}.json")).exists(),
+                "the claim is still removed for {id}"
+            );
+            let cell = read_cell_norm(root, id).ok().unwrap().unwrap();
+            assert_eq!(cell.get("status"), Some(&json!(status)), "never moved by the sweep: {id}");
+        }
+        assert!(
+            !decisions_path(root).exists()
+                || std::fs::read_to_string(decisions_path(root)).unwrap().trim().is_empty(),
+            "a non-claimed cell's swept claim logs no decision row"
+        );
+    }
+
+    /// row 6, primary: the cell is absent from the sweeper's own store (D5)
+    /// — a granted worktree's own `.bee/cells` most likely holds it. The
+    /// claim is still removed; no cell is written anywhere in THIS store;
+    /// the cell id and its worktree (resolved through the claim's
+    /// `workspace_id`) are named in the decision row.
+    #[test]
+    fn sweep_of_an_unreachable_cell_removes_the_claim_writes_no_cell_and_names_the_worktree() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+        // NOTE: no write_cell_fixture for "far-1" — this store never had it.
+        write_claim_fixture_ws(root, "far-1", Some("dead"), 60.0, OLD, Some("wt-far"));
+        write_session_fixture(root, "dead", OLD, None);
+        write_workspace_fixture(root, "wt-far", "/repos/wt-far");
+
+        sweep_expired_claims(root, now, None).ok().unwrap();
+
+        assert!(!claims_dir(root).join("far-1.json").exists(), "the claim is removed either way (D5)");
+        assert!(
+            !cells_dir(root).join("far-1.json").exists(),
+            "no cell record is ever written in this store (D5)"
+        );
+
+        let rows = std::fs::read_to_string(decisions_path(root)).unwrap();
+        assert!(rows.contains("far-1"), "names the cell id: {rows}");
+        assert!(rows.contains("/repos/wt-far"), "names the holding worktree: {rows}");
+        assert!(rows.contains("not readable in this store"), "{rows}");
+    }
+
+    /// row 6: the claim carries no `workspace_id` at all — the report names
+    /// that explicitly rather than omitting the clause.
+    #[test]
+    fn sweep_of_an_unreachable_cell_with_no_workspace_id_names_that_explicitly() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+        write_claim_fixture(root, "far-2", Some("dead"), 60.0, OLD);
+        write_session_fixture(root, "dead", OLD, None);
+
+        sweep_expired_claims(root, now, None).ok().unwrap();
+
+        assert!(!cells_dir(root).join("far-2.json").exists());
+        let rows = std::fs::read_to_string(decisions_path(root)).unwrap();
+        assert!(rows.contains("far-2"));
+        assert!(rows.contains("no workspace_id"), "{rows}");
+    }
+
+    /// row 6 / 5 (missing workspace record): the claim names a
+    /// `workspace_id` but no such workspace was ever registered — the
+    /// report names that explicitly too.
+    #[test]
+    fn sweep_of_an_unreachable_cell_with_a_missing_workspace_record_names_that_explicitly() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+        write_claim_fixture_ws(root, "far-3", Some("dead"), 60.0, OLD, Some("wt-gone"));
+        write_session_fixture(root, "dead", OLD, None);
+        // No write_workspace_fixture — the workspace record is missing.
+
+        sweep_expired_claims(root, now, None).ok().unwrap();
+
+        assert!(!cells_dir(root).join("far-3.json").exists());
+        let rows = std::fs::read_to_string(decisions_path(root)).unwrap();
+        assert!(rows.contains("wt-gone"), "{rows}");
+        assert!(rows.contains("no readable record"), "{rows}");
+    }
+
+    const CELLS_REOPEN_BEHAVIOR_CHILD: &str = "verbs::cells::tests::cells_reopen_behavior_child";
+
+    /// Runs ONLY as a child of the test below — reopens cell "x1" through
+    /// the REAL `cells reopen` CLI door, resolving its store root off its
+    /// own cwd (process-global, same isolation `cells_update_behavior_child`
+    /// above uses).
+    #[test]
+    #[ignore = "spawned by reopen_clears_the_blocked_reason_the_sweep_wrote"]
+    fn cells_reopen_behavior_child() {
+        let (flags, use_json) =
+            rsv::parse_flags(&["--id", "x1", "--reason", "investigating the crashed session's work"])
+                .expect("well-formed fixture argv");
+        run_reopen(flags, use_json, Instant::now());
+    }
+
+    fn cells_reopen_behavior_run(root: &Path) -> std::process::Output {
+        let exe = std::env::current_exe().expect("test binary path");
+        let mut cmd = std::process::Command::new(&exe);
+        cmd.args(["--exact", CELLS_REOPEN_BEHAVIOR_CHILD, "--ignored", "--test-threads", "1"]);
+        cmd.current_dir(root);
+        cmd.output().expect("spawn the test binary")
+    }
+
+    /// row 9: `bee cells reopen` clears `trace.blocked_reason` because the
+    /// sweep writes it at the SAME key `reopenCell` already nulls
+    /// (`handlers_close.rs:914`) — the whole point of using that key rather
+    /// than a top-level one.
+    #[test]
+    fn reopen_clears_the_blocked_reason_the_sweep_wrote() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        // `run_reopen` dispatches through the REAL CLI door, which resolves
+        // its store root via `resolve_store_root` — unlike the library-level
+        // sweep calls above, that needs `.bee/onboarding.json` (or a `.git`)
+        // to recognize `root` as a bee repo at all.
+        bp28_repo(root);
+        let now = rsv::now_ms();
+        write_cell_fixture(
+            root,
+            "x1",
+            &json!({"id":"x1","status":"claimed","feature":"f","trace":{"worker":"w","claim_session":"dead"}}),
+        );
+        write_claim_fixture(root, "x1", Some("dead"), 60.0, OLD);
+        write_session_fixture(root, "dead", OLD, None);
+
+        sweep_expired_claims(root, now, None).ok().unwrap();
+        let blocked = read_cell_norm(root, "x1").ok().unwrap().unwrap();
+        assert_eq!(blocked.get("status"), Some(&json!("blocked")));
+        assert!(matches!(
+            blocked.get("trace").and_then(|t| t.get("blocked_reason")),
+            Some(Value::String(_))
+        ));
+
+        let out = cells_reopen_behavior_run(root);
+        assert!(
+            out.status.success(),
+            "child failed:\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let reopened = read_cell_norm(root, "x1").ok().unwrap().unwrap();
+        assert_eq!(reopened.get("status"), Some(&json!("open")));
+        assert_eq!(reopened.get("trace").and_then(|t| t.get("blocked_reason")), Some(&Value::Null));
     }
 
     #[test]
@@ -2245,7 +2546,7 @@ use std::time::Instant;
         write_session_fixture(root, "dead", OLD, None);
         write_session_fixture(root, "live", &fresh, None);
 
-        sweep_expired_claims(root, now).ok().unwrap();
+        sweep_expired_claims(root, now, None).ok().unwrap();
 
         let claim_file = |id: &str| claims_dir(root).join(format!("{id}.json"));
         let status = |id: &str| match read_cell_norm(root, id).ok().unwrap() {
@@ -2262,7 +2563,7 @@ use std::time::Instant;
         );
 
         assert!(!claim_file("free").exists(), "expired + stale owner IS reclaimed");
-        assert_eq!(status("free"), "open");
+        assert_eq!(status("free"), "blocked", "claimed -> blocked verdict (D4)");
         assert!(
             !claim_gate_path(root, "free").unwrap().exists(),
             "a completed sweep leaves no gate file behind"
