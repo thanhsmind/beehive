@@ -181,12 +181,40 @@ red.
   a store-layer act and is only safe where the unit lives (sweep-at-every-door
   D5, cell sad-1, 2026-08-13).
 
-- R101 — Reclaiming abandoned work has more than one trigger. Picking up
-  cross-session work runs a sweep, and so does the orientation command every
-  session runs when it routes, starts, or resumes work. Adding the second
-  trigger is what makes an abandoned claim free itself without anyone happening
-  to reach for new work; the status report deliberately stays a report and
-  reclaims nothing (sweep-at-every-door D1, cell sad-2, 2026-08-13).
+- R101 — Reclaiming abandoned work has three triggers. Picking up cross-session
+  work runs a sweep; so does the orientation command every session runs when it
+  routes, starts, or resumes work; and so does the dedicated recovery command,
+  whose whole purpose is the sweep rather than a step before other work. The
+  first two reclaim as a side effect of doing something else, which is what
+  makes an abandoned claim free itself without anyone reaching for it
+  deliberately; the third exists for the person who came looking. The status
+  report deliberately stays a report and reclaims nothing (sweep-at-every-door
+  D1, cell sad-2, 2026-08-13; sweep-recovery-door D3, cell srd-2, 2026-08-14).
+
+- R102 — Only the dedicated recovery command annotates a session record. It
+  marks every heartbeat-stale record dead in place, in a pass over the session
+  records that is independent of the claim pass — a session that died holding
+  nothing is still marked — and it re-judges staleness while holding the
+  session lock, so a record read stale before the lock is not marked after its
+  owner's heartbeat lands. The sweeps reached from the other two triggers
+  release claims and never touch a session record (sweep-recovery-door D7/D9,
+  cell srd-2, 2026-08-14).
+
+- R103 — The dead mark is an annotation, never a verdict that outlives its
+  subject. Whichever path a returning session's heartbeat arrives on, that
+  heartbeat clears the mark and records when the session came back. Deadness is
+  inferred from heartbeat age, which a live but idle or long-running session
+  crosses routinely, so a mark that could not be cleared would leave live
+  sessions permanently mislabelled everywhere the record is read
+  (sweep-recovery-door D8, cell srd-3, 2026-08-14).
+
+- R104 — A reclaim reports what it did in three named sets: the claims it
+  released, the units it parked, and the units it could not reach. The set of
+  sessions worth investigating is a *different* set, derived from transcript
+  shape rather than from claim age, and the two are never presented as one — a
+  session that ended cleanly while still holding an expired claim belongs to
+  the first and not the second (sweep-recovery-door D3, cells srd-1 and srd-2,
+  2026-08-14).
 
 ## Edge Cases Settled
 
