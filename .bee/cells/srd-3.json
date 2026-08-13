@@ -3,7 +3,7 @@
   "feature": "sweep-recovery-door",
   "title": "Clear the dead mark on both heartbeat paths and repoint the decline text",
   "lane": "high-risk",
-  "status": "open",
+  "status": "capped",
   "deps": [
     "srd-2"
   ],
@@ -52,16 +52,81 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "srd3",
+    "outcome": "Both heartbeat writers clear the dead mark under their existing sessions lock and stamp revived_at, each proved by its own test; orient's D6 decline text and its two stale comments now name bee recovery scan",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/state_sync.rs",
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-13T17:27:28.697Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f4158037-da59-46aa-a355-3acf7820af24",
+    "claimed_at": "2026-08-13T17:21:31.612Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-13T17:27:09.690Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/state_sync.rs:505-509 clears status and dead_at and inserts revived_at inside the existing lock; its own test at state_sync.rs:1355-1381 (hooks::state_sync::tests::heartbeat_session_clears_dead_mark_and_stamps_revived_at) writes a status dead record, calls heartbeat_session, and asserts status/dead_at gone, revived_at present, lane preserved -- ok"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs:1608-1612 does the same on the UserPromptSubmit writer; a SEPARATE test at prompt_context.rs:2151-2178 (hooks::prompt_context::tests::heartbeat_session_clears_dead_mark_and_stamps_revived_at) proves it -- cargo test --bin bee clears_dead_mark ran 2 tests, both ok, one per module"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "git show 8361df9a touches only heartbeat_session bodies plus tests: state_sync.rs:478-480 throttle (heartbeat_stale + HEARTBEAT_TOUCH_THROTTLE_SECONDS) and state_sync.rs:496 AcquireOnce::Busy => Ok(()) are unchanged, as is prompt_context.rs:1598-1600 acquire_store_lock_once returning Ok(()) on LOCK_BUSY"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "verbs/status_full/orient.rs:271 blocker text now reads set BEE_SESSION_ID and run bee recovery scan ...; status_full/tests.rs:1320-1321 assert the blocker contains bee recovery scan and not claim-next on the real decline path (orient_declines_and_reports_the_count_when_its_caller_session_is_unresolvable ok), and target/release/bee recovery scan --json exits 0"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "rg -n claim-next orient.rs returns only orient.rs:193-196 and :239-242, both rewritten to name bee recovery scan as a third caller; no remaining only-trigger claim"
+          },
+          {
+            "id": "p1",
+            "status": "PASS",
+            "evidence": "state_sync.rs:497-513 and prompt_context.rs:1598-1618 show the clear sits inside the single pre-existing acquire_store_lock_once block on each path; the diff adds no lock call"
+          },
+          {
+            "id": "p2",
+            "status": "PASS",
+            "evidence": "git show --stat 8361df9a: 4 files, +85 -6, with the only prompt_context/state_sync hunks inside heartbeat_session and their test modules -- heartbeat_block throttle and the Busy fail-open arms are outside every hunk"
+          },
+          {
+            "id": "p3",
+            "status": "PASS",
+            "evidence": "orient.rs:271 names bee recovery scan, which registry_dispatch.rs proves served (8 passed, 0 failed) and which ran directly: target/release/bee recovery scan --json exited 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-13T17:35:29.469Z"
+      }
+    ]
   }
 }

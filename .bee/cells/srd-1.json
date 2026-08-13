@@ -3,7 +3,7 @@
   "feature": "sweep-recovery-door",
   "title": "Give the claim sweep a return value describing what it did",
   "lane": "high-risk",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "D3"
@@ -48,16 +48,24 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "srd1",
+    "outcome": "sweep_expired_claims returns SweepSummary{released,parked,unreachable}; all 15 call sites compile unchanged; new test pins the sets against the decision rows",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-13T16:39:16.672Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f4158037-da59-46aa-a355-3acf7820af24",
+    "claimed_at": "2026-08-13T16:06:27.489Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-13T16:38:57.363Z"
   }
 }

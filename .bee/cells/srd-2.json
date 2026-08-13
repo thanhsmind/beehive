@@ -3,7 +3,7 @@
   "feature": "sweep-recovery-door",
   "title": "Serve bee recovery scan as the releasing door",
   "lane": "high-risk",
-  "status": "open",
+  "status": "capped",
   "deps": [
     "srd-1"
   ],
@@ -62,16 +62,114 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "srd2",
+    "outcome": "recovery scan serves as the releasing door: three independent passes (release/mark/report), R98 decline, sessions-lock race guard; recovery window still refuses",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/recovery_verb.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/handbook/register.md"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-13T17:21:08.840Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f4158037-da59-46aa-a355-3acf7820af24",
+    "claimed_at": "2026-08-13T16:39:45.285Z",
+    "report": {
+      "outcome": "recovery scan serves as the releasing door: three independent passes (release/mark/report), R98 decline, sessions-lock race guard; recovery window still refuses",
+      "commit": "1f950a69",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/recovery_verb.rs",
+        "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/handbook/register.md"
+      ],
+      "tests": "green",
+      "deviations": [
+        "Added self-exclusion of the caller's own session to the MARK pass (not explicitly named in the cell text) to satisfy the must-have \"never marks its own session dead\" (R97's rationale applied to D9) -- a caller resolved by explicit --session-id/env, rather than the durable single-fresh-session adopt, could otherwise read heartbeat-stale to its own scan."
+      ]
+    },
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-13T17:20:49.901Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/status_full/recovery_verb.rs:221 passes Some(caller) into sweep_expired_claims; status_full/tests.rs:1480 asserts released == {cell-dead1, cell-dead2} and tests.rs:1529 asserts released is empty for the callers own claim (both tests ok)"
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "recovery_verb.rs:134-141 mark_stale_sessions walks sessions_dir(control) directly, never the release set; status_full/tests.rs:1458 seeds claim-less dead3 and tests.rs:1485 asserts marked_dead == {dead1,dead2,dead3}; a live run printed released [] with 49 marked_dead"
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "recovery_verb.rs:160-170 re-reads and re-judges under acquire_sessions_lock_bounded, returning Ok(false) when the fresh record is not stale; status_full/tests.rs:1546-1578 holds the sessions lock, lands the heartbeat at +60ms, asserts race1 is unmarked in the set and on disk (test ok)"
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "recovery_verb.rs:230-238 keeps candidates a separate field from released; status_full/tests.rs:1487-1488 assert candidates.len()==1 with session_id dead1, while clean-ended dead2 is released (tests.rs:1480) and marked (tests.rs:1498)"
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "recovery_verb.rs:216-220 returns Declined before any release or mark; status_full/tests.rs:1391-1397 assert the claim file survives, the cell stays claimed, and the stale record gains neither status nor dead_at (test ok)"
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "registry_payload.json keeps recovery.window unavailable{reason,fix}; tests/registry_dispatch.rs:150-153 requires every unavailable entry example to hit the refusal and the suite is green (8 passed, 0 failed); status_full/tests.rs:1600 asserts the window argv falls through to None"
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "cargo test --test registry_dispatch: 8 passed, 0 failed; registry_dispatch.rs:141-160 runs recovery.scan examples[0] (bee recovery scan --json) verbatim in a scratch repo, and a direct run of packages/bee-rs/target/release/bee recovery scan --json exited 0 with the full JSON payload"
+          },
+          {
+            "id": "p1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs:159-161 Ctx fields remain private; git show 1f950a69 -- status_full/mod.rs is one added line pub(crate) mod recovery_verb; (+1 -0) with no constructor and no widened field"
+          },
+          {
+            "id": "p2",
+            "status": "PASS",
+            "evidence": "json compare of packages/bee-rs/crates/bee/src/generated/registry_payload.json at 1f950a69^ vs 1f950a69: recovery.scan is the only changed entry; recovery.window is identical, marker and description"
+          },
+          {
+            "id": "p3",
+            "status": "PASS",
+            "evidence": "recovery_verb.rs:174-177 writes only sessions_dir(control)/<id>.json with control from sweep_cells::control_root(&ctx.root) (verbs/cells/claims.rs:42-53); it is the only write site in the file"
+          },
+          {
+            "id": "p4",
+            "status": "PASS",
+            "evidence": "git show --stat 1f950a69 lists 6 files, none of them verbs/cells/handlers_select.rs or verbs/cells/claims.rs, so the sweep criteria, ordering and locking are untouched"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-13T17:35:24.177Z"
+      }
+    ]
   }
 }
