@@ -3,7 +3,7 @@
   "feature": "retire-collation-guard",
   "title": "Retire the three dead parity guards and invert the tests that assert the defect",
   "lane": "standard",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "D1",
@@ -55,16 +55,105 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "rcg1",
+    "outcome": "Retired collation_safe (both copies) and id_sort_safe with their call-site guards; inverted the four tests that asserted the defect and deleted the two direct unit tests of the retired functions. bee decisions render and bee backlog pbi list (no --status) now run instead of refusing.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-14T00:18:28.317Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f4158037-da59-46aa-a355-3acf7820af24",
+    "claimed_at": "2026-08-14T00:08:58.850Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T00:18:09.356Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "./.bee/bin/bee decisions render --check and --all --check both reached the drift branch at packages/bee-rs/crates/bee/src/verbs/decisions/render.rs:281 (message: docs/decisions/index.md is out of date, rc=1), not the router refusal; that branch is reachable only when decision_index_content returned Some, so the plain write shape at render.rs:291 shares the same proven path (plain form not run: it writes)."
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "./.bee/bin/bee backlog pbi list with no --status listed legacy P1, P41 [declined] and P72 [declined] beside p-hex ids; the retired guard call site is gone at packages/bee-rs/crates/bee/src/verbs/backlog.rs:1025, where the plain byte-order list.sort_by on a.id.cmp(b.id) now runs unconditionally."
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "./.bee/bin/bee backlog render --check printed Current: docs/backlog.md with rc=0, so no drift for the current store; docs/backlog.md is absent from the bf9bdac4..HEAD diff, which touches only 4 source files."
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "All three inverted tests assert success plus concrete output: packages/bee-rs/crates/bee/src/verbs/backlog.rs:1789-1791 (unwrap, then exotic_lines index 12 equals the exact rendered row for the arrow id), backlog.rs:2164-2165 (feature_backlog_rank(root).unwrap(), then legacy.get(z) equals Some(0)), decisions/tests.rs:868-873 (.unwrap().unwrap(), count equals 1, contains the cafe scope heading, the untagged tag heading and the e1 line). The two direct unit tests went with their subject: a name-filtered release run on id_sort matched 0 tests, and the collation_safe asserts were cut from both locale_cmp_agrees_with_the_calibrated_probes copies while their probe tables and sort-order asserts survive (backlog.rs:1728-1734, decisions/tests.rs:788-793). Noted weakness, not a FAIL: each exotic fixture holds one row, so relative order against a non-exotic sibling is pinned only by the untouched happy-path asserts at backlog.rs:1765-1766 (p-727e9529 before P40)."
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "The bf9bdac4..HEAD diff lists only backlog.rs and decisions/mod.rs, render.rs, tests.rs; the message is intact at packages/bee-rs/crates/bee/src/router.rs:444-452 and the guard is intact at packages/bee-rs/crates/bee/src/verbs/decisions/supersede.rs:105, which still refuses a non-ASCII id."
+          },
+          {
+            "id": "p1",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/router.rs is absent from the bf9bdac4..HEAD diff; router.rs:444-452 still emits unsupported_argument_shape verbatim, so D3 holds."
+          },
+          {
+            "id": "p2",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/decisions/supersede.rs:105 still refuses a non-ASCII id, and supersede.rs is absent from the commit range, so D4 holds."
+          },
+          {
+            "id": "p3",
+            "status": "PASS",
+            "evidence": "In the render.rs diff lc_primary_key appears only as hunk context; its body, including the total fallback arm returning (1, 100 + c as u32), is unchanged at packages/bee-rs/crates/bee/src/verbs/decisions/render.rs:76-93, and the backlog.rs copy is likewise untouched."
+          },
+          {
+            "id": "p4",
+            "status": "PASS",
+            "evidence": "No no-panic-only test remains: every rewritten assertion is an equality or a contains check (packages/bee-rs/crates/bee/src/verbs/backlog.rs:1789-1791, backlog.rs:2164-2165, decisions/tests.rs:869-873); the declared release suite reported 1657 passed, 11 ignored, 16 suites, 18.96s."
+          },
+          {
+            "id": "p5",
+            "status": "PASS",
+            "evidence": "Commit 1e08beaf touches 3 files (backlog.rs, render.rs, tests.rs); docs/decisions/index.md was last changed by 25bd26fc and its md5 1f1283f8748e9a8c2dc0c0ed13587097 equals the bf9bdac4 blob."
+          },
+          {
+            "id": "dev-a",
+            "status": "PASS",
+            "evidence": "Justified and coverage-preserving: packages/bee-rs/crates/bee/src/verbs/backlog.rs:2052-2056 replaces the single assert on id_sort_safe(generated.id) plus len equals 10 with three asserts (len equals 10, starts_with p-, lowercase-hex tail) that reproduce the deleted predicate exactly. The compiler forced the edit because the callee was deleted, so touching a test off the cell list was unavoidable; the split also improves failure attribution."
+          },
+          {
+            "id": "dev-b",
+            "status": "PASS",
+            "evidence": "A real breach of the plan line Out of scope: regenerating docs/decisions/index.md as part of this cell, but fully remediated: docs/decisions/index.md md5 1f1283f8748e9a8c2dc0c0ed13587097 equals the bf9bdac4 blob, the working tree reports no modifications, and commit 1e08beaf does not carry the file. Advisory only, nothing to revise; the orchestrator should note the live write was avoidable, because --check alone proves the shape runs (packages/bee-rs/crates/bee/src/verbs/decisions/render.rs:277-289)."
+          },
+          {
+            "id": "dev-c",
+            "status": "PASS",
+            "evidence": "Leaving decisions/mod.rs alone was defensible, and the 4384a70c replacement text checks out against shipped code: supersede keeps its ASCII guard at packages/bee-rs/crates/bee/src/verbs/decisions/supersede.rs:105; the comparator is total at render.rs:76-93 through its catch-all arm; render can still return Ex at read.rs:151 (null event) and read.rs:71 and read.rs:230 (inconsistent date comparator), all reachable from build_decision_index_body through active_decisions. Residual nit outside the cell truths: render.rs:273 still carries the stale trailing comment about collation outside the calibrated alphabet."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-14T00:30:52.620Z"
+      }
+    ]
   }
 }
