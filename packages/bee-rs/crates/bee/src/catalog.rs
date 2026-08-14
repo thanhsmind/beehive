@@ -313,7 +313,19 @@ mod tests {
         // comma-separated list, neither the structured five-key object
         // `--report` carries. This bump documents the flag, it invents
         // nothing new at the CLI surface.
-        const PINNED_FLAG_COUNT: usize = 147;
+        // 147 -> 148 (awaiting-human ah-4): `state.waiting-on.set` gained
+        // `--subject`, the gate name or question text a waiting-on mark
+        // names. Checked first: `--reason`/`--note` (cells.block/drop/
+        // reopen/reset-budget, decisions.redact, perf.stop/section) all name
+        // WHY something already happened, retrospective; `--next-action`
+        // (state.handoff.write/state.set) names a saved next STEP, not the
+        // subject of a live wait; `--name` (state.gate) is scoped to the
+        // closed gate-name enum alone and cannot also carry free-form
+        // question text. None of those is "what a wait is about" — `kind`,
+        // `session-id`, `lane`, `no-lane` and `json` all reuse existing
+        // names for the same concepts unchanged; `--subject` is the one new
+        // spelling this cell adds.
+        const PINNED_FLAG_COUNT: usize = 148;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

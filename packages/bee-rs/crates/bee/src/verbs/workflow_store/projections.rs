@@ -117,6 +117,12 @@ pub(crate) fn apply_workflow_d1_fields(next: &mut Map<String, Value>, wf: &Map<S
     // pinned by
     // `apply_workflow_d1_fields_carries_run_state_...` in tests.rs.
     set_from(next, "run_state", wf);
+    // D1 (awaiting-human): the wait mark rides beside run_state on exactly
+    // the same path — omitted here it would reach the record but never
+    // `.bee/state.json`, the same vacuous-rebuild trap run_state's own
+    // comment names. Pinned by
+    // `apply_workflow_d1_fields_carries_waiting_on_...` in tests.rs.
+    set_from(next, "waiting_on", wf);
 }
 
 /// state-projection.mjs rebuildStateProjection(root) with NO overrides — the
@@ -243,6 +249,9 @@ pub(crate) fn rebuild_lane_projection_reporting(
     // duplicates that field list rather than calling it — kept in step so a
     // lane reader sees run_state too).
     set_from(&mut next, "run_state", wf);
+    // D1 (awaiting-human): kept in step with apply_workflow_d1_fields for the
+    // same reason — a lane reader sees the wait mark too.
+    set_from(&mut next, "waiting_on", wf);
     // `(existing && existing.created_at) || wf.created_at || new Date()...`
     let created_at = existing
         .as_ref()
