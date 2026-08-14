@@ -1151,3 +1151,174 @@ fn deliberate_red_an_unlocked_ledger_append_silently_drops_holds() {
          control must demonstrate a lost update, or the all-survive result above proves nothing."
     );
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 6. deferred-queue claim — exactly one winner, N-1 typed CLAIMED refusals.
+//    New for D5 (traceable-runs). There is no .mjs oracle for this verb — it
+//    never existed on the Node runtime — so this file IS the oracle, proven
+//    the same way every race above is proven: real OS processes for the
+//    green path, N real OS threads behind a Barrier for the falsifiability
+//    control. `deferred-queue claim`'s exclusivity rests on the same
+//    `lock::acquire_store_lock_once` O_EXCL store lock `cells claim`
+//    contends on (scenario 1 above), just with a different lock name and a
+//    JSONL append instead of a per-cell claim file.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Retry twin of `read_json_retry`, for a whole-file text read of the
+/// append-only JSONL store (no JSON parse — a line is checked by substring).
+fn read_to_string_retry(path: &Path) -> String {
+    for _ in 0..100 {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            return text;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("could not read {} after 100 attempts", path.display());
+}
+
+/// Retry twin of `write_retry`, but APPENDING a single JSONL line rather than
+/// truncating — the shape the deferred-queue store actually uses on every
+/// write, guarded and unguarded alike.
+fn append_retry(path: &Path, line: &str) {
+    use std::io::Write;
+    for _ in 0..100 {
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            if f.write_all(line.as_bytes()).is_ok() {
+                return;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("could not append to {} after 100 attempts", path.display());
+}
+
+fn dq_add(fx: &Fixture, reason: &str) -> String {
+    let out = run_bee(
+        fx,
+        &["deferred-queue", "add", "--kind", "capture", "--feature", "race-feat", "--reason", reason, "--json"],
+        "dq-add",
+    );
+    assert_eq!(out.code, 0, "seeding a deferred-queue item must succeed: {}", out.message());
+    out.json()
+        .and_then(|v| v.get("id").and_then(|i| i.as_str()).map(str::to_string))
+        .unwrap_or_else(|| panic!("dq add did not return an id: {}", out.stdout))
+}
+
+#[test]
+fn one_claimant_wins_the_deferred_queue_item_and_every_loser_is_a_typed_claimed_refusal() {
+    let fx = fixture();
+    let probe_id = dq_add(&fx, "probe item");
+    let race_id = dq_add(&fx, "race item");
+
+    if !native_probe(
+        &fx,
+        &["deferred-queue", "claim", "--id", &probe_id, "--owner", "probe-owner", "--json"],
+        "deferred-queue claim race",
+    ) {
+        return;
+    }
+
+    let argvs: Vec<Vec<String>> = (0..RACERS)
+        .map(|i| {
+            vec![
+                "deferred-queue".to_string(),
+                "claim".to_string(),
+                "--id".to_string(),
+                race_id.clone(),
+                "--owner".to_string(),
+                format!("owner-{i}"),
+                "--json".to_string(),
+            ]
+        })
+        .collect();
+    let racers = race(&fx, argvs, "dq-claim");
+    assert_all_native(&racers, "deferred-queue claim race");
+
+    let winners: Vec<&Racer> = racers.iter().filter(|r| r.code == 0).collect();
+    let losers: Vec<&Racer> = racers.iter().filter(|r| r.code != 0).collect();
+    assert_eq!(
+        winners.len(),
+        1,
+        "exactly one of {RACERS} concurrent claimants may win the deferred-queue item; got {} \
+         winners: {:#?}",
+        winners.len(),
+        winners.iter().map(|r| &r.stdout).collect::<Vec<_>>()
+    );
+    assert_eq!(losers.len(), RACERS - 1, "every non-winner must be a typed refusal, not a crash");
+
+    let winner = winners[0].json().expect("the winner emits the claimed item as JSON");
+    let winner_owner = winner["claim"]["owner"]
+        .as_str()
+        .expect("the winning claim stamps claim.owner")
+        .to_string();
+
+    // The VALUE of each refusal: it must name the CLAIMED state and the
+    // ACTUAL winner, not merely fail.
+    for loser in &losers {
+        let msg = loser.message();
+        assert!(
+            msg.contains("already claimed"),
+            "a losing claimant's refusal must name the CLAIMED state; got: {msg}"
+        );
+        assert!(
+            msg.contains(&winner_owner),
+            "a losing claimant's refusal must name the actual winner \"{winner_owner}\"; got: {msg}"
+        );
+    }
+
+    // The store agrees with the reported outcome: exactly one live claim on
+    // this id, owned by the reported winner.
+    let listed = run_bee(&fx, &["deferred-queue", "list", "--claimed", "claimed", "--json"], "dq-list");
+    assert_eq!(listed.code, 0, "{}", listed.message());
+    let items = listed.json().and_then(|v| v.get("items").cloned()).unwrap_or(Value::Array(vec![]));
+    let items = items.as_array().cloned().unwrap_or_default();
+    let matching: Vec<&Value> = items.iter().filter(|i| i["id"].as_str() == Some(race_id.as_str())).collect();
+    assert_eq!(
+        matching.len(),
+        1,
+        "the store must show exactly one claimed row for the race item: {items:#?}"
+    );
+    assert_eq!(matching[0]["claim"]["owner"].as_str(), Some(winner_owner.as_str()));
+}
+
+#[test]
+fn deliberate_red_an_unguarded_deferred_queue_claim_lets_every_racer_believe_it_won() {
+    // DELIBERATE RED (falsifiability) — the green result above is only
+    // meaningful if a claim WITHOUT the store-lock arbitration would let more
+    // than one racer believe it won. This reproduces the production
+    // `attempt_claim` decision (no existing "claim" event for this id yet ->
+    // append one) with the lock removed, as TEST-OWNED code — never calling
+    // the production function, matching this file's own rationale for
+    // hand-duplicating `lock_file`/`lease_file`: a control built by calling
+    // the thing it exists to prove could never catch that thing changing
+    // shape.
+    let fx = fixture();
+    let id = dq_add(&fx, "unguarded");
+    let path = fx.root.join(".bee").join("deferred-queue.jsonl");
+
+    let believed_claimable = unguarded(
+        RACERS,
+        |_| {
+            let text = read_to_string_retry(&path);
+            let needle_id = format!("\"id\":\"{id}\"");
+            !text.lines().any(|l| l.contains(&needle_id) && l.contains("\"event\":\"claim\""))
+        },
+        |i, believed| {
+            if *believed {
+                let line = format!(
+                    "{{\"ts\":\"2026-01-01T00:00:00.000Z\",\"event\":\"claim\",\"id\":\"{id}\",\"owner\":\"unguarded-{i}\",\"claimed_at\":\"2026-01-01T00:00:00.000Z\",\"ttl_seconds\":3600}}\n"
+                );
+                append_retry(&path, &line);
+            }
+        },
+    );
+
+    let believed = believed_claimable.iter().filter(|b| **b).count();
+    assert_eq!(
+        believed, RACERS,
+        "DETECTOR DID NOT BITE: only {believed}/{RACERS} unguarded racers saw the item unclaimed \
+         and believed they had claimed it. The barrier guarantees every read precedes every \
+         write, so this control MUST show every racer double-claiming — otherwise the \
+         single-winner result above proves nothing."
+    );
+}
