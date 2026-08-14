@@ -27,10 +27,15 @@
 // settled BEFORE the read, as verbs/cells.rs run_add/run_update already do.
 //
 // Still delegating: any unknown flag, missing required flag, or --help, all
-// before any output. `render`/`supersede` additionally delegate when a group
-// key or a superseded id leaves the calibrated region — see `collation_safe`
-// and run_supersede's ASCII guard (localeCompare collation over free prose,
-// deliberately out of the corrupt-JSON cutover's scope).
+// before any output. `supersede` additionally delegates when a superseded id
+// leaves the calibrated region — see run_supersede's ASCII guard
+// (localeCompare collation over free prose, deliberately out of the
+// corrupt-JSON cutover's scope). `render` no longer has such a guard:
+// retire-collation-guard D1 removed `collation_safe`, since the comparator it
+// gated (`lc_primary_key`) is total and the Node oracle it preserved parity
+// with is gone from this build. `render` can still return Ex through
+// `active_decisions`/`build_tag_overlay` on a null event or an inconsistent
+// date comparator — that family is filed, not fixed (D3).
 //
 // Provenance: bee.mjs handleDecisionsLog/Active/Search/Tag/Redact/Archive/
 // Supersede/Render + lib/decisions.mjs supersedeDecision/
