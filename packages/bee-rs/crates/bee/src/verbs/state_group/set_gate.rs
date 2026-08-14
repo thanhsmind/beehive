@@ -25,7 +25,7 @@ use crate::verbs::workflow_store::{
     rebuild_lane_projection_reporting, rebuild_state_projection,
     rebuild_state_projection_reporting, update_workflow, update_workflow_assuming_lock,
     update_workflow_assuming_lock_with, wf_id, workflows_list_sort, write_lane,
-    write_mailbox_handoff, MailboxAdopt,
+    write_mailbox_handoff, MailboxAdopt, GATE_ACTOR_VALUES, GATE_BYPASS_LEVELS,
 };
 use crate::verbs::decisions::{do_log, LogParams};
 use crate::verbs::drivers::{has_capture_deferral_decision, js_join, scribing_debt};
@@ -546,7 +546,10 @@ pub(crate) fn run_set_body(root: &Path, flags: &Flags) -> R2<Out> {
 // ─── state gate ────────────────────────────────────────────────────────────
 
 pub(crate) fn run_gate(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !keys_known(&flags, &["name", "merge", "approved", "lane", "no-lane", "owner"]) {
+    if !keys_known(
+        &flags,
+        &["name", "merge", "approved", "lane", "no-lane", "owner", "actor", "bypass-level", "reason"],
+    ) {
         return None;
     }
     for b in ["merge", "no-lane"] {
@@ -632,6 +635,35 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
         (values[0].clone(), values[1].clone())
     };
     let approved = approved_raw == "true";
+    // D2/D3: the caller-provided trace — who moved the gate, under what
+    // bypass level, and why. Validated and refused BEFORE any lock or
+    // mutation, so an invalid or under-specified call writes nothing.
+    let actor = flag_value(flags, "actor").unwrap_or_else(|| "user".to_string());
+    if !GATE_ACTOR_VALUES.contains(&actor.as_str()) {
+        return Ok(Out::Thrown(format!(
+            "gate: --actor \"{actor}\" is not recognized \u{2014} must be one of {}.",
+            GATE_ACTOR_VALUES.join("/")
+        )));
+    }
+    let bypass_level = flag_value(flags, "bypass-level").filter(|s| !s.is_empty());
+    if let Some(bl) = &bypass_level {
+        if !GATE_BYPASS_LEVELS.contains(&bl.as_str()) {
+            return Ok(Out::Thrown(format!(
+                "gate: --bypass-level \"{bl}\" is not recognized \u{2014} must be one of {}.",
+                GATE_BYPASS_LEVELS.join("/")
+            )));
+        }
+    }
+    let reason = flag_value(flags, "reason").filter(|s| !s.is_empty());
+    if actor == "auto" && (bypass_level.is_none() || reason.is_none()) {
+        // D2: "an auto-approval writes the same record with actor: auto plus
+        // the bypass level and reason" — an auto call that cannot say why it
+        // did not stop is refused outright, so a bypassed run is never LESS
+        // traceable than a stopped one.
+        return Ok(Out::Thrown(
+            "gate: --actor auto requires both --bypass-level and --reason \u{2014} an auto-approval must record the bypass level and the reason it did not stop (D2). FIX: pass --bypass-level <off|normal|full|total> and --reason \"<text>\".".to_string(),
+        ));
+    }
     let (lane_feature, no_lane) = match mutation_lane_selector(flags, "gate") {
         Ok(v) => v,
         Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
@@ -711,6 +743,42 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
     }
     let record = target.record().clone();
     write_through_projection(root, &target, &record, &stamps)?;
+    // D2/D3: stamp the caller's trace — actor, timestamp, reason, bypass
+    // level — onto exactly the gate entry/entries this call touched, on the
+    // LIVE WORKFLOW RECORD only. `approved_gates` (legacy state/lane files)
+    // never carried actor/reason, so there is nothing to mirror there. The
+    // routed feature is computed the SAME way `write_through_projection`
+    // computes it (a lane's own name, or the record's own `feature` field —
+    // NOT `scope.feature`, which `resolve_mutation_lock_scope` deliberately
+    // leaves `None` for a `--no-lane` default-record call): a gate mutation
+    // never changes `feature`, so `target.record()`'s value here is the same
+    // one that write above just routed by. No live workflow (C1: a repo
+    // with zero workflow records) means nothing to stamp — the run behaves
+    // exactly as before for that case.
+    let routed_feature = match target.lane() {
+        Some(l) => Some(l.to_string()),
+        None => target.record().get("feature").filter(|v| truthy(v)).map(js_disp),
+    };
+    if let Some(wf) = routed_feature.as_deref().and_then(|f| find_live_workflow(&workflows, f)) {
+        let touched: Vec<&str> = if merge { vec!["shape", "execution"] } else { vec![name.as_str()] };
+        let at = now_iso();
+        let reason_value = reason.clone().map_or(Value::Null, Value::String);
+        let bypass_value = bypass_level.clone().map_or(Value::Null, Value::String);
+        update_workflow_assuming_lock_with(root, &wf_id(wf), |_current| {
+            let mut gates = Map::new();
+            for gate_name in &touched {
+                let mut entry = Map::new();
+                entry.insert("actor".into(), json!(actor));
+                entry.insert("at".into(), json!(at));
+                entry.insert("reason".into(), reason_value.clone());
+                entry.insert("bypass_level".into(), bypass_value.clone());
+                gates.insert((*gate_name).to_string(), Value::Object(entry));
+            }
+            let mut patch = Map::new();
+            patch.insert("gates".into(), Value::Object(gates));
+            Ok(patch)
+        })?;
+    }
     drop(locks);
     let text = if merge {
         format!("Gates \"shape\" and \"execution\" set to {approved}.{lane_note}")
@@ -1471,6 +1539,229 @@ mod tests {
         let lane = read_json_file(root, ".bee/lanes/gate-door-legal-merge.json");
         assert_eq!(lane["approved_gates"]["execution"], json!(true));
         assert_eq!(lane["approved_gates"]["shape"], json!(true));
+    }
+
+    // ── run_gate_body — D2/D3 actor/bypass-level/reason trace (trun-2) ─────
+    //
+    // `default_gate_entry()` already seeds every gate's `state` as
+    // "pending" at record-creation time (trun-1, pinned in tests.rs); this
+    // cell's own job is the actor side of D2/D3 — `bee state gate` records
+    // WHO moved the gate, under what bypass level, and why, on the LIVE
+    // WORKFLOW RECORD (`.bee/runtime/workflows/<id>/state.json`), never on
+    // the legacy state/lane file, which never carried actor/reason.
+
+    fn write_gate_trace_fixture(root: &Path, feature: &str, mode: Option<&str>) {
+        let state = match mode {
+            Some(m) => format!(r#"{{"phase":"planning","feature":"{feature}","mode":"{m}"}}"#),
+            None => format!(r#"{{"phase":"planning","feature":"{feature}"}}"#),
+        };
+        w(root, ".bee/state.json", &state);
+        w(
+            root,
+            ".bee/runtime/workflows/wf-1/state.json",
+            &format!(
+                r#"{{"id":"wf-1","feature":"{feature}","status":"active","phase":"planning","created_at":"2026-01-01T00:00:00.000Z"}}"#
+            ),
+        );
+    }
+
+    /// Truth 1: `--actor` defaults to "user" and, on approval, the touched
+    /// gate's entry on the workflow record carries `state: approved`,
+    /// `actor: user` and a real timestamp — untouched gates stay pending.
+    #[test]
+    fn gate_approval_by_the_default_user_actor_records_state_actor_and_a_timestamp() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-trace-user", None);
+        let out = run_gate_body(
+            root,
+            &flags(&["--no-lane", "--name", "context", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(..) = out else { panic!("expected the approval to succeed") };
+        let wf = read_json_file(root, ".bee/runtime/workflows/wf-1/state.json");
+        assert_eq!(wf["gates"]["context"]["state"], json!("approved"), "{wf:?}");
+        assert_eq!(wf["gates"]["context"]["actor"], json!("user"), "{wf:?}");
+        assert!(wf["gates"]["context"]["at"].is_string(), "{wf:?}");
+        assert_eq!(wf["gates"]["context"]["reason"], Value::Null, "{wf:?}");
+        assert_eq!(wf["gates"]["context"]["bypass_level"], Value::Null, "{wf:?}");
+        assert_eq!(wf["gates"]["shape"]["state"], json!("pending"), "untouched gate: {wf:?}");
+    }
+
+    /// Truth 2: `--actor auto --bypass-level normal --reason X` records all
+    /// three on the entry.
+    #[test]
+    fn gate_approval_by_actor_auto_records_bypass_level_and_reason() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-trace-auto", None);
+        let out = run_gate_body(
+            root,
+            &flags(&[
+                "--no-lane", "--name", "review", "--approved", "true",
+                "--actor", "auto", "--bypass-level", "normal", "--reason", "gate_bypass=normal",
+            ]),
+        )
+        .unwrap();
+        let Out::Emit(..) = out else { panic!("expected the auto approval to succeed") };
+        let wf = read_json_file(root, ".bee/runtime/workflows/wf-1/state.json");
+        assert_eq!(wf["gates"]["review"]["state"], json!("approved"), "{wf:?}");
+        assert_eq!(wf["gates"]["review"]["actor"], json!("auto"), "{wf:?}");
+        assert_eq!(wf["gates"]["review"]["bypass_level"], json!("normal"), "{wf:?}");
+        assert_eq!(wf["gates"]["review"]["reason"], json!("gate_bypass=normal"), "{wf:?}");
+    }
+
+    /// Truth 3a: `--actor auto` without `--bypass-level` refuses (D2 — an
+    /// auto-approval must never be LESS traceable than a stopped run) and
+    /// writes nothing to either the legacy record or the workflow record.
+    #[test]
+    fn gate_actor_auto_without_bypass_level_refuses_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-trace-auto-no-level", None);
+        let before_state = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        let before_wf =
+            std::fs::read_to_string(root.join(".bee/runtime/workflows/wf-1/state.json")).unwrap();
+        let out = run_gate_body(
+            root,
+            &flags(&[
+                "--no-lane", "--name", "context", "--approved", "true",
+                "--actor", "auto", "--reason", "ci",
+            ]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else {
+            panic!("expected an auto call without --bypass-level to refuse")
+        };
+        assert!(msg.contains("--bypass-level"), "{msg}");
+        assert!(msg.contains("--reason"), "{msg}");
+        let after_state = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        let after_wf =
+            std::fs::read_to_string(root.join(".bee/runtime/workflows/wf-1/state.json")).unwrap();
+        assert_eq!(after_state, before_state, "a refusal must write nothing to the legacy record");
+        assert_eq!(after_wf, before_wf, "a refusal must write nothing to the workflow record");
+    }
+
+    /// Truth 3b: the same door on the missing side — `--bypass-level`
+    /// present, `--reason` absent — also refuses and writes nothing.
+    #[test]
+    fn gate_actor_auto_without_reason_refuses_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-trace-auto-no-reason", None);
+        let before_state = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        let out = run_gate_body(
+            root,
+            &flags(&[
+                "--no-lane", "--name", "context", "--approved", "true",
+                "--actor", "auto", "--bypass-level", "full",
+            ]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else {
+            panic!("expected an auto call without --reason to refuse")
+        };
+        assert!(msg.contains("--bypass-level"), "{msg}");
+        assert!(msg.contains("--reason"), "{msg}");
+        let after_state = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        assert_eq!(after_state, before_state, "a refusal must write nothing");
+    }
+
+    /// Truth 4: `--approved false` still stamps `gate_revoked_at` exactly as
+    /// before AND the workflow record's entry reads `state: rejected`,
+    /// while still carrying who rejected it and why.
+    #[test]
+    fn gate_rejection_stamps_revoked_and_records_rejected_state_and_actor() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-trace-reject", None);
+        run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"])).unwrap();
+        let out = run_gate_body(
+            root,
+            &flags(&[
+                "--no-lane", "--merge", "--approved", "false",
+                "--actor", "user", "--reason", "found a defect",
+            ]),
+        )
+        .unwrap();
+        let Out::Emit(..) = out else { panic!("expected the revocation to succeed") };
+        let state = read_json_file(root, ".bee/state.json");
+        assert!(state["gate_revoked_at"]["execution"].is_string(), "{state:?}");
+        let wf = read_json_file(root, ".bee/runtime/workflows/wf-1/state.json");
+        assert_eq!(wf["gates"]["execution"]["state"], json!("rejected"), "{wf:?}");
+        assert_eq!(wf["gates"]["execution"]["actor"], json!("user"), "{wf:?}");
+        assert_eq!(wf["gates"]["execution"]["reason"], json!("found a defect"), "{wf:?}");
+    }
+
+    /// Input extremes: an unrecognized `--actor` refuses loudly, naming the
+    /// legal values, and writes nothing.
+    #[test]
+    fn gate_refuses_an_unknown_actor_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-trace-bad-actor", None);
+        let before = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        let out = run_gate_body(
+            root,
+            &flags(&["--no-lane", "--name", "context", "--approved", "true", "--actor", "robot"]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else { panic!("expected an unknown --actor to be refused") };
+        assert!(msg.contains("robot"), "{msg}");
+        assert!(msg.contains("user"), "{msg}");
+        assert!(msg.contains("auto"), "{msg}");
+        let after = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        assert_eq!(after, before, "a refusal must write nothing");
+    }
+
+    /// Input extremes: an unrecognized `--bypass-level` refuses loudly, even
+    /// while `--actor` is the default "user".
+    #[test]
+    fn gate_refuses_an_unknown_bypass_level_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-trace-bad-level", None);
+        let before = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        let out = run_gate_body(
+            root,
+            &flags(&[
+                "--no-lane", "--name", "context", "--approved", "true", "--bypass-level", "extreme",
+            ]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else {
+            panic!("expected an unknown --bypass-level to be refused")
+        };
+        assert!(msg.contains("extreme"), "{msg}");
+        assert!(msg.contains("normal"), "{msg}");
+        let after = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        assert_eq!(after, before, "a refusal must write nothing");
+    }
+
+    /// `--merge` still addresses shape+execution together (no change to
+    /// that semantics) and stamps the SAME actor/bypass/reason trace onto
+    /// both entries in one call.
+    #[test]
+    fn gate_merge_with_actor_auto_writes_the_same_trace_to_shape_and_execution() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-trace-merge-auto", None);
+        let out = run_gate_body(
+            root,
+            &flags(&[
+                "--no-lane", "--merge", "--approved", "true",
+                "--actor", "auto", "--bypass-level", "full", "--reason", "gate_bypass=full",
+            ]),
+        )
+        .unwrap();
+        let Out::Emit(..) = out else { panic!("expected the merged approval to succeed") };
+        let wf = read_json_file(root, ".bee/runtime/workflows/wf-1/state.json");
+        for gate in ["shape", "execution"] {
+            assert_eq!(wf["gates"][gate]["state"], json!("approved"), "{wf:?}");
+            assert_eq!(wf["gates"][gate]["actor"], json!("auto"), "{wf:?}");
+            assert_eq!(wf["gates"][gate]["bypass_level"], json!("full"), "{wf:?}");
+            assert_eq!(wf["gates"][gate]["reason"], json!("gate_bypass=full"), "{wf:?}");
+        }
     }
 
     // ── run_set_body — the feature-swap scribing-debt door (fsd-1) ─────────

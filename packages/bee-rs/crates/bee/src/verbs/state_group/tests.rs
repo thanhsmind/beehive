@@ -159,6 +159,37 @@ use std::time::Instant;
         assert_eq!(ok(list_workflows(root)).len(), 3);
     }
 
+    /// trun-2 / D1 / D3: a run enters "awaiting approval" on its own — a
+    /// brand-new record's every gate is seeded `state: "pending"` without
+    /// anyone typing it. `run_start_feature`'s own record-creation call
+    /// (`ensure_workflow_record_for_feature(..., gates: None)`, exercised
+    /// here directly) is the seam; the actual attachment point that makes
+    /// this true is `default_gate_entry()` (workflow_store/record.rs,
+    /// landed by trun-1) via `create_workflow`'s `merge_gates(None, None)` —
+    /// NOT `default_gates()` in this file's `policy.rs`, which only resets
+    /// the PROJECTED `approved_gates` boolean `.bee/state.json` carries for
+    /// the write guard, never the record's own `state`/`actor`/`at`/
+    /// `reason`/`bypass_level` fields D3 added. Left untouched for that
+    /// reason — see the cell's deviation note.
+    #[test]
+    fn a_new_feature_record_seeds_every_gate_as_pending() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        ok(ensure_workflow_record_for_feature(
+            root, "trace-me", "planning", None, None, None, None,
+        ));
+        let records = ok(list_workflows(root));
+        let record = records
+            .iter()
+            .find(|w| js_disp_opt(w.get("feature")) == "trace-me")
+            .unwrap();
+        for name in ["context", "shape", "execution", "review"] {
+            assert_eq!(record["gates"][name]["state"], json!("pending"), "{record:?}");
+            assert_eq!(record["gates"][name]["approved"], json!(false), "{record:?}");
+            assert_eq!(record["gates"][name]["actor"], Value::Null, "{record:?}");
+        }
+    }
+
     /// closeWorkflowsForFeature closes BY FEATURE — every live record whose
     /// feature differs from `keep`, and is idempotent on a second call.
     #[test]
