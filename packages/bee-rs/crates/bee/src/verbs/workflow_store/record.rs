@@ -201,6 +201,11 @@ pub(crate) fn base_workflow_defaults() -> Map<String, Value> {
     // it fresh), and check_run_state_value accepts null for exactly that
     // reason.
     m.insert("run_state".into(), Value::Null);
+    // D1 (awaiting-human): the wait mark BESIDE run_state — what the agent
+    // is waiting on, if anything. Null is "no live wait", the same shape a
+    // record has always had before this feature and the shape D2's clearing
+    // paths (ah-2) restore it to.
+    m.insert("waiting_on".into(), Value::Null);
     m
 }
 
@@ -340,6 +345,101 @@ pub(crate) fn derive_run_state(status: &str, gates: &Value, cells: &CellCounts) 
         return "done";
     }
     "shaping"
+}
+
+// ─── waiting mark (D1/D3, awaiting-human) ──────────────────────────────────
+
+/// D1: what a waiting mark is ABOUT — a formal gate the human must approve,
+/// or a question the agent asked and has not yet received an answer to.
+/// Closed vocabulary, same typed-refusal discipline `check_gate_entry_fields`
+/// already applies to a gate entry's own `state`.
+pub(crate) const WAITING_ON_KIND_VALUES: [&str; 2] = ["gate", "question"];
+
+/// D1: build a validated waiting mark — `kind` must be in
+/// WAITING_ON_KIND_VALUES, `subject` (the gate name or the question asked)
+/// must be non-empty once trimmed, and `session` (the owning session id —
+/// D4's stale-expiry heartbeat check, ah-2, reclaims against it) must be
+/// non-empty too. Any violation refuses with a typed error and builds
+/// nothing, matching the WORKFLOW_MISSING/WORKFLOW_CORRUPT discipline
+/// already in this module — a caller that refuses writes nothing.
+pub(crate) fn build_waiting_on(kind: &str, subject: &str, session: &str) -> Result<Value, Err2> {
+    if !WAITING_ON_KIND_VALUES.contains(&kind) {
+        return Err(Err2::Msg(format!(
+            "waiting_on: kind must be one of {} (got {}).",
+            WAITING_ON_KIND_VALUES.join("/"),
+            jsjson::stringify(&json!(kind))
+        )));
+    }
+    let subject_trimmed = js_trim(subject);
+    if subject_trimmed.is_empty() {
+        return Err(Err2::Msg(
+            "waiting_on: subject is required \u{2014} name the gate or the question being waited on.".to_string(),
+        ));
+    }
+    let session_trimmed = js_trim(session);
+    if session_trimmed.is_empty() {
+        return Err(Err2::Msg(
+            "waiting_on: session is required \u{2014} it is what a stale-expiry check (D4) reclaims against.".to_string(),
+        ));
+    }
+    Ok(json!({
+        "kind": kind,
+        "subject": subject_trimmed,
+        "asked_at": now_iso(),
+        "session": session_trimmed,
+    }))
+}
+
+/// Whether a `waiting_on` value counts as a LIVE wait: present, an object,
+/// with a `kind` in the closed vocabulary and a non-empty `subject` — the
+/// only shape `build_waiting_on` ever produces. Absent/null (no wait, or a
+/// cleared one — D2) and any other shape (a stray hand-edit) both read as
+/// "not live" rather than a corrupt-record refusal: this feature's readers
+/// only ever need to know whether a wait is currently in force.
+pub(crate) fn waiting_on_is_live(v: Option<&Value>) -> bool {
+    match v {
+        Some(Value::Object(m)) => {
+            matches!(m.get("kind"), Some(Value::String(s)) if WAITING_ON_KIND_VALUES.contains(&s.as_str()))
+                && matches!(m.get("subject"), Some(Value::String(s)) if !js_trim(s).is_empty())
+        }
+        _ => false,
+    }
+}
+
+/// A patch's `waiting_on`, if it names one at all, must be `null` (D2's
+/// clearing shape) or a live mark in `build_waiting_on`'s own shape.
+/// Anything else refuses loudly and writes nothing, matching
+/// `check_patch_run_state`'s discipline for the record's other typed field.
+pub(crate) fn check_patch_waiting_on(patch: &Map<String, Value>) -> Result<(), Err2> {
+    match patch.get("waiting_on") {
+        None | Some(Value::Null) => Ok(()),
+        Some(v) if waiting_on_is_live(Some(v)) => Ok(()),
+        Some(v) => Err(Err2::Msg(format!(
+            "updateWorkflowAssumingLock: waiting_on must be null or an object with kind one of {} and a non-empty subject (got {}).",
+            WAITING_ON_KIND_VALUES.join("/"),
+            jsjson::stringify(v)
+        ))),
+    }
+}
+
+/// D1: the setter — "a verb the agent calls when it asks the human
+/// something" — for the feature-scoped case (a live workflow record). Builds
+/// the mark (refusing and writing nothing on an unknown kind or empty
+/// subject/session) then patches it through the self-locking `update_workflow`,
+/// whose write path recomputes `run_state` fresh and folds this mark into
+/// that derivation (see `update_workflow_assuming_lock_with`).
+#[allow(dead_code)] // not yet wired to a CLI verb — ah-3 owns the read/command surface
+pub(crate) fn set_workflow_waiting_on(
+    root: &Path,
+    id: &str,
+    kind: &str,
+    subject: &str,
+    session: &str,
+) -> Result<Map<String, Value>, Err2> {
+    let mark = build_waiting_on(kind, subject, session)?;
+    let mut patch = Map::new();
+    patch.insert("waiting_on".into(), mark);
+    update_workflow(root, id, patch)
 }
 
 // ─── record read ───────────────────────────────────────────────────────────
@@ -585,6 +685,7 @@ pub(crate) fn update_workflow_assuming_lock_with(
     let patch = updater(&current)?;
     check_patch_status(&patch)?;
     check_patch_run_state(&patch)?;
+    check_patch_waiting_on(&patch)?;
     let mut next = current.clone();
     for (k, v) in &patch {
         next.insert(k.clone(), v.clone());
@@ -604,7 +705,17 @@ pub(crate) fn update_workflow_assuming_lock_with(
     let feature_str = next.get("feature").and_then(Value::as_str).unwrap_or("");
     let gates_val = next.get("gates").cloned().unwrap_or_else(|| Value::Object(default_wf_gates()));
     let counts = cell_counts_for_feature(root, feature_str);
-    next.insert("run_state".into(), json!(derive_run_state(status_str, &gates_val, &counts)));
+    let derived_state = derive_run_state(status_str, &gates_val, &counts);
+    // D1: ONE state, TWO sources — a live `waiting_on` mark reads
+    // awaiting-approval exactly like a pending gate does, whether or not a
+    // gate is ALSO pending (both true still yields this one value, never a
+    // conflict).
+    let final_state = if waiting_on_is_live(next.get("waiting_on")) {
+        "awaiting-approval"
+    } else {
+        derived_state
+    };
+    next.insert("run_state".into(), json!(final_state));
     write_json_atomic(&workflow_state_path(root, &workflow_id), &Value::Object(next.clone()))
         .map_err(|_| Err2::Ex)?;
     Ok(next)

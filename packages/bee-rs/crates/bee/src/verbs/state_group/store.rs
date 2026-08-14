@@ -17,8 +17,8 @@ use crate::verbs::reservations::{
 use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
 use crate::verbs::workspace_store as ws;
 use crate::verbs::workflow_store::{
-    acquire_named_lock, acquire_workflow_lock, adopt_mailbox_handoff, create_workflow,
-    find_live_workflow, NewWorkflow,
+    acquire_named_lock, acquire_workflow_lock, adopt_mailbox_handoff, build_waiting_on,
+    create_workflow, find_live_workflow, NewWorkflow,
     gates_patch_from_record, lane_lock_name, lane_path, list_lanes, list_workflows,
     newest_open_handoff_mailbox_record, projection_lock_name, read_lane_display, read_lane_strict,
     rebuild_handoff_projection, rebuild_handoff_projection_reporting, rebuild_lane_projection,
@@ -61,6 +61,12 @@ pub(crate) fn default_state() -> Map<String, Value> {
         "next_action".into(),
         json!("No active bee work — awaiting a user request."),
     );
+    // D1/D3 (awaiting-human): the wait mark, session-scoped first — this is
+    // where it lives when no feature is active (D3), and the shape
+    // `apply_workflow_d1_fields` copies a live workflow's own mark into once
+    // a feature exists. Null is "no live wait", matching the workflow
+    // record's own default.
+    m.insert("waiting_on".into(), Value::Null);
     m
 }
 
@@ -167,6 +173,36 @@ pub(crate) fn read_state_peek(root: &Path) -> Ex<Map<String, Value>> {
 
 pub(crate) fn write_state(root: &Path, state: &Map<String, Value>) -> Result<(), Err2> {
     write_json_atomic(&state_path(root), &Value::Object(state.clone())).map_err(|_| Err2::Ex)
+}
+
+/// D1/D3 (awaiting-human): the setter for the SESSION-SCOPED case — mark the
+/// default `.bee/state.json` record as waiting on the human when no live
+/// workflow claims the current feature (D3's named gap: a question asked
+/// before any feature exists still needs a home). Shares its typed refusal
+/// with the workflow-record setter via `build_waiting_on` (writes nothing on
+/// an unknown kind or an empty subject/session) — one vocabulary, two
+/// storage locations. `run_state` has no gates/cells to derive from at this
+/// layer (no workflow record exists), so a live mark here writes
+/// "awaiting-approval" directly, the same value the record path derives —
+/// D1's "ONE state" holds across both.
+#[allow(dead_code)] // not yet wired to a CLI verb — ah-3 owns the read/command surface
+pub(crate) fn set_default_state_waiting_on(
+    root: &Path,
+    kind: &str,
+    subject: &str,
+    session: &str,
+) -> Result<Map<String, Value>, Err2> {
+    let mark = build_waiting_on(kind, subject, session)?;
+    let guard = acquire_named_lock(root, "state")?;
+    let out = (|| -> Result<Map<String, Value>, Err2> {
+        let mut current = read_state_strict(root)?;
+        current.insert("waiting_on".into(), mark);
+        current.insert("run_state".into(), json!("awaiting-approval"));
+        write_state(root, &current)?;
+        Ok(current)
+    })();
+    drop(guard);
+    out
 }
 
 // ─── phase rules (state.mjs, chain-integrity door — PURE) ──────────────────

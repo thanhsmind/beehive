@@ -480,7 +480,7 @@ use std::time::Instant;
         let state = read_state_strict(tmp.path()).ok().unwrap();
         assert_eq!(
             jsjson::stringify(&Value::Object(state)),
-            r#"{"schema_version":"1.0","phase":"idle","feature":null,"mode":null,"approved_gates":{"context":false,"shape":false,"execution":false,"review":false},"workers":[],"summary":"","next_action":"No active bee work — awaiting a user request."}"#
+            r#"{"schema_version":"1.0","phase":"idle","feature":null,"mode":null,"approved_gates":{"context":false,"shape":false,"execution":false,"review":false},"workers":[],"summary":"","next_action":"No active bee work — awaiting a user request.","waiting_on":null}"#
         );
     }
 
@@ -545,6 +545,53 @@ use std::time::Instant;
         // File keys override in the default slot order; extras append.
         let keys: Vec<&String> = state.keys().collect();
         assert_eq!(keys.last().unwrap().as_str(), "extra");
+    }
+
+    // ── awaiting-human: the session-scoped mark (D1/D3) ─────────────────────
+
+    /// D3's named gap: a question asked with no active feature still records
+    /// the wait, riding the default `.bee/state.json` record (no workflow,
+    /// no `--feature` involved anywhere in this test).
+    #[test]
+    fn set_default_state_waiting_on_marks_the_record_with_no_feature_active() {
+        let tmp = tmp_root();
+        let baseline = ok(read_state_strict(tmp.path()));
+        assert_eq!(baseline.get("feature"), Some(&Value::Null), "no feature active");
+        assert_eq!(baseline.get("run_state"), None, "no mark yet, no run_state key at all");
+
+        let marked = ok(set_default_state_waiting_on(
+            tmp.path(),
+            "question",
+            "why is X true?",
+            "sess-1",
+        ));
+        assert_eq!(marked.get("run_state"), Some(&json!("awaiting-approval")));
+        assert_eq!(marked.get("waiting_on").and_then(|v| v.get("kind")), Some(&json!("question")));
+        assert_eq!(
+            marked.get("waiting_on").and_then(|v| v.get("subject")),
+            Some(&json!("why is X true?"))
+        );
+        assert_eq!(marked.get("waiting_on").and_then(|v| v.get("session")), Some(&json!("sess-1")));
+
+        // Reads back the same off disk, still with no feature.
+        let on_disk = ok(read_state_strict(tmp.path()));
+        assert_eq!(on_disk.get("feature"), Some(&Value::Null));
+        assert_eq!(on_disk.get("run_state"), Some(&json!("awaiting-approval")));
+    }
+
+    #[test]
+    fn set_default_state_waiting_on_refuses_an_unknown_kind_and_writes_nothing() {
+        let tmp = tmp_root();
+        match set_default_state_waiting_on(tmp.path(), "vibe", "why?", "sess-1") {
+            Err(Err2::Msg(m)) => assert!(m.contains("kind must be one of gate/question"), "{m}"),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+        match set_default_state_waiting_on(tmp.path(), "question", "", "sess-1") {
+            Err(Err2::Msg(m)) => assert!(m.contains("subject is required"), "{m}"),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+        // Nothing was written at all — not even the default record's file.
+        assert!(!tmp.path().join(".bee").join("state.json").exists());
     }
 
     // ── worker add / prune ────────────────────────────────────────────────

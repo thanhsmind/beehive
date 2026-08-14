@@ -358,6 +358,121 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
         );
     }
 
+    // ── awaiting-human: the waiting mark (D1/D3) ────────────────────────────
+
+    #[test]
+    fn build_waiting_on_refuses_unknown_kind_empty_subject_and_empty_session() {
+        match build_waiting_on("vibe", "why?", "sess-1") {
+            Err(Err2::Msg(m)) => assert!(m.contains("kind must be one of gate/question"), "{m}"),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+        match build_waiting_on("question", "   ", "sess-1") {
+            Err(Err2::Msg(m)) => assert!(m.contains("subject is required"), "{m}"),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+        match build_waiting_on("question", "why?", "") {
+            Err(Err2::Msg(m)) => assert!(m.contains("session is required"), "{m}"),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+        let mark = ok(build_waiting_on("question", "why is X true?", "sess-1"));
+        assert_eq!(mark["kind"], json!("question"));
+        assert_eq!(mark["subject"], json!("why is X true?"));
+        assert_eq!(mark["session"], json!("sess-1"));
+        assert!(mark.get("asked_at").is_some());
+        assert!(waiting_on_is_live(Some(&mark)));
+    }
+
+    #[test]
+    fn waiting_on_is_live_only_for_a_well_shaped_mark() {
+        assert!(!waiting_on_is_live(None));
+        assert!(!waiting_on_is_live(Some(&Value::Null)));
+        assert!(!waiting_on_is_live(Some(&json!({"kind": "gate"})))); // no subject
+        assert!(!waiting_on_is_live(Some(&json!({"kind": "vibe", "subject": "x"})))); // bad kind
+        assert!(waiting_on_is_live(Some(&json!({"kind": "gate", "subject": "execution"}))));
+    }
+
+    /// Setting a mark makes run_state read awaiting-approval, WITH NO GATE
+    /// PENDING — the mark alone is sufficient.
+    #[test]
+    fn set_workflow_waiting_on_makes_run_state_read_awaiting_approval_with_no_gate_pending() {
+        let tmp = tmp_root();
+        let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
+        let id = record.get("id").unwrap().as_str().unwrap().to_string();
+        // Approve every gate first: the baseline (no mark) no longer reads
+        // awaiting-approval on its own.
+        let mut approve = Map::new();
+        approve.insert(
+            "gates".into(),
+            json!({
+                "context": {"approved": true, "state": "approved"},
+                "shape": {"approved": true, "state": "approved"},
+                "execution": {"approved": true, "state": "approved"},
+                "review": {"approved": true, "state": "approved"},
+            }),
+        );
+        let approved = ok(update_workflow(tmp.path(), &id, approve));
+        assert_eq!(approved.get("run_state"), Some(&json!("shaping")), "baseline, no wait");
+
+        let marked = ok(set_workflow_waiting_on(tmp.path(), &id, "question", "why is X true?", "sess-1"));
+        assert_eq!(marked.get("run_state"), Some(&json!("awaiting-approval")));
+        assert_eq!(
+            marked.get("waiting_on").and_then(|v| v.get("subject")),
+            Some(&json!("why is X true?"))
+        );
+        assert_eq!(marked.get("waiting_on").and_then(|v| v.get("session")), Some(&json!("sess-1")));
+
+        // Reads back the same off disk.
+        let on_disk = ok(read_workflow_record(tmp.path(), &id));
+        assert_eq!(on_disk.get("run_state"), Some(&json!("awaiting-approval")));
+        assert!(waiting_on_is_live(on_disk.get("waiting_on")));
+    }
+
+    /// A pending gate AND a live mark together still read exactly ONE
+    /// awaiting-approval, never a conflict — a fresh workflow's gates are
+    /// already all pending (its own awaiting-approval condition), so marking
+    /// it on top proves the two sources agree rather than disagreeing.
+    #[test]
+    fn a_pending_gate_and_a_live_waiting_on_mark_together_read_exactly_one_awaiting_approval() {
+        let tmp = tmp_root();
+        let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
+        assert_eq!(record.get("run_state"), Some(&json!("awaiting-approval")), "gate condition alone");
+        let id = record.get("id").unwrap().as_str().unwrap().to_string();
+        let marked = ok(set_workflow_waiting_on(tmp.path(), &id, "gate", "shape", "sess-1"));
+        assert_eq!(marked.get("run_state"), Some(&json!("awaiting-approval")), "both sources, one value");
+    }
+
+    #[test]
+    fn set_workflow_waiting_on_refuses_an_unknown_kind_and_writes_nothing() {
+        let tmp = tmp_root();
+        let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
+        let id = record.get("id").unwrap().as_str().unwrap().to_string();
+        match set_workflow_waiting_on(tmp.path(), &id, "vibe", "why?", "sess-1") {
+            Err(Err2::Msg(m)) => assert!(m.contains("kind must be one of gate/question"), "{m}"),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+        match set_workflow_waiting_on(tmp.path(), &id, "question", "", "sess-1") {
+            Err(Err2::Msg(m)) => assert!(m.contains("subject is required"), "{m}"),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+        // Nothing was written — the record still has no live mark.
+        let on_disk = ok(read_workflow_record(tmp.path(), &id));
+        assert_eq!(on_disk.get("waiting_on"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn check_patch_waiting_on_refuses_a_malformed_patch_and_writes_nothing() {
+        let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1"}));
+        let mut patch = Map::new();
+        patch.insert("waiting_on".into(), json!({"kind": "gate"})); // no subject
+        match update_workflow_assuming_lock(tmp.path(), "wf-1", patch) {
+            Err(Err2::Msg(m)) => assert!(m.contains("waiting_on must be null or an object"), "{m}"),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+        let on_disk = ok(read_workflow_record(tmp.path(), "wf-1"));
+        assert_eq!(on_disk.get("waiting_on"), Some(&Value::Null), "the refused patch wrote nothing");
+    }
+
     // ── listWorkflows skip tolerance (R6 blocker, now native) ─────────────
 
     /// The three ordinary skips, each with the reason bytes `read_workflow_
@@ -818,6 +933,47 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         assert_eq!(next.get("run_state"), Some(&json!("running")));
     }
 
+    /// CRITICAL, same trap, this feature's own field: `apply_workflow_d1_fields`
+    /// must ALSO carry `waiting_on`, or the mark reaches the record but never
+    /// `.bee/state.json` — invisible to `bee status --json`. This test starts
+    /// with a state.json that has NO mark at all and asserts one appears
+    /// after a rebuild, rather than merely checking a rebuild is idempotent
+    /// (which would pass vacuously on an omitted field).
+    #[test]
+    fn apply_workflow_d1_fields_carries_waiting_on_into_the_state_projection() {
+        let tmp = tmp_root();
+        // No `waiting_on` key at all on the starting state.json.
+        write_state_file(tmp.path(), r#"{"phase":"planning","feature":"f1"}"#);
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","status":"active","phase":"swarming",
+                   "mode":"standard","plan_rev":1,"summary":"s","next_action":"n",
+                   "created_at":"2026-01-01T00:00:00.000Z","run_state":"awaiting-approval",
+                   "waiting_on":{"kind":"question","subject":"why is X true?",
+                                 "asked_at":"2026-08-14T00:00:00.000Z","session":"sess-1"},
+                   "gates":{"execution":{"approved":true,"approved_for_plan_rev":1,"state":"approved"}}}),
+        );
+        let before = read_back(&tmp.path().join(".bee").join("state.json"));
+        assert!(before.get("waiting_on").is_none(), "starts with no mark at all");
+
+        ok(rebuild_state_projection(tmp.path()));
+        let out = read_back(&tmp.path().join(".bee").join("state.json"));
+        assert_eq!(
+            out["waiting_on"],
+            json!({"kind":"question","subject":"why is X true?",
+                   "asked_at":"2026-08-14T00:00:00.000Z","session":"sess-1"}),
+            "apply_workflow_d1_fields must copy waiting_on"
+        );
+
+        // Also directly on the function, the same belt-and-suspenders check
+        // run_state's own sibling test applies.
+        let mut next = Map::new();
+        let wf = ok(read_workflow_record(tmp.path(), "wf-1"));
+        apply_workflow_d1_fields(&mut next, &wf);
+        assert_eq!(next.get("waiting_on").and_then(|v| v.get("subject")), Some(&json!("why is X true?")));
+    }
+
     #[test]
     fn state_projection_is_a_noop_when_no_live_workflow_names_the_feature() {
         let tmp = tmp_root();
@@ -899,6 +1055,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
                 "summary",
                 "next_action",
                 "run_state",
+                "waiting_on",
                 "created_at"
             ]
         );
@@ -1295,10 +1452,11 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
             keys,
             vec![
                 "mode", "phase", "plan_rev", "summary", "next_action", "status", "route",
-                "run_state", "id", "feature", "gates", "created_at"
+                "run_state", "waiting_on", "id", "feature", "gates", "created_at"
             ],
             "a JS re-assignment keeps a key's original position — only id/feature/gates/created_at \
-             append; run_state (trun-7) is a new base default, so it sits with route, not appended"
+             append; run_state (trun-7) and waiting_on (awaiting-human) are base defaults, so both \
+             sit with route, not appended"
         );
         assert_eq!(record["id"], json!("wf-explicit"));
         assert_eq!(record["feature"], json!("billing-refunds"), "the feature slug is trimmed");
@@ -1329,7 +1487,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
             .replace(record["created_at"].as_str().unwrap(), "<now>");
         assert_eq!(
             on_disk,
-            "{\n  \"mode\": \"swarm\",\n  \"phase\": \"planning\",\n  \"plan_rev\": 2,\n  \"summary\": \"s\",\n  \"next_action\": \"n\",\n  \"status\": \"paused\",\n  \"route\": null,\n  \"run_state\": \"awaiting-approval\",\n  \"id\": \"wf-explicit\",\n  \"feature\": \"billing-refunds\",\n  \"gates\": {\n    \"context\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"shape\": {\n      \"approved\": true,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"approved\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"execution\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"review\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    }\n  },\n  \"created_at\": \"<now>\"\n}\n"
+            "{\n  \"mode\": \"swarm\",\n  \"phase\": \"planning\",\n  \"plan_rev\": 2,\n  \"summary\": \"s\",\n  \"next_action\": \"n\",\n  \"status\": \"paused\",\n  \"route\": null,\n  \"run_state\": \"awaiting-approval\",\n  \"waiting_on\": null,\n  \"id\": \"wf-explicit\",\n  \"feature\": \"billing-refunds\",\n  \"gates\": {\n    \"context\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"shape\": {\n      \"approved\": true,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"approved\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"execution\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"review\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    }\n  },\n  \"created_at\": \"<now>\"\n}\n"
         );
         // … and readWorkflowRecord round-trips it with no drift at all.
         let read_back = read_workflow_record(root, "wf-explicit").ok().expect("readable");
