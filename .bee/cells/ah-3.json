@@ -52,27 +52,144 @@
     ]
   },
   "trace": {
-    "worker": "dave2",
-    "outcome": null,
+    "worker": "dave3",
+    "outcome": "Six reporting surfaces enumerated and handled: five name a live wait, status --brief deliberately excluded per status-diet D1/D2; enumeration written to docs/history/awaiting-human/reports/ah-3-rework.md",
     "files_changed": [
-      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
       "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
       "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
       "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
-      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+      "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+      "docs/history/awaiting-human/reports/ah-3-rework.md"
     ],
     "deviations": [],
     "friction": null,
-    "capped_at": "2026-08-14T13:26:52.914Z",
+    "capped_at": "2026-08-14T14:26:29.976Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
-    "claimed_at": "2026-08-14T13:04:25.918Z",
+    "claimed_at": "2026-08-14T14:03:23.789Z",
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T13:26:31.925Z"
+    "ran_at": "2026-08-14T14:26:03.685Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "truth1-status-json-exposes-the-mark",
+            "status": "PASS",
+            "evidence": "status_full/build.rs:259 inserts waiting_on from the projected state, beside run_state at :253, read-not-rederived. Tests status_full/tests.rs:3673 (full mark shape asserted through bee status --json) and :3687 (null when no live wait)."
+          },
+          {
+            "id": "truth2-orient-reports-a-live-wait-as-a-blocker",
+            "status": "PASS",
+            "evidence": "orient.rs:327-331 pushes a blocker line \"awaiting human — {kind}: {subject}\" and orient.rs:405 also rides the structured mark on packet.where.waiting_on. Tests status_full/tests.rs:3739 asserts the blocker text AND where.waiting_on.subject==\"D1 or D2?\" (:3751); :3755 asserts no phantom blocker and where.waiting_on==null without a wait."
+          },
+          {
+            "id": "truth3-session-preamble-names-the-wait",
+            "status": "PASS",
+            "evidence": "session_preamble/render.rs:75 waiting_on_note reuses ah-1's waiting_on_is_live rather than re-deriving 'live'; :105-107 appends '| waiting on human — {kind}: {subject}' to the SAME '- Gates:' line budget.rs:476 already renders unconditionally, so there is no second call site to miss."
+          },
+          {
+            "id": "deviation-inline-cfg-test-really-proves-the-surface",
+            "status": "PASS",
+            "evidence": "Judged on the code, not the claim: render.rs:454 session_preamble_names_a_live_wait_at_session_start writes a real .bee/state.json carrying the mark, calls the ACTUAL build_session_preamble(root, None, None) — the same entry point every real preamble goes through — and asserts the produced text contains 'waiting on human — question: D1 or D2?'. That is positive proof the surface NAMES the wait, not merely that nothing broke. Its sibling :474 pins the no-phantom case, and :426 pins the helper. The deviation (inline module because session_preamble/tests.rs was outside the cell's file scope) is sound."
+          },
+          {
+            "id": "truth5-pre-existing-status-json-keys-unchanged",
+            "status": "PASS",
+            "evidence": "git diff 82eea948..ab83623e -- status_full/build.rs render.rs orient.rs prints ZERO '-' lines — additive only, no rename, no retype. status_full/tests.rs:3778 bee_status_json_run_state_and_waiting_on_keep_their_additive_shape asserts the key still exists and is object-or-null over the same fixture."
+          },
+          {
+            "id": "truth4-census-of-reporting-surfaces-is-incomplete",
+            "status": "FAIL",
+            "evidence": "The cell's action required enumerating every surface reporting run_state OR the phase-and-gate situation, covering extras found, and SAYING SO. Two problems. (1) No enumeration was ever recorded: cell trace.outcome is null and docs/history/awaiting-human/reports/ does not exist. (2) The judge's own fresh search finds a FIFTH phase-and-gate reporting surface that neither shows the mark nor was reported: build_compact_capsule in hooks/compaction.rs — it reads .bee/state.json (compaction.rs:187, so waiting_on IS in hand), renders phase/mode/feature/lane (:1421) and '- Gate pending: {gate}' (:1477-1478) via first_open_gate, and never mentions a live wait. That is the text a session reads immediately AFTER a compaction — precisely when it most needs to know it is stopped on a human — and it is the one surface that shares render.rs's own 'three shared renderers' note (render.rs:113) yet does not share gates_line (rg gates_line: one production caller, budget.rs:476). Secondary, weaker: bee status --brief (status_brief.rs:63-69) emits phase+gates for worker startup and carries neither run_state nor waiting_on. NOTE for the orchestrator: must_have truth #4's literal wording is scoped to 'surfaces reporting run_state', and by that letter alone it is satisfied (only build.rs reads run_state, and it shows the mark); this FAIL is an action-alignment failure against 'or the phase-and-gate situation' plus the missing written enumeration.",
+            "failure_signature": "hooks/compaction.rs build_compact_capsule renders phase (:1421) and 'Gate pending' (:1478) from .bee/state.json but never the live waiting_on mark; not covered, not enumerated, trace.outcome null"
+          },
+          {
+            "id": "prohibition-no-status-json-key-rename-or-retype",
+            "status": "PASS",
+            "evidence": "Zero '-' lines in the three status_full files across the whole feature diff (82eea948..ab83623e). Only insertions of the new waiting_on key."
+          },
+          {
+            "id": "prohibition-no-dashboard-ui-web-surface",
+            "status": "PASS",
+            "evidence": "fe0b8885 --stat touches exactly 5 files: hooks/session_preamble/render.rs, status_full/{build,orient,render,tests}.rs. No web/UI path."
+          },
+          {
+            "id": "prohibition-no-change-to-the-marks-shape",
+            "status": "PASS",
+            "evidence": "fe0b8885 does not touch workflow_store/record.rs; render.rs:77 and orient/build read the mark through ah-1's waiting_on_is_live / raw copy rather than reshaping it."
+          },
+          {
+            "id": "verify-reproduced-by-judge",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml re-run read-only: 1768 passed, 0 failed, 11 ignored, exit 0. The cell report's '1642 passed' was a partial count (the src/main.rs unittest binary alone is 1647 at HEAD, and 15 integration suites add 121 more); zero tests were lost — git diff 82eea948..ab83623e over packages/bee-rs/**/*.rs removes no `#[test]` and no `fn` line, and the #[test] attribute count rises 1752 -> 1790."
+          }
+        ],
+        "failure_signature": "Census incomplete: hooks/compaction.rs build_compact_capsule reads .bee/state.json (:187) and renders phase (:1421) plus '- Gate pending: {gate}' (:1478) but never a live waiting_on mark, so the post-compaction surface stays silent about a human wait; it was neither covered nor reported, and no enumeration exists at all (trace.outcome null, no docs/history/awaiting-human/reports/). Secondary: bee status --brief (status_brief.rs:63-69) likewise reports phase+gates with no mark.",
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T14:02:10.186Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "fifth-surface-now-wired-and-tested",
+            "status": "PASS",
+            "evidence": "compaction.rs:1434 `if let Some(note) = waiting_on_note(&record) { status.push(format!(\"- Waiting on human — {note}\")); }`, placed right after the Phase/Mode/Feature/Lane line. It imports the helper (compaction.rs:40 `waiting_on_note` from hooks::session_preamble), so there is ONE derivation of live and ONE kind:subject wording — render.rs:75 waiting_on_note, which itself calls workflow_store::waiting_on_is_live. No second copy anywhere: rg 'Gate pending' repo-wide returns exactly one production renderer (compaction.rs:1489). Two tests drive the real build_compact_capsule(root, Some(\"s1\"), None): compaction.rs:1679 asserts the text contains '- Waiting on human — question: D1 or D2?' from a real .bee/state.json fixture (positive proof, not just 'nothing broke'), and :1697 pins the no-phantom case. Both ran green in my re-run."
+          },
+          {
+            "id": "judge-own-fresh-census",
+            "status": "PASS",
+            "evidence": "I ran my own search, not the worker's. (1) run_state: `rg -n run_state --glob '!**/tests.rs'` over crates/bee/src — the ONLY reader-facing render is status_full/build.rs:253; every other hit is projection/validation machinery (workflow_store/{projections,record}.rs, state_group/store.rs). Wired. (2) phase-and-gate renderers: `rg -ln 'Phase:|Gate pending|Gates:|gates_line|first_open_gate|phase='` yields status_full/{render,orient}.rs, session_preamble/{budget,render}.rs, compaction.rs, status_brief.rs, prompt_context.rs, plus non-render machinery (chain_nudge.rs = pipeline-phase resolution, set_gate.rs = change log, state.rs = legacy coercion). Result: surfaces 1-4 wired in the first pass, surface 5 (capsule) wired by this rework, surface 6 (--brief) deliberately excluded. I found NO seventh surface that stays wrongly silent."
+          },
+          {
+            "id": "written-enumeration-accurate-but-omits-three-phase-rendering-call-sites",
+            "status": "PASS",
+            "evidence": "docs/history/awaiting-human/reports/ah-3-rework.md exists (the prior FAIL's second half) and its six-row table is accurate line-for-line where I checked it: build.rs:259, orient.rs:327/:405, render.rs:193, session_preamble/render.rs:105, compaction.rs, status_brief.rs; BriefState really is only phase/feature/mode/gates/route (state.rs:34-40). Three call sites its 'no seventh surface' sweep does not name: (a) prompt_context.rs:840-853 build_prompt_reminder, which really does render 'bee: phase=… / gate pending: …' to a reader every turn; (b) state_group/workflows.rs:56 `bee state workflows list` (per-record phase); (c) state_group/sessions.rs:571 `bee state handoff show` (the handoff record's own phase). All three are correctly OUT anyway, and (a) is the interesting one: the reminder text is computed in plan() and emitted at execute():300 — AFTER ah-2's clear at execute():298 — so naming a wait there would print 'waiting on human' on the very turn the human spoke; wiring it would also violate ah-2's live prohibition 'No change to what the UserPromptSubmit hook already emits'. (b) and (c) are record inventories, and their JSON already carries waiting_on because they emit whole records. So this is a completeness gap in the prose sweep, not a silent surface — no behavior is missing."
+          },
+          {
+            "id": "status-brief-deviation-judged-on-its-merits",
+            "status": "PASS",
+            "evidence": "The rationale is real and checkable, not convenient. docs/history/status-diet/CONTEXT.md:21 (D1) reads verbatim: '`bee status --brief` (with --json): reads ONLY the state layer needed for orientation — phase, feature, mode, gates, gate_bypass_level, ship_visibility, route — no cells scan, no review scan, no handoff resolution, no models/tier_mix. Target <50ms wall, <400B JSON. Full `status` unchanged for humans/orchestrator routing.' D2 (:22) makes --brief worker startup's cheap liveness ping, with `cells show` the claim authority. The code matches the doc: status_brief.rs:61 comment 'buildStatusBrief's frozen 7-key order' over exactly those seven inserts, and state.rs:34-40 BriefState carries no waiting_on. A live human wait is a handoff-shaped fact, which D1 names as explicitly out of scope, and the readers who ROUTE on it (human, orchestrator) use full status/orient, both wired. Wiring it means an 8th key on a frozen-order JS-parity surface plus a new BriefState field in state.rs — outside the cell's declared file list. I judge the deviation sound. Caveat for the orchestrator: the perf half of the argument is thin (waiting_on is already in the state.json read, so it costs no extra I/O); the load-bearing half is the frozen shape and the out-of-scope file, and that half holds. If the user wants --brief to carry the mark, it is its own scoped decision cell, not a rework fix."
+          },
+          {
+            "id": "prohibitions-still-respected",
+            "status": "PASS",
+            "evidence": "c5dc3d70 --stat: exactly 2 files (hooks/compaction.rs, docs/history/awaiting-human/reports/ah-3-rework.md), 114 insertions, 1 deletion (the deletion is the `HandoffOutcome,` import line being rewritten as `waiting_on_note, HandoffOutcome,`). No status_full file touched -> no bee status --json key renamed or retyped. No dashboard/UI/web path — the capsule is hook text. No change to the mark's shape: workflow_store/record.rs untouched, and compaction reads the mark only through ah-1's waiting_on_is_live via waiting_on_note."
+          },
+          {
+            "id": "verify-reproduced-by-judge",
+            "status": "PASS",
+            "evidence": "Re-ran read-only from /home/thanhsmind/projects/goglbe/beehive--wt--awaiting-human: `cargo test --release --manifest-path packages/bee-rs/Cargo.toml`, exit 0. TOTAL across all 16 `test result:` lines: 1772 passed, 0 failed, 11 ignored. The rework report's own '1649 passed (unit)' at ah-3-rework.md:71 is again a single-suite count, not the run total — the number to quote is 1772."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T14:24:41.186Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-14T14:02:10.186Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   }
 }

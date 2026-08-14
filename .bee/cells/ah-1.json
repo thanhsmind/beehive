@@ -80,6 +80,66 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T13:03:33.728Z"
+    "ran_at": "2026-08-14T13:03:33.728Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-mark-drives-awaiting-approval-no-gate-pending",
+            "status": "PASS",
+            "evidence": "record.rs:883-888 update_workflow_assuming_lock_with overrides derived_state with \"awaiting-approval\" when waiting_on_is_live(next.waiting_on); derive_run_state (record.rs:304) untouched. Test workflow_store/tests.rs:397 approves ALL four gates first (asserts baseline run_state==\"shaping\") then sets the mark and asserts awaiting-approval, on disk too (:426)."
+          },
+          {
+            "id": "truth2-no-feature-default-record",
+            "status": "PASS",
+            "evidence": "state_group/store.rs:189-206 set_default_state_waiting_on locks \"state\", writes the mark + run_state=awaiting-approval on the default record. Test state_group/tests.rs:553 asserts feature==null before AND after, run_state absent before, awaiting-approval after, read back off disk. No workflow, no --feature anywhere in the test."
+          },
+          {
+            "id": "truth3-typed-refusal-writes-nothing",
+            "status": "PASS",
+            "evidence": "record.rs:365-391 build_waiting_on refuses unknown kind / empty subject / empty session before any write; record.rs:413 check_patch_waiting_on guards the patch path. Tests: workflow_store/tests.rs:364, :445 (asserts on_disk waiting_on still Null after both refusals), :463; state_group/tests.rs:~578 asserts .bee/state.json was never even created."
+          },
+          {
+            "id": "truth4-projection-carries-the-mark-nonvacuously",
+            "status": "PASS",
+            "evidence": "projections.rs:125 set_from(next,\"waiting_on\",wf) and :254 for the lane twin. The named trap is closed by workflow_store/tests.rs:1133: state.json is seeded WITHOUT the key, tests.rs:1148 asserts before.get(\"waiting_on\").is_none(), then rebuild_state_projection and :1152 asserts the full mark object appears. Not a round-trip; a vacuous idempotence test could not pass this."
+          },
+          {
+            "id": "truth5-both-sources-one-value",
+            "status": "PASS",
+            "evidence": "workflow_store/tests.rs:435 a fresh workflow (all gates pending, run_state already awaiting-approval at :438) then set_workflow_waiting_on -> still exactly \"awaiting-approval\" (:441). The if/else at record.rs:883 makes a conflict structurally impossible."
+          },
+          {
+            "id": "truth6-run_state-reader-census",
+            "status": "PASS",
+            "evidence": "Judge's own fresh search (rg run_state over crates/bee/src, tests excluded): only writers record.rs:878/:1036 + projections.rs:119/:251, one persisted-value reader status_full/build.rs:253, and state_group/store.rs:200. build.rs is the surface ah-3 extends (build.rs:259 emits waiting_on beside it). No missed reader. CAVEAT: the enumeration itself was never written down — cell trace.outcome is null and docs/history/awaiting-human/reports/ does not exist; this check passes on the judge's independent census, not on a delivered report."
+          },
+          {
+            "id": "prohibition-no-new-run_state-value",
+            "status": "PASS",
+            "evidence": "git diff 82eea948..ab83623e -- record.rs shows zero +/- lines touching RUN_STATE_VALUES; record.rs:218 still the same five [\"shaping\",\"awaiting-approval\",\"running\",\"blocked\",\"done\"]. No subject text is ever put in the state string (the mark is a sibling object)."
+          },
+          {
+            "id": "prohibition-no-status-json-key-rename-or-retype",
+            "status": "PASS",
+            "evidence": "git diff 82eea948..ab83623e -- status_full/build.rs render.rs orient.rs prints ZERO '-' lines: purely additive. status_full/tests.rs:3778 bee_status_json_run_state_and_waiting_on_keep_their_additive_shape pins the additive shape. Gate record fields (check_gate_entry_fields / merge_gates) unchanged in the diff."
+          },
+          {
+            "id": "verify-reproduced-by-judge",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml re-run read-only by the judge: 16 suites, all ok, 1768 passed / 0 failed / 11 ignored, exit 0."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T14:01:56.609Z"
+      }
+    ]
   }
 }

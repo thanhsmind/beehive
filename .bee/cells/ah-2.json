@@ -51,27 +51,141 @@
     ]
   },
   "trace": {
-    "worker": "stuart3",
-    "outcome": "The waiting mark now ends three live ways: the UserPromptSubmit hook clears it best-effort on any human message (default state and the current feature's workflow record), an explicit clear function is a no-op when nothing is live, and a stale-expiry reap reuses cells/claims.rs's dual-condition rule (age past threshold AND owning-session heartbeat stale) -- pinned by a test where the heartbeat stays fresh and the mark survives.",
+    "worker": "stuart4",
+    "outcome": "Three live ways for the waiting mark to end, with the hook path now covered by tests that drive the real hook entry point, including a failure injection proving the hook survives a failing clear",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
       "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
       "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs"
     ],
-    "deviations": [
-      "Verified ah-1's setter has no CLI verb. Left it (and this cell's clear/reap functions) unwired to the CLI: ah-3 turned out to own only the read surface, and wiring a verb needs files outside ah-2's declared set (state_group/set_gate.rs, router.rs, catalog.rs) -- a public-contracts-risk change needing its own cell rather than a scope expansion here."
-    ],
+    "deviations": [],
     "friction": null,
-    "capped_at": "2026-08-14T13:23:43.493Z",
+    "capped_at": "2026-08-14T14:26:03.652Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
-    "claimed_at": "2026-08-14T13:04:25.912Z",
+    "claimed_at": "2026-08-14T14:03:23.780Z",
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T13:22:27.090Z"
+    "ran_at": "2026-08-14T14:25:37.081Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "truth4-fresh-heartbeat-mark-survives",
+            "status": "PASS",
+            "evidence": "THE critical one, and it holds. record.rs:532 waiting_on_expired = waiting_on_age_expired(..) && owner_heartbeat_stale — a conjunction, age alone can never fire. Two independent tests: workflow_store/tests.rs:559 asserts waiting_on_age_expired(old_mark)==true yet !waiting_on_expired(old_mark, now, false) (\"age alone must never expire a mark whose owning session is plainly alive\"); and tests.rs:595 reap_stale_waiting_on_survives_a_live_owner_session drives the REAL reap end to end — mark back-dated to 2020-01-01, session fixture written with a now heartbeat — and asserts the mark is still live on disk."
+          },
+          {
+            "id": "truth5-both-conditions-expire",
+            "status": "PASS",
+            "evidence": "workflow_store/tests.rs:623 reap_stale_waiting_on_clears_a_mark_whose_owner_session_is_dead (old asked_at + stale heartbeat -> waiting_on Null) and tests.rs:644 the same for the D3 default record. record.rs:580-588 re-verifies BOTH conditions under the record's own lock before writing, mirroring sweep_expired_claims."
+          },
+          {
+            "id": "truth3-explicit-clear-is-a-noop-not-an-error",
+            "status": "PASS",
+            "evidence": "record.rs:461 clear_workflow_waiting_on peeks first and returns Ok(current) when nothing is live; record.rs:482 clear_default_state_waiting_on does the same and re-checks under the lock for the hook/agent race. Tests tests.rs:508 and :537 (the latter with no .bee/state.json on disk at all)."
+          },
+          {
+            "id": "truth1-hook-clears-on-the-human-message",
+            "status": "FAIL",
+            "evidence": "The WIRING exists (prompt_context.rs:298 calls clear_and_reap_waiting_on_best_effort, defined :338-364, clearing the default record and the resolved feature's live workflow, then reaping). But NOTHING tests it: `rg clear_and_reap` over packages/bee-rs/crates/bee returns exactly two hits, both the definition and the single call site — zero test references. git show 39facee4 --stat: prompt_context.rs +70 lines, 0 test files touched for it (the +190 test lines all land in workflow_store/tests.rs and cover paths TWO and THREE only). tests/hook_contracts.rs runs `prompt-context` generically with no waiting_on fixture. The cell's artifact must_have for prompt_context.rs demanded 'tests for each of the three clearing paths'; path ONE, named the RELIABLE layer, ships unproven.",
+            "failure_signature": "no test exercises clear_and_reap_waiting_on_best_effort (prompt_context.rs:338) — path ONE of D2's three clearing paths is untested; rg over crates/bee finds only the definition and its single call site"
+          },
+          {
+            "id": "truth2-a-failing-clear-cannot-break-the-turn",
+            "status": "FAIL",
+            "evidence": "Structurally sound by inspection: prompt_context.rs:343-357 uses log_crash on every error, has no `?`, swallows Err(_) from list_workflows (:356), and reap_stale_waiting_on returns () and internally uses let-else/.ok() throughout (record.rs:563-591); the function returns () and the hook still reaches ExitCode::SUCCESS at :326. But the must_have artifact line explicitly required 'the hook's failure isolation' to be TESTED, and no test injects a failing clear. Cell judged on delivered proof, not on the judge's own code reading.",
+            "failure_signature": "hook failure-isolation asserted only by code inspection; no test drives a failing clear through the UserPromptSubmit hook and asserts exit 0 / unchanged stdout"
+          },
+          {
+            "id": "prohibition-no-expiry-on-age-alone",
+            "status": "PASS",
+            "evidence": "record.rs:532 is an AND; both reap call sites (:568, :575, :583, :602) pass mark_owner_heartbeat_stale(..) as the second operand. No call site passes a literal true."
+          },
+          {
+            "id": "prohibition-no-change-to-what-the-hook-emits",
+            "status": "PASS",
+            "evidence": "git diff 82eea948..ab83623e -- hooks/prompt_context.rs prints ZERO '-' lines — the change is purely additive. The clear runs at :298, before parts are composed at :300, and contributes nothing to stdout."
+          },
+          {
+            "id": "prohibition-no-new-store",
+            "status": "PASS",
+            "evidence": "39facee4 touches 3 files (prompt_context.rs, workflow_store/record.rs, workflow_store/tests.rs); the mark stays in ah-1's two locations (workflow record + default .bee/state.json). No new file, no new path."
+          },
+          {
+            "id": "recorded-deviation-is-honest",
+            "status": "PASS",
+            "evidence": "The deviation ('setter/clear not wired to a CLI verb; needs its own cell') was accurate at the time and was in fact closed by ah-4 (state_group/waiting_on.rs, commit 00c67cb6), which removed the two `#[allow(dead_code)] // not yet wired` markers ah-1/ah-2 left."
+          },
+          {
+            "id": "verify-reproduced-by-judge",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml re-run read-only: 1768 passed, 0 failed, 11 ignored, exit 0. The green is real; it simply does not cover the hook path."
+          }
+        ],
+        "failure_signature": "D2 path ONE is unproven: rg over packages/bee-rs/crates/bee finds zero test references to clear_and_reap_waiting_on_best_effort (prompt_context.rs:338); 39facee4 added +70 hook lines and 0 hook tests, so neither 'the human's message clears the mark' nor 'a failing clear cannot break the turn' is covered by any test.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T14:02:10.141Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "rework-scope-is-test-only",
+            "status": "PASS",
+            "evidence": "git show b7b422f9 --stat: 1 file, 142 insertions, 0 deletions, all inside `mod tests` (hunk header @@ -2334,4 +2334,146 @@ mod tests {). No production line changed, so every PASS check from the prior verdict stands untouched."
+          },
+          {
+            "id": "truth1-hook-clears-on-the-human-message-NOW-TESTED",
+            "status": "PASS",
+            "evidence": "prompt_context.rs:2364 run_clears_a_live_default_waiting_on_mark_through_the_real_hook_entry_point drives `run(&[], &payload)` — and `run` IS the dispatch entry point: hooks/mod.rs:126 `\"prompt-context\" => prompt_context::run(&rest, &stdin_str)`. It does NOT call the inner function: no reference to clear_and_reap_waiting_on_best_effort appears anywhere in the new test block. The mark is set through the real setter (state_group::set_default_state_waiting_on), asserted live BEFORE run() via waiting_on_is_live, and asserted gone AFTER. It also asserts matches!(outcome, Outcome::Done(_)), which excludes the vacuous pass where run() returns Outcome::Delegate at :147 and never reaches the clear. Ran green: `test hooks::prompt_context::tests::run_clears_a_live_default_waiting_on_mark_through_the_real_hook_entry_point ... ok`."
+          },
+          {
+            "id": "truth2-failing-clear-cannot-break-the-turn-NOW-TESTED",
+            "status": "PASS",
+            "evidence": "prompt_context.rs:2409 run_survives_a_failing_clear_without_failing_the_hook_or_skipping_its_output, #[cfg(unix)], chmods `.bee/` to 0o555 after pre-creating locks/, cache/, logs/. The injection is genuinely targeted, not decorative: fsutil.rs:139-145 write_json_atomic builds its tmp via tmp_path_for(file) — the target file's OWN directory, i.e. `.bee/` — so the clear's write to .bee/state.json cannot create its tmp, while mark_injected's target (prompt_context.rs:860 = .bee/cache/inject-cache.json) sits in a still-writable subdir. Non-vacuity is asserted, not assumed, three ways: (a) the mark is asserted STILL LIVE after run() (:2454) — had the injection silently done nothing, the clear would have succeeded and this assert fails; (b) outcome is Done, not Delegate; (c) .bee/cache/inject-cache.json must exist, and that file is created only by mark_injected inside execute() at :305 — so the early-return paths at run():136/142/158, which never reach the clear, cannot satisfy it. Ran green: `test ...run_survives_a_failing_clear_without_failing_the_hook_or_skipping_its_output ... ok`."
+          },
+          {
+            "id": "crash-log-assertion-is-weaker-than-its-siblings",
+            "status": "PASS",
+            "evidence": "Noted for the record, not a failure. The final assert (:2475) only checks that .bee/logs/hooks.jsonl contains \"prompt-context\", which is HOOK_NAME for every log_crash in the file — the heartbeat_block crash at :286 would also match under the same read-only `.bee/`. So that one line does not uniquely prove the CLEAR's failure was logged. It is redundant belt-and-braces: the must_have truth (a failing clear never fails the hook or the turn) is carried by the Done outcome, the completed inject-cache write, and the still-live mark, all three unambiguous."
+          },
+          {
+            "id": "prohibitions-still-respected",
+            "status": "PASS",
+            "evidence": "No change to what the UserPromptSubmit hook emits: b7b422f9 has zero '-' lines and adds nothing outside `mod tests`; stdout composition at prompt_context.rs:300-325 is untouched. No new store: no new file, no new path — the mark still lives in .bee/state.json and the workflow record. No expiry on age alone: record.rs is not touched by this commit; the conjunction at record.rs:532 stands."
+          },
+          {
+            "id": "verify-reproduced-by-judge",
+            "status": "PASS",
+            "evidence": "Re-ran read-only from /home/thanhsmind/projects/goglbe/beehive--wt--awaiting-human: `cargo test --release --manifest-path packages/bee-rs/Cargo.toml`, exit 0. TOTAL across all 16 `test result:` lines: 1772 passed, 0 failed, 11 ignored. That is the whole-run number, not one suite's line. 1772 = the prior judge's 1768 + 2 new prompt_context tests + 2 new compaction tests, so nothing was lost."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T14:24:38.151Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-14T14:02:10.141Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   }
 }

@@ -81,6 +81,71 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T13:48:49.700Z"
+    "ran_at": "2026-08-14T13:48:49.700Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-set-records-a-readable-mark",
+            "status": "PASS",
+            "evidence": "waiting_on.rs:182 calls ah-1's set_workflow_waiting_on and :194 set_default_state_waiting_on. Proven through the BUILT BINARY: tests/workflow_verbs.rs:461 runs `state waiting-on set --kind question --subject 'which approach?' --session-id sess-ah4 --json` and asserts kind/subject/session on the returned record (:475-477)."
+          },
+          {
+            "id": "truth2-clear-removes-and-is-a-noop",
+            "status": "PASS",
+            "evidence": "workflow_verbs.rs:490 clear -> waiting_on null, :496 status confirms null, then :500 a SECOND clear on an already-idle repo returns exit 0 with waiting_on null (:502) — the no-op case, through the binary. waiting_on.rs:234/:244 delegate to ah-2's clear functions."
+          },
+          {
+            "id": "truth3-both-verbs-work-with-no-feature-active",
+            "status": "PASS",
+            "evidence": "workflow_verbs.rs:461 is named ..._with_no_feature_active and runs in a repo with no workflow; the D3 fallback chain is unit-pinned separately at state_group/tests.rs:607 (lane -> session binding -> default feature -> none) and :721 (None in a C1 repo with zero workflow records). Refusals also proven: :571 an explicit --lane naming no live workflow, :618 no session resolves, :553 unknown kind with zero mutations."
+          },
+          {
+            "id": "truth4-cli-set-then-run-reports-awaiting-approval",
+            "status": "PASS",
+            "evidence": "workflow_verbs.rs:474 asserts run_state==\"awaiting-approval\" on the set response and :485 re-reads it through `bee status --json` (:486 subject too) — end to end, no feature active. The feature-scoped twin :506 additionally asserts the workflow record (:530), the rebuilt projection (:535-536) and bee status (:540), then the same three go null after clear."
+          },
+          {
+            "id": "truth5-verbs-and-flags-appear-in-the-generated-help-surface",
+            "status": "PASS",
+            "evidence": "Judge ran the built binary read-only: packages/bee-rs/target/release/bee --help --all --json lists `state.waiting-on.set` (flags kind, subject, session-id, lane, no-lane, json) and `state.waiting-on.clear` — 150 commands vs 148 at base. Machine-guarded, not just present: tests/registry_dispatch.rs:131 every_declared_command_dispatches_exactly_as_the_registry_says_it_does walks every payload example, and both new commands carry examples."
+          },
+          {
+            "id": "registry-payload-and-pinned-flag-count-are-consistent",
+            "status": "PASS",
+            "evidence": "Judge diffed the payload JSON structurally (python, base 82eea948 vs HEAD): commands 148 -> 150, new = {state.waiting-on.set, state.waiting-on.clear}, none removed; distinct flag names 147 -> 148, new = ['subject'] exactly, none removed. catalog.rs:328 PINNED_FLAG_COUNT = 148 matches, and the bump is for a genuinely new flag name (kind/session-id/lane/no-lane/json all reuse existing spellings). catalog.rs:69 builds the catalog FROM this payload, so there is no second source to drift from; the file has no generator in-tree (scripts/export_registry_payload.mjs is absent), so the hand-edit was the only available path."
+          },
+          {
+            "id": "prohibition-no-second-implementation-of-the-mark",
+            "status": "PASS",
+            "evidence": "waiting_on.rs contains no mark construction of its own — rg shows only calls to set_workflow_waiting_on / set_default_state_waiting_on / clear_workflow_waiting_on / clear_default_state_waiting_on (:182,:194,:234,:244). build_waiting_on is referenced only in a comment (:133)."
+          },
+          {
+            "id": "prohibition-no-change-to-ah-2s-three-clearing-paths-or-the-marks-shape",
+            "status": "PASS",
+            "evidence": "git show 00c67cb6 on record.rs and state_group/store.rs: the ONLY change in each is deleting the `#[allow(dead_code)] // not yet wired to a CLI verb` line and rewording the doc comment. No behavioral line touched. prompt_context.rs is not in the commit at all."
+          },
+          {
+            "id": "recorded-deviation-is-honest",
+            "status": "PASS",
+            "evidence": "The file-list correction (waiting_on.rs, catalog.rs, tests/workflow_verbs.rs) matches 00c67cb6 --stat exactly, and its stated reason for putting the CLI proof in tests/workflow_verbs.rs (run_* reads cwd via prelude(), so an in-process unit test would mutate the shared test-runner cwd) is consistent with that file's own header note."
+          },
+          {
+            "id": "verify-reproduced-by-judge",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml re-run read-only: 1768 passed, 0 failed, 11 ignored, exit 0; tests/workflow_verbs.rs alone reports 21 passed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T14:01:56.632Z"
+      }
+    ]
   }
 }
