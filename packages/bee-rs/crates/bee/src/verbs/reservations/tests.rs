@@ -1055,3 +1055,122 @@ use std::time::Instant;
         let v: Value = serde_json::from_str("{\"n\":1e21}").unwrap();
         assert!(js_numberify(&v).is_ok());
     }
+
+    // ── hha-2: the release side clears what the CELL owns ──────────────────
+
+    /// Reachability. The `{cell, session}` pairs release scopes the ledger
+    /// pass by are derived from LIVE reservations, so once the cell is capped
+    /// or unclaimed its leases are gone, the pairs are empty, and the row
+    /// becomes unreachable by any release at all — that is why ghost rows
+    /// outlive the cells that made them. An explicit `--cell` now scopes the
+    /// pass directly, which is the drain those rows never had.
+    #[test]
+    fn release_by_cell_clears_a_row_whose_lease_is_already_gone() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        let ledger = holds_ledger_path(tmp.path());
+        std::fs::create_dir_all(ledger.parent().unwrap()).unwrap();
+        let mirrored = now_iso();
+        std::fs::write(
+            &ledger,
+            serde_json::to_string_pretty(&json!({"holds": [
+                {"path": "src/ghost.ts", "holder": "main", "feature": null, "session": null,
+                 "cell": "ghost-cell", "ttl_seconds": 0, "mirrored_at": mirrored,
+                 "released_at": null},
+                {"path": "src/other.ts", "holder": "main", "feature": null, "session": null,
+                 "cell": "other-cell", "ttl_seconds": 0, "mirrored_at": mirrored,
+                 "released_at": null},
+            ]}))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let Ok(Out::Emit(result, text, 0)) =
+            release_exec(main_topo(tmp.path()), &root_s, "worker-a", Some("ghost-cell"), 1)
+        else {
+            panic!("expected release emit");
+        };
+        assert_eq!(result["released"], json!(0.0), "no lease is left to delete");
+        assert_eq!(result["holds_released"], json!(1.0));
+        assert_eq!(text, "Released 0 reservation(s) and 1 cross-worktree hold(s).");
+        let after: Value =
+            serde_json::from_str(&std::fs::read_to_string(&ledger).unwrap()).unwrap();
+        assert!(after["holds"][0]["released_at"].is_string());
+        assert!(
+            after["holds"][1]["released_at"].is_null(),
+            "another cell's row stays untouched"
+        );
+    }
+
+    /// Attribution. bee's control plane runs from MAIN, so main is the
+    /// checkout that types the release — while hha-1 stamps the row with the
+    /// granted worktree that owns the cell. Filtering by the ACTING holder
+    /// would make those rows ones main can never clear: the same bug,
+    /// mirrored. The filter asks who owns the CELL instead.
+    #[test]
+    fn main_releasing_a_worktree_owned_cell_clears_the_worktree_stamped_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = worktree_fixture(tmp.path());
+        cell_owned_by_the_granted_worktree(&main, &granted, "hha-cell", "hold-holder");
+
+        let m = roots_at(&main);
+        let (mm, mh) = m.hold_topology().expect("an ordinary checkout always has a topology");
+        let m_topo = Some(Topo { main_root: &mm, holder: &mh });
+        let m_root_s = root_str(&m.root);
+        assert!(matches!(
+            reserve_exec(m_topo, &m_root_s, &params("main-agent", "hha-cell", "src/shared.ts"), 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+        let ledger: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(&main)).unwrap())
+                .unwrap();
+        assert_eq!(ledger["holds"][0]["holder"], "wt-granted", "hha-1 stamps the owner");
+
+        // Typed from MAIN, with NO --cell: the pairs still come from the live
+        // lease, so this isolates the holder filter alone.
+        let Ok(Out::Emit(result, _, 0)) = release_exec(m_topo, &m_root_s, "main-agent", None, 1)
+        else {
+            panic!("expected a clean release");
+        };
+        assert_eq!(result["released"], json!(1.0));
+        assert_eq!(result["holds_released"], json!(1.0));
+        let after: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(&main)).unwrap())
+                .unwrap();
+        assert!(after["holds"][0]["released_at"].is_string());
+    }
+
+    /// The cap-time copy of that same loop (`verbs/cells/finish_support.rs`),
+    /// which is the release path `cells finish` runs — and `cells finish`
+    /// typically runs from MAIN for a cell whose work happened in a granted
+    /// worktree, which is exactly the case the acting-holder filter missed.
+    #[test]
+    fn the_cap_time_release_clears_a_worktree_owned_cells_rows() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = worktree_fixture(tmp.path());
+        cell_owned_by_the_granted_worktree(&main, &granted, "cap-cell", "hold-holder");
+
+        let m = roots_at(&main);
+        let (mm, mh) = m.hold_topology().expect("an ordinary checkout always has a topology");
+        let m_topo = Some(Topo { main_root: &mm, holder: &mh });
+        let m_root_s = root_str(&m.root);
+        assert!(matches!(
+            reserve_exec(m_topo, &m_root_s, &params("cap-agent", "cap-cell", "src/capped.ts"), 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+
+        let Ok(outcome) = crate::verbs::cells::release_reservations_for_agent(
+            Some((mm.as_path(), mh.as_str())),
+            m.root.as_path(),
+            "cap-agent",
+            "cap-cell",
+        ) else {
+            panic!("expected a clean cap-time release");
+        };
+        assert_eq!(outcome.paths, vec!["src/capped.ts".to_string()]);
+        assert_eq!(outcome.holds_released, 1);
+        let after: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(&main)).unwrap())
+                .unwrap();
+        assert!(after["holds"][0]["released_at"].is_string());
+    }
