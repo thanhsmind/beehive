@@ -370,16 +370,27 @@ mod tests {
     }
 
     #[test]
-    fn write_failure_log_never_changes_the_excerpt_it_sits_beside() {
+    fn the_excerpt_carries_no_trace_of_the_log_beside_it() {
         // The load-bearing constraint: failure_excerpt is hashed into the
-        // cell trace (trace.rs normalize_failure_signature), so writing the
-        // log alongside it must not perturb the excerpt string by one byte.
+        // cell trace (trace.rs normalize_failure_signature), so the excerpt
+        // must not carry the log's path, its directory, or any marker of it.
+        //
+        // Calling failure_excerpt twice around the write would prove nothing —
+        // it is a pure function of its arguments, so it cannot observe the
+        // write either way. Assert the property that actually matters: the
+        // excerpt is exactly the trimmed tail and contains nothing about the
+        // log. The end-to-end proof that no caller appends to it is the diff
+        // across this feature's two cells.
         let dir = tempfile::tempdir().unwrap();
         let output = "boom-line\nmore";
-        let before = failure_excerpt(output, Some(3));
+        let rel = failure_log_relative("close", 0);
         write_failure_log(dir.path(), "close", 0, output);
-        let after = failure_excerpt(output, Some(3));
-        assert_eq!(before, after);
+
+        let excerpt = failure_excerpt(output, Some(3));
+        assert_eq!(excerpt, output, "the excerpt is the trimmed tail, nothing more");
+        assert!(!excerpt.contains(&rel), "the excerpt must not name the log path");
+        assert!(!excerpt.contains(".bee/logs"), "the excerpt must not name the log directory");
+        assert!(!excerpt.contains(".log"), "the excerpt must carry no marker of the log");
     }
 
     #[test]

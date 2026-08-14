@@ -229,7 +229,7 @@ tier system (decision 412e9b3a, `docs/knowledge/areas/verify-pipeline/`, 2026-07
   declares test obligations.
 - **Runner:** `bee test` runs the declared commands in order and writes
   ONE normalized record, `.bee/logs/test-results.json` — `{ran_at, green,
-  commands: [{command, exit, duration_ms, failure_excerpt}]}`. The runner
+  commands: [{command, exit, duration_ms, failure_excerpt, failure_log}]}`. The runner
   is a program; an agent's word is never the record.
 - **At finish:** `bee finish` runs `bee test` when `commands.test`
   is declared. Green → the cap records `{tests: green}` plus the record
