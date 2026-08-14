@@ -1558,14 +1558,32 @@ use crate::version::BEE_VERSION;
         };
 
         let control2 = control.clone();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
         let handle = std::thread::spawn(move || {
-            recovery_verb::mark_stale_sessions(&control2, now_ms(), "caller-race")
+            let out = recovery_verb::mark_stale_sessions(&control2, now_ms(), "caller-race");
+            let _ = done_tx.send(());
+            out
         });
 
         // Give the pass time to run its pre-check (outside the lock, so
         // unaffected by us holding it) and start retrying to acquire —
         // THEN land the heartbeat while it waits.
         std::thread::sleep(std::time::Duration::from_millis(60));
+
+        // ASSERT THE PREMISE. The interleaving this test exists to pin is:
+        // pre-check reads STALE -> heartbeat lands -> lock acquired -> record
+        // re-read FRESH. If the pass has already returned, the heartbeat is
+        // about to land AFTER it finished, the pre-check saw a stale record
+        // and the under-lock re-judgement was never reached — the outcome
+        // assertions below would then pass for the wrong reason. Fail loudly
+        // instead of passing vacuously (parity concept R5: a fixture must be
+        // shown to reach the branch its test names).
+        assert!(
+            matches!(done_rx.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty)),
+            "premise broken: the mark pass finished before the heartbeat landed, \
+             so the under-lock re-judgement was never exercised"
+        );
+
         write_session_fixture(root, "race1", &to_iso(now_ms())); // the race: heartbeat lands
         drop(guard); // release — the pass's retry now succeeds and re-reads fresh
 
