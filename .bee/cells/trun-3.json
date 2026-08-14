@@ -66,6 +66,51 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T07:15:08.192Z"
+    "ran_at": "2026-08-14T07:15:08.192Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-status-json-exposes-the-full-gate-entry",
+            "status": "PASS",
+            "evidence": "status_full/build.rs:32-41 build_gate_records reads the LIVE workflow record's gates (find_live_workflow), :157 calls it, :247 inserts status[\"gate_records\"]; test status_full/tests.rs:3377 walks every gate name and asserts the entry is present"
+          },
+          {
+            "id": "truth2-pending-distinguishable-from-rejected",
+            "status": "PASS",
+            "evidence": "status_full/tests.rs:3234 gate_records_distinguishes_pending_from_rejected_where_the_boolean_projection_cannot; build.rs:41 falls back to default_wf_gates() (all pending) with no live workflow, pinned by tests.rs:3300"
+          },
+          {
+            "id": "truth3-existing-keys-unchanged",
+            "status": "PASS",
+            "evidence": "git show 328cd923 --stat is +221/-0 across build.rs/render.rs/tests.rs — zero deletions, so no key was renamed or retyped; build.rs:240-241 keeps \"gates\" sourced from approved_gates exactly as before, and tests.rs:3320 pins the old keys beside the new one"
+          },
+          {
+            "id": "truth-render-one-line-per-non-approved-gate",
+            "status": "PASS",
+            "evidence": "status_full/render.rs:149-158 reads gate_records[g][\"state\"], scoped to a live feature so an idle repo stays silent"
+          },
+          {
+            "id": "prohibition-no-dashboard-ui-surface",
+            "status": "PASS",
+            "evidence": "the diff touches only status_full build/render/tests — no web, UI, or new verb"
+          },
+          {
+            "id": "verify-reproduced",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -> 1715 passed, 11 ignored, exit 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T09:57:52.104Z"
+      }
+    ]
   }
 }

@@ -52,25 +52,28 @@
     ]
   },
   "trace": {
-    "worker": "norbert",
-    "outcome": "Materialized claimable scribe/promote deferred-queue records from the two derived scans (D5), reconciled through one shared clearing rule so neither scan disagrees or double-reports",
+    "worker": "stuart2",
+    "outcome": "Wired all scribing-debt scans through the shared queue rule so completing a scribe record clears the debt on every reporting surface; added queue-branch coverage",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
       "packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs",
       "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
-      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      "packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/store.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/chain_nudge.rs"
     ],
-    "deviations": [
-      "Scribe-record enqueue at cap time lives in drivers/close.rs scribing_debt as a lazy materialize-on-scan, not in cells/handlers_close.rs run_cap, which is outside this cells files list; promote-record enqueue is synchronous in drivers/close.rs since bee close own write is in scope. hooks/session_preamble/store.rs and hooks/chain_nudge.rs keep their own separate, pre-existing scribing_debt copies (out of scope) unreconciled; status_full unapplied_promote_proposals is reconciled and is confirmed via rg to be what hooks/session_preamble/render.rs actually calls."
-    ],
+    "deviations": [],
     "friction": null,
-    "capped_at": "2026-08-14T09:05:51.815Z",
+    "capped_at": "2026-08-14T10:51:31.050Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
-    "claimed_at": "2026-08-14T08:47:42.320Z",
+    "claimed_at": "2026-08-14T09:58:46.225Z",
     "report": {
       "outcome": "Materialized claimable scribe/promote deferred-queue records from the two derived scans (D5), reconciled through one shared clearing rule (state_group::ledger::deferred_debt_cleared) so neither scan can disagree or double-report; capture-queue.jsonl and review-candidates.jsonl untouched.",
       "commit": "2f099328",
@@ -86,11 +89,181 @@
         "The action text also named the session preamble as a consumer that should see debt clear. hooks/session_preamble/store.rs and hooks/chain_nudge.rs each carry their own independent, pre-existing copies of scribing_debt and best_scribing_stamp_ms, outside this cells files list, and are unchanged."
       ]
     },
-    "warnings": [
-      "advisory: this cap's commit changes 224 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
-    ],
+    "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T09:05:31.919Z"
+    "ran_at": "2026-08-14T10:51:11.844Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "truth5-completing-a-record-clears-the-preamble-debt",
+            "status": "FAIL",
+            "evidence": "HALF DELIVERED. Promote half: OK — hooks/session_preamble/render.rs:307 calls status_full::unapplied_promote_proposals, which at mod.rs:282-287 consults deferred_queue::items_for + deferred_debt_cleared. Scribe half: NOT DELIVERED — the preamble's capture-pending line comes from hooks/session_preamble/budget.rs:629 calling hooks/session_preamble/store.rs:175 scribing_debt, a separate copy that never reads the queue (rg over that file returns no items_for/deferred_debt_cleared); hooks/chain_nudge.rs:156/:873 is a third copy with the same gap. Completing a scribe record therefore leaves the preamble still reporting the debt. The worker recorded this as a deviation (out-of-scope files), but the truth is a must_have and is not met"
+          },
+          {
+            "id": "no-test-exercises-the-new-reconciliation-rule",
+            "status": "FAIL",
+            "evidence": "`rg -l \"items_for|enqueue_promote_deferred_record|deferred_debt_cleared\" packages/bee-rs/crates/bee/` returns ONLY four production files: verbs/deferred_queue.rs, verbs/status_full/mod.rs, verbs/drivers/close.rs, verbs/state_group/ledger.rs — no test file. deferred_queue.rs's own inline tests are fold/lifecycle/reclaim only (fns at :792/:836/:851/:865/:922). The pre-existing debt_door_* tests (state_group/set_gate.rs:919-1101) run against a tmp root with no queue records, so completed_cells is always empty and the queue branch of deferred_debt_cleared (ledger.rs:157) is never taken. Nothing asserts a scribe record is materialized, nothing asserts its payload, nothing asserts a promote record is enqueued by close, and nothing asserts the no-double-report rule. The cap's own advisory already flagged 224 changed lines touching no test-shaped path; that advisory is correct — this is a real coverage gap, not a formality"
+          },
+          {
+            "id": "truth1-scribe-record-payload",
+            "status": "PASS",
+            "evidence": "close.rs scribing_debt materializes one record per scan with feature, cell ids and the union of those cells' declared files (deferred_queue::enqueue(root, \"scribe\", feature, &cell_ids, &[], &files, &reason)), guarded so a cell already named by any existing record never gets a second one. Two qualifications for the record: the trigger is a LAZY materialize-on-scan in drivers/close.rs, not the cap handler (recorded deviation, cells/handlers_close.rs is outside the cell's files), so a capped cell gets no record until close or a gate swap next runs the scan; and `areas` is always passed empty, so that field of the truth is unmet"
+          },
+          {
+            "id": "truth2-close-enqueues-a-promote-record",
+            "status": "PASS",
+            "evidence": "close.rs:644-661 enqueue_promote_deferred_record writes kind promote with the feature and the proposal path in files, called from close_handler:1387 right where the proposal is written; best-effort so a failed append never fails close. Untested (see the coverage FAIL)"
+          },
+          {
+            "id": "truth3-no-double-report",
+            "status": "PASS",
+            "evidence": "both consumers count only from their legacy walk and use the queue solely to CLEAR — close.rs scribing_debt pushes ids from list_cells_including_archive and skips on deferred_debt_cleared; status_full/mod.rs:285 does the same per feature directory. The queue never adds a second row. Untested"
+          },
+          {
+            "id": "truth4-pre-queue-debt-still-surfaces",
+            "status": "PASS",
+            "evidence": "items_for over an absent/empty store yields no items, so queue_completed is false and ledger.rs:157 deferred_debt_cleared falls through to the legacy signal; the comment at status_full/mod.rs:278-281 states this explicitly. Covered indirectly by the surviving debt_door_* suite"
+          },
+          {
+            "id": "prohibition-one-reconciliation-site",
+            "status": "PASS",
+            "evidence": "state_group/ledger.rs:157 deferred_debt_cleared is the single shared rule, called from exactly two places (close.rs:409, status_full/mod.rs:285) and from nowhere else; its doc says which answer wins (either signal is individually sufficient)"
+          },
+          {
+            "id": "prohibition-legacy-scans-kept-and-other-stores-untouched",
+            "status": "PASS",
+            "evidence": "both legacy scans remain and still decide when no record exists; git show 2f099328 --stat touches only deferred_queue.rs, drivers/close.rs, state_group/ledger.rs, status_full/mod.rs — capture-queue.jsonl and review-candidates.jsonl paths and their lifecycles are untouched"
+          },
+          {
+            "id": "verify-reproduced",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -> 1715 passed, 11 ignored, exit 0 — green, but green over code paths this cell added no assertions for"
+          }
+        ],
+        "failure_signature": "trun-9: completing a scribe queue record does not clear the debt the session preamble reports (preamble reads an unreconciled second copy of scribing_debt), and no test anywhere exercises the new deferred_debt_cleared reconciliation rule or either enqueue path",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T09:57:52.129Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "fail1-preamble-half-of-truth5-now-delivered",
+            "status": "PASS",
+            "evidence": "FIXED for the surface truth 5 names. hooks/session_preamble/store.rs:190 scribing_debt and :232 global_scribing_debt now both fold state_group::scribe_queue_cells (store.rs:199, :276) and decide through state_group::deferred_debt_cleared (store.rs:215, :279); hooks/chain_nudge.rs:883 scribing_debt does the same (:891, :912). The shared helper is real and single: state_group/ledger.rs:189 scribe_queue_cells is the only scribe-queue fold, reading crate::verbs::deferred_queue::items_for(root,\"scribe\",feature). Behavior-equivalence of the rewrites holds with an empty queue: chain_nudge's legacy_cleared = !matches!(capped_at, Some(ms) if ms > threshold) is the exact negation of the old push condition, and store.rs global's legacy_cleared = {None=>false, Some(s)=>!(capped_at>s)} is the exact negation of the old `orphaned`. End-to-end proof: hooks/session_preamble/tests.rs completing_a_scribe_queue_record_clears_the_preamble_debt_lines renders the REAL preamble (tests.rs:38 render -> build_session_preamble), asserts \"### Scribing debt: 2 ...\" and \"### Orphaned scribing debt: 2 ...\" present with no queue record, then absent after an add+complete pair -- `cargo test --release ... completing_a_scribe_queue_record_clears_the_preamble_debt_lines` -> 1 passed, 1737 filtered out"
+          },
+          {
+            "id": "fail2-tests-now-take-the-queue-branch",
+            "status": "PASS",
+            "evidence": "FIXED. 12 new tests, and the suite total moved 1726 -> 1738 (prior judge run: 1715 passed + 11 ignored; this run: `cargo test --release --manifest-path packages/bee-rs/Cargo.toml` -> 1727 passed, 11 ignored, 16 suites, exit 0), so all 12 are live, none ignored. Every one constructs a real .bee/deferred-queue.jsonl and takes the queue branch, not the empty-store branch: state_group/ledger.rs:484 deferred_debt_cleared_is_an_or... asserts all four truth-table rows including (false,true); :502/:510 fold scribe_queue_cells over an absent store and over a real file with a completed record; drivers/close.rs:2484 asserts a materialized record's cells AND its files payload, :2506 asserts no double-materialize on a second scan, :2521 enqueues + appends a real complete event and asserts debt.ids empties, :2542 asserts enqueue_promote_deferred_record's kind/feature/files; status_full/tests.rs:1145 clears a promote proposal through a completed record with NO compounding run and :1189 keeps it reported while the record is open; chain_nudge.rs:1014 clears per-cell; session_preamble/tests.rs covers the full-clear and the partial (one of two cells completed -> \"### Scribing debt: 1 ...\" and \"- c2 capped since the last scribing run\"). `cargo test --release ... scribe_queue` -> 3 passed. The debt_door_* blind spot the prior judge named is gone: the queue side of deferred_debt_cleared is now asserted directly and through two end-to-end renders"
+          },
+          {
+            "id": "remaining-unreconciled-copy-status-and-orient",
+            "status": "FAIL",
+            "evidence": "A FOURTH and FIFTH copy of the scan still bypass the queue. verbs/status_full/cells.rs:436 scribing_debt and :467 global_scribing_debt compare capped_at > threshold with no queue involvement at all -- `rg -n \"deferred|queue\" packages/bee-rs/crates/bee/src/verbs/status_full/cells.rs` returns ZERO matches. They are not dead code: status_full/build.rs:311-313 inserts their result verbatim into status.scribing_debt (build.rs:6 `use super::*` resolves to cells.rs), which orient.rs:322 turns into the routing blocker \"scribing debt: N behavior_change cell(s) uncaptured\" (orient.rs:283 build_status) and render.rs:266 turns into \"Capture pending: ...\". status_full/mod.rs:285's deferred_debt_cleared call is the PROMOTE path only, not this one. Consequence: after `bee deferred-queue complete` on a scribe record, the preamble and close's door go quiet while `bee status --json` and `bee orient` keep reporting the same debt forever -- the exact divergence truth 5 exists to prevent, on the surface agents read on every routing turn. The rework's own doc comment at state_group/ledger.rs:169-177 claims \"every one of the three scans below\" and \"not a fourth private copy\"; the count is five, and two are unwired. The cell's action text named this surface explicitly (\"the mirrored copy the status path uses\") and asked to \"reconcile in ONE place so the two answers can never disagree\" -- they still disagree. Fix is the same 6-line pattern already applied three times (scribe_queue_cells + deferred_debt_cleared), in cells.rs"
+          },
+          {
+            "id": "no-overreach-in-the-out-of-scope-hook-edits",
+            "status": "PASS",
+            "evidence": "Confined to the reconciliation. `git show 0ef16a60 -- hooks/session_preamble/store.rs hooks/chain_nudge.rs` is +104/-15 across two files and touches only the two debt scans: added the scribe_queue_cells fold, restated the skip condition through deferred_debt_cleared, and added a per-feature completed_cache mirroring the existing stamp_cache. No threshold, ledger-read, archive-inclusion, render-string, ordering or nudge-trigger behavior changed; both rewrites are provably identical to the originals when the queue is empty (see check 1). No other hook or preamble section is touched. The wider commit adds only tests to the other four files"
+          },
+          {
+            "id": "truth1-scribe-record-payload-areas-and-cap-time",
+            "status": "PASS",
+            "evidence": "PASS with two literal gaps, both recorded deviations, both UNCHANGED by this rework. (a) `areas` ships EMPTY: drivers/close.rs passes &[] to deferred_queue::enqueue on both the scribe and promote paths. My call: this does NOT break D5's \"executable by an agent that was absent when it was queued\". The record carries feature, cell ids, the union of those cells' declared files, and a reason naming the debt -- an absent agent can act on that alone, and areas are derivable in-repo (verbs/knowledge/promote.rs:413 latest_scribing_areas already derives a feature's areas from the scribing ledger; work-item bee.areas is the primary source). `areas` is also display-only in the queue (deferred_queue.rs:325 renders it; nothing branches on it). So: truth 1's literal \"carrying ... areas\" is UNMET and worth a follow-up cell, but it is not a blocker and not grounds for revision on its own. (b) The record is materialized lazily on the next scan (close.rs:380-412), not at cap time, so a capped behavior_change cell is invisible to a parallel claimer until close or a gate swap next runs -- a real dent in D5's claimability, again a recorded deviation on a files-list scope reason, unchanged and not re-litigated here"
+          },
+          {
+            "id": "prohibitions-and-legacy-fallback",
+            "status": "PASS",
+            "evidence": "deferred_debt_cleared (ledger.rs:158) is still the ONE decider and its doc still says which answer wins (an OR, neither preferred). No new reconciliation site was added -- the rework added a shared READ (scribe_queue_cells), not a second decision. Pre-queue debt still surfaces: items_for over an absent store yields nothing, proven by ledger.rs:502 scribe_queue_cells_is_empty_over_an_absent_store. capture-queue.jsonl and review-candidates.jsonl untouched -- `git show --stat 0ef16a60` lists only chain_nudge.rs, session_preamble/store.rs, session_preamble/tests.rs, drivers/close.rs, state_group/ledger.rs, status_full/tests.rs"
+          },
+          {
+            "id": "verify-reproduced",
+            "status": "PASS",
+            "evidence": "Re-ran the cell's declared verify read-only from /home/thanhsmind/projects/goglbe/beehive--wt--traceable-runs: `cargo test --release --manifest-path packages/bee-rs/Cargo.toml` -> 1727 passed, 11 ignored (16 suites, 19.71s), exit 0. Green, and now green over the paths this cell added -- 12 of those passes did not exist before this commit"
+          }
+        ],
+        "failure_signature": "trun-9 rework: the preamble and nudge copies of scribing_debt are reconciled, but verbs/status_full/cells.rs:436/:467 remain unreconciled with the deferred queue, so completing a scribe record clears the preamble and close's door while `bee status --json` and `bee orient` keep reporting the same debt",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T10:25:30.741Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "scan-census-six-scans-none-bypassing",
+            "status": "PASS",
+            "evidence": "Fresh independent census, not the worker's count. Every scribing-debt scan must compare a cell's trace.capped_at against a best-scribing stamp; rg over packages/bee-rs/crates/bee/src for capped_at, excluding tests.rs, returns exactly SIX such production comparisons, and each is reconciled by state_group::deferred_debt_cleared within a few lines: drivers/close.rs:397 into :400; hooks/session_preamble/store.rs:212 into :215 and :272 into :279; hooks/chain_nudge.rs:906 into :912; verbs/status_full/cells.rs:471 into :474 and :534 into :541. Every one builds its completed set from state_group::scribe_queue_cells (close.rs:385, store.rs:199 and :276, chain_nudge.rs:891, cells.rs:460 and :537). ZERO bypassing copies remain. The only other capped_at comparison in the crate is close.rs:528, which is judge_debt (judge records against a door cutoff) - a different debt, out of this cell's scope. status_full/recovery.rs:233 and knowledge/promote.rs use capped_at for staleness and payload, not debt. set_gate.rs:143 scribing_debt_close_door and :174 scribing_debt_swap_door call drivers::scribing_debt instead of re-implementing it, so both state doors inherit the fix. state_group/workers.rs:418 run_scribing_run writes the stamp, it does not scan for debt. No sixth private copy exists. ADVISORY (non-blocking, comment prose only): ledger.rs:178 says 'the five scans across these four files' and :164 says 'three OTHER, older copies', but the true count is SIX scan functions across those four files. The wiring is complete; only the count in the comment is one short."
+          },
+          {
+            "id": "prior-fail-1-preamble-and-nudge-still-fixed",
+            "status": "PASS",
+            "evidence": "Pass 1's FAIL (preamble and chain-nudge copies bypassing the queue) stays fixed at c3312545 and was not regressed by the round-2 edit: store.rs:199 with :215, store.rs:276 with :279, and chain_nudge.rs:891 with :912 all still route through the shared fold. Consumers confirmed live: budget.rs:629 calls store.rs scribing_debt and budget.rs:646 calls global_scribing_debt, feeding the preamble Scribing debt line at budget.rs:633. Named tests green when run individually: completing_a_scribe_queue_record_clears_the_preamble_debt_lines, 1 passed; scribing_debt_clears_per_cell_once_the_queue_record_completes (chain_nudge.rs:1014), 1 passed."
+          },
+          {
+            "id": "prior-fail-2-status-and-orient-scans-now-wired",
+            "status": "PASS",
+            "evidence": "Pass 2's NEW FAIL is fixed. status_full/cells.rs:447 scribing_debt and :491 global_scribing_debt now read state_group::scribe_queue_cells (cells.rs:460 and :537, the latter behind a per-feature completed_cache that mirrors the existing stamp_cache) and decide with state_group::deferred_debt_cleared (cells.rs:474 and :541). Consumer chain verified: status_full/build.rs:311-313 puts scribing_debt into status.scribing_debt and nests global_scribing_debt under .orphaned; status_full/orient.rs:322 reads status.scribing_debt for the routing blocker; status_full/render.rs:266 renders the same map. bee status --json and bee orient therefore clear with the record."
+          },
+          {
+            "id": "prior-fail-2-tests-take-the-queue-branch",
+            "status": "PASS",
+            "evidence": "The original FAIL 2 (a test that builds no queue record proves nothing) does NOT reappear. status_full/tests.rs:3306 a_completed_scribe_queue_record_clears_the_status_and_orient_debt_line writes a REAL .bee/deferred-queue.jsonl holding an add event naming hot-1, arch-1 and dup-1 plus a complete event, then asserts the count moves from 3 to 0 on three surfaces: cells::scribing_debt, build_status scribing_debt count, and build_orient work.blockers. The fixture (parity_fixture, tests.rs:3173-3206) writes ONLY onboarding.json, state.json and the cell files - no scribing ledger, no last_scribing_run - so the legacy signal is identical on both sides of the assertion and the ONLY code path that can turn 3 into 0 is deferred_debt_cleared's queue side. tests.rs:3356 does the same for global_scribing_debt through status.scribing_debt.orphaned. tests.rs:3391 pins the no-double-report mirror: an OPEN record naming f9-1 leaves count at 2 with ids exactly f9-1 and f9-2. The hand-written JSONL matches the real fold event shape (deferred_queue.rs:167-173 handles the complete event; items_for at deferred_queue.rs:201). All three green, 1 passed each."
+          },
+          {
+            "id": "truth5-debt-clears-on-every-reporting-surface",
+            "status": "PASS",
+            "evidence": "Completing a scribe record now clears the debt on all five surfaces named in the brief. 1 session preamble: store.rs:215 and :279 via budget.rs:629 and :646, test at session_preamble/tests.rs:419. 2 chain nudge: chain_nudge.rs:912, test at chain_nudge.rs:1014. 3 bee close D1 door: close.rs:400, test at close.rs:2521 scribing_debt_clears_once_its_materialized_record_is_completed, plus set_gate.rs:143 and :174 which reuse the same function. 4 bee status --json: cells.rs:474 and :541 via build.rs:311-313, tests at status_full/tests.rs:3306 and :3356. 5 bee orient: orient.rs:322 off the same status map, asserted through build_orient in status_full/tests.rs:3306. Must_have 5 is now met in full."
+          },
+          {
+            "id": "legacy-fallback-and-no-second-reconciliation-site",
+            "status": "PASS",
+            "evidence": "Prohibitions hold. The legacy scans are not removed - all six capped_at comparisons survive, only rewritten as legacy_cleared = NOT (capped_at later than threshold). Boolean equivalence checked by hand on the round-2 diff: scribing_debt's old push-when-capped_at-exceeds-threshold equals the new continue-when-deferred_debt_cleared then push; global_scribing_debt's old orphaned (None arm true, Some arm capped_at later than the stamp) maps to legacy_cleared (None arm false, Some arm NOT capped_at later than the stamp), so orphaned equals NOT legacy_cleared on both arms and an empty queue reproduces the previous output exactly on every surface. One reconciliation site only: ledger.rs:158 deferred_debt_cleared, an OR whose comment at ledger.rs:130-157 states outright that neither side is preferred, plus ledger.rs:194 scribe_queue_cells. No caller re-implements either. .bee/capture-queue.jsonl and .bee/review-candidates.jsonl are untouched by c3312545."
+          },
+          {
+            "id": "no-overreach-in-the-rework-commit",
+            "status": "PASS",
+            "evidence": "The per-file numstat of c3312545 is three files only. state_group/ledger.rs 17 added 12 removed: the doc-comment block at ledger.rs:163-186 ONLY, no executable line changed. status_full/cells.rs 36 added 6 removed: four hunks, all inside scribing_debt and global_scribing_debt and their doc comments, no new imports, no signature change. status_full/tests.rs 142 added 0 removed: purely additive, zero deletions, so no existing test was weakened or rewritten. No status, orient, render, close, or deferred_queue behavior outside the reconciliation was touched."
+          },
+          {
+            "id": "declared-verify-reproduced-by-the-judge",
+            "status": "PASS",
+            "evidence": "Judge re-ran the cell's declared verify read-only from the worktree /home/thanhsmind/projects/goglbe/beehive--wt--traceable-runs at c3312545: cargo test --release --manifest-path packages/bee-rs/Cargo.toml - exit code 0, 1730 passed, 11 ignored, 16 suites, 19.54s. Targeted re-runs: filter scribe_queue, 6 passed; and each of the three new status_full tests plus the preamble and chain-nudge queue tests run individually, 1 passed each."
+          },
+          {
+            "id": "pass-2-recorded-deviations-not-relitigated",
+            "status": "PASS",
+            "evidence": "Per the review brief, pass 2's calls stand and are not re-opened: the empty areas payload on the materialized scribe record, and the lazy materialize-on-scan trigger in drivers/close.rs instead of cells/handlers_close.rs run_cap (which sits outside the cell's files list), remain recorded deviations - examined and not blocked on for a third time. Nothing in c3312545 changes either one."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T10:49:56.372Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-14T09:57:52.129Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   }
 }

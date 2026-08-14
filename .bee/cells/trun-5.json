@@ -73,6 +73,66 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T08:15:43.551Z"
+    "ran_at": "2026-08-14T08:15:43.551Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-docs-history-allowed-at-a-gated-phase",
+            "status": "PASS",
+            "evidence": "guards.rs:33-34 GATE_ALLOWED_PREFIXES_GATED = [\".bee/\", \"docs/history/\", \"plans/\", \"AGENTS.md\"]; write_guard/tests.rs gated_phase_denies_source_until_execution_approved retargeted to edit(\"docs/history/some-feature/plan.md\") asserting code 0"
+          },
+          {
+            "id": "truth2-blanket-docs-now-refuses-at-a-gated-phase",
+            "status": "PASS",
+            "evidence": "checks.rs:498 gated branch consumes under_allowed_prefix_gated; new test gated_phase_docs_outside_history_now_refuses asserts edit(\"docs/plan.md\") at phase planning returns code 2 and the message names docs/history/; the apply-patch twin asserts the same for an Add File patch"
+          },
+          {
+            "id": "truth3-dot-bee-still-allowed-at-a-gated-phase",
+            "status": "PASS",
+            "evidence": "new test gated_phase_bee_own_writes_still_allowed asserts code 0 for .bee/decisions.jsonl, plans/roadmap.md and AGENTS.md at phase planning with execution unapproved"
+          },
+          {
+            "id": "truth4-intake-keeps-blanket-docs",
+            "status": "PASS",
+            "evidence": "guards.rs:42-43 GATE_ALLOWED_PREFIXES_INTAKE = [\".bee/\", \"docs/\", \"plans/\", \"AGENTS.md\"] — byte-identical to the pre-split shared list; checks.rs:483 and :745 both consume the intake list; new test idle_intake_gate_still_allows_blanket_docs asserts code 0 for docs/plan.md at phase idle"
+          },
+          {
+            "id": "truth5-worktree-first-behavior-unchanged",
+            "status": "PASS",
+            "evidence": "git show 54a76810 -- hook_local.rs is a pure constant rename (GATE_ALLOWED_PREFIXES -> GATE_ALLOWED_PREFIXES_INTAKE) with an identical prefix body, and the INTAKE list's contents equal the old shared list, so worktree_first_exempt_rel is behaviourally identical by construction; the pre-existing worktree_first_exemptions_hold / worktree_first_denies_main_source_write suite (tests.rs:895-1024) still passes"
+          },
+          {
+            "id": "keylink-two-lists-never-one-constant",
+            "status": "PASS",
+            "evidence": "rg GATE_ALLOWED_PREFIXES across src: gated list used only at guards.rs:58 and checks.rs:505 (the gated message); intake list at guards.rs:63, checks.rs:483/:745, hook_local.rs:552, paths.rs:451. No shared constant remains"
+          },
+          {
+            "id": "prohibition-gated-phase-set-and-intake-behavior-unchanged",
+            "status": "PASS",
+            "evidence": "is_gated_phase is not in the 54a76810 diff; the intake list contents are unchanged; blanket docs/ was NOT removed from intake"
+          },
+          {
+            "id": "deviation-retargets-are-red-first-not-deletions",
+            "status": "PASS",
+            "evidence": "the diff shows both retargeted assertions kept and repointed with an inline comment naming trun-5, plus an added still_denies assertion in the apply-patch case — no assertion was deleted"
+          },
+          {
+            "id": "verify-reproduced",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -> 1715 passed, 11 ignored, exit 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T09:57:52.113Z"
+      }
+    ]
   }
 }

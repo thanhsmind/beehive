@@ -89,6 +89,66 @@
     ],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T08:17:16.082Z"
+    "ran_at": "2026-08-14T08:17:16.082Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-small-tiny-file-touching-routes-through-a-brief",
+            "status": "PASS",
+            "evidence": "skills/bee-hive/references/routing-and-contracts.md routing table row replaced: '\"Just fix this\" / small change, and it writes a file' -> bee-shaping (Lock) writing a SHORT CONTEXT.md before bee-planning; the writes-nothing twin still goes straight to bee-planning"
+          },
+          {
+            "id": "truth2-approval-moment-at-every-code-touching-lane",
+            "status": "PASS",
+            "evidence": "the Lane ceremony table's docs row now reads '1 — Gate 1 (the brief's approval)' where it read '0'; tiny reads '1 — Gate 1 folded into the merged shape+execution gate' and small '2 — Gate 1 folded into ...'"
+          },
+          {
+            "id": "truth3-bypass-scopes-the-stop-not-the-record",
+            "status": "PASS",
+            "evidence": "routing-and-contracts.md adds the bolded '`gate_bypass` scopes the STOP, never the record (D2)' paragraph; gates-and-delegation.md adds the matching 'Scope of the switch (D2, traceable-runs)' paragraph and rewrites the bypass step to call `bee gate --merge --approved true --actor auto --bypass-level <level> --reason \"<why>\"` — the real flags trun-2 shipped. The two files agree"
+          },
+          {
+            "id": "truth4-d6-boundary-stated",
+            "status": "PASS",
+            "evidence": "routing-and-contracts.md: 'this whole table applies only to a request that writes at least one file, code or docs alike; a pure question that changes nothing on disk takes no row here — it gets no brief and no record', echoed in the two new routing rows and in bee-shaping/SKILL.md"
+          },
+          {
+            "id": "truth5-brief-named-with-its-path",
+            "status": "PASS",
+            "evidence": "bee-shaping/SKILL.md's new 'The tiny/docs brief (D1, traceable-runs)' block names the artifact as a SHORT docs/history/<feature>/CONTEXT.md — the same file full lanes use, explicitly 'not a new artifact type'; the docs-lane section repeats the path"
+          },
+          {
+            "id": "truth6-regen-green",
+            "status": "PASS",
+            "evidence": "judge re-ran the cell's own verify tail read-only: `.bee/bin/bee dev release-manifest --check` -> '210 file(s) match stored manifest, 1 unhashed artifact(s) present'. The commit carries the regenerated mirrors (.agents/.claude/.claude-plugin/.codex-plugin/.opencode) and .bee/onboarding.json"
+          },
+          {
+            "id": "prohibition-no-rust-no-claude-md-no-agents-md",
+            "status": "PASS",
+            "evidence": "git show 63413f1b --stat contains no .rs path and neither CLAUDE.md nor AGENTS.md; only skills/ sources, their rendered mirrors, .bee/onboarding.json and the release manifest"
+          },
+          {
+            "id": "prohibition-no-added-plan-ceremony",
+            "status": "PASS",
+            "evidence": "the table adds the explicit line 'No added plan ceremony rides along with any of this (D1): tiny/small/docs gain exactly a brief and a recorded approval, never a plan.md requirement they didn't already have'; the Planning column for tiny/small still says the cell is the micro-plan / plan.md is opt-in"
+          },
+          {
+            "id": "note-unrelated-mirror-drift-swept-in",
+            "status": "PASS",
+            "evidence": "the regen also picked up two stale bee-swarming mirror lines (failure_excerpt -> failure_excerpt, failure_log) left over from the full-failure-evidence feature. Mechanical regen catch-up, disclosed in trace.report.deviations, not a doctrine edit by this cell"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T09:57:52.116Z"
+      }
+    ]
   }
 }

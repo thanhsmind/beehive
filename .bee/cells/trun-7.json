@@ -90,6 +90,61 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T08:47:00.059Z"
+    "ran_at": "2026-08-14T08:47:00.059Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-closed-vocabulary-persisted-and-typed-refusal",
+            "status": "PASS",
+            "evidence": "record.rs:203 base_workflow_defaults seeds run_state; :209-242 RUN_STATE_VALUES + valid_run_state_value + check_patch_run_state; :436-440 read_workflow_record refuses a corrupt on-disk run_state with the WORKFLOW_CORRUPT-style message. Tests workflow_store/tests.rs:199 and :219 pin both the patch refusal (exact message) and the on-disk refusal plus the legacy-null backfill"
+          },
+          {
+            "id": "truth2-awaiting-approval-rule",
+            "status": "PASS",
+            "evidence": "record.rs:299-343 derive_run_state: the highest-index pending gate with nothing later approved returns \"awaiting-approval\" before any cell-count branch, and the doc comment argues why the max index is the right probe; a dedicated test block for the rule sits at workflow_store/tests.rs:236ff"
+          },
+          {
+            "id": "truth3-projection-actually-carries-run_state-not-a-vacuous-roundtrip",
+            "status": "PASS",
+            "evidence": "THE named trap, checked directly: projections.rs:119 set_from(next, \"run_state\", wf) inside apply_workflow_d1_fields. Test workflow_store/tests.rs:798 writes a state.json with NO run_state and a record with run_state \"running\", runs rebuild_state_projection, and asserts state.json[\"run_state\"] == \"running\" — a rebuild round-trip could not pass this — then calls apply_workflow_d1_fields directly on a fresh empty map and asserts the copy again"
+          },
+          {
+            "id": "truth4-status-json-exposes-run_state",
+            "status": "PASS",
+            "evidence": "status_full/build.rs surfaces it beside gate_records; tests.rs:3393 bee_status_json_exposes_run_state_beside_the_gate_records and :3411 the null-without-a-live-workflow case"
+          },
+          {
+            "id": "truth5-no-new-cell-status-and-no-key-renames",
+            "status": "PASS",
+            "evidence": "the run_state derivation consumes the existing five statuses through CellCounts (record.rs:174-183 open/claimed/blocked/capped/dropped) and adds none; status_full/tests.rs:3427 cell_statuses_and_feature_run_state_are_independent_signals asserts a reader tells them apart without re-deriving either, and asserts status.cells keeps its 6 keys"
+          },
+          {
+            "id": "truth-persisted-not-computed-at-read",
+            "status": "PASS",
+            "evidence": "record.rs:607 (update_workflow_assuming_lock_with) and :755 (create_workflow) both WRITE json!(derive_run_state(...)); the comment at :599 states run_state is derived and written fresh on every update and never taken from a caller patch"
+          },
+          {
+            "id": "prohibition-no-dashboard-surface",
+            "status": "PASS",
+            "evidence": "git show a730189d --stat: only workflow_store record/projections/tests and status_full build/tests"
+          },
+          {
+            "id": "verify-reproduced",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -> 1715 passed, 11 ignored, exit 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T09:57:52.121Z"
+      }
+    ]
   }
 }

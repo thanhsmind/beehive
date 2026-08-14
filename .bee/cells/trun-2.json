@@ -74,6 +74,66 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T06:39:32.531Z"
+    "ran_at": "2026-08-14T06:39:32.531Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-start-feature-seeds-pending",
+            "status": "PASS",
+            "evidence": "state_group/tests.rs:175 a_new_feature_record_seeds_every_gate_as_pending asserts state pending / approved false / actor null on every GATE_NAME of a record created through ensure_workflow_record_for_feature(gates:None); the seam is default_gate_entry (record.rs:112), which the deviation names correctly — policy.rs default_gates only resets the projected approved_gates boolean"
+          },
+          {
+            "id": "truth2-actor-user-records-state-actor-timestamp",
+            "status": "PASS",
+            "evidence": "set_gate.rs:641 defaults actor to \"user\"; :767-780 stamps actor/at/reason/bypass_level under the still-held workflow lock; test set_gate.rs:1572 asserts state approved, actor user, at is_string, and that an untouched gate stays pending"
+          },
+          {
+            "id": "truth3-actor-auto-records-all-three",
+            "status": "PASS",
+            "evidence": "set_gate.rs:1594 gate_approval_by_actor_auto_records_bypass_level_and_reason asserts state/actor/bypass_level/reason on the record after --actor auto --bypass-level normal --reason gate_bypass=normal"
+          },
+          {
+            "id": "truth4-auto-without-level-or-reason-refuses-and-writes-nothing",
+            "status": "PASS",
+            "evidence": "set_gate.rs:658-666 refuses BEFORE mutation_lane_selector, any lock, and any write; tests :1618 and :1648 cover both missing sides and each asserts .bee/state.json AND the workflow record are byte-identical before/after"
+          },
+          {
+            "id": "truth5-rejection-still-stamps-revoked-and-reads-rejected",
+            "status": "PASS",
+            "evidence": "set_gate.rs:721-731 gate_revoked_at stamping unchanged; state \"rejected\" arrives through handoff.rs:538-548's revoked branch; test :1674 asserts state[gate_revoked_at][execution].is_string() and record state rejected + actor + reason"
+          },
+          {
+            "id": "keylink-flag-allowlist-extended",
+            "status": "PASS",
+            "evidence": "set_gate.rs:549-551 keys_known list now contains \"actor\", \"bypass-level\", \"reason\" alongside name/merge/approved/lane/no-lane/owner"
+          },
+          {
+            "id": "prohibition-no-self-approval-and-merge-semantics-intact",
+            "status": "PASS",
+            "evidence": "the flags only record caller-supplied values (set_gate.rs:641-666 validate, :767-780 write); merge still sets shape+execution together (:736-741) and gate_revoked_at logic is byte-unchanged; test gate_merge_with_actor_auto_writes_the_same_trace_to_shape_and_execution (:1745) pins the merged path"
+          },
+          {
+            "id": "deviation-registry-payload-gap-is-real-but-doc-only",
+            "status": "PASS",
+            "evidence": "verified the deviation honestly: `fd -H export_registry_payload .` returns nothing (generator absent), and `.bee/bin/bee state gate --help` still prints `flags: --name --merge --approved --lane --no-lane --owner` with no --actor/--bypass-level/--reason. Enforcement is run_gate's own keys_known allowlist, not the payload, so behavior is correct; the documented flag surface is stale. Real follow-up gap, outside this cell's must_haves"
+          },
+          {
+            "id": "verify-reproduced",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -> 1715 passed, 11 ignored, exit 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T09:57:52.100Z"
+      }
+    ]
   }
 }

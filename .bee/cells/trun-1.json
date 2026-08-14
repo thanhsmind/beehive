@@ -81,6 +81,66 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T06:14:16.441Z"
+    "ran_at": "2026-08-14T06:14:16.441Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-five-fields-on-all-four-authoring-paths",
+            "status": "PASS",
+            "evidence": "record.rs:112-122 default_gate_entry inserts state/actor/at/reason/bypass_level; feature.rs:323-344 legacy_gates_to_workflow_gates emits all seven keys; handoff.rs:524-555 gates_patch_from_record is overlaid via record.rs:597 merge_gates onto a full base entry; policy.rs default_gates left untouched (projection-only, per trun-2's confirming note). End-to-end byte assertion state_group/tests.rs:912/916 shows the written record entry carrying all five"
+          },
+          {
+            "id": "truth2-approved-equals-state-approved",
+            "status": "PASS",
+            "evidence": "handoff.rs:537-548 sets approved and state from the same boolean (approved->approved, revoked->rejected, else pending); record.rs:178-181 re-derives state whenever an override touches approved without naming state; state_group/tests.rs:912 asserts {approved:true,state:\"approved\"} and :916 {approved:false,state:\"pending\"} after write_through_projection -> gates_patch_from_record"
+          },
+          {
+            "id": "truth3-old-shape-read-derives-state",
+            "status": "PASS",
+            "evidence": "record.rs:422 read path is merge_gates(None, on-disk gates) so every on-disk entry travels the OVERRIDE branch and hits the 178-181 derivation; workflow_store/tests.rs:109-127 old_shape_gate_entry_without_state_derives_it_from_approved reads a record written with no state field and gets approved/pending correctly"
+          },
+          {
+            "id": "truth4-typed-refusal-on-unknown-value",
+            "status": "PASS",
+            "evidence": "record.rs:89-106 check_gate_entry_fields returns Err2::Msg naming the legal set; workflow_store/tests.rs:93-106 asserts both the state and actor refusal messages"
+          },
+          {
+            "id": "truth5-plan-rev-divergence-asserted-as-intended",
+            "status": "PASS",
+            "evidence": "workflow_store/tests.rs:129-154 plan_rev_bump_leaves_the_record_entry_approved_while_projection_goes_stale asserts entry approved:true/state:approved AND workflow_gates_to_approved_gates(...,rev 4) == false, with the comment naming it intended, never repaired"
+          },
+          {
+            "id": "prohibition-projections-untouched",
+            "status": "PASS",
+            "evidence": "git show --stat 4920d435 lists only state_group/feature.rs, state_group/tests.rs, workflow_store/handoff.rs, workflow_store/record.rs, workflow_store/tests.rs — projections.rs and write_guard/guards.rs are absent, so workflow_gates_to_approved_gates and GATE_ALLOWED_PREFIXES were not touched"
+          },
+          {
+            "id": "prohibition-approved-boolean-and-cell-statuses-kept",
+            "status": "PASS",
+            "evidence": "record.rs:114 still inserts approved:false on the default entry; no cell-status constant appears in the 4920d435 diff"
+          },
+          {
+            "id": "deviation-scope-widening-is-minimal",
+            "status": "PASS",
+            "evidence": "the one recorded deviation (state_group/tests.rs) is +2/-2 lines updating two byte-level expectations to include the new fields — git show 4920d435 -- .../state_group/tests.rs"
+          },
+          {
+            "id": "verify-reproduced",
+            "status": "PASS",
+            "evidence": "judge re-ran the cell verify read-only: cargo test --release --manifest-path packages/bee-rs/Cargo.toml -> 1715 passed, 11 ignored (16 suites, 20.37s), exit 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T09:57:52.081Z"
+      }
+    ]
   }
 }

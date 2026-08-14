@@ -86,6 +86,66 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T07:50:37.519Z"
+    "ran_at": "2026-08-14T07:50:37.519Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-bee-only-dirt-auto-commits-and-merge-succeeds",
+            "status": "PASS",
+            "evidence": "worktree/phases.rs:111-146 auto-commits before the WORKTREE_MERGE_MAIN_DIRTY refusal; test worktree/tests.rs:1282 bee_only_dirt_in_main_auto_commits_and_merge_succeeds"
+          },
+          {
+            "id": "truth2-dirt-outside-the-allowed-roots-still-refuses-and-names-it",
+            "status": "PASS",
+            "evidence": "phases.rs:123-136 refuses with the offending porcelain lines and names the scope; tests.rs:1336 dirt_outside_bee_still_refuses_and_names_the_offending_path and :1391 another_features_docs_history_dirt_still_refuses_and_is_named. AMENDMENT: the allowed root set is .bee/ PLUS docs/history/<merging-feature>/ (merge.rs:170-176 main_bookkeeping_roots), wider than the truth's literal '.bee/ only'. Recorded as a coordinator course-correction in trace.report.deviations, scoped to the merging feature only and pinned by the peer-feature refusal test"
+          },
+          {
+            "id": "truth3-path-scoped-never-sweeps-unrelated-work",
+            "status": "PASS",
+            "evidence": "merge.rs:257-287 commit_main_bookkeeping filters pathspecs then commits only those roots; tests.rs:1313 unrelated_staged_file_stays_staged_out_of_the_bookkeeping_commit and :2036 the_dirty_check_exclusion_is_a_pathspec_not_a_text_filter"
+          },
+          {
+            "id": "truth4-failing-commit-only-warns",
+            "status": "PASS",
+            "evidence": "phases.rs:137-145 comment plus MainBookkeepingCommit::Skipped carried into the result (:266-270, :294-298) instead of an error; test tests.rs:1430 a_failing_bookkeeping_commit_only_warns_and_the_merge_still_completes_green"
+          },
+          {
+            "id": "truth5-config-opt-out",
+            "status": "PASS",
+            "evidence": "merge.rs:187-192 worktree_merge_commit_bookkeeping_enabled reads .bee/config.json's worktree_merge_commit_bookkeeping, absent-means-on, mirroring close's archive_on_close_enabled; test tests.rs:1469 config_opt_out_disables_the_auto_commit_and_the_merge_refuses_as_before"
+          },
+          {
+            "id": "prohibition-worktree-first-guard-untouched",
+            "status": "PASS",
+            "evidence": "git show 9e01807d --stat lists close.rs, worktree/git.rs, worktree/merge.rs, worktree/phases.rs, worktree/tests.rs — no hooks/write_guard file appears, so the guard itself is unchanged; the close.rs delta is a one-line signature widening of commit_unsigned (Some(\".bee\") -> &[\".bee\"])"
+          },
+          {
+            "id": "keylink-reuse-rather-than-duplicate",
+            "status": "PASS",
+            "evidence": "the shared git primitive IS reused (commit_unsigned, widened to multi-pathspec, close.rs:1604 updated in the same commit) and MainBookkeepingCommit mirrors close's BookkeepingCommit JSON shape, but a second wrapper (merge.rs:257 commit_main_bookkeeping) exists rather than calling close's commit_close_bookkeeping. Named in trace.report.deviations with the reason (close's helper is single-.bee-pathspec and independently validated) — a named deviation, not a silent one"
+          },
+          {
+            "id": "deviation-pathspec-filter-was-red-first",
+            "status": "PASS",
+            "evidence": "merge.rs:265-286 drops roots matching neither disk nor git ls-files before add/commit, exactly the failure the deviation describes (git add -A -- <spec> fails outright on a non-matching root)"
+          },
+          {
+            "id": "verify-reproduced",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -> 1715 passed, 11 ignored, exit 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T09:57:52.109Z"
+      }
+    ]
   }
 }

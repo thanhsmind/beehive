@@ -71,6 +71,66 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-14T08:46:18.217Z"
+    "ran_at": "2026-08-14T08:46:18.217Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth1-payload-executable-with-no-session-memory",
+            "status": "PASS",
+            "evidence": "deferred_queue.rs:85-90 the item carries kind, feature, cells, areas, files, reason; :215-223 enqueue takes all of them; the add verb (:11-13 usage header) exposes --kind/--feature/--reason/--cells/--areas/--files"
+          },
+          {
+            "id": "truth2-exactly-one-winner-real-os-processes",
+            "status": "PASS",
+            "evidence": "tests/concurrency.rs:1208 one_claimant_wins_the_deferred_queue_item_and_every_loser_is_a_typed_claimed_refusal uses race() (:244-268) which spawns REAL child processes — cmd.spawn() on bee_bin() behind a Barrier — and asserts winners.len()==1, losers==RACERS-1, each refusal naming the CLAIMED state and the actual winner, then re-reads the store to assert exactly one claimed row. Judge ran it: `cargo test ... --test concurrency deferred_queue` -> 2 passed, 0 failed, 0 ignored, and no SKIP line under --nocapture, so native_probe did not short-circuit it"
+          },
+          {
+            "id": "truth3-negative-control-bites",
+            "status": "PASS",
+            "evidence": "tests/concurrency.rs:1285 deliberate_red_an_unguarded_deferred_queue_claim_lets_every_racer_believe_it_won reproduces attempt_claim's decision with the lock removed, as TEST-OWNED code (never calling the production fn), and asserts believed == RACERS with a DETECTOR DID NOT BITE message. It ran green in the run above. Note for the record: the control uses N threads behind a Barrier, not processes — that is this file's established falsifiability shape (:38) and the PROOF itself is multi-process, so the prohibition on an in-process test standing in for the multi-process proof is respected"
+          },
+          {
+            "id": "truth4-dual-condition-reclaim",
+            "status": "PASS",
+            "evidence": "deferred_queue.rs:35-38 documents lease-expired AND owner-heartbeat-stale, lease expiry alone never enough; unit test reclaim_requires_both_lease_expiry_and_stale_heartbeat (:865)"
+          },
+          {
+            "id": "truth5-list-filters-and-json",
+            "status": "PASS",
+            "evidence": "deferred_queue.rs:442-455 validate --kind (typed refusal naming the four kinds) and --claimed (claimed|unclaimed), :465-466 apply both filters; every verb parses --json (usage header :11-19, and the race test drives add/claim/list with --json end to end)"
+          },
+          {
+            "id": "keylink-reuses-the-crates-own-primitives",
+            "status": "PASS",
+            "evidence": "deferred_queue.rs:51 uses crate::lock::{acquire_store_lock_once, AcquireOnce} — the same O_EXCL store lock cells claim contends on — and :40 resolve_session_id's precedence chain for owner identity; no private copy"
+          },
+          {
+            "id": "prohibition-no-migration-of-the-two-existing-stores",
+            "status": "PASS",
+            "evidence": "git show 72f55b15 --stat: only deferred_queue.rs (new), verbs/mod.rs (+4 wiring lines) and tests/concurrency.rs (+171). capture-queue.jsonl and review-candidates.jsonl and their scans are untouched"
+          },
+          {
+            "id": "deviation-test-placement-follows-the-crate",
+            "status": "PASS",
+            "evidence": "the guessed deferred_queue_tests.rs and lib.rs do not exist in this crate; inline #[cfg(test)] (capture.rs/backlog.rs convention) plus tests/concurrency.rs (five sibling race proofs already live there) is the crate's real shape. Named deviation, verified against the tree"
+          },
+          {
+            "id": "verify-reproduced",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -> 1715 passed, 11 ignored, exit 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": "claude-opus-5[1m]",
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-14T09:57:52.125Z"
+      }
+    ]
   }
 }
