@@ -27,8 +27,9 @@ flowchart TB
             subgraph DATA["data plane — per checkout"]
                 CELLS["cells/*.json — units of work"]
                 DEC["decisions.jsonl — append-only WHY"]
+                DQ["deferred-queue.jsonl — claimable<br/>capture · scribe · review · promote work"]
                 CFG["config.json — the one hand-edited file:<br/>commands.test, gate_bypass, models"]
-                PROJ["state.json — read-only projection<br/>phase · gates · feature"]
+                PROJ["state.json — read-only projection<br/>phase · gates · feature<br/>run_state · waiting_on"]
                 LOGS["logs/ — test-results, timings, dispatch"]
             end
             EXP[".bee/expertise/ — vendored craft guides"]
@@ -147,7 +148,7 @@ sequenceDiagram
     B->>S: run commands.test — green caps, red refuses with excerpt
     W-->>O: [DONE] / [BLOCKED] / [HANDOFF] / [NOOP]
     O->>B: bee close --feature (reruns tests, retires cells)
-    O->>B: worktree merge --id (verify green, worktree removed)
+    O->>B: worktree merge --id (auto-commit .bee + this feature's docs/history,<br/>refuse and NAME anything dirty outside those, verify green, worktree removed)
     O-->>U: outcome + capture line
     Note over O: scribing + compounding later,<br/>at the owner's pace
 ```
@@ -161,7 +162,7 @@ down: every lane captures what settles.
 ```mermaid
 flowchart TB
     REQ["request"] --> ROUTE{"bee route<br/>class · lane · flags · files"}
-    ROUTE -->|docs only| DOCS["docs lane<br/>no gates: announce → write →<br/>format-check → capture line"]
+    ROUTE -->|docs only| DOCS["docs lane<br/>brief → Gate 1 → write →<br/>format-check → capture line<br/>no Gate 2, no cells"]
     ROUTE -->|1 file, no risk flag| TINY["tiny<br/>merged gate inline · one cell<br/>may run inline in-session"]
     ROUTE -->|few files, no risk flag| SMALL["small<br/>merged gate · dispatched worker(s)<br/>scoping logged as a decision"]
     ROUTE -->|more files or 1 risk flag| STD["standard<br/>full chain · plan.md frozen at Gate 2"]
@@ -243,10 +244,10 @@ flowchart TB
         E3["agent is about to run a tool"]
         E4["session ends"]
     end
-    E1 --> H1["session-init — inject the preamble:<br/>phase, gates, route, handoff,<br/>critical patterns, knowledge invitation"]
-    E2 --> H2["prompt-context — one-line state echo"]
+    E1 --> H1["session-init — inject the preamble:<br/>phase, gates, route, handoff,<br/>waiting-on-human, critical patterns,<br/>knowledge invitation"]
+    E2 --> H2["prompt-context — one-line state echo,<br/>and CLEARS the waiting-on-human mark<br/>(best-effort; never fails the turn)"]
     E3 --> H3{"write-guard"}
-    H3 -->|"edit before Gate 2<br/>secret-shaped path<br/>generated tree<br/>foreign worktree path"| DENY["DENY — names its remedy<br/>(the fix is in the message)"]
+    H3 -->|"edit before Gate 2 (gated phase:<br/>only .bee/, docs/history/, plans/, AGENTS.md)<br/>secret-shaped path<br/>generated tree<br/>foreign worktree path"| DENY["DENY — names its remedy<br/>(the fix is in the message)"]
     H3 -->|otherwise| ALLOW["allow"]
     E3 --> H4{"model-guard"}
     H4 -->|"dispatch without a tier"| REPAIR["repair or refuse the dispatch"]

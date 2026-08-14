@@ -14,6 +14,13 @@ invariants govern all of them:
    `.bee/backlog.jsonl`, `docs/backlog.md`, the two `.bee/runtime/` ledgers, and
    the companion marker, each named with the verb that owns it. Everything else in
    `.bee/` is held by discipline, not by the guard. Silence is never permission.
+   The net itself is phase-split, not one list: at a **gated** phase (`exploring`
+   or `planning` with execution unapproved) only `.bee/`, `docs/history/`,
+   `plans/`, and `AGENTS.md` pass — note the *narrower* `docs/history/`, not
+   blanket `docs/` — while the idle/terminal **intake** gate still allows blanket
+   `docs/` (`write_guard/guards.rs`'s `GATE_ALLOWED_PREFIXES_GATED` vs.
+   `GATE_ALLOWED_PREFIXES_INTAKE`). The consequence: a `docs/` write outside
+   `docs/history/` now refuses at a gated phase, where it used to pass.
 
 Anchors below are linked from stage pages and [index.md](index.md).
 
@@ -24,11 +31,28 @@ file marked *projection* below is derived from it.
 
 | Path | Holds |
 |------|-------|
-| `runtime/workflows/<wf-id>/state.json` | the workflow record (truth): `id`, `feature`, `phase`, `mode`, `plan_rev`, `gates` (each `{approved, approved_for_plan_rev}`), `route`, `summary`, `next_action`, `status`, `created_at` (older records also carry a `feature_verify` object — legacy residue of the retired `commands.verify`; no code reads or writes it) |
+| `runtime/workflows/<wf-id>/state.json` | the workflow record (truth): `id`, `feature`, `phase`, `mode`, `plan_rev`, `gates` (each entry — see sub-table below), `run_state`, `waiting_on`, `route`, `summary`, `next_action`, `status`, `created_at` (older records also carry a `feature_verify` object — legacy residue of the retired `commands.verify`; no code reads or writes it) |
 | `runtime/leases/cells/<cell-id>.json` · `runtime/leases/paths/<prefix>/<hash>.json` | sharded per-resource leases (exclusive/advisory) — replace the monolithic reservations store |
 | `runtime/handoffs/<wf-id>/<seq>.json` | per-workflow handoff mailbox — one workflow pausing never blocks another |
 | `runtime/workspaces/` · `cross-worktree-holds.json` · `worktree-grants.json` | worktree registry, path-keyed cross-checkout holds, and the grants `bee worktree new/register` issue |
 | `runtime/integration/queue/<seq>.json` | the durable merge queue `bee worktree merge` drains, one file per queued worktree, plus the processor lease that keeps two mergers from draining it at once |
+
+Each `gates` entry (one per name in `GATE_NAMES` — `context`, `shape`,
+`execution`, `review`) carries more than the boolean flag:
+
+| Field | Holds |
+|-------|-------|
+| `approved` | boolean — the pre-existing flag most call sites still read |
+| `approved_for_plan_rev` | the plan revision this approval was granted for, or `null` |
+| `state` | `pending` \| `approved` \| `rejected` — the gate's own persisted approval state |
+| `actor` | `user` \| `auto` \| `null` — who moved the gate; `auto` is a `gate_bypass` auto-approval |
+| `at` | ISO timestamp of the last state change, or `null` |
+| `reason` | free text, required when `actor` is `auto`, else `null` |
+| `bypass_level` | `off` \| `normal` \| `full` \| `total` \| `null` — the level an `auto` approval recorded as its reason for not halting |
+
+`bee gate` writes this shape; `.bee/state.json`'s `approved_gates`
+([below](#beestatejson)) is a booleans-only projection of it — see that entry
+for the cross-reference.
 
 The data plane (cells in flight, logs, tmp) stays isolated per worktree. Every
 state verb resolves the live workflow's record first.
@@ -45,8 +69,10 @@ of the live workflow record, kept for compatibility. Same keys as before:
 | `phase` | current chain phase — the closed nine: `idle` · `exploring` · `planning` · `swarming` · `reviewing` · `scribing` · `compounding` · `grooming` · `compounding-complete` |
 | `feature` | active feature slug |
 | `mode` | lane (`tiny` · `small` · `standard` · `high-risk` · `spike` · `docs`) |
-| `approved_gates` | `{context, shape, execution, review}` booleans — four fields, three gates: `shape` and `execution` flip together as Gate 2 |
+| `approved_gates` | `{context, shape, execution, review}` booleans — four fields, three gates: `shape` and `execution` flip together as Gate 2. This is a flattened projection: the workflow record's own `gates` entry carries `state`/`actor`/`at`/`reason`/`bypass_level` too ([above](#the-control-plane-beeruntime)) — read the record, not this boolean, when the richer shape matters |
 | `gate_revoked_at` | map of gate name → ISO timestamp (revocation audit) |
+| `run_state` | the run's own closed-vocabulary lifecycle name — `shaping` · `awaiting-approval` · `running` · `blocked` · `done` (or `null` pre-migration). Projected from the workflow record, never computed at read time; exposed by `bee status --json` |
+| `waiting_on` | the persisted wait mark, or `null` when nothing is waited on: `{kind, subject, asked_at, session}` — `kind` is `gate` (a formal approval) or `question` (something the agent asked and has not been answered). Written by `bee state waiting-on set`, cleared by `bee state waiting-on clear` |
 | `cells` | rollup counts `{open, claimed, capped, blocked}` |
 | `route` | the recorded triage `{class, lane, flags[], product_files, rationale, updated_at}` — written by `bee route` |
 | `summary`, `next_action` | human-readable resume hints |
@@ -201,6 +227,17 @@ Event-sourced friction + PBI records. Event shapes include `proposal`
 events. Written via `bee backlog add` / `backlog propose` / `backlog pbi.*`.
 Rendered to `docs/backlog.md` (generated — never hand-edited).
 
+### `.bee/deferred-queue.jsonl`
+Event-sourced, last-event-wins fold (add/claim/release/complete), holding
+deferred `capture` / `scribe` / `review` / `promote` work that a session
+absent when it was queued can pick up later — the ONE claimable queue for
+that work. One item: `{id, kind, feature, cells[], areas[], files[], reason,
+queued_at, claim, completed, completed_at}`; `claim` is `{owner, claimed_at,
+ttl_seconds}` or `null`. `claim` follows the same exclusive-append,
+lease-plus-heartbeat reclaim pattern `.bee/claims/` uses, so a parallel agent
+takes exactly one item. Written via `deferred-queue add / list / claim /
+release / complete`.
+
 ### `.bee/HANDOFF.json`
 **Legacy projection.** The pause/resume artifact — a projection of the live workflow's own mailbox
 (`runtime/handoffs/<wf-id>/<seq>.json`), rendered when no mailbox entry exists.
@@ -265,7 +302,7 @@ the next action in plain language.
 | `bee status` | Full snapshot when routing work |
 | `bee route` | Record the triage/lane classification |
 | `bee shape` | Write the shaping anchor — verbatim request + what "done" means |
-| `bee gate` | Record a gate approval (`--merge` for shape+execution together) |
+| `bee gate` | Record a gate approval (`--merge` for shape+execution together). `--actor <user\|auto>`, `--bypass-level <off\|normal\|full\|total>`, `--reason "<text>"` — an `--actor auto` call refuses without both a bypass level and a reason |
 | `bee cells add` · `cells ready` · `cells show` | Persist shaped work · what is claimable · one cell in full |
 | `bee dispatch prepare` | Build a worker dispatch payload (`--claim` claims + reserves in the same verb) |
 | `bee finish` | Worker completion: run the declared tests, cap on green, release reservations |
@@ -292,7 +329,7 @@ verb runs, so there is one implementation and one test set per operation:
 after the prefix is stripped and **refuses a flow verb** ("call it as `bee gate`,
 without `internal`"), so the boundary is real in both directions. The bare
 top-level spellings still work. `bee --help --all [--json]` lists the full registry
-(141 entries, 18 of them porcelain), each carrying its `surface` value;
+(150 entries, 19 of them porcelain), each carrying its `surface` value;
 `bee internal --help` lists just the plumbing.
 
 | Group | Verbs |
@@ -364,6 +401,7 @@ reason, never a silent skip — it is written onto the record it excuses.
 | `reviews record` (`approved`) | a `P1` finding is not named in the decision's `p1_resolutions[]` with a fixing cell | none — land the fix cell, then record with `p1_resolutions` |
 | write-guard, `docs/history/<feature>/plan.md` | that feature's `approved_gates.shape` is true — plan.md freezes once shape is locked | `bee state plan-rev bump --lane <feature>`, or unapprove shape to redraft |
 | model-guard, `Agent`/`Task` | the dispatch declares no tier and names no pinned subagent type. A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` now *derives* its tier instead of refusing | declare `[bee-tier: <tier>]` or a `model` param. A derived `cli` tier still refuses — an external process is not dispatchable as an agent |
+| `worktree merge`, dirty main | before this row's own refusal can fire, dirt confined to `.bee/` (plus `docs/history/<the-merging-feature>/` when the feature is known) is auto-committed first, warn-never-block; dirt found ANYWHERE ELSE still refuses, named by path | `worktree_merge_commit_bookkeeping: false` in config turns the auto-commit off — then a dirty main refuses unconditionally, exactly as before. Mirrors `bee close`'s own bookkeeping auto-commit |
 
 Two notes on doors that are not refusals:
 
@@ -377,16 +415,16 @@ Two notes on doors that are not refusals:
 
 ### Declared but not built
 
-20 registry entries have no implementation in the current binary — the R6 Node
-deletion removed the only one they had. Each refuses by name, states that nothing
-ran and nothing changed, and names its fallback:
+18 registry entries have no implementation in the current binary — the R6 Node
+deletion removed the only one they had (`state advisor-ref record/show`, once
+in this list, has since been ported and is built). Each refuses by name,
+states that nothing ran and nothing changed, and names its fallback:
 
 | Unbuilt | Count |
 |---|---|
 | `config get/set/unset/validate` | 4 |
 | `perf start/stop/section/log/render/report/sync` | 7 |
 | `herding enable/disable/status` | 3 |
-| `state advisor-ref record/show` | 2 |
 | `state compact-capsule/check/log` | 3 |
 | `recovery window` | 1 |
 

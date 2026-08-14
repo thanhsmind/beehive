@@ -37,12 +37,24 @@ standalone execution gate into the same approval, shape and execution together v
 `bee gate --merge` · Gate 3 (P1>0) "P1 findings block merge. Fix before
 proceeding?" / (P1=0) "Review complete. Approve merge?".
 
+Every lane earns a gate record, the `docs` lane included — it stops at Gate 1 only.
+A new feature starts with every gate at `state: pending`, so "not asked yet" and
+"asked, waiting" are distinguishable and the wait survives a restart. An answer
+stamps `state`, `actor` (`user` or `auto`), the time, and a reason; `--approved false`
+stamps `state: rejected` alongside the existing revocation timestamp. Under
+`gate_bypass`, an auto-approval must carry `--actor auto` with both
+`--bypass-level` and `--reason` — bee refuses it otherwise, so a bypassed run is
+never less traceable than one that stopped.
+
 ## State touched
-Reads [`state.json`](../register.md#beestatejson),
+Reads [`state.json`](../register.md#beestatejson) — including `run_state` and the
+`waiting_on` mark, which say whether the run is stopped on a person —
 [`onboarding.json`](../register.md#beeonboardingjson),
 [`HANDOFF.json`](../register.md#beehandoffjson),
 [`config.json`](../register.md#beeconfigjson) (bypass level, declared commands).
-Writes onboarding state and gate approvals (`bee gate`).
+Writes onboarding state and gate approvals (`bee gate`, which records `state`,
+`actor`, the timestamp, the reason and the bypass level in force), and the
+waiting-on-human mark (`bee state waiting-on set|clear`).
 
 ## Key rules
 - **Gates are never skipped, batched, or self-approved** — including go mode and

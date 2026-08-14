@@ -96,7 +96,9 @@ is captured the moment it settles, in every lane.
 Gate 2 approves shape and execution together in one call (`bee gate --merge`),
 folding the old standalone execution gate into it. They are never self-approved — except
 when the opt-in `gate_bypass` switch is deliberately set by the human (levels:
-`normal` / `full` / `total`).
+`normal` / `full` / `total`). Bypass changes whether a run **stops**, never whether
+its brief and approval record **exist**: an auto-approved gate is written with
+`actor: auto`, the level in force, and the reason it did not stop.
 
 **Knowledge over history.** The state layer an agent reads *first* is the knowledge
 bundle (`docs/knowledge/`) when the repo has one, or `docs/specs/` otherwise.
@@ -181,7 +183,9 @@ packages/bee/               vendored payload ASSETS only (no runtime code)
   runtime/workflows/<wf-id>/state.json  workflow record — SOURCE OF TRUTH  → register.md
   runtime/leases/           sharded cell/path leases (control plane)       → register.md
   runtime/handoffs/<wf-id>/ per-workflow handoff mailbox                   → register.md
-  state.json                read-only projection: phase · gates · feature  → register.md
+  state.json                read-only projection: phase · gates · feature   → register.md
+                            · run_state · waiting_on
+  deferred-queue.jsonl      claimable capture/scribe/review/promote work    → register.md
   config.json               commands · hook toggles · gate_bypass · models → register.md
   cells/<feature>-<n>.json  one unit of executable work                    → register.md
   decisions.jsonl           append-only decision log                       → register.md
@@ -226,8 +230,17 @@ is the one place they differ most: **`bee-capturing` runs both** stage 5
 - **Gate 3** — merge approval, and it lives **only** inside a review session the user
   explicitly asked for. It is never an automatic end-of-chain step.
 
-Every lane merges the old shape and execution approvals into one question;
-the docs lane has no gates at all. See each stage page for its lane behavior.
+Every lane merges the old shape and execution approvals into one question. The docs
+lane stops at Gate 1 only — a short brief and a one-line approval — and has no Gate 2,
+no cells, and no execution gate. See each stage page for its lane behavior.
+
+A gate is a record, not a boolean. Approving one writes `state` (`pending`, `approved`
+or `rejected`), `actor` (`user` or `auto`), a timestamp, a reason, and the
+`bypass_level` in force. Starting a feature seeds every gate as `pending`, so
+"nobody has asked yet" and "asked, still waiting" are finally distinguishable — and the
+wait survives a restart. `gate_bypass` decides whether a run **stops** at a gate; it
+never decides whether that gate's brief and approval record **exist**. An auto-approved
+gate is as readable after the fact as one you answered yourself.
 
 ## How to read this handbook
 

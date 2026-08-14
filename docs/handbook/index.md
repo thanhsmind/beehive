@@ -85,15 +85,21 @@ particular stage:
 
 Every lane merges the old shape and execution approvals into one question:
 tiny/small ask it inline before cells persist, standard/high-risk ask it once
-shape and the brief are ready. The docs lane has no gates. `gate_bypass` (in
-[config.json](register.md#beeconfigjson)) can auto-approve gates by level
-(`normal` / `full` / `total`).
+shape and the brief are ready. The docs lane stops at Gate 1 only — a short brief
+and a one-line approval — with no Gate 2 and no cells.
+
+A gate is a record, not a boolean: approving one writes `state`
+(`pending` / `approved` / `rejected`), `actor` (`user` / `auto`), a timestamp, a
+reason, and the bypass level in force. A new feature starts with every gate at
+`pending`. `gate_bypass` (in [config.json](register.md#beeconfigjson)) can
+auto-approve gates by level (`normal` / `full` / `total`) — it decides whether the
+run **stops**, never whether the brief and approval record **exist**.
 
 ## Lanes (how much of the chain runs)
 
 | Lane | Trigger (from the request alone) | Stages that run |
 |------|----------------------------------|-----------------|
-| `docs` | every touched file is knowledge, not runtime | announce → write → format-check → capture |
+| `docs` | every touched file is knowledge, not runtime | brief → Gate 1 → write → format-check → capture |
 | `tiny` | 0–1 risk flags, ≤2 product files, one direct task | hive → merged gate → one cell (may run inline) |
 | `small` | 0–1 flags, ≤3 product files, no gray areas | hive → merged gate → dispatched execution worker(s) |
 | `standard` | 2–3 flags, or story-sized behavior | full chain, Gates 1–2 |
