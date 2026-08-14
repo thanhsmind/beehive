@@ -8,6 +8,7 @@ use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_worktree, LinkedRoots, RootsWt};
 use crate::state::{bypass_level, read_config_raw};
+use crate::verbs::workflow_store::{default_wf_gates, find_live_workflow, list_workflows};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{json, Map, Value};
 use std::cell::RefCell;
@@ -18,6 +19,27 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 use crate::version::BEE_VERSION;
+
+/// D3/D7: the persisted gate RECORD (state/actor/at/reason/bypass_level per
+/// gate), read from the live workflow that names the current feature — not
+/// from the projected `approved_gates` booleans `status["gates"]` already
+/// carries. A gate that was never touched reads `state: "pending"`; a gate
+/// that was refused reads `state: "rejected"` — the two are indistinguishable
+/// in the boolean projection today, which is exactly the gap this closes.
+/// No live feature, or no live workflow naming it, falls back to
+/// `default_wf_gates()` — every gate `pending`, nobody having acted on it —
+/// the same default a brand-new workflow record seeds (trun-1).
+fn build_gate_records(ctx: &Ctx, feature: Option<&Value>) -> R<Value> {
+    let feature_str = feature.and_then(|f| f.as_str());
+    let live_gates = match feature_str {
+        Some(f) => {
+            let workflows = list_workflows(&ctx.root).map_err(|_| Ex::Bail)?;
+            find_live_workflow(&workflows, f).and_then(|wf| wf.get("gates").cloned())
+        }
+        None => None,
+    };
+    Ok(live_gates.unwrap_or_else(|| Value::Object(default_wf_gates())))
+}
 
 // ─── buildStatus (bee.mjs ~874-1047) ───────────────────────────────────────
 
@@ -132,6 +154,7 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
         .get("feature")
         .filter(|f| truthy(f))
         .cloned();
+    let gate_records = build_gate_records(ctx, feature_or_null.as_ref())?;
     let ready = ready_cells(ctx, feature_or_null.as_ref())?;
     let unreviewed_count = review
         .get("candidates")
@@ -217,6 +240,11 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
         "gates".into(),
         state.get("approved_gates").cloned().unwrap_or(Value::Null),
     );
+    // D3/D7 (additive only — `gates` above keeps its name, type, and
+    // meaning): the full persisted gate record beside the projected
+    // booleans, so a dashboard reads `pending` vs `rejected` without
+    // re-deriving either from a bare `false`.
+    status.insert("gate_records".into(), gate_records);
     let level1 = bypass_level_root(ctx)?; // readConfig
     status.insert("gate_bypass".into(), json!(level1 != "off"));
     let level2 = bypass_level_root(ctx)?; // readConfig (Node calls it twice)

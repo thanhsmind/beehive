@@ -145,6 +145,40 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
             .collect::<Vec<_>>()
             .join(" ")
     ));
+    // D3/D7: one short line per gate whose persisted RECORD state is not
+    // "approved" — distinguishing a gate nobody has acted on ("pending")
+    // from one an actor refused ("rejected"), which the boolean line above
+    // cannot: both show as "pending" there. Scoped to a live feature — an
+    // idle repo's fallback default (every gate "pending", nobody having
+    // acted) is not news worth a line.
+    if opt_truthy(s("feature")) {
+        if let Some(Value::Object(gate_records)) = s("gate_records") {
+            for g in GATE_NAMES {
+                let Some(entry) = gate_records.get(g) else { continue };
+                let state = vget(entry, "state").and_then(|v| v.as_str()).unwrap_or("pending");
+                if state == "approved" {
+                    continue;
+                }
+                let mut line = format!("Gate {g}: {state}");
+                if opt_truthy(vget(entry, "actor")) {
+                    line.push_str(&format!(" actor={}", tpl(vget(entry, "actor"))));
+                }
+                if opt_truthy(vget(entry, "at")) {
+                    line.push_str(&format!(" at={}", tpl(vget(entry, "at"))));
+                }
+                if opt_truthy(vget(entry, "bypass_level")) {
+                    line.push_str(&format!(" bypass={}", tpl(vget(entry, "bypass_level"))));
+                }
+                if opt_truthy(vget(entry, "reason")) {
+                    line.push_str(&format!(
+                        " reason={}",
+                        jsjson::stringify(vget(entry, "reason").unwrap())
+                    ));
+                }
+                lines.push(line);
+            }
+        }
+    }
     let level = s("gate_bypass_level");
     if opt_truthy(level) && !str_eq(level, "off") {
         lines.push(bypass_banner(&tpl(level)).to_string());
