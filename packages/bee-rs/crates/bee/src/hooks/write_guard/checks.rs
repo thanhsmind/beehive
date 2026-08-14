@@ -480,7 +480,7 @@ in a fresh worktree instead.",
             config.get("guards"),
             Some(g) if truthy(g) && g.get("idle_gate") == Some(&Value::Bool(false))
         );
-        if idle_gate_on && !under_allowed_prefix(&normalized) {
+        if idle_gate_on && !under_allowed_prefix_intake(&normalized) {
             return Ok(WV::Deny(intake_refusal(
                 &phase,
                 &format!("writing \"{}\"", normalized),
@@ -495,14 +495,14 @@ in a fresh worktree instead.",
             .get("approved_gates")
             .and_then(|g| g.get("execution"))
             == Some(&Value::Bool(true));
-        if !execution_approved && !under_allowed_prefix(&normalized) {
+        if !execution_approved && !under_allowed_prefix_gated(&normalized) {
             return Ok(WV::Deny(format!(
                 "bee gate: phase is \"{}\" and gate \"execution\" is not approved — \
 writing \"{}\" is blocked. Allowed now: {}. \
 Get execution approval (bee-hive) before touching source files.",
                 js_disp(&phase),
                 normalized,
-                GATE_ALLOWED_PREFIXES.join(", ")
+                GATE_ALLOWED_PREFIXES_GATED.join(", ")
             )));
         }
         return Ok(WV::Allow);
@@ -742,7 +742,7 @@ fn evaluate_git_invocation(
             let offending = paths
                 .iter()
                 .map(|p| normalize_rel(p))
-                .find(|p| !under_allowed_prefix(p));
+                .find(|p| !under_allowed_prefix_intake(p));
             if let Some(off) = offending {
                 return Ok(Some(WV::Deny(intake_refusal(
                     phase,

@@ -609,11 +609,19 @@ use std::process::ExitCode;
         );
         assert_eq!(deny.code, 2);
         assert!(deny.stderr.contains("bee gate"));
+        // trun-5: retargeted from "docs/notes.md" (now refused, same gated-
+        // phase split as `gated_phase_docs_outside_history_now_refuses`) to
+        // "docs/history/", which is the gated-phase list's allowed docs path.
         let ok = expect_done(
+            patch("*** Begin Patch\n*** Add File: docs/history/some-feature/notes.md\n+notes\n*** End Patch"),
+            &fx.root,
+        );
+        assert_eq!(ok.code, 0, "{}", ok.stderr);
+        let still_denies = expect_done(
             patch("*** Begin Patch\n*** Add File: docs/notes.md\n+notes\n*** End Patch"),
             &fx.root,
         );
-        assert_eq!(ok.code, 0);
+        assert_eq!(still_denies.code, 2, "{}", still_denies.stdout);
     }
 
     #[test]
@@ -1773,10 +1781,49 @@ use std::process::ExitCode;
         assert_eq!(deny.code, 2);
         assert!(deny.stderr.contains("bee gate"));
         assert!(deny.stderr.contains("execution"));
-        let docs = expect_done(edit("docs/plan.md"), &fx.root);
-        assert_eq!(docs.code, 0);
+        // trun-5: retargeted from "docs/plan.md" (was allowed pre-split; now
+        // refused below by `gated_phase_docs_outside_history_now_refuses`,
+        // the case this cell's split exists to add) to the path bee itself
+        // must still be able to write before Gate 2 clears — its own brief.
+        let docs = expect_done(edit("docs/history/some-feature/plan.md"), &fx.root);
+        assert_eq!(docs.code, 0, "{}", docs.stderr);
         let approved = build_fixture("planning", true);
         assert_eq!(expect_done(edit("src/app.js"), &approved.root).code, 0);
+    }
+
+    #[test]
+    fn gated_phase_docs_outside_history_now_refuses() {
+        // trun-5: closes the hole named in the plan — before this cell, a
+        // docs-lane write to a `docs/` path OUTSIDE `docs/history/` passed
+        // freely at a gated phase (blanket `docs/` on the old shared list).
+        let fx = build_fixture("planning", false);
+        let deny = expect_done(edit("docs/plan.md"), &fx.root);
+        assert_eq!(deny.code, 2, "{}", deny.stdout);
+        assert!(deny.stderr.contains("bee gate"));
+        assert!(deny.stderr.contains("execution"));
+        // The gated-phase "Allowed now:" list names docs/history/, not
+        // blanket docs/.
+        assert!(deny.stderr.contains("docs/history/"));
+    }
+
+    #[test]
+    fn gated_phase_bee_own_writes_still_allowed() {
+        // trun-5 (D1/D6): the split must not lock bee out of writing its own
+        // records before approval — `.bee/`, `plans/`, and `AGENTS.md` stay
+        // allowed at a gated phase exactly as before.
+        let fx = build_fixture("planning", false);
+        assert_eq!(expect_done(edit(".bee/decisions.jsonl"), &fx.root).code, 0);
+        assert_eq!(expect_done(edit("plans/roadmap.md"), &fx.root).code, 0);
+        assert_eq!(expect_done(edit("AGENTS.md"), &fx.root).code, 0);
+    }
+
+    #[test]
+    fn idle_intake_gate_still_allows_blanket_docs() {
+        // trun-5: the intake list (terminal phase, no execution gate to
+        // clear) keeps today's full behavior — a docs-lane write anywhere
+        // under `docs/` must not be locked out at phase idle.
+        let fx = build_fixture("idle", false);
+        assert_eq!(expect_done(edit("docs/plan.md"), &fx.root).code, 0);
     }
 
     #[test]

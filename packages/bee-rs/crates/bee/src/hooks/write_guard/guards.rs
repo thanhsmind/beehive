@@ -24,18 +24,43 @@ pub(crate) fn normalize_rel(rel: &str) -> String {
     }
 }
 
-pub(crate) const GATE_ALLOWED_PREFIXES: [&str; 4] = [".bee/", "docs/", "plans/", "AGENTS.md"];
+/// trun-5: the gated-phase boundary's allow-list — consumed ONLY at
+/// `checks.rs`'s `is_gated_phase` branch (phase `exploring`/`planning`,
+/// execution not yet approved). Drops the blanket `docs/` that let a
+/// docs-lane session write anywhere under `docs/` before approval; keeps
+/// exactly what bee itself must write before Gate 2 clears — its own brief
+/// and plan (`docs/history/<feature>/`), `.bee/`, `plans/`, `AGENTS.md`.
+pub(crate) const GATE_ALLOWED_PREFIXES_GATED: [&str; 4] =
+    [".bee/", "docs/history/", "plans/", "AGENTS.md"];
 
-/// provenance: guards.mjs underAllowedPrefix.
-pub(crate) fn under_allowed_prefix(rel: &str) -> bool {
+/// trun-5: the intake-gate allow-list — consumed at `checks.rs`'s
+/// terminal-phase (idle/compounding-complete) idle gate, at the git-bookkeeping
+/// arm of `evaluate_git_invocation` (also terminal-phase only), and at
+/// `hook_local.rs`'s `worktree_first_exempt_rel`. Unchanged from the
+/// pre-split behavior: a docs-lane session outside a gated phase still writes
+/// freely under blanket `docs/`.
+pub(crate) const GATE_ALLOWED_PREFIXES_INTAKE: [&str; 4] =
+    [".bee/", "docs/", "plans/", "AGENTS.md"];
+
+fn under_prefix_list(rel: &str, prefixes: &[&str]) -> bool {
     let normalized = normalize_rel(rel);
-    GATE_ALLOWED_PREFIXES.iter().any(|prefix| {
+    prefixes.iter().any(|prefix| {
         if let Some(bare) = prefix.strip_suffix('/') {
             normalized == bare || normalized.starts_with(prefix)
         } else {
             normalized == *prefix
         }
     })
+}
+
+/// provenance: guards.mjs underAllowedPrefix, split for the gated-phase list (trun-5).
+pub(crate) fn under_allowed_prefix_gated(rel: &str) -> bool {
+    under_prefix_list(rel, &GATE_ALLOWED_PREFIXES_GATED)
+}
+
+/// provenance: guards.mjs underAllowedPrefix, split for the intake list (trun-5).
+pub(crate) fn under_allowed_prefix_intake(rel: &str) -> bool {
+    under_prefix_list(rel, &GATE_ALLOWED_PREFIXES_INTAKE)
 }
 
 /// provenance: guards.mjs DIRECT_EDIT_DENY. E2 (guard-hardening) extends the

@@ -545,7 +545,11 @@ pub(crate) fn worktree_first_exempt_rel(rel: &str) -> bool {
     if rel.ends_with(".md") {
         return true;
     }
-    GATE_ALLOWED_PREFIXES.iter().any(|prefix| {
+    // trun-5: kept on the INTAKE list (unchanged, blanket `docs/`) — this
+    // exemption already independently allows every `*.md` above, and the
+    // brief for this cell says to leave this consumer's behavior byte-for-byte
+    // unchanged rather than tie it to the new gated-phase boundary.
+    GATE_ALLOWED_PREFIXES_INTAKE.iter().any(|prefix| {
         if let Some(bare) = prefix.strip_suffix('/') {
             rel == bare || rel.starts_with(prefix)
         } else {
