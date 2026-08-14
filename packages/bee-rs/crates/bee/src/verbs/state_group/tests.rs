@@ -878,11 +878,11 @@ use std::time::Instant;
         assert_eq!(wf["feature"], json!("f1"), "identity never patched");
         assert_eq!(
             wf["gates"]["execution"],
-            json!({"approved":true,"approved_for_plan_rev":2})
+            json!({"approved":true,"approved_for_plan_rev":2,"state":"approved","actor":null,"at":null,"reason":null,"bypass_level":null})
         );
         assert_eq!(
             wf["gates"]["context"],
-            json!({"approved":false,"approved_for_plan_rev":null})
+            json!({"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null})
         );
         // …and the lane projection was rebuilt FROM it ("record wins").
         let lane = ok(read_lane_strict(tmp.path(), "f1")).unwrap();
