@@ -528,7 +528,9 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 
 ## Status
 
-**v2.4.9** (versioned by git tag; the Rust workspace's `Cargo.toml` version is decoupled from release numbering). Core built and green on the Rust CLI: the skills, hook automation on all three runtimes, onboarding, and the full `cargo test` suite — exercised end to end (onboard → gate-locked claim → verify-gated cap → hook denials).
+**v2.5.0** (versioned by git tag; the Rust workspace's `Cargo.toml` version is decoupled from release numbering). Core built and green on the Rust CLI: the skills, hook automation on all three runtimes, onboarding, and the full `cargo test` suite — exercised end to end (onboard → gate-locked claim → verify-gated cap → hook denials).
+
+Since 2.4.9, every run is traceable. A gate is a record, not a boolean: it carries `state` (`pending`/`approved`/`rejected`), who approved it, when, why, and under which bypass level — so "waiting on a human" is a state that survives a restart instead of being indistinguishable from "never asked". Starting a feature seeds every gate as `pending`, the workflow record carries a `run_state`, and `bee status --json` exposes both. `gate_bypass` now scopes whether a run *stops*, never whether its record *exists*. Every file-touching request earns a brief and an approval moment at every lane, docs included. Deferred capture, scribing, review, and promote work became claimable records in one queue (`bee deferred-queue`), with claim exclusivity proven by a multi-process race test, so a parallel agent can drain what a run put down.
 
 Recent additions, each gated by a decision record:
 
