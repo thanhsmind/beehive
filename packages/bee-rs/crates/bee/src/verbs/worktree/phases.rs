@@ -30,6 +30,10 @@ pub(crate) struct Staged {
     /// teardownCompanionIfPresent's `{ended, sessionId, warning?}`, carried
     /// across the released lock so P3's results can spread it too.
     pub(crate) companion: Option<Value>,
+    /// trun-4: the pre-merge `.bee` (+ `docs/history/<feature>`) bookkeeping
+    /// auto-commit's outcome, if it ran — carried across the released lock
+    /// the same way `companion` is, so P3's results can attach it too.
+    pub(crate) bookkeeping_commit: Option<Value>,
 }
 
 pub(crate) enum StageOut {
@@ -86,14 +90,59 @@ pub(crate) fn merge_stage(
     // for the full ordering rationale.
     let companion_marker = read_companion_marker(&worktree_root);
 
+    // resolveWorktreeFeature, computed here (not just for the branch check
+    // further down) because trun-4's pre-merge bookkeeping auto-commit needs
+    // the MERGING feature's slug to scope its docs/history/<feature>
+    // pathspec.
+    let identity = resolve_worktree_feature(&worktree_root);
+
+    // trun-4: `bee worktree merge` used to refuse on ANY dirty path in main,
+    // but the dirt is routinely bee's OWN bookkeeping (cell traces,
+    // decisions, backlog under .bee/, and this feature's own
+    // docs/history/<feature>/ artifacts) written by the orchestrator's
+    // normal state calls during the slice — committing exactly that dirt BY
+    // HAND from main was refused by the worktree-first guard, deadlocking a
+    // green slice against its own landing step. Mirrors bee close's own
+    // bee-store bookkeeping auto-commit (drivers/close.rs,
+    // commit_close_bookkeeping): before the refusal fires, auto-commit ONLY
+    // the two allowed roots (merge.rs's main_bookkeeping_roots — never
+    // wider) and proceed; any dirt OUTSIDE them still refuses, named by
+    // path, exactly as before.
+    let mut bookkeeping_commit: Option<Value> = None;
     if is_tree_dirty(main_root).map_err(MErr::Thrown)? {
-        return Err(refuse_merge(
-            "WORKTREE_MERGE_MAIN_DIRTY",
-            format!(
-                "the MAIN checkout at {} has uncommitted changes (\"git status --porcelain\" is non-empty) — commit or stash before merging.",
-                p(main_root)
-            ),
-        ));
+        if !worktree_merge_commit_bookkeeping_enabled(main_root) {
+            return Err(refuse_merge(
+                "WORKTREE_MERGE_MAIN_DIRTY",
+                format!(
+                    "the MAIN checkout at {} has uncommitted changes (\"git status --porcelain\" is non-empty) — commit or stash before merging.",
+                    p(main_root)
+                ),
+            ));
+        }
+        let roots = main_bookkeeping_roots(identity.feature.as_deref());
+        if is_tree_dirty_excluding(main_root, &roots).map_err(MErr::Thrown)? {
+            let offending = git_status_porcelain_excluding_untracked_all(main_root, &roots).map_err(MErr::Thrown)?;
+            let scope = match &identity.feature {
+                Some(f) => format!(".bee/ or docs/history/{f}/"),
+                None => ".bee/".to_string(),
+            };
+            return Err(refuse_merge(
+                "WORKTREE_MERGE_MAIN_DIRTY",
+                format!(
+                    "the MAIN checkout at {} has uncommitted changes outside {scope} that \"bee worktree merge\" will not auto-commit — commit or stash them before merging:\n{offending}",
+                    p(main_root)
+                ),
+            ));
+        }
+        // Warn-never-block (same contract close's own bookkeeping commit
+        // keeps): whatever this returns, the merge proceeds — a leftover
+        // .bee/docs-history dirt that could not be tidied is not a reason to
+        // keep refusing forever.
+        let message = match &identity.feature {
+            Some(f) => format!("Auto-commit .bee and docs/history/{f} bookkeeping before merging worktree {id}"),
+            None => format!("Auto-commit .bee bookkeeping before merging worktree {id}"),
+        };
+        bookkeeping_commit = Some(commit_main_bookkeeping(main_root, &message, &roots).value());
     }
     // A present companion mount AND its marker file are both untracked (and
     // the marker, unlike the rest of a bootstrapped `.bee` store, is not
@@ -126,7 +175,8 @@ pub(crate) fn merge_stage(
         ));
     };
 
-    let identity = resolve_worktree_feature(&worktree_root);
+    // `identity` was already resolved above, before the main-dirty check,
+    // for the bookkeeping auto-commit's docs/history/<feature> scope.
     let expected_branch = identity.feature.as_ref().map(|f| format!("wt/{f}"));
     let branch_ok = match &expected_branch {
         Some(expected) => branch == *expected,
@@ -213,6 +263,12 @@ pub(crate) fn merge_stage(
         if let Some(companion) = companion {
             result.insert("companion".into(), companion);
         }
+        // trun-4: the pre-merge bookkeeping auto-commit, if it ran, already
+        // landed on main before this merge was even attempted — report it
+        // regardless of how the merge attempt itself came out.
+        if let Some(bookkeeping_commit) = bookkeeping_commit.clone() {
+            result.insert("bookkeeping_commit".into(), bookkeeping_commit);
+        }
         return Ok(StageOut::Done(MergeAnswer { result, ok: false }));
     }
 
@@ -234,6 +290,12 @@ pub(crate) fn merge_stage(
         // cleanup keys attachCleanupOutcome appends next.
         if let Some(companion) = companion {
             result.insert("companion".into(), companion);
+        }
+        // trun-4: same as the MERGE_CONFLICT arm above — the bookkeeping
+        // auto-commit, if it ran, already landed before this arm was even
+        // reached.
+        if let Some(bookkeeping_commit) = bookkeeping_commit.clone() {
+            result.insert("bookkeeping_commit".into(), bookkeeping_commit);
         }
         // verifySkipped is deliberately FALSE here (see the .mjs comment).
         //
@@ -268,6 +330,7 @@ pub(crate) fn merge_stage(
         merge_head_file,
         staged_tree_hash,
         companion,
+        bookkeeping_commit,
     })))
 }
 
@@ -292,6 +355,7 @@ pub(crate) fn merge_finish(
         merge_head_file,
         staged_tree_hash,
         companion,
+        bookkeeping_commit,
     } = state;
 
     let mut committed = false;
@@ -325,6 +389,12 @@ pub(crate) fn merge_finish(
             // `...(companion ? { companion } : {})` — last, after output_tail.
             if let Some(companion) = companion {
                 result.insert("companion".into(), companion.clone());
+            }
+            // trun-4: the bookkeeping auto-commit, if it ran, already landed
+            // before P1 ever staged this merge — report it regardless of
+            // this arm's own verify-red outcome.
+            if let Some(bookkeeping_commit) = bookkeeping_commit {
+                result.insert("bookkeeping_commit".into(), bookkeeping_commit.clone());
             }
             return Ok(MergeAnswer { result, ok: false });
         }
@@ -362,7 +432,7 @@ pub(crate) fn merge_finish(
         // commit keeps (B-P1-2), now through the one shared helper both call
         // (B-P2-1). `commit_unsigned` always spawns `git` with stdin null,
         // so even an unexpected prompt has nowhere to read from.
-        let commit_result = commit_unsigned(main_root, merge_message, None);
+        let commit_result = commit_unsigned(main_root, merge_message, &[]);
         if commit_result.status != Some(0) {
             run_git(main_root, &["merge", "--abort"]);
             return Err(refuse_merge(
@@ -388,6 +458,12 @@ pub(crate) fn merge_finish(
         // post-commit `warning` and the cleanup keys.
         if let Some(companion) = companion {
             result.insert("companion".into(), companion.clone());
+        }
+        // trun-4: the bookkeeping auto-commit, if it ran, already landed
+        // before P1 ever staged this merge — report it on the success path
+        // too.
+        if let Some(bookkeeping_commit) = bookkeeping_commit {
+            result.insert("bookkeeping_commit".into(), bookkeeping_commit.clone());
         }
 
         // Post-commit guard (D2-REVISED).

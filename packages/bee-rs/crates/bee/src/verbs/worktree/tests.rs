@@ -1220,6 +1220,281 @@ use std::time::Instant;
         assert_eq!(answer.result["merged"], Value::Bool(true));
     }
 
+    // ── trun-4: the pre-merge `.bee` (+ `docs/history/<feature>`) bookkeeping
+    //    auto-commit that closes the deadlock between WORKTREE_MERGE_MAIN_DIRTY
+    //    and the worktree-first guard ──────────────────────────────────────
+
+    /// A MAIN checkout with one commit and a TRACKED `.bee/config.json` —
+    /// unlike `main_repo` (whose `.gitignore` hides the whole store except
+    /// the companion marker), these tests need `.bee` bookkeeping that shows
+    /// up as ordinary tracked dirt, the same way a real store's
+    /// `.bee/decisions.jsonl` / `.bee/cells/*.json` do.
+    fn main_repo_tracking_bee(tmp: &Path) -> PathBuf {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(main.join(".bee").join("config.json"), "{}\n").unwrap();
+        // Everything else `bootstrap_worktree_store` writes into a FRESH
+        // worktree (`.bee/state.json`, `.bee/runtime/worktree-identity.json`)
+        // is untracked bee-store scaffolding, not this cell's concern — the
+        // worktree-dirty check already treats a bootstrapped, gitignored
+        // `.bee` store as clean (decision D8a). Only `.bee/config.json`
+        // (tracked, same as `main_repo`'s companion marker exception) is
+        // exempt, so a later edit to it shows up as ordinary tracked dirt.
+        std::fs::write(
+            main.join(".gitignore"),
+            ".bee/*\n!.bee/config.json\n",
+        )
+        .unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        git_ok(&main, &["config", "user.email", "a@b.c"]);
+        git_ok(&main, &["config", "user.name", "t"]);
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "init"]);
+        main
+    }
+
+    fn git_status_porcelain_str(dir: &Path) -> String {
+        git_status_porcelain(dir).unwrap()
+    }
+
+    /// A real worktree with one new commit on its branch — the smallest
+    /// fixture that reaches the STAGED path (not ALREADY_UP_TO_DATE) in
+    /// every test below.
+    fn worktree_with_a_real_commit(main: &Path, feature: &str) -> crate::verbs::worktree::Created {
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(main, feature, None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        std::fs::write(created.worktree_root.join("f.txt"), "y").unwrap();
+        git_ok(&created.worktree_root, &["config", "user.email", "a@b.c"]);
+        git_ok(&created.worktree_root, &["config", "user.name", "t"]);
+        git_ok(&created.worktree_root, &["commit", "-qam", "work"]);
+        created
+    }
+
+    /// Truth 1: `.bee`-only dirt in main — no config override, no manual
+    /// commit — merges clean. Reproduces the deadlock this cell closes: an
+    /// orchestrator's normal state calls (`bee decisions log`, cell traces)
+    /// leave `.bee/config.json` tracked-modified in main, and the merge must
+    /// no longer refuse on that alone.
+    #[test]
+    fn bee_only_dirt_in_main_auto_commits_and_merge_succeeds() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        // The orchestrator's own bookkeeping, dirtying a TRACKED .bee file.
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        assert!(is_tree_dirty(&main).unwrap(), "main must start dirty for this test to mean anything");
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge refused instead of auto-committing .bee dirt: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            answer.result["bookkeeping_commit"]["committed"],
+            Value::Bool(true),
+            "{}",
+            answer.result["bookkeeping_commit"]
+        );
+        assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+    }
+
+    /// Truth 3 (path scoping), tested at the same grain close.rs tests its
+    /// own bookkeeping commit: an unrelated STAGED file must never be swept
+    /// into the `.bee`-scoped auto-commit, even though `commit_main_bookkeeping`
+    /// runs `git add -A` — because that `-A` is itself pathspec-scoped.
+    #[test]
+    fn unrelated_staged_file_stays_staged_out_of_the_bookkeeping_commit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        std::fs::write(main.join("staged.txt"), "staged dirt\n").unwrap();
+        git_ok(&main, &["add", "staged.txt"]);
+
+        let commit = commit_main_bookkeeping(
+            &main,
+            "Auto-commit .bee bookkeeping before merging worktree demo",
+            &main_bookkeeping_roots(None),
+        );
+        assert!(matches!(commit, MainBookkeepingCommit::Committed { .. }), "{}", commit.value());
+
+        let status = git_status_porcelain_str(&main);
+        assert!(status.contains("A  staged.txt"), "{status}");
+        assert!(!status.contains("config.json"), "{status}");
+    }
+
+    /// Truth 2: a dirty path OUTSIDE `.bee/` (and outside this feature's own
+    /// `docs/history/<feature>/`) still refuses, and the message names it —
+    /// the auto-commit never widens past its two allowed roots.
+    #[test]
+    fn dirt_outside_bee_still_refuses_and_names_the_offending_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        std::fs::write(main.join("unrelated.txt"), "surprise\n").unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
+        let Err(err) = result else { panic!("a dirty path outside .bee/ must still refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains("unrelated.txt"), "{msg}");
+        // Nothing committed, nothing merged: main stays exactly as dirtied.
+        assert!(git_status_porcelain_str(&main).contains("unrelated.txt"));
+        assert!(git_status_porcelain_str(&main).contains("config.json"));
+    }
+
+    /// Truth 1 + the docs/history root: this feature's OWN
+    /// `docs/history/<feature>/` artifacts (a promote proposal `bee close`
+    /// wrote, for instance) are swept into the same auto-commit as `.bee/`.
+    #[test]
+    fn this_features_docs_history_dirt_is_auto_committed_alongside_bee() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        std::fs::create_dir_all(main.join("docs").join("history").join("demo")).unwrap();
+        std::fs::write(
+            main.join("docs").join("history").join("demo").join("promote-proposals.md"),
+            "proposal\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge refused instead of auto-committing docs/history/demo: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+    }
+
+    /// The sharper half of this cell: another feature's OWN
+    /// `docs/history/<other>/` must never be swept into THIS merge's
+    /// auto-commit — a sibling session can be writing it at the same
+    /// moment, and sweeping it would land a peer's uncommitted work without
+    /// their say-so. Only `docs/history/<the-merging-feature>/` is ever in
+    /// scope; anything under a DIFFERENT feature's history dir still
+    /// refuses and is named.
+    #[test]
+    fn another_features_docs_history_dirt_still_refuses_and_is_named() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        std::fs::create_dir_all(main.join("docs").join("history").join("other-feature")).unwrap();
+        std::fs::write(
+            main.join("docs").join("history").join("other-feature").join("plan.md"),
+            "a peer's in-flight work\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
+        let Err(err) = result else { panic!("another feature's docs/history dirt must still refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains("other-feature"), "{msg}");
+        // Nothing committed, nothing merged: the peer's file is left exactly
+        // as dirtied (plain porcelain collapses an all-untracked `docs/` to
+        // one summary line, per D8a — `--untracked-files=all` is what names
+        // it, already proven above via `msg`).
+        let after = git_status_porcelain_excluding_untracked_all(&main, &[]).unwrap();
+        assert!(
+            after.contains("docs/history/other-feature/plan.md"),
+            "the peer's docs/history dir must be left untouched: {after}"
+        );
+    }
+
+    /// Truth 4: warn-never-block. A `pre-commit` hook that fails SILENTLY
+    /// (exit 1, nothing on either stream) drives the bookkeeping commit's
+    /// own `git commit` into its failure branch — the merge must still
+    /// complete green, same contract `bee close`'s own bookkeeping commit
+    /// keeps. The hook fails ONCE (a marker file flips it green after) so it
+    /// targets only the bookkeeping auto-commit, not the merge commit that
+    /// follows it in the same repo.
+    #[cfg(unix)]
+    #[test]
+    fn a_failing_bookkeeping_commit_only_warns_and_the_merge_still_completes_green() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+
+        let hook_dir = main.join(".git").join("hooks");
+        std::fs::create_dir_all(&hook_dir).unwrap();
+        let hook = hook_dir.join("pre-commit");
+        std::fs::write(
+            &hook,
+            "#!/bin/sh\nmarker=\"$(git rev-parse --git-dir)/fail-once-marker\"\nif [ ! -f \"$marker\" ]; then touch \"$marker\"; exit 1; fi\nexit 0\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&hook).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&hook, perms).unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a failing bookkeeping commit must warn, not refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(answer.result["bookkeeping_commit"]["committed"], Value::Bool(false));
+        let reason = answer.result["bookkeeping_commit"]["reason"].as_str().unwrap_or_default();
+        assert!(reason.starts_with("git_failed:"), "{reason}");
+    }
+
+    /// Truth 5: the opt-out. `worktree_merge_commit_bookkeeping: false` in
+    /// `.bee/config.json` turns the auto-commit off entirely — the merge
+    /// falls back to refusing on ANY dirty main exactly as it did before
+    /// this cell, even for `.bee`-only dirt.
+    #[test]
+    fn config_opt_out_disables_the_auto_commit_and_the_merge_refuses_as_before() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        // Dirties `.bee/config.json` itself — writing the opt-out into the
+        // very file that must stay uncommitted (same shape close.rs's own
+        // `config_false_skips_the_commit_with_reason_config_off` test uses).
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            "{\"worktree_merge_commit_bookkeeping\": false}\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
+        let Err(err) = result else { panic!("the opt-out must fall back to refusing on any dirty main") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        // The pre-cell wording, unchanged: opting out reverts to it exactly,
+        // never a narrower "outside .bee/" variant.
+        assert!(msg.contains("\"git status --porcelain\" is non-empty"), "{msg}");
+        assert!(
+            git_status_porcelain_str(&main).contains("config.json"),
+            "opted-out dirt must stay uncommitted: {}",
+            git_status_porcelain_str(&main)
+        );
+    }
+
     /// releaseAllForHolder marks every unreleased row for the holder and
     /// leaves everyone else's — and never rewrites the file when nothing
     /// changed (worktree-holds.mjs's own "only write when something changed").
