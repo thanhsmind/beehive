@@ -32,12 +32,6 @@
 //
 // Additional delegation triggers (None before any output/write):
 //   - linked-worktree roots, corrupt manifest-hash cache/config
-//   - `pbi list` when any listed id falls outside ^p-[0-9a-f]+$ (Node sorts
-//     by localeCompare; lowercase-hex `p-` ids are the provably
-//     byte-order-identical subset — legacy `P<n>` ids delegate). `render`
-//     uses the full calibrated ICU model instead (see `locale_cmp` below),
-//     so it serves mixed `p-<hex>` / legacy `P<n>` stores natively and only
-//     delegates on an id outside the calibrated alphabet (`collation_safe`).
 //   - non-ASCII --feature/--text values (JS /i canonicalization + casefold)
 //   - `findings` rows whose numbers fail the JS round-trip guard
 //   - config product_root shapes Node warns about (non-string, missing dir,
@@ -207,16 +201,6 @@ pub(crate) fn backlog_row_for_work(root: &Path, work: &str) -> Option<Value> {
         let matches = pbi.id == work || pbi.feature.as_deref() == Some(work);
         matches.then(|| pbi_value(pbi))
     })
-}
-
-/// localeCompare-safe id guard: within ^p-[0-9a-f]+$ (lowercase hex after a
-/// fixed "p-" prefix) ICU collation and byte order provably agree.
-fn id_sort_safe(id: &str) -> bool {
-    let rest = match id.strip_prefix("p-") {
-        Some(r) => r,
-        None => return false,
-    };
-    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 // ─── counts (readBacklogCounts: fold-first, legacy table fallback) ─────────
@@ -1041,11 +1025,6 @@ fn run_pbi_list(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
             list.retain(|item| &item.status == s);
         }
     }
-    // localeCompare guard: every listed id must be in the byte-order-safe
-    // shape (legacy P<n> ids delegate).
-    if !list.iter().all(|item| id_sort_safe(&item.id)) {
-        return None;
-    }
     list.sort_by(|a, b| a.id.cmp(&b.id));
     let text = if list.is_empty() {
         "No PBIs.".to_string()
@@ -1084,10 +1063,10 @@ fn run_pbi_list(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
 // strength, first case difference (lowercase first) as the tertiary
 // tiebreak, shorter-prefix first. This is what makes `p-4ae119b0` sort
 // BEFORE `P40` (primary 'p' == 'P', then punctuation '-' < digit '4') where
-// plain byte order would put `P40` first — which is why `pbi list`'s
-// narrower `id_sort_safe` byte-order guard cannot serve the render sort.
-// `locale_cmp_agrees_with_the_calibrated_probes` asserts agreement with the
-// same measured V8/ICU probe vectors.
+// plain byte order would put `P40` first — which is why `pbi list`'s plain
+// byte-order sort (`a.id.cmp(&b.id)`) is not interchangeable with this
+// locale-aware sort. `locale_cmp_agrees_with_the_calibrated_probes` asserts
+// agreement with the same measured V8/ICU probe vectors.
 fn locale_cmp(a: &str, b: &str) -> std::cmp::Ordering {
     use std::cmp::Ordering;
     let av: Vec<char> = a.chars().collect();
@@ -1132,13 +1111,6 @@ fn lc_primary_key(c: char) -> (u8, u32) {
         _ if c.is_alphabetic() => (3, c.to_lowercase().next().unwrap_or(c) as u32),
         _ => (1, 100 + c as u32),
     }
-}
-
-/// The alphabet the collation model above is CALIBRATED on. A PBI id with
-/// anything else leaves the proven region — the verb delegates.
-fn collation_safe(key: &str) -> bool {
-    key.chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '_' | '-' | '.'))
 }
 
 /// PBI_RANK_WEIGHT / PBI_RANK_UNKNOWN_WEIGHT (lib/backlog.mjs).
@@ -1188,14 +1160,10 @@ fn escape_cell(value: &str) -> String {
     js_trim(&out).to_string()
 }
 
-/// computeBacklogRenderContent. None => delegate (unparseable rows, or an id
-/// outside the calibrated collation alphabet).
+/// computeBacklogRenderContent.
 fn compute_backlog_render_content(root: &Path) -> Option<String> {
     let fold = fold_pbis(root);
     let mut all: Vec<&Pbi> = fold.order.iter().map(|id| &fold.items[id]).collect();
-    if !all.iter().all(|p| collation_safe(&p.id)) {
-        return None;
-    }
     // JS sort is stable (ES2019+), so a stable sort_by reproduces it exactly.
     all.sort_by(|a, b| {
         pbi_rank_weight(&a.status)
@@ -1336,8 +1304,8 @@ fn walk_backlog_id_rows(product_root: &Path) -> Option<Vec<RankRow>> {
 // caller — hence pub(crate).
 
 /// lib/backlog.mjs featureBacklogRank. `None` = delegate (an unresolvable
-/// product_root, or a PBI id outside `id_sort_safe`'s proven localeCompare
-/// region — an unparseable backlog.jsonl line is skipped, not delegated).
+/// product_root — an unparseable backlog.jsonl line is skipped, not
+/// delegated).
 pub(crate) fn feature_backlog_rank(root: &Path) -> Option<HashMap<String, usize>> {
     let fold = fold_pbis(root);
     if fold.has_events {
@@ -1345,9 +1313,6 @@ pub(crate) fn feature_backlog_rank(root: &Path) -> Option<HashMap<String, usize>
         let mut rows: Vec<(Option<&str>, i32, &str)> = Vec::with_capacity(fold.order.len());
         for id in &fold.order {
             let item = fold.items.get(id)?;
-            if !id_sort_safe(&item.id) {
-                return None; // a.id.localeCompare(b.id) outside the calibrated alphabet
-            }
             rows.push((
                 item.feature.as_deref(),
                 pbi_rank_weight(&item.status),
@@ -1767,9 +1732,6 @@ mod tests {
             ids,
             vec!["p-4ae119b0", "p-727e9529", "P40", "P43", "P69", "P76"]
         );
-        assert!(collation_safe("p-4ae119b0"));
-        assert!(collation_safe("P77"));
-        assert!(!collation_safe("p→x"));
     }
 
     #[test]
@@ -1816,13 +1778,18 @@ mod tests {
         let shell = compute_backlog_render_content(empty.path()).unwrap();
         assert!(shell.ends_with("|----|-------|-----|--------|---------|\n"));
 
-        // An id outside the calibrated alphabet delegates.
+        // An id outside the calibrated alphabet renders too — the guard that
+        // used to delegate on it is retired; the sort just runs.
         let exotic = tempfile::tempdir().unwrap();
         write_backlog(
             exotic.path(),
             "{\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"p→x\",\"title\":\"t\"}\n",
         );
-        assert!(compute_backlog_render_content(exotic.path()).is_none());
+        let exotic_content = compute_backlog_render_content(exotic.path()).unwrap();
+        let exotic_lines: Vec<&str> = exotic_content.lines().collect();
+        assert_eq!(exotic_lines[10], "| ID | Story | CoS | Status | Feature |");
+        assert_eq!(exotic_lines[12], "| p→x | t |  | proposed | — |");
+        assert!(exotic_content.ends_with('\n'));
     }
 
     #[test]
@@ -2058,16 +2025,6 @@ mod tests {
     }
 
     #[test]
-    fn id_sort_guard_accepts_only_lowercase_hex_p_ids() {
-        assert!(id_sort_safe("p-a1b2c3d4"));
-        assert!(id_sort_safe("p-0f"));
-        assert!(!id_sort_safe("P50")); // legacy id -> delegate
-        assert!(!id_sort_safe("p-"));
-        assert!(!id_sort_safe("p-A1B2C3D4"));
-        assert!(!id_sort_safe("q-abcd"));
-    }
-
-    #[test]
     fn add_pbi_appends_event_and_respects_duplicates() {
         let tmp = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
@@ -2090,7 +2047,13 @@ mod tests {
             PbiAdd::Ok(i) => i,
             _ => panic!("expected Ok"),
         };
-        assert!(id_sort_safe(&generated.id) && generated.id.len() == 10);
+        // generated ids stay in the `p-<8hex>` shape (id_sort_safe's old
+        // predicate, inlined now that the guard is retired).
+        assert_eq!(generated.id.len(), 10);
+        assert!(generated.id.starts_with("p-"));
+        assert!(generated.id[2..]
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
         let fold = fold_pbis(tmp.path());
         assert_eq!(fold.order.len(), 2);
         // the written event carries the frozen key order
@@ -2191,11 +2154,13 @@ mod tests {
         assert_eq!(folded.get("omega"), Some(&0));
         assert_eq!(folded.get("zeta"), Some(&1), "best-ranked occurrence wins");
 
-        // An id outside the calibrated localeCompare alphabet delegates.
+        // A legacy id outside the old byte-order alphabet ranks too — the
+        // guard that used to delegate on it is retired.
         write_backlog(
             root,
             "{\"kind\":\"pbi\",\"event\":\"add\",\"id\":\"P50\",\"status\":\"done\",\"feature\":\"z\"}\n",
         );
-        assert!(feature_backlog_rank(root).is_none());
+        let legacy = feature_backlog_rank(root).unwrap();
+        assert_eq!(legacy.get("z"), Some(&0));
     }
 }

@@ -92,16 +92,6 @@ pub(crate) fn lc_primary_key(c: char) -> (u8, u32) {
     }
 }
 
-/// The alphabet the collation model above is CALIBRATED on: ASCII letters,
-/// digits, space, and the three anchored punctuation marks. A group key with
-/// anything else (accents, CJK, other punctuation, exotic whitespace) leaves
-/// the proven region — the whole verb delegates before any output rather
-/// than guess at an ICU weight this port never measured.
-pub(crate) fn collation_safe(key: &str) -> bool {
-    key.chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '_' | '-' | '.'))
-}
-
 // ─── decisions.mjs writeTextAtomic ─────────────────────────────────────────
 
 pub(crate) fn write_text_atomic(file: &Path, text: &str) -> std::io::Result<()> {
@@ -176,8 +166,7 @@ pub(crate) fn split_crlf_first(text: &str) -> &str {
     }
 }
 
-/// buildDecisionIndexBody (lib/decisions.mjs). Returns None when a group key
-/// leaves the calibrated collation alphabet (delegate).
+/// buildDecisionIndexBody (lib/decisions.mjs).
 pub(crate) fn build_decision_index_body(root: &Path, all: bool) -> Ex<Option<(String, usize)>> {
     let decisions = active_decisions(root, all)?;
     // Insertion-ordered Map<scope, events[]>.
@@ -193,9 +182,6 @@ pub(crate) fn build_decision_index_body(root: &Path, all: bool) -> Ex<Option<(St
         }
     }
     let mut scope_names: Vec<String> = by_scope.iter().map(|(k, _)| k.clone()).collect();
-    if !scope_names.iter().all(|k| collation_safe(k)) {
-        return Ok(None);
-    }
     scope_names.sort_by(|a, b| locale_cmp(a, b)); // JS sort is stable (ES2019+)
 
     let mut blocks: Vec<String> = Vec::new();
@@ -227,9 +213,6 @@ pub(crate) fn build_decision_index_body(root: &Path, all: bool) -> Ex<Option<(St
             }
         }
         let mut tag_names: Vec<String> = by_tag.iter().map(|(k, _)| k.clone()).collect();
-        if !tag_names.iter().all(|k| collation_safe(k)) {
-            return Ok(None);
-        }
         tag_names.sort_by(|a, b| locale_cmp(a, b));
         for tag in &tag_names {
             scope_lines.push(String::new());
