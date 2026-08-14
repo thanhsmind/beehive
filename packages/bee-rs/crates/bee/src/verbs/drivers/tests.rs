@@ -1912,10 +1912,14 @@ use std::time::Instant;
         assert_eq!(lines[3], "--- echo boom-line; echo more 1>&2; exit 3 (exit 3) ---");
         assert_eq!(lines[4], "boom-line");
         assert_eq!(lines[5], "more");
+        // full-failure-evidence: the refusal names the complete-output log
+        // path right after the excerpt block, shifting `next:` by one line.
+        assert_eq!(lines[6], "log: .bee/logs/test-failure-close-0.log");
         assert_eq!(
-            lines[6],
+            lines[7],
             "next: the red is the work — fix it (boom-line), then re-run bee close --feature demo"
         );
+        assert!(root.join(".bee/logs/test-failure-close-0.log").exists());
         // The record is STILL written on a red (a red is a normal result).
         assert!(root.join(".bee/logs/test-results.json").exists());
         let doors = result.get("doors").unwrap().as_array().unwrap();

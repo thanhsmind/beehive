@@ -202,6 +202,40 @@ pub(crate) fn failure_excerpt(trimmed_output: &str, exit: Option<i64>) -> String
     }
 }
 
+/// full-failure-evidence D1/D3: the complete output of a failing declared
+/// command survives past the ≤500-char `failure_excerpt` above, on disk,
+/// named for the runner (`test`, `finish` or `close` — the three runners
+/// that are never serialized against each other, plan.md Discovery 6, so a
+/// shared root never collides on one filename) and the command's position
+/// in the run. A later failure at the same (runner, index) overwrites its
+/// predecessor rather than accumulating (D3's retention story); the value
+/// returned is relative and portable, the same shape `TEST_RESULTS_RELATIVE`
+/// already uses for the sibling record, not an absolute path tied to one
+/// checkout.
+pub(crate) fn failure_log_relative(runner: &str, index: usize) -> String {
+    format!(".bee/logs/test-failure-{runner}-{index}.log")
+}
+
+/// Write a failing command's complete, untrimmed output to its log file
+/// under `log_root` (the same root the run's `test-results.json` uses).
+/// Best-effort and a DELIBERATE divergence from every adjacent write in
+/// this area (finish_support.rs, close.rs, test_runner.rs all abort the run
+/// on a write failure here): losing the evidence log must never turn a red
+/// into an error that hides which command failed, so a write failure is
+/// swallowed and `None` returned — the caller's `failure_log` record key
+/// stays `null`, the excerpt and the verdict are untouched.
+pub(crate) fn write_failure_log(log_root: &Path, runner: &str, index: usize, full_output: &str) -> Option<String> {
+    let rel = failure_log_relative(runner, index);
+    write_text_atomic(&log_root.join(&rel), full_output).ok().map(|()| rel)
+}
+
+/// The D3 half of retention: a command that just passed leaves no evidence
+/// behind of a failure that no longer reproduces. Best-effort, like
+/// [`remove_file_if_exists`]; never touches the run's verdict.
+pub(crate) fn clear_failure_log(log_root: &Path, runner: &str, index: usize) {
+    remove_file_if_exists(&log_root.join(failure_log_relative(runner, index)));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,5 +347,63 @@ mod tests {
         std::fs::write(&bad, "{nope").unwrap();
         assert!(matches!(read_json(&bad), ReadJson::Corrupt));
         assert!(matches!(read_json(&dir.path().join("absent.json")), ReadJson::Missing));
+    }
+
+    // ── full-failure-evidence (ffe-2) ───────────────────────────────────────
+
+    #[test]
+    fn failure_log_relative_names_runner_and_index() {
+        assert_eq!(failure_log_relative("test", 0), ".bee/logs/test-failure-test-0.log");
+        assert_eq!(failure_log_relative("finish", 2), ".bee/logs/test-failure-finish-2.log");
+        assert_eq!(failure_log_relative("close", 1), ".bee/logs/test-failure-close-1.log");
+    }
+
+    #[test]
+    fn write_failure_log_keeps_the_complete_output_and_returns_the_relative_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let full = format!("{}\nand a line the 500-char excerpt would never keep", "x".repeat(600));
+        let rel = write_failure_log(dir.path(), "test", 0, &full).unwrap();
+        assert_eq!(rel, ".bee/logs/test-failure-test-0.log");
+        let on_disk = std::fs::read_to_string(dir.path().join(&rel)).unwrap();
+        assert_eq!(on_disk, full, "the log keeps the FULL output, not a truncated tail");
+        assert!(on_disk.len() > FAILURE_EXCERPT_MAX_CHARS, "the log is unbounded — a file, not a field");
+    }
+
+    #[test]
+    fn write_failure_log_never_changes_the_excerpt_it_sits_beside() {
+        // The load-bearing constraint: failure_excerpt is hashed into the
+        // cell trace (trace.rs normalize_failure_signature), so writing the
+        // log alongside it must not perturb the excerpt string by one byte.
+        let dir = tempfile::tempdir().unwrap();
+        let output = "boom-line\nmore";
+        let before = failure_excerpt(output, Some(3));
+        write_failure_log(dir.path(), "close", 0, output);
+        let after = failure_excerpt(output, Some(3));
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn clear_failure_log_removes_a_stale_file_and_is_a_noop_when_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let rel = write_failure_log(dir.path(), "finish", 0, "stale red").unwrap();
+        assert!(dir.path().join(&rel).exists());
+        clear_failure_log(dir.path(), "finish", 0);
+        assert!(!dir.path().join(&rel).exists());
+        // Idempotent: clearing an already-absent log never panics.
+        clear_failure_log(dir.path(), "finish", 0);
+    }
+
+    #[test]
+    fn a_failed_failure_log_write_returns_none_without_touching_the_target() {
+        // Same shape as `a_failed_atomic_write_leaves_no_tmp_and_no_partial_target`:
+        // pre-occupy the target path with a directory so the rename must fail.
+        // D1's Approach: a failed log write leaves `failure_log` null, never
+        // the run's verdict — this is the fsutil half of that proof.
+        let dir = tempfile::tempdir().unwrap();
+        let rel = failure_log_relative("test", 0);
+        std::fs::create_dir_all(dir.path().join(&rel)).unwrap();
+        let result = write_failure_log(dir.path(), "test", 0, "would-be-lost output");
+        assert!(result.is_none());
+        assert!(dir.path().join(&rel).is_dir(), "the failure must not disturb what was already there");
     }
 }

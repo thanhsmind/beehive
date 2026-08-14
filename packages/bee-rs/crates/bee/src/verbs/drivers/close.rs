@@ -78,6 +78,10 @@ pub(crate) struct CommandResult {
     pub(crate) exit: Option<i64>,
     pub(crate) duration_ms: u64,
     pub(crate) failure_excerpt: Option<String>,
+    /// full-failure-evidence: the path of the complete-output log for a
+    /// failing command (relative, `.bee/logs/test-failure-close-<index>.log`),
+    /// or `None` when the command passed or the log write failed.
+    pub(crate) failure_log: Option<String>,
 }
 
 pub(crate) struct TestRun {
@@ -105,7 +109,7 @@ pub(crate) fn run_declared_tests(root: &Path, commands: &[String], shell: &str) 
     let ran_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     let mut results: Vec<CommandResult> = Vec::new();
     let mut green = true;
-    for command in commands {
+    for (index, command) in commands.iter().enumerate() {
         let started = Instant::now();
         let spawned = shell_command(shell)
             .arg("-c")
@@ -139,7 +143,15 @@ pub(crate) fn run_declared_tests(root: &Path, commands: &[String], shell: &str) 
             let trimmed = js_trim(&output).to_string();
             Some(fsutil::failure_excerpt(&trimmed, exit))
         };
-        results.push(CommandResult { command: command.clone(), exit, duration_ms, failure_excerpt });
+        // full-failure-evidence D1/D3 — see finish_support.rs's own
+        // run_declared_tests for the shared rationale.
+        let failure_log = if passed {
+            fsutil::clear_failure_log(root, "close", index);
+            None
+        } else {
+            fsutil::write_failure_log(root, "close", index, &output)
+        };
+        results.push(CommandResult { command: command.clone(), exit, duration_ms, failure_excerpt, failure_log });
     }
     let mut record = Map::new();
     record.insert("ran_at".into(), Value::String(ran_at.clone()));
@@ -175,7 +187,9 @@ pub(crate) fn tests_result_value(run: &TestRun) -> Value {
     Value::Object(tests)
 }
 
-/// {command, exit, duration_ms, failure_excerpt} — frozen key order.
+/// {command, exit, duration_ms, failure_excerpt, failure_log} — frozen key
+/// order; `failure_log` (full-failure-evidence) is appended LAST so the
+/// order grows rather than shifts.
 pub(crate) fn command_result_value(c: &CommandResult) -> Value {
     let mut m = Map::new();
     m.insert("command".into(), Value::String(c.command.clone()));
@@ -190,6 +204,13 @@ pub(crate) fn command_result_value(c: &CommandResult) -> Value {
     m.insert(
         "failure_excerpt".into(),
         match &c.failure_excerpt {
+            Some(s) => Value::String(s.clone()),
+            None => Value::Null,
+        },
+    );
+    m.insert(
+        "failure_log".into(),
+        match &c.failure_log {
             Some(s) => Value::String(s.clone()),
             None => Value::Null,
         },
@@ -1058,6 +1079,9 @@ pub(crate) fn close_handler(
                 c.exit.map(|e| e.to_string()).unwrap_or_else(|| "spawn-failed".to_string()),
                 c.failure_excerpt.clone().unwrap_or_default()
             ));
+            if let Some(log) = &c.failure_log {
+                lines.push(format!("log: {log}"));
+            }
         }
         lines.push(format!(
             "next: the red is the work — fix it ({}), then re-run bee close --feature {feature}",

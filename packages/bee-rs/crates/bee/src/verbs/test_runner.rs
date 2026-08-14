@@ -216,6 +216,10 @@ struct CommandResult {
     exit: Option<i64>,
     duration_ms: u64,
     failure_excerpt: Option<String>,
+    /// full-failure-evidence: the path of the complete-output log for a
+    /// failing command (relative, `.bee/logs/test-failure-test-<index>.log`),
+    /// or `None` when the command passed or the log write failed.
+    failure_log: Option<String>,
 }
 
 struct TestRun {
@@ -248,7 +252,7 @@ fn run_declared_tests(root: &Path, commands: &[String], shell: &str) -> TestRun 
     let ran_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     let mut results: Vec<CommandResult> = Vec::new();
     let mut green = true;
-    for command in commands {
+    for (index, command) in commands.iter().enumerate() {
         let started = Instant::now();
         let spawned = shell_command(shell)
             .arg("-c")
@@ -282,11 +286,20 @@ fn run_declared_tests(root: &Path, commands: &[String], shell: &str) -> TestRun 
             let trimmed = js_trim(&output);
             Some(fsutil::failure_excerpt(&trimmed, exit))
         };
+        // full-failure-evidence D1/D3 — see finish_support.rs's own
+        // run_declared_tests for the shared rationale.
+        let failure_log = if passed {
+            fsutil::clear_failure_log(root, "test", index);
+            None
+        } else {
+            fsutil::write_failure_log(root, "test", index, &output)
+        };
         results.push(CommandResult {
             command: command.clone(),
             exit,
             duration_ms,
             failure_excerpt,
+            failure_log,
         });
     }
     // The ONE normalized record: {ran_at, green, commands}.
@@ -311,7 +324,9 @@ fn run_declared_tests(root: &Path, commands: &[String], shell: &str) -> TestRun 
     }
 }
 
-/// {command, exit, duration_ms, failure_excerpt} — frozen key order.
+/// {command, exit, duration_ms, failure_excerpt, failure_log} — frozen key
+/// order; `failure_log` (full-failure-evidence) is appended LAST so the
+/// order grows rather than shifts.
 fn command_result_value(c: &CommandResult) -> Value {
     let mut m = Map::new();
     m.insert("command".into(), Value::from(c.command.clone()));
@@ -326,6 +341,13 @@ fn command_result_value(c: &CommandResult) -> Value {
     m.insert(
         "failure_excerpt".into(),
         match &c.failure_excerpt {
+            Some(s) => Value::from(s.clone()),
+            None => Value::Null,
+        },
+    );
+    m.insert(
+        "failure_log".into(),
+        match &c.failure_log {
             Some(s) => Value::from(s.clone()),
             None => Value::Null,
         },
@@ -465,9 +487,10 @@ mod tests {
         let cmd = &obj.get("commands").unwrap().as_array().unwrap()[0];
         assert_eq!(
             cmd.as_object().unwrap().keys().collect::<Vec<_>>(),
-            vec!["command", "exit", "duration_ms", "failure_excerpt"]
+            vec!["command", "exit", "duration_ms", "failure_excerpt", "failure_log"]
         );
         assert_eq!(cmd.get("failure_excerpt"), Some(&Value::Null));
+        assert_eq!(cmd.get("failure_log"), Some(&Value::Null));
     }
 
     #[test]
@@ -487,6 +510,16 @@ mod tests {
         assert_eq!(run.commands[0].exit, Some(3));
         // stdout then stderr, JS-trimmed.
         assert_eq!(run.commands[0].failure_excerpt.as_deref(), Some("boom-line\nmore"));
+        // full-failure-evidence: the failing command's complete output
+        // survives on disk, named by failure_log; the passing sibling gets
+        // no log (mixed run leaves logs only for the failing index).
+        let log_rel = run.commands[0].failure_log.clone().unwrap();
+        assert_eq!(log_rel, ".bee/logs/test-failure-test-0.log");
+        assert_eq!(
+            std::fs::read_to_string(root.join(&log_rel)).unwrap(),
+            "boom-line\nmore\n"
+        );
+        assert!(run.commands[1].failure_log.is_none());
         assert_eq!(run.commands[1].exit, Some(0));
         assert_eq!(first_failure_line(&run).as_deref(), Some("boom-line"));
         let lines = render_test_command_lines(&run);
@@ -505,6 +538,7 @@ mod tests {
         assert_eq!(run.commands[0].exit, Some(127)); // sh's command-not-found
         let excerpt = run.commands[0].failure_excerpt.as_deref().unwrap();
         assert!(!excerpt.is_empty());
+        assert_eq!(run.commands[0].failure_log.as_deref(), Some(".bee/logs/test-failure-test-0.log"));
     }
 
     #[test]
@@ -517,6 +551,55 @@ mod tests {
             run.commands[0].failure_excerpt.as_deref(),
             Some("(no output; exit 7)")
         );
+    }
+
+    // ── full-failure-evidence (ffe-2) ───────────────────────────────────────
+
+    #[test]
+    fn failure_log_keeps_output_the_bounded_excerpt_drops() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // marker-line first, then 650 trailing 'a's (a plain POSIX loop — no
+        // `seq` dependency) push it past the 500-char excerpt's TAIL window:
+        // the excerpt must not contain it, the log must.
+        let run = run_declared_tests(
+            root,
+            &["echo marker-line; i=0; while [ $i -lt 650 ]; do printf a; i=$((i+1)); done; exit 3".to_string()],
+            shell,
+        );
+        assert!(!run.green);
+        let excerpt = run.commands[0].failure_excerpt.clone().unwrap();
+        assert!(!excerpt.contains("marker-line"), "the excerpt is the last 500 chars, dropping the marker");
+        let log_rel = run.commands[0].failure_log.clone().unwrap();
+        let logged = std::fs::read_to_string(root.join(&log_rel)).unwrap();
+        assert!(logged.contains("marker-line"), "the log keeps the complete, untrimmed output");
+    }
+
+    #[test]
+    fn green_run_clears_a_stale_failure_log_at_the_same_index() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let red = run_declared_tests(root, &["echo boom && exit 3".to_string()], shell);
+        let log_rel = red.commands[0].failure_log.clone().unwrap();
+        assert!(root.join(&log_rel).exists());
+        let green = run_declared_tests(root, &["exit 0".to_string()], shell);
+        assert!(green.commands[0].failure_log.is_none());
+        assert!(!root.join(&log_rel).exists(), "D3: the stale log from the earlier red must be gone");
+    }
+
+    #[test]
+    fn unwritable_log_dir_leaves_failure_log_null_and_the_verdict_untouched() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let rel = fsutil::failure_log_relative("test", 0);
+        std::fs::create_dir_all(root.join(&rel)).unwrap();
+        let run = run_declared_tests(root, &["echo boom && exit 3".to_string()], shell);
+        assert!(!run.green, "a lost log must never turn a red into an error");
+        assert!(run.commands[0].failure_log.is_none());
+        assert_eq!(run.commands[0].failure_excerpt.as_deref(), Some("boom"));
     }
 
     #[test]
