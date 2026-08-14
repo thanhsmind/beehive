@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   polarity: pitfall
   critical: false
-  sources: ["close-bookkeeping-p3 cell cbp-2 (declared handlers_add.rs, real site validate.rs normalize_new_cell)", "onboard-root-resolution cell orr-1 (declared apply.rs, real site source.rs Engine::locate)", "worktree-store-hygiene cell wsh-1 (declared handlers.rs, real site registry.rs bootstrap_worktree_store)"]
+  sources: ["close-bookkeeping-p3 cell cbp-2 (declared handlers_add.rs, real site validate.rs normalize_new_cell)", "onboard-root-resolution cell orr-1 (declared apply.rs, real site source.rs Engine::locate)", "worktree-store-hygiene cell wsh-1 (declared handlers.rs, real site registry.rs bootstrap_worktree_store)", "traceable-runs cell trun-2 (action text pointed at default_gates() in state_group/policy.rs; real seam was default_gate_entry() in workflow_store/record.rs, already landed by trun-1 — the worker re-read the prior cell's own note against live code before implementing, left the wrong file untouched, and proved the real seam with a test instead)", "traceable-runs cell trun-9 (action text said to enqueue a scribe record inside cells/handlers_close.rs::run_cap, outside the cell's declared files; the worker moved the trigger to drivers/close.rs::scribing_debt, in scope, and named the deviation rather than widening file scope silently)"]
 ---
 
 # A cell's declared file list is a hypothesis

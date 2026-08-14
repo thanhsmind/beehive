@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Hook Runtime — governed paths, the always-writable set, and the intake gate"
-description: "Which write targets escape the active feature's gate routing and which never do, why the always-writable set only ever shrinks, why a finished feature's leftover approvals are not what decides whether the next source write is allowed, how many phases require that approval today, why a phase value the workflow does not recognize is now refused instead of silently allowed, how a value left by a retired phase is translated rather than left to trip that refusal, and why an approved plan document stops accepting direct edits until a revision is stamped."
-timestamp: 2026-08-06
+description: "Which write targets escape the active feature's gate routing and which never do, why the always-writable set only ever shrinks, why a finished feature's leftover approvals are not what decides whether the next source write is allowed, how many phases require that approval today, why a phase value the workflow does not recognize is now refused instead of silently allowed, how a value left by a retired phase is translated rather than left to trip that refusal, why an approved plan document stops accepting direct edits until a revision is stamped, and why the always-writable set is now two lists — a gated-phase list without blanket docs/, and an unchanged intake list — instead of one shared constant."
+timestamp: 2026-08-14
 bee:
   id: hook-runtime-governed-paths-and-the-intake-gate
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "hook-teeth D1/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — the approved plan document is frozen by the write guard itself, resolved lane-record-first; every flip lands red-first)"]
-  sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)", "hook-teeth cell bh-1 (trace .bee/cells/bh-1.json, 2026-08-04 — plan-document freeze deny, feature resolved from the path, lane-aware gate state; write_guard slice 93 passed)"]
+  decisions: [8ed35504 (write-guard always-writable set shrinks), c2c46488 (the intake gate fires in every terminal state; approvals never outlive the feature that earned them), "validation-diet D3/D13 (docs/history/validation-diet/CONTEXT.md, 2026-07-28)", "hook-teeth D1/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — the approved plan document is frozen by the write guard itself, resolved lane-record-first; every flip lands red-first)", "traceable-runs D1/D6 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — a file-touching request is gated at every lane including docs, and the mandatory flow scopes to writes, code and docs alike; trun-5 splits the always-writable set so a gated-phase docs/ write outside docs/history/ actually refuses, closing the accidental hole D1/D6 named)"]
+  sources: ["bee-footprint D2 (cell footprint-2, 2026-07-12)", "docs/specs/hook-runtime.md#B11", "docs/specs/hook-runtime.md#B12", "docs/specs/hook-runtime.md#R11", "docs/specs/hook-runtime.md#R12", "docs/specs/hook-runtime.md#P8", "validation-diet cells vd-1/vd-2 (traces in .bee/cells/, reports docs/history/validation-diet/reports/vd-1.md,vd-2.md, 2026-07-28 — the gated phase set narrowed to two, the write guard's unrecognized-phase fall-through flipped from silently allowing to refusing, and a saved value left by the retired phase translated on read)", "hook-teeth cell bh-1 (trace .bee/cells/bh-1.json, 2026-08-04 — plan-document freeze deny, feature resolved from the path, lane-aware gate state; write_guard slice 93 passed)", "traceable-runs cell trun-5 (trace .bee/cells/trun-5.json, capped 2026-08-14 — guards.rs/checks.rs/paths.rs/hook_local.rs/tests.rs, red-first retargeting two pre-existing tests that pinned the old shared-list behavior)"]
   authoritative_for: "hook-runtime: which write targets are governed and which are always writable"
 ---
 
@@ -128,7 +128,36 @@ forward — stamp a plan revision, which reopens the document, or withdraw the
 shape approval and redraft. The check fires ahead of record resolution and hold
 checks, and does not depend on the workflow's phase.
 
+**B33 — The always-writable set is now two lists, not one, because a blanket
+`docs/` write at a GATED phase was a real hole (traceable-runs trun-5,
+2026-08-14).** Trigger: a source write while the workflow sits in a gated
+phase (`exploring` or `planning`, execution unapproved) versus a write at
+idle or a terminal phase. What changed: the single shared
+`GATE_ALLOWED_PREFIXES` constant split into `GATE_ALLOWED_PREFIXES_GATED`
+(`.bee/`, `docs/history/`, `plans/`, `AGENTS.md` — no blanket `docs/`) and
+`GATE_ALLOWED_PREFIXES_INTAKE` (unchanged: `.bee/`, `docs/`, `plans/`,
+`AGENTS.md`). The gated-phase boundary and its "Allowed now" message now
+consult the gated list; the idle/terminal intake gate and the
+git-bookkeeping arm keep consulting the intake list; the worktree-first
+exemption in `hook_local.rs` stays on the intake list on purpose, to
+preserve its exact prior behavior — it independently exempts every `*.md`
+already, so it was never the enforcement point for this hole. What actually
+changed for a caller: at a gated phase, a write under `docs/history/`
+(bee's own brief/plan for the active feature) is still always allowed; a
+write to any other `docs/` path — a spec, a stray note — now refuses until
+execution is approved, exactly like any other governed source path. At idle
+or a terminal phase, blanket `docs/` is untouched. This closes the gap D1/D6
+named: the docs lane escaped the gate boundary by accident (the constant
+was shared, not by any considered exemption for docs work specifically),
+not by design.
+
 ## Business Rules
+
+- R33 — The always-writable set at a gated phase (`exploring`/`planning`,
+  execution unapproved) is `.bee/`, `docs/history/`, `plans/`, `AGENTS.md` —
+  no blanket `docs/`; the always-writable set at idle or a terminal phase
+  keeps blanket `docs/` unchanged; the worktree-first exemption is
+  unaffected either way (traceable-runs trun-5, D1/D6, 2026-08-14).
 
 - R11 — The write guard's always-writable set no longer includes the
   repo-root disposable-experiment location; that work now lives inside the
@@ -190,17 +219,19 @@ checks, and does not depend on the workflow's phase.
 
 ## Pointers (implementation)
 
-- Always-writable set: `GATE_ALLOWED_PREFIXES` in
-  `packages/bee/lib/guards.mjs` (`.bee/`, `docs/`, `plans/`,
-  `AGENTS.md`; repo-root `.spikes/` removed per bee-footprint D2 — the
-  workflow's own `.bee/spikes/` subfolder is already covered by `.bee/`);
-  session-close nudge mirrors it as `NUDGE_ALLOWED` in
-  `packages/bee/hooks/bee-session-close.mjs`.
+- Always-writable set (B33/R33): `GATE_ALLOWED_PREFIXES_GATED` and
+  `GATE_ALLOWED_PREFIXES_INTAKE` in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs` — the gated
+  list is `.bee/`, `docs/history/`, `plans/`, `AGENTS.md`; the intake list is
+  unchanged: `.bee/`, `docs/`, `plans/`, `AGENTS.md`. The gated-phase
+  boundary and idle/terminal-intake consumers are named per-list in
+  `write_guard/checks.rs`; the legacy `packages/bee/lib/guards.mjs` this
+  Pointer used to name no longer exists in this repo (Node fully retired) —
+  session-close-nudge parity is now whatever the Rust port's own nudge path
+  reads, not a separate `NUDGE_ALLOWED` mirror.
 - Gated set, unrecognized-phase refusal, and legacy-phase translation:
-  `GATED_PHASES` and the `checkWrite` phase dispatch's final branch in
-  `packages/bee/lib/guards.mjs`; the translation itself
-  (`LEGACY_PHASE_COERCIONS`) lives in `packages/bee/lib/state.mjs`, applied at
-  read time so every consumer of the state/lane record sees it automatically.
+  `is_gated_phase` and the phase dispatch's final branch in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs` and `paths.rs`.
 
 - Harness allowlist (R27): `HarnessRoots::from_bases` in
   `packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs` — the memory

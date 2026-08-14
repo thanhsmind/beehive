@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Workflow State — the workflow record, its rebuildable projections, and plan-revision-scoped gates"
-description: "The durable per-feature workflow record that is now the real unit of pipeline state, the three-transaction creation that seeds live legacy work into it, the legacy state.json/lane files (and the legacy handoff file) as mechanically rebuildable projections that never outrank the record and whose writer set is enforced by a grep audit rather than convention, the plan-revision-scoped shape and execution gates (widened from execution alone once the two approve together), and the per-record projection lock — one lock per record actually written (workflow:<id>, 'state' for state.json, lane:<feature> for a lane projection), under a single global acyclic acquisition order, that every writer of a projection record now shares instead of a lock scoped to whichever code path happens to be nearby."
-timestamp: 2026-08-06
+description: "The durable per-feature workflow record that is now the real unit of pipeline state, the three-transaction creation that seeds live legacy work into it, the legacy state.json/lane files (and the legacy handoff file) as mechanically rebuildable projections that never outrank the record and whose writer set is enforced by a grep audit rather than convention, the plan-revision-scoped shape and execution gates (widened from execution alone once the two approve together), the per-record projection lock — one lock per record actually written (workflow:<id>, 'state' for state.json, lane:<feature> for a lane projection), under a single global acyclic acquisition order, that every writer of a projection record now shares instead of a lock scoped to whichever code path happens to be nearby, the persisted per-gate approval record (state/actor/at/reason/bypass_level) that replaced the bare boolean, and the workflow's own persisted run_state exposed alongside it in bee status --json."
+timestamp: 2026-08-14
 bee:
   id: workflow-state-workflow-records-and-projections
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md, areas/workflow-state/sessions-lanes-and-identity.md, areas/workflow-state/holds-and-the-coordination-lock.md, areas/worktree-parallelism/control-plane-topology.md]
-  decisions: ["multisession-native D1 (workflow-first state: the workflow record becomes the unit of state; state.json/lanes become read-only compatibility projections; startFeature's lock becomes workflow:<id>, ending cross-feature contention on the single state lock — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D2 (control plane / data plane split: the workflow record and every store it seeds from — sessions, claims — resolve through controlRoot, i.e. main, from any linked worktree; docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D7 (gates scoped to plan revision: gate approval records approved_for_plan_rev; a plan_rev bump invalidates only that workflow's execution gate — scope later widened by validation-diet D15)", "validation-diet D2/D14/D15 (the standalone execution gate folds into Gate 2 as one merged approval via `bee state gate --merge`, flipping `shape` and `execution` together; the merge inherits the high-risk advisor-consult precondition D14 previously guarding execution alone; the merge also stamps `approved_for_plan_rev` on both fields together so a later bump can never leave the merged approval half-revoked — docs/history/validation-diet/CONTEXT.md, cell vd-3, 2026-07-28)", "multisession-native advisor-digest-slice2 conditions C1-C5/F5/F7/F8 (docs/history/multisession-native/reports/advisor-digest-slice2.md — idempotent seed before any rebuild treats state.json as derived, plan-rev-effective gate formula, startFeature worker-precondition self-exclusion, one global lock order with sessions and workflow:<id> never held together, the default-path residual seam scoped and later closed)", "multisession-native D5 amendment (msn-24, advisor-digest-slice5 condition E: the projection-writer discipline this concept states for state.json/lanes is generalized and enforced for the legacy handoff projection too — rebuildHandoffProjection is the sole sanctioned writer, a grep-audit test proves the exact production writer set rather than trusting a header comment; full detail in areas/workflow-state/handoff.md)", "state-phase-lock-race D1-D4/D9-D13 (GH #70: the lost-update race between the state-sync hook's 'state' hold and the CLI's workflow:<id>-only hold is closed by making every writer of a projection record share the lock scoped to that exact record, under one global acyclic order workflow:<id> -> 'state' -> lane:<feature>; D13 supersedes D1/D2's blanket 'state' wrap of the whole workflow branch, which mis-scoped lane mutations onto a lock they never needed and turned a live invariant red — docs/history/state-phase-lock-race/CONTEXT.md, decision 61e21a42-39b2-4f8a-bcb8-2a4d99f00154)", "state-phase-lock-race D9 (advisor-found pre-existing inversion: handleStatePlanRevBump held 'state' then called the self-locking updateWorkflow, violating the canonical order; repaired to resolve the workflow first and use updateWorkflowAssumingLock inside the ordered locks — decision cde492e3-800e-4a29-b574-b65cb06aabd7)", "workflow-lifecycle D1/D2 (docs/history/workflow-lifecycle/promote-proposals.md — one creation seam owns workflow-record creation, and zombie records are retirable through a verb instead of by hand)"]
-  sources: ["multisession-native cells multisession-native-5..10 (workflow-store.mjs, startFeature workflow creation, state-projection.mjs, activeWorkers, plan-rev gate scoping, default-path routing; traces .bee/cells/multisession-native-{5,6,7,8,9,10}.json, commits 1e7b538, f4fe163, 1c4d45d, c435add, 2dd834f, e7f365a, 2026-07-25)", "docs/history/multisession-native/CONTEXT.md (D1, D6, D7, D8 stage 2)", "docs/history/multisession-native/reports/advisor-digest-slice2.md (conditions C1-C5, findings F5/F7/F8)", "multisession-native cells multisession-native-18a/18b/18c (state.mjs's own workflow-record call sites, then bee's dispatcher, re-rooted onto controlRootFor(root); traces .bee/cells/multisession-native-{18a,18b,18c}.json, commits 5d0ec3c, a1431448, d69d81e, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "multisession-native cell multisession-native-24 (rebuildHandoffProjection reclassified as sole sanctioned writer of the legacy handoff projection; grep-audit test in test_state.mjs; trace .bee/cells/multisession-native-24.json, commit cee2d5f, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice5.md condition E; full detail in areas/workflow-state/handoff.md)", "state-phase-lock-race cells splr-1/splr-2/splr-3 (per-record lock scoping, the handleStatePlanRevBump order repair, re-vendoring into .bee/bin/, and the multi-process proof in test_state_projection_race.mjs; commits e787819a, 73eadc5f, ebc68f04, 2026-07-27; full suite verified green independently by the orchestrator, 109 suites)", "docs/history/state-phase-lock-race/CONTEXT.md (root cause: the state-sync hook holds 'state', CLI mutation verbs with a live workflow record hold workflow:<id> ONLY, and two more writers held nothing at all)", "docs/history/state-phase-lock-race/reports/advisor-consult.md (fable, 2026-07-27, PROCEED WITH CHANGES: refuted the plan's own claim that no 'state' -> workflow:<id> edge existed)", "workflow-lifecycle cells wl-1/wl-2 (one idempotent creation seam per feature, plus the list/close verb with its three exclusive modes; docs/history/workflow-lifecycle/promote-proposals.md, 2026-08-05)"]
+  decisions: ["multisession-native D1 (workflow-first state: the workflow record becomes the unit of state; state.json/lanes become read-only compatibility projections; startFeature's lock becomes workflow:<id>, ending cross-feature contention on the single state lock — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D2 (control plane / data plane split: the workflow record and every store it seeds from — sessions, claims — resolve through controlRoot, i.e. main, from any linked worktree; docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", "multisession-native D7 (gates scoped to plan revision: gate approval records approved_for_plan_rev; a plan_rev bump invalidates only that workflow's execution gate — scope later widened by validation-diet D15)", "validation-diet D2/D14/D15 (the standalone execution gate folds into Gate 2 as one merged approval via `bee state gate --merge`, flipping `shape` and `execution` together; the merge inherits the high-risk advisor-consult precondition D14 previously guarding execution alone; the merge also stamps `approved_for_plan_rev` on both fields together so a later bump can never leave the merged approval half-revoked — docs/history/validation-diet/CONTEXT.md, cell vd-3, 2026-07-28)", "multisession-native advisor-digest-slice2 conditions C1-C5/F5/F7/F8 (docs/history/multisession-native/reports/advisor-digest-slice2.md — idempotent seed before any rebuild treats state.json as derived, plan-rev-effective gate formula, startFeature worker-precondition self-exclusion, one global lock order with sessions and workflow:<id> never held together, the default-path residual seam scoped and later closed)", "multisession-native D5 amendment (msn-24, advisor-digest-slice5 condition E: the projection-writer discipline this concept states for state.json/lanes is generalized and enforced for the legacy handoff projection too — rebuildHandoffProjection is the sole sanctioned writer, a grep-audit test proves the exact production writer set rather than trusting a header comment; full detail in areas/workflow-state/handoff.md)", "state-phase-lock-race D1-D4/D9-D13 (GH #70: the lost-update race between the state-sync hook's 'state' hold and the CLI's workflow:<id>-only hold is closed by making every writer of a projection record share the lock scoped to that exact record, under one global acyclic order workflow:<id> -> 'state' -> lane:<feature>; D13 supersedes D1/D2's blanket 'state' wrap of the whole workflow branch, which mis-scoped lane mutations onto a lock they never needed and turned a live invariant red — docs/history/state-phase-lock-race/CONTEXT.md, decision 61e21a42-39b2-4f8a-bcb8-2a4d99f00154)", "state-phase-lock-race D9 (advisor-found pre-existing inversion: handleStatePlanRevBump held 'state' then called the self-locking updateWorkflow, violating the canonical order; repaired to resolve the workflow first and use updateWorkflowAssumingLock inside the ordered locks — decision cde492e3-800e-4a29-b574-b65cb06aabd7)", "workflow-lifecycle D1/D2 (docs/history/workflow-lifecycle/promote-proposals.md — one creation seam owns workflow-record creation, and zombie records are retirable through a verb instead of by hand)", "traceable-runs D3 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — a gate stops being a bare boolean and becomes a record: state/actor/at/reason/bypass_level, persisted not derived, additive over the existing approved boolean)", "traceable-runs D2 (gate_bypass decides whether a run halts, never whether the approval record exists; an auto-approval writes actor:auto plus the bypass level and reason)", "traceable-runs D4 (cell and feature/workflow each get a real, persisted status vocabulary including an explicit waiting state, stored not computed at read time — this concept implements the workflow-record half as run_state; cell status keeps its five existing values)", "traceable-runs D7 (the dashboard itself is out of scope; this feature delivers the persisted data and the CLI/JSON surface a dashboard would read)"]
+  sources: ["multisession-native cells multisession-native-5..10 (workflow-store.mjs, startFeature workflow creation, state-projection.mjs, activeWorkers, plan-rev gate scoping, default-path routing; traces .bee/cells/multisession-native-{5,6,7,8,9,10}.json, commits 1e7b538, f4fe163, 1c4d45d, c435add, 2dd834f, e7f365a, 2026-07-25)", "docs/history/multisession-native/CONTEXT.md (D1, D6, D7, D8 stage 2)", "docs/history/multisession-native/reports/advisor-digest-slice2.md (conditions C1-C5, findings F5/F7/F8)", "multisession-native cells multisession-native-18a/18b/18c (state.mjs's own workflow-record call sites, then bee's dispatcher, re-rooted onto controlRootFor(root); traces .bee/cells/multisession-native-{18a,18b,18c}.json, commits 5d0ec3c, a1431448, d69d81e, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", "multisession-native cell multisession-native-24 (rebuildHandoffProjection reclassified as sole sanctioned writer of the legacy handoff projection; grep-audit test in test_state.mjs; trace .bee/cells/multisession-native-24.json, commit cee2d5f, 2026-07-25; advisor digest docs/history/multisession-native/reports/advisor-digest-slice5.md condition E; full detail in areas/workflow-state/handoff.md)", "state-phase-lock-race cells splr-1/splr-2/splr-3 (per-record lock scoping, the handleStatePlanRevBump order repair, re-vendoring into .bee/bin/, and the multi-process proof in test_state_projection_race.mjs; commits e787819a, 73eadc5f, ebc68f04, 2026-07-27; full suite verified green independently by the orchestrator, 109 suites)", "docs/history/state-phase-lock-race/CONTEXT.md (root cause: the state-sync hook holds 'state', CLI mutation verbs with a live workflow record hold workflow:<id> ONLY, and two more writers held nothing at all)", "docs/history/state-phase-lock-race/reports/advisor-consult.md (fable, 2026-07-27, PROCEED WITH CHANGES: refuted the plan's own claim that no 'state' -> workflow:<id> edge existed)", "workflow-lifecycle cells wl-1/wl-2 (one idempotent creation seam per feature, plus the list/close verb with its three exclusive modes; docs/history/workflow-lifecycle/promote-proposals.md, 2026-08-05)", "traceable-runs cells trun-1/trun-2/trun-3/trun-7 (traces .bee/cells/trun-{1,2,3,7}.json, capped 2026-08-14 — persisted gate record, bee state gate's actor/bypass/reason flags, bee status --json gate_records exposure, and run_state; docs/history/traceable-runs/CONTEXT.md, plan.md)"]
   authoritative_for: "workflow-state: the workflow record schema and module, its creation at feature start, the rebuildable state.json/lane/handoff projections and their audited writer sets, plan-revision-scoped gates, and the per-record write lock order"
 ---
 
@@ -319,8 +319,138 @@ visible and retirable without hand-editing the store, and the record for the
 work actually in flight is protected from every sweep — only naming its id
 explicitly can close it, which is the deliberate escape.
 
+**A gate entry stops being a bare boolean and becomes a persisted record —
+`state`, `actor`, `at`, `reason`, `bypass_level` — kept equal to the
+existing `approved` boolean by construction, never a second source of truth
+(traceable-runs D3, trun-1, 2026-08-14).** Trigger: any read or write of a
+workflow record's per-gate entry. What happens: each gate entry on
+`{context, shape, execution, review}` gains five fields: `state` (one of
+`pending`/`approved`/`rejected`, persisted rather than derived — the whole
+point being that "awaiting approval" now survives a restart, where before it
+was indistinguishable from "gate never asked"), `actor` (`user`/`auto`, or
+`null` for a gate never explicitly stamped by this mechanism), `at` (ISO
+timestamp or `null`), `reason` (free text or `null`), and `bypass_level`
+(`off`/`normal`/`full`/`total`, or `null`). The existing `approved: bool`
+stays and is kept equal to `state == "approved"` by every one of the FOUR
+paths that author a gate entry: `default_gate_entry` (a brand-new record —
+every gate reads `pending` for free, with no seeding code needed at
+`start-feature`, see below), `merge_gates` (the patch overlay a `--merge`
+approval spreads over the base), `gates_patch_from_record` (the real author
+behind `bee state gate` — it builds each touched entry from an empty map,
+so a stale `state` field would otherwise survive while `approved` flips),
+and `legacy_gates_to_workflow_gates` (the C1 seed-from-legacy-boolean
+backfill). An entry written in the OLD shape — no `state` field at all,
+every pre-trun-1 record — reads back deriving `state` from its existing
+`approved` boolean, so an existing repo never mis-gates on upgrade. An
+unknown `state` or `actor` value refuses with a typed error and writes
+nothing, mirroring the existing `WORKFLOW_MISSING`/`WORKFLOW_CORRUPT`
+discipline. **One divergence is intended and stays intended, now pinned by
+a test:** the RECORD entry's `approved` stays `true` after a `plan-rev
+bump` invalidates it — only the *projected* boolean
+(`workflowGatesToApprovedGates`, R66 above) reads `false`, because
+plan-rev staleness is a projection-layer fact, not a record-layer one; the
+equivalence invariant above is scoped to the record entry, never to the
+projection.
+
+**`bee state gate` now records WHO approved a gate, under WHAT bypass
+level, and WHY (traceable-runs D2, trun-2, 2026-08-14).** Trigger: any
+`bee state gate` call, standalone or `--merge`. What happens: three new
+optional flags — `--actor` (`user`/`auto`, default `user`), `--bypass-level`
+(`off`/`normal`/`full`/`total`), `--reason` (free text) — write onto the
+touched gate entry/entries (both `shape` and `execution` under `--merge`)
+via a second, still-lock-held `update_workflow_assuming_lock_with` patch,
+issued right after `write_through_projection` lands `approved`/`state` on
+the legacy `approved_gates` projection (which never carried `actor`/
+`reason` and gets nothing new). Per D2, `--actor auto` is REQUIRED to carry
+both `--bypass-level` and `--reason` — a call that omits either refuses
+outright, zero mutation, so a bypassed run can never end up LESS traceable
+than a stopped one; a plain `--approved false` keeps stamping
+`gate_revoked_at` exactly as before and additionally sets `state:
+"rejected"`. What each actor observes: `gate_bypass` no longer decides
+whether an approval record exists, only whether the run halts at it — the
+record is identical either way, differing only in `actor`/`bypass_level`/
+`reason`.
+
+**A brand-new workflow record already seeds every gate `pending`, with no
+change needed to `start-feature` itself (traceable-runs trun-1, correcting
+the plan's own assumption).** `default_gates()` in `state_group/policy.rs`
+(the seam the plan pointed at) resets only the PROJECTED
+`.bee/state.json` `approved_gates` booleans, never the D3 record's new
+fields. The real seam is `default_gate_entry` in
+`workflow_store/record.rs`: `ensure_workflow_record_for_feature`'s primary
+path (`run_start_feature`) passes `gates: None`, so a brand-new record's
+every gate already reads `state: "pending"` for free, the moment the
+record is created — starting a feature is what puts the run into
+`awaiting-approval` (D1), without a caller ever typing a state.
+
+**The workflow record gains a persisted `run_state` a reader can display
+without re-deriving it (traceable-runs D4, trun-7, 2026-08-14).** Trigger:
+any create or update of a workflow record. What happens: `run_state` — a
+closed vocabulary, `shaping`/`awaiting-approval`/`running`/`blocked`/
+`done` — is derived fresh (`derive_run_state`, never taken from a caller's
+patch — `check_patch_run_state` accepts only a value already matching what
+the derivation would produce) from the record's own `status`, its D3 gate
+entries, and a live cell-count scan of the same feature, and WRITTEN on
+every `create_workflow`/`update_workflow_assuming_lock_with` call —
+persisted, not computed at read time, so it survives a restart the same
+way `state` does on a gate entry. `awaiting-approval` is the value whenever
+a gate entry reads `state: "pending"` and no later gate has been approved
+— the state the whole feature exists to make visible. An unknown value
+refuses with a typed error, the same discipline as an unknown gate `state`.
+**CRITICAL, and the reason this is stated explicitly:** `run_state` reaches
+`.bee/state.json` only because `apply_workflow_d1_fields`
+(`workflow_store/projections.rs`) was extended to carry it — that function
+otherwise copies only `phase`, `feature`, `mode`, `approved_gates`,
+`summary`, `next_action`, so a field added to the record and NOT added
+there projects as permanently absent, and the byte-identical-rebuild proof
+(R65) would pass vacuously while the field never actually reached a
+reader. No new cell `status` value was introduced: the five existing
+values (`open`/`claimed`/`capped`/`blocked`/`dropped`) still cover the
+cell side of waiting/running/blocked/done, and a reader tells the two
+vocabularies apart without re-deriving either.
+
+**`bee status --json` exposes the full per-gate record beside the
+projected booleans it already showed, and now `run_state` too
+(traceable-runs D7 boundary, trun-3, 2026-08-14).** Trigger: any `bee
+status` call. What happens: `build_gate_records` (`status_full/build.rs`)
+reads each gate's `state`/`actor`/`at`/`reason`/`bypass_level` from the
+LIVE WORKFLOW RECORD — never the projection — under the key
+`gate_records`, alongside the pre-existing `gates` key (the projected
+booleans, unchanged in name, type, and meaning: this is additive-only,
+because the JSON shape is a published contract, `docs/07-contracts.md`).
+A gate never approved now reads as `gate_records.<name>.state ==
+"pending"`, distinguishable from a rejected gate, where before both were
+the same indistinguishable `false`. `run_state` rides beside it at the top
+level. The text renderer prints one short human line per non-approved
+gate. This feature's own D7 scope line holds exactly here: the data and
+the read surface are delivered; no dashboard is built on top of it.
+
 ## Business Rules
 
+- R106 — A gate entry's `approved` boolean equals `state == "approved"`
+  after every one of the four entry-authoring paths
+  (`default_gate_entry`/`merge_gates`, `gates_patch_from_record`,
+  `legacy_gates_to_workflow_gates`); an entry in the pre-D3 shape (no
+  `state` field) derives `state` from its `approved` boolean on read; an
+  unknown `state` or `actor` value refuses with a typed error, writing
+  nothing (traceable-runs D3, trun-1).
+- R107 — The RECORD entry's `approved` boolean stays `true` after a
+  `plan-rev bump` invalidates it; only the PROJECTED boolean
+  (`workflowGatesToApprovedGates`, R66) reads `false` for a stale
+  plan-rev. This is the intended, tested divergence between the record
+  layer (traceable-runs D3, trun-1) and the projection layer (R66) — never
+  "repaired" to make the record itself flip.
+- R108 — `bee state gate --actor auto` refuses outright, zero mutation,
+  unless both `--bypass-level` and `--reason` are also given; `gate_bypass`
+  decides only whether the run halts at an approval, never whether the
+  approval record exists (traceable-runs D2, trun-2).
+- R109 — `run_state` is a closed vocabulary
+  (`shaping`/`awaiting-approval`/`running`/`blocked`/`done`), derived fresh
+  and written on every workflow-record create/update, never taken from a
+  caller's patch; it reads `awaiting-approval` whenever a gate entry is
+  `pending` and no later gate is approved; an unknown value refuses with a
+  typed error; no new cell `status` value was introduced alongside it
+  (traceable-runs D4, trun-7).
 - R105 — A feature's workflow record is created through one idempotent seam
   (asked twice, it changes nothing) and retired through a verb taking exactly one
   of three modes — by feature, by id, or all-but-active; the active feature's own
@@ -412,6 +542,11 @@ explicitly can close it, which is the deliberate escape.
   forcing every lane mutation to wait out an unrelated default-record hold —
   turning a near-instant, correct invariant into a ~5 s timeout
   (state-phase-lock-race D12/D13; `test_cli_state.mjs`).
+- A workflow record created (or last updated) before `run_state` shipped has
+  no `run_state` key at all until its next create/update call — `bee status
+  --json` reads it as `null` in the meantime rather than a computed
+  best-guess; the field is written fresh on the next mutation, never
+  backfilled by a read (traceable-runs D4, trun-7).
 
 ## Pointers (implementation)
 
@@ -494,6 +629,41 @@ explicitly can close it, which is the deliberate escape.
   `e787819a`/`73eadc5f`/`ebc68f04`, 2026-07-27; full 109-suite verify green,
   verified independently by the orchestrator. Advisor consult:
   `docs/history/state-phase-lock-race/reports/advisor-consult.md`.
+- Persisted gate record (R106/R107, D3, trun-1): `default_gate_entry`,
+  `merge_gates`, `valid_run_state_value`-sibling gate-value checks, and
+  `read_workflow_record`'s legacy-shape `state`-derivation-from-`approved`
+  all in `packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs`;
+  `gates_patch_from_record` (the real entry author behind `bee state gate`)
+  in `workflow_store/handoff.rs`; `legacy_gates_to_workflow_gates` in
+  `verbs/state_group/feature.rs`. Tests covering all four authoring paths,
+  the legacy-shape read, invalid-value refusal, and the intended plan-rev
+  divergence: `workflow_store/tests.rs`. Evidence: trace
+  `.bee/cells/trun-1.json`.
+- `bee state gate`'s new `--actor`/`--bypass-level`/`--reason` flags
+  (R108, D2, trun-2): the accepted-flags allowlist and the auto-actor
+  precondition in `run_gate_body`
+  (`packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs`), which
+  issues its own still-lock-held `update_workflow_assuming_lock_with` patch
+  after `write_through_projection` lands the legacy projection. Evidence:
+  trace `.bee/cells/trun-2.json`. Known gap: the generated CLI registry
+  payload (`packages/bee-rs/crates/bee/src/generated/registry_payload.json`,
+  fed by `bee --help --json`) does not list these three flags for `state
+  gate` — the flags are fully enforced by `run_gate_body`'s own
+  `keys_known` allowlist regardless, so behavior is correct and tested; the
+  gap is documentation-only, flagged by trun-2's own deviation note, not
+  re-filed as a fresh backlog row here.
+- `run_state` (R109, D4, trun-7): `RUN_STATE_VALUES`, `derive_run_state`,
+  `check_patch_run_state`, `base_workflow_defaults`'s `run_state: null`
+  default in `workflow_store/record.rs`; carried into `.bee/state.json` by
+  `apply_workflow_d1_fields` in `workflow_store/projections.rs` — the seam
+  the plan named as the one that makes the byte-identical-rebuild proof
+  pass vacuously if skipped. Evidence: trace `.bee/cells/trun-7.json`.
+- `bee status --json`'s `gate_records`/`run_state` exposure (D7 boundary,
+  trun-3): `build_gate_records` in
+  `packages/bee-rs/crates/bee/src/verbs/status_full/build.rs`, reading the
+  live workflow record rather than the projection; rendered one line per
+  non-approved gate in `status_full/render.rs`. Evidence: trace
+  `.bee/cells/trun-3.json`.
 - Creation seam and retirement verb (R105): `ensure_workflow_record_for_feature`
   in `packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs:337-385`
   (idempotent by feature; refuses an empty slug), wired into the feature start

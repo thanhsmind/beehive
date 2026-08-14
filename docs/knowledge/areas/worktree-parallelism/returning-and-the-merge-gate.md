@@ -2,14 +2,14 @@
 type: bee.area
 title: "Worktree Parallelism — returning: the staged merge, its verify gate, and the integration queue that serializes concurrent merges"
 description: "Why a feature worktree returns through a merge that is staged but never committed until the configured verify passes, why the coordination lock releases around that verify child and re-acquires behind a fence before any commit, how a second concurrent merge against the same main checkout now queues and bounded-waits behind a single processor lease instead of racing the lock, and when post-commit cleanup runs and when it refuses."
-timestamp: 2026-08-05
+timestamp: 2026-08-14
 bee:
   id: worktree-parallelism-returning-and-the-merge-gate
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/entering-creating-and-registering.md]
-  decisions: [worktree-session-routing D8 (worktree merge --id <id> is the return path), D2-REVISED (the merge is a staged transaction — user review P1-2), D8a (dirty is git status --porcelain without --ignored), "D8b/D8c (--cleanup ran post-commit only, opt-in, before worktree-reclaim D1 made cleanup the default outcome)", "I47 (issues-46-53 — cleanup on ALREADY_UP_TO_DATE, superseded by worktree-reclaim D1a below)", "multisession-native D10b (issue #56 3.9 — the worktree-admin lock releases around the verify child and re-acquires behind a four-part fence before any commit)", "multisession-native D8 stage 5 / D9 invariant 12 (issue #56 3.9/mục queue — bee worktree merge requests against the same main checkout serialize through a durable integration queue and a single processor lease instead of racing the coordination lock; a busy processor bounded-waits and a timeout returns a typed, unambiguous not-run result)", "worktree-reclaim D1 (cleanup is the default outcome of a merge that merged something, not a favour a caller has to ask for)", "worktree-reclaim D1a (cleanup-by-default fires only on a merge that actually merged something, so the ALREADY_UP_TO_DATE arm removes nothing; a non-boolean --no-cleanup value is refused outright, never silently read either way)"]
-  sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-returning-worktree-merge-id-id-d8", "issues-46-53 cell i-2 (GH #47 — the safety property is \"nothing would be lost\", not \"a commit happened\"; trace in `.bee/cells/`, 2026-07-23)", "multisession-native cell multisession-native-2 (three-phase lock split around the verify child, four-part fence, WORKTREE_MERGE_FENCE_DRIFT; trace .bee/cells/multisession-native-2.json, commit b8fc926, 2026-07-24)", "multisession-native cell multisession-native-22 (integration-queue.mjs: durable queue + processor lease serializing worktree merge; async verify child (runVerifyChild) replacing spawnSync so a heartbeat can interleave; checkProcessorLease as the P3 fence's first line; trace .bee/cells/multisession-native-22.json, commit 546d532, 2026-07-25)", "multisession-native cell multisession-native-23 (test_msn_invariants.mjs, invariant 7's fresh two-worktree merge-time MERGE_CONFLICT proof chained to the write-time advisory-allow+warning; trace .bee/cells/multisession-native-23.json, commit 06cd209, 2026-07-25)", "docs/history/multisession-native/reports/advisor-digest-slice5.md (conditions A/B/C, verdict proceed-with-conditions)", "docs/history/worktree-reclaim/CONTEXT.md and plan.md (D1, D1a, wr-4); commit e9fe0fd8 (cleanup by default, on a real merge only); packages/bee-rs/crates/bee/src/verbs/worktree/{handlers.rs,merge.rs,phases.rs}"]
+  decisions: [worktree-session-routing D8 (worktree merge --id <id> is the return path), D2-REVISED (the merge is a staged transaction — user review P1-2), D8a (dirty is git status --porcelain without --ignored), "D8b/D8c (--cleanup ran post-commit only, opt-in, before worktree-reclaim D1 made cleanup the default outcome)", "I47 (issues-46-53 — cleanup on ALREADY_UP_TO_DATE, superseded by worktree-reclaim D1a below)", "multisession-native D10b (issue #56 3.9 — the worktree-admin lock releases around the verify child and re-acquires behind a four-part fence before any commit)", "multisession-native D8 stage 5 / D9 invariant 12 (issue #56 3.9/mục queue — bee worktree merge requests against the same main checkout serialize through a durable integration queue and a single processor lease instead of racing the coordination lock; a busy processor bounded-waits and a timeout returns a typed, unambiguous not-run result)", "worktree-reclaim D1 (cleanup is the default outcome of a merge that merged something, not a favour a caller has to ask for)", "worktree-reclaim D1a (cleanup-by-default fires only on a merge that actually merged something, so the ALREADY_UP_TO_DATE arm removes nothing; a non-boolean --no-cleanup value is refused outright, never silently read either way)", "c117994b (traceable-runs trun-4, logged at capture 2026-08-14 — a discovered-live deadlock fix: the dirty-MAIN precondition auto-commits path-scoped .bee/ and the merging feature's own docs/history/<feature>/ before refusing, closing the deadlock against the worktree-first guard, reusing bee close's own bookkeeping-commit helper and opt-out key; cell trun-4, commit 9e01807d)"]
+  sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-returning-worktree-merge-id-id-d8", "issues-46-53 cell i-2 (GH #47 — the safety property is \"nothing would be lost\", not \"a commit happened\"; trace in `.bee/cells/`, 2026-07-23)", "multisession-native cell multisession-native-2 (three-phase lock split around the verify child, four-part fence, WORKTREE_MERGE_FENCE_DRIFT; trace .bee/cells/multisession-native-2.json, commit b8fc926, 2026-07-24)", "multisession-native cell multisession-native-22 (integration-queue.mjs: durable queue + processor lease serializing worktree merge; async verify child (runVerifyChild) replacing spawnSync so a heartbeat can interleave; checkProcessorLease as the P3 fence's first line; trace .bee/cells/multisession-native-22.json, commit 546d532, 2026-07-25)", "multisession-native cell multisession-native-23 (test_msn_invariants.mjs, invariant 7's fresh two-worktree merge-time MERGE_CONFLICT proof chained to the write-time advisory-allow+warning; trace .bee/cells/multisession-native-23.json, commit 06cd209, 2026-07-25)", "docs/history/multisession-native/reports/advisor-digest-slice5.md (conditions A/B/C, verdict proceed-with-conditions)", "docs/history/worktree-reclaim/CONTEXT.md and plan.md (D1, D1a, wr-4); commit e9fe0fd8 (cleanup by default, on a real merge only); packages/bee-rs/crates/bee/src/verbs/worktree/{handlers.rs,merge.rs,phases.rs}", "traceable-runs cell trun-4 (trace .bee/cells/trun-4.json, commit 9e01807d, capped 2026-08-14 — worktree/phases.rs, git.rs, tests.rs, drivers/close.rs)"]
   authoritative_for: "worktree-parallelism: the return path, the merge verify gate, the integration queue that serializes concurrent merges, and cleanup"
 ---
 
@@ -110,6 +110,51 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   verify command is recorded*, which would be a lie where verify was skipped only because nothing
   was merged.
 
+## Main's own `.bee` and closing-feature `docs/history/` dirt auto-commits before the dirty-MAIN refusal fires (trun-4, 2026-08-14)
+
+**The dirty-MAIN precondition and the worktree-first write guard used to
+deadlock against each other.** The dirt blocking a merge is routinely bee's
+own bookkeeping — cell traces under `.bee/cells/`, `.bee/decisions.jsonl`,
+`.bee/backlog.jsonl` — written by the orchestrator's ordinary state calls
+during the slice. Committing exactly that bookkeeping in MAIN was itself
+refused by the worktree-first guard (`AGENTS.md` "Code-touching feature work
+lives in its feature worktree"), which classified a bare `git commit` in the
+MAIN checkout as a feature source write while the active feature held a
+granted worktree. Neither door could be satisfied without disabling the
+other, so a green slice could not land at all.
+
+- **Before the dirty-MAIN refusal fires, `worktree merge` now auto-commits —
+  path-scoped to two roots only.** When every dirty path in MAIN is under
+  `.bee/` (wholesale) or under the *merging feature's own*
+  `docs/history/<feature>/` (never any other feature's history), the merge
+  commits exactly those paths and proceeds; the same `git add -A --
+  <pathspecs>` / commit helper `bee close`'s own bookkeeping commit uses
+  (`R81` in `gates.md`), widened here to accept the feature's docs-history
+  root as a second scoped pathspec alongside `.bee/`.
+- **Any dirty path outside those two roots still refuses exactly as
+  before**, `WORKTREE_MERGE_MAIN_DIRTY`, and the refusal message now names
+  the offending non-`.bee`/non-history paths so the operator knows what to
+  clear by hand — the worktree-first guard on genuine feature source is
+  never widened or bypassed.
+- **A pathspec that matches nothing is tolerated, not a hard failure.**
+  `git add -A -- <pathspecs>` (unlike `git status`) errors outright with
+  "pathspec did not match any files" when a root matches nothing at all —
+  the ordinary case for `docs/history/<feature>/` on a worktree that never
+  wrote there. The auto-commit filters pathspecs to roots that exist on disk
+  or are already tracked (`git ls-files`) before `add`/`commit` runs.
+- **A failing auto-commit warns; it never turns a green merge red** — same
+  discipline as `bee close`'s own bookkeeping commit, including the unsigned
+  (`--no-gpg-sign`, stdin-nulled) commit so a signing repo's pinentry can
+  never hang the merge.
+- **`.bee/config.json`'s opt-out for `bee close`'s bookkeeping commit now
+  also silences this auto-commit** — no separate key: turning bookkeeping
+  auto-commit off is one repo-wide choice, not two.
+- **Named cost, not a defect:** the sweep is `.bee`-wide, so a *concurrent*
+  session's in-flight tracked bee-store dirt can ride into this merge's
+  bookkeeping commit under this feature's message — misattributed history,
+  never data loss, the same tradeoff `gates.md` R81 already accepts for
+  `bee close`'s own sweep.
+
 ## Concurrent merges serialize through an integration queue, never the lock (multisession-native D8 stage 5, D9 invariant 12, msn-22)
 
 Phase 2's lock release (D10b, above) is correct for letting other worktree-admin
@@ -206,3 +251,16 @@ under any lock" claim, which is false today (short git plumbing legitimately run
   (index, 15 numbered entries) plus its two fresh Worker-concurrency race harnesses
   (`race_lease_child.mjs`, invariants 5/6). Evidence: trace
   `.bee/cells/multisession-native-23.json`, commit 06cd209.
+- Pre-refusal bookkeeping auto-commit (trun-4): the dirty-MAIN check and its
+  auto-commit precede in
+  `packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs` (the real refusal
+  site, not `merge.rs`); the shared unsigned-commit helper (widened to accept
+  multiple pathspecs) is `commit_unsigned` in
+  `packages/bee-rs/crates/bee/src/verbs/worktree/git.rs`; `bee close`'s own
+  bookkeeping commit (`R81`, `gates.md`) is
+  `packages/bee-rs/crates/bee/src/verbs/drivers/close.rs`. Tests: pathspec
+  filtering, mixed-dirt refusal naming the offending paths, commit-failure
+  warning, and the shared opt-out, in
+  `packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs`. Evidence: trace
+  `.bee/cells/trun-4.json`, commit `9e01807d`; backlog row that named the
+  deadlock: close-lands-bookkeeping-20260810 P2 row 708.
