@@ -445,3 +445,184 @@ fn close_by_feature_refuses_rather_than_guess_when_active_is_unresolvable() {
 
     assert_eq!(list_by_feature(&repo), before, "a refused close must touch no record");
 }
+
+// ── state waiting-on set / clear (awaiting-human ah-4) ──────────────────────
+//
+// ah-1/ah-2 built and unit-tested the mark itself (build/derive/clear/reap);
+// this cell only wires it to a CLI verb. `run_waiting_on_set`/
+// `run_waiting_on_clear` read `std::env::current_dir()` through `go()` like
+// every other verb in this file's own header note explains, so — same as
+// `start-feature`/`workflows list`/`workflows close` above — they are proven
+// against the BUILT BINARY rather than in-process. `resolve_waiting_on_target`
+// itself (the pure, root-taking half) has its own unit coverage at
+// state_group/tests.rs.
+
+#[test]
+fn waiting_on_set_then_clear_round_trips_with_no_feature_active() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+
+    // D3's named case: no feature is active anywhere in this test.
+    let (code, v) = run_json(
+        &repo,
+        &[
+            "state", "waiting-on", "set", "--kind", "question", "--subject",
+            "which approach?", "--session-id", "sess-ah4", "--json",
+        ],
+    );
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["run_state"], "awaiting-approval");
+    assert_eq!(v["waiting_on"]["kind"], "question");
+    assert_eq!(v["waiting_on"]["subject"], "which approach?");
+    assert_eq!(v["waiting_on"]["session"], "sess-ah4");
+    // The session-scoped mark rides the default record — no workflow record
+    // exists anywhere in this fixture.
+    assert_eq!(list_by_feature(&repo).len(), 0);
+
+    // `bee status --json` reads it straight back off the same record.
+    let (code, status) = run_json(&repo, &["status", "--json"]);
+    assert_eq!(code, 0, "{status}");
+    assert_eq!(status["run_state"], "awaiting-approval");
+    assert_eq!(status["waiting_on"]["subject"], "which approach?");
+
+    // The explicit clear (D2) is a real mutation, not a no-op, since a mark
+    // is live.
+    let (code, v) = run_json(&repo, &["state", "waiting-on", "clear", "--json"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["waiting_on"], serde_json::Value::Null);
+
+    let (code, status) = run_json(&repo, &["status", "--json"]);
+    assert_eq!(code, 0, "{status}");
+    assert_eq!(status["waiting_on"], serde_json::Value::Null);
+
+    // Clearing again is a no-op, never a refusal (D2), and needs no session
+    // at all.
+    let (code, v) = run_json(&repo, &["state", "waiting-on", "clear", "--json"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["waiting_on"], serde_json::Value::Null);
+}
+
+#[test]
+fn waiting_on_set_then_clear_reaches_the_live_workflow_and_the_state_projection() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+    // The default (non-lane) start makes "wf-c" the active feature.
+    run(&repo, &["state", "start-feature", "--feature", "wf-c"]);
+
+    let (code, v) = run_json(
+        &repo,
+        &[
+            "state", "waiting-on", "set", "--kind", "gate", "--subject", "execution",
+            "--session-id", "sess-ah4", "--json",
+        ],
+    );
+    assert_eq!(code, 0, "{v}");
+    // The emitted record is the WORKFLOW record (has its own "id"), not the
+    // default record.
+    assert!(v["id"].as_str().unwrap().starts_with("wf-"), "{v}");
+    assert_eq!(v["feature"], "wf-c");
+    assert_eq!(v["run_state"], "awaiting-approval");
+    assert_eq!(v["waiting_on"]["subject"], "execution");
+
+    // Reaches the workflow record on disk directly …
+    let records = list_by_feature(&repo);
+    assert_eq!(records.len(), 1, "{records:?}");
+    assert_eq!(records[0]["waiting_on"]["subject"], "execution");
+    // … AND the default `.bee/state.json` projection, proving the caller's
+    // own rebuild ran (ah-1's setter alone only ever touches the workflow
+    // record).
+    let projected: serde_json::Value = serde_json::from_str(&state_json(&repo)).unwrap();
+    assert_eq!(projected["run_state"], "awaiting-approval");
+    assert_eq!(projected["waiting_on"]["subject"], "execution");
+
+    let (code, status) = run_json(&repo, &["status", "--json"]);
+    assert_eq!(code, 0, "{status}");
+    assert_eq!(status["waiting_on"]["subject"], "execution");
+
+    let (code, v) = run_json(&repo, &["state", "waiting-on", "clear", "--json"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["waiting_on"], serde_json::Value::Null);
+
+    let records = list_by_feature(&repo);
+    assert_eq!(records[0]["waiting_on"], serde_json::Value::Null);
+    let projected: serde_json::Value = serde_json::from_str(&state_json(&repo)).unwrap();
+    assert_eq!(projected["waiting_on"], serde_json::Value::Null);
+}
+
+#[test]
+fn waiting_on_set_refuses_an_unknown_kind_with_zero_mutations() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+    let before = state_json(&repo);
+
+    let (code, out) = run(
+        &repo,
+        &[
+            "state", "waiting-on", "set", "--kind", "vibe", "--subject", "x", "--session-id",
+            "sess-1",
+        ],
+    );
+    assert_ne!(code, 0, "{out}");
+    assert!(out.contains("kind must be one of gate/question"), "{out}");
+    assert_eq!(state_json(&repo), before, "a refused set must touch no record");
+}
+
+#[test]
+fn waiting_on_set_refuses_an_explicit_lane_naming_no_live_workflow() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+    // At least one live workflow record must exist for --lane to be checked
+    // against the store at all — a C1 repo with ZERO workflow records
+    // anywhere falls straight to the session-scoped default record instead
+    // (matching resolve_handoff_workflow_id's own shortcut; pinned by
+    // state_group/tests.rs's `waiting_on_target_is_none_in_a_c1_repo_...`).
+    run(&repo, &["state", "start-feature", "--feature", "some-other-f"]);
+
+    let (code, out) = run(
+        &repo,
+        &[
+            "state", "waiting-on", "set", "--kind", "question", "--subject", "x", "--lane",
+            "ghost-feature", "--session-id", "sess-1",
+        ],
+    );
+    assert_ne!(code, 0, "{out}");
+    assert!(out.contains("--lane \"ghost-feature\" names no live workflow"), "{out}");
+}
+
+/// `resolve_session_id`'s env chain (BEE_SESSION_ID/CLAUDE_CODE_SESSION_ID)
+/// reads the SPAWNED process's own environment, which inherits this test
+/// runner's — and a Claude Code agent session sets exactly
+/// CLAUDE_CODE_SESSION_ID, so `run()`'s plain inherit-everything spawn would
+/// make this refusal untestable from inside one. Cleared explicitly rather
+/// than widening the shared `run()` helper's behavior for every other test
+/// in this file.
+fn run_with_no_session_env(cwd: &Path, args: &[&str]) -> (i32, String) {
+    let out = Command::new(binary())
+        .args(args)
+        .current_dir(cwd)
+        .env_remove("BEE_SESSION_ID")
+        .env_remove("CLAUDE_CODE_SESSION_ID")
+        .output()
+        .unwrap();
+    (
+        out.status.code().unwrap_or(-1),
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        ),
+    )
+}
+
+#[test]
+fn waiting_on_set_refuses_when_no_session_resolves() {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+
+    let (code, out) = run_with_no_session_env(
+        &repo,
+        &["state", "waiting-on", "set", "--kind", "question", "--subject", "x"],
+    );
+    assert_ne!(code, 0, "{out}");
+    assert!(out.contains("no session resolves"), "{out}");
+}

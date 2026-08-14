@@ -31,7 +31,7 @@ use crate::verbs::workflow_store::{
     rebuild_lane_projection_reporting, rebuild_state_projection,
     rebuild_state_projection_reporting, update_workflow, update_workflow_assuming_lock,
     update_workflow_assuming_lock_with, wf_id, workflows_list_sort, write_lane,
-    write_mailbox_handoff, MailboxAdopt,
+    write_mailbox_handoff, MailboxAdopt, clear_workflow_waiting_on, set_workflow_waiting_on,
 };
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -592,6 +592,186 @@ use std::time::Instant;
         }
         // Nothing was written at all — not even the default record's file.
         assert!(!tmp.path().join(".bee").join("state.json").exists());
+    }
+
+    // ── awaiting-human: the CLI wiring's target resolution (D3, ah-4) ───────
+    //
+    // `resolve_waiting_on_target` is the pure, root-taking half of
+    // `run_waiting_on_set`/`run_waiting_on_clear` — the two verbs themselves
+    // read `std::env::current_dir()` through `go()`/`prelude()` like every
+    // other verb here, so they are proven through the built binary instead
+    // (tests/workflow_verbs.rs), the same split `mutation_scope_follows_...`
+    // above draws for `resolve_mutation_lock_scope`.
+
+    #[test]
+    fn waiting_on_target_follows_lane_then_session_binding_then_default_feature_then_none() {
+        let tmp = tmp_root();
+        write_state_file(tmp.path(), r#"{"phase":"planning","feature":"default-f"}"#);
+        ok(create_workflow(tmp.path(), NewWorkflow::for_feature("default-f")));
+        ok(create_workflow(tmp.path(), NewWorkflow::for_feature("lane-a")));
+
+        // Explicit --lane always wins, and resolves the LIVE WORKFLOW's id.
+        let (id, feature) = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on set",
+            Some("lane-a"),
+            false,
+            None,
+        ))
+        .expect("lane-a has a live workflow");
+        assert_eq!(feature, "lane-a");
+        let workflows = ok(list_workflows(tmp.path()));
+        assert_eq!(Some(id.as_str()), find_live_workflow(&workflows, "lane-a").map(|w| wf_id(w)).as_deref());
+
+        // --no-lane forces the default record (None) and skips session
+        // resolution entirely, even though the default record's own feature
+        // has a live workflow.
+        let target = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on set",
+            None,
+            true,
+            None,
+        ));
+        assert!(target.is_none());
+
+        // A bound session targets ITS lane, not the default record's feature.
+        let sid = fixture_session_id(tmp.path());
+        write_session(tmp.path(), &sid, Some("lane-a"));
+        let (_, feature) = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on set",
+            None,
+            false,
+            None,
+        ))
+        .expect("session is bound to lane-a, which has a live workflow");
+        assert_eq!(feature, "lane-a");
+
+        // Unbound: the default record's own live feature.
+        write_session(tmp.path(), &sid, None);
+        let (_, feature) = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on set",
+            None,
+            false,
+            None,
+        ))
+        .expect("the default record's own feature has a live workflow");
+        assert_eq!(feature, "default-f");
+
+        // D3's own case: no --lane, unbound session, and the default
+        // record's feature names no live workflow at all — None, the
+        // session-scoped fallback.
+        write_state_file(tmp.path(), r#"{"phase":"idle","feature":null}"#);
+        let target = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on set",
+            None,
+            false,
+            None,
+        ));
+        assert!(target.is_none());
+    }
+
+    #[test]
+    fn waiting_on_target_refuses_an_explicit_lane_naming_no_live_workflow() {
+        let tmp = tmp_root();
+        ok(create_workflow(tmp.path(), NewWorkflow::for_feature("some-other-f")));
+        match resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on set",
+            Some("ghost-feature"),
+            false,
+            None,
+        ) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.starts_with("state waiting-on set: refused"), "{m}");
+                assert!(m.contains("--lane \"ghost-feature\" names no live workflow"), "{m}");
+                assert!(m.contains(".bee/runtime/workflows"), "{m}");
+            }
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn waiting_on_target_refuses_a_bound_lane_naming_no_live_workflow() {
+        let tmp = tmp_root();
+        let sid = fixture_session_id(tmp.path());
+        write_session(tmp.path(), &sid, Some("ghost-lane"));
+        // A different feature's live workflow exists, but not "ghost-lane" —
+        // the resolver never falls back to it.
+        ok(create_workflow(tmp.path(), NewWorkflow::for_feature("some-other-f")));
+        match resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on clear",
+            None,
+            false,
+            None,
+        ) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.starts_with("state waiting-on clear: refused"), "{m}");
+                assert!(m.contains("bound to lane \"ghost-lane\""), "{m}");
+            }
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn waiting_on_target_is_none_in_a_c1_repo_with_zero_workflow_records() {
+        // No `create_workflow` call at all — matches
+        // `resolve_handoff_workflow_id`'s own C1 shortcut: zero workflow
+        // records anywhere means every call falls to the session-scoped
+        // default record, even an explicit --lane.
+        let tmp = tmp_root();
+        let target = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on set",
+            Some("anything"),
+            false,
+            None,
+        ));
+        assert!(target.is_none());
+    }
+
+    /// The feature-scoped set/clear round trip a real CLI call takes: resolve
+    /// the target, call ah-1's/ah-2's own setter/clearer (never reimplemented
+    /// here), then rebuild the lane AND state projections so a reader of
+    /// `.bee/state.json` sees the mark immediately — the sync `run_gate`'s
+    /// own `write_through_projection` performs for its five D1 fields, which
+    /// `set_workflow_waiting_on`/`clear_workflow_waiting_on` do not do on
+    /// their own (they touch only the workflow record).
+    #[test]
+    fn waiting_on_set_then_clear_through_the_resolved_target_reaches_the_state_projection() {
+        let tmp = tmp_root();
+        write_state_file(tmp.path(), r#"{"phase":"swarming","feature":"proj-f"}"#);
+        ok(create_workflow(tmp.path(), NewWorkflow::for_feature("proj-f")));
+
+        let (id, feature) = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on set",
+            None,
+            false,
+            None,
+        ))
+        .expect("proj-f has a live workflow");
+        ok(set_workflow_waiting_on(tmp.path(), &id, "question", "which approach?", "sess-1"));
+        ok(rebuild_lane_projection(tmp.path(), &feature));
+        ok(rebuild_state_projection(tmp.path()));
+
+        let projected = ok(read_state_strict(tmp.path()));
+        assert_eq!(projected.get("run_state"), Some(&json!("awaiting-approval")));
+        assert_eq!(
+            projected.get("waiting_on").and_then(|v| v.get("subject")),
+            Some(&json!("which approach?"))
+        );
+
+        ok(clear_workflow_waiting_on(tmp.path(), &id));
+        ok(rebuild_lane_projection(tmp.path(), &feature));
+        ok(rebuild_state_projection(tmp.path()));
+
+        let projected = ok(read_state_strict(tmp.path()));
+        assert_eq!(projected.get("waiting_on"), Some(&Value::Null));
     }
 
     // ── worker add / prune ────────────────────────────────────────────────

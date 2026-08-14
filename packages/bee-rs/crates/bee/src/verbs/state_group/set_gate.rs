@@ -54,6 +54,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     let (verb, consumed): (&str, usize) = match leading {
         ["set", ..] => ("set", 1),
         ["gate", ..] => ("gate", 1),
+        ["waiting-on", "set", ..] => ("waiting-on.set", 2),
+        ["waiting-on", "clear", ..] => ("waiting-on.clear", 2),
         ["plan-rev", "bump", ..] => ("plan-rev.bump", 2),
         ["worker", "add", ..] => ("worker.add", 2),
         ["worker", "update", ..] => ("worker.update", 2),
@@ -85,6 +87,8 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     match verb {
         "set" => run_set(flags, use_json, t0),
         "gate" => run_gate(flags, use_json, t0),
+        "waiting-on.set" => run_waiting_on_set(flags, use_json, t0),
+        "waiting-on.clear" => run_waiting_on_clear(flags, use_json, t0),
         "plan-rev.bump" => run_plan_rev_bump(flags, use_json, t0),
         "worker.add" => run_worker_add(flags, use_json, t0),
         "worker.update" => run_worker_update(flags, use_json, t0),

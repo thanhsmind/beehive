@@ -184,8 +184,8 @@ pub(crate) fn write_state(root: &Path, state: &Map<String, Value>) -> Result<(),
 /// storage locations. `run_state` has no gates/cells to derive from at this
 /// layer (no workflow record exists), so a live mark here writes
 /// "awaiting-approval" directly, the same value the record path derives —
-/// D1's "ONE state" holds across both.
-#[allow(dead_code)] // not yet wired to a CLI verb — ah-3 owns the read/command surface
+/// D1's "ONE state" holds across both. Wired to `bee state waiting-on set`
+/// in `state_group/waiting_on.rs` (ah-4).
 pub(crate) fn set_default_state_waiting_on(
     root: &Path,
     kind: &str,

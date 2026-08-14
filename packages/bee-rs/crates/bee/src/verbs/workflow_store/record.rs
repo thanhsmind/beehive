@@ -427,8 +427,8 @@ pub(crate) fn check_patch_waiting_on(patch: &Map<String, Value>) -> Result<(), E
 /// the mark (refusing and writing nothing on an unknown kind or empty
 /// subject/session) then patches it through the self-locking `update_workflow`,
 /// whose write path recomputes `run_state` fresh and folds this mark into
-/// that derivation (see `update_workflow_assuming_lock_with`).
-#[allow(dead_code)] // not yet wired to a CLI verb — ah-3 owns the read/command surface
+/// that derivation (see `update_workflow_assuming_lock_with`). Wired to
+/// `bee state waiting-on set` in `state_group/waiting_on.rs` (ah-4).
 pub(crate) fn set_workflow_waiting_on(
     root: &Path,
     id: &str,
