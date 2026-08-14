@@ -3,7 +3,7 @@
   "feature": "traceable-runs",
   "title": "Feature start seeds every gate as pending, and bee gate records who approved and why",
   "lane": "high-risk",
-  "status": "open",
+  "status": "capped",
   "deps": [
     "trun-1"
   ],
@@ -52,16 +52,28 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "stuart",
+    "outcome": "bee state gate records who approved a gate, under what bypass level, and why; a new feature record already seeds every gate pending",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [
+      "The cell's action text points at default_gates() in state_group/policy.rs (lines 390/506) as the seam that seeds pending gates at start-feature. Confirmed (per trun-1's own note, reread against the code) that default_gates() only resets the PROJECTED .bee/state.json approved_gates boolean, never the D3 record's state/actor/at/reason/bypass_level fields. The real seam is default_gate_entry() in workflow_store/record.rs, already landed by trun-1: ensure_workflow_record_for_feature's primary path (run_start_feature) passes gates: None, so a brand-new record already gets state:\"pending\" on every gate for free. Left policy.rs untouched; added a_new_feature_record_seeds_every_gate_as_pending (state_group/tests.rs) as the proof instead of a code change.",
+      "The actor/at/reason/bypass_level trace never reaches gates_patch_from_record (workflow_store/handoff.rs) or write_through_projection (state_group/ledger.rs) — both are outside this cell's declared files. Instead, run_gate_body issues a second, still-lock-held update_workflow_assuming_lock_with patch (using only functions already imported into set_gate.rs) that stamps the trace onto exactly the touched gate name(s) after the existing write_through_projection call lands approved/state. This avoids widening the cell's file scope while keeping the write inside the same workflow lock.",
+      "The action text says to regenerate the CLI help/registry payload if it is generated from a declaration. packages/bee-rs/crates/bee/src/generated/registry_payload.json is NOT in this cell's declared files, and its generator (scripts/export_registry_payload.mjs, per its own regen comment) no longer exists in this repo (Node runtime removed, per src/main.rs's own header). No cli_shape/registry validation gates a native verb before try_native — run_gate's own keys_known allowlist (extended in this cell) is what the real CLI enforces, so behavior is correct and fully tested without this file. The registry_payload.json entry for `state gate` still lacks --actor/--bypass-level/--reason in its documented parameters (bee --help --json), which is a real but doc-only gap — flagging it for the orchestrator rather than hand-editing a 184KB generated file outside this cell's scope."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-14T06:39:52.267Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T06:19:05.882Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T06:39:32.531Z"
   }
 }

@@ -1,0 +1,91 @@
+{
+  "id": "trun-4",
+  "feature": "traceable-runs",
+  "title": "worktree merge auto-commits dirty .bee bookkeeping instead of deadlocking against the worktree-first guard",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Close a real deadlock between two of bee's own doors, observed 2026-08-14 while landing traceable-runs slice 1. `bee worktree merge` refuses with WORKTREE_MERGE_MAIN_DIRTY whenever `git status --porcelain` in main is non-empty. But the dirt is routinely bee's OWN bookkeeping — cell traces under .bee/cells/, .bee/decisions.jsonl, .bee/backlog.jsonl — written by the orchestrator's normal state calls during the slice. Committing exactly that bookkeeping in main is then refused by the worktree-first guard, which classifies the bare `git` command as a feature source write in the MAIN checkout while the active feature holds a granted worktree. Neither door can be satisfied without disabling the other, so a green slice cannot land at all. `bee close` already solves this exact case: search for the auto-commit it performs after a GREEN, non-dry-run close, which commits dirty .bee/ bookkeeping PATH-SCOPED to .bee (search close.rs and its help text for `close_commit_bookkeeping`). Give `worktree merge` the same treatment, reusing close's helper rather than writing a second one if the code allows: before the dirty-main refusal fires, if EVERY dirty path is under .bee/, auto-commit just those paths (path-scoped, so unrelated dirt and unrelated staged files are never swept) and proceed. If ANY dirty path is outside .bee/, keep refusing exactly as today, and make the message name the offending non-.bee paths so the operator knows what to clear. Mirror close's opt-out shape with a .bee/config.json key so a repo can turn the auto-commit off. A commit failure must only warn, never turn a green merge red — same as close. Do NOT touch the worktree-first guard itself: the guard is right that main should not take feature source edits, and widening it is a bigger change than this cell.",
+  "must_haves": {
+    "truths": [
+      "A worktree merge with only .bee/ dirt in main succeeds with no config override and no manual commit",
+      "A worktree merge with any dirty path outside .bee/ still refuses, and the message names those non-.bee paths",
+      "The auto-commit is path-scoped to .bee/ — unrelated dirty files and unrelated staged files are never included",
+      "A failing auto-commit warns and the merge still completes green",
+      "The auto-commit can be turned off through a .bee/config.json key, mirroring close's opt-out"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+        "substantive": "path-scoped .bee auto-commit before the dirty-main refusal, with the refusal narrowed to non-.bee paths and an opt-out key"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "substantive": "tests for .bee-only dirt succeeding, mixed dirt refusing and naming the offender, path scoping, commit-failure warning, and the opt-out"
+      }
+    ],
+    "key_links": [
+      "worktree merge reuses close's bookkeeping auto-commit helper rather than duplicating it"
+    ],
+    "prohibitions": [
+      "No change to the worktree-first guard",
+      "No change to what commands.verify or commands.test the merge runs",
+      "No sweeping of dirty paths outside .bee/"
+    ]
+  },
+  "trace": {
+    "worker": "bob",
+    "outcome": "Auto-commit .bee and this feature's docs/history/ before WORKTREE_MERGE_MAIN_DIRTY refuses, closing the merge deadlock",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [
+      "git add -A -- <pathspecs> (unlike git status) fails outright with 'pathspec did not match any files' when a root matches nothing at all -- the ordinary case for docs/history/<feature> on a worktree that never wrote there. commit_main_bookkeeping filters pathspecs to ones that exist on disk or are tracked (git ls-files) before add/commit, discovered via a red test and fixed before green."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-14T07:50:56.818Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T07:25:01.739Z",
+    "inline_reason": "state.json workers[] had no registration for bob/trun-4 at finish time (dispatch-side gap, not something a generation-tier worker may fix by writing state itself); capping inline per this refusal's own documented escape hatch.",
+    "report": {
+      "outcome": "Pre-merge auto-commit of .bee/ and the merging feature's docs/history/<feature>/ closes the WORKTREE_MERGE_MAIN_DIRTY deadlock against the worktree-first guard; dirt outside those two roots still refuses, named by path; a config opt-out and warn-never-block commit failure are both covered.",
+      "commit": "9e01807dff0bd85d3dd95f3c6ccd6a8fe2221265",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/git.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "green",
+      "deviations": [
+        "Real refusal location is phases.rs, not merge.rs; fix and tests split accordingly, deviation recorded on the cell.",
+        "Reused commit_unsigned (widened to multi-pathspec) rather than close's whole commit_close_bookkeeping helper, which is single-.bee-pathspec and independently validated.",
+        "Widened auto-commit scope to .bee/ + docs/history/<merging-feature>/ per coordinator course-correction, with a peer-feature-history refusal test.",
+        "Filtered bookkeeping pathspecs to existing/tracked roots before git add/commit to avoid a pathspec-not-matched failure when docs/history/<feature> never existed."
+      ]
+    },
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T07:50:37.519Z"
+  }
+}

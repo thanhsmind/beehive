@@ -3,7 +3,7 @@
   "feature": "traceable-runs",
   "title": "Gate entry carries persisted state, actor, timestamp, reason, and bypass level",
   "lane": "high-risk",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "D2",
@@ -58,16 +58,29 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "kevin",
+    "outcome": "done",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [
+      "Also edited verbs/state_group/tests.rs (outside the cell's declared files): two byte-level assertions on gates_patch_from_record's output (via write_through_projection) needed the new state field to keep the full declared suite green; minimal, mechanical, required by the in-scope gates_patch_from_record fix."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-14T06:14:35.372Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T05:39:47.582Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T06:14:16.441Z"
   }
 }

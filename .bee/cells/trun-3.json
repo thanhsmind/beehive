@@ -3,7 +3,7 @@
   "feature": "traceable-runs",
   "title": "One command reads back where a run stands and who approved it",
   "lane": "high-risk",
-  "status": "open",
+  "status": "capped",
   "deps": [
     "trun-2"
   ],
@@ -47,16 +47,25 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "dave",
+    "outcome": "done",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-14T07:15:28.010Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T06:59:51.421Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T07:15:08.192Z"
   }
 }
