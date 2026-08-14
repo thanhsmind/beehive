@@ -443,5 +443,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-14T00:32:45.751Z"
+  },
+  "race-test-asserts-its-premise": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-14T02:35:42.511Z"
   }
 }

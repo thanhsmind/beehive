@@ -1,0 +1,58 @@
+{
+  "id": "rtp-1",
+  "feature": "race-test-asserts-its-premise",
+  "title": "Make the mark-race test fail loudly when its interleaving does not happen",
+  "lane": "tiny",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "action": "mark_pass_does_not_mark_a_session_whose_heartbeat_lands_before_the_lock (status_full/tests.rs:1546) holds the sessions lock so the mark pass's bounded retry must wait, sleeps 60ms, lands a fresh heartbeat, then releases. The interleaving it needs is: pre-check reads STALE, then the heartbeat lands, then the lock is acquired and the record re-read FRESH. If the spawned thread has not reached its pre-check within the 60ms, the heartbeat lands first, the pre-check sees a fresh record and skips, and the assertion still passes — green for the wrong reason, with the under-lock re-judgement never exercised. Make the test assert its own premise so that case fails loudly: have the spawned thread report completion through a channel, and before landing the heartbeat assert the pass has NOT finished, so a run where the pass raced ahead is a failure rather than a silent pass. Keep the existing outcome assertions. Do not touch production code — mark_stale_sessions and the lock helpers stay exactly as they are; this is a test-instrument fix, per the repo's own rule that a fixture must be shown to reach the branch its test names.",
+  "must_haves": {
+    "truths": [
+      "The test fails when the mark pass completes before the heartbeat is landed, instead of passing",
+      "The existing assertions still hold: race1 is not marked and its record carries no status",
+      "No production code changes"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "substantive": "the test asserts the pass is still in flight before the heartbeat lands; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the premise assertion runs before write_session_fixture lands the fresh heartbeat"
+    ],
+    "prohibitions": [
+      "No change to recovery_verb::mark_stale_sessions",
+      "No change to any lock helper",
+      "No new production test hook"
+    ]
+  },
+  "trace": {
+    "worker": "inline",
+    "outcome": "The mark-race test asserts its own premise: the pass reports completion through a channel and the test fails loudly if it finished before the heartbeat landed. Proven by removal.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-14T02:31:29.861Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f4158037-da59-46aa-a355-3acf7820af24",
+    "claimed_at": "2026-08-14T02:27:59.210Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T02:31:10.310Z"
+  }
+}
