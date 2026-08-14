@@ -1,0 +1,75 @@
+{
+  "id": "hha-1",
+  "feature": "hold-holder-attribution",
+  "title": "A reserve records the worktree that owns the cell as the holder, and stops refusing itself",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/hold-holder-attribution/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs"
+  ],
+  "action": "Install the ownership rule the whole feature turns on: a cross-worktree hold belongs to the work stream that owns the CELL, never to the checkout that typed the command. Add one helper beside the ledger code in leases.rs — given the main root, the acting topology holder and a cell id, it resolves the cell to its feature (call `crate::verbs::cells::read_cell`; the module path `cells::read::` is PRIVATE, only the re-export compiles, and its error type is `Delegate` so map it at the call site) and the feature to its granted worktree (search status_full/topology.rs for `fn find_granted_worktree_for_feature` — already composed this exact way in cells/finish_support.rs, search there for the same name). It returns that worktree id, or the acting holder unchanged when the cell has no feature or the feature owns no granted worktree. The lookup does plain filesystem reads and never touches the holds ledger, so it is safe inside the lock section. Then use it in reserve.rs at BOTH places that currently ask the acting checkout: the ledger stamp (search for `topology.holder: \"main\" from an ordinary checkout` and the `hold.insert(\"holder\"` under it) and the foreign-hold check that runs before it (search reserve.rs for `find_foreign_holds`). Using it in only the first place is the trap the plan review caught: main would then read its OWN row as foreign and refuse its own control-plane reserve with FOREIGN_HOLD. Also replace the hardcoded `hold.insert(\"feature\".into(), Value::Null)` with the resolved feature, and keep the lease record's own holder (search reserve.rs for the comment claiming it is `the same holder string the mirrored ledger row carries below`) identical to the row's, so that comment stays true.",
+  "must_haves": {
+    "truths": [
+      "A reserve issued from main for a cell whose feature owns a granted worktree mirrors a ledger row whose holder is that worktree's id and whose feature is that feature",
+      "A second reserve from main on that same path and cell reports an ordinary lease conflict, never FOREIGN_HOLD",
+      "The lease record's holder and the mirrored ledger row's holder are the same string",
+      "A reserve for a cell with no feature, or whose feature owns no granted worktree, behaves exactly as it does today"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs",
+        "substantive": "the cell-ownership helper resolving cell to feature to granted worktree, with the acting holder as fallback"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+        "substantive": "the ledger stamp, the feature field, the lease holder and the foreign-hold check all resolved through the helper"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs",
+        "substantive": "red-first cases for the main-issued reserve on a granted worktree's cell, the self-refusal case, the lease/ledger holder match, the unchanged fallback, and one assertion that the grants-map key, LinkedRoots::id and the guard's workspace_id are the same string"
+      }
+    ],
+    "key_links": [
+      "reserve resolves cell to feature to owning worktree once, and uses that one answer for both the stamp and the foreign check"
+    ],
+    "prohibitions": [
+      "Do not weaken, move, or re-enter the store lock the ledger append runs under — tests/concurrency.rs asserts no lost update",
+      "Do not change release, finish_support, claim-next or the write-guard in this cell",
+      "Do not let the helper read the holds ledger"
+    ]
+  },
+  "decisions": [],
+  "trace": {
+    "worker": "hha-worker-1",
+    "outcome": "Added cell_hold_owner in leases.rs (cell -> feature -> granted worktree, acting holder as fallback) and wired reserve.rs to use one resolved owner for both the foreign-hold check and the ledger stamp, plus the row's feature and the lease record's holder. Worker ran the declared suite inside the feature worktree: 16 suites, 1671 passed, 0 failed, 11 ignored (base 1668 + 3 new cases); the four guard tests and tests/concurrency.rs pass unchanged. Red seen first: main_reserving_for_a_worktree_owned_cell_stamps_the_worktree left String(\"main\") right \"wt-granted\".",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs"
+    ],
+    "deviations": [
+      "commands.test could not be run from this checkout: the change lives on the feature worktree's branch, so a run here would test unchanged code. The evidence recorded is the worker's own full-suite run inside the worktree."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-14T07:18:58.022Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "82f511f8-5a2b-4193-954d-3483e7dc7e8f",
+    "claimed_at": "2026-08-14T07:06:50.167Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T07:18:38.314Z"
+  }
+}

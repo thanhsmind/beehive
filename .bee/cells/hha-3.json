@@ -1,0 +1,68 @@
+{
+  "id": "hha-3",
+  "feature": "hold-holder-attribution",
+  "title": "Claim-next stops reading a worktree's own holds as somebody else's",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "hha-2"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/hold-holder-attribution/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs"
+  ],
+  "action": "The last reader of the ledger that asks the acting checkout instead of the cell's owner: search handlers_select.rs for `has_foreign_hold` — it is what makes `cells claim-next` skip a cell whose paths carry a foreign hold. After hha-1 the rows for a worktree's cell name that worktree, so claim-next run from MAIN would read a cell's own holds as foreign and refuse to hand it out. Ask hha-1's helper for the candidate cell and compare against that, so a cell is skipped only when the hold belongs to a DIFFERENT work stream. Leave the write-guard alone on purpose (search hooks/write_guard/checks.rs for `find_foreign_holds` to see it): once a row names its real owner, a worker inside that worktree matches it and the deny stops firing, and main being denied a write to that worktree's file is the correct answer, not a bug.",
+  "must_haves": {
+    "truths": [
+      "cells claim-next run from main returns a cell whose paths carry holds owned by that cell's own worktree",
+      "cells claim-next still skips a cell whose paths carry a hold owned by a different feature's worktree",
+      "The write-guard's cross-worktree deny is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+        "substantive": "the foreign-hold test resolved through the cell-ownership helper"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "substantive": "a red-first case for claim-next over a cell whose own worktree holds its paths, and the still-skipped different-owner case"
+      }
+    ],
+    "key_links": [
+      "claim-next asks who owns the candidate cell before calling a hold foreign"
+    ],
+    "prohibitions": [
+      "Do not edit hooks/write_guard/",
+      "Do not let claim-next hand out a cell whose paths are held by another work stream"
+    ]
+  },
+  "decisions": [],
+  "trace": {
+    "worker": "hha-worker-3",
+    "outcome": "candidate_ok behind cells claim-next now resolves the candidate cell through cell_hold_owner and hands has_foreign_hold that owner instead of the literal acting holder, so a cell whose own worktree holds its paths is no longer read as foreign. has_foreign_hold keeps its signature; hooks/write_guard is untouched. Worker ran the declared suite inside the feature worktree: 1675 passed, 0 failed, 11 ignored (16 suites) - the 1674 base plus exactly the one new case. Red seen first: 'a cell's own worktree holding its paths is not a foreign hold', 0 passed 1 failed.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "commands.test could not be run from this checkout: the change lives on the feature worktree's branch, so a run here would test unchanged code. The evidence recorded is the worker's own full-suite run inside the worktree."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-14T07:33:01.775Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "82f511f8-5a2b-4193-954d-3483e7dc7e8f",
+    "claimed_at": "2026-08-14T07:27:01.442Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T07:32:42.025Z"
+  }
+}

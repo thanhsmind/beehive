@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "feature": "hold-holder-attribution",
+  "mode": "feature",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"hold-holder-attribution\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming for hold-holder-attribution slice 1 (hha-1, hha-2, hha-3) inside the feature worktree.",
+  "created_at": "2026-08-14T06:54:50.304Z",
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 6,
+    "rationale": "Plan rev 1 after review: the fix is a shared ownership rule (a hold belongs to the cell's owning worktree, not the acting checkout) applied at reserve, release, cap-time release, and claim-next. Touches reservations reserve/release/leases, cells finish_support and handlers_select; existing ledger tests assert today's holder semantics.",
+    "updated_at": "2026-08-14T07:05:17.891Z",
+    "feature": "hold-holder-attribution"
+  }
+}

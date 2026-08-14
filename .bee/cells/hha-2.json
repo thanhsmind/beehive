@@ -1,0 +1,79 @@
+{
+  "id": "hha-2",
+  "feature": "hold-holder-attribution",
+  "title": "Whichever checkout releases a cell clears the rows that cell owns, capped or not",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "hha-1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/reservations/release.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/hold-holder-attribution/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/release.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+  ],
+  "action": "Two defects on the release side, both about the same wrong question. FIRST: the holder filter. In release.rs, search for the line that skips a hold unless its holder equals the acting topology holder; the cap-time copy of the same loop is in cells/finish_support.rs (search it for the same holder comparison). Both ask the acting checkout. Ask hha-1's helper for the cell being released instead, so whichever checkout runs the release clears the rows that cell's owner holds — this matters because `cells finish` typically runs from MAIN (finish_support.rs says so itself, search for `MAIN checkout` in its comments) while hha-1 now stamps the worktree. SECOND: reachability. Release derives the {cell, session} pairs it scopes the ledger pass by from LIVE reservations for the agent (search release.rs for `matched rows FIRST`). Once the cell is capped or unclaimed those leases are gone, the pairs are empty, and the rows become unreachable by any release — that is why ghost rows outlive the cells that made them. When an explicit --cell is given, scope the ledger pass by that cell id directly instead of only through the derived pairs. Note the blast radius and keep it honest: release_exec is also reached by release_reservations_for_agent from verbs/drivers/prepare.rs (search prepare.rs for that name) on the claim-unwind path, so those unwinds get the wider scoping too. Keep the session match, keep the lock, keep holds_released counting exactly the rows it marked.",
+  "must_haves": {
+    "truths": [
+      "release --agent A --cell C marks C's matching ledger rows released even when no lease for C exists any more",
+      "A release run from main for a cell owned by a granted worktree clears that cell's worktree-stamped rows",
+      "cells finish run from main clears the rows of the cell it caps",
+      "release without --cell clears exactly what it clears today",
+      "holds_released counts exactly the rows it marked"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/reservations/release.rs",
+        "substantive": "the holder filter resolved through the cell-ownership helper, and the ledger pass scoped by an explicit --cell independently of live reservations"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "substantive": "the cap-time release loop's holder filter resolved the same way"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs",
+        "substantive": "red-first cases for the orphaned row with no lease, and for a main-run release clearing a worktree-owned cell's rows"
+      }
+    ],
+    "key_links": [
+      "both release paths ask who owns the cell, not who typed the command",
+      "an explicit --cell reaches the ledger without a live reservation to derive it from"
+    ],
+    "prohibitions": [
+      "Do not let a checkout clear rows belonging to a cell it does not own",
+      "Do not make release without --cell clear anything it does not clear today",
+      "Do not drop or move the store lock around the ledger write"
+    ]
+  },
+  "decisions": [],
+  "trace": {
+    "worker": "hha-worker-2",
+    "outcome": "release_exec and finish_support's cap-time release now filter ledger rows through cell_hold_owner (the cell's owner) instead of the acting checkout's topology holder, and an explicit --cell appends a session-less pair so the ledger pass reaches rows whose leases are already gone. Worker ran the declared suite inside the feature worktree: 16 suites, 1674 passed, 0 failed, 11 ignored (base 1671 + 3 new cases). Red seen first: holds_released left Number(0.0) right Number(1.0) on all three new cases.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/reservations/release.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs"
+    ],
+    "deviations": [
+      "commands.test could not be run from this checkout: the change lives on the feature worktree's branch, so a run here would test unchanged code. The evidence recorded is the worker's own full-suite run inside the worktree."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-14T07:26:58.204Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "82f511f8-5a2b-4193-954d-3483e7dc7e8f",
+    "claimed_at": "2026-08-14T07:19:03.887Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T07:26:38.260Z"
+  }
+}
