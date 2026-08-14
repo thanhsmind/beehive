@@ -2197,9 +2197,30 @@ use std::time::Instant;
         let rows = std::fs::read_to_string(decisions_path(root)).unwrap();
         let lines: Vec<&str> = rows.lines().filter(|l| !l.trim().is_empty()).collect();
         // Untouched (b1) logs no row at all; only the parked and unreachable
-        // ids each get exactly one decision row.
-        assert_eq!(lines.len(), summary.parked.len() + summary.unreachable.len());
-        assert!(!rows.contains("b1"), "b1 is released but untouched — no decision row: {rows}");
+        // ids each get exactly one decision row. Assert that per id rather
+        // than by a bare total: a count with no message reports "2 != 3" and
+        // names neither the id that went missing nor the row that appeared,
+        // which is how this test failed under parallel load with nothing to
+        // read afterwards.
+        // Match the id in its QUOTED cell context, never as a bare substring:
+        // every row carries a random uuid, and a uuid containing the letters
+        // of a short cell id (`5b1e6123…` contains `b1`) made the bare
+        // `rows.contains("b1")` form fail at random. That is what made this
+        // test look load-flaky — more runs, more uuids, more collisions.
+        let cell_named = |id: &str| format!("cell \\\"{id}\\\"");
+        for id in ["a1", "far-1"] {
+            let hits = lines.iter().filter(|l| l.contains(&cell_named(id))).count();
+            assert_eq!(hits, 1, "{id} must have exactly one decision row; rows were:\n{rows}");
+        }
+        assert_eq!(
+            lines.len(),
+            summary.parked.len() + summary.unreachable.len(),
+            "only parked and unreachable ids log rows; rows were:\n{rows}"
+        );
+        assert!(
+            !rows.contains(&cell_named("b1")),
+            "b1 is released but untouched — no decision row: {rows}"
+        );
         for id in &summary.parked {
             assert!(
                 rows.contains(&format!("cell \\\"{id}\\\" reset claimed -> blocked")),
