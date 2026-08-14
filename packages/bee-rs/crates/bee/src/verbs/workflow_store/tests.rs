@@ -60,19 +60,114 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
 
     #[test]
     fn merge_gates_defaults_overlays_and_keeps_unknown_names() {
-        let merged = merge_gates(
+        let merged = ok(merge_gates(
             None,
             Some(&json!({"execution": {"approved": true, "approved_for_plan_rev": 2},
                          "fifth": {"approved": true}})),
-        );
+        ));
         assert_eq!(
             jsjson::stringify(&merged),
-            r#"{"context":{"approved":false,"approved_for_plan_rev":null},"shape":{"approved":false,"approved_for_plan_rev":null},"execution":{"approved":true,"approved_for_plan_rev":2},"review":{"approved":false,"approved_for_plan_rev":null},"fifth":{"approved":true,"approved_for_plan_rev":null}}"#
+            r#"{"context":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"shape":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"execution":{"approved":true,"approved_for_plan_rev":2,"state":"approved","actor":null,"at":null,"reason":null,"bypass_level":null},"review":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"fifth":{"approved":true,"approved_for_plan_rev":null,"state":"approved","actor":null,"at":null,"reason":null,"bypass_level":null}}"#
         );
-        // A patch carrying only `approved` PRESERVES the base's rev stamp.
-        let base = merge_gates(None, Some(&json!({"execution": {"approved": true, "approved_for_plan_rev": 7}})));
-        let next = merge_gates(Some(&base), Some(&json!({"execution": {"approved": true}})));
+        // A patch carrying only `approved` PRESERVES the base's rev stamp —
+        // and, per D3, re-derives `state` from the fresh boolean rather than
+        // leaving the base's `state` stale.
+        let base = ok(merge_gates(None, Some(&json!({"execution": {"approved": true, "approved_for_plan_rev": 7}}))));
+        let next = ok(merge_gates(Some(&base), Some(&json!({"execution": {"approved": true}}))));
         assert_eq!(jget(&next, "execution").unwrap()["approved_for_plan_rev"], json!(7));
+        assert_eq!(jget(&next, "execution").unwrap()["state"], json!("approved"));
+    }
+
+    #[test]
+    fn default_gate_entry_carries_all_five_new_fields() {
+        let entry = default_gate_entry();
+        assert_eq!(entry["approved"], json!(false));
+        assert_eq!(entry["state"], json!("pending"));
+        assert_eq!(entry["actor"], Value::Null);
+        assert_eq!(entry["at"], Value::Null);
+        assert_eq!(entry["reason"], Value::Null);
+        assert_eq!(entry["bypass_level"], Value::Null);
+    }
+
+    #[test]
+    fn merge_gates_refuses_unknown_state_and_actor_values() {
+        match merge_gates(None, Some(&json!({"execution": {"approved": true, "state": "waiting"}}))) {
+            Err(Err2::Msg(m)) => assert!(m.contains("state must be one of pending/approved/rejected"), "{m}"),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+        match merge_gates(None, Some(&json!({"execution": {"approved": true, "actor": "robot"}}))) {
+            Err(Err2::Msg(m)) => assert!(m.contains("actor must be one of user/auto"), "{m}"),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+        // A merge that never touches state/actor at all writes nothing bad —
+        // no refusal, no new record on disk (this is a pure function, so
+        // "writes nothing" is simply "returns Err before merged is used").
+        assert!(ok(merge_gates(None, None)).is_object());
+    }
+
+    #[test]
+    fn old_shape_gate_entry_without_state_derives_it_from_approved() {
+        let tmp = tmp_root();
+        write_workflow(
+            tmp.path(),
+            "wf-legacy",
+            json!({"id":"wf-legacy","feature":"f1",
+                   "gates":{"execution":{"approved":true,"approved_for_plan_rev":3},
+                            "shape":{"approved":false,"approved_for_plan_rev":null}}}),
+        );
+        let rec = read_workflow_record(tmp.path(), "wf-legacy").ok().unwrap();
+        let gates = rec.get("gates").unwrap();
+        assert_eq!(jget(gates, "execution").unwrap()["state"], json!("approved"));
+        assert_eq!(jget(gates, "execution").unwrap()["approved"], json!(true));
+        assert_eq!(jget(gates, "shape").unwrap()["state"], json!("pending"));
+        // A gate name absent from the on-disk record entirely still defaults
+        // fully, including the new `state` field.
+        assert_eq!(jget(gates, "context").unwrap()["state"], json!("pending"));
+        assert_eq!(jget(gates, "context").unwrap()["approved"], json!(false));
+    }
+
+    #[test]
+    fn plan_rev_bump_leaves_the_record_entry_approved_while_projection_goes_stale() {
+        // D3's intended divergence (plan.md "One divergence is intended"):
+        // the RECORD entry an approval writes stays `approved: true` /
+        // `state: "approved"` — only the PROJECTED boolean
+        // (`workflow_gates_to_approved_gates`) reads plan-rev staleness.
+        // This is intended plan-rev invalidation, asserted here as intended,
+        // never repaired.
+        let gates = ok(merge_gates(
+            None,
+            Some(&json!({"execution": {"approved": true, "approved_for_plan_rev": 3}})),
+        ));
+        let entry = jget(&gates, "execution").unwrap();
+        assert_eq!(entry["approved"], json!(true));
+        assert_eq!(entry["state"], json!("approved"));
+        // plan_rev bumped past the stamp (3 → 4): the RECORD entry above is
+        // untouched by a bump (nothing here re-derives it), but the
+        // PROJECTION reads false for the same gate at the bumped rev.
+        assert_eq!(
+            jget(&workflow_gates_to_approved_gates(Some(&gates), Some(&json!(4))), "execution"),
+            Some(&json!(false))
+        );
+        // …while the record entry itself is still approved:true/state:approved.
+        assert_eq!(entry["approved"], json!(true));
+        assert_eq!(entry["state"], json!("approved"));
+    }
+
+    #[test]
+    fn legacy_gates_to_workflow_gates_emits_the_new_fields_consistently() {
+        use crate::verbs::state_group::legacy_gates_to_workflow_gates;
+        let approved = json!({"execution": true, "shape": false});
+        let gates = legacy_gates_to_workflow_gates(Some(&approved));
+        assert_eq!(jget(&gates, "execution").unwrap()["approved"], json!(true));
+        assert_eq!(jget(&gates, "execution").unwrap()["state"], json!("approved"));
+        assert_eq!(jget(&gates, "shape").unwrap()["approved"], json!(false));
+        assert_eq!(jget(&gates, "shape").unwrap()["state"], json!("pending"));
+        // A gate absent from the legacy boolean map defaults to pending too.
+        assert_eq!(jget(&gates, "context").unwrap()["state"], json!("pending"));
+        // Feeds straight into merge_gates/create_workflow without desyncing.
+        let merged = ok(merge_gates(None, Some(&gates)));
+        assert_eq!(jget(&merged, "execution").unwrap()["state"], json!("approved"));
+        assert_eq!(jget(&merged, "execution").unwrap()["approved"], json!(true));
     }
 
     #[test]
@@ -914,13 +1009,35 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         ];
         assert_eq!(
             jsjson::stringify(&gates_patch_from_record(&updated, &stamps)),
-            r#"{"context":{"approved":true},"shape":{"approved":true,"approved_for_plan_rev":4},"execution":{"approved":true,"approved_for_plan_rev":4},"review":{"approved":false}}"#
+            r#"{"context":{"approved":true,"state":"approved"},"shape":{"approved":true,"state":"approved","approved_for_plan_rev":4},"execution":{"approved":true,"state":"approved","approved_for_plan_rev":4},"review":{"approved":false,"state":"pending"}}"#
         );
-        // No stamps at all: every gate carries `approved` only, so mergeGates
-        // preserves whatever rev each entry already had.
+        // No stamps at all: every gate carries `approved` (+ `state`) only,
+        // so mergeGates preserves whatever rev each entry already had.
         assert_eq!(
             jsjson::stringify(&gates_patch_from_record(&updated, &[])),
-            r#"{"context":{"approved":true},"shape":{"approved":true},"execution":{"approved":true},"review":{"approved":false}}"#
+            r#"{"context":{"approved":true,"state":"approved"},"shape":{"approved":true,"state":"approved"},"execution":{"approved":true,"state":"approved"},"review":{"approved":false,"state":"pending"}}"#
+        );
+    }
+
+    #[test]
+    fn gates_patch_derives_rejected_state_from_gate_revoked_at() {
+        // A gate that was never approved stays `pending`; a gate the
+        // execution-component revocation path stamped `gate_revoked_at` for
+        // reads `rejected` — the invariant `approved == (state == "approved")`
+        // holds in both cases, and the two are told apart.
+        let mut updated = Map::new();
+        updated.insert(
+            "approved_gates".into(),
+            json!({"context": false, "shape": false, "execution": false, "review": false}),
+        );
+        updated.insert("gate_revoked_at".into(), json!({"execution": "2026-08-14T00:00:00.000Z"}));
+        let gates = gates_patch_from_record(&updated, &[]);
+        assert_eq!(jget(&gates, "execution").unwrap()["approved"], json!(false));
+        assert_eq!(jget(&gates, "execution").unwrap()["state"], json!("rejected"));
+        assert_eq!(
+            jget(&gates, "context").unwrap()["state"],
+            json!("pending"),
+            "never touched stays pending, not rejected"
         );
     }
 
@@ -981,21 +1098,26 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         assert!(record["created_at"].as_str().unwrap().ends_with('Z'));
         // mergeGates(defaultGates(), overrides): the override is one level
         // deep over the default entry, and every GATE_NAME is still present.
+        // D3 extends the default entry with `state` (+ actor/at/reason/
+        // bypass_level); the overlaid `shape` entry's `approved:true` derives
+        // `state:"approved"` since the override never named `state` itself.
         assert_eq!(
             jsjson::stringify(&record["gates"]),
-            r#"{"context":{"approved":false,"approved_for_plan_rev":null},"shape":{"approved":true,"approved_for_plan_rev":null},"execution":{"approved":false,"approved_for_plan_rev":null},"review":{"approved":false,"approved_for_plan_rev":null}}"#
+            r#"{"context":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"shape":{"approved":true,"approved_for_plan_rev":null,"state":"approved","actor":null,"at":null,"reason":null,"bypass_level":null},"execution":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"review":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null}}"#
         );
 
-        // The record is on disk at .bee/runtime/workflows/<id>/state.json,
-        // byte-for-byte as a live `node` run of workflow-store.mjs
-        // createWorkflow writes it over this exact fixture (ORACLE-PINNED).
+        // The record is on disk at .bee/runtime/workflows/<id>/state.json.
+        // This used to be byte-for-byte a live `node` run of
+        // workflow-store.mjs createWorkflow (ORACLE-PINNED); D3 extends the
+        // gate entry schema past what the Node oracle ever wrote, so the
+        // fixture below is now pinned against THIS shape, not the oracle's.
         let file = workflow_state_path(root, "wf-explicit");
         let on_disk = std::fs::read_to_string(&file)
             .unwrap()
             .replace(record["created_at"].as_str().unwrap(), "<now>");
         assert_eq!(
             on_disk,
-            "{\n  \"mode\": \"swarm\",\n  \"phase\": \"planning\",\n  \"plan_rev\": 2,\n  \"summary\": \"s\",\n  \"next_action\": \"n\",\n  \"status\": \"paused\",\n  \"route\": null,\n  \"id\": \"wf-explicit\",\n  \"feature\": \"billing-refunds\",\n  \"gates\": {\n    \"context\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null\n    },\n    \"shape\": {\n      \"approved\": true,\n      \"approved_for_plan_rev\": null\n    },\n    \"execution\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null\n    },\n    \"review\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null\n    }\n  },\n  \"created_at\": \"<now>\"\n}\n"
+            "{\n  \"mode\": \"swarm\",\n  \"phase\": \"planning\",\n  \"plan_rev\": 2,\n  \"summary\": \"s\",\n  \"next_action\": \"n\",\n  \"status\": \"paused\",\n  \"route\": null,\n  \"id\": \"wf-explicit\",\n  \"feature\": \"billing-refunds\",\n  \"gates\": {\n    \"context\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"shape\": {\n      \"approved\": true,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"approved\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"execution\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"review\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    }\n  },\n  \"created_at\": \"<now>\"\n}\n"
         );
         // … and readWorkflowRecord round-trips it with no drift at all.
         let read_back = read_workflow_record(root, "wf-explicit").ok().expect("readable");

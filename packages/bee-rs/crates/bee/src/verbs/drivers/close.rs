@@ -1604,7 +1604,7 @@ fn commit_close_bookkeeping(root: &Path, feature: &str) -> BookkeepingCommit {
     // function's own wording (including `git_fail_first_line`'s `exit
     // status <code>` fallback, R81) never changes.
     let message = format!("Record {feature} close bookkeeping in the bee store");
-    let commit_out = crate::verbs::worktree::commit_unsigned(root, &message, Some(".bee"));
+    let commit_out = crate::verbs::worktree::commit_unsigned(root, &message, &[".bee"]);
     if commit_out.stdout.is_none() {
         // `commit_unsigned`'s spawn itself failed (git off PATH) — the
         // `GitOut` "every field null" shape mirrors this module's own

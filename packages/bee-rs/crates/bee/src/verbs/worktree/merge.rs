@@ -107,6 +107,234 @@ pub(crate) fn is_tree_dirty_excluding(cwd: &Path, exclude_paths: &[String]) -> R
     Ok(!js_trim(&git_status_porcelain_excluding(cwd, exclude_paths)?).is_empty())
 }
 
+/// The same `:(exclude)` pathspec form [`git_status_porcelain_excluding`]
+/// uses, but with `--untracked-files=all` so an untracked directory is
+/// listed FILE BY FILE rather than collapsed to one top-level summary line.
+/// Plain porcelain's collapsing is fine for the boolean dirty/clean check
+/// (`is_tree_dirty_excluding`) — a collapsed line is still non-empty — but
+/// it is WRONG for a refusal message that has to NAME the offending path:
+/// with `docs/history/<mine>` excluded and `docs/history/<theirs>` left
+/// over, plain porcelain still renders the whole thing as `?? docs/`,
+/// naming neither feature. `--untracked-files=all` makes the exclude
+/// pathspec's own recursion into `docs/` surface the real leftover file
+/// (`?? docs/history/<theirs>/plan.md`) instead.
+pub(crate) fn git_status_porcelain_excluding_untracked_all(cwd: &Path, exclude_paths: &[String]) -> Result<String, String> {
+    let pathspecs: Vec<String> = exclude_paths
+        .iter()
+        .map(|p| format!(":(exclude){}", p.replace('\\', "/")))
+        .collect();
+    let mut args: Vec<&str> = vec!["status", "--porcelain", "--untracked-files=all", "--"];
+    args.extend(pathspecs.iter().map(String::as_str));
+    let r = run_git(cwd, &args);
+    if r.status != Some(0) {
+        return Err(format!(
+            "\"git status --porcelain --untracked-files=all -- {}\" failed in {}: {}",
+            pathspecs.join(" "),
+            p(cwd),
+            r.fail_text()
+        ));
+    }
+    Ok(r.stdout.unwrap_or_default())
+}
+
+// ─── trun-4: pre-merge `.bee` (+ `docs/history/<feature>`) bookkeeping
+//     auto-commit ───────────────────────────────────────────────────────
+//
+// Closes a real deadlock: `bee worktree merge` refuses on ANY dirty path in
+// main (WORKTREE_MERGE_MAIN_DIRTY, phases.rs), but the dirt is routinely
+// bee's OWN bookkeeping — cell traces, .bee/decisions.jsonl,
+// .bee/backlog.jsonl, and (at close) a promote proposal or other artifact
+// under the MERGING feature's own docs/history/<feature>/ — written by the
+// orchestrator's normal state calls during the slice. Committing exactly
+// that dirt BY HAND from main is refused by the worktree-first guard, so a
+// green slice could never land. This mirrors `bee close`'s own bee-store
+// bookkeeping auto-commit (drivers/close.rs's `commit_close_bookkeeping`) —
+// same warn-never-block contract, same `commit_unsigned` mechanism (git.rs,
+// B-P2-1) — widened to the two roots above and kept as its own
+// implementation (not a shared call into close's helper) because close's
+// version is hard-scoped to a single `.bee` pathspec and a different config
+// key/message; forcing the two together would either weaken close's own
+// validated config path or teach it a multi-pathspec, multi-root shape it
+// has no other reason to carry. What DOES stay the ONE shared mechanism is
+// the underlying `git commit --no-gpg-sign`, through `commit_unsigned`.
+
+/// The two pathspecs a pre-merge bookkeeping auto-commit is allowed to
+/// sweep. `.bee` always; `docs/history/<feature>` only when the worktree's
+/// feature is known (`resolve_worktree_feature` — absent for a worktree
+/// registered without bee's own creation identity, in which case only
+/// `.bee` applies). Never widened to all of `docs/history/`: a sibling
+/// feature's in-flight worktree can be writing its own
+/// `docs/history/<other>/` at the same moment, and sweeping it into an
+/// UNRELATED merge's bookkeeping commit would land a peer's uncommitted
+/// work without their say-so.
+pub(crate) fn main_bookkeeping_roots(feature: Option<&str>) -> Vec<String> {
+    let mut roots = vec![".bee".to_string()];
+    if let Some(feature) = feature {
+        roots.push(format!("docs/history/{feature}"));
+    }
+    roots
+}
+
+/// `worktree_merge_commit_bookkeeping` in the merged config (`.bee/config.json`
+/// overlaid by `.bee/config.local.json`, state.rs's `read_config_raw`) —
+/// absent or any non-`false` value reads as ON, the same absent-means-on
+/// default `archive_on_close_enabled` (close.rs) uses for its own opt-out.
+/// Only an explicit `false` turns the auto-commit off; at that point a
+/// dirty main refuses exactly as it did before this cell
+/// (WORKTREE_MERGE_MAIN_DIRTY, unconditionally, the original wording) — the
+/// opt-out means "stop auto-committing on my behalf," not "auto-commit a
+/// smaller scope."
+pub(crate) fn worktree_merge_commit_bookkeeping_enabled(main_root: &Path) -> bool {
+    !matches!(
+        crate::state::read_config_raw(main_root).get("worktree_merge_commit_bookkeeping"),
+        Some(Value::Bool(false))
+    )
+}
+
+/// What the pre-merge bookkeeping auto-commit did, and why not when it
+/// didn't — the same `committed` / `reason` / `index_restored` shape
+/// close's own `BookkeepingCommit` (drivers/close.rs) renders, so a caller
+/// reading either JSON never has to learn a second shape for the same idea.
+/// `reason` is one of: `clean`, `not_a_repo`, or `git_failed:<first line>`.
+/// `index_restored` is only ever `Some` on the one `git_failed` reason that
+/// can leave the roots staged after `git add` already ran — `git commit`
+/// itself failing — every other `Skipped` arm never staged anything.
+pub(crate) enum MainBookkeepingCommit {
+    Committed { sha: String },
+    Skipped { reason: String, index_restored: Option<bool> },
+}
+
+impl MainBookkeepingCommit {
+    fn skipped(reason: impl Into<String>) -> Self {
+        MainBookkeepingCommit::Skipped { reason: reason.into(), index_restored: None }
+    }
+
+    pub(crate) fn value(&self) -> Value {
+        match self {
+            MainBookkeepingCommit::Committed { sha } => json!({"committed": true, "sha": sha}),
+            MainBookkeepingCommit::Skipped { reason, index_restored: None } => {
+                json!({"committed": false, "reason": reason})
+            }
+            MainBookkeepingCommit::Skipped { reason, index_restored: Some(restored) } => {
+                json!({"committed": false, "reason": reason, "index_restored": restored})
+            }
+        }
+    }
+}
+
+/// The `(stderr || stdout || '').trim() || `exit status <code>`` (or
+/// `killed by signal`) fallback chain, applied to a [`GitOut`] the way
+/// close.rs's own `git_fail_first_line` applies it to its local `GitRun` —
+/// a silent failure (a pre-commit hook that exits non-zero without a word
+/// on either stream) must never render the bare `git_failed:` prefix with
+/// nothing after it.
+fn git_fail_first_line(out: &GitOut) -> String {
+    let src = out
+        .stderr
+        .as_deref()
+        .filter(|s| !js_trim(s).is_empty())
+        .or_else(|| out.stdout.as_deref().filter(|s| !js_trim(s).is_empty()))
+        .unwrap_or("");
+    let first_line = js_trim(src).lines().next().unwrap_or("").trim();
+    if !first_line.is_empty() {
+        return first_line.to_string();
+    }
+    match out.status {
+        Some(code) => format!("exit status {code}"),
+        None => "killed by signal".to_string(),
+    }
+}
+
+/// Auto-commits whatever dirt sits under `pathspecs` in `main_root` —
+/// path-scoped throughout (`git status` / `git add` both take the SAME
+/// `-- <pathspecs>` tail, so unrelated dirt and unrelated staged files are
+/// never swept) — using the ONE shared unsigned-commit mechanism
+/// (`commit_unsigned`, git.rs, B-P2-1) for the actual `git commit`.
+/// Warn-never-block: every step here is best-effort; the caller
+/// (phases.rs's `merge_stage`) never turns a `Skipped` outcome into a
+/// refusal — a dirty main that could not be tidied is not a reason to keep
+/// refusing forever.
+pub(crate) fn commit_main_bookkeeping(main_root: &Path, message: &str, pathspecs: &[String]) -> MainBookkeepingCommit {
+    let probe = run_git(main_root, &["rev-parse", "--is-inside-work-tree"]);
+    match (probe.status, probe.stdout.as_deref().map(js_trim)) {
+        (Some(0), Some("true")) => {}
+        (Some(_), _) => return MainBookkeepingCommit::skipped("not_a_repo"),
+        (None, _) => return MainBookkeepingCommit::skipped("git_failed:git rev-parse could not be spawned"),
+    }
+
+    // `git add -A -- <pathspec>` (unlike `git status`) FAILS OUTRIGHT with
+    // "pathspec '<p>' did not match any files" when a pathspec matches
+    // nothing at all — the ordinary case for `docs/history/<feature>` on a
+    // worktree whose feature never wrote anything there. Drop any root that
+    // matches neither a real path on disk nor a tracked one (`git ls-files`,
+    // so a root whose only content was just DELETED still counts) before it
+    // ever reaches `add`/`commit` — `.bee` alone is never dropped this way in
+    // practice (bootstrap always creates it), so this only ever narrows the
+    // optional docs/history root.
+    let specs: Vec<&str> = pathspecs
+        .iter()
+        .map(String::as_str)
+        .filter(|spec| {
+            main_root.join(spec).exists() || {
+                let tracked = run_git(main_root, &["ls-files", "--", spec]);
+                !js_trim(&tracked.stdout.unwrap_or_default()).is_empty()
+            }
+        })
+        .collect();
+    if specs.is_empty() {
+        return MainBookkeepingCommit::skipped("clean");
+    }
+
+    let mut status_args: Vec<&str> = vec!["status", "--porcelain", "--"];
+    status_args.extend_from_slice(&specs);
+    let status = run_git(main_root, &status_args);
+    match status.status {
+        Some(0) => {}
+        Some(_) => return MainBookkeepingCommit::skipped(format!("git_failed:{}", git_fail_first_line(&status))),
+        None => return MainBookkeepingCommit::skipped("git_failed:git status could not be spawned"),
+    }
+    if js_trim(&status.stdout.clone().unwrap_or_default()).is_empty() {
+        return MainBookkeepingCommit::skipped("clean");
+    }
+
+    let mut add_args: Vec<&str> = vec!["add", "-A", "--"];
+    add_args.extend_from_slice(&specs);
+    let add = run_git(main_root, &add_args);
+    match add.status {
+        Some(0) => {}
+        Some(_) => return MainBookkeepingCommit::skipped(format!("git_failed:{}", git_fail_first_line(&add))),
+        None => return MainBookkeepingCommit::skipped("git_failed:git add could not be spawned"),
+    }
+
+    let commit_out = commit_unsigned(main_root, message, &specs);
+    if commit_out.stdout.is_none() {
+        let mut reset_args: Vec<&str> = vec!["reset", "--"];
+        reset_args.extend_from_slice(&specs);
+        let index_restored = run_git(main_root, &reset_args).status == Some(0);
+        return MainBookkeepingCommit::Skipped {
+            reason: "git_failed:git commit could not be spawned".to_string(),
+            index_restored: Some(index_restored),
+        };
+    }
+    if commit_out.status != Some(0) {
+        let mut reset_args: Vec<&str> = vec!["reset", "--"];
+        reset_args.extend_from_slice(&specs);
+        let index_restored = run_git(main_root, &reset_args).status == Some(0);
+        return MainBookkeepingCommit::Skipped {
+            reason: format!("git_failed:{}", git_fail_first_line(&commit_out)),
+            index_restored: Some(index_restored),
+        };
+    }
+
+    let sha_out = run_git(main_root, &["rev-parse", "HEAD"]);
+    let sha = if sha_out.status == Some(0) {
+        js_trim(&sha_out.stdout.unwrap_or_default()).to_string()
+    } else {
+        String::new()
+    };
+    MainBookkeepingCommit::Committed { sha }
+}
+
 /// The three-part "main was left byte-untouched" proof (decision D2-REVISED)
 /// required after EVERY `git merge --abort` this module runs. `Ok(())` is
 /// `{ok:true}`; `Err(reason)` is the `{ok:false, reason}` the caller folds

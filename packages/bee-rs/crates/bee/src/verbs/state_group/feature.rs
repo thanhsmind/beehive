@@ -315,7 +315,11 @@ pub(crate) fn check_no_live_workflow_for_feature(
     ))
 }
 
-/// state.mjs legacyGatesToWorkflowGates.
+/// state.mjs legacyGatesToWorkflowGates, extended by D3: a legacy
+/// `approved_gates` boolean backfills `state` alongside `approved` instead of
+/// dropping it, so the seeded record never desyncs on its first read.
+/// `actor`/`at`/`reason`/`bypass_level` are left null — a legacy boolean
+/// carries no trace of who approved it or why.
 pub(crate) fn legacy_gates_to_workflow_gates(approved: Option<&Value>) -> Value {
     let mut gates = Map::new();
     for name in GATE_NAMES {
@@ -325,7 +329,15 @@ pub(crate) fn legacy_gates_to_workflow_gates(approved: Option<&Value>) -> Value 
             .unwrap_or(false);
         gates.insert(
             name.to_string(),
-            json!({ "approved": approved_flag, "approved_for_plan_rev": Value::Null }),
+            json!({
+                "approved": approved_flag,
+                "approved_for_plan_rev": Value::Null,
+                "state": if approved_flag { "approved" } else { "pending" },
+                "actor": Value::Null,
+                "at": Value::Null,
+                "reason": Value::Null,
+                "bypass_level": Value::Null,
+            }),
         );
     }
     Value::Object(gates)

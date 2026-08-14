@@ -511,6 +511,16 @@ pub(crate) fn find_gate_stamp<'a>(
 
 /// The `gates` half of writeLaneRecordThroughProjection /
 /// writeStateRecordThroughProjection's updateWorkflowAssumingLock patch.
+///
+/// D3: this is the real entry author for `bee state gate` (via
+/// `write_through_projection`) — it builds each gate's patch from scratch, so
+/// `state` is authored HERE, alongside `approved`, in the same patch object.
+/// `merge_gates`'s shallow per-key overlay would otherwise let a patch
+/// carrying only `approved` leave a stale `state` behind. `gate_revoked_at`
+/// (stamped by `run_gate_body` for the execution component only) is the one
+/// signal available here to tell "explicitly revoked" apart from "never
+/// touched" — everything else not approved is the persisted default,
+/// `pending`.
 pub(crate) fn gates_patch_from_record(
     updated: &Map<String, Value>,
     stamps: &[(String, Value)],
@@ -525,6 +535,17 @@ pub(crate) fn gates_patch_from_record(
             .map(|v| v == &Value::Bool(true))
             .unwrap_or(false);
         entry.insert("approved".into(), Value::Bool(approved));
+        let revoked = updated.get("gate_revoked_at").and_then(|v| jget(v, name)).is_some();
+        entry.insert(
+            "state".into(),
+            json!(if approved {
+                "approved"
+            } else if revoked {
+                "rejected"
+            } else {
+                "pending"
+            }),
+        );
         if let Some((_, rev)) = find_gate_stamp(stamps, name) {
             entry.insert("approved_for_plan_rev".into(), rev.clone());
         }

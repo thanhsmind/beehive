@@ -102,20 +102,24 @@ pub(crate) fn run_git(cwd: &Path, args: &[&str]) -> GitOut {
 
 /// B-P2-1: the ONE shared unsigned-commit mechanism — `git commit
 /// --no-gpg-sign` through `run_git` (stdin already `Stdio::null()` there,
-/// so the two defenses always travel together). Both worktree-merge call
+/// so the two defenses always travel together). Three worktree-merge call
 /// sites that must never block a repo with `commit.gpgsign true` and a tty
 /// pinentry configured on a signing prompt route through this: close.rs's
-/// bee-store bookkeeping commit and this module's own merge commit
-/// (`phases.rs`). Neither caller's user-facing failure text changes — each
-/// still formats its own reason from the returned [`GitOut`] fields (close
-/// keeps its `exit status <code>` spelling, merge keeps [`GitOut::fail_text`]).
-/// `pathspec`, when given, is appended as a trailing `-- <pathspec>` (close's
-/// `.bee`-scoped commit); `None` yields a full-tree commit (the merge commit).
-pub(crate) fn commit_unsigned(cwd: &Path, message: &str, pathspec: Option<&str>) -> GitOut {
+/// bee-store bookkeeping commit, this module's own merge commit
+/// (`phases.rs`), and trun-4's pre-merge `.bee` (+ `docs/history/<feature>`)
+/// bookkeeping auto-commit (`merge.rs`'s `commit_main_bookkeeping`). Neither
+/// caller's user-facing failure text changes — each still formats its own
+/// reason from the returned [`GitOut`] fields (close keeps its `exit status
+/// <code>` spelling, both merge call sites keep [`GitOut::fail_text`] /
+/// their own first-line extraction). `pathspecs`, when non-empty, are
+/// appended as a trailing `-- <pathspecs...>` (close's `.bee`-scoped commit,
+/// or trun-4's `.bee` + `docs/history/<feature>` commit); empty yields a
+/// full-tree commit (the merge commit itself).
+pub(crate) fn commit_unsigned(cwd: &Path, message: &str, pathspecs: &[&str]) -> GitOut {
     let mut args: Vec<&str> = vec!["commit", "--no-gpg-sign", "-m", message];
-    if let Some(spec) = pathspec {
+    if !pathspecs.is_empty() {
         args.push("--");
-        args.push(spec);
+        args.extend_from_slice(pathspecs);
     }
     run_git(cwd, &args)
 }

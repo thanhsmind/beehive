@@ -65,11 +65,59 @@ pub(crate) fn require_workflow_id(value: &str) -> Result<String, Err2> {
 
 // ─── gates ─────────────────────────────────────────────────────────────────
 
-/// workflow-store.mjs defaultGateEntry.
+/// D3: the gate entry's own approval state — persisted, not derived. `off` is
+/// deliberately excluded here (it is a config-level setting, not a per-gate
+/// one) — see `GATE_BYPASS_LEVELS` for the level vocabulary.
+pub(crate) const GATE_STATE_VALUES: [&str; 3] = ["pending", "approved", "rejected"];
+
+/// D2: who moved the gate — a real user, or an auto-approval under
+/// `gate_bypass`.
+pub(crate) const GATE_ACTOR_VALUES: [&str; 2] = ["user", "auto"];
+
+/// D2: the bypass level an auto-approval recorded as its reason for not
+/// halting, mirroring `gate_bypass`'s own vocabulary
+/// (`skills/bee-hive/references/gates-and-delegation.md`, "Gate bypass
+/// mode").
+pub(crate) const GATE_BYPASS_LEVELS: [&str; 4] = ["off", "normal", "full", "total"];
+
+/// A gate entry's `state`/`actor`/`bypass_level` are typed vocabularies. An
+/// unrecognized value refuses loudly rather than defaulting silently,
+/// mirroring the WORKFLOW_MISSING/WORKFLOW_CORRUPT discipline elsewhere in
+/// this module. Only fields PRESENT on `entry` are checked — an old-shape
+/// entry that never set `state` at all is not a refusal, it is the case
+/// `merge_gates` derives from `approved` instead.
+fn check_gate_entry_fields(name: &str, entry: &Map<String, Value>) -> Result<(), Err2> {
+    let check = |field: &str, allowed: &[&str], allow_null: bool| -> Result<(), Err2> {
+        match entry.get(field) {
+            None => Ok(()),
+            Some(Value::Null) if allow_null => Ok(()),
+            Some(Value::String(s)) if allowed.contains(&s.as_str()) => Ok(()),
+            Some(other) => Err(Err2::Msg(format!(
+                "gate \"{name}\": {field} must be one of {} (got {}).",
+                allowed.join("/"),
+                jsjson::stringify(other)
+            ))),
+        }
+    };
+    check("state", &GATE_STATE_VALUES, false)?;
+    check("actor", &GATE_ACTOR_VALUES, true)?;
+    check("bypass_level", &GATE_BYPASS_LEVELS, true)?;
+    Ok(())
+}
+
+/// workflow-store.mjs defaultGateEntry, extended by D2/D3: `state` is the
+/// persisted approval state (kept equal to `approved == "approved"`), and
+/// `actor`/`at`/`reason`/`bypass_level` are D2's auto-approval trace. The
+/// pre-existing `approved` boolean stays — 37 call sites still read it.
 pub(crate) fn default_gate_entry() -> Map<String, Value> {
     let mut m = Map::new();
     m.insert("approved".into(), Value::Bool(false));
     m.insert("approved_for_plan_rev".into(), Value::Null);
+    m.insert("state".into(), json!("pending"));
+    m.insert("actor".into(), Value::Null);
+    m.insert("at".into(), Value::Null);
+    m.insert("reason".into(), Value::Null);
+    m.insert("bypass_level".into(), Value::Null);
     m
 }
 
@@ -86,7 +134,20 @@ pub(crate) fn default_wf_gates() -> Map<String, Value> {
 /// ...(base||{})}` then a one-level-deep per-gate-name overlay. Unknown gate
 /// names in `overrides` are kept (forward-compat), every GATE_NAMES entry is
 /// always present.
-pub(crate) fn merge_gates(base: Option<&Value>, overrides: Option<&Value>) -> Value {
+///
+/// D3 extension: a shallow per-key overlay alone would let a patch (or an
+/// old-shape on-disk entry) that changes `approved` without also naming
+/// `state` leave a STALE `state` behind — the exact desync
+/// `gates_patch_from_record` would otherwise cause. So after the overlay, an
+/// override that touched `approved` but never named `state` gets `state`
+/// re-derived from the fresh boolean (`approved` → `"approved"`, otherwise
+/// the persisted default `"pending"`) — this is also what makes an old-shape
+/// entry (no `state` field at all, pre-migration) read back correctly. An
+/// override that names `state` explicitly is always respected as-is. Every
+/// entry an override touches is then validated (`check_gate_entry_fields`),
+/// so an unrecognized `state`/`actor`/`bypass_level` refuses instead of
+/// silently persisting.
+pub(crate) fn merge_gates(base: Option<&Value>, overrides: Option<&Value>) -> Result<Value, Err2> {
     let mut merged = default_wf_gates();
     match base {
         Some(Value::Object(b)) => {
@@ -105,15 +166,24 @@ pub(crate) fn merge_gates(base: Option<&Value>, overrides: Option<&Value>) -> Va
                 Some(v) if truthy(v) => Map::new(), // spread of a truthy primitive yields {}
                 _ => default_gate_entry(),
             };
+            let (touches_approved, names_state) = match value {
+                Value::Object(v) => (v.contains_key("approved"), v.contains_key("state")),
+                _ => (false, false),
+            };
             if let Value::Object(v) = value {
                 for (k, val) in v {
                     entry.insert(k.clone(), val.clone());
                 }
             }
+            if touches_approved && !names_state {
+                let approved = matches!(entry.get("approved"), Some(Value::Bool(true)));
+                entry.insert("state".into(), json!(if approved { "approved" } else { "pending" }));
+            }
+            check_gate_entry_fields(name, &entry)?;
             merged.insert(name.clone(), Value::Object(entry));
         }
     }
-    Value::Object(merged)
+    Ok(Value::Object(merged))
 }
 
 /// workflow-store.mjs baseWorkflowDefaults.
@@ -206,7 +276,16 @@ pub(crate) fn read_workflow_record(root: &Path, id: &str) -> Result<Map<String, 
         merged.insert(k.clone(), v.clone());
     }
     merged.insert("id".into(), json!(id));
-    merged.insert("gates".into(), merge_gates(None, parsed_map.get("gates")));
+    let gates = merge_gates(None, parsed_map.get("gates")).map_err(|e| {
+        WfSkip(format!(
+            "readWorkflow: \"{file_str}\" exists but its gates are corrupt ({}). The bee CLI refuses to guess at a workflow record it cannot read — that could silently clobber real state (gates, phase). FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\").",
+            match e {
+                Err2::Msg(m) => m,
+                Err2::Ex => "unreadable value".to_string(),
+            }
+        ))
+    })?;
+    merged.insert("gates".into(), gates);
     Ok(merged)
 }
 
@@ -358,7 +437,7 @@ pub(crate) fn update_workflow_assuming_lock_with(
     protect_identity(&mut next, &current, "created_at");
     next.insert(
         "gates".into(),
-        merge_gates(current.get("gates"), patch.get("gates")),
+        merge_gates(current.get("gates"), patch.get("gates"))?,
     );
     write_json_atomic(&workflow_state_path(root, &workflow_id), &Value::Object(next.clone()))
         .map_err(|_| Err2::Ex)?;
@@ -495,7 +574,7 @@ existing record. FIX: use updateWorkflow, or generate a fresh id.",
         record.insert("plan_rev".into(), opts.plan_rev.unwrap_or_else(|| json!(0)));
         // `mergeGates(defaultGates(), gates)` — merge_gates already seeds the
         // full default map, so a None base is the same value, not a shortcut.
-        record.insert("gates".into(), merge_gates(None, opts.gates.as_ref()));
+        record.insert("gates".into(), merge_gates(None, opts.gates.as_ref())?);
         record.insert("summary".into(), opts.summary.unwrap_or_else(|| json!("")));
         record.insert("next_action".into(), opts.next_action.unwrap_or_else(|| json!("")));
         record.insert("status".into(), Value::String(status.to_string()));

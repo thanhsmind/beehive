@@ -3222,3 +3222,162 @@ use crate::version::BEE_VERSION;
         preamble_ids.sort();
         assert_eq!(preamble_ids, vec!["arch-1", "dup-1", "hot-1"]);
     }
+
+    // ── trun-3: the persisted gate record beside the projected booleans ────
+
+    /// D3/D7: today `gates.shape` and `gates.execution` are both a bare
+    /// `false` whether nobody has touched the gate or an actor refused it.
+    /// `gate_records` reads the live workflow's own entries and tells the
+    /// two apart — `pending` vs `rejected` — while the pre-existing `gates`
+    /// projection keeps its exact old shape (four booleans, unchanged).
+    #[test]
+    fn gate_records_distinguishes_pending_from_rejected_where_the_boolean_projection_cannot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"planning","feature":"f1","mode":"standard","approved_gates":{"context":true,"shape":false,"execution":false,"review":true}}"#,
+        );
+        write(
+            root,
+            ".bee/runtime/workflows/wf1/state.json",
+            r#"{
+                "id": "wf1",
+                "feature": "f1",
+                "status": "active",
+                "phase": "planning",
+                "mode": "standard",
+                "gates": {
+                    "context": {"approved": true, "approved_for_plan_rev": null, "state": "approved", "actor": "user", "at": "2026-08-14T08:00:00.000Z", "reason": null, "bypass_level": null},
+                    "shape": {"approved": false, "approved_for_plan_rev": null, "state": "rejected", "actor": "user", "at": "2026-08-14T09:00:00.000Z", "reason": "needs rework", "bypass_level": null},
+                    "review": {"approved": true, "approved_for_plan_rev": null, "state": "approved", "actor": "auto", "at": "2026-08-14T08:30:00.000Z", "reason": "tiny lane", "bypass_level": "normal"}
+                }
+            }"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+
+        // The pre-existing projection is unchanged: still a plain boolean per
+        // gate, both refused gates reading bare `false`.
+        assert_eq!(
+            status.get("gates"),
+            Some(&json!({"context": true, "shape": false, "execution": false, "review": true})),
+            "pre-existing gates key keeps its name, type, and meaning"
+        );
+
+        // The new key tells `shape` (rejected) apart from `execution`
+        // (never touched, still the default `pending`) — both read `false`
+        // above.
+        let records = status.get("gate_records").expect("gate_records key");
+        assert_eq!(vget(records, "execution").and_then(|e| vget(e, "state")), Some(&json!("pending")));
+        assert_eq!(vget(records, "execution").and_then(|e| vget(e, "actor")), Some(&Value::Null));
+        assert_eq!(vget(records, "shape").and_then(|e| vget(e, "state")), Some(&json!("rejected")));
+        assert_eq!(vget(records, "shape").and_then(|e| vget(e, "actor")), Some(&json!("user")));
+        assert_eq!(vget(records, "shape").and_then(|e| vget(e, "at")), Some(&json!("2026-08-14T09:00:00.000Z")));
+        assert_eq!(vget(records, "shape").and_then(|e| vget(e, "reason")), Some(&json!("needs rework")));
+        assert_eq!(vget(records, "context").and_then(|e| vget(e, "state")), Some(&json!("approved")));
+        assert_eq!(vget(records, "review").and_then(|e| vget(e, "bypass_level")), Some(&json!("normal")));
+
+        // Text renderer: one line per non-approved gate, `approved` gates
+        // silent.
+        let text = render_status_text(&status);
+        assert!(
+            text.contains("Gate shape: rejected actor=user at=2026-08-14T09:00:00.000Z reason=\"needs rework\""),
+            "{text}"
+        );
+        assert!(text.contains("Gate execution: pending"), "{text}");
+        assert!(!text.contains("Gate context:"), "an approved gate prints no line: {text}");
+        assert!(!text.contains("Gate review:"), "an approved gate prints no line: {text}");
+    }
+
+    /// No live workflow names the current feature (or no feature at all):
+    /// `gate_records` falls back to the same all-`pending` default a
+    /// brand-new workflow record seeds (trun-1), and the idle-repo text
+    /// output stays exactly as it was before this key existed.
+    #[test]
+    fn gate_records_falls_back_to_defaults_without_a_live_workflow() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let records = status.get("gate_records").expect("gate_records key, even with no feature");
+        for g in ["context", "shape", "execution", "review"] {
+            assert_eq!(vget(records, g).and_then(|e| vget(e, "state")), Some(&json!("pending")), "{g}");
+            assert_eq!(vget(records, g).and_then(|e| vget(e, "actor")), Some(&Value::Null), "{g}");
+        }
+        // No feature -> the text renderer stays silent about gate records,
+        // same lines as before this key existed (status_text_renderer_minimal_repo).
+        assert!(!render_status_text(&status).contains("Gate "));
+    }
+
+    /// The hard constraint: `bee status --json` is a published contract
+    /// (docs/07-contracts.md); this feature is additive only. Every
+    /// pre-existing top-level key stays present with its old JSON kind, and
+    /// the new `gate_records` key sits beside them, never in place of one.
+    #[test]
+    fn bee_status_json_stays_additive_only_over_the_published_contract() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/config.json", r#"{"commands":{"test":"npm t"}}"#);
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f1","mode":"standard","approved_gates":{"context":true,"shape":true,"execution":true}}"#,
+        );
+        write(
+            root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f1","status":"open","lane":"standard","title":"t"}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+
+        let expect_kind = |key: &str, is_expected_kind: fn(&Value) -> bool| {
+            let v = status.get(key).unwrap_or_else(|| panic!("pre-existing key {key} is gone"));
+            assert!(is_expected_kind(v), "key {key} changed JSON kind: {v:?}");
+        };
+        expect_kind("onboarding", Value::is_object);
+        expect_kind("source", Value::is_object);
+        expect_kind("phase", Value::is_string);
+        expect_kind("mode", Value::is_string);
+        expect_kind("feature", Value::is_string);
+        expect_kind("gates", Value::is_object);
+        expect_kind("gate_bypass", Value::is_boolean);
+        expect_kind("gate_bypass_level", Value::is_string);
+        expect_kind("ship_visibility", Value::is_string);
+        expect_kind("models", Value::is_object);
+        expect_kind("tier_mix", Value::is_object);
+        expect_kind("handoff", Value::is_null);
+        expect_kind("cells", Value::is_object);
+        expect_kind("lanes", Value::is_object);
+        expect_kind("review", Value::is_object);
+        expect_kind("recovery", Value::is_object);
+        expect_kind("scribing_debt", Value::is_object);
+        expect_kind("capture_queue", Value::is_object);
+        expect_kind("pbi", Value::is_null);
+        expect_kind("commands", Value::is_object);
+        expect_kind("active_reservations", Value::is_array);
+        expect_kind("workers", Value::is_array);
+        expect_kind("critical_patterns_present", Value::is_boolean);
+        expect_kind("recent_decisions", Value::is_array);
+        expect_kind("staleness_warnings", Value::is_array);
+        expect_kind("recommended_next", Value::is_string);
+        // Every GATE_NAMES entry in the old `gates` projection is still a
+        // bare boolean, not restructured into an object.
+        for g in GATE_NAMES {
+            assert!(vget(status.get("gates").unwrap(), g).unwrap().is_boolean(), "{g}");
+        }
+
+        // The additive key: present, and shaped as one record per gate.
+        let records = status.get("gate_records").expect("new gate_records key");
+        assert!(records.is_object());
+        for g in GATE_NAMES {
+            let entry = vget(records, g).unwrap_or_else(|| panic!("gate_records missing {g}"));
+            assert!(vget(entry, "state").unwrap().is_string());
+        }
+    }
