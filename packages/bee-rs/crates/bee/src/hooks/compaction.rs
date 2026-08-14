@@ -37,7 +37,7 @@
 use crate::fsutil::{append_jsonl, read_json, warn_corrupt_json, ReadJson};
 use crate::hooks::session_preamble::{
     bypass_banner_lines, first_open_gate, handoff_block_lines, onboarding_line, read_handoff,
-    HandoffOutcome,
+    waiting_on_note, HandoffOutcome,
 };
 use crate::verbs::reservations::{js_disp, js_trim};
 use crate::verbs::state_group::{coerce_legacy_phase, default_state, spread_gates};
@@ -1423,6 +1423,17 @@ pub fn build_compact_capsule(
         nullish_disp(record.get("feature"), "none"),
         lane.as_deref().unwrap_or("none"),
     )];
+    // D1 (awaiting-human), ah-3 rework: the live wait mark, named right after
+    // the phase line so a session reading this capsule right after a
+    // compaction — precisely when it cannot see the rest of the transcript —
+    // knows immediately it is stopped on a person, not merely idle. Reuses
+    // session_preamble::waiting_on_note, the SAME helper the preamble's Gates
+    // line calls, rather than re-deriving "live" a second way here (this
+    // file's own "ONE truth for the shared blocks" discipline, module doc
+    // above).
+    if let Some(note) = waiting_on_note(&record) {
+        status.push(format!("- Waiting on human — {note}"));
+    }
     let cell_id = claimed_cell_id(root, session);
     match &cell_id {
         Some(cell_id) => {
@@ -1659,6 +1670,35 @@ mod tests {
         assert!(read_config_failopen(tmp.path()).is_empty());
         // and the capsule still renders.
         assert!(build_compact_capsule(tmp.path(), Some("s1"), None).contains("compact capsule"));
+    }
+
+    /// D1 (awaiting-human), ah-3 rework: the capsule a session reads right
+    /// after a compaction must NAME a live wait, not merely stay silent
+    /// about it — positive proof, not just "nothing broke".
+    #[test]
+    fn the_capsule_names_a_live_wait_right_after_the_phase_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        repo(tmp.path());
+        std::fs::write(
+            tmp.path().join(".bee").join("state.json"),
+            r#"{"phase":"shaping","waiting_on":{"kind":"question","subject":"D1 or D2?","asked_at":"2026-08-14T00:00:00.000Z","session":"s1"}}"#,
+        )
+        .unwrap();
+        let text = build_compact_capsule(tmp.path(), Some("s1"), None);
+        assert!(
+            text.contains("- Waiting on human — question: D1 or D2?"),
+            "{text}"
+        );
+    }
+
+    /// No live wait: the capsule stays exactly as it always did, no phantom
+    /// "Waiting on human" line.
+    #[test]
+    fn the_capsule_stays_silent_without_a_live_wait() {
+        let tmp = tempfile::tempdir().unwrap();
+        repo(tmp.path());
+        let text = build_compact_capsule(tmp.path(), Some("s1"), None);
+        assert!(!text.contains("Waiting on human"), "{text}");
     }
 
     #[test]
