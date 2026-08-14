@@ -1,0 +1,94 @@
+{
+  "id": "trun-6",
+  "feature": "traceable-runs",
+  "title": "Doctrine sends every file-touching request through a brief and an approval, at every lane",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D6"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "files": [
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-shaping/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/traceable-runs/plan.md",
+    "docs/history/traceable-runs/CONTEXT.md",
+    "skills/bee-hive/references/routing-and-contracts.md"
+  ],
+  "action": "Make the written workflow match D1 and D6: every request that writes a file gets a brief and an approval moment, at EVERY lane. Two edits, both in doctrine, no Rust. FIRST, the routing table in skills/bee-hive/references/routing-and-contracts.md currently sends 'Just fix this / small change' straight to bee-planning, which is why bee-shaping's Lock never runs for tiny and small and no CONTEXT.md is ever written for them. Reroute so those requests reach a brief first. Keep the ceremony proportionate per D1: tiny and small earn a SHORT brief, not the full standard treatment, and lanes keep their current plan ceremony — D1 adds a brief and a recorded approval, never plan ceremony. SECOND, the ceremony table in the same file lists Gate 1 as a human stop only for standard and high-risk. Make the approval moment exist at every code-touching lane including docs, and state plainly that gate_bypass decides whether the run STOPS, never whether the record EXISTS (per D2) — an auto-approved run still writes its brief and its approval record, stamped actor auto with the bypass level and reason, which the CLI now supports since trun-2. Update skills/bee-hive/references/gates-and-delegation.md wherever it describes what bypass skips, so the two files cannot disagree. Also state the D6 boundary explicitly: a request that writes a file is in scope, code and docs alike; a pure question that changes nothing on disk is not, and creates no record. Say what a tiny or docs brief actually IS and where it lives — if a short CONTEXT.md is the answer, say so in one line; do not invent a new artifact type without saying where it is written. AFTER editing, run the regen chain from the repo root: `bee dev regen` (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write). It stops at the first red with that step named. A doctrine edit that skips regen ships a stale rendered tree, and CI drift-checks it. The cell store also requires, for any cell touching skills/: run `bee dev release-manifest --check` as part of verify and treat docs/history/codex-harness-hardening/release-manifest.json as a file you may write — `bee dev regen`'s release-manifest --write step updates it, so commit that update with your change.",
+  "must_haves": {
+    "truths": [
+      "The routing table sends a small or tiny file-touching request through a brief before planning, not straight to planning",
+      "The ceremony table shows an approval moment at every code-touching lane, docs included",
+      "The doctrine states that gate_bypass decides whether the run stops, never whether the brief and approval record exist",
+      "The doctrine states the D6 boundary: a file write is in scope, code and docs alike; a pure question creates no record",
+      "The doctrine names what a tiny or docs brief is and the path it is written to",
+      "bee dev regen completes green after the edits"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/references/routing-and-contracts.md",
+        "substantive": "routing and ceremony tables rewritten for a brief and an approval at every lane, with proportionate ceremony"
+      },
+      {
+        "path": "skills/bee-hive/references/gates-and-delegation.md",
+        "substantive": "bypass description aligned so it scopes the stop, not the record"
+      }
+    ],
+    "key_links": [
+      "the ceremony table and the bypass table agree on what an auto-approved run still records"
+    ],
+    "prohibitions": [
+      "No Rust changes in this cell",
+      "No added plan ceremony for tiny or small — a brief and an approval record only",
+      "No new artifact type introduced without naming the path it is written to",
+      "No edit to CLAUDE.md or AGENTS.md"
+    ]
+  },
+  "trace": {
+    "worker": "phil",
+    "outcome": "Doctrine now sends every file-touching request through a brief and an approval at every lane",
+    "files_changed": [
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "skills/bee-shaping/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-14T08:17:37.108Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T08:06:43.167Z",
+    "report": {
+      "outcome": "Rerouted tiny/small/docs requests through a short brief (Lock writes a short CONTEXT.md) before planning or a docs write, added Gate 1 to the docs lane, and stated that gate_bypass scopes the stop not the record (D2) with the actual --actor/--bypass-level/--reason flags; aligned gates-and-delegation.md so bypass never skips brief authoring or the approval record. Ran bee dev regen (all 3 steps green) and committed the resulting release-manifest and rendered-tree updates.",
+      "commit": "63413f1b",
+      "files": [
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "skills/bee-shaping/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "green",
+      "deviations": [
+        "Committed the full bee dev regen byproduct set (.agents/.claude/.claude-plugin/.codex-plugin/.opencode skill mirrors, .bee/onboarding.json) alongside the declared files, since the regen chain the cell requires touches those mirrors mechanically; excluded jerry's concurrent packages/bee-rs/crates/bee/src/hooks/write_guard/*.rs edits from the commit"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 320 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T08:17:16.082Z"
+  }
+}

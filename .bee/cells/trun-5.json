@@ -1,0 +1,78 @@
+{
+  "id": "trun-5",
+  "feature": "traceable-runs",
+  "title": "Split the gate-allowed prefix list so a source edit stops without locking bee out of its own brief",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D6"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/traceable-runs/plan.md",
+    "docs/history/traceable-runs/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs"
+  ],
+  "action": "Close the hole that lets the docs lane write freely at a gated phase, WITHOUT locking bee out of writing its own records (per D1 and D6). Today `GATE_ALLOWED_PREFIXES` in hooks/write_guard/guards.rs is `[\".bee/\", \"docs/\", \"plans/\", \"AGENTS.md\"]` and it is consumed in THREE places, so editing it in place is not a local change: (1) checks.rs's gated-phase boundary (search checks.rs for `is_gated_phase`, the branch that denies with 'gate \"execution\" is not approved'), (2) checks.rs's idle/terminal intake gate slightly above it, and (3) `worktree_first_exempt_rel` in hooks/write_guard/hook_local.rs. Verify all three consumers yourself before changing anything — the count may have shifted. SPLIT the constant into two named lists rather than editing the shared one: a GATED-PHASE list and an INTAKE list. The gated-phase list drops the blanket `docs/` and keeps only what bee itself must write before approval: `.bee/`, `docs/history/`, `plans/`, `AGENTS.md`. The intake list keeps today's full behavior including blanket `docs/`, because a docs-lane session at phase idle or a terminal phase must not be locked out. Leave hook_local.rs's worktree-first consumer on whichever list preserves its CURRENT behavior exactly — note it independently exempts every `*.md`, so it is not the enforcement point for anything here. The behavior that must change: at phase exploring or planning with execution unapproved, a write to `docs/` that is NOT under `docs/history/` now REFUSES, where today it passes. RED-FIRST: `hooks/write_guard/tests.rs` already pins the current behavior with a case asserting a `docs/plan.md` write at phase planning returns code 0 (search tests.rs for `gated_phase_denies_source_until_execution_approved`). That existing assertion is exactly what this cell changes, so update it deliberately and say so — do not delete it, retarget it to a path that is still allowed and add a new case for the path that now refuses.",
+  "must_haves": {
+    "truths": [
+      "At phase exploring or planning with execution unapproved, a write under docs/history/ is allowed",
+      "At phase exploring or planning with execution unapproved, a write to a docs/ path outside docs/history/ refuses",
+      "A write under .bee/ is allowed at a gated phase exactly as before",
+      "At phase idle or a terminal phase, every path allowed today is still allowed, blanket docs/ included",
+      "The worktree-first exemption behaves exactly as it did before this cell"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+        "substantive": "two named prefix lists replacing the single shared constant, each documented with which consumer uses it"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "the retargeted existing case plus new cases for the newly-refused path, the still-allowed docs/history path, and the unchanged intake and worktree-first behavior"
+      }
+    ],
+    "key_links": [
+      "the gated-phase boundary consumes the gated-phase list and the intake gate consumes the intake list, never the same constant"
+    ],
+    "prohibitions": [
+      "No change to which phases count as gated",
+      "No change to intake-gate or worktree-first behavior",
+      "No blanket removal of docs/ from the intake list"
+    ]
+  },
+  "trace": {
+    "worker": "jerry",
+    "outcome": "Split GATE_ALLOWED_PREFIXES into GATE_ALLOWED_PREFIXES_GATED (docs/history/ only) and GATE_ALLOWED_PREFIXES_INTAKE (unchanged, blanket docs/); gated-phase boundary and its 'Allowed now' message use the gated list, the idle/terminal intake gate and the git-bookkeeping arm use the intake list, and hook_local.rs's worktree-first exemption stays on the intake list to preserve its exact prior behavior",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [
+      "Retargeted two existing tests that pinned the old shared-list behavior rather than deleting them: gated_phase_denies_source_until_execution_approved now asserts docs/history/ stays allowed (was docs/plan.md); apply_patch_gate_policy_denies_source_allows_docs now asserts docs/history/ stays allowed and adds an assertion that blanket docs/ now refuses. Both retargets are RED-FIRST per the cell brief, not silent edits."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-14T08:16:02.964Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T08:06:43.162Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T08:15:43.551Z"
+  }
+}
