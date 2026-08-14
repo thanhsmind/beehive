@@ -453,5 +453,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-14T04:16:24.592Z"
+  },
+  "traceable-runs": {
+    "capped": 9,
+    "dropped": 0,
+    "archived_at": "2026-08-14T11:03:13.282Z"
   }
 }
