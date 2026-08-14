@@ -122,6 +122,21 @@ history.
    scoping error — it only costs a wave (auto-serialized); prefer explicit
    paths or trailing-`*` patterns, since overlap detection treats mid-path
    globs as literals.
+   **Carry the hits, not a line range.** A `read_first` entry or an action
+   that names a span inside a large file — `tests.rs:2045-2549`, or a bare
+   list of line numbers — is a read instruction, and the worker follows it
+   literally. Paste the `rg -n` output into the cell instead: the matching
+   lines verbatim, each with its number. The author already ran that search;
+   handing over the answer costs the cell a few lines and saves the worker
+   the read. Line numbers ride ALONGSIDE their anchor text, never alone —
+   they drift the moment an earlier edit lands, and a worker that can only
+   count lines cannot recover. Never instruct a worker to work by line
+   number *instead of* searching: when several sites look identical, that
+   is a reason to carry more anchor — the enclosing function, the
+   occurrence index, the neighbouring line — not a reason to abandon the
+   search. Observed both ways: a cell naming `2045-2549` in a 5516-line
+   file stalled its worker outright; the re-dispatch carried the eleven
+   `rg` hits and it ran.
 3. **Testable exit.** The cell's outcome is provable by the declared
    suite (`commands.test`) at finish — plan the cell so its tests exist
    by cap time. "Manually check" is not an exit.
