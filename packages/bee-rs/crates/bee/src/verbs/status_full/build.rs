@@ -251,6 +251,12 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
     // discipline. Null when no live workflow has ever written it (a
     // pre-migration or brand-new-idle repo).
     status.insert("run_state".into(), state.get("run_state").cloned().unwrap_or(Value::Null));
+    // D1 (awaiting-human): what `run_state: "awaiting-approval"` is waiting
+    // ON — `kind`/`subject`/`asked_at`/`session`, or null when there is no
+    // live wait. Read straight off the same projected field ah-1 carries
+    // through `apply_workflow_d1_fields` — never re-derived here, matching
+    // `run_state`'s own "persisted, not derived" discipline just above.
+    status.insert("waiting_on".into(), state.get("waiting_on").cloned().unwrap_or(Value::Null));
     let level1 = bypass_level_root(ctx)?; // readConfig
     status.insert("gate_bypass".into(), json!(level1 != "off"));
     let level2 = bypass_level_root(ctx)?; // readConfig (Node calls it twice)

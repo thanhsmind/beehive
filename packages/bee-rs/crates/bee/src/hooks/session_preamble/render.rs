@@ -67,20 +67,45 @@ pub fn first_open_gate(record: &JMap) -> Option<&'static str> {
         .find(|gate| !matches!(gates.and_then(|v| vget(v, gate)), Some(Value::Bool(true))))
 }
 
+/// D1 (awaiting-human): the live wait mark's subject, if any — `None` when
+/// there is no live wait (absent/null, or a non-conforming shape from a
+/// stray hand-edit), matching `waiting_on_is_live`'s own discipline
+/// (`verbs::workflow_store::record`), which this reuses rather than
+/// re-deriving "live" a second way.
+pub(crate) fn waiting_on_note(record: &JMap) -> Option<String> {
+    let w = record.get("waiting_on")?;
+    if !crate::verbs::workflow_store::waiting_on_is_live(Some(w)) {
+        return None;
+    }
+    Some(format!(
+        "{}: {}",
+        tpl(vget(w, "kind")),
+        tpl(vget(w, "subject")),
+    ))
+}
+
+/// Appends the live wait mark (D1) to the SAME line `build_session_preamble`
+/// already renders unconditionally (`- Gates: {gates_line(...)}`) — a live
+/// wait then shows at session start with no second call site to wire.
 pub(crate) fn gates_line(record: &JMap) -> String {
     let shown = visible_gates(record);
-    if shown.is_empty() {
-        return "none pending (no active work)".to_string();
+    let base = if shown.is_empty() {
+        "none pending (no active work)".to_string()
+    } else {
+        let gates = record.get("approved_gates");
+        shown
+            .iter()
+            .map(|gate| {
+                let approved = matches!(gates.and_then(|v| vget(v, gate)), Some(Value::Bool(true)));
+                format!("{gate}: {}", if approved { "approved" } else { "pending" })
+            })
+            .collect::<Vec<_>>()
+            .join(" | ")
+    };
+    match waiting_on_note(record) {
+        Some(note) => format!("{base} | waiting on human — {note}"),
+        None => base,
     }
-    let gates = record.get("approved_gates");
-    shown
-        .iter()
-        .map(|gate| {
-            let approved = matches!(gates.and_then(|v| vget(v, gate)), Some(Value::Bool(true)));
-            format!("{gate}: {}", if approved { "approved" } else { "pending" })
-        })
-        .collect::<Vec<_>>()
-        .join(" | ")
 }
 
 // ─── the three shared renderers (compaction-hardening cz-5, D6/D26) ────────
@@ -376,4 +401,82 @@ pub(crate) fn bundle_project_map_lines(root: &Path) -> Vec<String> {
         "- Hit a symptom mid-flow (error text, odd behavior, an unfamiliar mechanism)? Pull it: `bee knowledge search --text \"<symptom>\"`.".to_string(),
     );
     lines
+}
+
+// ─── ah-3 (awaiting-human): the wait mark actually reaches this surface ────
+//
+// This module owns no sibling `tests.rs` entry for ah-3 (that file is not in
+// this cell's scope), so these tests live inline rather than leaving the new
+// behavior unproven. `gates_line_names_a_live_wait` pins the helper in
+// isolation; `session_preamble_names_a_live_wait_at_session_start` proves the
+// wiring reaches the ACTUAL text a session reads at start — the same
+// `build_session_preamble` (budget.rs) call every real preamble goes
+// through, not a re-implementation of it.
+#[cfg(test)]
+mod waiting_on_tests {
+    use super::*;
+
+    fn write(root: &Path, rel: &str, content: &str) {
+        let path = root.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, content).unwrap();
+    }
+
+    #[test]
+    fn gates_line_names_a_live_wait() {
+        let mut record = JMap::new();
+        record.insert("phase".into(), json!("shaping"));
+        record.insert(
+            "waiting_on".into(),
+            json!({
+                "kind": "question",
+                "subject": "which lane?",
+                "asked_at": "2026-08-14T00:00:00.000Z",
+                "session": "s-1",
+            }),
+        );
+        let line = gates_line(&record);
+        assert!(line.contains("waiting on human — question: which lane?"), "{line}");
+    }
+
+    /// No live wait: `gates_line` renders exactly what it did before this
+    /// feature — no phantom suffix.
+    #[test]
+    fn gates_line_stays_silent_without_a_live_wait() {
+        let mut record = JMap::new();
+        record.insert("phase".into(), json!("idle"));
+        assert_eq!(gates_line(&record), "none pending (no active work)");
+    }
+
+    /// End to end: `bee`'s actual session-start text — the whole point of
+    /// D1's "read surface" leg — names WHAT the run is waiting on, not
+    /// merely that it is waiting.
+    #[test]
+    fn session_preamble_names_a_live_wait_at_session_start() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!("{{\"bee_version\":\"{BEE_VERSION}\"}}"));
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"shaping","waiting_on":{"kind":"question","subject":"D1 or D2?","asked_at":"2026-08-14T00:00:00.000Z","session":"s-1"}}"#,
+        );
+        let preamble = build_session_preamble(root, None, None);
+        assert!(
+            preamble.contains("waiting on human — question: D1 or D2?"),
+            "{preamble}"
+        );
+    }
+
+    /// No live wait: the preamble's Gates line stays exactly as it was
+    /// before this feature — no phantom line, no phantom suffix.
+    #[test]
+    fn session_preamble_stays_silent_without_a_live_wait() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!("{{\"bee_version\":\"{BEE_VERSION}\"}}"));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let preamble = build_session_preamble(root, None, None);
+        assert!(!preamble.contains("waiting on human"), "{preamble}");
+    }
 }

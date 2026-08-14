@@ -319,6 +319,19 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     if opt_truthy(status.get("handoff")) {
         blockers.push(json!("pending handoff — surface it to the user and wait"));
     }
+    // D1 (awaiting-human): a live wait is a BLOCKER here — the whole point
+    // of `bee orient` is that a reader routing work can tell the run is
+    // stopped on a person rather than running. Named after the handoff
+    // blocker just above (a handoff is also a wait on the human, just a
+    // different shape of one) and before the report-only lines below.
+    if opt_truthy(status.get("waiting_on")) {
+        let w = status.get("waiting_on").unwrap();
+        blockers.push(json!(format!(
+            "awaiting human — {}: {}",
+            tpl(vget(w, "kind")),
+            tpl(vget(w, "subject")),
+        )));
+    }
     let sd = status.get("scribing_debt");
     if opt_truthy(sd) && vget(sd.unwrap(), "count").and_then(|v| v.as_f64()).unwrap_or(0.0) > 0.0 {
         blockers.push(json!(format!(
@@ -385,6 +398,11 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
             "gate_bypass_level".into(),
             status.get("gate_bypass_level").cloned().unwrap_or(Value::Null),
         );
+        // D1 (awaiting-human): the structured mark beside the text blocker
+        // above — a reader that wants the subject/kind without parsing the
+        // blocker string reads it here, same additive shape `status` itself
+        // carries it in.
+        where_.insert("waiting_on".into(), status.get("waiting_on").cloned().unwrap_or(Value::Null));
         packet.insert("where".into(), Value::Object(where_));
     }
     {

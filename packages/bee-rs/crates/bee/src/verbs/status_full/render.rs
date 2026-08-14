@@ -187,6 +187,18 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
         "Handoff: {}",
         if opt_truthy(s("handoff")) { "PRESENT — surface it and WAIT" } else { "none" }
     ));
+    // D1 (awaiting-human): the live wait mark, one line naming WHAT the run
+    // is waiting on (a gate name or the question asked) — silent when there
+    // is none, matching Handoff's own "PRESENT | absent" shape just above.
+    if opt_truthy(s("waiting_on")) {
+        let w = s("waiting_on").unwrap();
+        lines.push(format!(
+            "Waiting on human: {} — {} (asked {})",
+            tpl(vget(w, "kind")),
+            tpl(vget(w, "subject")),
+            tpl(vget(w, "asked_at")),
+        ));
+    }
     {
         let cells = s("cells").cloned().unwrap_or(Value::Null);
         let archived = vget(&cells, "archived").cloned().unwrap_or(Value::Null);

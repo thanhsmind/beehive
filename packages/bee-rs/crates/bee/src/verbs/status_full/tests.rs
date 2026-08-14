@@ -3654,3 +3654,140 @@ use crate::version::BEE_VERSION;
         // Still exactly the five names — no sixth cell status was invented.
         assert_eq!(cells.as_object().unwrap().len(), 6, "open/claimed/capped/blocked/archived/archivable");
     }
+
+    // ── ah-3 (awaiting-human): every reader names WHAT the run is waiting
+    //    on, not merely that it is waiting ────────────────────────────────
+
+    /// The literal `waiting_on` shape ah-1 builds (`build_waiting_on`):
+    /// `kind`/`subject`/`asked_at`/`session`. `bee status --json` reads it
+    /// straight off the projected state.json field — never re-derived —
+    /// matching `run_state`'s own discipline just above.
+    #[test]
+    fn bee_status_json_exposes_the_live_wait_beside_run_state() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"shaping","feature":"f1","mode":"standard","run_state":"awaiting-approval","waiting_on":{"kind":"question","subject":"which lane?","asked_at":"2026-08-14T00:00:00.000Z","session":"s-1"}}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let w = status.get("waiting_on").expect("waiting_on key");
+        assert_eq!(vget(w, "kind"), Some(&json!("question")));
+        assert_eq!(vget(w, "subject"), Some(&json!("which lane?")));
+        assert_eq!(vget(w, "session"), Some(&json!("s-1")));
+    }
+
+    /// No live wait — a fresh/idle repo, or a mark already cleared (ah-2):
+    /// the key is still present — null, never absent — matching how
+    /// `run_state` itself falls back.
+    #[test]
+    fn bee_status_json_waiting_on_is_null_without_a_live_wait() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        assert_eq!(status.get("waiting_on"), Some(&Value::Null));
+    }
+
+    /// `render_status_text` names the subject on a live wait, and stays
+    /// silent — no "Waiting on human" line at all — when there is none,
+    /// matching the Handoff line's own PRESENT/absent shape just above it.
+    #[test]
+    fn status_text_names_the_live_wait_and_stays_silent_without_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"shaping","waiting_on":{"kind":"gate","subject":"shape","asked_at":"2026-08-14T00:00:00.000Z","session":"s-1"}}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let text = render_status_text(&status);
+        assert!(
+            text.contains("Waiting on human: gate — shape (asked 2026-08-14T00:00:00.000Z)"),
+            "{text}"
+        );
+
+        let tmp2 = tempfile::tempdir().unwrap();
+        let root2 = tmp2.path();
+        write(root2, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root2, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx2 = ctx_for(root2);
+        let status2 = build_status(&mut ctx2, false).unwrap();
+        assert!(!render_status_text(&status2).contains("Waiting on human"));
+    }
+
+    /// D1's whole point for `bee orient`: a live wait is a BLOCKER, not a
+    /// report-only line — a routing reader must be able to tell the run is
+    /// stopped on a person rather than running, and see WHAT it is waiting
+    /// on without a second lookup.
+    #[test]
+    fn orient_reports_a_live_wait_as_a_blocker_naming_the_subject() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"shaping","waiting_on":{"kind":"question","subject":"D1 or D2?","asked_at":"2026-08-14T00:00:00.000Z","session":"s-1"}}"#,
+        );
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        let work = packet.get("work").unwrap();
+        let blockers = vget(work, "blockers").and_then(Value::as_array).unwrap();
+        assert!(
+            blockers.iter().any(|b| b.as_str().unwrap_or("").contains("D1 or D2?")),
+            "{blockers:?}"
+        );
+        // The structured mark also rides packet.where.waiting_on, additive
+        // beside the text blocker above.
+        let where_ = packet.get("where").unwrap();
+        assert_eq!(vget(where_, "waiting_on").and_then(|w| vget(w, "subject")), Some(&json!("D1 or D2?")));
+    }
+
+    /// No live wait: `bee orient`'s blocker list stays exactly what it was
+    /// before this feature — no phantom line, no phantom `where.waiting_on`
+    /// object (null, matching the JSON contract's own null-not-absent
+    /// discipline).
+    #[test]
+    fn orient_blockers_stay_empty_without_a_live_wait() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        let work = packet.get("work").unwrap();
+        assert_eq!(vget(work, "blockers"), Some(&json!([])));
+        let where_ = packet.get("where").unwrap();
+        assert_eq!(vget(where_, "waiting_on"), Some(&Value::Null));
+    }
+
+    /// The published-contract test (`bee_status_json_stays_additive_only_
+    /// over_the_published_contract`) already pins every OLD key's kind.
+    /// This pins the two THIS feature adds: `run_state` (trun-7, already
+    /// shipped — still a string/null, never restructured) and the new
+    /// `waiting_on` (null or an object), over the exact same fixture, so a
+    /// future change to either is caught the same way.
+    #[test]
+    fn bee_status_json_run_state_and_waiting_on_keep_their_additive_shape() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f1","mode":"standard","approved_gates":{"context":true,"shape":true,"execution":true}}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let run_state = status.get("run_state").expect("pre-existing key run_state is gone");
+        assert!(run_state.is_string() || run_state.is_null(), "run_state changed kind: {run_state:?}");
+        let waiting_on = status.get("waiting_on").expect("new key waiting_on is gone");
+        assert!(waiting_on.is_object() || waiting_on.is_null(), "waiting_on changed kind: {waiting_on:?}");
+    }
