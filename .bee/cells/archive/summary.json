@@ -448,5 +448,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-14T02:35:42.511Z"
+  },
+  "full-failure-evidence": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-14T04:16:24.592Z"
   }
 }
