@@ -102,3 +102,54 @@ comparison. When its fix command is blocked by the worktree-first guard
 the guard doing its job — name the blocker rather than working around it
 (e.g. `.bee/config.json`'s `worktree_first: "off"`); the rebuild waits for
 a worktree or for the feature to close.
+
+---
+
+# Learning: A shared helper extracted to reconcile N copies of a scan is only as complete as the census of those copies — already covered, extending the existing pattern
+
+**Category:** pattern (recurrence of `pattern-20260807-fix-the-fan-out-not-the-reported-cell`, not a new record — see that file for the full rule)
+**Severity:** critical
+**Tags:** [refactor, census, shared-helper, judge-review, scribing-debt]
+**Applicable-when:** consolidating N scattered copies of a check or scan
+behind one shared function or rule.
+
+## What Happened
+
+trun-9 (traceable-runs D5) extracted `deferred_debt_cleared` in
+`state_group/ledger.rs` to reconcile the scribing-debt scan against the new
+deferred-work queue. The scan itself had six independent copies across four
+files (`drivers/close.rs`; `hooks/session_preamble/store.rs` ×2;
+`hooks/chain_nudge.rs`; `verbs/status_full/cells.rs` ×2). The cell's first
+cap wired two of the six. A first judge round found two more (the session
+preamble and chain-nudge copies) — the debt cleared at `bee close`'s door
+but stayed loud in the session preamble and mid-session nudge. A second
+judge round, after those two were fixed, found the last two
+(`status_full/cells.rs`) — the exact copies `bee status --json` and
+`bee orient`'s routing blocker read, so the debt cleared everywhere except
+the one surface agents read on every routing turn. The cell's own doc
+comment claimed "three" scans after round one and "five" after round two;
+both counts were wrong, caught only by a fresh `rg` census in round three,
+not by re-reading the comment.
+
+## Root Cause
+
+Same root cause `pattern-20260807-fix-the-fan-out-not-the-reported-cell`
+already names: a rule (or, here, a shared helper) is only as good as the
+grid it's checked against, and a fix scoped to the callers a first pass
+happened to find is a scheduled recurrence, not a fix. This instance adds
+one detail: the miscount survived inside the helper's *own doc comment*,
+which asserted a specific total ("three", later "five") that read as
+authoritative and was wrong both times — a stated count is not evidence of
+a complete census, only a grep across the codebase for the shape being
+replaced is.
+
+## Recommendation
+
+Not a new rule — apply `pattern-20260807-fix-the-fan-out-not-the-reported-cell`'s
+existing rule ("name the grid before fixing; enumerate from source, not a
+hand-written list") with this addition: when the grid is "every existing
+copy of a scan/check", the source to enumerate from is a structural search
+for the shape the copies share (here: every `capped_at`-vs-threshold
+comparison in the crate), never a hand-maintained doc comment stating the
+count — a comment claiming "N copies, all reconciled" is itself a claim to
+verify, not evidence the census is complete.

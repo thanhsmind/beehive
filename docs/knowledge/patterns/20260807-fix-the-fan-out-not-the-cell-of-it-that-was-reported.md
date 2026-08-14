@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [advisor-protocol, hook-runtime]
   decisions: ["4439bd7e (work-visibility D2): every dispatch description is one work-language intent sentence, 2026-07-24", "dispatch-label-chokepoint Gate 2: close the grid and add the device that makes an uncovered combination unshippable, 2026-08-07"]
-  sources: ["bee 2.2.6: kind==cell on the claude Agent transport was fixed and a written rationale shipped for leaving the rest", "audit 2026-08-07: four gaps — codex task_name was the bare cell id (prepare.rs:687), claude gather/reviewer/advisor rendered kind-plus-model, cli-exec carried no label field, and the guard read the label and only logged it (model_guard.rs:732)", "cells dlc-1 and dlc-2: full suite 1350 passed, 3 ignored"]
+  sources: ["bee 2.2.6: kind==cell on the claude Agent transport was fixed and a written rationale shipped for leaving the rest", "audit 2026-08-07: four gaps — codex task_name was the bare cell id (prepare.rs:687), claude gather/reviewer/advisor rendered kind-plus-model, cli-exec carried no label field, and the guard read the label and only logged it (model_guard.rs:732)", "cells dlc-1 and dlc-2: full suite 1350 passed, 3 ignored", "traceable-runs cell trun-9 (trace .bee/cells/trun-9.json, 2026-08-14, three cap rounds): a shared reconciliation helper (deferred_debt_cleared) was extracted for the scribing-debt scan, but the first cap wired only two of six call sites and each of two rework rounds found more the prior round's own count had missed — see docs/knowledge/areas/workflow-state/deferred-work-queue.md"]
   polarity: pitfall
   critical: true
   evidence: exercised
@@ -32,6 +32,25 @@ that read plausibly and was wrong, because it assumed a caller could supply what
 the neighbouring squares needed when no mechanism existed for the caller to
 supply anything. The screenshot that reopened it came from the square nobody had
 touched.
+
+A second, independent occurrence (traceable-runs trun-9, 2026-08-14) shows the
+same shape from the other direction: not a rule with no shared implementation
+yet, but a shared implementation extracted too late to carry every existing
+caller with it. Six copies of the same scribing-debt scan existed across four
+files before the cell; the extracted helper (`deferred_debt_cleared`) was
+correct the moment it was written, but the cell's first cap wired only two of
+the six call sites into it. Two rework rounds followed, each triggered by a
+judge that re-counted the callers from scratch rather than trusting the
+cell's own tally — and each found more than the previous round's count had
+claimed was the total. **A rule extracted into one shared helper is only as
+complete as the census of its callers**, and that census is the part most
+likely to be under-counted, because "found every copy" cannot be verified by
+reading the helper — only by searching the codebase for the shape the helper
+replaces (here, every `capped_at` comparison against a debt threshold) and
+checking each hit off by hand. A doc comment that states the count ("three
+scans", "five scans") is itself evidence worth re-deriving, not trusting —
+this cell's own reconciliation comment was wrong twice before a fresh `rg`
+census, not a re-read of the comment, caught the true total of six.
 
 The tell, in hindsight: the fix was written **inside** a branch of the very
 match that fans out. Anything computed inside one arm is, by construction,
