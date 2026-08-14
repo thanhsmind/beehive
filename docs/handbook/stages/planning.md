@@ -23,6 +23,13 @@ deeply.
   <slug>`, session opened there. `docs` and a solo `tiny` stay in main.
 - `plan.md` (standard/high-risk — **frozen at Gate 2**); opt-in for small; none for
   tiny/spike (the cell is the micro-plan).
+- `implement-plan.md`, when the lane earns one — the single document the human and
+  the agent review at this gate. It is rendered by the **Brief** move of
+  `bee-shaping`, not by planning itself: full template for standard/high-risk, a
+  ~15-line mini-brief for small, none below. Brief *projects* from `plan.md`,
+  `CONTEXT.md`, and the cells; feedback lands on those truth artifacts first and the
+  brief re-renders — never the brief alone. See
+  [exploring](exploring.md), which owns the move.
 - Optional `discovery.md` / `approach.md`; a logged scoping-synthesis decision
   (small lane).
 - After approval only: current-slice [cells](../register.md#beecellsfeature-njson),

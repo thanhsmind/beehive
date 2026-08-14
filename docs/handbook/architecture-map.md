@@ -43,7 +43,7 @@ flowchart TB
         direction TB
         subgraph MACHINE["Machine layer — flow, state, gates, proof"]
             RS["packages/bee-rs/ — one Rust binary<br/>verbs · hooks · onboard · devtools"]
-            HOOKS["hooks catalog — 9 events, all fail-open:<br/>session-init · prompt-context · write-guard<br/>model-guard · state-sync · chain-nudge<br/>session-close · tools-logger · codex-subagent-audit"]
+            HOOKS["hooks catalog — 9 hook names on 8 events, all fail-open:<br/>session-init · prompt-context · write-guard<br/>model-guard · state-sync · chain-nudge<br/>session-close · tools-logger · codex-subagent-audit"]
         end
         subgraph CRAFT["Craft layer — how to work well"]
             SKILLS["skills/ — 9 SKILL.md instruction sets<br/>bee-hive routes; the rest are stages + side steps"]
@@ -238,11 +238,14 @@ and says so out loud.
 
 ```mermaid
 flowchart TB
-    subgraph EVENTS["runtime events"]
-        E1["session starts / clears"]
-        E2["user submits a prompt"]
-        E3["agent is about to run a tool"]
-        E4["session ends"]
+    subgraph EVENTS["runtime events — 8 in the catalog"]
+        E1["SessionStart — session starts / clears"]
+        E2["UserPromptSubmit — user submits a prompt"]
+        E3["PreToolUse — agent is about to run a tool"]
+        E5["PostToolUse — a tool has just run"]
+        E6["SubagentStart / SubagentStop — a worker begins or ends"]
+        E7["PreCompact — context is about to be compacted"]
+        E4["Stop — session ends"]
     end
     E1 --> H1["session-init — inject the preamble:<br/>phase, gates, route, handoff,<br/>waiting-on-human, critical patterns,<br/>knowledge invitation"]
     E2 --> H2["prompt-context — one-line state echo,<br/>and CLEARS the waiting-on-human mark<br/>(best-effort; never fails the turn)"]
@@ -253,6 +256,11 @@ flowchart TB
     H4 -->|"dispatch without a tier"| REPAIR["repair or refuse the dispatch"]
     E3 --> H5{"git guard (in write-guard)"}
     H5 -->|"git add with live sibling workers"| PS["refuse — demand path-scoped commit<br/>(shared index protection)"]
+    E5 --> H7["state-sync — refresh the state.json projection<br/>from the workflow record (try-once, never partial)"]
+    E5 --> H8["tools-logger — append the tool call to the log"]
+    E6 --> H9["chain-nudge — nudge the next stage<br/>when a worker leaves the chain mid-flight"]
+    E6 --> H10["codex-subagent-audit — record what a<br/>native Codex subagent did"]
+    E7 --> H11["compaction — build the capsule the session<br/>reads after a compact (names a live wait)"]
     E4 --> H6["session-close — warn on claimed cells,<br/>unreleased reservations, dirty state"]
     DENY -.-> NOTE["a deny is a teaching moment:<br/>follow the named remedy,<br/>never work around the guard"]
 ```

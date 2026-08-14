@@ -27,9 +27,12 @@ None directly — it relies on Gate 2's execution component
 
 ## State touched
 [`cells schedule/claim/claim-next/show/tier/judge/judge-record`](../register.md#beecellsfeature-njson),
-[`bee dispatch prepare --claim`](../register.md#beeclaimscell-idjson) (claims the
-cell **and** reserves its files under the worker nickname in one verb — on a
-reservation conflict the claim is unwound and nothing is left half-done),
+`bee dispatch wave --runtime <rt> --feature <f>` — the normal batch verb: it claims,
+reserves, and builds the payloads for a whole ready wave in one call.
+[`bee dispatch prepare --claim`](../register.md#beeclaimscell-idjson) is the
+single-cell fallback for a named worker (claims the cell **and** reserves its files
+under the worker nickname in one verb — on a reservation conflict the claim is
+unwound and nothing is left half-done),
 [`reservations reserve/release/sweep/list`](../register.md#beereservationsjson)
 (backed by the sharded lease store), `bee close`,
 [`HANDOFF.json`](../register.md#beehandoffjson) via the per-workflow mailbox.
@@ -51,6 +54,11 @@ reservation conflict the claim is unwound and nothing is left half-done),
 - **Goal-check every `[DONE]` yourself** — a worker's word is never the evidence.
   `bee cells judge` for undeclared-file hits; at standard/high-risk, one semantic
   judge per slice over its `behavior_change` cells.
+- **Judging is a door, not a courtesy.** Every `behavior_change` cell owes a
+  `bee cells judge-record` verdict, and `bee close` refuses on `judge-debt` until
+  each has one. A `NEEDS_REVISION` verdict reopens the cell it names — capped goes
+  back to open — and the cap refuses until a fresh independent verdict clears it.
+  Neither the worker nor the orchestrator issues its own PASS.
 - **`[BLOCKED]` has a rescue ladder**: re-dispatch with the missing context → next
   model tier up (the ceiling is this session, so the top rung hands it to you) →
   surface to the user with the worker's diagnosis. If it invalidates the plan,

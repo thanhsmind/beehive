@@ -20,18 +20,22 @@ description: Use when creating a new bee skill or editing an existing one
 ## Dependency metadata style
 
 Write `metadata.dependencies` as a mapping keyed by dependency id — never a
-YAML array of objects (generic evaluators reject that shape). bee skills
-are usually dependency-free (Node 18+, vendored `.bee/bin/` helpers):
+YAML array of objects (generic evaluators reject that shape). A bee skill's
+one real dependency is the vendored binary; no Node runtime is involved:
 
 ```yaml
 metadata:
   dependencies:
-    nodejs-runtime:
+    bee-cli:
       kind: command
-      command: node
-      missing_effect: degraded
-      reason: Reads bee records via the vendored .bee/bin helpers.
+      command: .bee/bin/bee
+      missing_effect: unavailable
+      reason: Every bee record is read and written through the vendored binary.
 ```
+
+`missing_effect: unavailable` is right here, not `degraded` — without the binary
+the skill cannot run at all. Reserve `degraded` for a dependency whose absence
+costs a capability but still leaves the skill usable.
 
 ## Persuasion principles
 

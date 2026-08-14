@@ -96,9 +96,10 @@ is captured the moment it settles, in every lane.
 Gate 2 approves shape and execution together in one call (`bee gate --merge`),
 folding the old standalone execution gate into it. They are never self-approved — except
 when the opt-in `gate_bypass` switch is deliberately set by the human (levels:
-`normal` / `full` / `total`). Bypass changes whether a run **stops**, never whether
-its brief and approval record **exist**: an auto-approved gate is written with
-`actor: auto`, the level in force, and the reason it did not stop.
+`off` is the default; the bypass levels are `normal`, `full`, `total`). Bypass
+changes whether a run **stops**, never whether its brief and approval record
+**exist**: an auto-approved gate is written with `actor: auto`, the level in
+force, and the reason it did not stop.
 
 **Knowledge over history.** The state layer an agent reads *first* is the knowledge
 bundle (`docs/knowledge/`) when the repo has one, or `docs/specs/` otherwise.

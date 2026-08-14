@@ -113,6 +113,8 @@ Per-repo configuration.
 | `cells_archive_on_close` | default true — a capped cell is relocated to `.bee/cells/archive/<feature>/` at close |
 | `ship_visibility` | how much of the ship line a session prints |
 | `dogfood_repos` | the foreign repos `bee feedback` collects a digest from |
+| `worktree_cleanup_on_merge` | boolean, absent means on — whether `worktree merge` tears down the merged worktree after a clean merge; `false` leaves it in place |
+| `doc_viewer` | `{base_url, project}` — an opt-in URL prefix. When set, the session preamble and the compaction capsule give doc links as this URL plus the repo-relative path, instead of the bare path |
 
 Read by hive (bypass level), planning (test scoping), swarming (model tiers),
 `bee test` / `bee cells finish` / `bee close` (`commands.test`), and
@@ -149,7 +151,7 @@ One unit of executable work — the atom the swarm dispatches. One file per cell
 | `deps` | cell ids that must cap first |
 | `tier` | dispatch tier (`generation`, …) |
 | `status` | `open` · `claimed` · `capped` · `blocked` · `dropped` |
-| `trace` | populated on finish: `{worker, outcome, files_changed[], deviations[], friction, behavior_change, capped_at, warnings[], tests, results, ran_at, attempts[], budget_resets[], claim_session, claimed_at, verify_passed, verify_output, verification_evidence}` |
+| `trace` | populated on finish: `{worker, outcome, files_changed[], deviations[], friction, behavior_change, capped_at, warnings[], tests, results, ran_at, attempts[], budget_resets[], claim_session, claimed_at, verify_passed, verify_output, verification_evidence, report}` — `report` is the worker's structured Result, written by `cells finish --report` |
 
 `trace.tests` is `"green"` when the declared suite ran and passed — with
 `trace.results` pointing at `.bee/logs/test-results.json` and `trace.ran_at`
@@ -188,8 +190,9 @@ it started from.
 Self-derived session identity: `{id, started_at, last_heartbeat, transcript_path,
 workspace_id}`. Heartbeats are throttled and self-renewing; this is the join key
 that makes "active workers" derivable, and the input `bee status`'s recovery block
-reads for crash candidates (the `recovery` verbs themselves are
-[not built](#declared-but-not-built)). Managed by `state session bind/list/unbind`.
+reads for crash candidates. `bee recovery scan` is real and implemented — it
+releases every crashed-session claim on invocation; only `bee recovery window`
+is [not built](#declared-but-not-built). Managed by `state session bind/list/unbind`.
 
 ### `.bee/locks/`
 The cross-process coordination-store lock: holder body, stale takeover, and the
@@ -259,7 +262,7 @@ Shape: `{kind:'stub', id, at, outcome, dids[], area, files[], lane}`. Written vi
 lane never queues — it merges now.
 
 ### `.bee/expertise/`
-The vendored craft layer — 9 craft guides and 6 domain guides plus `INDEX.md`,
+The vendored craft layer — 10 craft guides and 6 domain guides plus `INDEX.md`,
 copied from the source `expertise/` by onboarding. **Read-only from the agent's
 side**: skills reference `.bee/expertise/<guide>.md`, and a change belongs in the
 source tree, not the vendored render.
@@ -305,6 +308,7 @@ the next action in plain language.
 | `bee gate` | Record a gate approval (`--merge` for shape+execution together). `--actor <user\|auto>`, `--bypass-level <off\|normal\|full\|total>`, `--reason "<text>"` — an `--actor auto` call refuses without both a bypass level and a reason |
 | `bee cells add` · `cells ready` · `cells show` | Persist shaped work · what is claimable · one cell in full |
 | `bee dispatch prepare` | Build a worker dispatch payload (`--claim` claims + reserves in the same verb) |
+| `bee dispatch wave` | Claim, reserve, and build payloads for a whole ready wave in one call — the normal batch verb; `dispatch prepare` is the single-cell fallback |
 | `bee finish` | Worker completion: run the declared tests, cap on green, release reservations |
 | `bee reservations reserve` | Claim write scope before editing |
 | `bee decisions log` · `decisions active` | Record an agreement · what is in force |
@@ -342,10 +346,10 @@ top-level spellings still work. `bee --help --all [--json]` lists the full regis
 | `capture` | add · list · flush · count |
 | `reviews` | create · list · show · record · candidate.add · candidates · status |
 | `feedback` | digest · count · collect · rank |
-| `knowledge` | check · index · list · context · promote |
-| `worktree` | new · merge · list · register · unregister |
+| `knowledge` | check · index · list · context · promote · search · bootstrap · report |
+| `worktree` | new · merge · list · register · unregister · prune |
 | `intent` | set · show · advance · clear |
-| *other* | `dispatch prepare` · `tmp sweep` · `recovery scan` · `recovery window` · `config.*` · `perf.*` · `herding.*` · `doctor attest` |
+| *other* | `dispatch prepare` · `dispatch wave` · `timings report` · `tmp sweep` · `recovery scan` · `recovery window` · `config.*` · `perf.*` · `herding.*` · `doctor attest` |
 
 ### Maintenance surfaces (outside the registry)
 
@@ -360,6 +364,10 @@ These probe **before** the verb tree, so nothing in it can shadow them:
 - `bee dev render-skill-trees | render-prompt | render-hook-manifests | statusline |
   release-manifest | plugin-distribution | install-support` — the maintainer surface:
   the first three regenerate payload assets, the last two build what ships.
+- `bee dev regen` — chains the three-step regen in order (render-skill-trees →
+  `onboard --repo-root . --apply` → `release-manifest --write`), stopping at the
+  first red with that step named. Run it after any doctrine or skill edit instead
+  of sequencing the three steps by hand.
 - `bee herding classify-lane | interlock | command-template | …` — the cockpit's
   executable helpers.
 - `bee rs-info` — diagnostic: runtime, version, and the ported-shape list.
@@ -395,6 +403,7 @@ reason, never a silent skip — it is written onto the record it excuses.
 | `cells finish` (cap) | the cell changed files and no commit in the last 50 commits carries the trailer `cell: <id>` — one commit per cell, checked, not asserted | `--commit-pending "<reason>"`, stored on `trace.commit_pending` |
 | `cells tier` | assigning `ceiling` would put more than 40% of the feature's tiered cells on the ceiling tier (exactly 40% passes) | `--reason "<text>"`, stored on `trace.tier_reason` |
 | `bee close` | the feature has `behavior_change` cells capped since the last scribing stamp and nothing captured them | run `bee-capturing`, or log a `capture-deferral` decision naming the feature |
+| `bee close` (judge-debt, standard/high-risk lanes only) | a `behavior_change` cell capped since the judge-debt door shipped carries no `cells judge-record` verdict | run `bee cells judge` then `bee cells judge-record` for each named cell, or log a `judge-deferral` decision naming the feature |
 | `bee route --set` | a re-lane would demote a `high-risk` feature, demote while a hard-gate flag is present, or demote a second time (`demoted_at` already stamped) | **none** — all three are absolute |
 | `state start-feature` | the current phase is neither `idle` nor the terminal alias `compounding-complete` — a prior feature is still in flight | none — finish it, or drop its remaining cells |
 | `state handoff adopt` | the session started from `resume` or `compact`, not a fresh-session boundary; or the record's `kind` is `pause` | **none** — present the handoff and wait for the user. A session with no recorded start source warns and proceeds |
@@ -403,7 +412,7 @@ reason, never a silent skip — it is written onto the record it excuses.
 | model-guard, `Agent`/`Task` | the dispatch declares no tier and names no pinned subagent type. A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` now *derives* its tier instead of refusing | declare `[bee-tier: <tier>]` or a `model` param. A derived `cli` tier still refuses — an external process is not dispatchable as an agent |
 | `worktree merge`, dirty main | before this row's own refusal can fire, dirt confined to `.bee/` (plus `docs/history/<the-merging-feature>/` when the feature is known) is auto-committed first, warn-never-block; dirt found ANYWHERE ELSE still refuses, named by path | `worktree_merge_commit_bookkeeping: false` in config turns the auto-commit off — then a dirty main refuses unconditionally, exactly as before. Mirrors `bee close`'s own bookkeeping auto-commit |
 
-Two notes on doors that are not refusals:
+Three notes on doors that are not refusals:
 
 - **`bee orient`'s capture queue escalates.** Below 10 pending stubs *and* under 7
   days old, it is an offer line; at or past either threshold it moves into
@@ -412,6 +421,10 @@ Two notes on doors that are not refusals:
   refuses to run from a granted linked worktree and names the main checkout. `finish`
   resolves its cell and claim at the main store while running the declared tests in
   the calling worktree's own directory, so a worker caps where it worked.
+- **A `NEEDS_REVISION` verdict reopens its cell.** `cells judge-record` recording
+  `NEEDS_REVISION` after a cap does not just log a finding — it moves the cell
+  capped → open, clears its claim and verify evidence, and sends it back for rework.
+  A reopened cell cannot re-cap until a fresh independent verdict clears it.
 
 ### Declared but not built
 

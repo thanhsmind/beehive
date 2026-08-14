@@ -92,8 +92,9 @@ A gate is a record, not a boolean: approving one writes `state`
 (`pending` / `approved` / `rejected`), `actor` (`user` / `auto`), a timestamp, a
 reason, and the bypass level in force. A new feature starts with every gate at
 `pending`. `gate_bypass` (in [config.json](register.md#beeconfigjson)) can
-auto-approve gates by level (`normal` / `full` / `total`) — it decides whether the
-run **stops**, never whether the brief and approval record **exist**.
+auto-approve gates by level (`off` is the default; the levels are `normal`,
+`full`, `total`) — it decides whether the run **stops**, never whether the brief
+and approval record **exist**.
 
 ## Lanes (how much of the chain runs)
 
