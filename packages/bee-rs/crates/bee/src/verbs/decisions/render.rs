@@ -92,16 +92,6 @@ pub(crate) fn lc_primary_key(c: char) -> (u8, u32) {
     }
 }
 
-/// The alphabet the collation model above is CALIBRATED on: ASCII letters,
-/// digits, space, and the three anchored punctuation marks. A group key with
-/// anything else (accents, CJK, other punctuation, exotic whitespace) leaves
-/// the proven region — the whole verb delegates before any output rather
-/// than guess at an ICU weight this port never measured.
-pub(crate) fn collation_safe(key: &str) -> bool {
-    key.chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '_' | '-' | '.'))
-}
-
 // ─── decisions.mjs writeTextAtomic ─────────────────────────────────────────
 
 pub(crate) fn write_text_atomic(file: &Path, text: &str) -> std::io::Result<()> {
@@ -176,8 +166,7 @@ pub(crate) fn split_crlf_first(text: &str) -> &str {
     }
 }
 
-/// buildDecisionIndexBody (lib/decisions.mjs). Returns None when a group key
-/// leaves the calibrated collation alphabet (delegate).
+/// buildDecisionIndexBody (lib/decisions.mjs).
 pub(crate) fn build_decision_index_body(root: &Path, all: bool) -> Ex<Option<(String, usize)>> {
     let decisions = active_decisions(root, all)?;
     // Insertion-ordered Map<scope, events[]>.
@@ -193,9 +182,6 @@ pub(crate) fn build_decision_index_body(root: &Path, all: bool) -> Ex<Option<(St
         }
     }
     let mut scope_names: Vec<String> = by_scope.iter().map(|(k, _)| k.clone()).collect();
-    if !scope_names.iter().all(|k| collation_safe(k)) {
-        return Ok(None);
-    }
     scope_names.sort_by(|a, b| locale_cmp(a, b)); // JS sort is stable (ES2019+)
 
     let mut blocks: Vec<String> = Vec::new();
@@ -227,9 +213,6 @@ pub(crate) fn build_decision_index_body(root: &Path, all: bool) -> Ex<Option<(St
             }
         }
         let mut tag_names: Vec<String> = by_tag.iter().map(|(k, _)| k.clone()).collect();
-        if !tag_names.iter().all(|k| collation_safe(k)) {
-            return Ok(None);
-        }
         tag_names.sort_by(|a, b| locale_cmp(a, b));
         for tag in &tag_names {
             scope_lines.push(String::new());
@@ -287,7 +270,10 @@ pub(crate) fn run_render(flags: Flags, use_json: bool, t0: Instant) -> Option<Ex
 /// text), so it is reproduced natively rather than delegated.
 pub(crate) fn do_render(root: &Path, all: bool, check: bool) -> R2<Out> {
     let Some((content, count)) = decision_index_content(root, all)? else {
-        return Err(Err2::Ex); // collation outside the calibrated alphabet
+        // No longer reachable via a collation guard — retire-collation-guard D1
+        // removed it. Still reachable through active_decisions/build_tag_overlay
+        // on a null event or an inconsistent date comparator, which D3 left open.
+        return Err(Err2::Ex);
     };
     let file = decision_index_path(root);
     let rel = path_relative(root, &file);

@@ -792,11 +792,6 @@ use std::time::Instant;
             scopes,
             vec!["a b", "a_b", "a-b", "a.b", "x09", "x10", "x9", "zed", "Zed"]
         );
-        // Outside the calibrated alphabet the verb delegates instead.
-        assert!(collation_safe("bee harness releases"));
-        assert!(collation_safe("dp-1"));
-        assert!(!collation_safe("café"));
-        assert!(!collation_safe("a/b"));
     }
 
     #[test]
@@ -862,13 +857,20 @@ use std::time::Instant;
         assert_eq!(count, 0);
         assert!(body.ends_with("# Decision Index\n\nNo active decisions.\n"));
 
-        // A scope outside the calibrated alphabet delegates.
+        // A scope outside the old calibrated alphabet renders too — the
+        // guard that used to delegate on it is retired; `lc_primary_key`
+        // already sorts letters, accented or not, by the alphabetic arm.
         let exotic = fixture_root();
         write_events(
             exotic.path(),
             &[r#"{"id":"e1","type":"decide","date":"2024-01-01T00:00:00.000Z","decision":"x","scope":"café"}"#],
         );
-        assert!(decision_index_content(exotic.path(), false).ok().unwrap().is_none());
+        let (exotic_content, exotic_count) =
+            decision_index_content(exotic.path(), false).ok().unwrap().unwrap();
+        assert_eq!(exotic_count, 1);
+        assert!(exotic_content.contains("## café\n"));
+        assert!(exotic_content.contains("### untagged\n"));
+        assert!(exotic_content.contains("- e1 · 2024-01-01 · x\n"));
     }
 
     #[test]

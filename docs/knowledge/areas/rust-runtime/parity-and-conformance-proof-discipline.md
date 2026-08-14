@@ -53,6 +53,12 @@ A port is only as good as the instrument that says it is faithful. This is the h
 - **R6** — A defect fixed in the port ships with red-first evidence: the failure recorded before the fix, and green after.
 - **R7** — When a proof cannot reach a budget or a zero-diff result, the run reports the measurement and stops. Widening a tolerance or shrinking a fixture to produce green is refused (D5).
 
+- **R8** — A parity guard outlives its usefulness the moment the reference implementation is removed, and from then on it is pure cost. Such a guard refuses work whose ordering could not be proven identical to the reference; with the reference gone there is nothing left to differ from, the port's own behavior IS the contract, and every refusal the guard still issues is a dead end rather than a fallback. Retiring one is therefore a deletion, not a migration (retire-collation-guard D1/D2, 2026-08-14).
+
+- **R9** — A parity guard must be no narrower than the model it guards. When the guard admits a smaller alphabet than the comparator it protects, it refuses inputs the comparator was deliberately built to handle — and because the refusal travels as a delegate exit rather than a stated error, the mismatch is invisible until a real value trips it. Check the guard against its model, not against intuition about what looks exotic (retire-collation-guard, 2026-08-14).
+
+- **R10** — A test that asserts a guard DISABLES a command is asserting the defect once the guard is retired. Such assertions are inverted, never deleted: the new case asserts the command succeeds AND produces a specific stable order. A test reduced to "it does not fail" has traded coverage for green (retire-collation-guard, cell rcg-1, 2026-08-14).
+
 ## Edge Cases Settled
 
 - **A meta-test guards the instrument, not the code.** Because parsed-value equality is order-blind under the serializer configuration this workspace uses, a permanent test asserts both halves — that parsed equality really is order-blind here, and that the byte comparator really does flag the same pair — and says so loudly if the premise ever changes.
@@ -61,6 +67,7 @@ A port is only as good as the instrument that says it is faithful. This is the h
 
 ## Open Gaps
 
+- **Delegate exits still read as argument errors.** A handler that declines by returning "not handled" — the shape that used to hand work to the reference implementation — now reaches a dispatcher with nowhere to send it, and the user is told the argument shape was wrong. Three commands have been found this way and one was repaired at the handler; the dispatcher message itself is unchanged, so the next one will present the same way (filed 2026-08-14).
 - One rendering path has no oracle because the reference derives it from its own working directory; its equality is established by direct comparison of the two literals instead, which no automated run repeats.
 - Table-driven cases prove one rung each; a priority-order regression between two competing fields is not detectable unless a case carries both.
 
