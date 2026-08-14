@@ -1,0 +1,62 @@
+{
+  "id": "trun-3",
+  "feature": "traceable-runs",
+  "title": "One command reads back where a run stands and who approved it",
+  "lane": "high-risk",
+  "status": "open",
+  "deps": [
+    "trun-2"
+  ],
+  "decisions": [
+    "D3",
+    "D7"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/traceable-runs/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs"
+  ],
+  "action": "Expose the persisted approval state so a dashboard can read it without re-deriving anything (per D7, which scopes this feature to the data and the read surface, not the dashboard). Extend the existing status output rather than adding a new verb: build.rs already assembles the `where.gates` block (search build.rs for `gates`, near lines 128 and 217-218) from the projected booleans. Add the full gate entry beside it — state, actor, at, reason, bypass_level per gate — read from the workflow record, not from the projection, so a pending gate is visible as pending rather than as an indistinguishable false. Render one short human line per non-approved gate in the text output. The JSON shape is a published contract (docs/07-contracts.md documents bee status --json), so this is additive only: every existing key keeps its current name, type, and meaning.",
+  "must_haves": {
+    "truths": [
+      "bee status --json exposes each gate's state, actor, at, reason, and bypass_level",
+      "A gate never approved reads as state pending, distinguishable from a gate that was rejected",
+      "Every pre-existing key in bee status --json keeps its name, type, and meaning"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+        "substantive": "gate entries read from the workflow record and emitted alongside the existing projected booleans"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "substantive": "tests asserting the new keys and asserting the old keys are unchanged"
+      }
+    ],
+    "key_links": [
+      "status_full reads the workflow record's gate entries, not only the projected approved_gates booleans"
+    ],
+    "prohibitions": [
+      "No renaming or retyping of any existing bee status --json key",
+      "No dashboard, UI, or web surface — D7 puts it out of scope"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

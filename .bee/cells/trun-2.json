@@ -1,0 +1,67 @@
+{
+  "id": "trun-2",
+  "feature": "traceable-runs",
+  "title": "Feature start seeds every gate as pending, and bee gate records who approved and why",
+  "lane": "high-risk",
+  "status": "open",
+  "deps": [
+    "trun-1"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/traceable-runs/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "action": "Make a run enter awaiting-approval on its own, and make an approval say who and why (per D1, D2, D3). Two halves. FIRST: `bee state start-feature` must seed every gate on the new record with state \"pending\" instead of a bare approved:false — the attachment points are the default_gates() calls in state_group/policy.rs near lines 390 and 506. After this, starting a feature is what puts the run into awaiting-approval; nobody types it. SECOND: `bee state gate` gains three optional flags — --actor (\"user\" or \"auto\", defaulting to \"user\"), --bypass-level (one of off, normal, full, total), and --reason (free text) — and writes them onto the entry with the current timestamp. The flag allowlist to extend is in run_gate_body in state_group/set_gate.rs (search for the accepted-flags list containing \"name\", \"merge\", \"approved\", \"lane\", \"no-lane\", \"owner\", near line 549); the write itself is near line 700-710. --approved false continues to stamp gate_revoked_at exactly as today (search set_gate.rs for `gate_revoked_at`, near line 690) and additionally sets state \"rejected\". Per D2 an auto-approval is REQUIRED to carry --actor auto plus --bypass-level and --reason: refuse an --actor auto call that omits either, so a bypassed run can never be less traceable than a stopped one. If the CLI help or registry payload is generated from a declaration rather than hand-written, regenerate it in the same cell so the shipped surface matches.",
+  "must_haves": {
+    "truths": [
+      "bee state start-feature leaves every gate on the new record with state pending",
+      "bee gate --approved true --actor user records state approved, actor user, and a timestamp",
+      "bee gate --approved true --actor auto --bypass-level normal --reason X records all three on the entry",
+      "bee gate --actor auto without --bypass-level or without --reason refuses and writes nothing",
+      "bee gate --approved false still stamps gate_revoked_at and sets state rejected"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+        "substantive": "three new flags parsed, validated, and written; auto-actor precondition enforced"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "substantive": "tests for pending seeding, each actor path, the auto-without-level refusal, and the revocation path"
+      }
+    ],
+    "key_links": [
+      "start-feature's default_gates path produces entries carrying state pending",
+      "run_gate_body's flag allowlist accepts actor, bypass-level, and reason"
+    ],
+    "prohibitions": [
+      "No change to the merged --merge semantics of flipping shape and execution together",
+      "No change to gate_revoked_at's existing stamping behavior",
+      "No agent-side self-approval logic — the flags record a decision, they never make one"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

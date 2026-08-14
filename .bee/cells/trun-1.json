@@ -1,0 +1,73 @@
+{
+  "id": "trun-1",
+  "feature": "traceable-runs",
+  "title": "Gate entry carries persisted state, actor, timestamp, reason, and bypass level",
+  "lane": "high-risk",
+  "status": "open",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D3"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/feature.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs"
+  ],
+  "read_first": [
+    "docs/history/traceable-runs/plan.md",
+    "docs/history/traceable-runs/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs"
+  ],
+  "action": "Extend the workflow record's per-gate entry so an approval state is PERSISTED, not derived (per D3). Today the entry is default_gate_entry -> {approved: bool, approved_for_plan_rev: null|number} in workflow_store/record.rs (search for `fn default_gate_entry`, near line 69). Add five fields to the entry: `state` (one of \"pending\", \"approved\", \"rejected\"), `actor` (one of \"user\", \"auto\", or null when never set), `at` (ISO timestamp or null), `reason` (string or null), and `bypass_level` (one of \"off\", \"normal\", \"full\", \"total\", or null) — bypass_level and reason are required by D2 so an auto-approval records WHY it did not stop. Reject an unknown `state` or `actor` value with a typed error, mirroring the existing WORKFLOW_MISSING/WORKFLOW_CORRUPT discipline rather than defaulting silently. Keep the existing `approved: bool` on the entry and keep it EQUAL to (state == \"approved\") — the plan's additive approach depends on this, because 37 call sites read the boolean. FOUR paths author a gate entry and every one of them must set the new fields or they desync on first use: (1) `default_gate_entry` in workflow_store/record.rs (~line 69) and `merge_gates` (~line 89-117) which spreads a base entry and overlays a patch; (2) `gates_patch_from_record` in workflow_store/handoff.rs (~line 514-534) — THIS is the real entry author for `bee state gate`: it builds each entry from an empty map and inserts only `approved` plus the rev stamp, so a stale `state` would survive while `approved` flips; (3) `legacy_gates_to_workflow_gates` in state_group/feature.rs (~line 319-332), which hardcodes {approved, approved_for_plan_rev: null} and is called from feature.rs near lines 438 and 462; (4) the `default_gates()` resets at state_group/policy.rs near lines 390 and 506. A record written by the OLD shape (no `state` field) must still read correctly, deriving `state` from the existing boolean, so an existing repo never mis-gates on upgrade. Do NOT change workflow_gates_to_approved_gates in workflow_store/projections.rs: the PROJECTED boolean is `is_approved && rev_effective` on purpose, so after `plan-rev bump` the record stays approved:true while the projection reads false. That divergence is intended plan-rev invalidation and must be asserted as intended, never repaired.",
+  "must_haves": {
+    "truths": [
+      "A gate entry written by any of the four authoring paths has state, actor, at, reason, and bypass_level present",
+      "For every entry after every write path, the entry's approved boolean equals (state == \"approved\")",
+      "An entry written in the old shape, with no state field, reads back with state derived from its approved boolean",
+      "An unknown state or actor value refuses with a typed error and writes nothing",
+      "After plan-rev bump the record entry stays approved:true while the projected approved_gates boolean reads false, asserted as intended behavior"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+        "substantive": "default_gate_entry and merge_gates carry the five new fields with validation, no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/handoff.rs",
+        "substantive": "gates_patch_from_record authors state alongside approved"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+        "substantive": "tests covering all four authoring paths, legacy-shape read, invalid-value refusal, and the intended plan-rev divergence"
+      }
+    ],
+    "key_links": [
+      "gates_patch_from_record writes state and approved together so merge_gates cannot leave them disagreeing",
+      "legacy_gates_to_workflow_gates emits the new fields instead of dropping them"
+    ],
+    "prohibitions": [
+      "No change to workflow_gates_to_approved_gates in projections.rs",
+      "No change to the five cell status values",
+      "No removal of the approved boolean from the entry",
+      "No change to GATE_ALLOWED_PREFIXES — that belongs to slice 2"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
