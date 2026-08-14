@@ -657,7 +657,7 @@ pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
 // (claims-store territory, msn-18b — the same root claims_dir/sessions_dir
 // already resolve through), in the EXACT shape
 // finish_support::run_declared_tests/tests_record_value writes:
-// `{ran_at, green, commands:[{command, exit, duration_ms, failure_excerpt}]}`.
+// `{ran_at, green, commands:[{command, exit, duration_ms, failure_excerpt, failure_log}]}`.
 // The named failing command is the first row carrying a non-null
 // `failure_excerpt` — the same row run_declared_tests marks not-passed.
 //

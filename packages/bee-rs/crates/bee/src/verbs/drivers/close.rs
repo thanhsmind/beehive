@@ -4,11 +4,10 @@
 #![allow(unused_imports)]
 
 use super::*;
-use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, write_text_atomic, ReadJson};
+use crate::fsutil::{self, append_jsonl, ensure_dir, read_json, write_json_atomic, write_text_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state::{capture_queue_threshold, read_config_raw};
-use crate::textutil::truncate_chars_tail;
 use crate::verbs::reservations::{
     finish, js_is_ws, now_iso, now_ms, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
 };
@@ -28,9 +27,6 @@ use std::time::Instant;
 
 /// provenance: test-runner.mjs TEST_RESULTS_RELATIVE (verbs/test_runner.rs:60).
 pub(crate) const TEST_RESULTS_RELATIVE: &str = ".bee/logs/test-results.json";
-
-/// provenance: test-runner.mjs FAILURE_EXCERPT_MAX_CHARS (verbs/test_runner.rs:63).
-pub(crate) const FAILURE_EXCERPT_MAX: usize = 500;
 
 /// provenance: bee.mjs CLOSE_TESTS_UNDECLARED_DETAIL.
 pub(crate) const CLOSE_TESTS_UNDECLARED_DETAIL: &str = "no commands.test declared — close has no test door here; declare commands.test in .bee/config.json (string or array) to give it one";
@@ -82,6 +78,10 @@ pub(crate) struct CommandResult {
     pub(crate) exit: Option<i64>,
     pub(crate) duration_ms: u64,
     pub(crate) failure_excerpt: Option<String>,
+    /// full-failure-evidence: the path of the complete-output log for a
+    /// failing command (relative, `.bee/logs/test-failure-close-<index>.log`),
+    /// or `None` when the command passed or the log write failed.
+    pub(crate) failure_log: Option<String>,
 }
 
 pub(crate) struct TestRun {
@@ -109,7 +109,7 @@ pub(crate) fn run_declared_tests(root: &Path, commands: &[String], shell: &str) 
     let ran_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
     let mut results: Vec<CommandResult> = Vec::new();
     let mut green = true;
-    for command in commands {
+    for (index, command) in commands.iter().enumerate() {
         let started = Instant::now();
         let spawned = shell_command(shell)
             .arg("-c")
@@ -141,17 +141,17 @@ pub(crate) fn run_declared_tests(root: &Path, commands: &[String], shell: &str) 
             None
         } else {
             let trimmed = js_trim(&output).to_string();
-            let tail = truncate_chars_tail(&trimmed, FAILURE_EXCERPT_MAX);
-            Some(if tail.is_empty() {
-                format!(
-                    "(no output; exit {})",
-                    exit.map(|e| e.to_string()).unwrap_or_else(|| "null".to_string())
-                )
-            } else {
-                tail
-            })
+            Some(fsutil::failure_excerpt(&trimmed, exit))
         };
-        results.push(CommandResult { command: command.clone(), exit, duration_ms, failure_excerpt });
+        // full-failure-evidence D1/D3 — see finish_support.rs's own
+        // run_declared_tests for the shared rationale.
+        let failure_log = if passed {
+            fsutil::clear_failure_log(root, "close", index);
+            None
+        } else {
+            fsutil::write_failure_log(root, "close", index, &output)
+        };
+        results.push(CommandResult { command: command.clone(), exit, duration_ms, failure_excerpt, failure_log });
     }
     let mut record = Map::new();
     record.insert("ran_at".into(), Value::String(ran_at.clone()));
@@ -187,7 +187,9 @@ pub(crate) fn tests_result_value(run: &TestRun) -> Value {
     Value::Object(tests)
 }
 
-/// {command, exit, duration_ms, failure_excerpt} — frozen key order.
+/// {command, exit, duration_ms, failure_excerpt, failure_log} — frozen key
+/// order; `failure_log` (full-failure-evidence) is appended LAST so the
+/// order grows rather than shifts.
 pub(crate) fn command_result_value(c: &CommandResult) -> Value {
     let mut m = Map::new();
     m.insert("command".into(), Value::String(c.command.clone()));
@@ -202,6 +204,13 @@ pub(crate) fn command_result_value(c: &CommandResult) -> Value {
     m.insert(
         "failure_excerpt".into(),
         match &c.failure_excerpt {
+            Some(s) => Value::String(s.clone()),
+            None => Value::Null,
+        },
+    );
+    m.insert(
+        "failure_log".into(),
+        match &c.failure_log {
             Some(s) => Value::String(s.clone()),
             None => Value::Null,
         },
@@ -1070,6 +1079,9 @@ pub(crate) fn close_handler(
                 c.exit.map(|e| e.to_string()).unwrap_or_else(|| "spawn-failed".to_string()),
                 c.failure_excerpt.clone().unwrap_or_default()
             ));
+            if let Some(log) = &c.failure_log {
+                lines.push(format!("log: {log}"));
+            }
         }
         lines.push(format!(
             "next: the red is the work — fix it ({}), then re-run bee close --feature {feature}",

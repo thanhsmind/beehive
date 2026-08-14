@@ -54,6 +54,14 @@ A test suite whose entire dependency closure is byte-identical to the last green
 - **Fail open.** A missing or corrupt store reads as an empty cache — a cache defect buys more running, never less; the store repairs itself on the next green.
 - **Hermetic tests spawn with the cache off.** Suites that assert "this run really executed" pass the no-cache flag; a warm cache must never change a test's meaning.
 
+- **A failure keeps its whole output, not a window onto it.** The run that observed a failure is the only one that holds its output, so discarding all but a bounded tail makes a red that does not reproduce permanently unexplainable. The complete output of every failing declared command is written beside the run's own record and named from it; the bounded excerpt stays bounded, because no bound is large enough for every runner and the excerpt is read by machines as well as people (full-failure-evidence D1/D2, 2026-08-14).
+
+- **The bounded excerpt is an identity, not a message.** It is reduced to a signature that decides whether two runs saw the same failure, so nothing may be appended to it — not a path, not a hint, not a marker. Anything a person needs beside it travels in its own field and in the refusal text (full-failure-evidence D1, cell ffe-2, 2026-08-14).
+
+- **Losing evidence never changes a verdict.** Writing the failure output is the one write in this area that does not abort its run when it fails: a red must never be converted into a different error that hides which command failed. The record simply carries no log path (full-failure-evidence, cell ffe-2, 2026-08-14).
+
+- **Retention is per runner and per command, and green cleans up.** A run writes a log for every command that failed and removes the log for every command it ran that passed, so a mixed run leaves exactly the failing ones on disk. Names carry the runner, because the runners are not serialized against one another and share a root (full-failure-evidence D3, 2026-08-14).
+
 ## Edge Cases Settled
 
 - Corrupt store: silent cache-miss, then rewritten clean.

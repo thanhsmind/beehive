@@ -9,7 +9,7 @@
 // code using them lives in sibling modules.
 #![allow(unused_imports)]
 
-use crate::fsutil::{read_json, write_json_atomic, ReadJson};
+use crate::fsutil::{self, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock;
 use crate::registry::check_manifest_drift;
@@ -1689,12 +1689,14 @@ use std::time::Instant;
         let run = run_declared_tests(root, &["exit 0".to_string()]).unwrap();
         assert!(run.green);
         assert!(run.commands[0].failure_excerpt.is_none());
+        assert!(run.commands[0].failure_log.is_none());
         let record: Value =
             serde_json::from_str(&std::fs::read_to_string(test_results_path(root)).unwrap()).unwrap();
         assert_eq!(record["green"], json!(true));
         assert_eq!(record["commands"][0]["command"], json!("exit 0"));
         assert_eq!(record["commands"][0]["exit"], json!(0));
         assert_eq!(record["commands"][0]["failure_excerpt"], Value::Null);
+        assert_eq!(record["commands"][0]["failure_log"], Value::Null);
         // Red run: excerpt carries the tail, firstFailureLine picks line 1.
         let run = run_declared_tests(root, &["echo boom && exit 3".to_string()]).unwrap();
         assert!(!run.green);
@@ -1702,12 +1704,64 @@ use std::time::Instant;
         assert_eq!(js_trim(excerpt), "boom");
         assert_eq!(run.commands[0].exit, Some(3.0));
         assert_eq!(first_failure_line(&run).as_deref(), Some("boom"));
+        // full-failure-evidence D1: a red command's complete output survives
+        // on disk, named by the record's own failure_log path.
+        let log_rel = run.commands[0].failure_log.clone().unwrap();
+        assert_eq!(log_rel, fsutil::failure_log_relative("finish", 0));
+        let logged = std::fs::read_to_string(root.join(&log_rel)).unwrap();
+        assert_eq!(js_trim(&logged), "boom");
         let record: Value =
             serde_json::from_str(&std::fs::read_to_string(test_results_path(root)).unwrap()).unwrap();
         assert_eq!(record["green"], json!(false));
+        assert_eq!(record["commands"][0]["failure_log"], json!(log_rel));
         // Silent red: the "(no output; exit N)" placeholder.
         let run = run_declared_tests(root, &["exit 7".to_string()]).unwrap();
         assert_eq!(run.commands[0].failure_excerpt.as_deref(), Some("(no output; exit 7)"));
+    }
+
+    // ── full-failure-evidence (ffe-2) ───────────────────────────────────────
+
+    #[test]
+    fn green_run_clears_a_stale_failure_log_from_a_previous_red() {
+        // D3: a green run leaves no stale evidence of a failure that no
+        // longer reproduces, at the SAME command index.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let red = run_declared_tests(root, &["echo boom && exit 3".to_string()]).unwrap();
+        let log_rel = red.commands[0].failure_log.clone().unwrap();
+        assert!(root.join(&log_rel).exists());
+        let green = run_declared_tests(root, &["exit 0".to_string()]).unwrap();
+        assert!(green.commands[0].failure_log.is_none());
+        assert!(!root.join(&log_rel).exists(), "the stale log from the earlier red must be gone");
+    }
+
+    #[test]
+    fn mixed_run_writes_a_log_only_for_the_failing_index() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let run = run_declared_tests(
+            root,
+            &["exit 0".to_string(), "echo boom && exit 3".to_string()],
+        )
+        .unwrap();
+        assert!(!run.green);
+        assert!(run.commands[0].failure_log.is_none(), "the passing command gets no log");
+        assert!(root.join(run.commands[1].failure_log.clone().unwrap()).exists());
+    }
+
+    #[test]
+    fn unwritable_log_dir_leaves_failure_log_null_without_touching_the_verdict() {
+        // The DELIBERATE divergence: a lost log must never turn a red into
+        // an error or hide which command failed.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Pre-occupy the log target with a directory so the write must fail.
+        let rel = fsutil::failure_log_relative("finish", 0);
+        std::fs::create_dir_all(root.join(&rel)).unwrap();
+        let run = run_declared_tests(root, &["echo boom && exit 3".to_string()]).unwrap();
+        assert!(!run.green, "the verdict is untouched by the lost log");
+        assert!(run.commands[0].failure_log.is_none());
+        assert_eq!(js_trim(run.commands[0].failure_excerpt.as_deref().unwrap()), "boom");
     }
 
     // ── decision log ──────────────────────────────────────────────────────
@@ -3218,6 +3272,13 @@ use std::time::Instant;
             refusal.starts_with("refusing to cap \"nt-2\" — the declared test run is RED"),
             "{refusal}"
         );
+        // full-failure-evidence: the refusal names the complete-output log
+        // right after the excerpt block.
+        assert!(
+            refusal.contains("\nlog: .bee/logs/test-failure-finish-0.log\n"),
+            "{refusal}"
+        );
+        assert!(root2.join(".bee/logs/test-failure-finish-0.log").exists());
         let after = read_cell_norm(root2, "nt-2").ok().unwrap().unwrap();
         assert_eq!(after.get("status"), Some(&json!("claimed")), "a red run never caps");
         assert!(test_results_path(root2).exists(), "the red run IS recorded");

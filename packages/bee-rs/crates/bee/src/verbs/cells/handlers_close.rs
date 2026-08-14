@@ -240,6 +240,9 @@ pub(crate) fn cap_cell_from_flags(root: &Path, test_root: &Path, f: &CapFlags, f
                     c.exit.map(jsjson::js_f64_to_string).unwrap_or_else(|| "spawn-failed".to_string()),
                     c.failure_excerpt.as_deref().unwrap_or("")
                 ));
+                if let Some(log) = &c.failure_log {
+                    lines.push(format!("log: {log}"));
+                }
             }
             lines.push(format!(
                 "The red is the work: fix what the failing output names, then re-run bee cells finish --id {id}. Never build on a red base."
