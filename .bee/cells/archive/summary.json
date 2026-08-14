@@ -458,5 +458,10 @@
     "capped": 9,
     "dropped": 0,
     "archived_at": "2026-08-14T11:03:13.282Z"
+  },
+  "awaiting-human": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-14T15:52:16.627Z"
   }
 }
