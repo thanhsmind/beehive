@@ -270,7 +270,10 @@ pub(crate) fn run_render(flags: Flags, use_json: bool, t0: Instant) -> Option<Ex
 /// text), so it is reproduced natively rather than delegated.
 pub(crate) fn do_render(root: &Path, all: bool, check: bool) -> R2<Out> {
     let Some((content, count)) = decision_index_content(root, all)? else {
-        return Err(Err2::Ex); // collation outside the calibrated alphabet
+        // No longer reachable via a collation guard — retire-collation-guard D1
+        // removed it. Still reachable through active_decisions/build_tag_overlay
+        // on a null event or an inconsistent date comparator, which D3 left open.
+        return Err(Err2::Ex);
     };
     let file = decision_index_path(root);
     let rel = path_relative(root, &file);
