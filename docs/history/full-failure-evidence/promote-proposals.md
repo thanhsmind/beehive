@@ -14,7 +14,7 @@ bee:
   lifecycle: active
   areas: [verify-pipeline]
   required_context: [docs/history/full-failure-evidence/CONTEXT.md, docs/history/full-failure-evidence/plan.md]
-  sources: [docs/history/full-failure-evidence/CONTEXT.md, docs/history/full-failure-evidence/plan.md, .bee/cells/ffe-1.json, .bee/cells/ffe-2.json]
+  sources: [docs/history/full-failure-evidence/CONTEXT.md, docs/history/full-failure-evidence/plan.md, .bee/cells/archive/full-failure-evidence/ffe-1.json, .bee/cells/archive/full-failure-evidence/ffe-2.json]
 ---
 
 # full-failure-evidence — Delivery
@@ -44,7 +44,7 @@ Proposed by `bee knowledge promote --work full-failure-evidence` from 2 capped c
 areas: from the scribing stamp for "full-failure-evidence" — .bee/logs/scribing-runs.jsonl's most recent entry (2026-08-14T04:12:41.941Z), the work item declares no bee.areas.
 
 area verify-pipeline:
-  - [ffe-2] Wired the test-runner runner and the refusal-text log line; register.md and tests updated — feature-wide sync per the scribing stamp, 8 file(s) changed (trace .bee/cells/ffe-2.json)
+  - [ffe-2] Wired the test-runner runner and the refusal-text log line; register.md and tests updated — feature-wide sync per the scribing stamp, 8 file(s) changed (trace .bee/cells/archive/full-failure-evidence/ffe-2.json)
 
 (c) PATTERN CANDIDATES — candidate bee.pattern concepts, bee.polarity pitfall
 
