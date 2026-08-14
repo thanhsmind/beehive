@@ -433,6 +433,17 @@ pub(crate) fn best_scribing_stamp_ms(
 }
 
 /// cells.mjs scribingDebt(root) — no opts on the status path.
+///
+/// trun-9 rework (round 2, D5): this was the FOURTH private copy of the
+/// scan — the one `bee status --json` and `bee orient` actually read
+/// (`status_full/build.rs` puts its result straight into
+/// `status.scribing_debt`; `orient.rs` turns that into the routing blocker
+/// line; `render.rs` turns it into "Capture pending"). It still bypassed the
+/// deferred queue entirely after round 1 fixed the preamble and chain-nudge
+/// copies. Reconciled through the same shared fold and OR rule as those two
+/// (`state_group::scribe_queue_cells` / `state_group::deferred_debt_cleared`)
+/// so a completed `scribe` record clears the debt on every surface, not only
+/// `bee close`'s door and the session preamble.
 pub(crate) fn scribing_debt(ctx: &mut Ctx) -> R<JMap> {
     let state = read_state_full(ctx)?;
     let feature = state.get("feature").cloned().unwrap_or(Value::Null);
@@ -444,6 +455,9 @@ pub(crate) fn scribing_debt(ctx: &mut Ctx) -> R<JMap> {
     }
     let ledger = read_scribing_ledger(ctx);
     let threshold = best_scribing_stamp_ms(ctx, &feature, &ledger, &state)?.unwrap_or(0.0);
+    let feature_str = jsjson::js_to_string(&feature);
+    let completed_cells =
+        crate::verbs::state_group::scribe_queue_cells(&ctx.root, &feature_str).completed;
     // dda-2: archive-aware, so a feature that just closed (and got archived)
     // still shows its unpaid debt instead of going structurally silent.
     let capped = list_cells_including_archive(ctx, Some(&feature), Some("capped"))?;
@@ -454,9 +468,13 @@ pub(crate) fn scribing_debt(ctx: &mut Ctx) -> R<JMap> {
             continue;
         }
         let capped_at = date_parse_val(vget(&trace, "capped_at"));
-        if capped_at.is_finite() && capped_at > threshold {
-            ids.push(vget(&cell, "id").cloned().unwrap_or(Value::Null));
+        let legacy_cleared = !(capped_at.is_finite() && capped_at > threshold);
+        let id_str = vget(&cell, "id").and_then(Value::as_str).unwrap_or("").to_string();
+        let queue_completed = !id_str.is_empty() && completed_cells.contains(&id_str);
+        if crate::verbs::state_group::deferred_debt_cleared(legacy_cleared, queue_completed) {
+            continue;
         }
+        ids.push(vget(&cell, "id").cloned().unwrap_or(Value::Null));
     }
     out.insert("count".into(), json!(ids.len()));
     out.insert("cells".into(), Value::Array(ids));
@@ -464,6 +482,12 @@ pub(crate) fn scribing_debt(ctx: &mut Ctx) -> R<JMap> {
 }
 
 /// cells.mjs globalScribingDebt — the orphan sweep across every feature.
+///
+/// trun-9 rework (round 2, D5): same fourth-copy gap as `scribing_debt`
+/// above, on the orphan sweep this module feeds into `bee status --json`'s
+/// `scribing_debt.features` and `bee orient`'s routing blocker. Reconciled
+/// through the same shared fold and OR rule; `completed_cache` mirrors
+/// `stamp_cache`'s per-feature memoization.
 pub(crate) fn global_scribing_debt(ctx: &mut Ctx) -> R<JMap> {
     // dda-2: archive-aware. An orphaned feature's cells are exactly the ones
     // most likely to have been archived already, so the sweep must see them.
@@ -484,6 +508,7 @@ pub(crate) fn global_scribing_debt(ctx: &mut Ctx) -> R<JMap> {
     let state = read_state_full(ctx)?;
     let ledger = read_scribing_ledger(ctx);
     let mut stamp_cache: HashMap<String, Option<f64>> = HashMap::new();
+    let mut completed_cache: HashMap<String, HashSet<String>> = HashMap::new();
     // Insertion-ordered feature -> ids map (JS Map).
     let mut order: Vec<String> = Vec::new();
     let mut by_feature: HashMap<String, Vec<Value>> = HashMap::new();
@@ -504,11 +529,16 @@ pub(crate) fn global_scribing_debt(ctx: &mut Ctx) -> R<JMap> {
                 s
             }
         };
-        let orphaned = match stamp {
-            None => true,
-            Some(s) => capped_at.is_finite() && capped_at > s,
+        let legacy_cleared = match stamp {
+            None => false,
+            Some(s) => !(capped_at.is_finite() && capped_at > s),
         };
-        if !orphaned {
+        let completed = completed_cache.entry(feature_key.clone()).or_insert_with(|| {
+            crate::verbs::state_group::scribe_queue_cells(&ctx.root, &feature_key).completed
+        });
+        let id_str = vget(cell, "id").and_then(Value::as_str).unwrap_or("").to_string();
+        let queue_completed = !id_str.is_empty() && completed.contains(&id_str);
+        if crate::verbs::state_group::deferred_debt_cleared(legacy_cleared, queue_completed) {
             continue;
         }
         if !by_feature.contains_key(&feature_key) {

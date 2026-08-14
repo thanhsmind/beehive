@@ -3279,6 +3279,148 @@ use crate::version::BEE_VERSION;
         assert_eq!(preamble_ids, vec!["arch-1", "dup-1", "hot-1"]);
     }
 
+    // ── trun-9 rework (round 2, D5): the FOURTH copy — the one the second
+    //    judge pass caught. `bee status --json`'s `scribing_debt` key comes
+    //    straight from `status_full::cells::scribing_debt` /
+    //    `global_scribing_debt` (`build.rs`), and `bee orient`'s routing
+    //    blocker line comes straight from that same key (`orient.rs`). Round
+    //    1 of this rework wired the preamble and chain-nudge copies but left
+    //    this one untouched, so completing a `scribe` record went quiet at
+    //    `bee close`'s door and in the preamble while `bee status --json`
+    //    and `bee orient` — the surface every routing turn actually reads —
+    //    kept reporting the same debt forever. These pin the queue branch on
+    //    THIS surface specifically, through `build_status` and
+    //    `build_orient`, not only the bare scan function.
+
+    fn blockers_over(root: &Path) -> Vec<String> {
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        vget(packet.get("work").unwrap(), "blockers")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn a_completed_scribe_queue_record_clears_the_status_and_orient_debt_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, feature) = parity_fixture(tmp.path());
+
+        // Before: the scan, `bee status --json`, and `bee orient` all agree
+        // the debt stands.
+        assert_eq!(
+            scribing_debt(&mut ctx_for(&root)).unwrap()["count"],
+            json!(3),
+            "status_full::cells::scribing_debt"
+        );
+        let status = build_status(&mut ctx_for(&root), false).unwrap();
+        assert_eq!(status["scribing_debt"]["count"], json!(3), "bee status --json");
+        let blockers_before = blockers_over(&root);
+        assert!(
+            blockers_before.iter().any(|b| b.starts_with("scribing debt:")),
+            "bee orient must report the debt before the record completes: {blockers_before:?}"
+        );
+
+        // A `scribe` record naming every debt cell for this feature,
+        // completed — the exact shape `drivers/close.rs::scribing_debt`
+        // materializes on a scan.
+        write(
+            &root,
+            ".bee/deferred-queue.jsonl",
+            &format!(
+                "{{\"ts\":\"2026-02-02T00:00:00.000Z\",\"event\":\"add\",\"id\":\"q1\",\"kind\":\"scribe\",\"feature\":\"{feature}\",\"cells\":[\"hot-1\",\"arch-1\",\"dup-1\"],\"areas\":[],\"files\":[],\"reason\":\"r\"}}\n{{\"ts\":\"2026-02-02T00:00:01.000Z\",\"event\":\"complete\",\"id\":\"q1\"}}\n"
+            ),
+        );
+
+        // After: all three surfaces go quiet together.
+        assert_eq!(
+            scribing_debt(&mut ctx_for(&root)).unwrap()["count"],
+            json!(0),
+            "status_full::cells::scribing_debt"
+        );
+        let status = build_status(&mut ctx_for(&root), false).unwrap();
+        assert_eq!(status["scribing_debt"]["count"], json!(0), "bee status --json");
+        let blockers_after = blockers_over(&root);
+        assert!(
+            !blockers_after.iter().any(|b| b.starts_with("scribing debt:")),
+            "bee orient must go quiet once the scribe record completes: {blockers_after:?}"
+        );
+    }
+
+    /// The orphan-sweep sibling: `bee status --json`'s `scribing_debt.orphaned`
+    /// key is `status_full::cells::global_scribing_debt`'s own result
+    /// (`build.rs` nests it under `orphaned`), reconciled through the same
+    /// shared fold.
+    #[test]
+    fn a_completed_scribe_queue_record_clears_the_global_orphan_sweep_too() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (root, feature) = parity_fixture(tmp.path());
+
+        assert_eq!(
+            global_scribing_debt(&mut ctx_for(&root)).unwrap()["count"],
+            json!(3),
+            "status_full::cells::global_scribing_debt"
+        );
+        let status = build_status(&mut ctx_for(&root), false).unwrap();
+        assert_eq!(status["scribing_debt"]["orphaned"]["count"], json!(3), "bee status --json orphaned");
+
+        write(
+            &root,
+            ".bee/deferred-queue.jsonl",
+            &format!(
+                "{{\"ts\":\"2026-02-02T00:00:00.000Z\",\"event\":\"add\",\"id\":\"q1\",\"kind\":\"scribe\",\"feature\":\"{feature}\",\"cells\":[\"hot-1\",\"arch-1\",\"dup-1\"],\"areas\":[],\"files\":[],\"reason\":\"r\"}}\n{{\"ts\":\"2026-02-02T00:00:01.000Z\",\"event\":\"complete\",\"id\":\"q1\"}}\n"
+            ),
+        );
+
+        assert_eq!(
+            global_scribing_debt(&mut ctx_for(&root)).unwrap()["count"],
+            json!(0),
+            "status_full::cells::global_scribing_debt"
+        );
+        let status = build_status(&mut ctx_for(&root), false).unwrap();
+        assert_eq!(status["scribing_debt"]["orphaned"]["count"], json!(0), "bee status --json orphaned");
+    }
+
+    /// The mirror case (must_have: "a queued record and the legacy scan
+    /// never double-report the same debt"): an OPEN `scribe` record naming
+    /// only one of two debt cells must not clear it, and must not
+    /// double-count it either — `status_full::cells::scribing_debt` must
+    /// keep reporting exactly the one cell the record does NOT (yet) cover.
+    #[test]
+    fn an_uncompleted_scribe_queue_record_leaves_its_cell_reported_and_never_double_counts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"executing","feature":"f9","gates":{}}"#);
+        let cell = |id: &str| {
+            write(
+                root,
+                &format!(".bee/cells/{id}.json"),
+                &format!(
+                    r#"{{"id":"{id}","feature":"f9","status":"capped","title":"t","trace":{{"behavior_change":true,"capped_at":"2024-01-01T00:00:00Z"}}}}"#
+                ),
+            );
+        };
+        cell("f9-1");
+        cell("f9-2");
+        assert_eq!(scribing_debt(&mut ctx_for(root)).unwrap()["count"], json!(2));
+
+        // A `scribe` record naming ONLY f9-1, still open (not completed).
+        write(
+            root,
+            ".bee/deferred-queue.jsonl",
+            "{\"ts\":\"2026-02-02T00:00:00.000Z\",\"event\":\"add\",\"id\":\"q1\",\"kind\":\"scribe\",\"feature\":\"f9\",\"cells\":[\"f9-1\"],\"areas\":[],\"files\":[],\"reason\":\"r\"}\n",
+        );
+
+        let debt = scribing_debt(&mut ctx_for(root)).unwrap();
+        let mut ids: Vec<String> =
+            debt["cells"].as_array().unwrap().iter().map(jsjson::js_to_string).collect();
+        ids.sort();
+        assert_eq!(debt["count"], json!(2), "an OPEN record clears nothing: {ids:?}");
+        assert_eq!(ids, vec!["f9-1", "f9-2"], "not cleared and not double-counted: {ids:?}");
+    }
+
     // ── trun-3: the persisted gate record beside the projected booleans ────
 
     /// D3/D7: today `gates.shape` and `gates.execution` are both a bare
