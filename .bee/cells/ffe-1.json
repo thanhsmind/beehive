@@ -1,0 +1,64 @@
+{
+  "id": "ffe-1",
+  "feature": "full-failure-evidence",
+  "title": "Consolidate the three failure-excerpt blocks into one helper, changing no behavior",
+  "lane": "standard",
+  "status": "open",
+  "deps": [],
+  "decisions": [
+    "D2"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/fsutil.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/test_runner.rs"
+  ],
+  "read_first": [
+    "docs/history/full-failure-evidence/CONTEXT.md",
+    "docs/history/full-failure-evidence/plan.md",
+    "packages/bee-rs/crates/bee/src/fsutil.rs"
+  ],
+  "action": "Three modules carry the same failure-excerpt block, each with its own 500-char constant and its own truncation call. Extract one pub(crate) helper into crate::fsutil, beside write_text_atomic, and call it from all three. This cell changes NO behavior: same bound, same trimmed tail, same '(no output; exit N)' fallback, no log file, no new record key — that arrives in ffe-2. The three blocks and their constants, verbatim from rg: fsutil is the home because textutil is text-only by locked decision (js-parity-cleanup D3, textutil.rs:1-15) and performs zero IO, while fsutil already owns ensure_dir (:95), write_text_atomic (:156) and remove_file_if_exists (:178) and is already imported by all three call sites (test_runner.rs:49, cells/finish_support.rs:7, drivers/close.rs:7). Sites: packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs:29 (FAILURE_EXCERPT_MAX_CHARS = 500) and its block at :115-128; packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:33 (FAILURE_EXCERPT_MAX = 500) and its block at :140-153; packages/bee-rs/crates/bee/src/verbs/test_runner.rs:66 (FAILURE_EXCERPT_MAX = 500) and its block at :281-291. Fold, do not preserve, one difference: finish_support.rs:118 assigns its trim back into `output` while the other two bind a local `trimmed`; `output` is dead after that block (:129 pushes only command/exit/duration/excerpt), so keep the local form. The exit type differs — Option<f64> at finish_support.rs:37 against Option<i64> at close.rs:82 and test_runner.rs:218 — and both render identically (jsjson.rs:42 prints an integral f64 with no fraction; finish_support.rs:103 builds it from an integer code), so pick whichever helper signature avoids a lossy conversion at any call site and convert at the caller. PROOF OF THIS CELL: every existing test passes with no assertion changed. Exactly one mechanical edit is allowed and expected — test_runner.rs:537, :538 and :544 name FAILURE_EXCERPT_MAX directly, so those three references retarget the surviving pub(crate) constant while asserting the same values. If you find yourself changing any other test, stop: the consolidation was not behavior-preserving and the cell is wrong. Do not delete a constant that still has a live reference.",
+  "must_haves": {
+    "truths": [
+      "One helper in crate::fsutil produces the failure excerpt; no module keeps its own copy of the truncation block",
+      "Exactly one 500-char constant survives, and it is still reachable from test_runner.rs's assertions",
+      "Every existing test passes with no assertion changed, apart from the three FAILURE_EXCERPT_MAX references retargeted to the surviving constant",
+      "No log file is written and no record key is added by this cell"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/fsutil.rs",
+        "substantive": "the shared excerpt helper; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+        "substantive": "its inline block replaced by a call to the helper"
+      }
+    ],
+    "key_links": [
+      "finish_support.rs, close.rs and test_runner.rs all call the fsutil helper"
+    ],
+    "prohibitions": [
+      "No new helper in crate::textutil — it is text-only by locked decision",
+      "No change to the 500-character bound",
+      "No log file, no new record key, no refusal-text change in this cell",
+      "No test assertion changed beyond the three FAILURE_EXCERPT_MAX references"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

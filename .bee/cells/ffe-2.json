@@ -1,0 +1,75 @@
+{
+  "id": "ffe-2",
+  "feature": "full-failure-evidence",
+  "title": "Keep the full failing output on disk and name it in the record and the refusal",
+  "lane": "standard",
+  "status": "open",
+  "deps": [
+    "ffe-1"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/fsutil.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "docs/handbook/register.md"
+  ],
+  "read_first": [
+    "docs/history/full-failure-evidence/CONTEXT.md",
+    "docs/history/full-failure-evidence/plan.md",
+    "packages/bee-rs/crates/bee/src/fsutil.rs"
+  ],
+  "action": "On the single path ffe-1 created, keep the complete output of a failing declared command and name it where a person will look. THE LOAD-BEARING CONSTRAINT: failure_excerpt must stay byte-identical to what the same output produces today. It is not display text — handlers_close.rs:218 feeds first_failure_line into normalize_failure_signature, which trace.rs:409-427 reduces to sha256[..12] and stores on the cell trace, so appending anything to that string changes the identity of a failure. The path goes in a NEW record key instead: failure_log, appended LAST so close.rs:190's frozen key order grows rather than shifts, null when the command passed or the log write failed. handlers_write.rs:698 reads failure_excerpt by name with no key-count check, so a sibling key cannot flip the red-base gate. Write the complete, untrimmed output to .bee/logs/test-failure-<runner>-<index>.log where <runner> is test, finish or close and <index> is the command's position in the run — the runner segment matters because the three runners are not serialized against each other (no lock in test_runner.rs or close.rs; handlers_close.rs:202 takes the cell lock only after the run; finish_support.rs:362-367 makes test_root == main root for an ordinary checkout), so without it two concurrent runs collide on one filename. Use the same root the run's test-results.json uses: test_root where the runner has one, the run root otherwise. Retention per D3: a run writes a log for every command index that failed and deletes the log for every index it ran that passed, so a mixed run leaves exactly the failing indices on disk; fixed names mean a later failure overwrites its predecessor rather than accumulating. DELIBERATE DIVERGENCE, do not read it as a bug: every adjacent write failure in this area aborts the run (finish_support.rs:132, close.rs:1025-1027, test_runner.rs:125-130) but this one must NOT — a failed log write leaves failure_log null and the verdict untouched, because losing evidence about a failure must never convert a red into an error that hides which command failed. Add one line naming the log path to the refusal text after the excerpt block at close.rs:1071 and the equivalent in handlers_close.rs:229-241. Update docs/handbook/register.md:231-234, which publishes the test-results.json shape and the .bee/logs/ inventory. Tests this cell breaks, all of them: cells/tests.rs:1697, :1702, :1704, :1710; test_runner.rs:478-481 (the exact key vector), :501, :528-530; drivers/tests.rs:1904-1918 (asserts close's red text by line index — a new line after the excerpt shifts next: from lines[6] to lines[7]; the doors[0].detail assertion at :1922-1925 is a separate string and stays).",
+  "must_haves": {
+    "truths": [
+      "A failing command writes its complete untrimmed output to .bee/logs/test-failure-<runner>-<index>.log",
+      "failure_excerpt is byte-identical to what the same output produced before this cell",
+      "The record carries failure_log naming that path, appended last, null when the command passed",
+      "A mixed run leaves logs for the failing command indices only, and a green run removes a stale one",
+      "An unwritable log directory leaves failure_log null, the excerpt intact and the verdict unchanged",
+      "The refusal text names the log path"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/fsutil.rs",
+        "substantive": "the helper writes the log and returns its path alongside the unchanged excerpt; no TODO stubs"
+      },
+      {
+        "path": "docs/handbook/register.md",
+        "substantive": "the test-results.json shape and .bee/logs/ inventory carry the new key and file"
+      }
+    ],
+    "key_links": [
+      "failure_log is appended after failure_excerpt in the record builder at close.rs:190",
+      "the refusal text at close.rs:1071 names the log path"
+    ],
+    "prohibitions": [
+      "failure_excerpt's value must not change by a single byte",
+      "No change to the 500-character bound",
+      "No framework-specific parsing of the output (D4)",
+      "A failed log write must not change any command's verdict",
+      "No timestamped log filenames"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
