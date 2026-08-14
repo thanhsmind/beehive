@@ -110,6 +110,13 @@ pub(crate) fn apply_workflow_d1_fields(next: &mut Map<String, Value>, wf: &Map<S
     );
     set_from(next, "summary", wf);
     set_from(next, "next_action", wf);
+    // D4/D7: run_state is WRITTEN on the record (record.rs's
+    // derive_run_state); this list is the only path it takes into
+    // `.bee/state.json`. A new record field never reaches the projection
+    // unless it is named here — this is the exact trap plan.md calls out,
+    // pinned by
+    // `apply_workflow_d1_fields_carries_run_state_...` in tests.rs.
+    set_from(next, "run_state", wf);
 }
 
 /// state-projection.mjs rebuildStateProjection(root) with NO overrides — the
@@ -232,6 +239,10 @@ pub(crate) fn rebuild_lane_projection_reporting(
     );
     set_from(&mut next, "summary", wf);
     set_from(&mut next, "next_action", wf);
+    // D4/D7: same additive field as apply_workflow_d1_fields (this function
+    // duplicates that field list rather than calling it — kept in step so a
+    // lane reader sees run_state too).
+    set_from(&mut next, "run_state", wf);
     // `(existing && existing.created_at) || wf.created_at || new Date()...`
     let created_at = existing
         .as_ref()

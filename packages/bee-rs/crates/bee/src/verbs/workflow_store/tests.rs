@@ -193,6 +193,171 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
         }
     }
 
+    // ── trun-7: run_state, the persisted run-lifecycle vocabulary ──────────
+
+    #[test]
+    fn run_state_closed_vocabulary_accepts_null_and_refuses_unknown_values() {
+        for v in RUN_STATE_VALUES {
+            assert!(valid_run_state_value(&json!(v)), "{v} should be valid");
+        }
+        assert!(valid_run_state_value(&Value::Null), "null is the pre-migration shape");
+        assert!(!valid_run_state_value(&json!("waiting-around")));
+        assert!(!valid_run_state_value(&json!(true)));
+
+        let mut patch = Map::new();
+        patch.insert("run_state".into(), json!("waiting-around"));
+        match check_patch_run_state(&patch) {
+            Err(Err2::Msg(m)) => assert_eq!(
+                m,
+                "updateWorkflowAssumingLock: run_state must be one of shaping/awaiting-approval/running/blocked/done (got \"waiting-around\")."
+            ),
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_workflow_record_refuses_a_corrupt_run_state_on_disk() {
+        let tmp = tmp_root();
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","run_state":"vibing"}),
+        );
+        match read_workflow_record(tmp.path(), "wf-1") {
+            Err(WfSkip(m)) => assert!(m.contains("its run_state is corrupt"), "{m}"),
+            Ok(_) => panic!("expected the run_state corruption refusal"),
+        }
+        // A legacy record with no run_state at all reads back fine, backfilled null.
+        write_workflow(tmp.path(), "wf-2", json!({"id":"wf-2","feature":"f2"}));
+        let rec = read_workflow_record(tmp.path(), "wf-2").ok().unwrap();
+        assert_eq!(rec.get("run_state"), Some(&Value::Null));
+    }
+
+    /// The one rule this feature exists to make visible: any gate `pending`
+    /// with nothing LATER in the fixed GATE_NAMES sequence `approved` reads
+    /// `awaiting-approval` — unconditionally, holding even when an earlier
+    /// gate is `rejected`.
+    #[test]
+    fn derive_run_state_reads_awaiting_approval_whenever_a_gate_is_pending_and_none_later_is_approved() {
+        let counts = CellCounts::default();
+
+        // Fresh gates: every gate pending, nothing approved anywhere.
+        let all_pending = json!(default_wf_gates());
+        assert_eq!(derive_run_state("active", &all_pending, &counts), "awaiting-approval");
+
+        // context approved, shape pending, execution/review untouched —
+        // shape is the earliest pending gate and nothing later is approved.
+        let mid_pending = json!({
+            "context": {"state": "approved"},
+            "shape": {"state": "pending"},
+        });
+        assert_eq!(derive_run_state("active", &mid_pending, &counts), "awaiting-approval");
+
+        // context rejected, shape (later) still pending, execution/review
+        // untouched (also pending): an earlier rejection never blocks the
+        // unconditional pending-with-nothing-later-approved rule.
+        let rejected_then_pending = json!({
+            "context": {"state": "rejected"},
+            "shape": {"state": "pending"},
+        });
+        assert_eq!(
+            derive_run_state("active", &rejected_then_pending, &counts),
+            "awaiting-approval",
+            "an earlier rejected gate never overrides the unconditional pending rule"
+        );
+    }
+
+    #[test]
+    fn derive_run_state_reads_blocked_for_a_trailing_unresolved_rejection() {
+        let counts = CellCounts::default();
+        // Every gate decided; the last decision in the sequence is a
+        // rejection nothing later has overturned — the existing
+        // approved→rejected revocation path, named on the run.
+        let gates = json!({
+            "context": {"state": "approved"},
+            "shape": {"state": "approved"},
+            "execution": {"state": "rejected"},
+            "review": {"state": "pending"},
+        });
+        // `review` is still pending, and nothing later than it is approved,
+        // so the unconditional awaiting-approval rule fires first.
+        assert_eq!(derive_run_state("active", &gates, &counts), "awaiting-approval");
+
+        // Once every earlier gate is settled and the LAST gate in the
+        // sequence is the rejection, nothing later can ever supersede it.
+        let trailing_rejection = json!({
+            "context": {"state": "approved"},
+            "shape": {"state": "approved"},
+            "execution": {"state": "approved"},
+            "review": {"state": "rejected"},
+        });
+        assert_eq!(derive_run_state("active", &trailing_rejection, &counts), "blocked");
+    }
+
+    #[test]
+    fn derive_run_state_reads_cell_counts_once_every_gate_clears() {
+        let all_approved = json!({
+            "context": {"state": "approved"},
+            "shape": {"state": "approved"},
+            "execution": {"state": "approved"},
+            "review": {"state": "approved"},
+        });
+        let mut counts = CellCounts::default();
+        assert_eq!(derive_run_state("active", &all_approved, &counts), "shaping", "no cells yet");
+
+        counts.open = 1;
+        assert_eq!(derive_run_state("active", &all_approved, &counts), "running");
+
+        counts = CellCounts::default();
+        counts.blocked = 1;
+        assert_eq!(derive_run_state("active", &all_approved, &counts), "blocked");
+
+        counts = CellCounts::default();
+        counts.capped = 2;
+        counts.dropped = 1;
+        assert_eq!(derive_run_state("active", &all_approved, &counts), "done");
+
+        // A closed workflow always reads done, regardless of gates or cells.
+        assert_eq!(derive_run_state("closed", &all_approved, &counts), "done");
+    }
+
+    #[test]
+    fn create_workflow_starts_awaiting_approval_with_every_gate_pending() {
+        let tmp = tmp_root();
+        let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
+        assert_eq!(record.get("run_state"), Some(&json!("awaiting-approval")));
+        // …and it landed on disk, readable back through the strict reader.
+        let on_disk = ok(read_workflow_record(tmp.path(), record.get("id").unwrap().as_str().unwrap()));
+        assert_eq!(on_disk.get("run_state"), Some(&json!("awaiting-approval")));
+    }
+
+    #[test]
+    fn update_assuming_lock_recomputes_run_state_and_ignores_a_patched_value() {
+        let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1"}));
+        // Approve every gate directly through the patch — run_state should
+        // move off awaiting-approval even though nothing named it.
+        let mut patch = Map::new();
+        patch.insert(
+            "gates".into(),
+            json!({
+                "context": {"approved": true, "state": "approved"},
+                "shape": {"approved": true, "state": "approved"},
+                "execution": {"approved": true, "state": "approved"},
+                "review": {"approved": true, "state": "approved"},
+            }),
+        );
+        // A caller-supplied run_state is a valid vocabulary value, but the
+        // write recomputes it anyway — it is never taken from the patch.
+        patch.insert("run_state".into(), json!("done"));
+        let next = ok(update_workflow_assuming_lock(tmp.path(), "wf-1", patch));
+        assert_eq!(
+            next.get("run_state"),
+            Some(&json!("shaping")),
+            "recomputed from status=active, all gates approved, zero cells — not the patched \"done\""
+        );
+    }
+
     // ── listWorkflows skip tolerance (R6 blocker, now native) ─────────────
 
     /// The three ordinary skips, each with the reason bytes `read_workflow_
@@ -466,6 +631,21 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
     }
 
     #[test]
+    fn update_assuming_lock_refuses_bad_run_state() {
+        let tmp = tmp_root();
+        write_workflow(tmp.path(), "wf-1", json!({"id":"wf-1","feature":"f1"}));
+        let mut patch = Map::new();
+        patch.insert("run_state".into(), json!("zombie"));
+        match update_workflow_assuming_lock(tmp.path(), "wf-1", patch) {
+            Err(Err2::Msg(m)) => assert_eq!(
+                m,
+                "updateWorkflowAssumingLock: run_state must be one of shaping/awaiting-approval/running/blocked/done (got \"zombie\")."
+            ),
+            _ => panic!("expected the run_state refusal"),
+        }
+    }
+
+    #[test]
     fn workflow_lock_name_matches_node_and_is_per_id() {
         let tmp = tmp_root();
         let g = ok(acquire_workflow_lock(tmp.path(), "wf-a"));
@@ -608,6 +788,36 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         );
     }
 
+    /// CRITICAL, plan.md's named trap: `apply_workflow_d1_fields` copies a
+    /// FIXED field list into `.bee/state.json`. A new record field does NOT
+    /// reach the projection unless it is named in that list — so a rebuild
+    /// round-trip alone (byte-identical) proves nothing about a field that
+    /// was never copied at all. This test asserts the projection ACTUALLY
+    /// CARRIES `run_state`, not merely that a rebuild is idempotent.
+    #[test]
+    fn apply_workflow_d1_fields_carries_run_state_into_the_state_projection() {
+        let tmp = tmp_root();
+        write_state_file(tmp.path(), r#"{"phase":"planning","feature":"f1"}"#);
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","status":"active","phase":"swarming",
+                   "mode":"standard","plan_rev":1,"summary":"s","next_action":"n",
+                   "created_at":"2026-01-01T00:00:00.000Z","run_state":"running",
+                   "gates":{"execution":{"approved":true,"approved_for_plan_rev":1,"state":"approved"}}}),
+        );
+        ok(rebuild_state_projection(tmp.path()));
+        let out = read_back(&tmp.path().join(".bee").join("state.json"));
+        assert_eq!(out["run_state"], json!("running"), "apply_workflow_d1_fields must copy run_state");
+
+        // Also directly on the function, in case a future caller stops
+        // going through rebuild_state_projection: the field-copy itself.
+        let mut next = Map::new();
+        let wf = ok(read_workflow_record(tmp.path(), "wf-1"));
+        apply_workflow_d1_fields(&mut next, &wf);
+        assert_eq!(next.get("run_state"), Some(&json!("running")));
+    }
+
     #[test]
     fn state_projection_is_a_noop_when_no_live_workflow_names_the_feature() {
         let tmp = tmp_root();
@@ -688,6 +898,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
                 "approved_gates",
                 "summary",
                 "next_action",
+                "run_state",
                 "created_at"
             ]
         );
@@ -1083,10 +1294,11 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         assert_eq!(
             keys,
             vec![
-                "mode", "phase", "plan_rev", "summary", "next_action", "status", "route", "id",
-                "feature", "gates", "created_at"
+                "mode", "phase", "plan_rev", "summary", "next_action", "status", "route",
+                "run_state", "id", "feature", "gates", "created_at"
             ],
-            "a JS re-assignment keeps a key's original position — only id/feature/gates/created_at append"
+            "a JS re-assignment keeps a key's original position — only id/feature/gates/created_at \
+             append; run_state (trun-7) is a new base default, so it sits with route, not appended"
         );
         assert_eq!(record["id"], json!("wf-explicit"));
         assert_eq!(record["feature"], json!("billing-refunds"), "the feature slug is trimmed");
@@ -1117,7 +1329,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
             .replace(record["created_at"].as_str().unwrap(), "<now>");
         assert_eq!(
             on_disk,
-            "{\n  \"mode\": \"swarm\",\n  \"phase\": \"planning\",\n  \"plan_rev\": 2,\n  \"summary\": \"s\",\n  \"next_action\": \"n\",\n  \"status\": \"paused\",\n  \"route\": null,\n  \"id\": \"wf-explicit\",\n  \"feature\": \"billing-refunds\",\n  \"gates\": {\n    \"context\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"shape\": {\n      \"approved\": true,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"approved\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"execution\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"review\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    }\n  },\n  \"created_at\": \"<now>\"\n}\n"
+            "{\n  \"mode\": \"swarm\",\n  \"phase\": \"planning\",\n  \"plan_rev\": 2,\n  \"summary\": \"s\",\n  \"next_action\": \"n\",\n  \"status\": \"paused\",\n  \"route\": null,\n  \"run_state\": \"awaiting-approval\",\n  \"id\": \"wf-explicit\",\n  \"feature\": \"billing-refunds\",\n  \"gates\": {\n    \"context\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"shape\": {\n      \"approved\": true,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"approved\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"execution\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"review\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    }\n  },\n  \"created_at\": \"<now>\"\n}\n"
         );
         // … and readWorkflowRecord round-trips it with no drift at all.
         let read_back = read_workflow_record(root, "wf-explicit").ok().expect("readable");

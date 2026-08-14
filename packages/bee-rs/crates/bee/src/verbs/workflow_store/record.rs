@@ -196,7 +196,150 @@ pub(crate) fn base_workflow_defaults() -> Map<String, Value> {
     m.insert("next_action".into(), json!(""));
     m.insert("status".into(), json!("active"));
     m.insert("route".into(), Value::Null);
+    // D4: the run's own persisted lifecycle name. Null is the pre-migration
+    // / not-yet-computed shape (see derive_run_state — every write recomputes
+    // it fresh), and check_run_state_value accepts null for exactly that
+    // reason.
+    m.insert("run_state".into(), Value::Null);
     m
+}
+
+// ─── run state (D4) ─────────────────────────────────────────────────────────
+
+/// D4: the closed vocabulary a workflow record's `run_state` is persisted
+/// against — covering the lifecycle states a dashboard needs to name without
+/// re-deriving them at read time: still being shaped, waiting on a human
+/// decision, actively executing, stuck behind a refusal, or finished.
+pub(crate) const RUN_STATE_VALUES: [&str; 5] =
+    ["shaping", "awaiting-approval", "running", "blocked", "done"];
+
+/// `null` (not yet computed / pre-migration) or one of RUN_STATE_VALUES.
+/// Anything else is a corrupt or hand-edited record, refused loudly rather
+/// than defaulted silently — the same discipline check_gate_entry_fields
+/// already applies to a gate entry's own `state`.
+pub(crate) fn valid_run_state_value(v: &Value) -> bool {
+    matches!(v, Value::Null) || matches!(v, Value::String(s) if RUN_STATE_VALUES.contains(&s.as_str()))
+}
+
+/// A patch's `run_state`, if it names one at all, must be in the closed
+/// vocabulary. In practice every write recomputes `run_state` itself
+/// (`derive_run_state`, below) and ignores whatever the patch said — this
+/// guard exists so a caller that DOES pass a bogus value refuses loudly
+/// instead of that value briefly existing in the patch unnoticed.
+pub(crate) fn check_patch_run_state(patch: &Map<String, Value>) -> Result<(), Err2> {
+    match patch.get("run_state") {
+        None => Ok(()),
+        Some(v) if valid_run_state_value(v) => Ok(()),
+        Some(v) => Err(Err2::Msg(format!(
+            "updateWorkflowAssumingLock: run_state must be one of {} (got {}).",
+            RUN_STATE_VALUES.join("/"),
+            jsjson::stringify(v)
+        ))),
+    }
+}
+
+/// D4: per-status cell counts for one feature, gathered natively from the
+/// same `.bee/cells/*.json` store `bee cells list` reads
+/// (`crate::verbs::cells::list_cells`). An exotic JSON-array cell file
+/// (`Delegate`) is never a run_state input — it counts toward nothing here,
+/// exactly as it counts toward nothing in `list_cells`'s own callers today.
+#[derive(Default)]
+pub(crate) struct CellCounts {
+    pub(crate) open: usize,
+    pub(crate) claimed: usize,
+    pub(crate) blocked: usize,
+    pub(crate) capped: usize,
+    pub(crate) dropped: usize,
+}
+
+impl CellCounts {
+    pub(crate) fn total(&self) -> usize {
+        self.open + self.claimed + self.blocked + self.capped + self.dropped
+    }
+}
+
+pub(crate) fn cell_counts_for_feature(root: &Path, feature: &str) -> CellCounts {
+    let mut counts = CellCounts::default();
+    if feature.is_empty() {
+        return counts;
+    }
+    let Ok(cells) = crate::verbs::cells::list_cells(root, Some(feature), None) else {
+        return counts; // exotic array cell — fail open, same as list_cells's own tolerance
+    };
+    for cell in &cells {
+        match cell.get("status").and_then(Value::as_str) {
+            Some("open") => counts.open += 1,
+            Some("claimed") => counts.claimed += 1,
+            Some("blocked") => counts.blocked += 1,
+            Some("capped") => counts.capped += 1,
+            Some("dropped") => counts.dropped += 1,
+            _ => {}
+        }
+    }
+    counts
+}
+
+/// D4: the run's own persisted lifecycle name, derived from what the record
+/// already knows (its own `status`, and the GATE_NAMES-ordered gate entries
+/// slice 1 added) plus a fresh cell-count scan of the SAME feature — never
+/// computed at read time, only written by `create_workflow` and
+/// `update_workflow_assuming_lock_with`, which both call this and persist
+/// the result unconditionally.
+///
+/// The one rule this feature exists to make visible (plan.md, must_haves):
+/// `awaiting-approval` fires whenever any gate is `pending` and NO gate
+/// later in the fixed sequence is `approved` — unconditionally, even if an
+/// earlier gate in the sequence was `rejected`. A trailing, unresolved
+/// `rejected` (nothing later approved, and no earlier pending gate already
+/// claimed the state) reads `blocked` — the existing approved→rejected
+/// revocation path, finally named on the run as a whole. Once every gate
+/// clears, the cell counts distinguish `running` (something open or
+/// claimed) from a stalled `blocked` (only blocked cells remain) from
+/// `done` (every cell settled) from the pre-cells default of `shaping`.
+pub(crate) fn derive_run_state(status: &str, gates: &Value, cells: &CellCounts) -> &'static str {
+    if status == "closed" {
+        return "done";
+    }
+    let mut approved_at: Vec<usize> = Vec::new();
+    let mut pending_at: Vec<usize> = Vec::new();
+    let mut rejected_at: Option<usize> = None;
+    for (i, name) in GATE_NAMES.iter().enumerate() {
+        let state = jget(gates, name).and_then(|e| jget(e, "state")).and_then(Value::as_str);
+        match state {
+            Some("approved") => approved_at.push(i),
+            Some("rejected") => rejected_at = Some(i),
+            _ => pending_at.push(i), // "pending", an old-shape entry, or missing entirely
+        }
+    }
+    // The LAST (highest-index) pending gate is the one to check: anything
+    // after it in the sequence is, by construction, not pending (it is
+    // either approved or rejected), so it has the fewest "later" gates to
+    // clear. If ITS condition holds — nothing later approved — the rule
+    // ("a gate entry is pending and none later is approved") is satisfied,
+    // and it is also the weakest possible case: if a LOWER pending index
+    // failed this same check, the highest one would too, since every later
+    // gate that defeats a lower pending gate's check also postdates the
+    // higher one.
+    if let Some(&p) = pending_at.iter().max() {
+        if !approved_at.iter().any(|&a| a > p) {
+            return "awaiting-approval";
+        }
+    }
+    if let Some(r) = rejected_at {
+        if !approved_at.iter().any(|&a| a > r) {
+            return "blocked";
+        }
+    }
+    if cells.open > 0 || cells.claimed > 0 {
+        return "running";
+    }
+    if cells.blocked > 0 {
+        return "blocked";
+    }
+    if cells.total() > 0 {
+        return "done";
+    }
+    "shaping"
 }
 
 // ─── record read ───────────────────────────────────────────────────────────
@@ -286,6 +429,19 @@ pub(crate) fn read_workflow_record(root: &Path, id: &str) -> Result<Map<String, 
         ))
     })?;
     merged.insert("gates".into(), gates);
+    // D4: `run_state` is a closed vocabulary too (RUN_STATE_VALUES, or the
+    // pre-migration `null`) — a hand-edited or corrupt value refuses rather
+    // than silently passing through, the same discipline the gates map just
+    // applied to itself above.
+    if let Some(rs) = merged.get("run_state") {
+        if !valid_run_state_value(rs) {
+            return Err(WfSkip(format!(
+                "readWorkflow: \"{file_str}\" exists but its run_state is corrupt (must be one of {} or null, got {}). The bee CLI refuses to guess at a workflow record it cannot read — that could silently clobber real state (gates, phase). FIX: inspect/restore the file (e.g. \"git checkout -- {rel}\").",
+                RUN_STATE_VALUES.join("/"),
+                jsjson::stringify(rs)
+            )));
+        }
+    }
     Ok(merged)
 }
 
@@ -428,6 +584,7 @@ pub(crate) fn update_workflow_assuming_lock_with(
     };
     let patch = updater(&current)?;
     check_patch_status(&patch)?;
+    check_patch_run_state(&patch)?;
     let mut next = current.clone();
     for (k, v) in &patch {
         next.insert(k.clone(), v.clone());
@@ -439,6 +596,15 @@ pub(crate) fn update_workflow_assuming_lock_with(
         "gates".into(),
         merge_gates(current.get("gates"), patch.get("gates"))?,
     );
+    // D4: run_state is derived and WRITTEN fresh on every update — never
+    // taken from the patch — so it always reflects what this write just
+    // produced (the status/gates fields resolved above) plus a live
+    // cell-count scan of the same feature, and survives a restart.
+    let status_str = next.get("status").and_then(Value::as_str).unwrap_or("active");
+    let feature_str = next.get("feature").and_then(Value::as_str).unwrap_or("");
+    let gates_val = next.get("gates").cloned().unwrap_or_else(|| Value::Object(default_wf_gates()));
+    let counts = cell_counts_for_feature(root, feature_str);
+    next.insert("run_state".into(), json!(derive_run_state(status_str, &gates_val, &counts)));
     write_json_atomic(&workflow_state_path(root, &workflow_id), &Value::Object(next.clone()))
         .map_err(|_| Err2::Ex)?;
     Ok(next)
@@ -579,6 +745,14 @@ existing record. FIX: use updateWorkflow, or generate a fresh id.",
         record.insert("next_action".into(), opts.next_action.unwrap_or_else(|| json!("")));
         record.insert("status".into(), Value::String(status.to_string()));
         record.insert("created_at".into(), Value::String(now_iso()));
+        // D4/D1: a brand-new record's gates are all the default `pending`
+        // (default_wf_gates via merge_gates above), so this reads
+        // "awaiting-approval" on the very first write — the run is
+        // traceable as waiting on a human from the moment it exists.
+        let gates_val = record.get("gates").cloned().unwrap_or_else(|| Value::Object(default_wf_gates()));
+        let feature_for_counts = record.get("feature").and_then(Value::as_str).unwrap_or("").to_string();
+        let counts = cell_counts_for_feature(root, &feature_for_counts);
+        record.insert("run_state".into(), json!(derive_run_state(status, &gates_val, &counts)));
         write_json_atomic(&file, &Value::Object(record.clone())).map_err(|_| Err2::Ex)?;
         Ok(record)
     })();
