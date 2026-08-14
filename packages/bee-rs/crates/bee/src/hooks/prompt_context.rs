@@ -2334,4 +2334,146 @@ mod tests {
         let lease = sanitize_lock_name("lease:abc");
         assert!(lease.starts_with("lease_abc-"));
     }
+
+    // ─── D2 path ONE: the UserPromptSubmit hook clears the mark (ah-2 rework) ──
+    //
+    // Both tests below drive `run()` — the exact `pub fn` the `bee hook
+    // prompt-context` dispatch calls — rather than `clear_and_reap_waiting_on_
+    // best_effort` directly. That inner function was already reachable and
+    // correct; what had zero coverage was the WIRING: that a real UserPromptSubmit
+    // payload, run through plan()+execute() exactly as the host invokes it,
+    // actually reaches the clear and can never let a failing clear take the
+    // turn down with it.
+
+    /// `Err2`'s `Exotic` payload has no `Debug` impl (by design — see
+    /// jsval.rs), so a plain `.unwrap()`/`.expect()` on a `Result<_, Err2>`
+    /// does not compile. Same shape as workflow_store/tests.rs's own `ok()`.
+    fn ok<T, E>(r: Result<T, E>) -> T {
+        match r {
+            Ok(v) => v,
+            Err(_) => panic!("unexpected error result"),
+        }
+    }
+
+    /// TRUTH: "the human sending a message clears a live mark through the
+    /// UserPromptSubmit hook." A mark set through the real setter, on disk,
+    /// before `run()` — and gone after — with the outcome proving the native
+    /// path decided (not `Outcome::Delegate`, which would mean the clear never
+    /// ran at all).
+    #[test]
+    fn run_clears_a_live_default_waiting_on_mark_through_the_real_hook_entry_point() {
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        ok(crate::verbs::state_group::set_default_state_waiting_on(
+            tmp.path(),
+            "question",
+            "should we ship the v3 index?",
+            "sess-asker",
+        ));
+        let before = ok(crate::verbs::state_group::read_state_peek(tmp.path()));
+        assert!(
+            crate::verbs::workflow_store::waiting_on_is_live(before.get("waiting_on")),
+            "fixture must start with a live mark: {before:?}"
+        );
+
+        let payload = json!({ "cwd": tmp.path().to_string_lossy() }).to_string();
+        let outcome = run(&[], &payload);
+        assert!(
+            matches!(outcome, Outcome::Done(_)),
+            "a plain repo with no linked-worktree/lane edge case must decide natively, \
+             not delegate — otherwise this proves nothing about the Rust clear path"
+        );
+
+        let after = ok(crate::verbs::state_group::read_state_peek(tmp.path()));
+        assert!(
+            !crate::verbs::workflow_store::waiting_on_is_live(after.get("waiting_on")),
+            "the human's message must clear the live mark through the REAL hook entry \
+             point, not merely through the inner clear function: {after:?}"
+        );
+    }
+
+    /// TRUTH: "a failing clear inside the hook never fails the hook or the
+    /// turn." `.bee/` itself (the direct parent of `state.json`) is made
+    /// unwritable AFTER `.bee/locks/`, `.bee/cache/`, and `.bee/logs/` are
+    /// pre-created and left writable — so lock acquisition, the reminder's
+    /// inject-cache write, and crash logging are unaffected, and only the
+    /// clear's own `write_json_atomic(state.json, ..)` tmp-file creation
+    /// fails (a real, first-attempt failure — not a 100-retry lock-contention
+    /// stall). By inspection `clear_and_reap_waiting_on_best_effort` only ever
+    /// logs and swallows; this proves it end to end: the hook still reaches
+    /// its normal completion (the inject cache is written, exactly as a
+    /// successful run would) and still returns the same native `Done`
+    /// outcome — never a crash, never a delegate.
+    #[cfg(unix)]
+    #[test]
+    fn run_survives_a_failing_clear_without_failing_the_hook_or_skipping_its_output() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        ok(crate::verbs::state_group::set_default_state_waiting_on(
+            tmp.path(),
+            "question",
+            "still waiting on you",
+            "sess-asker",
+        ));
+
+        let bee_dir = tmp.path().join(".bee");
+        // Pre-create every subdirectory the rest of the hook writes into so
+        // ONLY the clear's write (a new tmp file directly inside `.bee/`)
+        // fails — the lock, the inject cache, and crash logging all live in
+        // their own subdirectories and stay writable.
+        std::fs::create_dir_all(bee_dir.join("locks")).unwrap();
+        std::fs::create_dir_all(bee_dir.join("cache")).unwrap();
+        std::fs::create_dir_all(bee_dir.join("logs")).unwrap();
+        let writable = std::fs::metadata(&bee_dir).unwrap().permissions();
+        let mut readonly = writable.clone();
+        readonly.set_mode(0o555); // r-x, no write: no new file can be created directly in .bee/
+        std::fs::set_permissions(&bee_dir, readonly).unwrap();
+
+        let payload = json!({ "cwd": tmp.path().to_string_lossy() }).to_string();
+        let outcome = run(&[], &payload);
+
+        // Restore write access before any assertion can panic and before the
+        // tempdir's own Drop tries to remove a directory it can no longer
+        // write into.
+        std::fs::set_permissions(&bee_dir, writable).unwrap();
+
+        assert!(
+            matches!(outcome, Outcome::Done(_)),
+            "a clear that fails on disk must still resolve natively — never Delegate, \
+             and every path `execute()` can return here is ExitCode::SUCCESS by \
+             construction, so `Done` at all is the hook surviving intact"
+        );
+
+        // The clear genuinely failed (proves the injected failure was real,
+        // not accidentally a no-op): the mark is still live.
+        let after = ok(crate::verbs::state_group::read_state_peek(tmp.path()));
+        assert!(
+            crate::verbs::workflow_store::waiting_on_is_live(after.get("waiting_on")),
+            "the mark must still be live — this test's whole point is a clear that \
+             fails, not one that quietly no-ops: {after:?}"
+        );
+
+        // And yet the hook ran all the way to its normal completion: the
+        // reminder pipeline still wrote the inject cache exactly as it would
+        // on a clean run, proving the failing clear never short-circuited the
+        // turn's actual output.
+        let cache = bee_dir.join("cache").join("inject-cache.json");
+        assert!(
+            cache.is_file(),
+            "the hook must still reach and complete its normal reminder/inject step \
+             after a failing clear — a failing clear that also skipped the reminder \
+             would still be breaking the turn, just less visibly"
+        );
+
+        // And the failure was not silently dropped either: best-effort still
+        // means "logged", never "swallowed with no trace".
+        let crash_log = std::fs::read_to_string(bee_dir.join("logs").join("hooks.jsonl"))
+            .unwrap_or_default();
+        assert!(
+            crash_log.contains("prompt-context"),
+            "a failing clear must be crash-logged (log_crash), not silently eaten: {crash_log}"
+        );
+    }
 }
