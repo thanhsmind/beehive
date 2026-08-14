@@ -540,6 +540,142 @@ use std::time::Instant;
         assert_eq!(result["holds_released"], 1.0);
     }
 
+    /// Give the fixture's granted worktree a feature identity and put a cell
+    /// naming that feature in MAIN's store — the exact shape a control-plane
+    /// reserve runs against (the cell is claimed from main, the work happens
+    /// in the worktree).
+    fn cell_owned_by_the_granted_worktree(main: &Path, granted: &Path, cell: &str, feature: &str) {
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            granted.join(".bee").join("runtime").join("worktree-identity.json"),
+            format!("{}\n", json!({ "feature": feature })),
+        )
+        .unwrap();
+        std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("cells").join(format!("{cell}.json")),
+            format!("{}\n", json!({ "id": cell, "feature": feature })),
+        )
+        .unwrap();
+    }
+
+    /// hha-1: a hold belongs to the work stream that owns the CELL. A reserve
+    /// typed from MAIN — where every control-plane command must run — for a
+    /// cell whose feature owns a granted worktree stamps that WORKTREE as the
+    /// holder, so the worker standing in it matches its own row instead of
+    /// being denied by it.
+    #[test]
+    fn main_reserving_for_a_worktree_owned_cell_stamps_the_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = worktree_fixture(tmp.path());
+        cell_owned_by_the_granted_worktree(&main, &granted, "hha-cell", "hold-holder");
+
+        let m = roots_at(&main);
+        let (mm, mh) = m.hold_topology().expect("an ordinary checkout always has a topology");
+        assert_eq!(mh, "main", "the ACTING holder is still plain main");
+        let m_topo = Some(Topo { main_root: &mm, holder: &mh });
+        let m_root_s = root_str(&m.root);
+        assert!(matches!(
+            reserve_exec(m_topo, &m_root_s, &params("main-agent", "hha-cell", "src/shared.ts"), 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+
+        // The mirrored row names the OWNER of the cell, not the typist.
+        let ledger: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(&main)).unwrap())
+                .unwrap();
+        assert_eq!(ledger["holds"].as_array().unwrap().len(), 1);
+        assert_eq!(ledger["holds"][0]["holder"], "wt-granted");
+        // …and it can finally say WHICH feature, instead of "feature unknown".
+        assert_eq!(ledger["holds"][0]["feature"], "hold-holder");
+        assert_eq!(ledger["holds"][0]["cell"], "hha-cell");
+
+        // The lease record carries the SAME holder string as the row.
+        let Ok(rows) = list_reservations(&m_root_s, true, now_ms()) else { panic!("listable") };
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].holder, Some(ledger["holds"][0]["holder"].clone()));
+
+        // Main must not then read its OWN row as foreign: a second reserve on
+        // the same path and cell is an ordinary lease conflict.
+        let Ok(Out::Emit(result, text, 1)) =
+            reserve_exec(m_topo, &m_root_s, &params("other-agent", "hha-cell", "src/shared.ts"), 1)
+        else {
+            panic!("expected a plain reservation conflict from main");
+        };
+        assert_eq!(result.get("code"), None, "FOREIGN_HOLD would be main refusing itself");
+        assert_eq!(result["ok"], Value::Bool(false));
+        assert_eq!(result["conflicts"][0]["agent"], "main-agent");
+        assert!(text.starts_with("Reservation CONFLICT"), "{text}");
+    }
+
+    /// The fallback arm, unchanged from before hha-1: a cell whose feature owns
+    /// no granted worktree keeps the ACTING checkout as the holder — only the
+    /// row's `feature` stops being a hardcoded null.
+    #[test]
+    fn a_cell_without_a_granted_worktree_keeps_the_acting_holder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, _granted, _ungranted) = worktree_fixture(tmp.path());
+        std::fs::create_dir_all(main.join(".bee").join("cells")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("cells").join("lonely.json"),
+            "{\"id\": \"lonely\", \"feature\": \"no-worktree\"}\n",
+        )
+        .unwrap();
+
+        let m = roots_at(&main);
+        let (mm, mh) = m.hold_topology().unwrap();
+        let m_topo = Some(Topo { main_root: &mm, holder: &mh });
+        let m_root_s = root_str(&m.root);
+        assert!(matches!(
+            reserve_exec(m_topo, &m_root_s, &params("main-agent", "lonely", "src/a.ts"), 1),
+            Ok(Out::Emit(_, _, 0))
+        ));
+        let ledger: Value =
+            serde_json::from_str(&std::fs::read_to_string(holds_ledger_path(&main)).unwrap())
+                .unwrap();
+        assert_eq!(ledger["holds"][0]["holder"], "main");
+        assert_eq!(ledger["holds"][0]["feature"], "no-worktree");
+    }
+
+    /// The identity the whole feature rests on, asserted rather than assumed:
+    /// the key in `worktree-grants.json`, `LinkedRoots::id` (the holder a
+    /// granted worktree stamps), and the write guard's own `ctx.workspace_id`
+    /// (the string it compares a row's holder against) are ONE string.
+    #[test]
+    fn grant_key_linked_id_and_guard_workspace_id_are_one_string() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = worktree_fixture(tmp.path());
+
+        let grants = crate::roots::read_grants(&main.join(".bee"));
+        let keys: Vec<String> = match &grants {
+            Value::Object(m) => m.keys().cloned().collect(),
+            other => panic!("the grants registry is an object, got {other:?}"),
+        };
+        assert_eq!(keys, vec!["wt-granted".to_string()]);
+
+        let r = roots_at(&granted);
+        let linked = r.linked.as_ref().expect("a linked worktree");
+        assert!(linked.granted());
+        assert_eq!(linked.id, keys[0]);
+        assert_eq!(r.hold_topology().unwrap().1, keys[0]);
+
+        let ctx = match crate::hooks::write_guard::resolve_context(granted.to_str().unwrap()) {
+            Ok(crate::hooks::write_guard::CtxOutcome::Ok(c)) => c,
+            _ => panic!("the write guard must resolve a granted worktree"),
+        };
+        assert_eq!(ctx.workspace_id.as_deref(), Some(keys[0].as_str()));
+        assert_eq!(ctx.worktree_id.as_deref(), Some(keys[0].as_str()));
+
+        // And it is the string the holder helper answers with, so the row the
+        // guard reads and the id it compares against cannot drift apart.
+        cell_owned_by_the_granted_worktree(&main, &granted, "id-cell", "id-feat");
+        let Ok(owner) = cell_hold_owner(&main, "main", "id-cell") else {
+            panic!("the holder lookup is a plain filesystem read");
+        };
+        assert_eq!(owner.holder, keys[0]);
+        assert_eq!(owner.feature.as_deref(), Some("id-feat"));
+    }
+
     /// An UNGRANTED worktree has NO topology: reserve takes no cross-worktree
     /// lock, writes no mirror row, and release reports zero holds — while the
     /// LEASE itself still lands in main's shared store (controlRootFor).
