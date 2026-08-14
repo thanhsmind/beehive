@@ -1133,6 +1133,62 @@ use crate::version::BEE_VERSION;
         assert_eq!(orient_blockers(root), Vec::<String>::new());
     }
 
+    /// trun-9 (D5): the SAME proposal, cleared through the deferred-queue
+    /// half of `unapplied_promote_proposals` instead of the legacy mtime
+    /// scan above — a completed `promote` record (the shape
+    /// `drivers/close.rs::enqueue_promote_deferred_record` writes on every
+    /// `bee close`) applies the proposal with zero compounding run
+    /// involved, proving `state_group::deferred_debt_cleared`'s queue side
+    /// actually fires here, not only the legacy `legacy_cleared` side the
+    /// test above already covers.
+    #[test]
+    fn a_completed_promote_queue_record_clears_the_proposal_without_a_compounding_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/history/f4/promote-proposals.md",
+            "promote proposal for work item \"f4\" (docs/history/f4/CONTEXT.md) — 1 capped cell(s): b-1\nanchor: history — docs/history/f4/CONTEXT.md\n",
+        );
+        let blockers = orient_blockers(root);
+        assert_eq!(blockers.len(), 1, "{blockers:?}");
+
+        write(
+            root,
+            ".bee/deferred-queue.jsonl",
+            concat!(
+                "{\"ts\":\"2026-01-01T00:00:00.000Z\",\"event\":\"add\",\"id\":\"q1\",\"kind\":\"promote\",\"feature\":\"f4\",\"cells\":[],\"areas\":[],\"files\":[\"docs/history/f4/promote-proposals.md\"],\"reason\":\"r\"}\n",
+                "{\"ts\":\"2026-01-01T00:00:01.000Z\",\"event\":\"complete\",\"id\":\"q1\"}\n",
+            ),
+        );
+        assert_eq!(orient_blockers(root), Vec::<String>::new());
+    }
+
+    /// The mirror case: a `promote` record exists but is not yet completed
+    /// — `items_for(...).any(|item| item.completed)` must stay false, so
+    /// the legacy scan alone still decides and the proposal keeps reporting
+    /// (must_have: "a queued record and the legacy scan never
+    /// double-report the same debt" — an OPEN record is neither route
+    /// clearing it nor doubling the one blocker line).
+    #[test]
+    fn an_uncompleted_promote_queue_record_leaves_the_proposal_reported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/history/f5/promote-proposals.md",
+            "promote proposal for work item \"f5\" (docs/history/f5/CONTEXT.md) — 1 capped cell(s): b-1\nanchor: history — docs/history/f5/CONTEXT.md\n",
+        );
+        write(
+            root,
+            ".bee/deferred-queue.jsonl",
+            "{\"ts\":\"2026-01-01T00:00:00.000Z\",\"event\":\"add\",\"id\":\"q2\",\"kind\":\"promote\",\"feature\":\"f5\",\"cells\":[],\"areas\":[],\"files\":[\"docs/history/f5/promote-proposals.md\"],\"reason\":\"r\"}\n",
+        );
+        let blockers = orient_blockers(root);
+        assert_eq!(blockers.len(), 1, "{blockers:?}");
+        assert!(blockers[0].contains("f5"), "{blockers:?}");
+    }
+
     // ── sweep-at-every-door (D1/D6): bee orient's sweep door ────────────────
     //
     // `sweep_expired_claims` itself (TTL-expired-AND-heartbeat-stale, the

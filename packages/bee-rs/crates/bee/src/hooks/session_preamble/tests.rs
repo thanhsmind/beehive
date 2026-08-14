@@ -406,6 +406,90 @@ use crate::version::BEE_VERSION;
         assert!(text.contains("### Recent decisions\n- «a» (2026-01-01)"), "{text}");
     }
 
+    /// trun-9 rework (D5), FAIL 1's proof: the first pass wired the deferred
+    /// queue into `drivers/close.rs::scribing_debt` only — completing a
+    /// `scribe` record cleared close's own door but left THIS preamble line
+    /// (and the orphan sweep beside it) still reporting the same debt,
+    /// because `hooks::session_preamble::store::scribing_debt` /
+    /// `global_scribing_debt` carried a second, unreconciled copy of the
+    /// scan. Both now read `state_group::scribe_queue_cells` and decide with
+    /// `state_group::deferred_debt_cleared`, the same shared rule close's
+    /// door uses — so completing the queue record clears the preamble too.
+    #[test]
+    fn completing_a_scribe_queue_record_clears_the_preamble_debt_lines() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f1"}"#);
+        write(
+            root,
+            ".bee/cells/c1.json",
+            r#"{"id":"c1","feature":"f1","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-01-02T00:00:00.000Z"}}"#,
+        );
+        write(
+            root,
+            ".bee/cells/c2.json",
+            r#"{"id":"c2","feature":"f1","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-01-02T00:00:00.000Z"}}"#,
+        );
+
+        // Before any queue record: both the active-feature line and the
+        // orphan sweep report the debt — no scribing run has ever happened
+        // (threshold is 0), so the legacy stamp alone leaves both cells open.
+        let text = render(root);
+        assert!(text.contains("### Scribing debt: 2 behavior_change cell(s) uncaptured"), "{text}");
+        assert!(text.contains("### Orphaned scribing debt: 2 cell(s) across 1 feature(s)"), "{text}");
+
+        // A `scribe` deferred-queue record naming BOTH cells, then completed
+        // — the exact shape `drivers/close.rs::scribing_debt` materializes
+        // and `deferred-queue complete` folds, written directly here so this
+        // test proves the READ side, not the write side (covered separately
+        // in drivers/close.rs's own tests).
+        write(
+            root,
+            ".bee/deferred-queue.jsonl",
+            concat!(
+                "{\"ts\":\"2026-01-03T00:00:00.000Z\",\"event\":\"add\",\"id\":\"q1\",\"kind\":\"scribe\",\"feature\":\"f1\",\"cells\":[\"c1\",\"c2\"],\"areas\":[],\"files\":[],\"reason\":\"r\"}\n",
+                "{\"ts\":\"2026-01-04T00:00:00.000Z\",\"event\":\"complete\",\"id\":\"q1\"}\n",
+            ),
+        );
+        let text = render(root);
+        assert!(!text.contains("### Scribing debt:"), "debt line survived completion:\n{text}");
+        assert!(!text.contains("### Orphaned scribing debt:"), "orphan line survived completion:\n{text}");
+    }
+
+    /// Same fixture, but the queue record completes only ONE of the two
+    /// debtor cells — proves the reconciliation is per-cell, not
+    /// per-feature: c1's debt clears while c2's stays reported, on both the
+    /// active-feature line and the orphan sweep.
+    #[test]
+    fn a_partially_completed_scribe_record_still_reports_the_remaining_cell() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(root, ".bee/state.json", r#"{"phase":"swarming","feature":"f1"}"#);
+        write(
+            root,
+            ".bee/cells/c1.json",
+            r#"{"id":"c1","feature":"f1","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-01-02T00:00:00.000Z"}}"#,
+        );
+        write(
+            root,
+            ".bee/cells/c2.json",
+            r#"{"id":"c2","feature":"f1","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-01-02T00:00:00.000Z"}}"#,
+        );
+        write(
+            root,
+            ".bee/deferred-queue.jsonl",
+            concat!(
+                "{\"ts\":\"2026-01-03T00:00:00.000Z\",\"event\":\"add\",\"id\":\"q1\",\"kind\":\"scribe\",\"feature\":\"f1\",\"cells\":[\"c1\"],\"areas\":[],\"files\":[],\"reason\":\"r\"}\n",
+                "{\"ts\":\"2026-01-04T00:00:00.000Z\",\"event\":\"complete\",\"id\":\"q1\"}\n",
+            ),
+        );
+        let text = render(root);
+        assert!(text.contains("### Scribing debt: 1 behavior_change cell(s) uncaptured"), "{text}");
+        assert!(text.contains("- c2 capped since the last scribing run"), "{text}");
+        assert!(text.contains("### Orphaned scribing debt: 1 cell(s) across 1 feature(s)"), "{text}");
+        assert!(text.contains("- Heaviest: f1 (1 cell(s))."), "{text}");
+    }
+
     /// D3 (kf-2): `bee close` writes docs/history/<feature>/promote-proposals.md
     /// on every green close and nothing read it back until this line. A
     /// proposal names its feature, its own count clause, and its path — and
