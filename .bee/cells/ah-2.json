@@ -1,0 +1,77 @@
+{
+  "id": "ah-2",
+  "feature": "awaiting-human",
+  "title": "The waiting mark ends three ways so it can never become a permanent lie",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "ah-1"
+  ],
+  "decisions": [
+    "D2",
+    "D4"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/awaiting-human/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs"
+  ],
+  "action": "Give the waiting mark from ah-1 three independent ways to end, all live at once (per D2). ONE: the `UserPromptSubmit` hook clears it the moment the human sends anything. That hook is hooks/prompt_context.rs — it already runs on every human message and composes the phase/gate reminder in `build_prompt_reminder`. This is the reliable layer, because it fires on a real human action instead of on the agent remembering. It must be BEST-EFFORT: a clear that fails must never fail the hook or break the turn, matching the try-once, lock-losing discipline the other opportunistic hooks already use. TWO: an explicit clear the agent calls when it acts on the answer — the sibling of ah-1's setter. Clearing a mark that does not exist is a no-op, not an error. THREE: stale expiry, and this is the one with a trap. Per D4 it reuses the DUAL-CONDITION rule cells/claims.rs already applies: a mark expires only when its age is past the threshold AND the owning session's heartbeat is stale. Expiry alone must NEVER clear a mark — a human who simply took twenty minutes to answer must not have the wait silently erased while their session is plainly alive. Read the claim sweep before writing this: it excludes the caller's own session first, then re-verifies both conditions. Write the test that pins the trap: age past the threshold, heartbeat FRESH, mark SURVIVES.",
+  "must_haves": {
+    "truths": [
+      "The human sending a message clears a live mark through the UserPromptSubmit hook",
+      "A failing clear inside the hook never fails the hook or the turn",
+      "The agent can clear a mark explicitly, and clearing a mark that does not exist is a no-op rather than an error",
+      "A mark whose age is past the threshold but whose owning session heartbeat is FRESH survives",
+      "A mark whose age is past the threshold and whose owning session heartbeat is stale expires"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+        "substantive": "best-effort clear on the human's message, never able to fail the hook"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+        "substantive": "tests for each of the three clearing paths, including the fresh-heartbeat survival case and the hook's failure isolation"
+      }
+    ],
+    "key_links": [
+      "stale expiry consults the owning session's heartbeat, not the mark's age alone"
+    ],
+    "prohibitions": [
+      "No expiry that clears on age alone",
+      "No change to what the UserPromptSubmit hook already emits",
+      "No new store — the mark lives where ah-1 put it"
+    ]
+  },
+  "trace": {
+    "worker": "stuart3",
+    "outcome": "The waiting mark now ends three live ways: the UserPromptSubmit hook clears it best-effort on any human message (default state and the current feature's workflow record), an explicit clear function is a no-op when nothing is live, and a stale-expiry reap reuses cells/claims.rs's dual-condition rule (age past threshold AND owning-session heartbeat stale) -- pinned by a test where the heartbeat stays fresh and the mark survives.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs"
+    ],
+    "deviations": [
+      "Verified ah-1's setter has no CLI verb. Left it (and this cell's clear/reap functions) unwired to the CLI: ah-3 turned out to own only the read surface, and wiring a verb needs files outside ah-2's declared set (state_group/set_gate.rs, router.rs, catalog.rs) -- a public-contracts-risk change needing its own cell rather than a scope expansion here."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-14T13:23:43.493Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T13:04:25.912Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T13:22:27.090Z"
+  }
+}

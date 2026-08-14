@@ -1,0 +1,78 @@
+{
+  "id": "ah-3",
+  "feature": "awaiting-human",
+  "title": "Every surface a reader checks names what the run is waiting on",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "ah-1"
+  ],
+  "decisions": [
+    "D1",
+    "D5"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs"
+  ],
+  "read_first": [
+    "docs/history/awaiting-human/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs"
+  ],
+  "action": "Surface the waiting mark on every place a reader actually looks (per D1; D5 keeps the dashboard itself out of scope). The previous feature learned this the hard way: a reconciliation wired into some reporting surfaces but not others let one surface go quiet while another kept reporting the opposite, and it took three judge rounds to find every copy. So START by enumerating, with your own fresh search, every surface that reports run_state or the phase-and-gate situation — `bee status --json` (status_full/build.rs), `bee orient` (status_full/orient.rs), the text renderer (status_full/render.rs), and the session preamble (hooks/session_preamble/render.rs) are the ones known now; if your search finds more, cover them and say so. On each: when a mark is live, name WHAT the run is waiting on, not merely that it is waiting. In `orient`, a live wait is a blocker — the whole point is that a reader routing work can tell the run is stopped on a person rather than running. Keep it additive: `bee status --json` is a published contract (docs/07-contracts.md), so every pre-existing key keeps its name, type, and meaning, and assert that in a test rather than in the diff.",
+  "must_haves": {
+    "truths": [
+      "bee status --json exposes the live mark and what is being waited on",
+      "bee orient reports a live wait as a blocker",
+      "The session preamble names a live wait at session start",
+      "Every surface reporting run_state is enumerated, and each either shows the mark or is reported as not a reporting surface",
+      "Every pre-existing bee status --json key keeps its name, type, and meaning"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+        "substantive": "the mark emitted alongside run_state"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "substantive": "tests asserting the new keys, the orient blocker, and the old keys unchanged"
+      }
+    ],
+    "key_links": [
+      "orient treats a live wait as a blocker so a routing reader cannot mistake a stopped run for a running one"
+    ],
+    "prohibitions": [
+      "No renaming or retyping of any existing bee status --json key",
+      "No dashboard, UI, or web surface",
+      "No change to the mark's shape — ah-1 owns it"
+    ]
+  },
+  "trace": {
+    "worker": "dave2",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-14T13:26:52.914Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T13:04:25.918Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T13:26:31.925Z"
+  }
+}

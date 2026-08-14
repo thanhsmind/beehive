@@ -1,0 +1,85 @@
+{
+  "id": "ah-1",
+  "feature": "awaiting-human",
+  "title": "A waiting mark exists, can be set, and makes the run read awaiting-approval",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D3"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/awaiting-human/plan.md",
+    "docs/history/awaiting-human/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs"
+  ],
+  "action": "Make 'the agent is waiting on the human' a real, persisted fact (per D1 and D3). Today `run_state` (added by feature traceable-runs, cell trun-7, in workflow_store/record.rs) reads `awaiting-approval` ONLY when a gate entry is `state: \"pending\"` and none later is approved — so an interview question leaves the run reading `shaping` while the agent sits idle. Read trun-7's diff before writing: `git log --oneline --all -- packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs`. Add a `waiting_on` structure BESIDE `run_state`, not inside it: the state must stay the closed five-value vocabulary existing readers branch on, and the typed refusal trun-7 built must keep working. The mark carries what is being waited on (a gate name or the question the agent asked), a kind distinguishing a gate wait from a question wait, when it was asked, and the session id that owns it — the owner is what makes ah-2's heartbeat check possible. Then widen the derivation: `run_state` reads `awaiting-approval` when a live `waiting_on` mark exists OR the existing pending-gate condition holds. One state, two sources — exactly D1. Add the setter: a verb the agent calls when it asks the human something. Per D3 the mark must work with NO active feature — a question asked before any feature exists is precisely the case the user named, so the mark is session-scoped first and rides the default `.bee/state.json` record when no workflow record is live. Refuse an unknown kind or an empty subject with a typed error and write nothing, matching the WORKFLOW_MISSING/WORKFLOW_CORRUPT discipline already in the module. CRITICAL, or this ships invisible: `apply_workflow_d1_fields` in workflow_store/projections.rs copies a FIXED field list into `.bee/state.json`. A new field omitted there never reaches the projection, and a byte-identical rebuild test still passes VACUOUSLY — this exact trap cost the previous feature a named plan warning. Add the field there and write a test that starts from a state.json with NO mark, rebuilds, and asserts the mark appears. Finally, do the census the plan names as the top risk: enumerate every reader of `run_state` in the crate with your own fresh search, and either update it or state in your report why it is unaffected. The previous feature needed three judge rounds because each pass found reader copies the last had missed.",
+  "must_haves": {
+    "truths": [
+      "Setting a mark makes run_state read awaiting-approval, with no gate pending",
+      "A mark can be set and read when no feature is active, riding the default state record",
+      "An unknown kind or an empty subject refuses with a typed error and writes nothing",
+      "The mark reaches .bee/state.json, proven by a test that starts without it and asserts it appears after a rebuild",
+      "A pending gate AND a live mark together still yield exactly one awaiting-approval, not a conflict",
+      "Every reader of run_state in the crate is enumerated, and each is either updated or reported as unaffected"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+        "substantive": "waiting_on structure with validation and the widened run_state derivation, no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+        "substantive": "apply_workflow_d1_fields extended to carry the mark"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+        "substantive": "tests for the derivation, the no-feature case, the typed refusals, the projection carrying the field, and the both-sources case"
+      }
+    ],
+    "key_links": [
+      "run_state derives awaiting-approval from a live waiting_on mark as well as from a pending gate",
+      "apply_workflow_d1_fields copies the mark so the projection is never missing it"
+    ],
+    "prohibitions": [
+      "No new run_state value and no change to the existing five",
+      "No subject text encoded inside the run_state string",
+      "No change to the gate record fields shipped by traceable-runs",
+      "No renaming or retyping of any existing bee status --json key"
+    ]
+  },
+  "trace": {
+    "worker": "kevin2",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-14T13:03:55.046Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T12:49:31.249Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T13:03:33.728Z"
+  }
+}

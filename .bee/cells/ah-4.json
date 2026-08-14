@@ -1,0 +1,86 @@
+{
+  "id": "ah-4",
+  "feature": "awaiting-human",
+  "title": "The agent can actually mark and unmark a wait from the command line",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "ah-2"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/awaiting-human/plan.md",
+    "docs/history/awaiting-human/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs"
+  ],
+  "action": "Close the gap that makes this feature unusable: the waiting mark exists and can end three ways, but NOTHING can set or clear it from outside the crate, so the agent can never actually declare a wait. ah-1 added the store functions and ah-2 added the clear and reap; ah-2's own deviation names this gap explicitly and says wiring it needs files outside its declared set. Read both commits before writing — `git show b306201f` (ah-1: the waiting_on structure, kind/subject/asked_at/session, on the workflow record AND the default state record) and `git show 39facee4` (ah-2: the hook clear, the explicit clear, the dual-condition stale reap). Take the real function names from those diffs, not from this brief; ah-2 reported them as `set_workflow_waiting_on` and `set_default_state_waiting_on`, but verify. Add the agent-facing verb — `bee state waiting-on set` and `bee state waiting-on clear` unless the crate's own naming says otherwise. `set` takes the kind, the subject (the gate name, or the question the agent asked), and resolves the owning session through the same precedence chain the rest of the crate uses (search for `resolve_session_id`); `clear` takes nothing beyond the usual routing flags and is a no-op when no mark is live, per ah-2. Per D3 BOTH must work with no active feature, writing the session-scoped mark on the default record — that is the case the user specifically named, and it is the one most likely to be missed because every other state verb assumes a live feature. Every verb takes `--json`. Follow the crate's existing verb-registration path exactly rather than inventing one: find how a sibling `state` subcommand is declared and routed, and mirror it. If the CLI help surface is generated rather than hand-written, regenerate it in the same cell — a flag that ships without appearing in `bee --help --json` is a known, already-filed defect in this repo and must not be repeated. Prove it end to end, not just at the unit level: set a mark through the CLI with no feature active, read it back, and confirm the run reports awaiting-approval.",
+  "must_haves": {
+    "truths": [
+      "bee state waiting-on set records a mark the store can read back",
+      "bee state waiting-on clear removes a live mark and is a no-op when none exists",
+      "Both verbs work with no active feature, writing the session-scoped mark on the default record",
+      "After a CLI set with no feature active, the run reports awaiting-approval",
+      "The new verbs and their flags appear in the generated CLI help surface"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs",
+        "substantive": "set and clear handlers wired through the crate's real registration path, no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "substantive": "end-to-end tests through the CLI surface including the no-feature case and the help-surface presence"
+      }
+    ],
+    "key_links": [
+      "the verbs call ah-1's and ah-2's store functions rather than reimplementing the mark"
+    ],
+    "prohibitions": [
+      "No second implementation of the mark or its clearing",
+      "No change to the three clearing paths ah-2 shipped",
+      "No change to the mark's shape — ah-1 owns it"
+    ]
+  },
+  "trace": {
+    "worker": "bob2",
+    "outcome": "Wired bee state waiting-on set/clear onto ah-1/ah-2's existing store functions, with D3 target resolution and projection sync",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+    ],
+    "deviations": [
+      "File list corrected: added waiting_on.rs (the new module), catalog.rs (PINNED_FLAG_COUNT bump for --subject), and tests/workflow_verbs.rs (true through-the-binary CLI proof) beyond the cell's guessed set."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-14T13:49:16.652Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T13:24:36.337Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T13:48:49.700Z"
+  }
+}
