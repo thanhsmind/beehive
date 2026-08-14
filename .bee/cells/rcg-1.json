@@ -1,0 +1,70 @@
+{
+  "id": "rcg-1",
+  "feature": "retire-collation-guard",
+  "title": "Retire the three dead parity guards and invert the tests that assert the defect",
+  "lane": "standard",
+  "status": "open",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/render.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/retire-collation-guard/CONTEXT.md",
+    "docs/history/retire-collation-guard/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/render.rs",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+  ],
+  "action": "Retire three guards that preserved locale-compare parity with a Node oracle this build no longer contains, so two commands that refuse today start working. Per D1 delete BOTH copies of collation_safe — decisions/render.rs:100 and backlog.rs:1139 — they are separate functions with identical bodies, not one shared helper, and both must go. Remove their call-site conditionals at render.rs:196 and :230 (each currently `return Ok(None)`) and backlog.rs:1196 (`return None`), letting the sort that follows run unconditionally. Per D2 delete id_sort_safe (backlog.rs:214) and its two call-site guards at :1046 and :1348-1350. Context you need before touching the sort: lc_primary_key (backlog.rs:1118-1134) already assigns ICU-ordered primary keys to _ - , ; : ! ? . individually and falls back to (1, 100 + c as u32) for everything else, so it is a total function with no undefined region — the colon that disables bee decisions render today is a character the comparator was already calibrated for, and the guard simply was never widened to match its own model. You are removing an over-strict gate, not inventing an ordering. Now the delicate half, which is the reason this cell has a plan at all: four existing tests assert that an exotic key DISABLES a command, which is asserting the defect. Invert them so each asserts the command SUCCEEDS and produces a specific stable order — never merely that it does not panic: backlog.rs:1786 render_content_groups_by_weight_then_collated_id at :1819-1825 (keep its happy-path table assertions untouched), backlog.rs:2148 feature_backlog_rank_reads_the_feature_column_then_the_pbi_fold at :2194-2199, and decisions/tests.rs:865-871 (the scope \"café\" case). Delete these two, which are direct unit tests of the functions being retired and have no subject once they are gone: backlog.rs:1740 locale_cmp_agrees_with_the_calibrated_probes at :1770-1772 (delete only the collation_safe asserts if the rest of that test still probes lc_primary_key usefully — judge it) and backlog.rs:2061 id_sort_guard_accepts_only_lowercase_hex_p_ids, plus the collation_safe asserts in decisions/tests.rs:762 at :796-799. Per D3 do NOT change the router message at router.rs:441-452, and per D4 do NOT touch run_supersede's ASCII guard — both are deliberately out of scope and filed. Do not claim this cell cures the masked-failure family: active_decisions and build_tag_overlay keep their own Exotic returns (decisions/read.rs:55-72 and :146-152) for null events and inconsistent date comparators, and if one fires the same misleading message returns.",
+  "must_haves": {
+    "truths": [
+      "bee decisions render, bee decisions render --all and bee decisions render --check all run instead of refusing",
+      "bee backlog pbi list with no --status lists PBIs including the legacy P-prefixed ids",
+      "bee backlog render still works and its output for the current store is unchanged",
+      "Every test that previously asserted an exotic key disables a command now asserts the command succeeds AND produces a specific order",
+      "No change to router.rs's message and none to run_supersede's ASCII guard"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+        "substantive": "collation_safe and id_sort_safe removed with their call-site guards; the tests that asserted the delegate branch inverted or deleted"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/decisions/render.rs",
+        "substantive": "the second collation_safe removed with both call-site guards"
+      }
+    ],
+    "key_links": [
+      "build_decision_index_body no longer returns Ok(None) for a group key carrying punctuation",
+      "compute_backlog_render_content and the pbi-list path no longer gate on an id alphabet"
+    ],
+    "prohibitions": [
+      "No change to router.rs:441-452",
+      "No change to run_supersede's ASCII guard",
+      "No change to lc_primary_key's ordering model",
+      "No test left asserting only that a command does not panic",
+      "Do not regenerate docs/decisions/index.md in this cell"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
