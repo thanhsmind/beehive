@@ -1,0 +1,76 @@
+{
+  "id": "trun-8",
+  "feature": "traceable-runs",
+  "title": "One claimable queue holds the work a run deferred, with enough payload for an absent agent",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D5"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/lib.rs",
+    "packages/bee-rs/crates/bee/src/verbs/deferred_queue_tests.rs"
+  ],
+  "read_first": [
+    "docs/history/traceable-runs/plan.md",
+    "docs/history/traceable-runs/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs"
+  ],
+  "action": "Build the one claimable queue D5 asks for: deferred capture, scribing, review, and promote-proposal work as REAL records an agent that was absent when they were queued can pick up and execute. New store, event-sourced JSONL, following the pattern backlog.rs already proves rather than inventing one. Record shape: an id, a `kind` (`capture` | `scribe` | `review` | `promote`), and a payload complete enough to act on with no session memory — feature, cells, areas, files, and a reason in the queuer's own words. Plus claim fields: owner, claimed_at, and a lease expiry. Reuse, do not reinvent: `lock::acquire_store_lock` for the store lock (its stale-takeover rule already handles a dead holder), `resolve_session_id`'s precedence chain for owner identity, backlog.rs's append-then-fold shape (pre-lock read-only fold and duplicate probe, acquire the lock, RE-fold under it as the race check, append, release), and the O_EXCL create protocol plus the dual-condition stale rule from cells/claims.rs — a claim is only reclaimable when the lease is expired AND the owner's heartbeat is stale, never on the lease alone. Verbs: add to the queue, list (filterable by kind and by claimed state), claim exactly one item (the point of the whole cell — two parallel agents must never get the same item), release, and complete. Every verb takes `--json`. The race is the risk, so prove it the way this repo proves races: real OS child processes contending for the same item, with an exact-count assertion that exactly one wins, plus a NEGATIVE CONTROL that must itself produce a violation when the claim is not exclusive, so the suite cannot pass vacuously. Search the repo for an existing multi-process race test and follow its shape. Do NOT migrate any existing store in this cell: `.bee/capture-queue.jsonl` and `.bee/review-candidates.jsonl` stay exactly as they are, and the derived scribing and promote scans stay too. This cell builds the queue; a later cell decides what feeds it. Verify the module wiring path yourself — the file list here is a guess at where a new verb module goes; if the crate wires verbs differently, follow the crate and record the corrected paths as a deviation.",
+  "must_haves": {
+    "truths": [
+      "A queued item carries kind, feature, cells, areas, files, and a reason, and is executable with no session memory",
+      "Two concurrent OS processes claiming the same item produce exactly one winner, proven with an exact-count assertion",
+      "The race suite has a negative control that fails when exclusivity is removed, so it cannot pass vacuously",
+      "A claim is reclaimable only when the lease is expired AND the owner heartbeat is stale, never on expiry alone",
+      "list filters by kind and by claimed state, and every verb supports --json"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+        "substantive": "event-sourced store with fold, named lock, add/list/claim/release/complete, no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/deferred_queue_tests.rs",
+        "substantive": "fold and lifecycle tests plus the multi-process claim race with its negative control"
+      }
+    ],
+    "key_links": [
+      "the queue's claim path uses lock::acquire_store_lock and resolve_session_id rather than a private copy"
+    ],
+    "prohibitions": [
+      "No migration of .bee/capture-queue.jsonl or .bee/review-candidates.jsonl in this cell",
+      "No change to the existing derived scribing-debt or promote-proposal scans in this cell",
+      "No in-process-only concurrency test standing in for the multi-process proof"
+    ]
+  },
+  "trace": {
+    "worker": "tim",
+    "outcome": "New deferred_queue.rs verb module (add/list/claim/release/complete) wired into verbs/mod.rs's dispatch chain; claim exclusivity proven with a real multi-process race test plus a falsifiability negative control in tests/concurrency.rs.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/tests/concurrency.rs"
+    ],
+    "deviations": [
+      "Split tests by kind rather than the guessed deferred_queue_tests.rs: fold/lifecycle/dual-condition-stale unit tests stay inline in deferred_queue.rs (capture.rs/backlog.rs's own convention); the multi-process claim race and its negative control live in tests/concurrency.rs, the crate's established home for real-OS-process race proofs."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-14T08:46:38.046Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T08:23:26.441Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T08:46:18.217Z"
+  }
+}

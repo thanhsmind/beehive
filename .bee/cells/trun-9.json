@@ -1,0 +1,96 @@
+{
+  "id": "trun-9",
+  "feature": "traceable-runs",
+  "title": "Deferred scribing and promote work become real queue records instead of scans nobody can claim",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [
+    "trun-8"
+  ],
+  "decisions": [
+    "D5"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "docs/history/traceable-runs/plan.md",
+    "docs/history/traceable-runs/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs"
+  ],
+  "action": "Finish what trun-8 started: make the two DERIVED deferred-work scans into real, claimable queue records, so a parallel agent can take them (per D5). trun-8 built the queue at .bee/deferred-queue.jsonl with add/list/claim/release/complete; read it first and use it as-is. Two sources to convert. FIRST, scribing debt: today it is recomputed on every call by scanning every capped cell whose trace.behavior_change is true and comparing its capped_at against the best scribing stamp for that feature (see scribing_debt / global_scribing_debt / best_scribing_stamp_ms in state_group/ledger.rs, and the mirrored copy the status path uses). A scan has nothing to claim and no payload, which is exactly why a parallel agent cannot be handed the work. Enqueue a `scribe` record at the moment the debt is INCURRED — when a behavior_change cell caps — carrying the feature, the cell ids, the areas, and the files, so the record is executable with no session memory. SECOND, promote proposals: today unapplied ones are detected by walking docs/history/*/ and comparing each promote-proposals.md mtime against that feature's scribing stamp (see unapplied_promote_proposals in status_full/mod.rs). Enqueue a `promote` record when `bee close` writes a promote proposal, carrying the feature and the proposal path. KEEP BOTH SCANS WORKING as a fallback for repos whose history predates the queue: a record already queued must not be double-reported, and a debt with no record must still surface. Reconcile in ONE place so the two answers can never disagree, and say in the code which one wins. Completing the queue record is what clears the debt going forward — wire `complete` so the existing scribing-run and compounding-run stamps still satisfy the old scan too. Do NOT touch .bee/capture-queue.jsonl or .bee/review-candidates.jsonl: those are already real stores with their own lifecycles, and CONTEXT.md's open question about absorbing them is explicitly not decided here. Verify every path and function name against the tree before trusting this brief; record corrections as deviations.",
+  "must_haves": {
+    "truths": [
+      "Capping a behavior_change cell enqueues a scribe record carrying feature, cells, areas, and files",
+      "bee close writing a promote proposal enqueues a promote record carrying the feature and the proposal path",
+      "A queued record and the legacy scan never double-report the same debt",
+      "A debt that predates the queue, with no record, still surfaces through the scan",
+      "Completing a queue record clears that debt from what the session preamble reports"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs",
+        "substantive": "scribing debt enqueues a real record at cap time and reconciles with the legacy scan in one place"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+        "substantive": "promote-proposal reporting reads queue records first, falling back to the mtime scan"
+      }
+    ],
+    "key_links": [
+      "both the scribe and promote sources write through trun-8's queue verbs rather than a second private store"
+    ],
+    "prohibitions": [
+      "No change to .bee/capture-queue.jsonl or .bee/review-candidates.jsonl",
+      "No removal of the legacy scans while repos exist whose debt predates the queue",
+      "No second reconciliation site — one place decides, and the code says which answer wins"
+    ]
+  },
+  "trace": {
+    "worker": "norbert",
+    "outcome": "Materialized claimable scribe/promote deferred-queue records from the two derived scans (D5), reconciled through one shared clearing rule so neither scan disagrees or double-reports",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [
+      "Scribe-record enqueue at cap time lives in drivers/close.rs scribing_debt as a lazy materialize-on-scan, not in cells/handlers_close.rs run_cap, which is outside this cells files list; promote-record enqueue is synchronous in drivers/close.rs since bee close own write is in scope. hooks/session_preamble/store.rs and hooks/chain_nudge.rs keep their own separate, pre-existing scribing_debt copies (out of scope) unreconciled; status_full unapplied_promote_proposals is reconciled and is confirmed via rg to be what hooks/session_preamble/render.rs actually calls."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-14T09:05:51.815Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T08:47:42.320Z",
+    "report": {
+      "outcome": "Materialized claimable scribe/promote deferred-queue records from the two derived scans (D5), reconciled through one shared clearing rule (state_group::ledger::deferred_debt_cleared) so neither scan can disagree or double-report; capture-queue.jsonl and review-candidates.jsonl untouched.",
+      "commit": "2f099328",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/ledger.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "green",
+      "deviations": [
+        "The action text said to enqueue a scribe record when a behavior_change cell caps, inside cells/handlers_close.rs run_cap. That file is outside this cells files list, so the trigger instead lives in drivers/close.rs scribing_debt: it lazily materializes a missing scribe record the next time anything calls the scan.",
+        "The action text also named the session preamble as a consumer that should see debt clear. hooks/session_preamble/store.rs and hooks/chain_nudge.rs each carry their own independent, pre-existing copies of scribing_debt and best_scribing_stamp_ms, outside this cells files list, and are unchanged."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 224 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T09:05:31.919Z"
+  }
+}

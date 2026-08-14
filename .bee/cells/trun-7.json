@@ -1,0 +1,95 @@
+{
+  "id": "trun-7",
+  "feature": "traceable-runs",
+  "title": "Cell and feature carry a persisted run state a reader can display without deriving it",
+  "lane": "high-risk",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D4",
+    "D7"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/traceable-runs/plan.md",
+    "docs/history/traceable-runs/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs"
+  ],
+  "action": "Give the FEATURE a persisted run state, so a dashboard reads one field instead of inferring where a run stands (per D4, exposed per D7). Slice 1 already did this for the gate entry; this cell does it for the run as a whole. Add a `run_state` field to the workflow record with a closed vocabulary covering the states the lifecycle already has but cannot name: at minimum `shaping`, `awaiting-approval`, `running`, `blocked`, `done`. Persist it; never compute it at read time. Derive its initial value and its transitions from what the record already knows — phase, the gate entries slice 1 added, and the cell counts — but WRITE the result, so it survives a restart. Reject an unknown value with a typed error, matching the existing WORKFLOW_MISSING/WORKFLOW_CORRUPT discipline. `awaiting-approval` must be the value whenever a gate entry is `state: \"pending\"` and no later gate has been approved — that is the state the whole feature exists to make visible. CRITICAL, or this ships invisible: `apply_workflow_d1_fields` in workflow_store/projections.rs copies exactly `phase`, `feature`, `mode`, `approved_gates`, `summary`, `next_action` into `.bee/state.json`. A new record field does NOT reach the projection unless you add it there. The plan flags this explicitly: the byte-identical rebuild proof passes vacuously if `run_state` never projects, so add a test that asserts the projection actually CARRIES it, not merely that a rebuild round-trips. Then surface it in `bee status --json` beside the gate entries slice 1 exposed. On the CELL side, do not add new status values: the five (`open`, `claimed`, `capped`, `blocked`, `dropped`) already map onto waiting, running, blocked and done, and 41 call sites read them. Instead confirm in a test that a reader can tell those five apart from the feature's `run_state` without re-deriving either. If you conclude a genuinely new cell state IS needed, do not add it silently — record it as a deviation with the transition it names that the five cannot express.",
+  "must_haves": {
+    "truths": [
+      "The workflow record persists run_state with a closed vocabulary, and an unknown value refuses with a typed error",
+      "run_state reads awaiting-approval whenever a gate entry is pending and none later is approved",
+      "run_state reaches .bee/state.json through apply_workflow_d1_fields, proven by a test asserting the projection carries it",
+      "bee status --json exposes run_state beside the gate entries",
+      "No new cell status value is introduced, and every pre-existing bee status --json key keeps its name, type, and meaning"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+        "substantive": "run_state field with validation and transition writes, no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+        "substantive": "apply_workflow_d1_fields extended to carry run_state"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+        "substantive": "tests for the vocabulary, the awaiting-approval rule, the invalid-value refusal, and the projection actually carrying the field"
+      }
+    ],
+    "key_links": [
+      "apply_workflow_d1_fields copies run_state, so the state.json projection is never missing it"
+    ],
+    "prohibitions": [
+      "No new cell status value without a recorded deviation naming the transition the five cannot express",
+      "No renaming or retyping of any existing bee status --json key",
+      "No dashboard, UI, or web surface"
+    ]
+  },
+  "trace": {
+    "worker": "carl",
+    "outcome": "Add a persisted run_state field to the workflow record (closed vocabulary: shaping/awaiting-approval/running/blocked/done), derived from status/gates/cell-counts and written on every create/update; extend apply_workflow_d1_fields so it reaches .bee/state.json; expose it in bee status --json beside gate_records; no new cell status value.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-14T08:47:19.877Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d0cba344-c9f5-4d6a-b084-d10ff11e0560",
+    "claimed_at": "2026-08-14T08:23:26.436Z",
+    "report": {
+      "outcome": "Persisted run_state on the workflow record with a closed 5-value vocabulary, derived from status + the D3 gate entries + a live cell-count scan, written on every create_workflow/update_workflow_assuming_lock_with call (never taken from a caller patch). Extended apply_workflow_d1_fields (and the sibling lane projection) to carry run_state into .bee/state.json — the CRITICAL trap the plan named. Exposed run_state in bee status --json beside gate_records. No new cell status value introduced.",
+      "commit": "a730189d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/projections.rs",
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+      ],
+      "tests": "green",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T08:47:00.059Z"
+  }
+}
