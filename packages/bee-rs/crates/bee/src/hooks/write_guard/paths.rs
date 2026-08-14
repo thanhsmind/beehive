@@ -448,7 +448,7 @@ pub(crate) fn intake_fix_line() -> String {
 or route the request through bee-hive first (classify the mode; tiny fixes stay tiny — one cell, a 2-minute \
 reality check, Gate 2, go), then execute. Last resort, repo-level opt-out: \
 set guards.idle_gate to false in .bee/config.json (plain JSON; delete the key to re-enable).",
-        GATE_ALLOWED_PREFIXES.join(", ")
+        GATE_ALLOWED_PREFIXES_INTAKE.join(", ")
     )
 }
 
