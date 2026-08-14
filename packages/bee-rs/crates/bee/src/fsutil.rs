@@ -14,6 +14,7 @@
 // that refused still refuses.
 
 use crate::jsjson;
+use crate::textutil::truncate_chars_tail;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -177,6 +178,28 @@ pub fn append_jsonl(file: &Path, value: &Value) -> std::io::Result<()> {
 
 pub fn remove_file_if_exists(file: &Path) {
     let _ = std::fs::remove_file(file);
+}
+
+/// The bound every failure excerpt below shares (provenance `lib/test-runner.mjs`
+/// FAILURE_EXCERPT_MAX_CHARS; decision D2 of full-failure-evidence keeps it
+/// unraised). Counts `char`s, not UTF-16 units (js-parity-cleanup D3).
+pub(crate) const FAILURE_EXCERPT_MAX_CHARS: usize = 500;
+
+/// The tail-of-output excerpt for one failing declared command: the last
+/// [`FAILURE_EXCERPT_MAX_CHARS`] characters of `trimmed_output` (already
+/// JS-trimmed by the caller — `bee test`, `bee cells finish` and `bee close`
+/// each spawn their own command and trim its output before calling this), or
+/// `(no output; exit N)` when nothing survives the trim.
+pub(crate) fn failure_excerpt(trimmed_output: &str, exit: Option<i64>) -> String {
+    let tail = truncate_chars_tail(trimmed_output, FAILURE_EXCERPT_MAX_CHARS);
+    if tail.is_empty() {
+        format!(
+            "(no output; exit {})",
+            exit.map(|e| e.to_string()).unwrap_or_else(|| "null".to_string())
+        )
+    } else {
+        tail
+    }
 }
 
 #[cfg(test)]

@@ -46,11 +46,12 @@
 // (the .bee/logs dir is pre-flighted before the drift write to keep that
 // path all but impossible).
 
-use crate::fsutil::{ensure_dir, write_json_atomic};
+use crate::fsutil::{self, ensure_dir, write_json_atomic};
 use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_any as resolve_store_root, Roots};
 use crate::state::read_config_raw;
+#[cfg(test)]
 use crate::textutil::truncate_chars_tail;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Value};
@@ -61,9 +62,6 @@ use std::time::Instant;
 
 /// TEST_RESULTS_RELATIVE (lib/test-runner.mjs:30).
 const TEST_RESULTS_RELATIVE: &str = ".bee/logs/test-results.json";
-/// FAILURE_EXCERPT_MAX_CHARS (lib/test-runner.mjs:35) — CHARS (decision D3:
-/// char-based, not the historical UTF-16-unit count).
-const FAILURE_EXCERPT_MAX: usize = 500;
 
 pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
     if args.first()?.to_str()? != "test" {
@@ -282,12 +280,7 @@ fn run_declared_tests(root: &Path, commands: &[String], shell: &str) -> TestRun 
             None
         } else {
             let trimmed = js_trim(&output);
-            let tail = truncate_chars_tail(&trimmed, FAILURE_EXCERPT_MAX);
-            Some(if tail.is_empty() {
-                format!("(no output; exit {})", js_exit(exit))
-            } else {
-                tail
-            })
+            Some(fsutil::failure_excerpt(&trimmed, exit))
         };
         results.push(CommandResult {
             command: command.clone(),
@@ -378,11 +371,6 @@ fn first_failure_line(run: &TestRun) -> Option<String> {
 }
 
 // ── JS string primitives ───────────────────────────────────────────────────
-
-/// JS `${exit}` for the "(no output; exit N)" excerpt: null -> "null".
-fn js_exit(exit: Option<i64>) -> String {
-    exit.map(|e| e.to_string()).unwrap_or_else(|| "null".to_string())
-}
 
 /// ECMA WhiteSpace ∪ LineTerminator — String.prototype.trim's char set
 /// (includes U+FEFF and NBSP, which Rust's str::trim does not).
@@ -534,14 +522,14 @@ mod tests {
     #[test]
     fn excerpt_keeps_only_the_last_500_chars() {
         let long = "x".repeat(650);
-        assert_eq!(truncate_chars_tail(&long, FAILURE_EXCERPT_MAX).len(), 500);
-        assert_eq!(truncate_chars_tail("short", FAILURE_EXCERPT_MAX), "short");
+        assert_eq!(truncate_chars_tail(&long, fsutil::FAILURE_EXCERPT_MAX_CHARS).len(), 500);
+        assert_eq!(truncate_chars_tail("short", fsutil::FAILURE_EXCERPT_MAX_CHARS), "short");
         // Decision D3: the cap counts CHARS, not UTF-16 units — an astral
         // char is one char, so 300 of them (600 UTF-16 units) fits under the
         // 500-char cap untouched, where the old UTF-16-unit cap would have
         // truncated it.
         let astral = "🐝".repeat(300);
-        let tail = truncate_chars_tail(&astral, FAILURE_EXCERPT_MAX);
+        let tail = truncate_chars_tail(&astral, fsutil::FAILURE_EXCERPT_MAX_CHARS);
         assert_eq!(tail.chars().count(), 300);
         assert_eq!(tail, astral);
     }

@@ -4,11 +4,10 @@
 #![allow(unused_imports)]
 
 use super::*;
-use crate::fsutil::{append_jsonl, ensure_dir, read_json, write_json_atomic, write_text_atomic, ReadJson};
+use crate::fsutil::{self, append_jsonl, ensure_dir, read_json, write_json_atomic, write_text_atomic, ReadJson};
 use crate::jsjson;
 use crate::roots::{resolve_store_root, Roots};
 use crate::state::{capture_queue_threshold, read_config_raw};
-use crate::textutil::truncate_chars_tail;
 use crate::verbs::reservations::{
     finish, js_is_ws, now_iso, now_ms, parse_flags, prelude, pseudo_uuid_v4, truthy, FlagV, Flags, Out, Pre, R2,
 };
@@ -28,9 +27,6 @@ use std::time::Instant;
 
 /// provenance: test-runner.mjs TEST_RESULTS_RELATIVE (verbs/test_runner.rs:60).
 pub(crate) const TEST_RESULTS_RELATIVE: &str = ".bee/logs/test-results.json";
-
-/// provenance: test-runner.mjs FAILURE_EXCERPT_MAX_CHARS (verbs/test_runner.rs:63).
-pub(crate) const FAILURE_EXCERPT_MAX: usize = 500;
 
 /// provenance: bee.mjs CLOSE_TESTS_UNDECLARED_DETAIL.
 pub(crate) const CLOSE_TESTS_UNDECLARED_DETAIL: &str = "no commands.test declared — close has no test door here; declare commands.test in .bee/config.json (string or array) to give it one";
@@ -141,15 +137,7 @@ pub(crate) fn run_declared_tests(root: &Path, commands: &[String], shell: &str) 
             None
         } else {
             let trimmed = js_trim(&output).to_string();
-            let tail = truncate_chars_tail(&trimmed, FAILURE_EXCERPT_MAX);
-            Some(if tail.is_empty() {
-                format!(
-                    "(no output; exit {})",
-                    exit.map(|e| e.to_string()).unwrap_or_else(|| "null".to_string())
-                )
-            } else {
-                tail
-            })
+            Some(fsutil::failure_excerpt(&trimmed, exit))
         };
         results.push(CommandResult { command: command.clone(), exit, duration_ms, failure_excerpt });
     }

@@ -4,13 +4,12 @@
 #![allow(unused_imports)]
 
 use super::*;
-use crate::fsutil::{read_json, write_json_atomic, ReadJson};
+use crate::fsutil::{self, read_json, write_json_atomic, ReadJson};
 use crate::jsjson;
 use crate::lock;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, Roots, StoreRoots};
 use crate::state as bstate;
-use crate::textutil::truncate_chars_tail;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
@@ -25,8 +24,6 @@ use std::time::Instant;
 // ─── test runner (lib/test-runner.mjs) ─────────────────────────────────────
 
 pub(crate) const TEST_RESULTS_RELATIVE: &str = ".bee/logs/test-results.json";
-
-pub(crate) const FAILURE_EXCERPT_MAX_CHARS: usize = 500;
 
 pub(crate) fn test_results_path(root: &Path) -> PathBuf {
     root.join(".bee").join("logs").join("test-results.json")
@@ -99,7 +96,7 @@ pub(crate) fn run_declared_tests(root: &Path, commands: &[String]) -> MR<TestsRu
         let started = std::time::Instant::now();
         let spawn = spawn_declared(command, root);
         let duration_ms = started.elapsed().as_millis() as f64;
-        let (exit, mut output, passed) = match spawn {
+        let (exit, output, passed) = match spawn {
             Ok((code, stdout, stderr)) => {
                 let out = format!("{stdout}{stderr}");
                 (code.map(|c| c as f64), out, code == Some(0))
@@ -115,16 +112,8 @@ pub(crate) fn run_declared_tests(root: &Path, commands: &[String]) -> MR<TestsRu
         let excerpt = if passed {
             None
         } else {
-            output = js_trim(&output).to_string();
-            let tail = truncate_chars_tail(&output, FAILURE_EXCERPT_MAX_CHARS);
-            Some(if tail.is_empty() {
-                format!(
-                    "(no output; exit {})",
-                    exit.map(jsjson::js_f64_to_string).unwrap_or_else(|| "null".to_string())
-                )
-            } else {
-                tail
-            })
+            let trimmed = js_trim(&output).to_string();
+            Some(fsutil::failure_excerpt(&trimmed, exit.map(|e| e as i64)))
         };
         results.push(CmdRun { command: command.clone(), exit, duration_ms, failure_excerpt: excerpt });
     }
