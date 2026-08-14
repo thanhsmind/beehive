@@ -3,7 +3,7 @@
   "feature": "full-failure-evidence",
   "title": "Consolidate the three failure-excerpt blocks into one helper, changing no behavior",
   "lane": "standard",
-  "status": "open",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "D2"
@@ -49,16 +49,26 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "ffe1",
+    "outcome": "Extracted the three failure-excerpt blocks into crate::fsutil::failure_excerpt; every existing test passes with only the three FAILURE_EXCERPT_MAX references retargeted",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/fsutil.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/test_runner.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-14T03:13:18.899Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f4158037-da59-46aa-a355-3acf7820af24",
+    "claimed_at": "2026-08-14T03:04:27.209Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T03:12:59.369Z"
   }
 }

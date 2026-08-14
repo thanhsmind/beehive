@@ -3,7 +3,7 @@
   "feature": "full-failure-evidence",
   "title": "Keep the full failing output on disk and name it in the record and the refusal",
   "lane": "standard",
-  "status": "open",
+  "status": "capped",
   "deps": [
     "ffe-1"
   ],
@@ -60,16 +60,110 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "ffe2",
+    "outcome": "Wired the test-runner runner and the refusal-text log line; register.md and tests updated",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/fsutil.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+      "docs/handbook/register.md"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-14T03:50:13.279Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f4158037-da59-46aa-a355-3acf7820af24",
+    "claimed_at": "2026-08-14T03:13:57.328Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-14T03:49:53.698Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "status": "PASS",
+            "evidence": "All three runners log raw untrimmed stdout+stderr: finish_support.rs:131, drivers/close.rs:152, test_runner.rs:295 pass &output (built raw at finish_support.rs:105, close.rs:121-135, test_runner.rs:264-278; ffe-1 removed the old in-place trim). E2E: bee test in a scratch root wrote a 712-byte .bee/logs/test-failure-test-0.log beginning marker-line, which the 500-char excerpt drops."
+          },
+          {
+            "id": "t2",
+            "status": "PASS",
+            "evidence": "git diff d465a1eb 91618568 -- verbs/test_runner.rs filtered on js_trim/failure_excerpt/truncate printed nothing; the fsutil hunk is a pure insertion after the function (@@ -204,0 +205,34 @@), so fsutil.rs:186-199 is byte-identical. E2E record showed failure_excerpt of exactly 500 chars with no path appended. Caveat: the added test fsutil.rs:373-381 is tautological (same pure fn called twice), so the proof rests on the diff plus the unmodified pinned assertions cells/tests.rs:1706 and test_runner.rs:538."
+          },
+          {
+            "id": "t3",
+            "status": "PASS",
+            "evidence": "failure_log inserted LAST in all three builders: finish_support.rs:161-164, drivers/close.rs:208-215, test_runner.rs:345-352; key order pinned at test_runner.rs:487-491; E2E record keys were command, exit, duration_ms, failure_excerpt, failure_log with null on the passing command (serde_json preserve_order, packages/bee-rs/Cargo.toml:12)."
+          },
+          {
+            "id": "t4",
+            "status": "PASS",
+            "evidence": "finish: cells/tests.rs:1739 mixed run, cells/tests.rs:1725 green clears stale. test: test_runner.rs:580 plus the mixed assertion test_runner.rs:513-520, confirmed E2E (mixed left index 0 only; the next green run removed it). close has NO dedicated retention test — provable only through the identical block drivers/close.rs:148-153 over fsutil::clear_failure_log (fsutil.rs:235, unit-tested fsutil.rs:386)."
+          },
+          {
+            "id": "t5",
+            "status": "PASS",
+            "evidence": "E2E: a directory pre-occupying .bee/logs/test-failure-test-0.log left green=false, failure_excerpt=boom, failure_log=null, exit 1. Tests: test_runner.rs:593, cells/tests.rs:1753, fsutil.rs:397. The divergence is documented deliberate at fsutil.rs:219-226, matching plan.md Error path."
+          },
+          {
+            "id": "t6",
+            "status": "PASS",
+            "evidence": "drivers/close.rs:1082-1084 pushes the log line (asserted drivers/tests.rs:1917 as lines[6]); cells/handlers_close.rs:243-245 does the same (asserted cells/tests.rs:3276-3280)."
+          },
+          {
+            "id": "t7",
+            "status": "PASS",
+            "evidence": "docs/handbook/register.md:231-241 carries failure_log in the test-results.json shape and the new test-failure-runner-index.log inventory entry with its retention rule."
+          },
+          {
+            "id": "p1",
+            "status": "PASS",
+            "evidence": "No excerpt-path line changed between d465a1eb and 91618568; textutil.rs and cells/trace.rs show an empty diff between the two commits (git diff --stat printed nothing)."
+          },
+          {
+            "id": "p2",
+            "status": "PASS",
+            "evidence": "fsutil.rs:186 FAILURE_EXCERPT_MAX_CHARS = 500 is the only bound in the tree and is unchanged; the E2E excerpt measured exactly 500 chars."
+          },
+          {
+            "id": "p3",
+            "status": "PASS",
+            "evidence": "The excerpt is still a pure tail (fsutil.rs:194 truncate_chars_tail); ffe-2 added no output parsing and left first_failure_line untouched (test_runner.rs:372 region, handlers_close.rs:200)."
+          },
+          {
+            "id": "p4",
+            "status": "PASS",
+            "evidence": "write_failure_log swallows the error with .ok() (fsutil.rs:228) and green is decided before the log block (close.rs:136-139, test_runner.rs:279-282, finish_support.rs:113-115); the E2E red stayed red with failure_log null."
+          },
+          {
+            "id": "p5",
+            "status": "PASS",
+            "evidence": "fsutil.rs:216 formats .bee/logs/test-failure-RUNNER-INDEX.log — runner and index only, no timestamp; asserted fsutil.rs:355-360."
+          },
+          {
+            "id": "ffe1",
+            "status": "PASS",
+            "evidence": "d465a1eb touched 4 source files and exactly 3 test lines (test_runner.rs:608, 609, 615), each only retargeting the constant name with values 500/short/300 unchanged. The one semantic delta — finish_support jsjson::js_f64_to_string replaced by (exit as i64).to_string() — is exact because the f64 is always built from an i32 exit code (finish_support.rs:106). Declared suite green: cargo test --release --manifest-path packages/bee-rs/Cargo.toml gave 1668 passed, 11 ignored, 0 failed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-14T04:09:34.280Z"
+      }
+    ]
   }
 }
