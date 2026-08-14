@@ -473,6 +473,196 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
         assert_eq!(on_disk.get("waiting_on"), Some(&Value::Null), "the refused patch wrote nothing");
     }
 
+    // ── awaiting-human: clearing (D2, ah-2) ─────────────────────────────────
+
+    #[test]
+    fn clear_workflow_waiting_on_clears_a_live_mark_and_recomputes_run_state() {
+        let tmp = tmp_root();
+        let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
+        let id = record.get("id").unwrap().as_str().unwrap().to_string();
+        // Approve every gate so, once the mark is gone, run_state falls all
+        // the way through to a value the gate condition alone can't fake.
+        let mut approve = Map::new();
+        approve.insert(
+            "gates".into(),
+            json!({
+                "context": {"approved": true, "state": "approved"},
+                "shape": {"approved": true, "state": "approved"},
+                "execution": {"approved": true, "state": "approved"},
+                "review": {"approved": true, "state": "approved"},
+            }),
+        );
+        ok(update_workflow(tmp.path(), &id, approve));
+        ok(set_workflow_waiting_on(tmp.path(), &id, "question", "why is X true?", "sess-1"));
+        let marked = ok(read_workflow_record(tmp.path(), &id));
+        assert_eq!(marked.get("run_state"), Some(&json!("awaiting-approval")));
+
+        let cleared = ok(clear_workflow_waiting_on(tmp.path(), &id));
+        assert_eq!(cleared.get("waiting_on"), Some(&Value::Null));
+        assert_eq!(cleared.get("run_state"), Some(&json!("shaping")), "recomputed, mark gone");
+        let on_disk = ok(read_workflow_record(tmp.path(), &id));
+        assert_eq!(on_disk.get("waiting_on"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn clear_workflow_waiting_on_is_a_no_op_when_nothing_is_live() {
+        let tmp = tmp_root();
+        let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
+        let id = record.get("id").unwrap().as_str().unwrap().to_string();
+        // No mark was ever set — clearing must not refuse.
+        let cleared = ok(clear_workflow_waiting_on(tmp.path(), &id));
+        assert_eq!(cleared.get("waiting_on"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn clear_default_state_waiting_on_clears_a_live_mark() {
+        let tmp = tmp_root();
+        ok(crate::verbs::state_group::set_default_state_waiting_on(
+            tmp.path(),
+            "question",
+            "why?",
+            "sess-1",
+        ));
+        let marked = ok(crate::verbs::state_group::read_state_strict(tmp.path()));
+        assert!(waiting_on_is_live(marked.get("waiting_on")));
+        assert_eq!(marked.get("run_state"), Some(&json!("awaiting-approval")));
+
+        let cleared = ok(clear_default_state_waiting_on(tmp.path()));
+        assert_eq!(cleared.get("waiting_on"), Some(&Value::Null));
+        let on_disk = ok(crate::verbs::state_group::read_state_strict(tmp.path()));
+        assert_eq!(on_disk.get("waiting_on"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn clear_default_state_waiting_on_is_a_no_op_when_nothing_is_live() {
+        let tmp = tmp_root();
+        // No .bee/state.json at all yet — clearing must not refuse or create one
+        // with a bogus mark.
+        let cleared = ok(clear_default_state_waiting_on(tmp.path()));
+        assert_eq!(cleared.get("waiting_on"), Some(&Value::Null));
+    }
+
+    // ── awaiting-human: stale expiry (D4, ah-2) ─────────────────────────────
+
+    const WAITING_ON_OLD_ASKED_AT: &str = "2020-01-01T00:00:00.000Z";
+
+    fn write_session_fixture(root: &Path, id: &str, last_heartbeat: &str) {
+        let dir = crate::verbs::cells::sessions_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let rec = json!({"id": id, "started_at": last_heartbeat, "last_heartbeat": last_heartbeat});
+        std::fs::write(dir.join(format!("{id}.json")), jsjson::stringify_pretty(&rec)).unwrap();
+    }
+
+    /// Pure predicate: age past the threshold is necessary but, on its own,
+    /// never sufficient — the trap D4 exists to close.
+    #[test]
+    fn waiting_on_expired_requires_both_conditions_age_alone_never_expires() {
+        let now = crate::verbs::reservations::now_ms();
+        let old_mark = json!({
+            "kind": "question", "subject": "x", "session": "s",
+            "asked_at": WAITING_ON_OLD_ASKED_AT,
+        });
+        let fresh_mark = json!({
+            "kind": "question", "subject": "x", "session": "s",
+            "asked_at": ok(crate::verbs::reservations::iso_from_ms(now)),
+        });
+        assert!(waiting_on_age_expired(&old_mark, now), "old enough on its own");
+        assert!(!waiting_on_age_expired(&fresh_mark, now), "not old enough");
+
+        // The trap: age past threshold, heartbeat FRESH (owner_heartbeat_stale
+        // = false) — the mark SURVIVES.
+        assert!(
+            !waiting_on_expired(&old_mark, now, false),
+            "age alone must never expire a mark whose owning session is plainly alive"
+        );
+        // Both conditions hold — the mark expires.
+        assert!(waiting_on_expired(&old_mark, now, true));
+        // Heartbeat stale but the mark itself is still fresh — never expires.
+        assert!(!waiting_on_expired(&fresh_mark, now, true));
+    }
+
+    #[test]
+    fn waiting_on_age_expired_tolerates_a_missing_or_unparseable_asked_at() {
+        let now = crate::verbs::reservations::now_ms();
+        assert!(!waiting_on_age_expired(&json!({"kind": "gate", "subject": "x"}), now));
+        assert!(!waiting_on_age_expired(&json!({"asked_at": "not a date"}), now));
+    }
+
+    /// The must-have this cell exists to prove: a workflow's waiting_on mark
+    /// whose age is past the threshold but whose owning session's heartbeat
+    /// is FRESH survives a reap untouched.
+    #[test]
+    fn reap_stale_waiting_on_survives_a_live_owner_session() {
+        let tmp = tmp_root();
+        let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
+        let id = record.get("id").unwrap().as_str().unwrap().to_string();
+        ok(set_workflow_waiting_on(tmp.path(), &id, "question", "why?", "live-sess"));
+        // Back-date asked_at past the threshold by hand-editing the record
+        // (build_waiting_on always stamps "now").
+        let mut patch = Map::new();
+        patch.insert(
+            "waiting_on".into(),
+            json!({"kind": "question", "subject": "why?", "session": "live-sess", "asked_at": WAITING_ON_OLD_ASKED_AT}),
+        );
+        ok(update_workflow(tmp.path(), &id, patch));
+        let fresh = ok(crate::verbs::reservations::iso_from_ms(crate::verbs::reservations::now_ms()));
+        write_session_fixture(tmp.path(), "live-sess", &fresh);
+
+        reap_stale_waiting_on(tmp.path(), crate::verbs::reservations::now_ms());
+
+        let on_disk = ok(read_workflow_record(tmp.path(), &id));
+        assert!(
+            waiting_on_is_live(on_disk.get("waiting_on")),
+            "a plainly alive owner session must never lose its mark to age alone: {on_disk:?}"
+        );
+    }
+
+    /// The other half: the SAME old mark, but its owning session's heartbeat
+    /// has also gone stale — the reap clears it.
+    #[test]
+    fn reap_stale_waiting_on_clears_a_mark_whose_owner_session_is_dead() {
+        let tmp = tmp_root();
+        let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
+        let id = record.get("id").unwrap().as_str().unwrap().to_string();
+        ok(set_workflow_waiting_on(tmp.path(), &id, "question", "why?", "dead-sess"));
+        let mut patch = Map::new();
+        patch.insert(
+            "waiting_on".into(),
+            json!({"kind": "question", "subject": "why?", "session": "dead-sess", "asked_at": WAITING_ON_OLD_ASKED_AT}),
+        );
+        ok(update_workflow(tmp.path(), &id, patch));
+        write_session_fixture(tmp.path(), "dead-sess", WAITING_ON_OLD_ASKED_AT); // stale heartbeat too
+
+        reap_stale_waiting_on(tmp.path(), crate::verbs::reservations::now_ms());
+
+        let on_disk = ok(read_workflow_record(tmp.path(), &id));
+        assert_eq!(on_disk.get("waiting_on"), Some(&Value::Null), "dead owner: reaped");
+    }
+
+    /// D3's session-scoped case reaps exactly like the feature-scoped one.
+    #[test]
+    fn reap_stale_waiting_on_covers_the_default_state_record_too() {
+        let tmp = tmp_root();
+        ok(crate::verbs::state_group::set_default_state_waiting_on(
+            tmp.path(),
+            "question",
+            "why?",
+            "dead-sess",
+        ));
+        let mut current = ok(crate::verbs::state_group::read_state_strict(tmp.path()));
+        current.insert(
+            "waiting_on".into(),
+            json!({"kind": "question", "subject": "why?", "session": "dead-sess", "asked_at": WAITING_ON_OLD_ASKED_AT}),
+        );
+        ok(write_state(tmp.path(), &current));
+        write_session_fixture(tmp.path(), "dead-sess", WAITING_ON_OLD_ASKED_AT);
+
+        reap_stale_waiting_on(tmp.path(), crate::verbs::reservations::now_ms());
+
+        let on_disk = ok(crate::verbs::state_group::read_state_strict(tmp.path()));
+        assert_eq!(on_disk.get("waiting_on"), Some(&Value::Null), "dead owner: reaped");
+    }
+
     // ── listWorkflows skip tolerance (R6 blocker, now native) ─────────────
 
     /// The three ordinary skips, each with the reason bytes `read_workflow_

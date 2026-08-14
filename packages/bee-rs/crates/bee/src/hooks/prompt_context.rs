@@ -176,6 +176,12 @@ struct Nudge {
 
 struct Plan {
     session_id: Option<String>,
+    /// D2/D4 (awaiting-human, ah-2): the feature this reminder resolved
+    /// against, if any — the resolved `record.feature`, whichever pipeline
+    /// arm produced it. Used only to find that feature's live workflow
+    /// record (if one exists) for the waiting-mark clearing pass below;
+    /// `None` when no feature is bound, matching D3's session-scoped case.
+    feature: Option<String>,
     reminder_text: String,
     reminder_hash: String,
     inject_key: String,
@@ -223,6 +229,13 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
         Pipeline::Ok(rec) => rec.clone(),
         Pipeline::Refused => read_state(root)?,
     };
+    // D2/D4 (ah-2): the resolved record's own feature, if any — carried into
+    // the Plan so execute()'s waiting-mark clearing pass can find that
+    // feature's live workflow record without a second pipeline resolution.
+    let feature = match &record.feature {
+        Value::String(s) if !s.trim().is_empty() => Some(s.clone()),
+        _ => None,
+    };
 
     // inject.mjs buildPromptReminder — fields + stableHash(sha1(JSON)).
     let (reminder_text, reminder_hash) = build_prompt_reminder(&record);
@@ -249,6 +262,7 @@ fn plan(root: &Path, payload: &Map<String, Value>) -> Pf<Option<Plan>> {
 
     Ok(Some(Plan {
         session_id,
+        feature,
         reminder_text,
         reminder_hash,
         inject_key,
@@ -272,6 +286,16 @@ fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) ->
             log_crash(Some(root), HOOK_NAME, &err, ctx.source);
         }
     }
+
+    // D2 (awaiting-human, ah-2): the RELIABLE clearing layer — the human
+    // sending anything at all clears any live waiting_on mark, because this
+    // fires on a real human action rather than on the agent remembering.
+    // Own try/catch per clear, exactly like heartbeat_block above: a failure
+    // here is crash-logged and must NEVER fail the hook or block the
+    // reminder that already printed. D4's stale-expiry reap rides the same
+    // best-effort pass, on the theory that any live session's prompt is as
+    // good an opportunity as any to sweep a mark left behind by a dead one.
+    clear_and_reap_waiting_on_best_effort(root, ctx, plan.feature.as_deref());
 
     let mut parts: Vec<String> = Vec::new();
     if plan.inject_reminder {
@@ -300,6 +324,52 @@ fn execute(root: &Path, ctx: &crate::hooks::adapter::HookContext, plan: Plan) ->
         let _ = std::io::stdout().write_all(parts.join("\n\n").as_bytes());
     }
     ExitCode::SUCCESS
+}
+
+// ─── waiting-mark clearing (D2/D4, ah-2) ────────────────────────────────────
+
+/// D2's reliable clearing layer plus D4's stale-expiry reap, both best-effort
+/// and both isolated per call — one failing (or the mark not existing at
+/// all, which is a no-op everywhere it is checked) never skips or blocks the
+/// other, and neither ever surfaces to stdout or changes the hook's exit
+/// code. The mark can live in TWO places (D1/D3): the default
+/// `.bee/state.json` record is always tried, and the resolved `feature`'s
+/// live workflow record (if any) is tried too.
+fn clear_and_reap_waiting_on_best_effort(
+    root: &Path,
+    ctx: &crate::hooks::adapter::HookContext,
+    feature: Option<&str>,
+) {
+    if let Err(e) = crate::verbs::workflow_store::clear_default_state_waiting_on(root) {
+        log_crash(Some(root), HOOK_NAME, &waiting_on_err_message(e), ctx.source);
+    }
+    if let Some(feature) = feature.filter(|f| !f.trim().is_empty()) {
+        match crate::verbs::workflow_store::list_workflows(root) {
+            Ok(workflows) => {
+                if let Some(wf) = crate::verbs::workflow_store::find_live_workflow(&workflows, feature) {
+                    let id = crate::verbs::workflow_store::wf_id(wf);
+                    if let Err(e) = crate::verbs::workflow_store::clear_workflow_waiting_on(root, &id) {
+                        log_crash(Some(root), HOOK_NAME, &waiting_on_err_message(e), ctx.source);
+                    }
+                }
+            }
+            Err(_) => {} // best-effort: an unreadable workflows dir is silently skipped
+        }
+    }
+    // D4: the stale-expiry backstop for a mark left by a session that will
+    // never send another prompt to clear it itself. `reap_stale_waiting_on`
+    // is its own best-effort function (never returns an error to log) —
+    // every record it touches is individually locked/re-verified.
+    crate::verbs::workflow_store::reap_stale_waiting_on(root, now_ms() as f64);
+}
+
+fn waiting_on_err_message(e: crate::verbs::reservations::Err2) -> String {
+    match e {
+        crate::verbs::reservations::Err2::Msg(m) => m,
+        crate::verbs::reservations::Err2::Ex => {
+            "waiting_on clear: an exotic (unmodelable) record value".to_string()
+        }
+    }
 }
 
 // ─── payload parsing (adapter-normalization twin, read-only) ────────────────
