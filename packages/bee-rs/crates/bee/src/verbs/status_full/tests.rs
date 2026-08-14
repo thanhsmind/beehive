@@ -3381,3 +3381,78 @@ use crate::version::BEE_VERSION;
             assert!(vget(entry, "state").unwrap().is_string());
         }
     }
+
+    // ── trun-7: run_state, read straight off the projection ────────────────
+
+    /// D4/D7: `run_state` is WRITTEN on the workflow record and reaches
+    /// `.bee/state.json` purely through `apply_workflow_d1_fields` (pinned
+    /// directly in `workflow_store::tests`). `bee status --json` never
+    /// re-derives it — it reads the SAME state.json field the pre-existing
+    /// `phase`/`feature`/`mode` keys already read.
+    #[test]
+    fn bee_status_json_exposes_run_state_beside_the_gate_records() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f1","mode":"standard","run_state":"running"}"#,
+        );
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        assert_eq!(status.get("run_state"), Some(&json!("running")));
+    }
+
+    /// No live workflow has ever written run_state (a fresh or idle repo):
+    /// the key is still present — null, never absent, matching how `phase`/
+    /// `feature` already behave at the same fallback.
+    #[test]
+    fn bee_status_json_run_state_is_null_without_a_live_workflow() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        assert_eq!(status.get("run_state"), Some(&Value::Null));
+    }
+
+    /// The D4 boundary the cell's must_haves name explicitly: the five cell
+    /// statuses (open/claimed/capped/blocked/dropped, `status.cells.*`) and
+    /// the feature's own `run_state` are two separate, independently
+    /// persisted signals — a reader tells them apart without re-deriving
+    /// either from the other. No new cell status value is introduced here.
+    #[test]
+    fn cell_statuses_and_feature_run_state_are_independent_signals() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f1","mode":"standard","run_state":"blocked"}"#,
+        );
+        write(root, ".bee/cells/c-1.json", r#"{"id":"c-1","feature":"f1","status":"open","lane":"standard","title":"t"}"#);
+        write(root, ".bee/cells/c-2.json", r#"{"id":"c-2","feature":"f1","status":"claimed","lane":"standard","title":"t"}"#);
+        write(root, ".bee/cells/c-3.json", r#"{"id":"c-3","feature":"f1","status":"capped","lane":"standard","title":"t"}"#);
+        write(root, ".bee/cells/c-4.json", r#"{"id":"c-4","feature":"f1","status":"blocked","lane":"standard","title":"t"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+
+        // The feature's own run_state — read straight from the record, not
+        // computed from the cell counts below.
+        assert_eq!(status.get("run_state"), Some(&json!("blocked")));
+
+        // The five-value cell vocabulary, unchanged and independently
+        // countable — none of these values is "blocked" for the SAME
+        // reason run_state is; a cell can be individually blocked while the
+        // feature as a whole reads any run_state at all.
+        let cells = status.get("cells").expect("cells key");
+        assert_eq!(cells.get("open"), Some(&json!(1)));
+        assert_eq!(cells.get("claimed"), Some(&json!(1)));
+        assert_eq!(cells.get("capped"), Some(&json!(1)));
+        assert_eq!(cells.get("blocked"), Some(&json!(1)));
+        // Still exactly the five names — no sixth cell status was invented.
+        assert_eq!(cells.as_object().unwrap().len(), 6, "open/claimed/capped/blocked/archived/archivable");
+    }

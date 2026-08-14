@@ -205,6 +205,22 @@ impl Ctx {
 // mtime; otherwise it is open work. `bee orient` (orient.rs) and the session
 // preamble (hooks::session_preamble::render) both call this ONE scan —
 // neither re-parses docs/history/ its own way.
+//
+// D5 (trun-9, docs/history/traceable-runs/plan.md): `bee close`
+// (drivers/close.rs) now ALSO enqueues a `promote` deferred-queue record
+// every time it writes this file, so this scan checks that record FIRST.
+// Applied is decided by the SAME shared OR rule scribing debt uses,
+// `state_group::deferred_debt_cleared` (ledger.rs) — legacy mtime signal OR
+// a completed queue record, either clears it, so a plain compounding run
+// still applies a pre-queue proposal with zero queue involvement, and
+// `deferred-queue complete` clears a post-queue one without also requiring
+// a compounding run. A feature whose proposal predates the queue (no
+// `promote` record was ever written for it) falls straight back to the
+// mtime scan, unchanged — this is the "keep both scans working" half of
+// the must_have. This scan never materializes a missing record itself
+// (unlike scribing debt): the trigger point for a `promote` record is
+// `bee close` writing the file, which is reachable directly in-scope, so
+// there is no derived-scan-side workaround to write here.
 
 pub(crate) struct UnappliedPromoteProposal {
     pub(crate) feature: String,
@@ -258,8 +274,16 @@ pub(crate) fn unapplied_promote_proposals(root: &Path) -> Vec<UnappliedPromotePr
             &ledger,
             &state,
         );
-        if threshold.map(|t| t >= mtime_ms).unwrap_or(false) {
-            continue; // a compounding run at or after the proposal — applied
+        let legacy_cleared = threshold.map(|t| t >= mtime_ms).unwrap_or(false);
+        // A record predates the queue when none was ever written for this
+        // feature (bee close pre-trun-9, or a proposal from before this
+        // cell shipped) — `.any` over zero items is `false`, so that case
+        // falls straight through to the legacy-only decision below.
+        let queue_completed = crate::verbs::deferred_queue::items_for(root, "promote", &feature)
+            .iter()
+            .any(|item| item.completed);
+        if crate::verbs::state_group::deferred_debt_cleared(legacy_cleared, queue_completed) {
+            continue; // applied — either the legacy stamp or the queue record says so
         }
         let text = std::fs::read_to_string(&file).unwrap_or_default();
         out.push(UnappliedPromoteProposal {

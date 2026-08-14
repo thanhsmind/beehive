@@ -245,6 +245,12 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
     // booleans, so a dashboard reads `pending` vs `rejected` without
     // re-deriving either from a bare `false`.
     status.insert("gate_records".into(), gate_records);
+    // D4/D7: the run's own persisted lifecycle name, read straight off the
+    // projected state.json field apply_workflow_d1_fields carries — never
+    // re-derived here, matching the record's own "persisted, not derived"
+    // discipline. Null when no live workflow has ever written it (a
+    // pre-migration or brand-new-idle repo).
+    status.insert("run_state".into(), state.get("run_state").cloned().unwrap_or(Value::Null));
     let level1 = bypass_level_root(ctx)?; // readConfig
     status.insert("gate_bypass".into(), json!(level1 != "off"));
     let level2 = bypass_level_root(ctx)?; // readConfig (Node calls it twice)
