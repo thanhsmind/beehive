@@ -126,6 +126,38 @@ pub(crate) fn best_scribing_stamp_ms(
     Ok(best)
 }
 
+// ─── deferred-queue reconciliation (trun-9, D5) ────────────────────────────
+//
+// The ONE place the two derived deferred-work scans this cell converts —
+// scribing debt (`drivers/close.rs::scribing_debt`) and unapplied promote
+// proposals (`status_full/mod.rs::unapplied_promote_proposals`) — decide
+// whether their legacy timestamp signal and a `.bee/deferred-queue.jsonl`
+// record can ever disagree. They cannot: this is the single answer both
+// callers read, so neither can drift from the other.
+//
+// The answer is an OR, and that IS "which one wins": neither signal is
+// preferred over the other, on purpose.
+//   - LEGACY clears it (capped_at/proposal mtime at or before the best
+//     scribing/compounding stamp): unchanged behavior. A repo that has
+//     never touched the deferred queue — every repo whose debt predates
+//     trun-8 — keeps clearing debt exactly as it always did, and a plain
+//     scribing or compounding run still satisfies it with zero queue
+//     involvement (must_have: "the existing scribing-run and
+//     compounding-run stamps still satisfy the old scan too").
+//   - QUEUE clears it (`deferred-queue complete` was run against the
+//     record this debt was materialized into): the new path.
+// Whichever fires first wins; completing the queue record never demands a
+// redundant legacy stamp, and a legacy stamp never requires draining the
+// queue. This is also what stops double-reporting: a scan never
+// materializes a second record for a cell/feature a record already names
+// (see the `queued_*` sets each caller builds from `deferred_queue::items_for`
+// before calling this), and a cleared cell/feature is skipped by BOTH
+// callers' loops the same way, so the same debt is never both "found by the
+// scan" and "sitting open in the queue" in a single report.
+pub(crate) fn deferred_debt_cleared(legacy_cleared: bool, queue_completed: bool) -> bool {
+    legacy_cleared || queue_completed
+}
+
 pub(crate) fn acquire_state_lock(root: &Path) -> Result<lock::LockGuard, Err2> {
     lock::acquire_store_lock(root, "state", lock::MAX_ATTEMPTS).map_err(|b| Err2::Msg(b.message()))
 }

@@ -365,19 +365,73 @@ pub(crate) struct DebtSummary {
 /// `bee close`'s own auto-archive already moved to
 /// `.bee/cells/archive/<feature>/` still counts against the threshold below
 /// — a clear door can no longer be a side effect of archiving the debt away.
+///
+/// D5 (trun-9, docs/history/traceable-runs/plan.md): this scan is also now
+/// the ONE place that MATERIALIZES a claimable `scribe` deferred-queue
+/// record the moment it finds debt with no record yet — "capping a
+/// behavior_change cell enqueues a scribe record" happens lazily, on the
+/// next call here (close's own door, and `state_group/set_gate.rs`'s swap
+/// door, both call this on every relevant mutation) rather than inside the
+/// cap handler itself, which this cell's `files` list does not reach.
+/// Whether a cell's debt still counts is decided by ONE shared rule,
+/// `state_group::deferred_debt_cleared` (ledger.rs) — see that function's
+/// doc for what "which one wins" means. A cell already named by ANY
+/// existing `scribe` record (completed or not) never gets a second one.
 pub(crate) fn scribing_debt(root: &Path, feature: &str) -> D<DebtSummary> {
     let state = read_state(root)?;
     let threshold = best_scribing_stamp_ms(root, feature, &state)?.unwrap_or(0.0);
+
+    let scribe_records = crate::verbs::deferred_queue::items_for(root, "scribe", feature);
+    let mut queued_cells: HashSet<String> = HashSet::new();
+    let mut completed_cells: HashSet<String> = HashSet::new();
+    for record in &scribe_records {
+        for cell_id in &record.cells {
+            queued_cells.insert(cell_id.clone());
+            if record.completed {
+                completed_cells.insert(cell_id.clone());
+            }
+        }
+    }
+
     let mut ids = Vec::new();
+    // (cell id, that cell's own declared `files`) — only cells no existing
+    // record names yet; materialized into one new record below, once.
+    let mut to_materialize: Vec<(String, Vec<String>)> = Vec::new();
     for cell in list_cells_including_archive(root, feature, "capped")? {
         let trace = vget(&cell, "trace").cloned().unwrap_or(Value::Object(Map::new()));
         if !matches!(vget(&trace, "behavior_change"), Some(Value::Bool(true))) {
             continue;
         }
         let capped_at = date_parse(vget(&trace, "capped_at"));
-        if capped_at.is_finite() && capped_at > threshold {
-            ids.push(vget(&cell, "id").cloned().unwrap_or(Value::Null));
+        let legacy_cleared = !(capped_at.is_finite() && capped_at > threshold);
+        let id_str = vget(&cell, "id").and_then(Value::as_str).unwrap_or("").to_string();
+        let queue_completed = !id_str.is_empty() && completed_cells.contains(&id_str);
+        if crate::verbs::state_group::deferred_debt_cleared(legacy_cleared, queue_completed) {
+            continue;
         }
+        ids.push(vget(&cell, "id").cloned().unwrap_or(Value::Null));
+        if !id_str.is_empty() && !queued_cells.contains(&id_str) {
+            let files: Vec<String> = match vget(&cell, "files") {
+                Some(Value::Array(a)) => a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
+                _ => Vec::new(),
+            };
+            to_materialize.push((id_str, files));
+        }
+    }
+    if !to_materialize.is_empty() {
+        let cell_ids: Vec<String> = to_materialize.iter().map(|(id, _)| id.clone()).collect();
+        let mut files: Vec<String> = to_materialize.iter().flat_map(|(_, f)| f.iter().cloned()).collect();
+        files.sort();
+        files.dedup();
+        let reason = format!(
+            "Scribing debt: {} capped behavior_change cell(s) for \"{feature}\" with no scribing/compounding record since capping.",
+            cell_ids.len()
+        );
+        // Best-effort: this scan runs on every close attempt and every gate
+        // swap check, so a failed append here is never fatal — the count
+        // just returned above is still correct for THIS call, and the next
+        // call tries materializing again.
+        let _ = crate::verbs::deferred_queue::enqueue(root, "scribe", feature, &cell_ids, &[], &files, &reason);
     }
     Ok(DebtSummary { count: ids.len(), ids })
 }
@@ -585,6 +639,27 @@ pub(crate) fn enqueue_promote_stub(root: &Path, feature: &str, proposal: &Value,
     stub.insert("lane".into(), Value::Null);
     stub.insert("source".into(), Value::String("promote".into()));
     let _ = append_jsonl(&root.join(".bee").join("capture-queue.jsonl"), &Value::Object(stub));
+}
+
+/// D5 (trun-9, docs/history/traceable-runs/plan.md): the SECOND, separate
+/// enqueue this same close writes — into `.bee/deferred-queue.jsonl`, never
+/// into `.bee/capture-queue.jsonl` (the stub above is untouched and keeps
+/// its own lifecycle; CONTEXT.md leaves absorbing it explicitly undecided).
+/// This is the record `status_full::unapplied_promote_proposals` reads back
+/// via `deferred_queue::items_for` so a proposal has a real, claimable
+/// payload instead of only a derived mtime scan. Best-effort, same as the
+/// stub above: an append failure here never fails close.
+pub(crate) fn enqueue_promote_deferred_record(root: &Path, feature: &str, proposals_rel: &str) {
+    let reason = format!("Promote proposal for \"{feature}\" awaiting apply — {proposals_rel}.");
+    let _ = crate::verbs::deferred_queue::enqueue(
+        root,
+        "promote",
+        feature,
+        &[],
+        &[],
+        &[proposals_rel.to_string()],
+        &reason,
+    );
 }
 
 /// D1 escape hatch: a logged decision tagged `capture-deferral` whose
@@ -1312,6 +1387,7 @@ pub(crate) fn close_handler(
             match write_text_atomic(&root.join(&proposals_rel), &text) {
                 Ok(()) => {
                     enqueue_promote_stub(root, feature, &proposal, &proposals_rel);
+                    enqueue_promote_deferred_record(root, feature, &proposals_rel);
                     let cells_mined = proposal["cells"].as_array().map(Vec::len).unwrap_or(0);
                     let area_bullets: usize = proposal["area_updates"]
                         .as_array()

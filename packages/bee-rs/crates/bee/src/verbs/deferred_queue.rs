@@ -177,6 +177,66 @@ fn fold(root: &Path) -> Fold {
     f
 }
 
+// ─── non-CLI query + write surface (trun-9, D5) ────────────────────────────
+//
+// The two DERIVED deferred-work scans this cell converts — scribing debt
+// (drivers/close.rs) and unapplied promote proposals (status_full/mod.rs) —
+// need a plain function call, not an argv shape: "is there already a
+// record naming this?", "has it been completed?", and "add one". Both
+// reuse `fold` (never a second parse of the JSONL file) and `run_add`
+// below calls the same `enqueue` a scan calls, so there is exactly one
+// append path for a new item, CLI or not.
+
+/// A folded item stripped of the CLI-only claim/lease detail neither
+/// caller needs.
+pub(crate) struct QueuedItem {
+    pub(crate) cells: Vec<String>,
+    pub(crate) completed: bool,
+}
+
+/// Every record of `kind` naming `feature` — exactly `deferred-queue list
+/// --kind <k>` filtered to one feature, minus the JSON/text rendering.
+/// Read-only: safe to call on every scan, no lock needed (mirrors `run_list`
+/// reading the fold directly, uncontended).
+pub(crate) fn items_for(root: &Path, kind: &str, feature: &str) -> Vec<QueuedItem> {
+    let f = fold(root);
+    f.order
+        .iter()
+        .filter_map(|id| f.items.get(id))
+        .filter(|item| item.kind == kind && item.feature == feature)
+        .map(|item| QueuedItem { cells: item.cells.clone(), completed: item.completed })
+        .collect()
+}
+
+/// The core of `deferred-queue add` (`run_add` below calls this too): append
+/// one `add` event and hand back its id. No lock — matches `run_add`'s
+/// existing behavior, since a fresh id never contends with anything already
+/// on disk; the exclusivity this store cares about is `claim`, not `add`.
+pub(crate) fn enqueue(
+    root: &Path,
+    kind: &str,
+    feature: &str,
+    cells: &[String],
+    areas: &[String],
+    files: &[String],
+    reason: &str,
+) -> std::io::Result<(String, String)> {
+    let id = super::feedback::random_uuid_v4();
+    let ts = now_iso();
+    let mut event = Map::new();
+    event.insert("ts".into(), Value::String(ts.clone()));
+    event.insert("event".into(), Value::String("add".into()));
+    event.insert("id".into(), Value::String(id.clone()));
+    event.insert("kind".into(), Value::String(kind.to_string()));
+    event.insert("feature".into(), Value::String(feature.to_string()));
+    event.insert("cells".into(), Value::Array(cells.iter().cloned().map(Value::String).collect()));
+    event.insert("areas".into(), Value::Array(areas.iter().cloned().map(Value::String).collect()));
+    event.insert("files".into(), Value::Array(files.iter().cloned().map(Value::String).collect()));
+    event.insert("reason".into(), Value::String(reason.to_string()));
+    append_jsonl(&queue_path(root), &Value::Object(event))?;
+    Ok((id, ts))
+}
+
 // ─── claim exclusivity: the dual-condition stale rule ──────────────────────
 //
 // Pattern re-derived from cells/claims.rs (claim_expired + heartbeat_stale +
@@ -346,23 +406,13 @@ fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let areas = split_list(parsed.flags.get("areas").map(String::as_str));
     let files = split_list(parsed.flags.get("files").map(String::as_str));
 
-    let id = super::feedback::random_uuid_v4();
-    let ts = now_iso();
-    let mut event = Map::new();
-    event.insert("ts".into(), Value::String(ts.clone()));
-    event.insert("event".into(), Value::String("add".into()));
-    event.insert("id".into(), Value::String(id.clone()));
-    event.insert("kind".into(), Value::String(kind.to_string()));
-    event.insert("feature".into(), Value::String(feature.to_string()));
-    event.insert("cells".into(), Value::Array(cells.iter().cloned().map(Value::String).collect()));
-    event.insert("areas".into(), Value::Array(areas.iter().cloned().map(Value::String).collect()));
-    event.insert("files".into(), Value::Array(files.iter().cloned().map(Value::String).collect()));
-    event.insert("reason".into(), Value::String(reason.to_string()));
-
-    if append_jsonl(&queue_path(&ctx.root), &Value::Object(event)).is_err() {
-        let msg = format!("bee {cmd}: could not append to the deferred queue.");
-        return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
-    }
+    let (id, ts) = match enqueue(&ctx.root, kind, feature, &cells, &areas, &files, reason) {
+        Ok(pair) => pair,
+        Err(_) => {
+            let msg = format!("bee {cmd}: could not append to the deferred queue.");
+            return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
+        }
+    };
 
     let item = Item {
         id: id.clone(),
