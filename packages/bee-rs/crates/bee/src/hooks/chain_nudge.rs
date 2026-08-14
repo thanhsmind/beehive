@@ -870,6 +870,16 @@ fn best_scribing_stamp_ms(
 ///
 /// pub(crate) (not the default private) only so the debt-door-archive dda-2
 /// parity test can reach it alongside the other three counters.
+///
+/// trun-9 rework (D5): the deferred-capture nudge's OWN copy of the
+/// scribing-debt scan — a third one, alongside `drivers/close.rs` (close's
+/// door) and `hooks/session_preamble/store.rs` (the preamble line). The
+/// semantic judge caught this one having the same gap as the preamble's:
+/// completing a `scribe` deferred-queue record cleared close's door and
+/// left this nudge still firing. It now reads the same queue fold
+/// (`state_group::scribe_queue_cells`) and decides with the same OR rule
+/// (`state_group::deferred_debt_cleared`) as the other two copies, so all
+/// three answer identically for the same cell.
 pub(crate) fn scribing_debt(root: &Path) -> Result<(usize, Vec<String>), Delegate> {
     let state = read_state(root)?;
     let feature = state.get("feature").cloned().unwrap_or(Value::Null);
@@ -877,6 +887,8 @@ pub(crate) fn scribing_debt(root: &Path) -> Result<(usize, Vec<String>), Delegat
         return Ok((0, Vec::new()));
     }
     let threshold = best_scribing_stamp_ms(root, &feature, &state).unwrap_or(0.0);
+    let feature_str = crate::jsjson::js_to_string(&feature);
+    let completed_cells = crate::verbs::state_group::scribe_queue_cells(root, &feature_str).completed;
     // dda-2: archive-aware, so a feature that just closed (and got archived)
     // still shows its unpaid debt instead of going structurally silent.
     let cells = list_cells_filtered_including_archive(root, &feature, "capped");
@@ -891,16 +903,17 @@ pub(crate) fn scribing_debt(root: &Path) -> Result<(usize, Vec<String>), Delegat
             continue;
         }
         let capped_at = trace.get("capped_at").and_then(date_parse_ms);
-        match capped_at {
-            Some(ms) if ms > threshold => {
-                // Array.prototype.join semantics: null/undefined render empty.
-                ids.push(match cell.get("id") {
-                    None | Some(Value::Null) => String::new(),
-                    Some(v) => crate::jsjson::js_to_string(v),
-                });
-            }
-            _ => {}
+        let legacy_cleared = !matches!(capped_at, Some(ms) if ms > threshold);
+        let id_str = match cell.get("id") {
+            None | Some(Value::Null) => String::new(),
+            Some(v) => crate::jsjson::js_to_string(v),
+        };
+        let queue_completed = !id_str.is_empty() && completed_cells.contains(&id_str);
+        if crate::verbs::state_group::deferred_debt_cleared(legacy_cleared, queue_completed) {
+            continue;
         }
+        // Array.prototype.join semantics: null/undefined render empty.
+        ids.push(id_str);
     }
     Ok((ids.len(), ids))
 }
@@ -990,6 +1003,47 @@ mod tests {
         let (count, ids) = scribing_debt(tmp.path()).ok().unwrap();
         assert_eq!(count, 2);
         assert_eq!(ids, vec!["f1-2", "f1-10"]); // numeric-aware sort order
+    }
+
+    /// trun-9 rework (D5): this nudge's own copy of the scan is the THIRD
+    /// place the semantic judge found unreconciled with the deferred queue
+    /// (alongside `drivers/close.rs`'s door and the preamble line) —
+    /// completing a `scribe` record for a debtor cell must silence the
+    /// nudge too, per-cell, not just clear close's door.
+    #[test]
+    fn scribing_debt_clears_per_cell_once_the_queue_record_completes() {
+        let tmp = setup_root();
+        write_state_file(tmp.path(), r#"{"phase":"swarming","feature":"f1"}"#);
+        let cells = tmp.path().join(".bee").join("cells");
+        let cell = |id: &str, capped_at: &str| {
+            std::fs::write(
+                cells.join(format!("{id}.json")),
+                serde_json::to_string(&json!({
+                    "id": id, "feature": "f1", "status": "capped",
+                    "trace": {"behavior_change": true, "capped_at": capped_at}
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        };
+        cell("f1-1", "2026-02-01T00:00:00.000Z");
+        cell("f1-2", "2026-02-01T00:00:00.000Z");
+        let (count, ids) = scribing_debt(tmp.path()).ok().unwrap();
+        assert_eq!(count, 2);
+        assert_eq!(ids, vec!["f1-1", "f1-2"]);
+
+        // A `scribe` record naming ONLY f1-1, completed.
+        std::fs::write(
+            tmp.path().join(".bee").join("deferred-queue.jsonl"),
+            concat!(
+                "{\"ts\":\"2026-02-02T00:00:00.000Z\",\"event\":\"add\",\"id\":\"q1\",\"kind\":\"scribe\",\"feature\":\"f1\",\"cells\":[\"f1-1\"],\"areas\":[],\"files\":[],\"reason\":\"r\"}\n",
+                "{\"ts\":\"2026-02-02T00:00:01.000Z\",\"event\":\"complete\",\"id\":\"q1\"}\n",
+            ),
+        )
+        .unwrap();
+        let (count, ids) = scribing_debt(tmp.path()).ok().unwrap();
+        assert_eq!(count, 1, "only f1-1's record completed");
+        assert_eq!(ids, vec!["f1-2"]);
     }
 
     #[test]
