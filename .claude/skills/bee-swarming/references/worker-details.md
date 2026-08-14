@@ -121,7 +121,7 @@ One line per trigger, factual, in `--friction` (or the deviations file for multi
 
 `.bee/logs/test-results.json` — written by `bee test` — is the single
 verification record: `{ran_at, green, commands: [{command, exit,
-duration_ms, failure_excerpt}]}`. **You are never asked to author
+duration_ms, failure_excerpt, failure_log}]}`. **You are never asked to author
 anything in order to pass a gate**: do not compose evidence prose, do not
 write `reports/<cell-id>-evidence.json` or any other on-disk evidence
 file, and do not paste raw test output into reports as proof. The cell

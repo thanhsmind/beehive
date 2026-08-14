@@ -97,6 +97,16 @@ Question, never a guess. Concrete language only. Deferred ideas that are
 real future work get `bee backlog add` in the same turn. Downstream work
 cites D-IDs, never reinterprets them (AGENTS.md).
 
+**The `tiny`/`docs` brief (D1, traceable-runs).** Every file-touching
+request, at every lane, needs a brief written before any source edit —
+not a new artifact type, the same file: a SHORT `docs/history/<feature>/CONTEXT.md`,
+naming only what was asked, what was found, and what will be done in as
+few lines as the request needs. No mini-Explore interview, no plan
+ceremony added — the short brief earns exactly its own Gate 1 approval
+(Lane ceremony table, `routing-and-contracts.md`), never a `plan.md`
+requirement the lane didn't already have. A pure question that writes no
+file skips Lock entirely (D6) — it gets no brief and no record.
+
 ## Brief (the gate's document)
 
 When the lane calls for one, render
