@@ -1,0 +1,68 @@
+{
+  "id": "dmc-4",
+  "feature": "dirty-main-conflicts",
+  "title": "An expired reservation stops blocking the path it no longer holds",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D3"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/dirty-main-conflicts/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs"
+  ],
+  "action": "A dead session's reservation outlives its own TTL and blocks the exact path it named. The conflict PRE-CHECK is expiry-aware: list_reservations(.., active_only = true) drops expired leases (leases.rs:330-338), so an expired lease is not a logical conflict. But the O_EXCL create still collides with the stale file on disk, and the AlreadyExists arm (reserve.rs:309-330) reads that lease and reports it as a conflict WITHOUT ever consulting `expires_at`. So a path whose holder died is refused past its TTL, and nothing clears it automatically — unlike cell claims, which are swept at three doors (orient.rs:274, recovery_verb.rs:221, handlers_select.rs:662), reservations have no sweep door at all: lease_store.rs:779 `sweep_expired_leases` is reachable only from integration_queue.rs:376 and the manual `bee reservations sweep`. Fix the arm: when the lease parses AND reads expired at `now`, take it over — remove the stale file and retry the create once — instead of reporting a conflict. Reuse the same expiry predicate the pre-check uses (`lease_record_expired`, leases.rs around :316) so the two paths cannot disagree; do not write a second expiry rule. Bound it: retry the create exactly once, and if that retry also loses the race, report the conflict as before — a live competitor must never be stolen from, and an unparseable lease is never guessed at (the existing `Err(_) => None` at reserve.rs:324 stays as-is, reporting a null holder). Then give reservations the door they lack, mirroring the claim sweep: call `sweep_expired_leases` from `bee orient` where the claim sweep already runs (verbs/status_full/orient.rs:274), so takeover is the rare path rather than the normal one. Keep `reserve_exact_path_race_reports_conflict` (tests.rs:145-165) passing untouched — a LIVE holder must still produce exactly that refusal — and add its counterpart: an expired lease on the same path is taken over and the new reserve succeeds.",
+  "must_haves": {
+    "truths": [
+      "An expired lease on the exact path is taken over and the new reservation succeeds",
+      "A live lease on the exact path still refuses with the same conflict output as before",
+      "The takeover uses the same expiry predicate as the active_only pre-check, not a second rule",
+      "The create is retried at most once, and a lost retry reports a conflict",
+      "An unparseable lease is still reported rather than deleted",
+      "bee orient sweeps expired leases the way it already sweeps expired claims"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+        "substantive": "expiry-aware takeover in the AlreadyExists arm with a single bounded retry"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "substantive": "the expired-lease sweep called at the orient door beside the claim sweep"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs",
+        "substantive": "tests for takeover, live-holder refusal, bounded retry, and unparseable lease"
+      }
+    ]
+  },
+  "trace": {
+    "worker": "dmc-4-builder",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/reservations/reserve.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-15T02:52:52.461Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f4553d58-a148-4191-bda1-9eaef21bdef5",
+    "claimed_at": "2026-08-15T02:44:47.927Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-15T02:52:33.130Z"
+  }
+}

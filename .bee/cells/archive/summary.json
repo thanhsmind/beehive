@@ -463,5 +463,10 @@
     "capped": 4,
     "dropped": 0,
     "archived_at": "2026-08-14T15:52:16.627Z"
+  },
+  "dirty-main-conflicts": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-15T03:05:03.549Z"
   }
 }

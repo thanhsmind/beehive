@@ -1,0 +1,63 @@
+{
+  "id": "dmc-1",
+  "feature": "dirty-main-conflicts",
+  "title": "Merge auto-commits every bookkeeping root bee itself writes",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/dirty-main-conflicts/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "action": "`bee worktree merge` refuses its own output. Before merging it auto-commits main's bookkeeping dirt, but `main_bookkeeping_roots` (merge.rs:170-176) returns only `.bee` plus `docs/history/<feature>`. bee also writes `docs/decisions/taxonomy.json` on every `decisions log` (verbs/decisions/mod.rs:120-121) and `docs/knowledge/**` on every capture sync. Both are git-tracked, both fall outside the auto-commit scope, so phases.rs:122-136 refuses the merge by naming a path bee wrote itself. This is the deadlock the user reported: main held exactly `.bee/decisions.jsonl` and `docs/decisions/taxonomy.json` and the pending worktree could not land. Widen `main_bookkeeping_roots` to include `docs/decisions` and `docs/knowledge` alongside the two it already returns. Widen ONLY that: the function's callers (the exclusion pathspecs at merge.rs:87-104 and the commit at merge.rs:141-146) need no change, and the commit message built at phases.rs:141-144 should keep naming what it swept. The boundary that must survive intact is that arbitrary source dirt still refuses, named by path — `dirt_outside_bee_still_refuses_and_names_the_offending_path` (tests.rs:1335-1353) pins it with `unrelated.txt` and must keep passing untouched. Add a test in the same module, modelled on `this_features_docs_history_dirt_is_auto_committed_alongside_bee` (tests.rs:1358), that dirties a tracked file under `docs/decisions/` and one under `docs/knowledge/` in main and asserts the merge completes green with `bookkeeping_commit.committed == true`. Note the scope string at phases.rs:125-128 is what a refusal prints; if it still says only `.bee/ or docs/history/<f>/` after the widening it now lies, so update it to name the roots actually swept.",
+  "must_haves": {
+    "truths": [
+      "A tracked dirty file under docs/decisions/ in main is auto-committed and the merge completes green",
+      "A tracked dirty file under docs/knowledge/ in main is auto-committed and the merge completes green",
+      "Dirt at an unrelated source path still refuses with WORKTREE_MERGE_MAIN_DIRTY and names that path",
+      "The refusal's scope string names the roots that are actually auto-committed, not a stale shorter list",
+      "dirt_outside_bee_still_refuses_and_names_the_offending_path passes unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+        "substantive": "main_bookkeeping_roots returns the four roots; no other behaviour changed"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "substantive": "a new test proving docs/decisions and docs/knowledge dirt is swept, beside the untouched refusal test"
+      }
+    ]
+  },
+  "trace": {
+    "worker": "dmc-1-builder",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-15T02:55:35.864Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f4553d58-a148-4191-bda1-9eaef21bdef5",
+    "claimed_at": "2026-08-15T02:44:39.405Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-15T02:55:16.607Z"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "id": "dmc-2",
+  "feature": "dirty-main-conflicts",
+  "title": "The unresolved-worker-count refusal names the escape that works",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D2"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/dirty-main-conflicts/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/paths.rs"
+  ],
+  "action": "The concurrent-worker git guard denies through two arms (checks.rs:653-681). The `count > 1` arm hands back CONCURRENT_TREE_TEMP_INDEX_REMEDY (paths.rs:365-372), which ends with the sentence that actually unblocks a caller: \"A genuinely path-scoped `git commit -- <your paths>` is allowed too.\" The Unresolved arm (checks.rs:655-669) substitutes a one-line remedy naming only `.bee/reservations.json`, so a session that hits it is told to repair a file and never told it can simply land its work path-scoped — even though paths.rs:317-326 already exempts that form in BOTH arms. Keep the unresolved arm's own remedy: naming the corrupt store is the right first move for a solo session, and the comment at checks.rs:663-667 explains why it was deliberately made different. Append the path-scoped-commit escape to it rather than replacing it with the temp-index recipe. Do not touch the `count > 1` arm, do not touch classify_concurrent_tree_verb, and do not add any new exemption — this cell changes refusal text only, no control flow. Extend `concurrent_tree_guard_unresolved_arm_names_the_reservation_store` (tests.rs:701) so it keeps its existing two asserts and gains one proving the escape sentence is present.",
+  "must_haves": {
+    "truths": [
+      "The unresolved arm's refusal still names .bee/reservations.json and the inspect/restore remedy",
+      "The unresolved arm's refusal also names the allowed path-scoped `git commit -- <paths>` escape",
+      "The count > 1 arm's refusal text is byte-identical to before",
+      "No control flow changes: the same invocations deny and allow as before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+        "substantive": "the unresolved arm's remedy string gains the escape sentence, nothing else"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "the unresolved-arm test asserts the escape sentence alongside its existing asserts"
+      }
+    ]
+  },
+  "trace": {
+    "worker": "dmc-2-builder",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-15T02:48:52.182Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f4553d58-a148-4191-bda1-9eaef21bdef5",
+    "claimed_at": "2026-08-15T02:44:44.975Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-15T02:48:33.178Z"
+  }
+}

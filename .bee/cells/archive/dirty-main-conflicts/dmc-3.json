@@ -1,0 +1,68 @@
+{
+  "id": "dmc-3",
+  "feature": "dirty-main-conflicts",
+  "title": "A tiny fix keeps main only while no other session is live",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "dmc-2"
+  ],
+  "decisions": [
+    "D4"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/dirty-main-conflicts/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs"
+  ],
+  "action": "Close the gap the guard's own comment schedules. AGENTS.md:37-39 grants main to \"a solo `tiny` fix when no other session is live\", and docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md:33 states the same rule with its condition. hook_local.rs:661 drops the condition entirely (`if lane == \"tiny\" { return Ok(None); }`), and the comment above it says so: \"left unconditional rather than guessed at. Gap named here per cell wtf-3; closing it is a separate cell.\" This is that cell. The comment's stated blocker — no live-session walk reachable without a new store dependency — is stale. The write-guard module already carries the pieces: store.rs:383 `is_concurrent_mode(root, exclude, strict)` is the self-excluding \"another non-stale session exists\" predicate, store.rs:374 `heartbeat_stale`, store.rs:364 `HEARTBEAT_STALE_SECONDS`. The caller already has the session id in scope: main.rs:345 passes `session_id.as_deref()` into `resolve_write_record`, so thread it into `check_worktree_first` (hook_local.rs:581) as one new parameter and use it as the exclusion so a session never counts itself. Gate line 661 on the condition. Two boundaries: this touches the NO-GRANT arm only — the granted arm above returns first and must keep denying lane tiny, which `worktree_first_granted_arm_denies_lane_tiny_too` (tests.rs:943) pins; and it stays FAIL-OPEN on any read error, matching the discipline at hook_local.rs:630-639, so an unreadable session store allows the write rather than refusing it. Agree with the canonical predicate `is_code_touching_lane` (verbs/state_group/workflows.rs:587-591, `lane == \"tiny\" && !other_live_session`), already pinned by verbs/state_group/tests.rs:1536-1540 — read it before writing so the two do not drift. Update `worktree_first_no_grant_arm_carve_outs_allow` (tests.rs:1086, tiny assert at :1090-1091) which currently asserts the unconditional allow, and add its opposite: a live sibling session makes the same tiny write deny. Leave the `.md` exemption at hook_local.rs:545-547 alone — the owner decided it stays (decision logged at the shape gate).",
+  "must_haves": {
+    "truths": [
+      "A tiny-lane write in main with no other live session is still allowed",
+      "The same write with another live session present is denied by worktree-first",
+      "The acting session never counts itself as the other live session",
+      "An unreadable or corrupt session store fails open and allows the write",
+      "The granted arm still denies lane tiny, unchanged",
+      "The .md exemption at hook_local.rs:545-547 is untouched"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+        "substantive": "the tiny carve-out gated on a self-excluding live-session check, fail-open on error"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "tests for allow-when-solo, deny-when-sibling-live, self-exclusion, and fail-open"
+      }
+    ]
+  },
+  "trace": {
+    "worker": "dmc-3-builder",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-15T03:03:47.252Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f4553d58-a148-4191-bda1-9eaef21bdef5",
+    "claimed_at": "2026-08-15T02:49:08.013Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-15T03:03:28.135Z"
+  }
+}
