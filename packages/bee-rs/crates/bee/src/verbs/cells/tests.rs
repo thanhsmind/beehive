@@ -2647,6 +2647,61 @@ use std::time::Instant;
         assert!(candidate_ok(root, root, "mine", &bare, now).ok().unwrap());
     }
 
+    /// hha-3 — the read side stops seeing its own work as foreign.
+    ///
+    /// `cells claim-next` is a control-plane command, so it runs from MAIN;
+    /// after hha-1 the mirrored row for a cell whose feature owns a granted
+    /// worktree names that WORKTREE, not the typist. Asking "is this row
+    /// mine?" from main would make claim-next skip the very cell it exists to
+    /// hand out. It asks who owns the CELL instead — so a hold owned by that
+    /// cell's own work stream never blocks, and a hold owned by a DIFFERENT
+    /// one still does.
+    #[test]
+    fn claim_next_keeps_a_cell_its_own_worktree_holds_and_skips_another_streams_hold() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = wf_worktree_fixture(tmp.path());
+        // The granted worktree owns feature "hold-holder"; the cell naming
+        // that feature lives in MAIN's store — the control-plane shape (the
+        // cell is claimed from main, the work happens in the worktree).
+        std::fs::create_dir_all(granted.join(".bee").join("runtime")).unwrap();
+        std::fs::write(
+            granted.join(".bee").join("runtime").join("worktree-identity.json"),
+            format!("{}\n", json!({ "feature": "hold-holder" })),
+        )
+        .unwrap();
+        let cell = json!({
+            "id": "hha-cell", "status": "open", "feature": "hold-holder",
+            "files": ["src/shared.ts"]
+        });
+        write_cell_fixture(&main, "hha-cell", &cell);
+
+        let now = rsv::now_ms();
+        let stamp = rsv::iso_from_ms(now).ok().unwrap();
+        let write_hold = |holder: &str| {
+            std::fs::write(
+                main.join(".bee").join("runtime").join("cross-worktree-holds.json"),
+                format!(
+                    r#"{{"holds":[{{"holder":"{holder}","path":"src/shared.ts","cell":"hha-cell","mirrored_at":"{stamp}","ttl_seconds":3600,"released_at":null}}]}}"#
+                ),
+            )
+            .unwrap();
+        };
+
+        // The cell's OWN worktree holds the path: main still hands it out.
+        write_hold("wt-granted");
+        assert!(
+            candidate_ok(&main, &main, "mine", &cell, now).ok().unwrap(),
+            "a cell's own worktree holding its paths is not a foreign hold"
+        );
+
+        // A hold owned by a DIFFERENT work stream still skips the cell.
+        write_hold("wt-elsewhere");
+        assert!(
+            !candidate_ok(&main, &main, "mine", &cell, now).ok().unwrap(),
+            "another work stream's hold must still block the claim"
+        );
+    }
+
     // ── claims (R5): the sweep's gate discipline ──────────────────────────
     // Oracle: test_claims.mjs "sweep: TTL expired AND heartbeat stale IS
     // reclaimed; no gate file leaks", "sweep: TTL expired but heartbeat FRESH

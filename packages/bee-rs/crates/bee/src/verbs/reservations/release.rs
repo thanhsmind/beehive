@@ -109,6 +109,25 @@ pub(crate) fn release_exec(
             pairs.push((cell_v.clone(), session_v));
         }
     }
+    // hha-2 (docs/history/hold-holder-attribution/plan.md): those pairs are
+    // derived from LIVE reservations, so a cell that is already capped or
+    // unclaimed has no lease left to derive from — the pairs come out empty
+    // and its ledger rows become unreachable by any release at all. That is
+    // why ghost rows outlive the cells that made them. An EXPLICIT `--cell`
+    // therefore scopes the ledger pass by that cell id directly, in addition
+    // to whatever the live leases contributed: a session-less pair, which
+    // covers every session's rows for that one cell. Without `--cell` the
+    // scoping is untouched, so a whole-agent release clears exactly what it
+    // cleared before. Rows already marked by an earlier pair are skipped by
+    // the `unreleased` guard below, so nothing is counted twice.
+    if let Some(c) = cell {
+        let cell_v = Value::String(c.to_string());
+        let key = format!("{}::", js_disp(&cell_v));
+        if !seen.contains(&key) {
+            seen.push(key);
+            pairs.push((cell_v, None));
+        }
+    }
 
     // release() (lib/reservations.mjs).
     if js_trim(agent).is_empty() {
@@ -147,13 +166,22 @@ pub(crate) fn release_exec(
         }
     }
 
-    // xwh-2/gfb-1: clear THIS checkout's mirrored ledger entries, one locked
+    // xwh-2/gfb-1: clear the mirrored ledger entries these cells own (hha-2 —
+    // no longer "this checkout's"), one locked
     // releaseHolds per {cell, session} pair — the same topology gate the
     // reserve side uses, so `if (topology)` skipping it entirely inside an
     // ungranted worktree leaves holds_released at 0 and takes no lock.
     let mut holds_released: u64 = 0;
     for (cell_v, session_v) in &pairs {
         let Some(t) = topo else { break };
+        // hha-2: whichever checkout types the release clears the rows the
+        // CELL's owner holds, never the rows the acting checkout happens to
+        // be stamped with. bee's control plane runs from main while hha-1
+        // stamps the granted worktree that owns the cell, so an acting-holder
+        // filter here would leave those rows unclearable by anyone — the same
+        // deadlock, mirrored. Resolved per pair, before the lock: plain
+        // filesystem reads, no ledger touch.
+        let owner = cell_hold_owner(t.main_root, t.holder, &js_disp(cell_v))?;
         let guard =
             match lock::acquire_store_lock(t.main_root, CROSS_WORKTREE_HOLDS_LOCK, max_attempts) {
                 Ok(g) => g,
@@ -168,7 +196,7 @@ pub(crate) fn release_exec(
                 if !unreleased {
                     continue;
                 }
-                if !matches!(jget(hold, "holder"), Some(Value::String(s)) if s == t.holder) {
+                if !matches!(jget(hold, "holder"), Some(Value::String(s)) if s == &owner.holder) {
                     continue;
                 }
                 if let Some(s) = session_v {

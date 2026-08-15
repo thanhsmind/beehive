@@ -488,6 +488,52 @@ pub(crate) fn find_foreign_holds<'a>(
     Ok(out)
 }
 
+/// Who owns this cell's holds — the answer every hold-reading site asks for
+/// instead of "is this row mine?" (docs/history/hold-holder-attribution/plan.md).
+///
+/// A hold belongs to the work stream that owns the CELL, never to the checkout
+/// that happened to type the command. bee's control plane MUST run from main
+/// (drivers/prepare.rs), so a reserve made from main on behalf of a granted
+/// worktree's cell used to stamp `holder: "main"` on a row the worktree alone
+/// can ever satisfy — the guard then denied that worktree's own writes.
+pub(crate) struct CellHoldOwner {
+    /// The granted worktree's id when the cell's feature owns one, else the
+    /// ACTING topology holder, unchanged from before this rule existed.
+    pub(crate) holder: String,
+    /// The cell's own feature, resolved so a refusal can name it instead of
+    /// reading "feature unknown" (hooks/write_guard/checks.rs).
+    pub(crate) feature: Option<String>,
+}
+
+/// `cell -> feature -> granted worktree`, composed out of the two lookups that
+/// already answer each half (`verbs/cells/finish_support.rs` composes the same
+/// pair for the commit-trailer history root). Both halves are plain filesystem
+/// reads — `.bee/cells/<id>.json` plus `worktree-grants.json` and the gitdir
+/// pointers — with no store lock and no read of the holds ledger, so this is
+/// safe to call from INSIDE the CROSS_WORKTREE_HOLDS_LOCK section.
+///
+/// `read_cell` answers `Delegate` (unreachable today: a corrupt cell file
+/// warns and reads as absent), mapped here to this module's own Exotic channel
+/// so a caller's `?` delegates the whole command exactly as it already does.
+pub(crate) fn cell_hold_owner(main_root: &Path, acting: &str, cell: &str) -> Ex<CellHoldOwner> {
+    let id = js_trim(cell);
+    let mine = || CellHoldOwner { holder: acting.to_string(), feature: None };
+    if id.is_empty() {
+        return Ok(mine());
+    }
+    let Some(record) = crate::verbs::cells::read_cell(main_root, id).map_err(|_| Exotic)? else {
+        return Ok(mine());
+    };
+    let feature = match jget(&record, "feature") {
+        Some(Value::String(s)) if !js_trim(s).is_empty() => js_trim(s).to_string(),
+        _ => return Ok(mine()),
+    };
+    let holder = crate::verbs::status_full::find_granted_worktree_for_feature(main_root, &feature)
+        .map(|(id, _root)| id)
+        .unwrap_or_else(|| acting.to_string());
+    Ok(CellHoldOwner { holder, feature: Some(feature) })
+}
+
 /// provenance: bee.mjs holdForeignExpiry.
 pub(crate) fn hold_foreign_expiry(hold: &Value) -> Ex<String> {
     let mirrored = date_parse_val(jget(hold, "mirrored_at"))?;

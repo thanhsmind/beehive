@@ -157,8 +157,21 @@ pub(crate) fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams
         Some(t) => Some(read_holds_store(t.main_root)?),
         None => None,
     };
-    if let (Some(t), Some(store)) = (topo, store.as_ref()) {
-        let foreign = find_foreign_holds(store, t.holder, &p.path, now_ms())?;
+    // hha-1 (docs/history/hold-holder-attribution/plan.md): the holds this
+    // command reads AND writes belong to whoever owns the CELL, not to the
+    // checkout typing it. Resolved ONCE, from inside the section (plain
+    // filesystem reads only — no ledger read, no second lock), and used by
+    // both the foreign-hold check below and the mirrored row further down:
+    // stamping the owner without also asking on the read side would make main
+    // refuse its own control-plane reserve with FOREIGN_HOLD.
+    let owner = match topo {
+        Some(t) => Some(cell_hold_owner(t.main_root, t.holder, &p.cell)?),
+        None => None,
+    };
+    // `store` and `owner` are Some exactly when `topo` is, so this is the same
+    // "with a topology" arm it has always been.
+    if let (Some(store), Some(owner)) = (store.as_ref(), owner.as_ref()) {
+        let foreign = find_foreign_holds(store, &owner.holder, &p.path, now_ms())?;
         if let Some(hold) = foreign.first() {
             let hold = (*hold).clone();
             let mut m = Map::new();
@@ -270,12 +283,13 @@ pub(crate) fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams
     );
     record.insert("kind".into(), Value::String(kind));
     // Reporting-only addition (D3, wtf-2): the same holder string the
-    // mirrored ledger row carries below (:331) — "main" for an ordinary
-    // checkout, the git-verified worktree id for a granted one. Omitted
-    // entirely for an ungranted linked worktree (topo is None there), so an
-    // old reader never sees a key it does not expect.
-    if let Some(t) = topo {
-        record.insert("holder".into(), Value::String(t.holder.to_string()));
+    // mirrored ledger row carries below — the cell's owning worktree when it
+    // has one (hha-1), else "main" for an ordinary checkout or the
+    // git-verified worktree id for a granted one. Omitted entirely for an
+    // ungranted linked worktree (topo is None there), so an old reader never
+    // sees a key it does not expect.
+    if let Some(owner) = owner.as_ref() {
+        record.insert("holder".into(), Value::String(owner.holder.clone()));
     }
 
     let lease_file = path_lease_file(&control_root, &p.path);
@@ -322,7 +336,7 @@ pub(crate) fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams
     // insertHold (worktree-holds.mjs), called from inside the held section —
     // the ledger read from this same section is reused (see module header).
     // Skipped wholesale without a topology, exactly like Node.
-    if let (Some(t), Some(store)) = (topo, store.as_mut()) {
+    if let (Some(t), Some(store), Some(owner)) = (topo, store.as_mut(), owner.as_ref()) {
         let ttl_secs = reservation.ttl_seconds.unwrap_or(f64::NAN);
         let hold_ttl = if ttl_secs.is_finite() && ttl_secs > 0.0 {
             ttl_secs.floor()
@@ -334,10 +348,18 @@ pub(crate) fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams
             "path".into(),
             Value::String(res_normalize_path(&reservation.path)),
         );
-        // topology.holder: "main" from an ordinary checkout, the git-verified
-        // worktree id from a granted one.
-        hold.insert("holder".into(), Value::String(t.holder.to_string()));
-        hold.insert("feature".into(), Value::Null);
+        // hha-1: the cell's owning worktree when its feature has one — the
+        // work stream this hold actually belongs to. Falls back to
+        // topology.holder ("main" from an ordinary checkout, the git-verified
+        // worktree id from a granted one) for a cell with no feature or a
+        // feature with no granted worktree.
+        hold.insert("holder".into(), Value::String(owner.holder.clone()));
+        // Resolved from the cell instead of hardcoded null, so a refusal can
+        // name the feature rather than reading "feature unknown".
+        hold.insert(
+            "feature".into(),
+            owner.feature.clone().map(Value::String).unwrap_or(Value::Null),
+        );
         hold.insert(
             "session".into(),
             match &reservation.session {

@@ -455,8 +455,10 @@ pub(crate) fn has_session_conflict(root: &Path, acting: &str, requested: &[Strin
     Ok(false)
 }
 
-/// lib/worktree-holds.mjs findForeignHolds over resolveHoldTopology's
-/// ORDINARY arm (`{mainRoot: root, holder: 'main'}` — see the section header).
+/// lib/worktree-holds.mjs findForeignHolds over the ledger at `root`
+/// (resolveHoldTopology's ORDINARY arm, `{mainRoot: root, …}` — see the
+/// section header). `holder` is whoever the caller decided owns the rows it
+/// is asking about: hha-3 hands it the CELL's owner, not the acting checkout.
 pub(crate) fn has_foreign_hold(root: &Path, holder: &str, requested: &[String], now: f64) -> MR<bool> {
     if requested.is_empty() {
         return Ok(false);
@@ -519,8 +521,22 @@ pub(crate) fn candidate_ok(root: &Path, control: &Path, session: &str, cell: &Va
         if has_session_conflict(control, session, &requested, now)? {
             return Ok(false);
         }
-        // resolveHoldTopology(root) is the ordinary constant here.
-        if has_foreign_hold(root, "main", &requested, now)? {
+        // A hold belongs to the work stream that owns the CELL, never to the
+        // checkout that typed the command
+        // (docs/history/hold-holder-attribution/plan.md). claim-next is a
+        // control-plane command, so it runs from MAIN — and after hha-1 the
+        // mirrored row for a cell whose feature owns a granted worktree names
+        // that WORKTREE. resolveHoldTopology(root)'s ordinary `'main'` is
+        // still the ACTING holder and still the fallback; asking it directly
+        // here would make main read a cell's own holds as foreign and skip
+        // the very cell it exists to hand out. A hold owned by a DIFFERENT
+        // work stream is unaffected and still skips the candidate.
+        let cell_id = match cell.get("id") {
+            Some(v) if js_truthy(v) => jsjson::js_to_string(v),
+            _ => String::new(), // no id → the helper answers with the acting holder
+        };
+        let owner = rsv::cell_hold_owner(root, "main", &cell_id).map_err(|_| Fail::Delegate)?;
+        if has_foreign_hold(root, &owner.holder, &requested, now)? {
             return Ok(false);
         }
     }

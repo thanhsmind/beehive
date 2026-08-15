@@ -608,6 +608,16 @@ pub(crate) fn release_reservations_for_agent(
     let mut holds_released: u64 = 0;
     if let Some((main_root, holder)) = topo {
         for (cell_v, session_v) in &pairs {
+            // hha-2 (docs/history/hold-holder-attribution/plan.md): the rows
+            // this cap clears belong to whoever owns the CELL, not to the
+            // checkout typing `cells finish` — and that command typically
+            // runs from MAIN for a cell whose work happened inside a granted
+            // worktree (see the D6 note above), which is exactly the row hha-1
+            // now stamps with that worktree. Filtering by the acting holder
+            // here would make those rows ones main could never clear.
+            let owner =
+                rsv::cell_hold_owner(main_root, holder, &jsjson::js_to_string(cell_v))
+                    .map_err(|_| Fail::Delegate)?;
             let mut guard = acquire_named_lock(main_root, CROSS_WORKTREE_HOLDS_LOCK)?;
             let outcome = (|| -> MR<u64> {
                 let mut store = read_holds_store(main_root)?;
@@ -619,7 +629,8 @@ pub(crate) fn release_reservations_for_agent(
                         if !unreleased {
                             continue;
                         }
-                        if !matches!(hold.get("holder"), Some(Value::String(s)) if s == holder) {
+                        if !matches!(hold.get("holder"), Some(Value::String(s)) if s == &owner.holder)
+                        {
                             continue;
                         }
                         if let Some(s) = session_v {
