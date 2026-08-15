@@ -325,7 +325,18 @@ mod tests {
         // `session-id`, `lane`, `no-lane` and `json` all reuse existing
         // names for the same concepts unchanged; `--subject` is the one new
         // spelling this cell adds.
-        const PINNED_FLAG_COUNT: usize = 148;
+        // 148 -> 150 (gate-help-drift ghd-1): `state.gate`/`gate` accepted
+        // `--actor`, `--bypass-level` and `--reason` since D2 (set_gate.rs)
+        // but the payload never declared them, so `bee --help --json`
+        // understated the command. Checked first: `--reason` already names
+        // "why" on cells.block/drop/reopen/reset-budget, decisions.redact,
+        // perf.stop/section, and is reused here unchanged (no count change
+        // from it); no existing flag names "who is approving" or "the
+        // bypass level an auto-approval recorded" — `--actor` and
+        // `--bypass-level` are the two new spellings. This bump documents
+        // flags the handler already accepted; it invents nothing new at the
+        // CLI surface.
+        const PINNED_FLAG_COUNT: usize = 150;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
