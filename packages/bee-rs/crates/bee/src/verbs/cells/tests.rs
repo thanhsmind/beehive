@@ -2603,6 +2603,52 @@ use std::time::Instant;
         }
     }
 
+    /// GH#20 + D1 (default-pipeline-liveness): `live_session_facts` is the
+    /// single session-record walk `run_claim_next`'s fallback pool now runs —
+    /// prove the pure selection logic directly rather than through the full
+    /// claim-next dispatch.
+    #[test]
+    fn live_session_facts_gates_the_default_pipeline_on_peer_liveness() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let now = rsv::now_ms();
+        let fresh = rsv::iso_from_ms(now).ok().unwrap();
+
+        // No peer at all: the default pipeline is pooled exactly as before.
+        let (live_owned, unbound_peer) = live_session_facts(root, "acting", now).ok().unwrap();
+        assert!(live_owned.is_empty());
+        assert!(!unbound_peer, "no session records at all must never block the default pipeline");
+
+        // The acting session's OWN record — even unbound and fresh — is never
+        // its own peer (D2): the loop already skips the acting session's id.
+        write_session_fixture(root, "acting", &fresh, None);
+        let (live_owned, unbound_peer) = live_session_facts(root, "acting", now).ok().unwrap();
+        assert!(live_owned.is_empty());
+        assert!(!unbound_peer, "a session can never be its own peer");
+
+        // A live, UNBOUND peer is, by definition, working the default
+        // pipeline right now: it must gate the fallback push.
+        write_session_fixture(root, "peer", &fresh, None);
+        let (live_owned, unbound_peer) = live_session_facts(root, "acting", now).ok().unwrap();
+        assert!(live_owned.is_empty(), "an unbound peer is never mistaken for a lane owner");
+        assert!(unbound_peer, "a live unbound peer must gate the default pipeline");
+
+        // A STALE heartbeat on that same peer never blocks it — a dead
+        // session must never park work forever.
+        write_session_fixture(root, "peer", OLD, None);
+        let (live_owned, unbound_peer) = live_session_facts(root, "acting", now).ok().unwrap();
+        assert!(!unbound_peer, "a stale peer heartbeat must never park the default pipeline forever");
+        assert!(live_owned.is_empty());
+
+        // Restored liveness but bound to a LANE: the GH#20 lane list still
+        // picks it up, and it no longer counts as an unbound peer — lane
+        // pooling behaviour is unchanged by this fix.
+        write_session_fixture(root, "peer", &fresh, Some("lane-x"));
+        let (live_owned, unbound_peer) = live_session_facts(root, "acting", now).ok().unwrap();
+        assert_eq!(live_owned, vec!["lane-x".to_string()]);
+        assert!(!unbound_peer, "a lane-bound peer is not working the default pipeline");
+    }
+
     #[test]
     fn candidate_filters_skip_foreign_session_holds_and_foreign_worktree_holds() {
         let tmp = cn_root();

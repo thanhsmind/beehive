@@ -56,6 +56,7 @@
 // Every wait in this file is bounded (`wait_bounded`): a race test that can
 // hang is worse than no race test.
 
+use chrono::Utc;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -1321,4 +1322,202 @@ fn deliberate_red_an_unguarded_deferred_queue_claim_lets_every_racer_believe_it_
          write, so this control MUST show every racer double-claiming — otherwise the \
          single-winner result above proves nothing."
     );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 7. cells claim-next — the default pipeline's own liveness gate.
+//    Oracle: docs/history/default-pipeline-liveness/CONTEXT.md (D1-D4). GH#20
+//    already keeps a lane actively owned by another live session out of the
+//    fallback pool; this closes the matching hole on the DEFAULT pipeline
+//    (`.bee/state.json`) — a session bound to a lane must never pool and
+//    claim cells out of a feature another, live, UNBOUND session is actively
+//    working, while a dead (stale-heartbeat) peer must never park that work
+//    forever, and the acting session must never block itself.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// A minimal, valid session record — the shape `read_session` / GH#20's own
+/// walk requires: `id` matching the filename stem, and (for an unbound
+/// session) `lane` simply absent from the pool it can gate.
+fn write_session_record(root: &Path, id: &str, lane: Option<&str>, heartbeat: &str) {
+    let dir = root.join(".bee").join("sessions");
+    std::fs::create_dir_all(&dir).unwrap();
+    let body = serde_json::json!({
+        "id": id,
+        "started_at": heartbeat,
+        "last_heartbeat": heartbeat,
+        "lane": lane,
+    });
+    std::fs::write(dir.join(format!("{id}.json")), body.to_string() + "\n").unwrap();
+}
+
+/// A minimal, valid lane record — `feature` must equal the filename stem
+/// (lane_record_from's own identity check), everything else defaults.
+fn write_lane_record(root: &Path, feature: &str, execution: bool) {
+    let dir = root.join(".bee").join("lanes");
+    std::fs::create_dir_all(&dir).unwrap();
+    let body = serde_json::json!({
+        "feature": feature,
+        "approved_gates": {"execution": execution},
+    });
+    std::fs::write(dir.join(format!("{feature}.json")), body.to_string() + "\n").unwrap();
+}
+
+fn fresh_heartbeat() -> String {
+    Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+}
+
+fn stale_heartbeat() -> String {
+    (Utc::now() - chrono::Duration::seconds(3600)).format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
+}
+
+fn claim_next_argv(session: &str, worker: &str) -> Vec<String> {
+    vec![
+        "cells".into(),
+        "claim-next".into(),
+        "--worker".into(),
+        worker.into(),
+        "--session-id".into(),
+        session.into(),
+        "--json".into(),
+    ]
+}
+
+fn as_str_refs(v: &[String]) -> Vec<&str> {
+    v.iter().map(String::as_str).collect()
+}
+
+fn probe_claim_next(fx: &Fixture, scenario: &str) -> bool {
+    let argv = claim_next_argv("probe-sess", "probe");
+    native_probe(fx, &as_str_refs(&argv), scenario)
+}
+
+fn run_claim_next(fx: &Fixture, session: &str, worker: &str, label: &str) -> Racer {
+    let argv = claim_next_argv(session, worker);
+    run_bee(fx, &as_str_refs(&argv), label)
+}
+
+#[test]
+fn a_live_unbound_peer_walls_off_the_default_pipeline_from_lane_bound_racers() {
+    // D4: the real multi-process race. RACERS OS processes, each a session
+    // bound to lane "lane-feat" (which has no ready cell of its own), race
+    // `cells claim-next` while a LIVE, UNBOUND peer session record sits on
+    // disk — by D1 that peer is, by definition, working the default pipeline
+    // "race-feat" right now. Not one racer may walk away holding its cell.
+    let fx = fixture();
+    // Probe BEFORE any cell exists anywhere, so the served-ness check itself
+    // cannot consume the cell the race depends on: a typed NO_APPROVED_WORK
+    // refusal is still a SERVED answer, never an "unserved" one.
+    if !probe_claim_next(&fx, "claim-next default-pipeline liveness race") {
+        return;
+    }
+
+    write_open_cell(&fx, "default-cell");
+    write_lane_record(&fx.root, "lane-feat", true);
+    write_session_record(&fx.root, "peer-session", None, &fresh_heartbeat());
+    for i in 0..RACERS {
+        write_session_record(&fx.root, &format!("sess-{i}"), Some("lane-feat"), &fresh_heartbeat());
+    }
+
+    let argvs: Vec<Vec<String>> =
+        (0..RACERS).map(|i| claim_next_argv(&format!("sess-{i}"), &format!("worker-{i}"))).collect();
+    let racers = race(&fx, argvs, "claim-next-default-pipeline-liveness");
+    assert_all_native(&racers, "claim-next default-pipeline liveness race");
+
+    for r in &racers {
+        assert_ne!(
+            r.code, 0,
+            "racer {} must never succeed: its own lane has nothing ready and the default \
+             pipeline is walled off by the live unbound peer. stdout={} stderr={}",
+            r.label, r.stdout, r.stderr
+        );
+        let msg = r.message();
+        assert!(
+            msg.contains("NO_APPROVED_WORK"),
+            "racer {} must be refused NO_APPROVED_WORK, never any other outcome; got: {msg}",
+            r.label
+        );
+    }
+
+    // The store agrees: the peer's cell was never touched by anyone.
+    let cell =
+        read_store(&fx, ".bee/cells/default-cell.json").expect("the default-pipeline cell survives untouched");
+    assert_eq!(
+        cell["status"], "open",
+        "no lane-bound racer may walk away holding the other feature's cell: {cell}"
+    );
+    assert!(
+        !fx.root.join(".bee/claims/default-cell.json").exists(),
+        "no racer may leave a claim file on a cell it was never allowed to touch"
+    );
+}
+
+#[test]
+fn a_stale_peer_never_parks_the_default_pipeline_and_no_peer_pools_it_unchanged() {
+    // Companion to the race above (single-process here — no exclusion is
+    // being contended for, only the liveness READ). A dead session (stale
+    // heartbeat) must never block the default pipeline forever, and with no
+    // peer at all the fallback pools it exactly as it always has.
+    let fx = fixture();
+    if !probe_claim_next(&fx, "claim-next stale-peer / no-peer control") {
+        return;
+    }
+    write_open_cell(&fx, "default-cell-b");
+    write_lane_record(&fx.root, "lane-feat", true);
+    write_session_record(&fx.root, "sess-b", Some("lane-feat"), &fresh_heartbeat());
+
+    // (a) A STALE peer record present: the default pipeline is still pooled.
+    write_session_record(&fx.root, "peer-session", None, &stale_heartbeat());
+    let out = run_claim_next(&fx, "sess-b", "w-b", "stale-peer");
+    assert_eq!(
+        out.code, 0,
+        "a peer with a STALE heartbeat must never park the default pipeline forever: {}",
+        out.message()
+    );
+    let claimed = out.json().expect("claim-next emits the claimed cell as JSON");
+    assert_eq!(claimed["cell"]["id"], "default-cell-b");
+    assert_eq!(claimed["cell"]["feature"], "race-feat");
+}
+
+#[test]
+fn a_lane_bound_session_pools_the_default_pipeline_once_no_peer_is_live() {
+    let fx = fixture();
+    if !probe_claim_next(&fx, "claim-next no-peer control") {
+        return;
+    }
+    write_open_cell(&fx, "default-cell-c");
+    write_lane_record(&fx.root, "lane-feat", true);
+    write_session_record(&fx.root, "sess-c", Some("lane-feat"), &fresh_heartbeat());
+    // No peer session record at all.
+
+    let out = run_claim_next(&fx, "sess-c", "w-c", "no-peer");
+    assert_eq!(out.code, 0, "with no peer present the fallback must pool the default pipeline exactly as before: {}", out.message());
+    let claimed = out.json().expect("claim-next emits the claimed cell as JSON");
+    assert_eq!(claimed["cell"]["id"], "default-cell-c");
+    assert_eq!(claimed["cell"]["feature"], "race-feat");
+}
+
+#[test]
+fn a_solo_unbound_session_still_claims_its_own_default_pipeline_and_never_blocks_itself() {
+    // D2: the acting session must never block itself. A session record that
+    // is itself alive AND unbound — the exact shape that gates a PEER's
+    // default pipeline in the race above — must never gate its OWN, because
+    // it resolves as that session's own pipeline before the fallback pool
+    // (and the walk that computes the new fact skips the acting session's own
+    // record outright).
+    let fx = fixture();
+    if !probe_claim_next(&fx, "claim-next solo self-claim control") {
+        return;
+    }
+    write_open_cell(&fx, "own-cell");
+    write_session_record(&fx.root, "solo-sess", None, &fresh_heartbeat());
+
+    let out = run_claim_next(&fx, "solo-sess", "w-solo", "solo-self-claim");
+    assert_eq!(
+        out.code, 0,
+        "a solo unbound session must still claim from its own default pipeline: {}",
+        out.message()
+    );
+    let claimed = out.json().expect("claim-next emits the claimed cell as JSON");
+    assert_eq!(claimed["cell"]["id"], "own-cell");
+    assert_eq!(claimed["cell"]["feature"], "race-feat");
 }
