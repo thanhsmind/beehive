@@ -1,0 +1,73 @@
+{
+  "id": "dpl-1",
+  "feature": "default-pipeline-liveness",
+  "title": "A live session's default pipeline is not poolable by anyone else",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/tests/concurrency.rs"
+  ],
+  "read_first": [
+    "docs/history/default-pipeline-liveness/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+    "packages/bee-rs/crates/bee/tests/concurrency.rs"
+  ],
+  "action": "Close the GH#20 liveness gap on the default pipeline. In `run_claim_next` (handlers_select.rs, the fallback block that starts once `candidate.is_none()`), the default pipeline read from `.bee/state.json` is pushed into the `pipelines` fallback pool with NO liveness check, while lane records a few lines below ARE checked against `live_owned` (the GH#20 block). The ordering makes the gap visible: the default pipeline is appended BEFORE `live_owned` is even built, and `live_owned` is then consulted only inside the lane loop. Result: a session bound to a lane, finding its own lane empty, pools and claims cells out of whatever feature the default pipeline currently holds, even while another live session is actively working it. Fix per D1: a session record that is ALIVE (heartbeat not stale, same `heartbeat_stale` the GH#20 block already uses) and NOT bound to any lane is by definition working the default pipeline; while any such record exists, the default pipeline must not be pushed into the fallback pool. Per D3, reuse the SINGLE `list_session_records` walk the GH#20 block already performs rather than adding a second walk with different error semantics — that means hoisting that existing loop ABOVE the default-pipeline push and computing both facts in it: the `live_owned` lane list it already builds, and a new boolean for 'some other live session is unbound'. Do not change what the loop does for lanes, do not change its error propagation, and do not reorder anything else in the pool. Per D2, the acting session must never block itself: the loop already skips the record whose id equals the acting session, and the existing `own_feature.as_deref() != Some(f.as_str())` guard on the default-pipeline push already keeps an UNBOUND acting session from pushing its own pipeline as a fallback — do not add a second, contradictory self-exclusion, and confirm by test that a solo unbound session still claims from its own default pipeline exactly as before. Per D4 the proof is a REAL multi-process race, not a single-process simulation: packages/bee-rs/crates/bee/tests/concurrency.rs already spawns RACERS=8 OS processes per scenario with its `race()` helper and carries a 'deliberate red' control pattern (see `deliberate_red_an_unguarded_claim_lets_every_racer_believe_it_won`). Add a scenario there that sets up one live unbound session owning a default-pipeline feature with ready cells, races a lane-bound session's `cells claim-next` against it, and asserts the lane-bound session never walks away holding the other feature's cell. Also add a focused unit test in verbs/cells/tests.rs for the pure selection logic: live unbound peer present -> default pipeline not pooled; peer with a STALE heartbeat -> pooled again (a dead session must never park work forever); no peer at all -> pooled, unchanged.",
+  "must_haves": {
+    "truths": [
+      "A live, unbound peer session makes the default pipeline unpoolable by a lane-bound session's claim-next",
+      "A peer whose heartbeat is stale does NOT block the default pipeline — dead sessions never park work forever",
+      "With no other session present, claim-next pools the default pipeline exactly as before",
+      "A solo unbound session still claims from its own default pipeline and never blocks itself",
+      "Lane pooling behaviour and the existing GH#20 lane check are unchanged",
+      "Only one list_session_records walk is performed, with its existing error propagation unchanged",
+      "The fix is proven by a real multi-process race in tests/concurrency.rs, not a single-process simulation"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+        "substantive": "the session-record walk hoisted above the default-pipeline push, computing both the lane list and the unbound-peer fact, gating that push"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/concurrency.rs",
+        "substantive": "a multi-process race proving a lane-bound claim-next never takes a live unbound peer's default-pipeline cell"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "substantive": "unit coverage for live-peer, stale-peer, and no-peer selection outcomes"
+      }
+    ]
+  },
+  "trace": {
+    "worker": "dpl-1-builder",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/tests/concurrency.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-15T06:26:45.744Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f4553d58-a148-4191-bda1-9eaef21bdef5",
+    "claimed_at": "2026-08-15T06:12:07.748Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-15T06:26:27.024Z"
+  }
+}

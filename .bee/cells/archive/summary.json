@@ -468,5 +468,10 @@
     "capped": 4,
     "dropped": 0,
     "archived_at": "2026-08-15T03:05:03.549Z"
+  },
+  "default-pipeline-liveness": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-15T06:28:12.734Z"
   }
 }
