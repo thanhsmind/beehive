@@ -348,6 +348,48 @@ pub(crate) fn sweep_reset_cell(
     outcome
 }
 
+/// GH#20 + D1 (default-pipeline-liveness, docs/history/default-pipeline-liveness):
+/// the SINGLE session-record walk `claimNextCell`'s fallback pool needs,
+/// computing both facts liveness protects from one read with one error
+/// propagation:
+///   - `live_owned`: lanes actively bound to another LIVE session (GH#20) —
+///     never pooled as a fallback candidate lane.
+///   - the returned `bool`: whether some OTHER live session is unbound. An
+///     unbound session record is, by definition, working the default
+///     pipeline (`.bee/state.json`) right now, so while one exists the
+///     default pipeline itself must not be pushed into the fallback pool.
+/// A record whose heartbeat is stale (`heartbeat_stale`) counts as neither —
+/// a dead session must never park work forever. The acting session's own
+/// record is skipped outright: it can never be its own peer (D2), and the
+/// existing `own_feature` comparisons at each push site already keep an
+/// unbound acting session claiming its own default pipeline unblocked.
+pub(crate) fn live_session_facts(
+    control: &Path,
+    session: &str,
+    now: f64,
+) -> MR<(Vec<String>, bool)> {
+    let mut live_owned: Vec<String> = Vec::new();
+    let mut live_unbound_peer = false;
+    for record in list_session_records(control)? {
+        if matches!(record.get("id"), Some(Value::String(s)) if *s == session) {
+            continue;
+        }
+        if heartbeat_stale(Some(&record), now)? {
+            continue;
+        }
+        let bound = match record.get("lane") {
+            Some(Value::String(l)) => js_trim(l).to_string(),
+            _ => String::new(),
+        };
+        if bound.is_empty() {
+            live_unbound_peer = true;
+        } else {
+            live_owned.push(bound);
+        }
+    }
+    Ok((live_owned, live_unbound_peer))
+}
+
 /// lib/state.mjs resolvePipeline's answer, reduced to the two fields
 /// claimNextCell consumes: `resolved.record.feature || null` and
 /// `gateApproved(resolved.record, 'execution')`.
@@ -689,29 +731,21 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
                 v if js_truthy(v) => Some(jsjson::js_to_string(v)),
                 _ => None,
             };
+            // GH#20 + D1 (default-pipeline-liveness): ONE walk of every session
+            // record produces both facts liveness protects — lanes actively
+            // owned by ANOTHER live session, and whether some OTHER live
+            // session is unbound, which by definition means it is working the
+            // default pipeline right now (docs/history/default-pipeline-liveness).
+            let (live_owned, default_pipeline_live_peer) =
+                live_session_facts(&control, &session, now)?;
             if let Some(f) = &state_feature {
-                if own_feature.as_deref() != Some(f.as_str()) {
+                if own_feature.as_deref() != Some(f.as_str()) && !default_pipeline_live_peer {
                     pipelines.push((
                         f.clone(),
                         matches!(state.gates.get("execution"), Some(Value::Bool(true))),
                         Value::Null,
                     ));
                 }
-            }
-            // GH#20: lanes actively owned by ANOTHER live session are never pooled.
-            let mut live_owned: Vec<String> = Vec::new();
-            for record in list_session_records(&control)? {
-                if matches!(record.get("id"), Some(Value::String(s)) if *s == session) {
-                    continue;
-                }
-                let bound = match record.get("lane") {
-                    Some(Value::String(l)) => js_trim(l).to_string(),
-                    _ => String::new(),
-                };
-                if bound.is_empty() || heartbeat_stale(Some(&record), now)? {
-                    continue;
-                }
-                live_owned.push(bound);
             }
             for lane in crate::verbs::workflow_store::list_lanes(&root)? {
                 let feature = match lane.get("feature") {
