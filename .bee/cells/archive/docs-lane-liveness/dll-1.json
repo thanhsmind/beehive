@@ -1,0 +1,80 @@
+{
+  "id": "dll-1",
+  "feature": "docs-lane-liveness",
+  "title": "Docs keeps main only while no other session is live",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+    "AGENTS.md",
+    "packages/bee/AGENTS.block.md",
+    "docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/docs-lane-liveness/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs"
+  ],
+  "action": "Give the docs lane the exact condition the tiny lane took in commit 6c50b195, in the same function. Two grant mechanisms currently make docs-in-main unconditional, and BOTH must carry the one condition or the change is toothless. (1) The lane arm: `check_worktree_first` (hook_local.rs) returns early at `if lane == \"docs\" { return Ok(None); }` (around line 611), ahead of both the granted and no-grant arms. Gate it: docs returns early only while no OTHER live session exists. Compute the fact once with the SAME call the tiny carve-out already makes lower in this function — `is_concurrent_mode(&main_root, session_id, false).unwrap_or(false)` — hoisted so one computation serves both the docs gate and the existing tiny gate; never call it twice, never reimplement it. Note the ordering constraint: the docs early-return sits BEFORE `main_root` is resolved today, so hoisting means resolving what the liveness call needs first — keep every refusal and fail-open path of that resolution exactly as it is, and if resolution itself fails, treat it as solo (fail open), matching hook_local.rs:630-639 discipline. (2) The path arm: `worktree_first_exempt_rel` (hook_local.rs:538-559) exempts every path ending `.md`. It has exactly ONE production caller — the offender scan at hook_local.rs:618. Gate the `.md` clause on the same computed fact: with a live peer, a bare `.md` path outside the prefix list is no longer exempt. Implementation choice is yours — add a boolean parameter to the function, or split the `.md` clause out to the call site — but the prefix exemptions (`.bee/`, `docs/`, `plans/`, `AGENTS.md` via GATE_ALLOWED_PREFIXES_INTAKE) stay UNCONDITIONAL, and `rel.is_empty()` / `\"**\"` sentinels stay as they are. Solo behavior must remain byte-identical: same early returns, same allowed writes — that is what the superseded owner decision protected, and four existing tests pin it (`worktree_first_exemptions_hold` tests.rs:910, granted/no-grant arm tests around :943-:1128). (3) Doctrine follows code, same change: AGENTS.md:37-39 currently reads \"the main checkout takes integration, docs-lane, release work, and a solo `tiny` fix when no other session is live\" — move docs-lane under the same solo condition, e.g. \"integration and release work, plus docs-lane and a solo `tiny` fix when no other session is live\". Make the IDENTICAL edit in packages/bee/AGENTS.block.md (it is the rendered source; the two files carry the same sentence and must not drift). Update docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md line ~33 the same way: the sentence stating the tiny solo rule gains docs alongside tiny. Keep those edits to the one sentence each — no rewrites around them. (4) Tests in write_guard/tests.rs, modelled on the tiny liveness tests from 6c50b195: docs-lane main write with NO live peer allowed (unchanged); docs-lane main write WITH a live unbound peer denied by worktree-first, remedy naming the worktree road; a bare `.md` write (e.g. README.md path shape) with a live peer denied, and with no peer allowed; a stale-heartbeat peer reads as no peer; the acting session never counts as its own peer; a corrupt/unreadable session store fails open and allows. The existing exemption/arm tests must keep passing — where one hard-codes the unconditional docs allow, extend it with the solo precondition rather than deleting the assertion. (5) REGEN obligation: because packages/bee/AGENTS.block.md is release-manifest-hashed, run the full regen chain inside this cell AFTER the edits — from the WORKTREE root: `.bee/bin/bee dev regen` (it runs render-skill-trees, onboard --apply, release-manifest --write in order; the worktree has its own .bee/bin/bee copy — if that binary is missing or stale, rebuild it first with cargo build --release and copy target/release/bee over it). Commit whatever tracked files the regen changed (rendered skill trees, .bee/onboarding.json, docs/history/codex-harness-hardening/release-manifest.json) in the same path-scoped commit as the source edits.",
+  "must_haves": {
+    "truths": [
+      "A docs-lane write in main with no other live session is allowed, byte-identical to today",
+      "A docs-lane write in main with a live unbound peer is denied by worktree-first with the worktree remedy",
+      "A bare .md write outside the prefix list is denied with a live peer and allowed solo",
+      "The prefix exemptions (.bee/, docs/, plans/, AGENTS.md) remain unconditional",
+      "A stale-heartbeat peer reads as no peer; the acting session never counts itself; a read error fails open",
+      "is_concurrent_mode is called once per check and reused by both the docs gate and the tiny gate",
+      "AGENTS.md, packages/bee/AGENTS.block.md, and the knowledge area all state the same conditional sentence with no drift between them"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+        "substantive": "the docs early-return and the .md exemption both gated on one hoisted liveness fact, fail-open, prefix list untouched"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        "substantive": "coverage for solo-allow, peer-deny (lane and .md), stale-peer, self-exclusion, and fail-open"
+      },
+      {
+        "path": "AGENTS.md",
+        "substantive": "the main-checkout sentence conditions docs-lane on no other live session, identically in packages/bee/AGENTS.block.md"
+      }
+    ]
+  },
+  "trace": {
+    "worker": "dll-1-builder",
+    "outcome": null,
+    "files_changed": [
+      "AGENTS.md",
+      "packages/bee/AGENTS.block.md",
+      "docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-15T09:42:25.605Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f4553d58-a148-4191-bda1-9eaef21bdef5",
+    "claimed_at": "2026-08-15T09:33:44.928Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-15T09:42:06.865Z"
+  }
+}
