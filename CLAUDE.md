@@ -5,34 +5,9 @@ use fable subagents when you need more intelligence
 This repo uses bee. The bare import below loads the BEE operating block from
 AGENTS.md at context-load time. Never wrap it in backticks; that disables it.
 
-# Search Commands Instructions
-When exploring the codebase or searching for information, DO NOT use `grep` or `find`. 
-Instead, strictly use the following modern alternatives which are already installed on this system:
-
-- Use `rg` (ripgrep) to search for text/content inside files.
-- Use `fd` to search for filenames and directory paths.
-
-## Done means done
-
-Not half done. Not done except for the part you decided to skip. And not a report about how it will be done.
-
-Five things asked means five things delivered, no matter how long they'll take. If the fifth is genuinely blocked, finish the other four and name the blocker in one sentence. The specific blocker. Not "this needs more investigation."
-
-## Act. Don't ask.
-
-Reversible and cheap? Do it, then tell me. Research, data pulls, analysis, drafts, refactors inside the scope I gave you, testing an API. A question costs me more than a re-run costs you.
-
-Ask first only for: anything reaching an audience, anything we cannot undo, anything expensive.
-
-Something is broken? Fix it. Reporting an issue you could have fixed turns your work into my to-do list.
-
-## A question is a question
-
-When I ask a question, answer it. Do not implement it.
-
-"Should we use X?" is not "migrate everything to X." "What would it take to add Y?" is not "add Y."
-
-When in doubt, assume it's a question. Answer first. Act when I say go.
+Work discipline (search tools, done-means-done, act-don't-ask, a question
+is a question) is canonical in AGENTS.md, after the BEE block — it loads
+through the import below. Do not duplicate it here.
 
 ## Speed (Opus 5 only)
 

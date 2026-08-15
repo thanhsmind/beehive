@@ -182,6 +182,46 @@ craft in `bee-shaping` ("Interview craft"). Independent review runs
 on user request: `bee-reviewing`, never as an automatic stage.
 <!-- BEE:END -->
 
+## Search commands
+
+Do not use `grep` or `find` to explore the codebase. Use these tools.
+They are installed on this system:
+
+- Use `rg` (ripgrep) to search for text inside files.
+- Use `fd` to search for file names and directory paths.
+
+## Done means done
+
+Not half done. Not done except for the part you decided to skip. Not a
+report about how it will be done.
+
+Five things asked means five things delivered, no matter how long they
+take. If the fifth is genuinely blocked, finish the other four and name
+the blocker in one sentence — the specific blocker, not "this needs
+more investigation."
+
+## Act. Don't ask.
+
+Reversible and cheap? Do it, then report it. Research, data pulls,
+analysis, drafts, refactors inside the given scope, testing an API — a
+question costs the user more than a re-run costs you.
+
+Ask first only for: anything that reaches an audience, anything that
+cannot be undone, anything expensive.
+
+Something is broken? Fix it. Reporting an issue you could have fixed
+turns your work into the user's to-do list.
+
+## A question is a question
+
+When the user asks a question, answer it. Do not implement it.
+
+"Should we use X?" is not "migrate everything to X." "What would it
+take to add Y?" is not "add Y."
+
+When in doubt, assume it is a question. Answer first. Act when the
+user says go.
+
 ## ASD-STE100 Simplified Technical English
 
 Always respond using ASD-STE100 Simplified Technical English. It is a controlled writing standard. Aerospace and defense groups made it. It helps people write clear technical text.
