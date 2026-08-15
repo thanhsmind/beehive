@@ -1188,6 +1188,137 @@ use std::process::ExitCode;
         assert!(result.is_none(), "corrupt session store must fail OPEN, got {:?}", result);
     }
 
+    // dll-1: docs-lane main privilege is gated on the same liveness fact as
+    // tiny's, computed once and reused (D1/D3, docs/history/docs-lane-liveness/
+    // CONTEXT.md) — solo, docs stays exactly as fast as today; with a live
+    // peer, it routes into a worktree like any other feature. Modelled on
+    // the tiny liveness tests above (dmc-3).
+
+    fn add_stale_session(root: &Path, id: &str) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        // Well past HEARTBEAT_STALE_SECONDS (900s) — reads as no session at
+        // all, the same shape a genuinely dead peer leaves behind.
+        let stale = ms_to_iso(now_ms() - (HEARTBEAT_STALE_SECONDS + 60.0) * 1000.0).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": id, "started_at": stale, "last_heartbeat": stale
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn worktree_first_docs_lane_solo_allowed_byte_identical() {
+        // No other live session at all: unchanged from today.
+        let wtf = build_worktree_first_no_grant("swarming", Some("docs"));
+        assert_eq!(expect_done(edit("src/app.js"), &wtf.root).code, 0);
+    }
+
+    #[test]
+    fn worktree_first_docs_lane_denied_when_sibling_session_live() {
+        let wtf = build_worktree_first_no_grant("swarming", Some("docs"));
+        add_live_session(&wtf.root, "other-live");
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"src/app.js"},"session_id":"mine"}),
+            &wtf.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("worktree-first"), "{}", e.stderr);
+        assert!(e.stderr.contains("bee worktree new --feature demo"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn worktree_first_docs_lane_self_exclusion_still_allows_solo_write() {
+        // Only session record on disk is the ACTING session's own — it must
+        // never count as "another live session" and take the carve-out away.
+        let wtf = build_worktree_first_no_grant("swarming", Some("docs"));
+        add_live_session(&wtf.root, "mine");
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"src/app.js"},"session_id":"mine"}),
+            &wtf.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn worktree_first_docs_lane_stale_peer_reads_as_no_peer() {
+        let wtf = build_worktree_first_no_grant("swarming", Some("docs"));
+        add_stale_session(&wtf.root, "other-stale");
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"src/app.js"},"session_id":"mine"}),
+            &wtf.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn worktree_first_docs_lane_fails_open_on_corrupt_session_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        add_session_with_unparseable_heartbeat(&root, "other-live");
+        let record = json!({
+            "phase": "swarming",
+            "feature": "demo",
+            "route": { "lane": "docs" }
+        });
+        let record = record.as_object().unwrap().clone();
+        let root_s = root.to_string_lossy().into_owned();
+        let result = check_worktree_first(
+            "ordinary",
+            &root_s,
+            &root,
+            &record,
+            &["src/app.js".to_string()],
+            Some("mine"),
+        )
+        .unwrap();
+        assert!(result.is_none(), "corrupt session store must fail OPEN, got {:?}", result);
+    }
+
+    // dll-1: the `.md` blanket exemption (`worktree_first_exempt_rel`) is
+    // gated on the same fact — a bare `.md` path outside the prefix list
+    // (README.md is not under `.bee/`, `docs/`, `plans/`, or `AGENTS.md`)
+    // loses its exemption only while a peer is live. Proven on lane
+    // "standard" so the .md gate stands on its own, independent of the
+    // docs/tiny lane gates above.
+    #[test]
+    fn worktree_first_md_write_denied_with_live_peer_allowed_solo() {
+        let wtf = build_worktree_first_no_grant("swarming", Some("standard"));
+        add_live_session(&wtf.root, "other-live");
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"README.md"},"session_id":"mine"}),
+            &wtf.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("worktree-first"), "{}", e.stderr);
+
+        let solo = build_worktree_first_no_grant("swarming", Some("standard"));
+        assert_eq!(expect_done(edit("README.md"), &solo.root).code, 0);
+    }
+
+    // dll-1: the prefix exemptions stay unconditional even with a live
+    // peer — bee's own bookkeeping and the merge auto-commit already cover
+    // those roots (D3, docs/history/docs-lane-liveness/CONTEXT.md).
+    #[test]
+    fn worktree_first_prefix_exemptions_stay_unconditional_with_live_peer() {
+        let wtf = build_worktree_first_no_grant("swarming", Some("standard"));
+        add_live_session(&wtf.root, "other-live");
+        for path in [".bee/notes.txt", "docs/specs/plan.txt", "plans/roadmap.txt", "AGENTS.md"] {
+            let e = expect_done(
+                json!({"tool_name":"Edit","tool_input":{"file_path":path},"session_id":"mine"}),
+                &wtf.root,
+            );
+            assert_eq!(e.code, 0, "{path}: {}", e.stderr);
+        }
+    }
+
     // wtf-3 (5) / decision 0cd7bc46: the live beedashboard shape is a
     // PRESENT, EMPTY `{}` grants registry — a different code branch from a
     // missing file — and it must still deny, not be misread as corrupt.
