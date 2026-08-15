@@ -260,6 +260,13 @@ fn count_expired_claims(control: &Path, now: f64) -> sweep_cells::MR<usize> {
 fn sweep_on_orient(ctx: &Ctx) -> R<Option<String>> {
     let control = sweep_cells::control_root(&ctx.root).map_err(bridge_sweep_fail)?;
     let now = now_ms();
+    // D3 (dirty-main-conflicts dmc-4): reservations get the same sweep door
+    // claims already have, so a dead session's stale lease is the rare,
+    // cleared-away case rather than the normal thing a new reserve on the
+    // same path has to take over. Expiry-only — unlike the claim sweep below,
+    // no caller-session exclusion is needed: an expired lease is expired
+    // regardless of who is asking.
+    crate::lease_store::sweep_expired_leases(&control, now);
     let caller = sweep_cells::resolve_session_flag_env(None)
         .or_else(|| sweep_cells::resolve_session_adopt(&control).ok().flatten());
     let Some(caller) = caller else {
