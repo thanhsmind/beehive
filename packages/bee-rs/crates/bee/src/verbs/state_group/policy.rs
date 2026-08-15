@@ -15,6 +15,12 @@ use crate::verbs::reservations::{
     Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
 use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
+// live_session_facts (GH#20 + D1, docs/history/default-pipeline-liveness) is
+// defined once in cells::handlers_select and re-exported crate-wide through
+// `cells`'s own glob `pub(crate) use`. state_group has no dependency on
+// cells otherwise, so this import stays the ONLY coupling — reused here
+// rather than reimplemented, per lane-road-in-refusals D3.
+use crate::verbs::cells::{live_session_facts, Fail};
 use crate::verbs::workspace_store as ws;
 use crate::verbs::workflow_store::{
     acquire_named_lock, acquire_workflow_lock, adopt_mailbox_handoff, create_workflow,
@@ -414,9 +420,11 @@ pub(crate) fn start_lane(
 /// zero mutations.
 pub(crate) fn start_default(
     root: &Path,
+    control_root: &Path,
     feature: &str,
     mode: Option<&str>,
     phase: &str,
+    session_id: Option<&str>,
     workflows: &[Map<String, Value>],
 ) -> R2<Result<Map<String, Value>, String>> {
     let mut state = read_state_strict(root)?;
@@ -425,10 +433,40 @@ pub(crate) fn start_default(
     if &current_phase != &json!("idle")
         && &current_phase != &json!("compounding-complete")
     {
-        return Ok(Err(format!(
-            "startFeature: refused — current phase is \"{}\", not idle or the terminal alias \"compounding-complete\". A prior feature must finish or be explicitly wound down before a new feature starts. FIX: resume/close the current feature through its normal chain, or drop its remaining cells (bee cells drop), then retry.",
-            js_disp_opt(Some(&current_phase))
-        )));
+        // The lane road (D1): a concrete, runnable escape that never reads
+        // `state.json` at all, so it starts cleanly no matter who — or what —
+        // holds the default pipeline right now.
+        let mode_clause = mode.map(|m| format!(" --mode {m}")).unwrap_or_default();
+        let lane_command = format!(
+            "bee state start-feature --feature {feature} --as-lane --paths <path1,path2,...>{mode_clause}"
+        );
+
+        // D3/D4: the SAME liveness predicate default-pipeline-liveness already
+        // settled, reused rather than reimplemented — one definition in the
+        // codebase. The acting session id rides through so the helper's own
+        // self-skip (D2) applies: a session resuming the feature it started
+        // itself is never counted as its own peer, and a stale heartbeat is
+        // never counted as live.
+        let acting = session_id.map(js_trim).unwrap_or("");
+        let live_peer = match live_session_facts(control_root, acting, now_ms()) {
+            Ok((_, unbound_peer)) => unbound_peer,
+            Err(Fail::Delegate) => return Err(Err2::Ex),
+            Err(Fail::Thrown(msg)) => return Err(Err2::Msg(msg)),
+        };
+
+        return Ok(Err(if live_peer {
+            // D2: register change, not an appended line. This caller is never
+            // invited to disturb work that is not its own.
+            format!(
+                "startFeature: refused — current phase is \"{}\", not idle or the terminal alias \"compounding-complete\". The default pipeline is held by another LIVE session's own feature right now. Do NOT resume it, finish it, wind it down, or drop any of its cells — that work belongs to a live peer, not to this caller, and none of the usual remedies are this caller's to take. FIX: start THIS feature as a lane instead — a lane reads only its own record and never touches the occupied default pipeline: {lane_command}, then retry.",
+                js_disp_opt(Some(&current_phase))
+            )
+        } else {
+            format!(
+                "startFeature: refused — current phase is \"{}\", not idle or the terminal alias \"compounding-complete\". A prior feature must finish or be explicitly wound down before a new feature starts. FIX: resume/close the current feature through its normal chain, or drop its remaining cells (bee cells drop), then retry — or, to start THIS feature without touching the prior one at all, start it as a lane instead: {lane_command} (a lane reads only its own record and never touches the occupied default pipeline).",
+                js_disp_opt(Some(&current_phase))
+            )
+        }));
     }
 
     // F5: scoped per-feature — a handoff naming a DIFFERENT feature no longer
@@ -671,7 +709,15 @@ pub(crate) fn run_start_feature(flags: Flags, use_json: bool, t0: Instant) -> Op
                 Err(e) => Err(e),
             }
         } else {
-            start_default(&ctx.root, &feature_trimmed, mode.as_deref(), &phase, &workflows)
+            start_default(
+                &ctx.root,
+                &control_root,
+                &feature_trimmed,
+                mode.as_deref(),
+                &phase,
+                session_id_trimmed.as_deref(),
+                &workflows,
+            )
         };
         drop(guard);
         let legacy = match legacy? {

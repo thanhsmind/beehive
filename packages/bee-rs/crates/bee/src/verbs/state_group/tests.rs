@@ -1939,7 +1939,7 @@ use std::time::Instant;
                 "route":{"class":"feature","lane":"high-risk","flags":[],"product_files":7,
                          "rationale":null,"updated_at":"2020-01-01T00:00:00.000Z","feature":"old-feat"}}"#,
         );
-        let record = match ok(start_default(root, "new-feat", Some("standard"), "shaping", &[])) {
+        let record = match ok(start_default(root, root, "new-feat", Some("standard"), "shaping", None, &[])) {
             Ok(r) => r,
             Err(m) => panic!("unexpected refusal: {m}"),
         };
@@ -1967,7 +1967,7 @@ use std::time::Instant;
 
         // A freshly started feature carries no route — the first --set is
         // accepted whatever lane it names, even the top of the ladder.
-        ok(start_default(root, "feat-a", Some("standard"), "shaping", &[]));
+        ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[]));
         let target = ok(resolve_mutation_target(root, None, "route", true));
         assert!(target.record().get("route").is_none());
 
@@ -2002,7 +2002,7 @@ use std::time::Instant;
         let mut terminal = ok(read_state_strict(root));
         terminal.insert("phase".into(), json!("compounding-complete"));
         ok(write_state(root, &terminal));
-        ok(start_default(root, "feat-b", Some("standard"), "shaping", &[]));
+        ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[]));
         let target3 = ok(resolve_mutation_target(root, None, "route", true));
         assert!(target3.record().get("route").is_none());
         let feature_b = target3.record().get("feature").cloned().unwrap();
@@ -2040,4 +2040,148 @@ use std::time::Instant;
             record.insert("route".into(), Value::Object(route_b));
             ok(write_state(root, &record));
         }
+    }
+
+    // ── lane-road-in-refusals: start_default's occupied-pipeline refusal ───
+
+    fn write_session_fixture(root: &Path, id: &str, heartbeat: &str, lane: Option<&str>) {
+        let dir = sessions_dir(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut rec = Map::new();
+        rec.insert("id".into(), json!(id));
+        rec.insert("started_at".into(), json!(heartbeat));
+        rec.insert("last_heartbeat".into(), json!(heartbeat));
+        rec.insert("lane".into(), lane.map(|l| json!(l)).unwrap_or(Value::Null));
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            jsjson::stringify_pretty(&Value::Object(rec)),
+        )
+        .unwrap();
+    }
+
+    fn occupied_state_fixture(root: &Path) {
+        write_state_file(
+            root,
+            r#"{"schema_version":"1.0","phase":"shaping","feature":"old-feat","mode":"standard",
+                "approved_gates":{"context":true,"shape":false,"execution":false,"review":false},
+                "summary":"s","next_action":"n"}"#,
+        );
+    }
+
+    /// D1: with no live peer at all, the refusal keeps its original register
+    /// AND names a concrete, runnable lane-road escape.
+    #[test]
+    fn start_default_names_the_lane_road_when_no_peer_is_live() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        occupied_state_fixture(root);
+
+        let message = match ok(start_default(root, root, "new-feat", Some("standard"), "shaping", None, &[])) {
+            Ok(_) => panic!("expected a refusal"),
+            Err(m) => m,
+        };
+        assert!(message.starts_with("startFeature: refused —"), "message: {message}");
+        assert!(
+            message.contains("A prior feature must finish or be explicitly wound down"),
+            "the no-peer branch keeps the original register: {message}"
+        );
+        assert!(
+            message.contains(
+                "bee state start-feature --feature new-feat --as-lane --paths <path1,path2,...> --mode standard"
+            ),
+            "the FIX must name a runnable --as-lane command: {message}"
+        );
+        assert!(
+            !message.contains("LIVE session"),
+            "a no-peer refusal must never use the live-peer register: {message}"
+        );
+    }
+
+    /// D2/D3/D4: an OTHER live, unbound session (by definition on the default
+    /// pipeline, per live_session_facts) flips the refusal's register — it
+    /// states plainly the pipeline is a live peer's, and never offers
+    /// close/wind-down/drop as something THIS caller should do.
+    #[test]
+    fn start_default_uses_peer_wording_and_never_invites_closing_a_live_peers_work() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        occupied_state_fixture(root);
+        let fresh = iso_from_ms(now_ms()).ok().unwrap();
+        write_session_fixture(root, "peer", &fresh, None);
+
+        let message = match ok(start_default(
+            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &[],
+        )) {
+            Ok(_) => panic!("expected a refusal"),
+            Err(m) => m,
+        };
+        assert!(message.starts_with("startFeature: refused —"), "message: {message}");
+        assert!(message.contains("LIVE session"), "message: {message}");
+        assert!(
+            message.contains(
+                "bee state start-feature --feature new-feat --as-lane --paths <path1,path2,...> --mode standard"
+            ),
+            "the peer branch still names the runnable lane road: {message}"
+        );
+        assert!(
+            !message.contains("bee cells drop"),
+            "the peer branch must never hand the caller a remedy that disturbs the peer's cells: {message}"
+        );
+        assert!(
+            !message.contains("resume/close the current feature"),
+            "the peer branch must never invite the caller to resume/close a peer's feature: {message}"
+        );
+        assert!(
+            message.contains("Do NOT resume it, finish it, wind it down, or drop any of its cells"),
+            "the peer branch must say plainly not to touch the peer's work: {message}"
+        );
+    }
+
+    /// A stale heartbeat on the only other session record must read as no
+    /// peer at all — a dead session never parks the caller on the harder
+    /// wording forever.
+    #[test]
+    fn start_default_treats_a_stale_peer_heartbeat_as_no_peer() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        occupied_state_fixture(root);
+        write_session_fixture(root, "peer", "2020-01-01T00:00:00.000Z", None);
+
+        let message = match ok(start_default(
+            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &[],
+        )) {
+            Ok(_) => panic!("expected a refusal"),
+            Err(m) => m,
+        };
+        assert!(
+            !message.contains("LIVE session"),
+            "a stale peer heartbeat must read as no peer: {message}"
+        );
+        assert!(
+            message.contains("A prior feature must finish or be explicitly wound down"),
+            "a stale peer falls back to the ordinary wording: {message}"
+        );
+    }
+
+    /// D4: the acting session's own record — even fresh and unbound — is
+    /// never counted as its own peer; a session resuming the feature it
+    /// started itself still gets the original wording.
+    #[test]
+    fn start_default_never_counts_the_acting_session_as_its_own_peer() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        occupied_state_fixture(root);
+        let fresh = iso_from_ms(now_ms()).ok().unwrap();
+        write_session_fixture(root, "acting", &fresh, None);
+
+        let message = match ok(start_default(
+            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &[],
+        )) {
+            Ok(_) => panic!("expected a refusal"),
+            Err(m) => m,
+        };
+        assert!(
+            !message.contains("LIVE session"),
+            "the acting session's own record must never read as its own peer: {message}"
+        );
     }
