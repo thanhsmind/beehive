@@ -339,6 +339,7 @@
     "opencode",
     "capture-deferral",
     "promote-proposal",
-    "worktrees"
+    "worktrees",
+    "documentation"
   ]
 }
