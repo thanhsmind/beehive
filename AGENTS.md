@@ -148,6 +148,20 @@ bee term — if nothing the user needs is lost, those terms did not
 belong there. The full turn shape and rules load with the `bee-hive`
 skill ("Communication contract").
 
+## Token efficiency
+
+- Never re-read a file you just wrote or edited — you know its contents.
+- Never re-run a command to "verify" unless the outcome was uncertain
+  ("Prove, then say so" still holds: a done/green claim still needs its
+  fresh output — test and verify runs ARE the uncertain outcome).
+- Do not echo large blocks of code or file contents back unless asked.
+- Batch related edits into one operation — never five edits where one
+  serves.
+- Skip filler confirmations ("I'll continue…") — just do it.
+- If a task needs one tool call, do not spend three. Plan before acting.
+- Do not summarize what you just did unless the result is ambiguous or
+  you need additional input.
+
 ## Care for the session
 
 - At roughly 65% context, write `.bee/HANDOFF.json` and pause cleanly.
