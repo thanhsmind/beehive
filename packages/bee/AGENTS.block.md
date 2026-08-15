@@ -29,8 +29,8 @@ Four boundaries hold in every mode:
   locked ones — cite them, never reinterpret them.
 - Code-touching feature work lives in its feature worktree from the
   start (`bee worktree new --feature <slug>`); the main checkout takes
-  integration, docs-lane, release work, and a solo `tiny` fix when no
-  other session is live — land through `bee worktree merge`.
+  integration and release work, plus docs-lane and a solo `tiny` fix
+  when no other session is live — land through `bee worktree merge`.
 
 `bee --help --json` prints the porcelain flow surface; `--names` adds a
 one-line-per-command index (plain `bee --help` / `bee --help --all` are the

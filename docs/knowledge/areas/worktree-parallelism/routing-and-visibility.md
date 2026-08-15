@@ -30,8 +30,8 @@ code-touching lane in the main checkout makes the worktree the loud, machine-nam
 `wt/<slug>` — and the session opens there. An occupied checkout is no longer the trigger;
 the worktree is the default home for the feature, occupied or not. The MAIN checkout takes
 only integration, docs-lane work, release machinery, merges, and reading (release always
-runs in main). A `tiny` fix may stay in main only while no other live session is present
-(heartbeat + non-idle phase, D9a); with one, it takes a worktree like any feature. The
+runs in main). Docs-lane work and a `tiny` fix may stay in main only while no other live session is
+present (heartbeat + non-idle phase, D9a); with one, each takes a worktree like any feature. The
 explicit owner override is `--in-main` at feature start, recorded as a decision — never
 silent. Landing stays `bee worktree merge` from main. The rule lives in bee-hive's Session
 Scout and the AGENTS.md boundary list; the existing guards (holds, live-owner lanes,

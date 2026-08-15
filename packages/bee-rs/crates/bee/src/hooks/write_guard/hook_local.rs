@@ -535,20 +535,30 @@ pub(crate) fn find_feature_worktree_grant(main_root: &str, feature: &str) -> R<F
 }
 
 /// provenance: bee-write-guard.mjs worktreeFirstExemptRel.
-pub(crate) fn worktree_first_exempt_rel(rel: &str) -> bool {
+///
+/// `other_live_session` gates ONLY the blanket `.md` clause (cell
+/// dll-1): solo, every `.md` path stays exempt, byte-identical to
+/// today; with a live peer present, a bare `.md` path outside the
+/// prefix list below is no longer exempt — worktree-first can now see
+/// it as an offender. The `rel.is_empty()` / `"**"` sentinels and the
+/// prefix list itself stay unconditional either way; this function has
+/// exactly one production caller, `check_worktree_first`'s offender
+/// scan, which threads the same liveness fact it already computed once.
+pub(crate) fn worktree_first_exempt_rel(rel: &str, other_live_session: bool) -> bool {
     if rel.is_empty() {
         return true;
     }
     if rel == "**" {
         return true;
     }
-    if rel.ends_with(".md") {
+    if rel.ends_with(".md") && !other_live_session {
         return true;
     }
     // trun-5: kept on the INTAKE list (unchanged, blanket `docs/`) — this
-    // exemption already independently allows every `*.md` above, and the
-    // brief for this cell says to leave this consumer's behavior byte-for-byte
-    // unchanged rather than tie it to the new gated-phase boundary.
+    // exemption already independently allows every `*.md` above while solo,
+    // and the brief for this cell says to leave this consumer's behavior
+    // byte-for-byte unchanged rather than tie it to the new gated-phase
+    // boundary.
     GATE_ALLOWED_PREFIXES_INTAKE.iter().any(|prefix| {
         if let Some(bare) = prefix.strip_suffix('/') {
             rel == bare || rel.starts_with(prefix)
@@ -564,9 +574,11 @@ pub(crate) fn worktree_first_exempt_rel(rel: &str) -> bool {
 /// the default state.json otherwise (the same resolution `check_write` uses
 /// via `resolve_write_record`); it is never the raw default state.json for a
 /// lane-bound session. Every carve-out below is a fail-open bound, narrowest
-/// first: lane "docs" never fires on EITHER arm (AGENTS.md gives main
-/// integration and docs-lane work), lane "tiny" never fires on the NEW
-/// no-grant arm only (AGENTS.md's solo tiny fix — see that arm's own
+/// first: lane "docs" never fires on EITHER arm while no other live session
+/// is present (AGENTS.md gives main integration and release work, plus
+/// docs-lane and a solo tiny fix when no other session is live — cell
+/// dll-1, same condition as tiny's below), lane "tiny" never fires on the
+/// NEW no-grant arm only (AGENTS.md's solo tiny fix — see that arm's own
 /// carve-out comment below for the "solo" gap and why a feature already
 /// holding a granted worktree does not get this exemption), and a
 /// missing/empty route on the acting record is "no opinion" — never guessed
@@ -581,9 +593,14 @@ pub(crate) fn worktree_first_exempt_rel(rel: &str) -> bool {
 ///
 /// `session_id` is the acting session's own id (main.rs's
 /// `session_id.as_deref()`, the same value `resolve_write_record` already
-/// takes) — used only below, as the exclusion for the no-grant arm's "tiny"
-/// carve-out, so a session never counts itself as the other live session
-/// that would take the carve-out away.
+/// takes) — used below both as the docs-lane gate's own liveness fact and,
+/// unchanged, as the exclusion for the no-grant arm's "tiny" carve-out, so a
+/// session never counts itself as the other live session that would take
+/// either carve-out away. `main_root` is resolved once, up front — earlier
+/// than the docs gate needed it before this cell — because the liveness
+/// check (`is_concurrent_mode`, computed exactly once and reused by both
+/// gates) needs it too; if resolution itself fails, that is read the same
+/// as every other arm below reads it: no opinion, fail open (`Ok(None)`).
 pub(crate) fn check_worktree_first(
     worktree_resolution: &str,
     root: &str,
@@ -606,21 +623,34 @@ pub(crate) fn check_worktree_first(
         },
         _ => return Ok(None),
     };
-    // "docs" is exempt on BOTH arms — it never becomes a source write in the
-    // first place, so it never needs a worktree, granted or not.
-    if lane == "docs" {
+    // Hoisted ahead of the docs gate below (cell dll-1): resolution failure
+    // reads exactly as it did in its old position — no opinion, fail open.
+    let main_root = match realpath_any(root) {
+        Some(m) => m,
+        None => return Ok(None),
+    };
+    // The single liveness fact both the docs gate (immediately below) and
+    // the tiny gate (further down, unchanged) share — computed once here,
+    // never reimplemented, never called twice. Self-excluding via
+    // `session_id`; any session-store read error fails OPEN (`false`),
+    // matching hook_local.rs:630-639's discipline: an unreadable store must
+    // never turn a permitted solo write into a refusal.
+    let other_live_session = is_concurrent_mode(&main_root, session_id, false).unwrap_or(false);
+    // "docs" is exempt on BOTH arms — but only while no other live session
+    // is present (cell dll-1, same condition as tiny's below). With a live
+    // peer, docs work routes into a worktree like any other feature.
+    if lane == "docs" && !other_live_session {
         return Ok(None);
     }
     let config = read_config(store_root)?;
     if config.get("worktree_first") == Some(&Value::String("off".into())) {
         return Ok(None);
     }
-    let offender = match rel_paths.iter().find(|rel| !worktree_first_exempt_rel(rel)) {
+    let offender = match rel_paths
+        .iter()
+        .find(|rel| !worktree_first_exempt_rel(rel, other_live_session))
+    {
         Some(o) => o.clone(),
-        None => return Ok(None),
-    };
-    let main_root = match realpath_any(root) {
-        Some(m) => m,
         None => return Ok(None),
     };
     match find_feature_worktree_grant(&main_root, &feature)? {
@@ -671,13 +701,14 @@ worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded,
     // that the canonical predicate would also deny, never the reverse. Gap
     // named at cell wtf-3, closed here at cell dmc-3.
     //
-    // `session_id` excludes the acting session itself, so a lone session
-    // never counts its own heartbeat as "another live session". Any read
-    // error (missing/corrupt sessions dir, an unparseable heartbeat) is
-    // treated as `false` — fails OPEN, same discipline as the read-error
-    // handling at this function's other arms: an unreadable session store
-    // must never turn a permitted solo tiny fix into a refusal.
-    let other_live_session = is_concurrent_mode(&main_root, session_id, false).unwrap_or(false);
+    // `other_live_session` is the same fact computed once, above, for the
+    // docs gate (cell dll-1) — reused here, never recomputed: `session_id`
+    // excludes the acting session itself, so a lone session never counts
+    // its own heartbeat as "another live session"; any read error
+    // (missing/corrupt sessions dir, an unparseable heartbeat) reads as
+    // `false` — fails OPEN, same discipline as the read-error handling at
+    // this function's other arms: an unreadable session store must never
+    // turn a permitted solo tiny fix into a refusal.
     if lane == "tiny" && !other_live_session {
         return Ok(None);
     }
