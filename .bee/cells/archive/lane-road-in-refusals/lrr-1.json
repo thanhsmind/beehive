@@ -1,0 +1,69 @@
+{
+  "id": "lrr-1",
+  "feature": "lane-road-in-refusals",
+  "title": "A blocked feature start is told about the lane, not asked to close a peer's work",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs"
+  ],
+  "read_first": [
+    "docs/history/lane-road-in-refusals/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs"
+  ],
+  "action": "`start_default` (policy.rs, around line 415) refuses a feature start when the default pipeline is mid-flight, and every remedy its FIX names — resume, close, wind down, `bee cells drop` — requires disturbing work that may belong to a DIFFERENT agent. A real screenshot showed an agent dutifully escalating exactly those two options to a human about a peer's feature. The remedy that needs nobody's permission is never mentioned: a lane. `start_lane` (same file, around line 272) reads only the lane's OWN record and never reads `state.json`, so a lane starts cleanly while the default pipeline is occupied — the doctrine already calls this the paved road (skills/bee-hive/references/routing-and-contracts.md:144). Two changes, both to the refusal only. (D1) The existing refusal gains the lane road, with the flag spelled out concretely enough to run — `bee state start-feature --feature <f> --mode <m> --as-lane --paths <declared>` — beside the remedies it already names. (D2) When the occupying feature belongs to another LIVE session, do not merely append a line: change the message's register. It must say plainly that the pipeline is held by a live peer session, that this caller must NOT wind that feature down, and that the lane is the way forward. Keep the code prefix `startFeature: refused` and the typed-refusal shape unchanged — the wording changes, the contract does not. (D3) 'Another live session' is already settled: `live_session_facts` in verbs/cells/handlers_select.rs (added by feature default-pipeline-liveness) walks session records once and returns, as its second value, whether some OTHER live session is unbound — an unbound live session is BY DEFINITION on the default pipeline. Reuse that helper, or move it to a shared home both modules import if a cells->state_group dependency is wrong here; state which you chose and why in your report. Do NOT reimplement the predicate — two copies of a liveness rule is the next drift, and this is the third refusal-wording defect found today. (D4) The caller's own session must never read as its own peer: `live_session_facts` already skips the acting session's record, and `start_default` must pass the acting session id through so that skip works. The call site at policy.rs:674 already has `session_id_trimmed` and `control_root` in scope, so this is plumbing, not new resolution. A session resuming the feature it started itself still gets the ORIGINAL wording. (D5) Refusal wording only: do not auto-route the caller into a lane, do not relax the default-pipeline guard, do not touch `start_lane`. Cover with tests in state_group/tests.rs: occupied pipeline with no live peer names the lane road in the original register; occupied pipeline WITH a live unbound peer uses the peer wording and never tells the caller to close or drop; a peer whose heartbeat is stale reads as no peer at all; and the existing start_default tests keep passing with their refusal-code expectations intact.",
+  "must_haves": {
+    "truths": [
+      "A blocked start with no live peer names the lane road with a runnable --as-lane command",
+      "A blocked start with a live unbound peer says the pipeline is a live peer's and never tells the caller to close, wind down, or drop it",
+      "A peer whose heartbeat is stale reads as no peer, and the caller gets the ordinary wording",
+      "The acting session is never counted as its own peer",
+      "The refusal keeps its `startFeature: refused` prefix and typed shape; only wording changed",
+      "The liveness predicate is reused, not reimplemented — one definition in the codebase",
+      "start_lane and the default-pipeline guard itself are unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+        "substantive": "start_default takes the acting session, branches its refusal wording on live-peer presence, and names the lane road in both branches"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "substantive": "coverage for no-peer, live-peer, stale-peer, and self-is-not-peer refusal wording"
+      }
+    ]
+  },
+  "trace": {
+    "worker": "lrr-1-builder",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-15T08:15:30.832Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f4553d58-a148-4191-bda1-9eaef21bdef5",
+    "claimed_at": "2026-08-15T08:06:15.728Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-15T08:15:11.182Z"
+  }
+}
