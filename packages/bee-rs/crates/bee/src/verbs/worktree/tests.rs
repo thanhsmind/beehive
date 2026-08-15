@@ -1352,6 +1352,30 @@ use std::time::Instant;
         assert!(git_status_porcelain_str(&main).contains("config.json"));
     }
 
+    /// Truth 4 (this cell, D1): the refusal's scope string names all four
+    /// roots the auto-commit actually sweeps — `.bee/`, `docs/decisions/`,
+    /// `docs/knowledge/`, and `docs/history/<feature>/` — not the stale
+    /// two-root list. A refusal that undercounts its own swept scope would
+    /// mislead the reader about what still needs a manual commit.
+    #[test]
+    fn refusal_scope_string_names_the_widened_roots() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        std::fs::write(main.join("unrelated.txt"), "surprise\n").unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
+        let Err(err) = result else { panic!("a dirty path outside the swept roots must still refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains(".bee/"), "{msg}");
+        assert!(msg.contains("docs/decisions/"), "{msg}");
+        assert!(msg.contains("docs/knowledge/"), "{msg}");
+        assert!(msg.contains("docs/history/demo/"), "{msg}");
+    }
+
     /// Truth 1 + the docs/history root: this feature's OWN
     /// `docs/history/<feature>/` artifacts (a promote proposal `bee close`
     /// wrote, for instance) are swept into the same auto-commit as `.bee/`.
