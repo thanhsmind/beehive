@@ -1380,6 +1380,86 @@ use std::time::Instant;
         assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
     }
 
+    /// D1 (dirty-main-conflicts): `docs/decisions/` is bee's own tracked
+    /// output — `bee decisions log` writes `docs/decisions/taxonomy.json`
+    /// on every run — so a dirty, already-tracked file under it joins
+    /// `.bee` in the auto-commit's swept roots exactly like `docs/history`
+    /// does, instead of refusing on bee's own bookkeeping.
+    #[test]
+    fn docs_decisions_dirt_is_auto_committed_alongside_bee() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        std::fs::create_dir_all(main.join("docs").join("decisions")).unwrap();
+        std::fs::write(main.join("docs").join("decisions").join("taxonomy.json"), "{}\n").unwrap();
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "seed taxonomy.json"]);
+        // Dirty the already-tracked file, the same shape `decisions log`
+        // leaves behind.
+        std::fs::write(main.join("docs").join("decisions").join("taxonomy.json"), "{\"a\": 1}\n").unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge refused instead of auto-committing docs/decisions: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            answer.result["bookkeeping_commit"]["committed"],
+            Value::Bool(true),
+            "{}",
+            answer.result["bookkeeping_commit"]
+        );
+        assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+    }
+
+    /// D1 (dirty-main-conflicts): `docs/knowledge/` is bee's own tracked
+    /// output — the capture chain writes `docs/knowledge/**` on every sync
+    /// — so a dirty, already-tracked file under it joins `.bee` in the
+    /// auto-commit's swept roots exactly like `docs/history` does, instead
+    /// of refusing on bee's own bookkeeping.
+    #[test]
+    fn docs_knowledge_dirt_is_auto_committed_alongside_bee() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        std::fs::create_dir_all(main.join("docs").join("knowledge").join("areas")).unwrap();
+        std::fs::write(
+            main.join("docs").join("knowledge").join("areas").join("example.md"),
+            "captured\n",
+        )
+        .unwrap();
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "seed knowledge doc"]);
+        // Dirty the already-tracked file, the same shape a capture sync
+        // leaves behind.
+        std::fs::write(
+            main.join("docs").join("knowledge").join("areas").join("example.md"),
+            "captured, updated\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge refused instead of auto-committing docs/knowledge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            answer.result["bookkeeping_commit"]["committed"],
+            Value::Bool(true),
+            "{}",
+            answer.result["bookkeeping_commit"]
+        );
+        assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+    }
+
     /// The sharper half of this cell: another feature's OWN
     /// `docs/history/<other>/` must never be swept into THIS merge's
     /// auto-commit — a sibling session can be writing it at the same
