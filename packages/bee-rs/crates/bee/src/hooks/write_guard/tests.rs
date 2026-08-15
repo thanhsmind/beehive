@@ -1106,6 +1106,88 @@ use std::process::ExitCode;
         assert_eq!(expect_done(edit("src/app.js"), &no_route.root).code, 0);
     }
 
+    // dmc-3: the no-grant arm's "tiny" carve-out is gated on whether another
+    // LIVE session exists — closing the gap the comment above it named at
+    // wtf-3. A session file whose `last_heartbeat` will not parse counts as
+    // corrupt data, not a live session — the same shape `add_live_session`
+    // uses, minus a readable heartbeat.
+    fn add_session_with_unparseable_heartbeat(root: &Path, id: &str) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": id, "started_at": "not-a-date", "last_heartbeat": "not-a-date"
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn worktree_first_no_grant_tiny_denied_when_sibling_session_live() {
+        let wtf = build_worktree_first_no_grant("swarming", Some("tiny"));
+        add_live_session(&wtf.root, "other-live");
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"src/app.js"},"session_id":"mine"}),
+            &wtf.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("worktree-first"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn worktree_first_no_grant_tiny_self_exclusion_still_allows_solo_write() {
+        // Only session record on disk is the ACTING session's own — it must
+        // never count as "another live session" and take the carve-out away.
+        let wtf = build_worktree_first_no_grant("swarming", Some("tiny"));
+        add_live_session(&wtf.root, "mine");
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"src/app.js"},"session_id":"mine"}),
+            &wtf.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    // A direct call to `check_worktree_first` itself, not through the full
+    // `expect_done`/`run_native` pipeline: an EARLIER, unrelated guard
+    // (wcg-2's `is_shared_nested_checkout_target`, main.rs) also scans
+    // `.bee/sessions` in STRICT mode ahead of this one, on every
+    // write-capable call — a session record with an unparseable heartbeat
+    // trips THAT guard's own (intentional, differently-scoped) fail-closed
+    // read-error handling before a write ever reaches `check_worktree_first`,
+    // which would make an end-to-end test prove that guard's behavior, not
+    // this one's. Calling the function under test directly isolates the
+    // claim this cell actually makes: a corrupt/unreadable session record
+    // never turns `check_worktree_first`'s own tiny carve-out into a refusal.
+    #[test]
+    fn worktree_first_no_grant_tiny_fails_open_on_corrupt_session_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        add_session_with_unparseable_heartbeat(&root, "other-live");
+        let record = json!({
+            "phase": "swarming",
+            "feature": "demo",
+            "route": { "lane": "tiny" }
+        });
+        let record = record.as_object().unwrap().clone();
+        let root_s = root.to_string_lossy().into_owned();
+        let result = check_worktree_first(
+            "ordinary",
+            &root_s,
+            &root,
+            &record,
+            &["src/app.js".to_string()],
+            Some("mine"),
+        )
+        .unwrap();
+        assert!(result.is_none(), "corrupt session store must fail OPEN, got {:?}", result);
+    }
+
     // wtf-3 (5) / decision 0cd7bc46: the live beedashboard shape is a
     // PRESENT, EMPTY `{}` grants registry — a different code branch from a
     // missing file — and it must still deny, not be misread as corrupt.

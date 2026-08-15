@@ -350,6 +350,7 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     &store_root_pb,
                     &record,
                     &rel_paths,
+                    session_id.as_deref(),
                 )? {
                     denial = Some(reason);
                 }
