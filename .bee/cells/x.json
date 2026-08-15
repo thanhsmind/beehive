@@ -1,0 +1,30 @@
+{
+  "id": "x",
+  "feature": "guard-refusal-wording",
+  "lane": "small",
+  "files": [
+    "a"
+  ],
+  "action": "x",
+  "verify": "x",
+  "acceptance": "x",
+  "title": "x",
+  "status": "dropped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "dropped_reason": "junk probe cell, added by mistake"
+  }
+}

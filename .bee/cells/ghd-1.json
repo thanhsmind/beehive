@@ -1,0 +1,52 @@
+{
+  "id": "ghd-1",
+  "title": "List state gate's actor/bypass-level/reason in the help payload, with a drift test",
+  "feature": "gate-help-drift",
+  "lane": "small",
+  "files": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "action": "In registry_payload.json add parameter entries for actor (enum from GATE_ACTOR_VALUES), bypass-level, and reason to BOTH the state.gate command and the gate flow alias, stating the facts from set_gate.rs:645-668 (actor defaults to user; --actor auto requires both --bypass-level and --reason). In tests/registry_contracts.rs add a drift test asserting every flag in set_gate.rs's known-flags list (name, merge, approved, lane, no-lane, owner, actor, bypass-level, reason) appears as a parameter key of both state.gate and gate in the embedded payload.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "bee state gate --help --json and bee --help --json list actor, bypass-level, reason; drift test fails if a known flag is missing; cargo test green",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-ghd-1",
+    "outcome": "Added actor/bypass-level/reason parameters to state.gate and gate in the registry payload, plus a drift test pinning every set_gate.rs known flag against both commands",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-15T23:59:13.022Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e499dfc3-c889-41e5-b4a7-381b38596b5e",
+    "claimed_at": "2026-08-15T23:52:45.048Z",
+    "report": {
+      "outcome": "Added actor/bypass-level/reason parameters to state.gate and gate in the registry payload, plus a drift test pinning every set_gate.rs known flag against both commands",
+      "commit": "8dbb0b4c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "green",
+      "deviations": [
+        "Bumped catalog.rs PINNED_FLAG_COUNT 148->150 (out-of-scope file) since actor/bypass-level are new distinct flag names the drift test surfaced; reason already existed. Blocking breakage in-path per Execute step 3."
+      ]
+    },
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-15T23:58:54.232Z"
+  }
+}

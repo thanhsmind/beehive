@@ -1,0 +1,45 @@
+{
+  "id": "grw-1",
+  "title": "Name the resolution failure when a Bash write-guard target cannot be resolved",
+  "feature": "guard-refusal-wording",
+  "lane": "standard",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+  ],
+  "read_first": [
+    "docs/history/guard-refusal-wording/CONTEXT.md"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3"
+  ],
+  "must_haves": {
+    "truths": [
+      "A Bash write-guard refusal for a target with unexpanded shell syntax ($VAR, backquote) names the resolution failure and quotes the raw token",
+      "No unresolvable token ever appears inside the gate 'writing X is blocked' sentence as if it were a path",
+      "The guard stays fail-closed: every previously refused command is still refused"
+    ]
+  },
+  "action": "Per docs/history/guard-refusal-wording/CONTEXT.md D1-D3: (D1) before canonical_rel_path in the Bash branch (main.rs:189-207), classify a target token carrying unexpanded shell syntax (a $ or backquote) as unresolvable so it never resolves as a literal relative path and never reaches the gate 'writing X is blocked' sentences; (D2) the unresolvable-target refusal states the target could not be resolved and quotes the raw token — sharpen GENERIC_BASH_CONTAINMENT_MESSAGE or add a distinct message in hook_local.rs; (D3) regression tests: a Bash command with an unexpanded $VAR/... target refuses with the resolution-failure wording (not a fake path), and existing resolved-path refusal wording is unchanged. Guard stays fail-closed: the change may only widen the unresolvable bucket, never allow a write.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "Unresolvable Bash target refusal names the resolution failure and quotes the raw token; no fake path in gate sentence; regression tests green; suite green",
+  "status": "claimed",
+  "deps": [],
+  "trace": {
+    "worker": "w-grw-1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e499dfc3-c889-41e5-b4a7-381b38596b5e",
+    "claimed_at": "2026-08-15T23:55:21.908Z"
+  }
+}
