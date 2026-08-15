@@ -578,12 +578,19 @@ pub(crate) fn worktree_first_exempt_rel(rel: &str) -> bool {
 /// for the live swarming lane alone, so a phase other than "swarming" never
 /// takes it — everywhere else (reviewing, planning, scribing) the
 /// pre-existing granted refusal keeps firing exactly as it always did.
+///
+/// `session_id` is the acting session's own id (main.rs's
+/// `session_id.as_deref()`, the same value `resolve_write_record` already
+/// takes) — used only below, as the exclusion for the no-grant arm's "tiny"
+/// carve-out, so a session never counts itself as the other live session
+/// that would take the carve-out away.
 pub(crate) fn check_worktree_first(
     worktree_resolution: &str,
     root: &str,
     store_root: &Path,
     record: &Map<String, Value>,
     rel_paths: &[String],
+    session_id: Option<&str>,
 ) -> R<Option<String>> {
     if worktree_resolution != "ordinary" {
         return Ok(None);
@@ -645,20 +652,33 @@ worktree_first: \"off\" in .bee/config.json to disable this refusal (a recorded,
     //
     // "tiny" is exempt HERE, on the no-grant arm only — AGENTS.md's solo
     // tiny fix in main, read as "this work is small enough not to need a
-    // worktree at all." A feature that already holds a granted worktree
-    // never reaches this arm (the granted arm above returns first), so this
-    // exemption can never rescue a tiny edit that collides with a live
-    // worktree — that case is exactly the drift worktree-first exists to
-    // stop. This carve-out is also wider than its own cited source:
-    // state_group/workflows.rs is_code_touching_lane only exempts lane
-    // "tiny" when no OTHER live session is present
-    // (`lane == "tiny" && !other_live_session`), via
-    // other_live_work_present's session-record + lane-display walk. That
-    // walk has no equivalent on this path without a new store dependency (a
+    // worktree at all — while no other session is live." A feature that
+    // already holds a granted worktree never reaches this arm (the granted
+    // arm above returns first), so this exemption can never rescue a tiny
+    // edit that collides with a live worktree — that case is exactly the
+    // drift worktree-first exists to stop.
+    //
+    // Gated on the same shape as its cited source, state_group/workflows.rs
+    // `is_code_touching_lane` (`lane == "tiny" && !other_live_session`,
+    // pinned by verbs/state_group/tests.rs) — but via `is_concurrent_mode`
+    // (store.rs), the self-excluding "another non-stale session exists"
+    // predicate this hook module already carries, not that verb's
+    // lane-display walk (`other_live_work_present`), which needs a
     // Path-rooted, Ex-returning session/lane reader this hook module does
-    // not carry) — left unconditional rather than guessed at. Gap named
-    // here per cell wtf-3; closing it is a separate cell.
-    if lane == "tiny" {
+    // not have. `is_concurrent_mode` is narrower — presence of a live
+    // sibling session, not that session's own lane/phase liveness — a
+    // conservative reading of the same rule: it can only deny a tiny write
+    // that the canonical predicate would also deny, never the reverse. Gap
+    // named at cell wtf-3, closed here at cell dmc-3.
+    //
+    // `session_id` excludes the acting session itself, so a lone session
+    // never counts its own heartbeat as "another live session". Any read
+    // error (missing/corrupt sessions dir, an unparseable heartbeat) is
+    // treated as `false` — fails OPEN, same discipline as the read-error
+    // handling at this function's other arms: an unreadable session store
+    // must never turn a permitted solo tiny fix into a refusal.
+    let other_live_session = is_concurrent_mode(&main_root, session_id, false).unwrap_or(false);
+    if lane == "tiny" && !other_live_session {
         return Ok(None);
     }
     let phase = match record.get("phase") {

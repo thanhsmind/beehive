@@ -164,6 +164,106 @@ use std::time::Instant;
         assert!(text.contains("- main holds \"src/x.ts\" (cell cell-1, agent worker-a)"));
     }
 
+    /// D3 (dirty-main-conflicts dmc-4) — counterpart to
+    /// `reserve_exact_path_race_reports_conflict`: a dead session's lease on
+    /// the exact same path has already passed its own `expires_at`, so the
+    /// AlreadyExists arm takes it over instead of reporting a conflict, and
+    /// the new reserve succeeds and overwrites the stale file.
+    #[test]
+    fn reserve_takes_over_an_expired_lease_on_exact_path() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        write_lease_file(&root_s, "src/old.ts", json!("2020-01-01T01:00:00.000Z"));
+
+        let Ok(Out::Emit(result, text, code)) = reserve_exec(
+            main_topo(tmp.path()),
+            &root_s,
+            &params("worker-b", "cell-2", "src/old.ts"),
+            1,
+        ) else {
+            panic!("expected emit");
+        };
+        assert_eq!(code, 0, "an expired lease is taken over, not reported as a conflict");
+        assert_eq!(result["ok"], Value::Bool(true));
+        assert!(text.starts_with("Reserved \"src/old.ts\" for worker-b (cell cell-2"));
+
+        // The lease file on disk now carries the new holder, not the dead one.
+        let file = path_lease_file(&root_s, "src/old.ts");
+        let content = std::fs::read_to_string(&file).unwrap();
+        let parsed: Value = serde_json::from_str(&content).unwrap();
+        assert_eq!(parsed["workspace_id"], "agent:worker-b");
+        assert_eq!(parsed["workflow_id"], "cell-2");
+    }
+
+    /// D3 (dirty-main-conflicts dmc-4) — an unparseable lease is never
+    /// guessed at: `lease_record_expired` is never even asked, the existing
+    /// `Err(_) => None` arm stays exactly as it was, and the file is left on
+    /// disk untouched.
+    #[test]
+    fn reserve_unparseable_lease_is_reported_not_deleted() {
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        let file = path_lease_file(&root_s, "src/broken.ts");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "{not json").unwrap();
+
+        let Ok(Out::Emit(result, text, code)) = reserve_exec(
+            main_topo(tmp.path()),
+            &root_s,
+            &params("worker-b", "cell-2", "src/broken.ts"),
+            1,
+        ) else {
+            panic!("expected emit");
+        };
+        assert_eq!(code, 1);
+        assert_eq!(result["ok"], Value::Bool(false));
+        assert_eq!(result["conflicts"], json!([]));
+        assert!(text.contains("Reservation CONFLICT"));
+        assert!(file.exists(), "an unparseable lease is reported, never deleted");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "{not json");
+    }
+
+    /// D3 (dirty-main-conflicts dmc-4) — the takeover retries the create
+    /// exactly once. Blocking the takeover's own `remove_file` (by denying
+    /// write on the containing directory) forces the retry to lose to the
+    /// same still-present lease, proving the bound: a second takeover attempt
+    /// never happens, and the retry's loss reports a conflict instead of
+    /// looping.
+    #[cfg(unix)]
+    #[test]
+    fn reserve_bounded_retry_reports_conflict_when_takeover_is_blocked() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        write_lease_file(&root_s, "src/old.ts", json!("2020-01-01T01:00:00.000Z"));
+        let file = path_lease_file(&root_s, "src/old.ts");
+        let dir = file.parent().unwrap().to_path_buf();
+
+        let mut locked = std::fs::metadata(&dir).unwrap().permissions();
+        locked.set_mode(0o555); // read + execute only: unlink in this dir fails
+        std::fs::set_permissions(&dir, locked).unwrap();
+
+        let outcome = reserve_exec(
+            main_topo(tmp.path()),
+            &root_s,
+            &params("worker-b", "cell-2", "src/old.ts"),
+            1,
+        );
+
+        // Restore write access before any assertion below can panic, so the
+        // fixture tempdir still cleans up.
+        let mut restored = std::fs::metadata(&dir).unwrap().permissions();
+        restored.set_mode(0o755);
+        std::fs::set_permissions(&dir, restored).unwrap();
+
+        let Ok(Out::Emit(result, text, code)) = outcome else {
+            panic!("expected emit");
+        };
+        assert_eq!(code, 1, "the retry is bounded to one attempt");
+        assert_eq!(result["ok"], Value::Bool(false));
+        assert!(text.contains("Reservation CONFLICT"));
+    }
+
     #[test]
     fn intent_kind_overlap_is_advisory_but_exact_path_still_hard() {
         let tmp = fixture_root();

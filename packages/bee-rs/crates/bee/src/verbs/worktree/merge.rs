@@ -137,38 +137,45 @@ pub(crate) fn git_status_porcelain_excluding_untracked_all(cwd: &Path, exclude_p
     Ok(r.stdout.unwrap_or_default())
 }
 
-// ─── trun-4: pre-merge `.bee` (+ `docs/history/<feature>`) bookkeeping
-//     auto-commit ───────────────────────────────────────────────────────
+// ─── trun-4: pre-merge `.bee` (+ `docs/decisions`, `docs/knowledge`, and
+//     `docs/history/<feature>`) bookkeeping auto-commit ──────────────────
 //
 // Closes a real deadlock: `bee worktree merge` refuses on ANY dirty path in
 // main (WORKTREE_MERGE_MAIN_DIRTY, phases.rs), but the dirt is routinely
 // bee's OWN bookkeeping — cell traces, .bee/decisions.jsonl,
-// .bee/backlog.jsonl, and (at close) a promote proposal or other artifact
-// under the MERGING feature's own docs/history/<feature>/ — written by the
-// orchestrator's normal state calls during the slice. Committing exactly
-// that dirt BY HAND from main is refused by the worktree-first guard, so a
-// green slice could never land. This mirrors `bee close`'s own bee-store
-// bookkeeping auto-commit (drivers/close.rs's `commit_close_bookkeeping`) —
-// same warn-never-block contract, same `commit_unsigned` mechanism (git.rs,
-// B-P2-1) — widened to the two roots above and kept as its own
-// implementation (not a shared call into close's helper) because close's
-// version is hard-scoped to a single `.bee` pathspec and a different config
-// key/message; forcing the two together would either weaken close's own
-// validated config path or teach it a multi-pathspec, multi-root shape it
-// has no other reason to carry. What DOES stay the ONE shared mechanism is
-// the underlying `git commit --no-gpg-sign`, through `commit_unsigned`.
+// .bee/backlog.jsonl, docs/decisions/taxonomy.json (every `decisions log`),
+// docs/knowledge/** (every capture sync), and (at close) a promote proposal
+// or other artifact under the MERGING feature's own docs/history/<feature>/
+// — written by the orchestrator's normal state calls during the slice.
+// Committing exactly that dirt BY HAND from main is refused by the
+// worktree-first guard, so a green slice could never land. This mirrors
+// `bee close`'s own bee-store bookkeeping auto-commit (drivers/close.rs's
+// `commit_close_bookkeeping`) — same warn-never-block contract, same
+// `commit_unsigned` mechanism (git.rs, B-P2-1) — widened to the roots above
+// and kept as its own implementation (not a shared call into close's
+// helper) because close's version is hard-scoped to a single `.bee`
+// pathspec and a different config key/message; forcing the two together
+// would either weaken close's own validated config path or teach it a
+// multi-pathspec, multi-root shape it has no other reason to carry. What
+// DOES stay the ONE shared mechanism is the underlying `git commit
+// --no-gpg-sign`, through `commit_unsigned`.
 
-/// The two pathspecs a pre-merge bookkeeping auto-commit is allowed to
-/// sweep. `.bee` always; `docs/history/<feature>` only when the worktree's
-/// feature is known (`resolve_worktree_feature` — absent for a worktree
-/// registered without bee's own creation identity, in which case only
-/// `.bee` applies). Never widened to all of `docs/history/`: a sibling
-/// feature's in-flight worktree can be writing its own
-/// `docs/history/<other>/` at the same moment, and sweeping it into an
-/// UNRELATED merge's bookkeeping commit would land a peer's uncommitted
+/// The pathspecs a pre-merge bookkeeping auto-commit is allowed to sweep:
+/// `.bee`, `docs/decisions`, and `docs/knowledge` always; `docs/history/<feature>`
+/// only when the worktree's feature is known (`resolve_worktree_feature` —
+/// absent for a worktree registered without bee's own creation identity, in
+/// which case the other three still apply). `docs/decisions` and
+/// `docs/knowledge` join `.bee` unconditionally because bee itself writes
+/// all three on every session — `decisions log` writes
+/// `docs/decisions/taxonomy.json` (verbs/decisions/mod.rs), and the capture
+/// chain writes `docs/knowledge/**` — exactly the bookkeeping dirt this
+/// auto-commit exists to sweep, never a peer's work. Never widened to all of
+/// `docs/history/`: a sibling feature's in-flight worktree can be writing
+/// its own `docs/history/<other>/` at the same moment, and sweeping it into
+/// an UNRELATED merge's bookkeeping commit would land a peer's uncommitted
 /// work without their say-so.
 pub(crate) fn main_bookkeeping_roots(feature: Option<&str>) -> Vec<String> {
-    let mut roots = vec![".bee".to_string()];
+    let mut roots = vec![".bee".to_string(), "docs/decisions".to_string(), "docs/knowledge".to_string()];
     if let Some(feature) = feature {
         roots.push(format!("docs/history/{feature}"));
     }

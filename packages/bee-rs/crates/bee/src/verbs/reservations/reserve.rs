@@ -297,38 +297,71 @@ pub(crate) fn reserve_locked(topo: Option<Topo>, root_s: &str, p: &ReserveParams
         std::fs::create_dir_all(dir).map_err(|_| Err2::Ex)?;
     }
     let body = format!("{}\n", jsjson::stringify_pretty(&Value::Object(record.clone())));
-    let create = std::fs::OpenOptions::new()
+    let mut create = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&lease_file);
-    match create {
-        Ok(mut f) => {
-            use std::io::Write;
-            f.write_all(body.as_bytes()).map_err(|_| Err2::Ex)?;
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            // Lost an exact-path race — report like a pre-check conflict.
-            let holder_resv: Option<Resv> = match std::fs::read_to_string(&lease_file) {
-                Ok(text) => match serde_json::from_str::<Value>(&text) {
-                    Ok(v) => {
-                        let v = js_numberify(&v)?;
-                        match v {
-                            Value::Object(m)
-                                if matches!(m.get("resource"), Some(Value::String(s)) if s.starts_with("path:")) =>
-                            {
-                                Some(lease_to_reservation(&m)?)
+    // D3 (dirty-main-conflicts dmc-4): a lost exact-path race is reported as a
+    // conflict UNLESS the stale lease itself is already expired, in which case
+    // it is taken over — the create is retried exactly once. A live
+    // competitor winning the retry is reported exactly as before; an
+    // unparseable lease is never guessed at and is reported, not deleted.
+    let mut took_over = false;
+    loop {
+        match create {
+            Ok(mut f) => {
+                use std::io::Write;
+                f.write_all(body.as_bytes()).map_err(|_| Err2::Ex)?;
+                break;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                let parsed: Option<Map<String, Value>> = match std::fs::read_to_string(&lease_file)
+                {
+                    Ok(text) => match serde_json::from_str::<Value>(&text) {
+                        Ok(v) => {
+                            let v = js_numberify(&v)?;
+                            match v {
+                                Value::Object(m)
+                                    if matches!(m.get("resource"), Some(Value::String(s)) if s.starts_with("path:")) =>
+                                {
+                                    Some(m)
+                                }
+                                _ => None,
                             }
-                            _ => None,
                         }
-                    }
-                    Err(_) => None, // readLeaseSafe: unparseable → null holder
-                },
-                Err(_) => None,
-            };
-            let conflicts: Vec<Resv> = holder_resv.into_iter().collect();
-            return Ok(conflict_out(&conflicts));
+                        Err(_) => None, // readLeaseSafe: unparseable → null holder
+                    },
+                    Err(_) => None,
+                };
+                // Reuse the SAME expiry predicate the active_only pre-check
+                // uses (lease_record_expired) — no second expiry rule.
+                let expired = match &parsed {
+                    Some(m) => lease_record_expired(m, now)?,
+                    None => false,
+                };
+                if expired && !took_over {
+                    took_over = true;
+                    // A concurrent release racing this takeover is a
+                    // harmless no-op — same discipline sweep_expired_leases
+                    // already uses.
+                    let _ = std::fs::remove_file(&lease_file);
+                    create = std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(&lease_file);
+                    continue;
+                }
+                // Lost the race to a live holder (or lost the retry) —
+                // report like a pre-check conflict.
+                let holder_resv: Option<Resv> = match parsed {
+                    Some(m) => Some(lease_to_reservation(&m)?),
+                    None => None,
+                };
+                let conflicts: Vec<Resv> = holder_resv.into_iter().collect();
+                return Ok(conflict_out(&conflicts));
+            }
+            Err(_) => return Err(Err2::Ex),
         }
-        Err(_) => return Err(Err2::Ex),
     }
 
     let reservation = lease_to_reservation(&record)?;

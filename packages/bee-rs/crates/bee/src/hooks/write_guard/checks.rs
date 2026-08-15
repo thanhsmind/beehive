@@ -664,7 +664,8 @@ fn evaluate_git_invocation(
                     // instead of only handing it the heavy temp-index workaround — mirrors
                     // the hold-guard corrupt-store remedy (checks.rs ~356-360), which
                     // covers unreadable as well as unparseable.
-                    "FIX: inspect/restore the reservation store (.bee/reservations.json), then retry.",
+                    "FIX: inspect/restore the reservation store (.bee/reservations.json), then retry. \
+A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
                 ))));
             }
             WorkerCount::Resolved(count) => {
