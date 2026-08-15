@@ -708,6 +708,10 @@ use std::process::ExitCode;
         // temp-index recipe (which stays reserved for the `count > 1` arm).
         assert!(e.stderr.contains(".bee/reservations.json"));
         assert!(e.stderr.contains("inspect/restore the reservation store"));
+        // Also names the path-scoped-commit escape the `count > 1` arm
+        // already carries, so a solo session is not only told to repair a
+        // file — it is also told it can land its work directly.
+        assert!(e.stderr.contains("A genuinely path-scoped `git commit -- <your paths>` is allowed too."));
     }
 
     // ── linked-worktree matrix (rows 30-34) ────────────────────────────────
