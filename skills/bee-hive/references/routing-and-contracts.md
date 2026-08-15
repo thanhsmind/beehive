@@ -301,6 +301,18 @@ RECOMMENDATION: <the option the evidence favors, and why in one line>
 
 One question per message. Never bundle. Never answer your own question.
 
+**Mark the wait before you send.** A turn that ends on a question —
+a gate or a freeform one — runs `bee state waiting-on set
+--kind <gate|question> --subject "<the question>"` before the message
+goes out (awaiting-human D1: the agent marks the wait when it asks).
+The mark flips `run_state` to `awaiting-approval` so an external
+reader — a dashboard, a sibling session — sees "waiting on you"
+instead of "idle"; it works with or without an active feature (D3),
+and it ends on its own: the user's next message clears it via the
+`UserPromptSubmit` hook, `bee state waiting-on clear` clears it
+explicitly, and a stale session's mark expires with its heartbeat
+(D2/D4). Never leave a question pending without its mark.
+
 ## File Quick Reference
 
 ```text

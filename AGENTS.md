@@ -142,6 +142,14 @@ red or refusal line is never silenced, composited, or delayed by any
 switch or bypass level. The work is the subject of every line; ids and
 counts trail it, never lead.
 
+A turn that ends waiting on the human — a gate question or a freeform
+one — marks the wait before it ends: `bee state waiting-on set
+--kind <gate|question> --subject "<what>"`. The mark is what lets a
+dashboard or a sibling session read "waiting on you" instead of
+"idle"; the user's next message clears it on its own, and a dead
+session's mark expires with its heartbeat. Never leave a question
+pending without its mark.
+
 **Pre-send check**: reading only the first and last line of the
 message must answer what happened and what's next; then strip every
 bee term — if nothing the user needs is lost, those terms did not

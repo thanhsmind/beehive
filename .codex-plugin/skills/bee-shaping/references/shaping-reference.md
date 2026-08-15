@@ -17,6 +17,11 @@ shows the moves; this file carries the craft and judgment detail.
   needed to answer well before the question (see "Blindspot pass" below).
 - **Ask only what passes the materiality test** (next section); what makes
   a decision worth locking at all: `.bee/expertise/decisions.md`.
+- **Mark the wait.** Every interview question ends the turn waiting on
+  the human: run `bee state waiting-on set --kind question --subject
+  "<the question>"` before sending, so an external reader sees
+  "waiting on you", not "idle" (full rule: bee-hive
+  routing-and-contracts, "Question Format").
 
 ## When to stop
 
