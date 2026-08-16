@@ -157,3 +157,41 @@ fn the_payload_declares_the_schema_version_the_binary_was_built_against() {
          updating this pin (regen: node scripts/export_registry_payload.mjs, then rebuild)"
     );
 }
+
+#[test]
+fn state_gate_and_gate_list_every_flag_set_gate_rs_actually_accepts() {
+    // set_gate.rs's `run_gate`'s own known-flags list (verbs/state_group/set_gate.rs)
+    // is the ground truth for what `state gate` / `gate` accept. The payload is
+    // hand-maintained (the generator that used to derive it no longer exists —
+    // see docs/history/gate-help-drift/CONTEXT.md), so a new flag landing in the
+    // handler without a matching payload entry must fail loudly here rather than
+    // silently understating `--help --json` again.
+    const KNOWN_FLAGS: &[&str] = &[
+        "name",
+        "merge",
+        "approved",
+        "lane",
+        "no-lane",
+        "owner",
+        "actor",
+        "bypass-level",
+        "reason",
+    ];
+    let p = payload();
+    for cmd_name in ["state.gate", "gate"] {
+        let entry = commands(&p)
+            .iter()
+            .find(|e| e["name"] == cmd_name)
+            .unwrap_or_else(|| panic!("registry payload has no {cmd_name:?} entry"));
+        let props = entry["parameters"]["properties"]
+            .as_object()
+            .unwrap_or_else(|| panic!("{cmd_name}: parameters.properties must be an object"));
+        for flag in KNOWN_FLAGS {
+            assert!(
+                props.contains_key(*flag),
+                "{cmd_name}: set_gate.rs accepts --{flag} but the registry payload does not \
+                 declare it as a parameter — bee --help --json would understate the command"
+            );
+        }
+    }
+}
