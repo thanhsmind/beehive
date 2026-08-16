@@ -4992,6 +4992,75 @@ use std::time::Instant;
         assert_eq!(ids, vec!["a-1", "b-1"], "an ungranted worktree's read is unfiltered, like main's");
     }
 
+    // ══ cwr-1 (claim-time-worktree-redirect D1/D2/D6) — claim/claim-next's
+    //    execution-location annotation ═══════════════════════════════════
+    //
+    // `append_worktree_execution_annotation` is the exact function both
+    // `run_claim` and `run_claim_next` call after building their success
+    // payload; unit-testing it directly (explicit `main_root`, never
+    // `set_current_dir`, D6) exercises the identical wiring both doors run.
+
+    /// Grant present: the success text gains the suffix line and the JSON
+    /// object gains `worktree_root`, both naming the granted worktree root.
+    #[test]
+    fn claim_annotation_names_the_granted_worktree_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted, _ungranted) = wf_worktree_fixture(tmp.path());
+        write_worktree_identity(&granted, "f");
+
+        let mut obj = Map::new();
+        obj.insert("id".into(), json!("c-1"));
+        let mut text = "Claimed c-1 for w1.".to_string();
+        append_worktree_execution_annotation(&main, Some("f"), &mut obj, &mut text);
+
+        let worktree_root = obj["worktree_root"].as_str().unwrap().to_string();
+        assert!(text.contains(&worktree_root), "{text}");
+        assert!(text.contains("execution runs from a session rooted there"), "{text}");
+        assert_eq!(
+            wf_nrm(Path::new(&worktree_root)),
+            wf_nrm(&granted),
+            "worktree_root resolves to the granted worktree"
+        );
+    }
+
+    /// No grant recorded for the feature at all: both the text and the
+    /// object stay byte-identical to what the caller built.
+    #[test]
+    fn claim_annotation_absent_without_a_grant() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path(); // no `.bee/runtime/worktree-grants.json` at all
+
+        let mut obj = Map::new();
+        obj.insert("id".into(), json!("c-2"));
+        let mut text = "Claimed c-2 for w1.".to_string();
+        append_worktree_execution_annotation(main, Some("f"), &mut obj, &mut text);
+
+        assert_eq!(text, "Claimed c-2 for w1.");
+        assert!(obj.get("worktree_root").is_none());
+    }
+
+    /// Unresolvable grant entry (D1/D6 named fail-open case): a grant is
+    /// registered (`worktree-grants.json` names "wt-granted") but the
+    /// worktree carries no readable creation identity, so
+    /// `find_feature_worktree_grant` cannot tell whether it is or is not
+    /// this feature's grant — same discipline as the refusal guard's own
+    /// `Unresolvable` arm: never a confident annotation.
+    #[test]
+    fn claim_annotation_absent_on_an_unresolvable_grant_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, _granted, _ungranted) = wf_worktree_fixture(tmp.path());
+        // Deliberately no `write_worktree_identity` call — the registered
+        // "wt-granted" worktree's creation identity stays unreadable.
+
+        let mut obj = Map::new();
+        obj.insert("id".into(), json!("c-3"));
+        let mut text = "Claimed c-3 for w1.".to_string();
+        append_worktree_execution_annotation(&main, Some("f"), &mut obj, &mut text);
+
+        assert_eq!(text, "Claimed c-3 for w1.", "an unresolvable grant must fail open, not annotate");
+        assert!(obj.get("worktree_root").is_none());
+    }
+
     /// The MAIN store itself, several features at once — pinned
     /// byte-identical: `island_feature_scope` never engages outside a
     /// GRANTED worktree island, so this is the exact pre-fix behavior.

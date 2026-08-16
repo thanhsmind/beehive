@@ -831,14 +831,19 @@ pub(crate) fn run_claim_next(flags: rsv::Flags, use_json: bool, t0: Instant) -> 
                 return Err(Fail::Thrown(format!("claim-next: {code} — {reason}")));
             }
         };
-        let text = format!(
+        let mut text = format!(
             "Claimed {} for {worker} (session {session}).",
             js_string_or_undefined(cell.get("id"))
         );
+        let feature = match cell.get("feature") {
+            Some(Value::String(f)) => Some(f.clone()),
+            _ => None,
+        };
         let mut result = Map::new();
         result.insert("ok".into(), Value::Bool(true));
         result.insert("cell".into(), cell);
         result.insert("claim".into(), claim);
+        append_worktree_execution_annotation(&root, feature.as_deref(), &mut result, &mut text);
         Ok(Out::Emit(Value::Object(result), text, 0))
     })
 }
