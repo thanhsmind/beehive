@@ -45,6 +45,11 @@ pub(crate) const CLOSE_JUDGE_DEBT_PREFIX: &str = "Judge debt for";
 /// contract tests live in verbs/drivers/tests.rs). CONTEXT.md D1.
 pub(crate) const CLOSE_KNOWLEDGE_FRESHNESS_PREFIX: &str = "Knowledge freshness debt for";
 
+/// doc-impact-synthesis D1b: pinned prefix of the impact-door refusal
+/// headline (message-contract tests live in verbs/drivers/tests.rs).
+/// CONTEXT.md D1, plan v2 kds-2.
+pub(crate) const CLOSE_IMPACT_PREFIX: &str = "Impact debt for";
+
 /// provenance: test-runner.mjs declaredTestCommands + state.mjs
 /// normalizeCommands (verbs/test_runner.rs:184 declared_test_commands).
 /// `None` == JS `null` (undeclared).
@@ -805,6 +810,133 @@ impl Door {
     }
 }
 
+// ── doc-impact-synthesis D1b: impact door at close ──────────────────────────
+//
+// CONTEXT.md D1: every decision the closing feature logged (feature-stamped
+// by kds-1) that a docs/** file still cites gets one more fresh sweep at
+// close — citations only, never a text scan. Stub-independent by design:
+// v1's flush-coverage design sat on the log-time capture queue, but a hit
+// written AFTER log time (a doc edited post-log to add a stale citation)
+// never had a stub to flush — so this door re-derives its own findings
+// every close instead of trusting a queue, exactly like knowledge-freshness
+// above re-derives from `check_bundle` rather than a persisted record.
+
+/// doc-impact-synthesis D1b: the closing feature's own decision ids,
+/// collected from the structured `feature` field kds-1 stamps onto every new
+/// `decide` event — structured field ONLY. Named deviation (plan v2 kds-2,
+/// plan-check S2): a decision logged before kds-1 landed carries no
+/// `feature` field and is never walked here; a time-window fallback was
+/// rejected as unboundable — that debt belongs to the 2026-08-16 audit
+/// backfill (kds-4) and the D4 campaign row, not this door.
+pub(crate) fn feature_stamped_decision_ids(root: &Path, feature: &str) -> D<Vec<String>> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    Ok(active
+        .into_iter()
+        .filter(|e| {
+            e.get("type").and_then(Value::as_str) == Some("decide")
+                && e.get("feature").and_then(Value::as_str) == Some(feature)
+        })
+        .filter_map(|e| e.get("id").and_then(Value::as_str).map(str::to_string))
+        .collect())
+}
+
+/// D1 escape hatch for the impact door below: mirrors
+/// `has_knowledge_freshness_deferral_decision` exactly, tagged
+/// `impact-deferral` instead — returns the deferring decision's own
+/// `decision` text so the door's detail line can quote the reason, never a
+/// silent pass (D1: "an explicit recorded deferral with reason, never a
+/// silent pass").
+pub(crate) fn has_impact_deferral_decision(root: &Path, feature: &str) -> D<Option<String>> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    let filtered = crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some("impact-deferral".to_string()),
+            feature: Some(feature.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| Delegate)?;
+    Ok(filtered.last().and_then(|d| d.get("decision")).and_then(Value::as_str).map(|s| s.to_string()))
+}
+
+/// doc-impact-synthesis D1b: does a sweep hit's root-relative file fall
+/// inside the write-guard's own generated/vendored tree list? Reused
+/// verbatim from `hooks::write_guard::SCOUT_DIRS` (guards.rs, `check_read`'s
+/// own match arm) rather than hand-copied — the guard is the one place that
+/// list lives.
+fn impact_sweep_in_generated_tree(root_relative_file: &str) -> bool {
+    let normalized = root_relative_file.replace('\\', "/");
+    crate::hooks::write_guard::SCOUT_DIRS
+        .iter()
+        .any(|dir| normalized.starts_with(*dir) || normalized.contains(&format!("/{dir}")))
+}
+
+/// doc-impact-synthesis D1b: the impact door. Walks each of the closing
+/// feature's feature-stamped decision ids (`feature_stamped_decision_ids`
+/// above) through the same citation sweep the log-time touches-sweep already
+/// proved (`sweep_decision_citations`, render.rs:419), excluding the
+/// generated decisions index and the feature's own live history dir via
+/// `touches_sweep_excluded` (verbs_read.rs — the exact exclusion the
+/// log-time sweep already uses, reused rather than re-derived) plus the
+/// write-guard's generated-tree list above. Every surviving hit blocks,
+/// naming file:line and the fix-and-rerun remedy: the sweep re-runs fresh on
+/// every close, so a fixed citing doc clears itself on re-run — no stub, no
+/// queue.
+pub(crate) fn build_impact_door(root: &Path, feature: &str) -> D<Door> {
+    let ids = feature_stamped_decision_ids(root, feature)?;
+    let mut blocking_items: Vec<String> = Vec::new();
+    for id in &ids {
+        let short8 = crate::textutil::truncate_chars_head(id, 8);
+        let sweep = crate::verbs::decisions::sweep_decision_citations(root, id, &short8);
+        let hits = match sweep.get("files") {
+            Some(Value::Array(a)) => a.clone(),
+            _ => Vec::new(),
+        };
+        for hit in &hits {
+            let file = hit.get("file").and_then(Value::as_str).unwrap_or("").to_string();
+            if crate::verbs::decisions::touches_sweep_excluded(&file, Some(feature)) {
+                continue;
+            }
+            if impact_sweep_in_generated_tree(&file) {
+                continue;
+            }
+            let line = hit.get("line").and_then(Value::as_f64).unwrap_or(0.0) as u64;
+            blocking_items.push(format!(
+                "{file}:{line} cites decision {short8}, touched by closing feature \"{feature}\" — remedy: fix or annotate the citing doc, then re-run bee close --feature {feature} (the sweep re-runs fresh)."
+            ));
+        }
+    }
+
+    if blocking_items.is_empty() {
+        return Ok(Door { door: "impact", blocking: false, detail: "clear".to_string(), command: None });
+    }
+
+    if let Some(reason) = has_impact_deferral_decision(root, feature)? {
+        return Ok(Door {
+            door: "impact",
+            blocking: false,
+            detail: format!(
+                "deferred — {} citing doc(s) of decision(s) touched by \"{feature}\" ({}); a logged impact-deferral decision names \"{feature}\": {reason}",
+                blocking_items.len(),
+                blocking_items.join("; ")
+            ),
+            command: None,
+        });
+    }
+
+    Ok(Door {
+        door: "impact",
+        blocking: true,
+        detail: format!(
+            "{} citing doc(s) of decision(s) touched by \"{feature}\": {}",
+            blocking_items.len(),
+            blocking_items.join("; ")
+        ),
+        command: None,
+    })
+}
+
 /// U3 (docs/history/knowledge-usable/CONTEXT.md): past the configured
 /// `capture_queue_threshold` — the pending count exceeds it, OR the oldest
 /// pending stub is older than the configured day count — the capture-queue
@@ -1180,6 +1312,7 @@ pub(crate) fn close_handler(
         doors.extend(build_close_report_doors(root, feature)?);
         doors.push(build_pattern_check_door(root, feature, pattern_verdicts)?);
         doors.push(build_knowledge_freshness_door(root, feature)?);
+        doors.push(build_impact_door(root, feature)?);
         let next_line = match &declared {
             Some(_) => format!("next: bee close --feature {feature} — runs the declared tests and reports"),
             None => format!(
@@ -1212,6 +1345,7 @@ pub(crate) fn close_handler(
     let report_doors = build_close_report_doors(root, feature)?;
     let pattern_door = build_pattern_check_door(root, feature, pattern_verdicts)?;
     let knowledge_freshness_door = build_knowledge_freshness_door(root, feature)?;
+    let impact_door = build_impact_door(root, feature)?;
 
     if !run.undeclared && !run.green {
         let failing: Vec<&CommandResult> =
@@ -1230,6 +1364,7 @@ pub(crate) fn close_handler(
         doors.extend(report_doors);
         doors.push(pattern_door);
         doors.push(knowledge_freshness_door);
+        doors.push(impact_door);
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
@@ -1299,6 +1434,7 @@ pub(crate) fn close_handler(
     doors.extend(report_doors);
     doors.push(pattern_door);
     doors.push(knowledge_freshness_door);
+    doors.push(impact_door);
 
     // ── D1: refuse on uncaptured behavior_change cells ──────────────────────
     //
@@ -1417,6 +1553,32 @@ pub(crate) fn close_handler(
             ),
             "remedy: fix each pointer above (bee knowledge check names the same findings), or log a decision tagged knowledge-freshness-deferral naming this feature with the reason.".to_string(),
             format!("next: settle the stale pointer(s) above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // ── doc-impact-synthesis D1b: refuse on a surviving citation of a
+    // closing-feature decision ──────────────────────────────────────────────
+    //
+    // Runs only here — tests GREEN (or undeclared) and past the capture-debt,
+    // judge-debt, pattern-check and knowledge-freshness refusals above — same
+    // "stops close exactly like a red test" placement those doors already
+    // established.
+    if doors.iter().any(|d| d.door == "impact" && d.blocking) {
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
+        result.insert("tests".into(), tests_result_value(&run));
+        let impact_detail = doors
+            .iter()
+            .find(|d| d.door == "impact")
+            .map(|d| d.detail.clone())
+            .unwrap_or_default();
+        let lines = vec![
+            format!("{CLOSE_IMPACT_PREFIX} \"{feature}\" — close stops at the impact door: {impact_detail}"),
+            "remedy: fix or annotate each citing doc above, or log a decision tagged impact-deferral naming this feature with the reason.".to_string(),
+            format!("next: settle the citation(s) above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }

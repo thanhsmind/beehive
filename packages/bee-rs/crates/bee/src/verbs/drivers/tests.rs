@@ -1649,6 +1649,7 @@ use std::time::Instant;
                 "door capture-queue: clear\n",
                 "door pattern-check: clear\n",
                 "door knowledge-freshness: clear\n",
+                "door impact: clear\n",
                 "next: bee close --feature demo — runs the declared tests and reports"
             )
         );
@@ -2664,4 +2665,152 @@ use std::time::Instant;
         let astral = "🐝".repeat(4);
         assert_eq!(truncate_chars_head(&astral, 5), astral);
         assert_eq!(truncate_chars_head(&astral, 5).chars().count(), 4);
+    }
+
+    // ─── doc-impact-synthesis D1b: impact door at close ─────────────────────
+
+    /// One feature-stamped `decide` event, tagged onto the closing feature by
+    /// kds-1's structured `feature` field — never by text scan. `id`'s first
+    /// 8 chars (the short8 `sweep_decision_citations` also keys on) are
+    /// exactly `aaaaaaaa`.
+    fn write_impact_decision(root: &Path, feature: &str) {
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            &format!(
+                "{{\"id\":\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"d\",\"rationale\":\"r\",\"scope\":\"repo\",\"feature\":\"{feature}\"}}\n"
+            ),
+        );
+    }
+
+    #[test]
+    fn impact_door_refuses_when_an_outside_doc_cites_a_feature_stamped_decision() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_impact_decision(root, "demo");
+        w(root, "docs/knowledge/areas/other/notes.md", "cites decision aaaaaaaa here\n");
+        let door = build_impact_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/other/notes.md:1"), "{}", door.detail);
+        assert!(door.detail.contains("remedy:"), "{}", door.detail);
+        assert!(door.detail.contains("re-run bee close --feature demo"), "{}", door.detail);
+    }
+
+    /// v1's rejected flush-coverage design tied the door to a persisted
+    /// stub queue — a hit written after log time never had one. This door
+    /// re-derives its findings fresh every call, so fixing the citing doc
+    /// clears it on the very next check with no stub to reconcile.
+    #[test]
+    fn impact_door_clears_after_fixing_the_citing_doc() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_impact_decision(root, "demo");
+        w(root, "docs/knowledge/areas/other/notes.md", "cites decision aaaaaaaa here\n");
+        assert!(build_impact_door(root, "demo").unwrap().blocking);
+        w(root, "docs/knowledge/areas/other/notes.md", "no citation left\n");
+        let door = build_impact_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn impact_door_excludes_the_generated_index_and_the_feature_own_history() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_impact_decision(root, "demo");
+        w(root, "docs/decisions/index.md", "cites decision aaaaaaaa here\n");
+        w(root, "docs/history/demo/CONTEXT.md", "cites decision aaaaaaaa here\n");
+        let door = build_impact_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    /// The write-guard's own generated/vendored tree list (`SCOUT_DIRS`,
+    /// hooks/write_guard/guards.rs) is reused verbatim rather than
+    /// hand-copied — a hit under `docs/vendor/` never blocks.
+    #[test]
+    fn impact_door_excludes_the_write_guards_generated_tree_list() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_impact_decision(root, "demo");
+        w(root, "docs/vendor/upstream.md", "cites decision aaaaaaaa here\n");
+        let door = build_impact_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn impact_door_deferral_decision_demotes_to_non_blocking_with_the_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_impact_decision(root, "demo");
+        w(root, "docs/knowledge/areas/other/notes.md", "cites decision aaaaaaaa here\n");
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"d\",\"rationale\":\"r\",\"scope\":\"repo\",\"feature\":\"demo\"}\n{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:01.000Z\",\"decision\":\"defer the demo citation cleanup until the doc rewrite lands\",\"rationale\":\"r\",\"tags\":[\"impact-deferral\"],\"scope\":\"repo\"}\n",
+        );
+        let door = build_impact_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert!(door.detail.starts_with("deferred —"), "{}", door.detail);
+        assert!(
+            door.detail.contains("defer the demo citation cleanup until the doc rewrite lands"),
+            "{}",
+            door.detail
+        );
+    }
+
+    #[test]
+    fn impact_door_is_clear_with_no_feature_stamped_decisions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let door = build_impact_door(root, "demo").unwrap();
+        assert!(!door.blocking);
+        assert_eq!(door.detail, "clear");
+    }
+
+    /// D1b's named deviation: NO time-window fallback exists — a decision
+    /// naming "demo" only in its prose text, with no structured `feature`
+    /// field, is never collected. Structured field ONLY.
+    #[test]
+    fn impact_door_never_walks_a_decision_with_no_structured_feature_field() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"something about demo\",\"rationale\":\"r\",\"scope\":\"repo\"}\n",
+        );
+        w(root, "docs/knowledge/areas/other/notes.md", "cites decision aaaaaaaa here\n");
+        let door = build_impact_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    /// End-to-end: `close_handler` stops at the impact door — tests GREEN,
+    /// past every earlier door — naming the file and the remedy in the
+    /// refusal headline, exactly like the knowledge-freshness refusal above.
+    #[test]
+    fn close_refuses_at_the_impact_door() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        write_impact_decision(&root, "demo");
+        w(&root, "docs/knowledge/areas/other/notes.md", "cites decision aaaaaaaa here\n");
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(result, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1);
+        assert!(
+            text.starts_with(&format!("{CLOSE_IMPACT_PREFIX} \"demo\" — close stops at the impact door:")),
+            "{text}"
+        );
+        assert!(text.contains("docs/knowledge/areas/other/notes.md:1"), "{text}");
+        assert!(text.contains("next: settle the citation(s) above, then re-run bee close --feature demo"), "{text}");
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        let impact = doors.iter().find(|d| d.get("door") == Some(&json!("impact"))).unwrap();
+        assert_eq!(impact.get("blocking"), Some(&json!(true)));
     }
