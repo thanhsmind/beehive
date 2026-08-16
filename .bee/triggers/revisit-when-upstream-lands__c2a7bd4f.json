@@ -1,0 +1,11 @@
+{
+  "id": "revisit-when-upstream-lands__c2a7bd4f",
+  "decision": "c2a7bd4f",
+  "condition": "revisit when upstream lands",
+  "tier": "predicate",
+  "predicate": "path-exists:packages/bee-rs/Cargo.toml",
+  "status": "resolved",
+  "created_at": "2026-08-16T09:43:45.149Z",
+  "updated_at": "2026-08-16T09:45:14.847Z",
+  "outcome": "smoke test cleanup"
+}

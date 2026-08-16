@@ -1,0 +1,60 @@
+{
+  "id": "kdt-4",
+  "feature": "knowledge-distill-trigger",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Repair remaining dangling sources: patterns/ and work/okf-foundation pointers",
+  "behavior_change": false,
+  "files": [
+    "docs/knowledge/patterns/",
+    "docs/knowledge/work/okf-foundation/delivery.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-distill-trigger/CONTEXT.md",
+    "docs/history/knowledge-distill-trigger/plan.md"
+  ],
+  "action": "Per plan v2 S2-a (D4). Run PATH=\"$HOME/.cargo/bin:$PATH\" cargo run --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- knowledge check --json (or the worktree-built target/release binary) to get the CURRENT dangling_source list — kdt-1 already fixed required_context resolution and 6 areas/ pointers, so what remains is ~23 under docs/knowledge/patterns/ and ~9 in docs/knowledge/work/okf-foundation/delivery.md (retired .bee/cells/okf-*.json traces). For each remaining dangling sources entry: if the content moved in the rust-port, repoint to the live equivalent path (verify the target exists with fd/Read before writing it); if the artifact is genuinely gone (archived cell traces, retired scripts), replace the entry with a removal-with-reason note matching the corpus idiom kdt-1 used (see git log -1 --name-only e79eca74 for examples). Never delete a whole sources section; never invent a target. Edit ONLY frontmatter/sources lines — pattern body text stays untouched. Proof (must_have): a fresh knowledge check run reports ZERO dangling_source and ZERO dangling_required_context across the whole bundle; paste the counts line. Frontmatter edits must stay canonical — if check reports new not_canonical warnings on files you touched, re-emit those frontmatter blocks canonically (the check output names them).",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee knowledge check reports zero dangling_source and zero dangling_required_context bundle-wide",
+      "no pattern body text changed — only sources/frontmatter entries",
+      "every repointed target exists on disk; every removal carries a one-line reason"
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "orchestrator",
+    "outcome": "Repaired 32 dangling_source entries across patterns/ and okf-foundation delivery.md; bee knowledge check reports zero dangling warnings bundle-wide",
+    "files_changed": [
+      "docs/knowledge/patterns/20260722-a-coverage-gate-derives-ground-truth-it-never-compares-two-hand-lists.md",
+      "docs/knowledge/patterns/20260725-a-shim-can-drop-an-unnamed-side-effect.md",
+      "docs/knowledge/patterns/20260728-a-derivation-the-tooling-computes-but-doctrine-forbids-where-it-is-needed.md",
+      "docs/knowledge/patterns/20260728-a-scan-set-from-the-git-index-crashes-the-gate-that-guards-it.md",
+      "docs/knowledge/patterns/20260728-one-membership-hand-copied-six-times-has-no-owner-and-no-alarm.md",
+      "docs/knowledge/patterns/20260805-a-golden-test-that-byte-compares-only-one-of-several-copies-makes-drift-invisible.md",
+      "docs/knowledge/patterns/20260806-a-new-enforcement-door-treats-absent-evidence-as-silence.md",
+      "docs/knowledge/patterns/20260806-a-sweeping-consolidation-eats-the-call-site-that-was-different-on-purpose.md",
+      "docs/knowledge/patterns/20260806-arm-a-refusal-only-after-its-own-remedy-is-proven-to-work.md",
+      "docs/knowledge/patterns/20260806-scope-a-gating-counter-to-the-actor-who-can-clear-it.md",
+      "docs/knowledge/patterns/20260813-a-refusal-from-one-verb-of-a-family-does-not-speak-for-the-verb-the-contract-rests-on.md",
+      "docs/knowledge/work/okf-foundation/delivery.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T10:29:20.433Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3ffdb508-af83-4ed1-b5ce-2d68f4e6f780",
+    "claimed_at": "2026-08-16T10:15:17.041Z",
+    "inline_reason": "kdt-4 was claimed under trace.worker \"orchestrator\" at dispatch time; kdt4-worker (registered for this cell) is the actual dispatched execution worker capping it",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T10:29:01.136Z"
+  }
+}

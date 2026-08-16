@@ -1,0 +1,42 @@
+{
+  "id": "kdt-6",
+  "feature": "knowledge-distill-trigger",
+  "lane": "standard",
+  "tier": "generation",
+  "depends_on": [
+    "kdt-2",
+    "kdt-3"
+  ],
+  "title": "Post-merge: register orphan deferred conditions as triggers, formal supersedes for unmarked reversals",
+  "behavior_change": false,
+  "files": [],
+  "read_first": [
+    "docs/history/knowledge-distill-trigger/CONTEXT.md"
+  ],
+  "action": "Runs in the MAIN checkout AFTER bee worktree merge lands this feature and the bee support binary is reinstalled (the old binary has no triggers verb — source shipped without reinstalling the called binary is inert). (1) Register the 5 audited orphan deferred conditions as triggers via bee triggers add, each citing its deferring decision short8: cli-performance rust-rewrite budget condition (.bee/decisions.jsonl:1231 — superseded by rust-port, so instead SKIP registering and handle in (2)); opencode-support D5 parallelism-returns-when-upstream-lands (decisions.jsonl:1982, manual tier, condition names anomalyco/opencode#29638); P72 harness-context-metric condition (backlog.jsonl:792, manual); p-c6e61dfb orchestrator-instruction-load condition (backlog.jsonl:798, manual); codex-native P25 version-scoped deferral (decisions.jsonl:317, manual). (2) Formal decisions supersede for confirmed unmarked reversals: the cli-performance full-rust-rewrite rejection (1231) superseded by rust-port D1-D8 (1545-1547) — cite both; the P76 bee-exploring-deleted shape-supersede recorded only in backlog.jsonl:723. Every new decision write obeys the kdt-3 surface (--relation, --trigger where prose is deferral-shaped). (3) Delete the leftover smoke-test trigger .bee/triggers/revisit-when-upstream-lands__c2a7bd4f.json. (4) Proof: bee triggers list --json shows the registered set; bee decisions search --text 'full-CLI rust rewrite' surfaces the supersede chain.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "4 orphan conditions registered as manual-tier triggers, each citing its decision",
+      "cli-performance rejection formally superseded citing rust-port",
+      "smoke-test trigger file deleted",
+      "all writes made through the reinstalled binary honoring the new --relation surface"
+    ]
+  },
+  "status": "open",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

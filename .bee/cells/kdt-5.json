@@ -1,0 +1,57 @@
+{
+  "id": "kdt-5",
+  "feature": "knowledge-distill-trigger",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Distill the changelog-prose knowledge files into present-tense current state",
+  "behavior_change": false,
+  "files": [
+    "docs/knowledge/areas/workflow-state/gates.md",
+    "docs/knowledge/areas/workflow-state/worktree-isolation.md",
+    "docs/knowledge/areas/rust-runtime/overview.md",
+    "docs/knowledge/areas/verify-pipeline/concurrency-and-hermetic-runs.md",
+    "docs/knowledge/areas/decision-memory/overview.md"
+  ],
+  "read_first": [
+    "docs/history/knowledge-distill-trigger/CONTEXT.md",
+    "docs/knowledge/areas/worktree-parallelism/overview.md"
+  ],
+  "action": "Per plan v2 S2-c (D4) plus the kdt-3 follow-up. Distill = rewrite accreted changelog-prose into ONE present-tense current-state description; a contradicted line is REPLACED, never kept alongside; history lives in git, not prose. (1) workflow-state/gates.md section 'Closing a feature' (~lines 143-306): five sequential patch-note paragraphs (terminal-phase-port, scribing-integrity, debt-door-archive, scribing-stamp-seam, knowledge-loop D2/D9) — fold into one description of the CURRENT close law; keep decision short8 citations inline; drop before/now framing. ALSO add the new knowledge-freshness door (kdt-1) to the door list — read build_knowledge_freshness_door in packages/bee-rs/crates/bee/src/verbs/drivers/close.rs for the actual behavior. (2) workflow-state/worktree-isolation.md: Pointers section cites four deleted JS files (packages/bee/lib/state.mjs etc.) — repoint to the live Rust write-guard/worktree modules (verify paths exist); R32's 'isolation is opt-in, never a new default' framing contradicts current worktree-first doctrine (AGENTS.md) — replace with the current two-model description (P40 swarm-worker vs feature-worktree default), citing worktree-parallelism/overview.md. (3) rust-runtime/overview.md: 'every ported handler is dark, nothing routes to it' + 'crates/queen-bee, crates/bee-core' are stale — the Rust crate is packages/bee-rs/crates/bee and its hooks/verbs ARE the live runtime; rewrite the status and Pointers sections to current truth; keep Open Gaps honest (drop the activation gap, it happened). (4) verify-pipeline/concurrency-and-hermetic-runs.md:93-97: the erratum at :93 says the scripts/tests/*.mjs pointers retired — DELETE the stale P5 pointer line the erratum left in place and fold the erratum into the pointer list itself. (5) decision-memory/overview.md: documents the retired --supersedes flag on decisions log — update to the kdt-3 surface: required --relation supersedes:|touches:|none, deferral prose needs --trigger, dcc-1 candidates in refusal (read verbs_read.rs RELATION_REQUIRED_MESSAGE for exact behavior). Every file keeps canonical frontmatter (no new not_canonical warnings on touched files) and updates its timestamp. must_have proof: quote one before/after pair per file (one line each) showing changelog-prose replaced by present-tense.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "gates.md 'Closing a feature' reads as one current-state law including the knowledge-freshness door, no before/now paragraphs remain",
+      "worktree-isolation.md points only at existing files and states the current two-model worktree reality",
+      "rust-runtime/overview.md names the real crate path and the live routing status",
+      "decision-memory/overview.md documents --relation and --trigger, not the retired --supersedes-only surface",
+      "no new not_canonical warnings on touched files"
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "orchestrator",
+    "outcome": "Distilled five changelog-prose knowledge files into present-tense law; added knowledge-freshness door to gates.md; verified zero new not_canonical warnings via bee knowledge check",
+    "files_changed": [
+      "docs/knowledge/areas/workflow-state/gates.md",
+      "docs/knowledge/areas/workflow-state/worktree-isolation.md",
+      "docs/knowledge/areas/rust-runtime/overview.md",
+      "docs/knowledge/areas/verify-pipeline/concurrency-and-hermetic-runs.md",
+      "docs/knowledge/areas/decision-memory/overview.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T10:27:44.822Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3ffdb508-af83-4ed1-b5ce-2d68f4e6f780",
+    "claimed_at": "2026-08-16T10:15:17.045Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T10:27:25.151Z"
+  }
+}
