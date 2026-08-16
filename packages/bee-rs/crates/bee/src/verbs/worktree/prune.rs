@@ -198,7 +198,7 @@ fn parse_iso_ms(s: &str) -> Option<f64> {
 /// `list_session_records`'s fail-open scan does elsewhere in this codebase.
 /// A missing/unparseable heartbeat is the same fail-closed direction: treated
 /// as fresh, never as stale.
-fn live_session_holds(
+pub(crate) fn live_session_holds(
     main_root: &Path,
     id: &str,
     worktree_root: &Path,

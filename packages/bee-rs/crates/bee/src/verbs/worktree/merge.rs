@@ -587,6 +587,12 @@ pub(crate) fn teardown_worktree(
 /// `{ok, code?}` object folded into the merge result's `.cleanup` field, in
 /// Node's exact key order. The `Map` construction stays here; only the
 /// side-effect calls moved into `teardown_worktree`.
+///
+/// A live session's cwd must never be deleted out from under it: that
+/// strands the session behind WORKTREE_LINK_INVALID denials on every write
+/// it makes afterward. So this checks `live_session_holds` (mlsg-1) right
+/// before `teardown_worktree`'s `git worktree remove --force`, the same
+/// liveness gate `bee worktree prune` already applies.
 pub(crate) fn perform_cleanup(
     main_root: &Path,
     worktree_root: &Path,
@@ -612,6 +618,29 @@ pub(crate) fn perform_cleanup(
             p(worktree_root)
         )));
         out.insert("status".into(), Value::String(status));
+        return out;
+    }
+
+    // A live session's cwd must never be deleted out from under it — every
+    // write it makes after that lands on a directory that no longer exists,
+    // and gets denied as WORKTREE_LINK_INVALID with no path back but a
+    // restart. Reuse prune's `live_session_holds` (D2b) with the SHORT
+    // window, `HEARTBEAT_STALE_SECONDS` (15 minutes, claims.rs) — not
+    // prune's own six-hour `PRUNE_LIVENESS_SECONDS` — because a merge that
+    // races an active session should refuse promptly, not wait out prune's
+    // much longer patience for a worktree its owner might return to.
+    if let Some(reason) = live_session_holds(
+        main_root,
+        id,
+        worktree_root,
+        crate::verbs::reservations::now_ms(),
+        crate::verbs::cells::HEARTBEAT_STALE_SECONDS,
+    ) {
+        out.insert("ok".into(), Value::Bool(false));
+        out.insert("code".into(), json!("WORKTREE_MERGE_CLEANUP_LIVE_SESSION"));
+        out.insert("reason".into(), json!(format!(
+            "{reason} The merge itself has already landed — only directory removal is deferred. Close the session working in that worktree, then rerun `bee worktree merge --id {id}`, or let `bee worktree prune` sweep the worktree once that session goes stale."
+        )));
         return out;
     }
 

@@ -942,6 +942,69 @@ use std::time::Instant;
         assert_eq!(out["removed"], Value::Bool(true));
     }
 
+    /// mlsg-1: a live session's cwd must never be deleted out from under it.
+    /// A fresh-heartbeat session record naming this worktree's id refuses
+    /// cleanup BEFORE `teardown_worktree` runs — the worktree directory is
+    /// still there afterward, unlike every other refusal shape above.
+    #[test]
+    fn cleanup_refuses_while_a_live_session_holds_the_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "live", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+
+        std::fs::create_dir_all(main.join(".bee").join("sessions")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("sessions").join("sess-live.json"),
+            jsjson::stringify(&json!({
+                "id": "sess-live",
+                "last_heartbeat": chrono::Utc::now().to_rfc3339(),
+                "workspace_id": created.id,
+            })),
+        )
+        .unwrap();
+
+        let out = perform_cleanup(&main, &wt, &created.branch, &created.id, false);
+        assert_eq!(out["ok"], Value::Bool(false));
+        assert_eq!(out["code"], json!("WORKTREE_MERGE_CLEANUP_LIVE_SESSION"));
+        assert!(wt.exists(), "the worktree directory must survive a live-session refusal");
+    }
+
+    /// mlsg-1: the same session record, but its heartbeat is well past
+    /// `HEARTBEAT_STALE_SECONDS` (900s) — stale, so it does not hold the
+    /// worktree and the live-session refusal must not fire.
+    #[test]
+    fn cleanup_ignores_a_session_with_a_stale_heartbeat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "stale", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+
+        let stale = chrono::Utc::now() - chrono::Duration::seconds(1000);
+        std::fs::create_dir_all(main.join(".bee").join("sessions")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("sessions").join("sess-stale.json"),
+            jsjson::stringify(&json!({
+                "id": "sess-stale",
+                "last_heartbeat": stale.to_rfc3339(),
+                "workspace_id": created.id,
+            })),
+        )
+        .unwrap();
+
+        let out = perform_cleanup(&main, &wt, &created.branch, &created.id, false);
+        assert_ne!(
+            out.get("code"),
+            Some(&json!("WORKTREE_MERGE_CLEANUP_LIVE_SESSION"))
+        );
+    }
+
     /// attachCleanupOutcome's `cleanup=false` branch NEVER runs anything — it
     /// attaches the suggestion (decision D8b: "never prompt"). D1/D1a: the
     /// caller now passes the EFFECTIVE decision (`--no-cleanup`, a `false`
