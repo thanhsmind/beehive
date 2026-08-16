@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "worktree-first-enforcement",
   "mode": "feature",
-  "phase": "exploring",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -10,13 +10,8 @@
     "review": false
   },
   "summary": "Feature \"worktree-first-enforcement\" started at phase \"exploring\".",
-  "next_action": "Continue bee-exploring for \"worktree-first-enforcement\".",
+  "next_action": "idle",
+  "created_at": "2026-08-16T04:28:42.386Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "question",
-    "subject": "Main checkout dirty with another live session's uncommitted files — close/commit that session so the merge-live-session-guard worktree can merge",
-    "asked_at": "2026-08-16T04:43:51.916Z",
-    "session": "b905fa1b-3e59-4fdf-a234-af43a0398b55"
-  },
-  "created_at": "2026-08-16T04:28:42.386Z"
+  "waiting_on": null
 }

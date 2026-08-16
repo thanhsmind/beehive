@@ -1,0 +1,71 @@
+{
+  "id": "cwr-2",
+  "feature": "claim-time-worktree-redirect",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Worker cwd self-check and enter-the-worktree doctrine",
+  "behavior_change": false,
+  "files": [
+    "packages/bee/prompts/worker-cell.md",
+    "skills/bee-swarming/SKILL.md",
+    "packages/bee/AGENTS.block.md",
+    "docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/claim-time-worktree-redirect/plan.md",
+    "docs/history/claim-time-worktree-redirect/CONTEXT.md"
+  ],
+  "action": "Doctrine + prompt half of the redirect chain (plan.md C2, decisions D3/D4). (1) packages/bee/prompts/worker-cell.md: add a FIRST instruction before any work step — when worktree_root is set, self-check the effective working directory; if it is not inside worktree_root, return [BLOCKED: session cwd is not the worktree — enter it or spawn this worker from a session rooted there] with zero edit attempts. Keep the existing Location block (it serves pane/cockpit workers whose cwd IS the worktree). (2) skills/bee-swarming/SKILL.md and packages/bee/AGENTS.block.md: state the contract in one or two lines each, at the orchestrate/dispatch and Multi-session etiquette points respectively — claim from main is control-plane and fine; execution workers are dispatched only from a session rooted in the feature worktree (EnterWorktree on Claude Code, or a session/pane opened at the worktree path); a Task-tool subagent inherits the session cwd, so dispatching an execution worker while cwd is main cannot write into the worktree and dies on the write guard. (3) Run the full regen chain inside THIS cell so AGENTS.md and the release manifest reflect the edits: bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order); leave the tree regen-clean. (4) docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md: record the redirect chain as behavior — first signal at claim (worktree_root line from cwr-1), second the worker cwd self-check, last the write guard; update the area index if the area convention requires. Match each file's existing voice and line discipline; skill text stays terse.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "worker-cell.md self-check precedes every work step and names the [BLOCKED] return exactly",
+      "bee-swarming and AGENTS.block name the inherit-cwd dead end and the enter-before-dispatch move",
+      "AGENTS.md regenerated and release manifest rewritten; bee dev release-manifest --check passes",
+      "Knowledge doc records the three-signal redirect chain"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-cwr-2",
+    "outcome": "Add worker cwd self-check before every work step and the enter-the-worktree doctrine in bee-swarming, AGENTS.block, and worker-cell.md; sync the redirect chain into the worktree-parallelism knowledge doc; regen AGENTS.md and the release manifest",
+    "files_changed": [
+      "packages/bee/prompts/worker-cell.md",
+      "skills/bee-swarming/SKILL.md",
+      "packages/bee/AGENTS.block.md",
+      "docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "AGENTS.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T08:23:38.699Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6ca254b3-714a-4bdc-89ae-2fae3863c283",
+    "claimed_at": "2026-08-16T08:14:13.368Z",
+    "report": {
+      "outcome": "Add worker cwd self-check before every work step and the enter-the-worktree doctrine in bee-swarming, AGENTS.block, and worker-cell.md; sync the redirect chain into the worktree-parallelism knowledge doc; regen AGENTS.md and the release manifest",
+      "commit": "c044a421",
+      "files": [
+        "packages/bee/prompts/worker-cell.md",
+        "skills/bee-swarming/SKILL.md",
+        "packages/bee/AGENTS.block.md",
+        "docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "AGENTS.md"
+      ],
+      "tests": "green",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T08:23:19.646Z"
+  }
+}

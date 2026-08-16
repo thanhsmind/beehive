@@ -483,5 +483,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-15T09:43:50.836Z"
+  },
+  "claim-time-worktree-redirect": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-16T08:26:55.838Z"
   }
 }

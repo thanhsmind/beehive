@@ -1,0 +1,83 @@
+{
+  "id": "cwr-1",
+  "feature": "claim-time-worktree-redirect",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Claim output annotates the granted-worktree execution location",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/claim-time-worktree-redirect/plan.md",
+    "docs/history/claim-time-worktree-redirect/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs"
+  ],
+  "action": "Add a claim-time execution-location annotation (plan.md C1, decisions D1/D2/D6). Shared helper in the cells module: given the main store root and the claimed cell's feature, resolve the feature's granted worktree via crate::hooks::write_guard::find_feature_worktree_grant (crate-visible via write_guard/mod.rs pub(crate) use; three-state enum Found/NotFound/Unresolvable at hook_local.rs:637-644). Found -> annotate; NotFound and Unresolvable -> no annotation (fail open). In run_claim (handlers_write.rs:602-646), after claim_cell_from_flags_ex succeeds, append one suffix line to the success emit text naming the worktree root: execution runs from a session rooted there, and a subagent dispatched from main inherits main's cwd and cannot write into the worktree; add worktree_root to the emitted JSON object. Same suffix line and worktree_root field for run_claim_next's success output (handlers_select.rs:658-843, result object ok/cell/claim). NO refusal path, NO candidate_ok change, NO change to any refusal string or to NO_APPROVED_WORK. Never call std::env::set_current_dir in tests; the annotation must not depend on acting cwd. Tests extend wf_worktree_fixture (cells/tests.rs:4644): grant present -> line + field on both claim and claim-next; no grant -> both absent; unresolvable grant entry -> both absent as a named fail-open case. If any existing test pins the exact full success text, update it in this cell.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "cells claim and cells claim-next success output name the granted worktree root when one exists for the claimed cell's feature, in text and as worktree_root in JSON",
+      "No claim/claim-next refusal or skip semantics changed; refusal strings byte-identical",
+      "Unresolvable grant entries fail open with a test naming that case",
+      "No test uses set_current_dir; full suite green"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-cwr-1",
+    "outcome": "Claim/claim-next annotate success output with the granted worktree root, fail-open on unresolvable grants",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T08:22:16.618Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6ca254b3-714a-4bdc-89ae-2fae3863c283",
+    "claimed_at": "2026-08-16T08:14:13.329Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T08:21:57.580Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "id": "claim-and-claim-next-annotate-worktree-root-in-text-and-json",
+            "evidence": "shared helper append_worktree_execution_annotation (handlers_write.rs, D1 doc comment) called from run_claim and run_claim_next success paths; text suffix + worktree_root JSON field; diff 21081054"
+          },
+          {
+            "status": "PASS",
+            "id": "no-refusal-or-skip-semantics-changed",
+            "evidence": "diff touches only success-path text/result construction; no refusal string, candidate_ok, or NO_APPROVED_WORK hunk in 21081054"
+          },
+          {
+            "status": "PASS",
+            "id": "fail-open-on-notfound-unresolvable-and-err",
+            "evidence": "helper early-returns on Err, NotFound, Unresolvable (three-state FeatureWorktreeGrant); +3 tests over baseline (1868 -> 1871) cover grant-present/absent/unresolvable without set_current_dir"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet-5",
+        "judge_model": "fable-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-16T08:24:48.641Z"
+      }
+    ]
+  }
+}
