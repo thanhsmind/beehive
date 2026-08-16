@@ -404,7 +404,12 @@ pub(crate) fn io_err_is_enoent(e: &std::io::Error) -> bool {
         return true;
     }
     if cfg!(windows) {
-        matches!(e.raw_os_error(), Some(2) | Some(3))
+        // 2/3 are Windows' own file/path-not-found codes; 123
+        // (ERROR_INVALID_NAME) and 161 (ERROR_BAD_PATHNAME) show up when a
+        // segment like "*.log" is a literal glob token — POSIX stats that
+        // as plain ENOENT, so Windows must count it not-found too, or the
+        // ancestor walk stops instead of climbing.
+        matches!(e.raw_os_error(), Some(2) | Some(3) | Some(123) | Some(161))
     } else {
         false
     }

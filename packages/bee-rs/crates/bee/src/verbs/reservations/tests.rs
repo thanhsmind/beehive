@@ -556,6 +556,12 @@ use std::time::Instant;
 
     /// main + `wt-granted` (registered) + `wt-ungranted` (not).
     fn worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        // Canonicalize once, up front: on a Windows runner `tempdir()` can
+        // hand back an 8.3 short form (RUNNER~1), and every path this
+        // fixture builds — plus every git command run against them — must
+        // share one spelling with what git's own gitdir chain reports, or
+        // `nrm()`'s identity checks compare apples to short-name apples.
+        let tmp = dunce::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
         let main = tmp.join("main");
         std::fs::create_dir_all(main.join(".bee")).unwrap();
         std::fs::write(main.join(".bee").join("onboarding.json"), "{}\n").unwrap();
