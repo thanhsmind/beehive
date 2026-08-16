@@ -50,6 +50,16 @@ pub(crate) const CLOSE_KNOWLEDGE_FRESHNESS_PREFIX: &str = "Knowledge freshness d
 /// CONTEXT.md D1, plan v2 kds-2.
 pub(crate) const CLOSE_IMPACT_PREFIX: &str = "Impact debt for";
 
+/// doc-impact-synthesis D2: pinned prefix of the routing-door refusal
+/// headline (message-contract tests live in verbs/drivers/tests.rs).
+/// CONTEXT.md D2, plan v2 kds-3.
+pub(crate) const CLOSE_ROUTING_PREFIX: &str = "Routing debt for";
+
+/// doc-impact-synthesis D3: pinned prefix of the doc-deferral-door refusal
+/// headline (message-contract tests live in verbs/drivers/tests.rs).
+/// CONTEXT.md D3, plan v2 kds-3.
+pub(crate) const CLOSE_DOC_DEFERRAL_PREFIX: &str = "Doc deferral debt for";
+
 /// provenance: test-runner.mjs declaredTestCommands + state.mjs
 /// normalizeCommands (verbs/test_runner.rs:184 declared_test_commands).
 /// `None` == JS `null` (undeclared).
@@ -937,6 +947,347 @@ pub(crate) fn build_impact_door(root: &Path, feature: &str) -> D<Door> {
     })
 }
 
+// ── doc-impact-synthesis D2: routing door at close ──────────────────────────
+//
+// CONTEXT.md D2: every locked D-ID in the feature's own CONTEXT.md decision
+// table must be routed — merged into an area's bundle citation (`context_
+// table::context_table_covers_d_id`, plain/range/slash forms, or the
+// decision's own logged short8) or explicitly recorded feature-local
+// (a logged `feature-local`-tagged decision naming `<feature> D<n>`).
+// Reuses `context_table::parse_locked_decision_ids` for the grammar, the
+// same tag+feature text-scan `filter_decision_events` shape the deferral
+// escapes below already use for `feature-local`, and `matches_whole_token`
+// for both the plain-form and short8 citation checks.
+
+/// D2 escape hatch: mirrors `has_impact_deferral_decision` exactly, tagged
+/// `routing-deferral` instead.
+pub(crate) fn has_routing_deferral_decision(root: &Path, feature: &str) -> D<Option<String>> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    let filtered = crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some("routing-deferral".to_string()),
+            feature: Some(feature.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| Delegate)?;
+    Ok(filtered.last().and_then(|d| d.get("decision")).and_then(Value::as_str).map(|s| s.to_string()))
+}
+
+/// D3 escape hatch: mirrors `has_impact_deferral_decision` exactly, tagged
+/// `doc-deferral` instead.
+pub(crate) fn has_doc_deferral_decision(root: &Path, feature: &str) -> D<Option<String>> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    let filtered = crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some("doc-deferral".to_string()),
+            feature: Some(feature.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| Delegate)?;
+    Ok(filtered.last().and_then(|d| d.get("decision")).and_then(Value::as_str).map(|s| s.to_string()))
+}
+
+/// The bare numeric suffix of a `D<n>` id (`"D12"` -> `Some(12)`).
+fn d_id_number(d_id: &str) -> Option<u32> {
+    d_id.strip_prefix('D')?.parse().ok()
+}
+
+/// D2: the logged `decide` event whose text names `<feature> D<n>` literally
+/// (the convention this feature's own decision log already follows: `"doc-
+/// impact-synthesis D2: at feature close, ..."`), if any — its own id,
+/// truncated to short8 (`sweep_decision_citations`'s own key), so a bundle
+/// file can cite the decision by hash instead of by name. `None` when no
+/// logged decision names this D-id at all (the plain/range/slash citation
+/// forms and the feature-local tag remain the D-id's only routes).
+pub(crate) fn decision_short8_for_context_id(root: &Path, feature: &str, d_id: &str) -> D<Option<String>> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    let token = format!("{feature} {d_id}");
+    Ok(active
+        .iter()
+        .find(|e| {
+            e.get("type").and_then(Value::as_str) == Some("decide")
+                && e.get("decision")
+                    .and_then(Value::as_str)
+                    .map(|t| crate::verbs::decisions::matches_whole_token(&[t.to_string()], &token))
+                    .unwrap_or(false)
+        })
+        .and_then(|e| e.get("id").and_then(Value::as_str))
+        .map(|id| crate::textutil::truncate_chars_head(id, 8)))
+}
+
+/// D2: every `decide` event tagged `feature-local` whose feature-text-scan
+/// matches `feature` (same text-scan `DecisionFilters.feature` shape the
+/// deferral escapes use, not kds-1's structured field — feature-local
+/// recording is a decisions-log call, not a close-time sweep target).
+fn feature_local_decisions(root: &Path, feature: &str) -> D<Vec<Value>> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some("feature-local".to_string()),
+            feature: Some(feature.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| Delegate)
+}
+
+/// D2: the routing door itself. `None` from the parser (no canonical table —
+/// legacy CONTEXT form, or the file is missing) degrades to a LOUD
+/// report-only notice: named deviation from D2's letter, bounded by D4's
+/// no-archaeology rationale — the door BLOCKS only for CONTEXT files
+/// carrying the canonical grammar.
+pub(crate) fn build_routing_door(root: &Path, feature: &str) -> D<Door> {
+    let context_path = root.join("docs").join("history").join(feature).join("CONTEXT.md");
+    let text = match std::fs::read_to_string(&context_path) {
+        Ok(t) => t,
+        Err(_) => {
+            return Ok(Door {
+                door: "routing",
+                blocking: false,
+                detail: format!(
+                    "NOTICE — no docs/history/{feature}/CONTEXT.md found to route (legacy-form gap); the routing door never blocks on it — route it manually or fold it into the D4 historical-routing-sweep campaign backlog row"
+                ),
+                command: None,
+            });
+        }
+    };
+    let Some(ids) = parse_locked_decision_ids(&text) else {
+        return Ok(Door {
+            door: "routing",
+            blocking: false,
+            detail: format!(
+                "NOTICE — docs/history/{feature}/CONTEXT.md has no canonical '## Locked Decisions' pipe table (legacy bullet/split form, the legacy-form gap); the routing door never blocks on it — route it manually or fold it into the D4 historical-routing-sweep campaign backlog row"
+            ),
+            command: None,
+        });
+    };
+    if ids.is_empty() {
+        return Ok(Door {
+            door: "routing",
+            blocking: false,
+            detail: "clear — canonical table present, no locked decisions to route".to_string(),
+            command: None,
+        });
+    }
+
+    let bundle_files: Vec<(PathBuf, String)> = match crate::verbs::knowledge::bundle_dir(root) {
+        Some(dir) => crate::verbs::knowledge::list_bundle_markdown(&dir)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|rel| (crate::verbs::knowledge::join_rel(&dir, &rel), rel))
+            .collect(),
+        None => Vec::new(),
+    };
+    let local_decisions = feature_local_decisions(root, feature)?;
+
+    let mut unrouted: Vec<String> = Vec::new();
+    let mut warnings: Vec<String> = Vec::new();
+    for d_id in &ids {
+        let Some(d_num) = d_id_number(d_id) else { continue };
+        let plain_token = format!("{feature} {d_id}");
+        let short8 = decision_short8_for_context_id(root, feature, d_id)?;
+        let mut citing: Vec<String> = Vec::new();
+        for (abs, rel) in &bundle_files {
+            let text = crate::verbs::knowledge::read_file_lossy(abs).unwrap_or_default();
+            let plain_hit = crate::verbs::decisions::matches_whole_token(&[text.clone()], &plain_token);
+            let range_hit = context_table_covers_d_id(&text, feature, d_num);
+            let short8_hit = short8
+                .as_deref()
+                .map(|s8| crate::verbs::decisions::matches_whole_token(&[text.clone()], s8))
+                .unwrap_or(false);
+            if plain_hit || range_hit || short8_hit {
+                citing.push(rel.clone());
+            }
+        }
+        if !citing.is_empty() {
+            if citing.len() > 1 {
+                warnings.push(format!(
+                    "{d_id} cited in {} bundle files ({}) — duplication, report-only",
+                    citing.len(),
+                    citing.join(", ")
+                ));
+            }
+            continue;
+        }
+        let feature_local_hit = local_decisions.iter().any(|d| {
+            d.get("decision")
+                .and_then(Value::as_str)
+                .map(|t| crate::verbs::decisions::matches_whole_token(&[t.to_string()], &plain_token))
+                .unwrap_or(false)
+        });
+        if !feature_local_hit {
+            unrouted.push(d_id.clone());
+        }
+    }
+
+    if unrouted.is_empty() {
+        let detail = if warnings.is_empty() {
+            "clear — every locked D-ID routed".to_string()
+        } else {
+            format!(
+                "clear — every locked D-ID routed; {} duplication warning(s), report-only: {}",
+                warnings.len(),
+                warnings.join("; ")
+            )
+        };
+        return Ok(Door { door: "routing", blocking: false, detail, command: None });
+    }
+
+    if let Some(reason) = has_routing_deferral_decision(root, feature)? {
+        return Ok(Door {
+            door: "routing",
+            blocking: false,
+            detail: format!(
+                "deferred — {} unrouted locked D-ID(s) ({}); a logged routing-deferral decision names \"{feature}\": {reason}",
+                unrouted.len(),
+                unrouted.join(", ")
+            ),
+            command: None,
+        });
+    }
+
+    Ok(Door {
+        door: "routing",
+        blocking: true,
+        detail: format!(
+            "{} unrouted locked D-ID(s) in docs/history/{feature}/CONTEXT.md ({}) — remedy: cite \"{feature} <D-id>\" (plain, a range, a slash-list, or the decision's own short8) in a docs/knowledge/ bundle file, or log a decision tagged feature-local naming \"{feature} <D-id>\" to record it as feature-local",
+            unrouted.len(),
+            unrouted.join(", ")
+        ),
+        command: None,
+    })
+}
+
+// ── doc-impact-synthesis D3: doc-deferral door at close ─────────────────────
+//
+// CONTEXT.md D3: deferral-shaped prose written into a touched doc must name
+// a registered trigger id. Scan set = the closing feature's capped cells'
+// `files_changed` filtered to `docs/`, UNION every file that exists on disk
+// under `docs/history/<feature>/` (CONTEXT.md is written at shaping, before
+// any cell exists — `feature_touched_files` alone would never see it).
+// Full-text scan of that bounded set, no git — close spawns no git today
+// and a merge-flow base is ill-defined post-merge (plan-check S2).
+
+/// D3's bounded scan set: root-relative paths, deduped, insertion order —
+/// `feature_touched_files` filtered to `docs/`, then every markdown file
+/// under `docs/history/<feature>/` on disk (present or not, cell-touched or
+/// not).
+pub(crate) fn doc_deferral_scan_files(root: &Path, feature: &str) -> D<Vec<String>> {
+    let touched = feature_touched_files(root, feature)?;
+    let mut files: Vec<String> = touched.into_iter().filter(|f| f.starts_with("docs/")).collect();
+    let history_dir = root.join("docs").join("history").join(feature);
+    if let Some(rels) = crate::verbs::knowledge::list_bundle_markdown(&history_dir) {
+        for rel in rels {
+            let full = format!("docs/history/{feature}/{rel}");
+            if !files.contains(&full) {
+                files.push(full);
+            }
+        }
+    }
+    Ok(files)
+}
+
+/// Every trigger-id candidate cited on one line: a backtick span (`` `<id>`
+/// ``) or a `[[trigger:<id>]]` span. Multiple candidates on one line are all
+/// checked; any one resolving clears the line.
+fn line_trigger_ids(line: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    let mut in_tick = false;
+    let mut start = 0usize;
+    for (idx, ch) in line.char_indices() {
+        if ch == '`' {
+            if in_tick {
+                ids.push(line[start..idx].trim().to_string());
+                in_tick = false;
+            } else {
+                in_tick = true;
+                start = idx + 1;
+            }
+        }
+    }
+    let mut rest = line;
+    while let Some(pos) = rest.find("[[trigger:") {
+        let after = &rest[pos + "[[trigger:".len()..];
+        match after.find("]]") {
+            Some(end) => {
+                ids.push(after[..end].trim().to_string());
+                rest = &after[end + 2..];
+            }
+            None => break,
+        }
+    }
+    ids
+}
+
+/// D3: the doc-deferral door itself. A line matching `matches_deferral_
+/// prose` inside a ``` fenced block is exempt (`in_fence` toggles on every
+/// fence-marker line, code included); every other match needs a same-line
+/// trigger citation resolving via `trigger_registered` or it blocks, naming
+/// file:line and the create-the-trigger teach line.
+pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str) -> D<Door> {
+    let files = doc_deferral_scan_files(root, feature)?;
+    let mut blocking_items: Vec<String> = Vec::new();
+    for rel in &files {
+        let Ok(text) = std::fs::read_to_string(root.join(rel)) else { continue };
+        let mut in_fence = false;
+        for (idx, line) in text.lines().enumerate() {
+            if line.trim_start().starts_with("```") {
+                in_fence = !in_fence;
+                continue;
+            }
+            if in_fence {
+                continue;
+            }
+            if !crate::verbs::decisions::matches_deferral_prose(line) {
+                continue;
+            }
+            let resolved = line_trigger_ids(line)
+                .iter()
+                .any(|id| crate::verbs::triggers::trigger_registered(root, id));
+            if resolved {
+                continue;
+            }
+            blocking_items.push(format!(
+                "{rel}:{} deferral-shaped prose with no registered trigger citation",
+                idx + 1
+            ));
+        }
+    }
+
+    if blocking_items.is_empty() {
+        return Ok(Door { door: "doc-deferral", blocking: false, detail: "clear".to_string(), command: None });
+    }
+
+    if let Some(reason) = has_doc_deferral_decision(root, feature)? {
+        return Ok(Door {
+            door: "doc-deferral",
+            blocking: false,
+            detail: format!(
+                "deferred — {} deferral line(s) with no registered trigger ({}); a logged doc-deferral decision names \"{feature}\": {reason}",
+                blocking_items.len(),
+                blocking_items.join("; ")
+            ),
+            command: None,
+        });
+    }
+
+    Ok(Door {
+        door: "doc-deferral",
+        blocking: true,
+        detail: format!(
+            "{} deferral line(s) with no registered trigger citation: {} — remedy: register the condition first with `bee triggers add --decision <id> --condition \"...\"`, then cite it inline (backtick `<id>` or [[trigger:<id>]])",
+            blocking_items.len(),
+            blocking_items.join("; ")
+        ),
+        command: None,
+    })
+}
+
 /// U3 (docs/history/knowledge-usable/CONTEXT.md): past the configured
 /// `capture_queue_threshold` — the pending count exceeds it, OR the oldest
 /// pending stub is older than the configured day count — the capture-queue
@@ -1313,6 +1664,8 @@ pub(crate) fn close_handler(
         doors.push(build_pattern_check_door(root, feature, pattern_verdicts)?);
         doors.push(build_knowledge_freshness_door(root, feature)?);
         doors.push(build_impact_door(root, feature)?);
+        doors.push(build_routing_door(root, feature)?);
+        doors.push(build_doc_deferral_door(root, feature)?);
         let next_line = match &declared {
             Some(_) => format!("next: bee close --feature {feature} — runs the declared tests and reports"),
             None => format!(
@@ -1346,6 +1699,8 @@ pub(crate) fn close_handler(
     let pattern_door = build_pattern_check_door(root, feature, pattern_verdicts)?;
     let knowledge_freshness_door = build_knowledge_freshness_door(root, feature)?;
     let impact_door = build_impact_door(root, feature)?;
+    let routing_door = build_routing_door(root, feature)?;
+    let doc_deferral_door = build_doc_deferral_door(root, feature)?;
 
     if !run.undeclared && !run.green {
         let failing: Vec<&CommandResult> =
@@ -1365,6 +1720,8 @@ pub(crate) fn close_handler(
         doors.push(pattern_door);
         doors.push(knowledge_freshness_door);
         doors.push(impact_door);
+        doors.push(routing_door);
+        doors.push(doc_deferral_door);
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
@@ -1435,6 +1792,8 @@ pub(crate) fn close_handler(
     doors.push(pattern_door);
     doors.push(knowledge_freshness_door);
     doors.push(impact_door);
+    doors.push(routing_door);
+    doors.push(doc_deferral_door);
 
     // ── D1: refuse on uncaptured behavior_change cells ──────────────────────
     //
@@ -1579,6 +1938,58 @@ pub(crate) fn close_handler(
             format!("{CLOSE_IMPACT_PREFIX} \"{feature}\" — close stops at the impact door: {impact_detail}"),
             "remedy: fix or annotate each citing doc above, or log a decision tagged impact-deferral naming this feature with the reason.".to_string(),
             format!("next: settle the citation(s) above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // ── doc-impact-synthesis D2: refuse on an unrouted locked D-ID ──────────
+    //
+    // Runs only here — tests GREEN (or undeclared) and past the capture-debt,
+    // judge-debt, pattern-check, knowledge-freshness and impact refusals
+    // above — same "stops close exactly like a red test" placement those
+    // doors already established. Never fires for a legacy-form CONTEXT
+    // (`build_routing_door`'s own notice branch is never `blocking`).
+    if doors.iter().any(|d| d.door == "routing" && d.blocking) {
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
+        result.insert("tests".into(), tests_result_value(&run));
+        let routing_detail = doors
+            .iter()
+            .find(|d| d.door == "routing")
+            .map(|d| d.detail.clone())
+            .unwrap_or_default();
+        let lines = vec![
+            format!("{CLOSE_ROUTING_PREFIX} \"{feature}\" — close stops at the routing door: {routing_detail}"),
+            "remedy: cite the unrouted D-ID(s) in a docs/knowledge/ bundle file, or log a decision tagged routing-deferral naming this feature with the reason.".to_string(),
+            format!("next: settle the unrouted D-ID(s) above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // ── doc-impact-synthesis D3: refuse on doc deferral prose with no
+    // registered trigger ─────────────────────────────────────────────────────
+    //
+    // Runs only here — tests GREEN (or undeclared) and past every refusal
+    // above, including routing.
+    if doors.iter().any(|d| d.door == "doc-deferral" && d.blocking) {
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
+        result.insert("tests".into(), tests_result_value(&run));
+        let doc_deferral_detail = doors
+            .iter()
+            .find(|d| d.door == "doc-deferral")
+            .map(|d| d.detail.clone())
+            .unwrap_or_default();
+        let lines = vec![
+            format!(
+                "{CLOSE_DOC_DEFERRAL_PREFIX} \"{feature}\" — close stops at the doc-deferral door: {doc_deferral_detail}"
+            ),
+            "remedy: register the condition with `bee triggers add --decision <id> --condition \"...\"` and cite it inline, or log a decision tagged doc-deferral naming this feature with the reason.".to_string(),
+            format!("next: settle the deferral line(s) above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }

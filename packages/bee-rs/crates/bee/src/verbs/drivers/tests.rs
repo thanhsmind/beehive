@@ -1650,6 +1650,8 @@ use std::time::Instant;
                 "door pattern-check: clear\n",
                 "door knowledge-freshness: clear\n",
                 "door impact: clear\n",
+                "door routing: open — NOTICE — no docs/history/demo/CONTEXT.md found to route (legacy-form gap); the routing door never blocks on it — route it manually or fold it into the D4 historical-routing-sweep campaign backlog row\n",
+                "door doc-deferral: clear\n",
                 "next: bee close --feature demo — runs the declared tests and reports"
             )
         );
@@ -2813,4 +2815,320 @@ use std::time::Instant;
         let doors = result.get("doors").unwrap().as_array().unwrap();
         let impact = doors.iter().find(|d| d.get("door") == Some(&json!("impact"))).unwrap();
         assert_eq!(impact.get("blocking"), Some(&json!(true)));
+    }
+
+    // ─── doc-impact-synthesis D2/D3: context-table parser, routing door,
+    //     doc-deferral door ────────────────────────────────────────────────
+
+    /// The canonical template's own `## Locked Decisions` table
+    /// (`.claude/skills/bee-shaping/references/context-template.md:26`)
+    /// must parse — the routing door's grammar IS the template's grammar.
+    const CONTEXT_TEMPLATE: &str = include_str!(
+        "../../../../../../../.claude/skills/bee-shaping/references/context-template.md"
+    );
+
+    /// This feature's own `docs/history/doc-impact-synthesis/CONTEXT.md`
+    /// must parse too — the door that would refuse every OTHER feature's
+    /// legacy CONTEXT is bound by its own grammar first.
+    const THIS_FEATURE_CONTEXT: &str = include_str!(
+        "../../../../../../../docs/history/doc-impact-synthesis/CONTEXT.md"
+    );
+
+    #[test]
+    fn context_table_parses_the_canonical_template_header() {
+        assert_eq!(
+            parse_locked_decision_ids(CONTEXT_TEMPLATE),
+            Some(vec!["D1".to_string(), "D2".to_string()])
+        );
+    }
+
+    #[test]
+    fn context_table_parses_this_features_own_context_md() {
+        assert_eq!(
+            parse_locked_decision_ids(THIS_FEATURE_CONTEXT),
+            Some(vec!["D1".to_string(), "D2".to_string(), "D3".to_string(), "D4".to_string()])
+        );
+    }
+
+    #[test]
+    fn context_table_is_none_for_a_legacy_bullet_context() {
+        let text = "# Old Feature — Context\n\n## Locked Decisions\n\n- D1: bullet form decision.\n- D2: another bullet decision.\n";
+        assert_eq!(parse_locked_decision_ids(text), None);
+    }
+
+    #[test]
+    fn context_table_covers_d_id_matches_the_plain_form() {
+        let text = "prose then demo D2 lives here\n";
+        assert!(context_table_covers_d_id(text, "demo", 2));
+        assert!(!context_table_covers_d_id(text, "demo", 3));
+    }
+
+    #[test]
+    fn context_table_covers_d_id_matches_the_range_form() {
+        let text = "prose then demo D1-D3 lives here\n";
+        assert!(context_table_covers_d_id(text, "demo", 1));
+        assert!(context_table_covers_d_id(text, "demo", 2));
+        assert!(context_table_covers_d_id(text, "demo", 3));
+        assert!(!context_table_covers_d_id(text, "demo", 4));
+    }
+
+    #[test]
+    fn context_table_covers_d_id_matches_the_slash_form() {
+        let text = "prose then demo D1/D3 lives here\n";
+        assert!(context_table_covers_d_id(text, "demo", 1));
+        assert!(!context_table_covers_d_id(text, "demo", 2));
+        assert!(context_table_covers_d_id(text, "demo", 3));
+    }
+
+    fn write_locked_decisions_table(root: &Path, feature: &str, ids: &[&str]) {
+        let mut body = "# Demo — Context\n\n## Locked Decisions\n\n| ID | Decision | Rationale (only if it changes implementation) |\n|----|----------|-----------------------------------------------|\n".to_string();
+        for id in ids {
+            body.push_str(&format!("| {id} | placeholder decision text | - |\n"));
+        }
+        w(root, &format!("docs/history/{feature}/CONTEXT.md"), &body);
+    }
+
+    #[test]
+    fn routing_door_routes_the_plain_range_and_slash_citation_forms() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_locked_decisions_table(root, "demo", &["D1", "D2", "D3", "D4", "D5"]);
+        w(root, "docs/knowledge/areas/a/plain.md", "demo D1 lives here\n");
+        w(root, "docs/knowledge/areas/a/range.md", "demo D2-D3 lives here\n");
+        w(root, "docs/knowledge/areas/a/slash.md", "demo D4/D5 lives here\n");
+        let door = build_routing_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear — every locked D-ID routed");
+    }
+
+    #[test]
+    fn routing_door_routes_via_the_decisions_logged_short8() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_locked_decisions_table(root, "demo", &["D1"]);
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"aaaa1111-bbbb-cccc-dddd-eeeeeeeeeeee\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"demo D1: something locked\",\"rationale\":\"r\",\"scope\":\"repo\"}\n",
+        );
+        w(root, "docs/knowledge/areas/a/short8.md", "cites decision aaaa1111 here\n");
+        let door = build_routing_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear — every locked D-ID routed");
+    }
+
+    #[test]
+    fn routing_door_blocks_on_an_unrouted_d_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_locked_decisions_table(root, "demo", &["D1"]);
+        let door = build_routing_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("D1"), "{}", door.detail);
+        assert!(door.detail.contains("cite"), "{}", door.detail);
+        assert!(door.detail.contains("feature-local"), "{}", door.detail);
+    }
+
+    #[test]
+    fn routing_door_clears_via_a_feature_local_tagged_decision() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_locked_decisions_table(root, "demo", &["D1"]);
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"b1\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"demo D1: kept as feature-local, no separate area yet\",\"rationale\":\"r\",\"tags\":[\"feature-local\"],\"scope\":\"repo\"}\n",
+        );
+        let door = build_routing_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear — every locked D-ID routed");
+    }
+
+    #[test]
+    fn routing_door_multi_area_citation_is_a_report_only_warning() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_locked_decisions_table(root, "demo", &["D1"]);
+        w(root, "docs/knowledge/areas/a/one.md", "demo D1 lives here\n");
+        w(root, "docs/knowledge/areas/b/two.md", "demo D1 also lives here\n");
+        let door = build_routing_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("clear"), "{}", door.detail);
+        assert!(door.detail.contains("duplication"), "{}", door.detail);
+        assert!(door.detail.contains("report-only"), "{}", door.detail);
+    }
+
+    #[test]
+    fn routing_door_legacy_context_yields_a_loud_notice_never_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/history/demo/CONTEXT.md",
+            "# Demo — Context\n\n## Locked Decisions\n\n- D1: bullet form decision.\n",
+        );
+        let door = build_routing_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert!(door.detail.starts_with("NOTICE"), "{}", door.detail);
+        assert!(door.detail.contains("legacy"), "{}", door.detail);
+        assert!(door.detail.contains("D4"), "{}", door.detail);
+    }
+
+    #[test]
+    fn routing_door_deferral_decision_demotes_to_non_blocking_with_the_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_locked_decisions_table(root, "demo", &["D1"]);
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"c1\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"defer routing cleanup for demo until the next pass\",\"rationale\":\"r\",\"tags\":[\"routing-deferral\"],\"scope\":\"repo\"}\n",
+        );
+        let door = build_routing_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert!(door.detail.starts_with("deferred —"), "{}", door.detail);
+        assert!(
+            door.detail.contains("defer routing cleanup for demo until the next pass"),
+            "{}",
+            door.detail
+        );
+    }
+
+    #[test]
+    fn close_refuses_at_the_routing_door() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        write_locked_decisions_table(&root, "demo", &["D1"]);
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(result, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1);
+        assert!(
+            text.starts_with(&format!("{CLOSE_ROUTING_PREFIX} \"demo\" — close stops at the routing door:")),
+            "{text}"
+        );
+        assert!(text.contains("next: settle the unrouted D-ID(s) above, then re-run bee close --feature demo"), "{text}");
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        let routing = doors.iter().find(|d| d.get("door") == Some(&json!("routing"))).unwrap();
+        assert_eq!(routing.get("blocking"), Some(&json!(true)));
+    }
+
+    // ─── doc-impact-synthesis D3: doc-deferral door ─────────────────────────
+
+    fn write_trigger(root: &Path, id: &str) {
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        let dir = root.join(".bee").join("triggers");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            format!(
+                r#"{{"id":"{id}","decision":"deadbeef","condition":"upstream lands","tier":"manual","predicate":null,"status":"waiting","created_at":"2026-08-16T00:00:00.000Z","updated_at":"2026-08-16T00:00:00.000Z","outcome":null}}"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn doc_deferral_door_blocks_a_deferral_line_with_no_registered_trigger() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:2"), "{}", door.detail);
+        assert!(door.detail.contains("remedy:"), "{}", door.detail);
+    }
+
+    #[test]
+    fn doc_deferral_door_clears_with_a_registered_trigger_citation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_trigger(root, "demo-trigger");
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "line one\nThis work is deferred for now, see `demo-trigger`.\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn doc_deferral_door_exempts_fenced_code() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "prose\n```\nThis work is deferred for now.\n```\nmore prose\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    /// CONTEXT.md is written at shaping, before any cell exists — the scan
+    /// set is the UNION of capped-cell `files_changed` and every file on
+    /// disk under `docs/history/<feature>/`, so a feature with ZERO capped
+    /// cells still has its own CONTEXT.md scanned.
+    #[test]
+    fn doc_deferral_door_scan_set_includes_the_on_disk_context_md_with_no_capped_cells() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, "docs/history/demo/CONTEXT.md", "# Demo\n\nThis is deferred for now.\n");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/history/demo/CONTEXT.md:3"), "{}", door.detail);
+    }
+
+    #[test]
+    fn doc_deferral_door_deferral_decision_demotes_to_non_blocking_with_the_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"defer registering a trigger for demo until the audit lands\",\"rationale\":\"r\",\"tags\":[\"doc-deferral\"],\"scope\":\"repo\"}\n",
+        );
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert!(door.detail.starts_with("deferred —"), "{}", door.detail);
+        assert!(
+            door.detail.contains("defer registering a trigger for demo until the audit lands"),
+            "{}",
+            door.detail
+        );
+    }
+
+    #[test]
+    fn close_refuses_at_the_doc_deferral_door() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        w(&root, "docs/history/demo/CONTEXT.md", "# Demo\n\nThis is deferred for now.\n");
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(result, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1);
+        assert!(
+            text.starts_with(&format!("{CLOSE_DOC_DEFERRAL_PREFIX} \"demo\" — close stops at the doc-deferral door:")),
+            "{text}"
+        );
+        assert!(text.contains("next: settle the deferral line(s) above, then re-run bee close --feature demo"), "{text}");
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        let doc_deferral = doors.iter().find(|d| d.get("door") == Some(&json!("doc-deferral"))).unwrap();
+        assert_eq!(doc_deferral.get("blocking"), Some(&json!(true)));
     }
