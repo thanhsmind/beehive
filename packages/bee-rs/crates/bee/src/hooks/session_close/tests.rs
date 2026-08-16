@@ -441,8 +441,17 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(project_name(&Value::Null), "(unknown)");
     }
 
+    /// Serializes every test that mutates the process-global `BEEHIVE_PERF_DIR`
+    /// var — `cargo test` runs test fns on multiple threads in the SAME
+    /// process, so two such tests racing would each read the other's tempdir.
+    fn lock_perf_env() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     #[test]
     fn rollup_and_upsert_roundtrip_in_isolated_perf_dir() {
+        let _guard = lock_perf_env();
         // BEEHIVE_PERF_DIR isolates the machine-global store for this test.
         let perf = tempfile::tempdir().unwrap();
         unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
@@ -515,7 +524,8 @@ so the next session can resume cleanly, or record a capture stub for what settle
         let root = fx.path();
         // BEEHIVE_PERF_DIR isolates the machine-global store the Stop path's
         // perf refresh touches — see rollup_and_upsert_roundtrip_in_isolated_
-        // perf_dir above.
+        // perf_dir above; lock_perf_env keeps the two tests from racing on it.
+        let _guard = lock_perf_env();
         let perf = tempfile::tempdir().unwrap();
         unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
         write_json_file(&root.join(".bee").join("config.json"), &json!({}));
