@@ -340,6 +340,9 @@
     "capture-deferral",
     "promote-proposal",
     "worktrees",
-    "documentation"
+    "documentation",
+    "cli-help",
+    "registry",
+    "drift-guard"
   ]
 }

@@ -26,20 +26,59 @@
   "action": "Per docs/history/guard-refusal-wording/CONTEXT.md D1-D3: (D1) before canonical_rel_path in the Bash branch (main.rs:189-207), classify a target token carrying unexpanded shell syntax (a $ or backquote) as unresolvable so it never resolves as a literal relative path and never reaches the gate 'writing X is blocked' sentences; (D2) the unresolvable-target refusal states the target could not be resolved and quotes the raw token — sharpen GENERIC_BASH_CONTAINMENT_MESSAGE or add a distinct message in hook_local.rs; (D3) regression tests: a Bash command with an unexpanded $VAR/... target refuses with the resolution-failure wording (not a fake path), and existing resolved-path refusal wording is unchanged. Guard stays fail-closed: the change may only widen the unresolvable bucket, never allow a write.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "acceptance": "Unresolvable Bash target refusal names the resolution failure and quotes the raw token; no fake path in gate sentence; regression tests green; suite green",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "trace": {
     "worker": "w-grw-1",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Bash write-guard classifies unexpanded shell-syntax targets (, backquote) as unresolvable and refuses them with a distinct resolution-failure message quoting the raw token, instead of a fake resolved path",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-16T00:06:47.154Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "e499dfc3-c889-41e5-b4a7-381b38596b5e",
-    "claimed_at": "2026-08-15T23:55:21.908Z"
+    "claimed_at": "2026-08-15T23:55:21.908Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T00:06:28.246Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "hook_local.rs:43 unresolvable_bash_target_message; wired main.rs:241-242; exact stderr asserts tests.rs:2869,2881",
+            "id": "unresolvable-target-refusal-names-resolution-failure-and-quotes-token"
+          },
+          {
+            "status": "PASS",
+            "evidence": "canonical_rel_path returns Ok(None) for $/backquote (hook_local.rs:238); rel_paths filter_map miss forces denial branch main.rs:217-249 before check_write",
+            "id": "no-unresolvable-token-reaches-gate-writing-x-is-blocked-sentence"
+          },
+          {
+            "status": "PASS",
+            "evidence": "every None-resolution consumer denies or delegates (main.rs:155-170,217-249,267-285); pre-change $WT token could reach WV::Allow — change strictly tightens",
+            "id": "fail-closed-preserved-no-new-allow"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet-5",
+        "judge_model": "fable-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-16T00:11:29.205Z"
+      }
+    ]
   }
 }
