@@ -105,6 +105,21 @@ Three field failures (reported against a host repo, fixed generically):
   the projection behind R5's derived index — stays the single read surface
   for current truth; the append-only log itself is never re-read for "is
   this still true," only for "why."
+- **R2a — Deferred conditions live in a two-tier trigger registry**
+  (knowledge-distill-trigger D2, kdt-2). One record per trigger in the
+  shared control-root store (`.bee/triggers/<slug>__<short8>.json`), each
+  citing its deferring decision. Predicate-tier records
+  (`path-exists:`/`path-missing:`) are re-evaluated on every registry
+  read; a predicate that has come true flips the record `waiting → due`
+  and the flip persists. Manual-tier records never auto-fire — they
+  surface as awaiting confirmation until a human resolves them.
+  `triggers resolve` writes the outcome onto the record only; any
+  follow-up decision is logged separately under R2's rules. Orientation
+  surfaces the registry as one line — due count plus
+  awaiting-confirmation count — so a registered condition can wait but
+  never sink; an unreadable record degrades to a visible
+  delete-the-file remedy line, never a silent skip. A due trigger routes
+  its work through the backlog; the registry never executes anything.
 - **R3 — Reversals inherit their place** (D6, `b9b9fee3`). A supersede without
   explicit tags/scope inherits both from the (overlay-applied) decision it
   supersedes, so the reversal is discoverable exactly where the original

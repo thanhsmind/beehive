@@ -1,6 +1,6 @@
 # CONTEXT — rust-write-guard
 
-**Feature slug:** `rust-write-guard` · **Date:** 2026-07-22 · **Source:** user instruction ("port riêng write-guard hook sang Rust"), which is part (2) of backlog **P59** (decision `2e224c90`).
+**Feature slug:** `rust-write-guard` · **Date:** 2026-07-22 · **Source:** user instruction ("port riêng write-guard hook sang Rust"), which is part (2) of backlog **P59** (decision `2e224c90` — superseded 2026-08-16 by `f7ea4ce2`: the full rewrite that decision rejected later happened via rust-port).
 
 ## Boundary
 
@@ -42,7 +42,7 @@ Consequences for the ask:
 - `.bee/bin/hooks/bee-write-guard.mjs` (the shim) · `.bee/bin/lib/guards.mjs:checkWrite` (all decision logic)
 - `.bee/bin/lib/state.mjs` (1,964 lines — the dominant import cost), `reservations.mjs`, `worktree-holds.mjs`
 - `hooks/test_write_guard.mjs` (147 checks — the seed corpus for D1's vectors)
-- P59 / decision `2e224c90` (the original trigger-conditioned plan, whose cost model this CONTEXT corrects)
+- P59 / decision `2e224c90` (the original trigger-conditioned plan, whose cost model this CONTEXT corrects; superseded 2026-08-16 by `f7ea4ce2` after rust-port shipped the full rewrite)
 
 ## Open questions (for planning)
 
