@@ -6,7 +6,7 @@
   "action": "Widen live_session_holds to pub(crate) in packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs. In packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs perform_cleanup, after the dirty check and before teardown_worktree, call live_session_holds with the session-heartbeat window HEARTBEAT_STALE_SECONDS (900s, claims.rs:36) — NOT prune's 6h constant — and on Some(reason) return ok:false with new code WORKTREE_MERGE_CLEANUP_LIVE_SESSION and a reason naming the holding session plus the remedy (close that session, rerun bee worktree merge --id <id>, or let bee worktree prune sweep later). Merge itself still lands; only directory removal is refused. Add tests in packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs: (1) fresh-heartbeat session record naming the worktree's workspace id makes perform_cleanup return the new code and leaves the directory in place; (2) a stale-heartbeat record does not block removal.",
   "intent": "bee worktree merge's cleanup deletes the floor under a live session (git worktree remove --force, no liveness check), stranding that session behind WORKTREE_LINK_INVALID denials. Reuse prune's live_session_holds so removal waits for the session to go stale.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "files": [],
@@ -14,15 +14,23 @@
   "trace": {
     "worker": "mlsg-1-builder",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-16T04:41:20.730Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "b905fa1b-3e59-4fdf-a234-af43a0398b55",
-    "claimed_at": "2026-08-16T04:30:21.847Z"
+    "claimed_at": "2026-08-16T04:30:21.847Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T04:41:01.235Z"
   }
 }
