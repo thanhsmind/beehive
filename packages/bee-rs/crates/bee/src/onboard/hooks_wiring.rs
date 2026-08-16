@@ -105,6 +105,9 @@ pub fn render_repo_hook_entries(repo_root: &Path) -> Vec<(&'static str, Value)> 
             "Stop",
             json!([{ "hooks": [repo_entry("bee-state-sync.mjs", r), repo_entry("bee-session-close.mjs", r)] }]),
         ),
+        // SessionEnd: Claude-only (see render_codex_hook_entries — the Codex
+        // runtime has no equivalent event to wire this against).
+        ("SessionEnd", json!([{ "hooks": [repo_entry("bee-session-close.mjs", r)] }])),
     ]
 }
 
@@ -408,6 +411,8 @@ pub fn render_codex_hook_entries() -> Vec<(&'static str, Value)> {
             "Stop",
             json!([{ "hooks": [codex_entry("bee-state-sync.mjs", "bee: state sync"), codex_entry("bee-session-close.mjs", "bee: session close check")] }]),
         ),
+        // No SessionEnd arm here: the Codex runtime does not expose a
+        // SessionEnd hook event, so there is nothing to wire it against.
     ]
 }
 

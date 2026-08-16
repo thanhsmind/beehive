@@ -479,3 +479,60 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert!(html.contains("sonnet-4"));
         unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
     }
+
+    // ─── SessionEnd (close the session record) ─────────────────────────────
+
+    #[test]
+    fn session_end_marks_the_session_record_closed() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("sessions").join("s-1.json"),
+            &json!({"id": "s-1", "started_at": "2026-01-01T00:00:00.000Z"}),
+        );
+        let body = json!({
+            "hook_event_name": "SessionEnd",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+        // The SessionEnd branch returns before the perf refresh runs, so no
+        // BEEHIVE_PERF_DIR isolation is needed here.
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+        let record: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("sessions").join("s-1.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(record["status"], "closed");
+        assert!(record["closed_at"].as_str().unwrap().ends_with('Z'), "{record}");
+        // The rest of the record survives the write untouched.
+        assert_eq!(record["started_at"], "2026-01-01T00:00:00.000Z");
+    }
+
+    #[test]
+    fn stop_payload_leaves_the_session_record_untouched() {
+        let fx = fixture();
+        let root = fx.path();
+        // BEEHIVE_PERF_DIR isolates the machine-global store the Stop path's
+        // perf refresh touches — see rollup_and_upsert_roundtrip_in_isolated_
+        // perf_dir above.
+        let perf = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        let record = json!({"id": "s-1", "started_at": "2026-01-01T00:00:00.000Z"});
+        write_json_file(&root.join(".bee").join("sessions").join("s-1.json"), &record);
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+        let _ = run_inner(&[], &stdin);
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        let after: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("sessions").join("s-1.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(after, record, "Stop must never touch status/closed_at");
+    }
