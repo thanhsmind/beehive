@@ -29,21 +29,31 @@
       "each door demotes on its recorded deferral decision"
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "orchestrator",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/context_table.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/mod.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-16T12:09:57.910Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "3ffdb508-af83-4ed1-b5ce-2d68f4e6f780",
-    "claimed_at": "2026-08-16T11:52:50.852Z"
+    "claimed_at": "2026-08-16T11:52:50.852Z",
+    "inline_reason": "worker-registration gap: no /dispatch-worker record exists for this generation-tier session (sibling kds-2 precedent, orchestrator-claimed and dispatched directly)",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T12:09:33.879Z"
   }
 }

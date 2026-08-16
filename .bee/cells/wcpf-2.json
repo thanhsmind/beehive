@@ -1,0 +1,37 @@
+{
+  "id": "wcpf-2",
+  "feature": "windows-ci-path-fixes",
+  "lane": "tiny",
+  "title": "Canonicalize triggers test fixture root (Windows 8.3, follow-up to wcpf-1)",
+  "action": "In packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs worktree_fixture (~line 523), canonicalize the tmp root with dunce::canonicalize (fallback to_path_buf) before building main/wt, same pattern as wcpf-1. Fixes Windows-only red store_path_resolves_to_control_root_from_a_linked_worktree: .bee/triggers does not exist so n() falls back to the raw spelling and long-vs-8.3 forms diverge at mod.rs:549.",
+  "goal": "Windows CI verify green on windows-latest; Linux suite stays green.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "notes": "Surfaced by CI run 31945914659 after wcpf-1 fixed the first 4; trigger tests first reached Windows CI in that push.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-wcpf-2",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T12:11:14.721Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6e83b991-dafe-45af-b6d8-7abac0afe364",
+    "claimed_at": "2026-08-16T12:08:56.431Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T12:10:55.291Z"
+  }
+}
