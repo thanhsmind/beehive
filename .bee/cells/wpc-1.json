@@ -1,0 +1,48 @@
+{
+  "id": "wpc-1",
+  "feature": "waiting-on-pair-clear",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Clear run_state beside waiting_on in the default-state clear path",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/store.rs"
+  ],
+  "action": "set_default_state_waiting_on (state_group/store.rs:189-206) writes BOTH waiting_on and run_state:'awaiting-approval' into .bee/state.json, but clear_default_state_waiting_on (workflow_store/record.rs:482-499) only nulls waiting_on — run_state stays 'awaiting-approval' forever on the session-scoped no-workflow-record path (dashboard badge stuck). Fix: in clear_default_state_waiting_on, when clearing a live mark, also null run_state IFF its current value is 'awaiting-approval' (never touch any other value — a record-derived run_state from another path must not be clobbered). Keep the fail-open peek and raced-clear no-op structure unchanged. Extend clear_default_state_waiting_on_clears_a_live_mark (workflow_store/tests.rs:518) to assert run_state is cleared after the clear, and add an assertion that a non-awaiting-approval run_state value survives the clear untouched.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "After set-then-clear on the default-state path, .bee/state.json has waiting_on null AND no awaiting-approval run_state",
+      "A run_state value other than awaiting-approval is not modified by the clear",
+      "Full suite green"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "main-inline",
+    "outcome": "clear_default_state_waiting_on nulls run_state (guarded on awaiting-approval) beside waiting_on; test asserts pair-clear and foreign-value survival",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T08:44:07.353Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6ca254b3-714a-4bdc-89ae-2fae3863c283",
+    "claimed_at": "2026-08-16T08:41:59.828Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T08:43:48.154Z"
+  }
+}
