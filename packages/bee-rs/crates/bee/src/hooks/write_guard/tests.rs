@@ -2853,6 +2853,52 @@ use std::process::ExitCode;
         assert!(relative.roots.is_empty());
     }
 
+    // ── guard-refusal-wording D1/D2/D3: unresolvable shell-syntax targets ──
+    // A Bash target still carrying unexpanded shell syntax ($VAR, backquote)
+    // was never expanded by a shell — the guard only ever sees the literal
+    // characters, so resolving it as a plain relative path produces a fake
+    // in-repo path. It must be classified unresolvable and refused with the
+    // resolution-failure wording, never the "writing X is blocked" gate
+    // sentence and never GENERIC_BASH_CONTAINMENT_MESSAGE.
+
+    #[test]
+    fn bash_unexpanded_var_target_names_resolution_failure_not_a_fake_path() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("printf x > \"$WT/foo.txt\""), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+        assert!(e.stderr.contains("could not be resolved"), "{}", e.stderr);
+        assert!(e.stderr.contains("\"$WT/foo.txt\""), "{}", e.stderr);
+        assert!(!e.stderr.contains("is blocked"), "{}", e.stderr);
+        assert!(!e.stderr.contains("canonically contained"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_backquote_target_names_resolution_failure_not_a_fake_path() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("touch `whoami`"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert_eq!(e.stderr, unresolvable_bash_target_message("`whoami`"));
+        assert!(e.stderr.contains("could not be resolved"), "{}", e.stderr);
+        assert!(e.stderr.contains("`whoami`"), "{}", e.stderr);
+        assert!(!e.stderr.contains("is blocked"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_resolved_path_containment_denial_wording_is_unchanged() {
+        // D3b: a target that genuinely resolves (no shell syntax) but sits
+        // outside the worktree keeps its existing GENERIC_BASH_CONTAINMENT_MESSAGE
+        // wording — the D1/D2 classification only widens the unresolvable
+        // bucket, it never touches an already-resolved target's message.
+        let fx = build_fixture("swarming", true);
+        let outside = tempfile::tempdir().unwrap();
+        let target = dunce::canonicalize(outside.path()).unwrap().join("elsewhere.txt");
+        let bash_target = target.to_string_lossy().replace('\\', "/");
+        let e = expect_done(bash(&format!("printf x > \"{bash_target}\"")), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert_eq!(e.stderr, GENERIC_BASH_CONTAINMENT_MESSAGE);
+    }
+
     // ── D1 plan.md freeze (bh-1) — feature-from-path + lane-aware gate ─────
     // D7 red-first: these resolver tests land (and are run RED against a
     // stub) before the deny wires into check_write below.

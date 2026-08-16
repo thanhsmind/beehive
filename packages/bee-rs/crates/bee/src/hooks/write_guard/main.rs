@@ -234,15 +234,24 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                         }
                     }
                     if let Some(c) = first_failing {
-                        let enriched = describe_cross_worktree_target(
-                            &root,
-                            &cwd,
-                            &Value::String(c.raw.clone()),
-                        )?;
-                        denial = Some(
-                            enriched
-                                .unwrap_or_else(|| GENERIC_BASH_CONTAINMENT_MESSAGE.to_string()),
-                        );
+                        // D1/D2: a target still carrying unexpanded shell
+                        // syntax was never a literal path — name the
+                        // resolution failure and quote the raw token instead
+                        // of the containment-denial wording.
+                        if has_unexpanded_shell_syntax(&c.raw) {
+                            denial = Some(unresolvable_bash_target_message(&c.raw));
+                        } else {
+                            let enriched = describe_cross_worktree_target(
+                                &root,
+                                &cwd,
+                                &Value::String(c.raw.clone()),
+                            )?;
+                            denial = Some(
+                                enriched.unwrap_or_else(|| {
+                                    GENERIC_BASH_CONTAINMENT_MESSAGE.to_string()
+                                }),
+                            );
+                        }
                     }
                 }
                 if denial.is_none() && rel_paths.is_empty() && targets.broad_write {

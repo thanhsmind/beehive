@@ -22,6 +22,33 @@ pub(crate) const GENERIC_BASH_CONTAINMENT_MESSAGE: &str =
     "bee write guard denied Bash: one or more extracted targets could not be canonically contained inside the physical worktree. \
 FIX: use plain in-worktree paths without traversal, outside absolute paths, or symlink escapes.";
 
+// ─── unresolvable shell syntax (guard-refusal-wording D1/D2) ─────────────
+
+/// D1: a raw target token still carrying unexpanded shell syntax (`$VAR`,
+/// `${VAR}`, or a backquote command substitution) was never expanded by a
+/// shell — the guard only ever sees the literal characters. Resolving it as
+/// though it were a plain relative path produces a fake in-repo path (e.g.
+/// `$WT/foo` lexically "resolves" under cwd), so every path-resolution entry
+/// point must classify it unresolvable BEFORE it is walked as a path.
+pub(crate) fn has_unexpanded_shell_syntax(raw: &str) -> bool {
+    raw.contains('$') || raw.contains('`')
+}
+
+/// D2: the unresolvable-target refusal for a shell-syntax token — distinct
+/// from both `GENERIC_BASH_CONTAINMENT_MESSAGE` (a resolved-but-not-contained
+/// target) and the gate's "writing X is blocked" sentences (a resolved,
+/// in-repo target the phase itself denies). This message never lets the raw
+/// token stand in for a path: it names the resolution failure and quotes the
+/// token as the shell fragment it is.
+pub(crate) fn unresolvable_bash_target_message(raw: &str) -> String {
+    format!(
+        "bee write guard denied Bash: the target \"{raw}\" could not be resolved — it still carries \
+unexpanded shell syntax ($VAR or a backquote command substitution) the guard cannot see through, so it is \
+refused rather than risking an unchecked write. \
+FIX: expand the variable or command substitution yourself before invoking the write, or pass a plain in-worktree path."
+    )
+}
+
 // ─── harness-owned surface allowlist (guard-hardening E1) ──────────────────
 
 /// The harness-owned write surfaces exempt from the outside-root containment
@@ -207,6 +234,10 @@ pub(crate) fn canonical_rel_path(root: &str, cwd: &str, raw: Option<&Value>) -> 
         Some(Value::String(s)) if !s.is_empty() => s.clone(),
         _ => return Ok(None),
     };
+    // D1: unexpanded shell syntax never resolves as a literal path.
+    if has_unexpanded_shell_syntax(&raw_s) {
+        return Ok(None);
+    }
     if is_home_prefixed(&raw_s) {
         return Ok(None);
     }
@@ -263,6 +294,10 @@ pub(crate) fn resolve_target_realpath(cwd: &str, root: &str, raw: &Value) -> R<O
         Value::String(s) if !s.is_empty() => s.clone(),
         _ => return Ok(None),
     };
+    // D1: unexpanded shell syntax never resolves as a literal path.
+    if has_unexpanded_shell_syntax(&raw_s) {
+        return Ok(None);
+    }
     if is_home_prefixed(&raw_s) {
         return Ok(None);
     }
