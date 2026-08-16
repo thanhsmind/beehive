@@ -650,6 +650,68 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("otto holds \"src/held.txt\" (cell cell-1)"));
     }
 
+    // D1: cp/mv check only the destination operand — a source operand must
+    // never surface in a refusal.
+    #[test]
+    fn cp_under_a_gated_phase_refuses_naming_the_destination_only() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "src/dst.txt", "otto", "cell-1", None, "lease");
+        let e = expect_done(
+            json!({"tool_name":"Bash","tool_input":{"command":"cp src/held_source.txt src/dst.txt"},"agent_name":"mel"}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee reservation conflict"));
+        assert!(e.stderr.contains("otto holds \"src/dst.txt\" (cell cell-1)"));
+        assert!(!e.stderr.contains("held_source.txt"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn mv_under_a_gated_phase_refuses_naming_the_destination_only() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "src/dst.txt", "otto", "cell-1", None, "lease");
+        let e = expect_done(
+            json!({"tool_name":"Bash","tool_input":{"command":"mv src/held_source.txt src/dst.txt"},"agent_name":"mel"}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee reservation conflict"));
+        assert!(e.stderr.contains("otto holds \"src/dst.txt\" (cell cell-1)"));
+        assert!(!e.stderr.contains("held_source.txt"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn cp_with_target_directory_flag_refuses_naming_the_directory_only() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "held_dir", "otto", "cell-1", None, "lease");
+        let e = expect_done(
+            json!({"tool_name":"Bash","tool_input":{"command":"cp a.txt b.txt -t held_dir"},"agent_name":"mel"}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("otto holds \"held_dir\" (cell cell-1)"));
+        assert!(!e.stderr.contains("a.txt") && !e.stderr.contains("b.txt"), "{}", e.stderr);
+    }
+
+    // A compound command ending in a null redirect must never be refused
+    // because of that redirect token — the extractor must not turn it into
+    // a bogus path operand.
+    #[test]
+    fn null_redirect_tail_never_becomes_a_refusable_target() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "src/held.txt", "otto", "cell-1", None, "lease");
+        for cmd in [
+            "cp src/held.txt safe.txt 2>/dev/null",
+            "rm safe.txt 2>>/dev/null",
+            "mv src/other.txt safe.txt &>/dev/null",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            // None of these name the reserved file as a destination, so the
+            // guard must not deny on the redirect tail alone.
+            assert!(!e.stderr.contains("bee reservation conflict"), "{cmd}: {}", e.stderr);
+        }
+    }
+
     #[test]
     fn intent_reservation_allows_with_warning() {
         let fx = build_fixture("swarming", true);
@@ -2382,6 +2444,53 @@ use std::process::ExitCode;
         assert_eq!(t.paths, vec!["f.txt"]);
         let t = extract_bash_targets("node x.mjs > out.log && echo done");
         assert_eq!(t.paths, vec!["out.log"]);
+    }
+
+    // ── D1: cp/mv operand roles + fd-digit/ampersand null redirects ────────
+
+    #[test]
+    fn extract_bash_targets_cp_mv_take_only_the_last_operand_as_target() {
+        let t = extract_bash_targets("cp src.txt dst.txt");
+        assert_eq!(t.paths, vec!["dst.txt"], "source must never be extracted");
+        let t = extract_bash_targets("mv src.txt dst.txt");
+        assert_eq!(t.paths, vec!["dst.txt"], "source must never be extracted");
+        // multiple sources, last operand still wins
+        let t = extract_bash_targets("cp a.txt b.txt c.txt dst_dir");
+        assert_eq!(t.paths, vec!["dst_dir"]);
+    }
+
+    #[test]
+    fn extract_bash_targets_cp_mv_honors_target_directory_flag() {
+        let t = extract_bash_targets("cp -v a.txt b.txt -t dst_dir");
+        assert_eq!(t.paths, vec!["dst_dir"], "{:?}", t.paths);
+        let t = extract_bash_targets("cp a.txt --target-directory=dst_dir");
+        assert_eq!(t.paths, vec!["dst_dir"], "{:?}", t.paths);
+        let t = extract_bash_targets("mv a.txt b.txt --target-directory dst_dir");
+        assert_eq!(t.paths, vec!["dst_dir"], "{:?}", t.paths);
+    }
+
+    #[test]
+    fn extract_bash_targets_fd_digit_and_ampersand_null_redirects_never_become_targets() {
+        // Previously the rm/mv/cp/mkdir/touch/tee operand loop never called
+        // match_redirect, so a glued fd-digit redirect like `2>/dev/null`
+        // was collected as a literal, bogus path operand.
+        let t = extract_bash_targets("rm foo 2>/dev/null");
+        assert_eq!(t.paths, vec!["foo"], "{:?}", t.paths);
+        let t = extract_bash_targets("rm foo 2>>/dev/null");
+        assert_eq!(t.paths, vec!["foo"], "{:?}", t.paths);
+        // `&>/dev/null` glued: the tokenizer always splits a bare `&` into its
+        // own token, so this arrives as ["&", ">/dev/null"] — both forms must
+        // still resolve to no bogus target.
+        let t = extract_bash_targets("rm foo &>/dev/null");
+        assert_eq!(t.paths, vec!["foo"], "{:?}", t.paths);
+        let t = extract_bash_targets("cp src.txt dst.txt 2>/dev/null");
+        assert_eq!(t.paths, vec!["dst.txt"], "{:?}", t.paths);
+        let t = extract_bash_targets("mv src.txt dst.txt &>/dev/null");
+        assert_eq!(t.paths, vec!["dst.txt"], "{:?}", t.paths);
+        // a real (non-null) redirect glued to the operand list still extracts
+        assert!(match_redirect("&>/dev/null").is_some());
+        assert!(match_redirect("&>>/dev/null").is_some());
+        assert_eq!(match_redirect("&>out.log").as_deref(), Some("out.log"));
     }
 
     #[test]

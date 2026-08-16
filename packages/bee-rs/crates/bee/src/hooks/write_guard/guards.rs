@@ -709,16 +709,81 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
             continue;
         }
         if matches!(cmd, "rm" | "mv" | "cp" | "mkdir" | "touch" | "tee") {
+            let is_cp_mv = matches!(cmd, "cp" | "mv");
             let mut saw_any = false;
             let mut last = i;
             let mut j = i + 1;
+            // D1: cp/mv have operand roles — every SOURCE is a read, only the
+            // LAST non-flag operand (or the -t/--target-directory argument)
+            // is a write target. rm/mkdir/touch/tee are unchanged: every
+            // non-flag, non-redirect operand is a target.
+            let mut operands: Vec<String> = Vec::new();
+            let mut target_dir: Option<String> = None;
             while j < tokens.len() && !is_separator(&tokens[j]) {
-                if !is_flag(&tokens[j]) {
-                    add_target(&tokens[j], &mut broad_write, &mut paths);
+                let t = &tokens[j];
+                // A redirect glued into this same argv (`2>/dev/null`,
+                // `&>/dev/null`, split or attached) is never an operand —
+                // route it through the same add_target/dev-null-skip path
+                // the top-level loop uses instead of collecting it as a file.
+                if let Some(inline) = match_redirect(t) {
+                    if !inline.is_empty() {
+                        if !inline.starts_with('&') {
+                            add_target(&inline, &mut broad_write, &mut paths);
+                        }
+                        last = j;
+                        j += 1;
+                    } else if let Some(next) = tokens.get(j + 1) {
+                        if !is_separator(next) && !next.starts_with('&') {
+                            add_target(next, &mut broad_write, &mut paths);
+                            last = j + 1;
+                            j += 2;
+                        } else {
+                            last = j;
+                            j += 1;
+                        }
+                    } else {
+                        last = j;
+                        j += 1;
+                    }
+                    continue;
+                }
+                if is_cp_mv && (t == "-t" || t == "--target-directory") {
+                    if let Some(dir) = tokens.get(j + 1) {
+                        target_dir = Some(dir.clone());
+                        saw_any = true;
+                        last = j + 1;
+                        j += 2;
+                        continue;
+                    }
+                }
+                if is_cp_mv {
+                    if let Some(dir) = t.strip_prefix("--target-directory=") {
+                        target_dir = Some(dir.to_string());
+                        saw_any = true;
+                        last = j;
+                        j += 1;
+                        continue;
+                    }
+                }
+                if !is_flag(t) {
+                    if is_cp_mv {
+                        operands.push(t.clone());
+                    } else {
+                        add_target(t, &mut broad_write, &mut paths);
+                    }
                     saw_any = true;
                 }
                 last = j;
                 j += 1;
+            }
+            if is_cp_mv {
+                if let Some(dir) = target_dir {
+                    // Every operand is a source when -t/--target-directory
+                    // names the write target explicitly.
+                    add_target(&dir, &mut broad_write, &mut paths);
+                } else if let Some(dst) = operands.last() {
+                    add_target(dst, &mut broad_write, &mut paths);
+                }
             }
             if cmd == "rm" && !saw_any {
                 broad_write = true;
@@ -731,11 +796,16 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
     BashTargets { paths, broad_write }
 }
 
-/// /^\d?>{1,2}(.*)$/ → Some(captured tail) when the token is a redirect.
+/// /^(\d|&)?>{1,2}(.*)$/ → Some(captured tail) when the token is a redirect.
+/// D1: the `&` branch is the combined stdout+stderr form (`&>`, `&>>`) — a
+/// standalone `&` (background operator) never reaches here since it has no
+/// following `>` and falls through to `None`, same as before this cell.
 pub(crate) fn match_redirect(token: &str) -> Option<String> {
     let chars: Vec<char> = token.chars().collect();
     let mut idx = 0usize;
-    if idx < chars.len() && chars[idx].is_ascii_digit() {
+    if chars.first() == Some(&'&') {
+        idx = 1;
+    } else if idx < chars.len() && chars[idx].is_ascii_digit() {
         // optional single digit — but only if a '>' follows it or starts the token
         if chars.get(idx + 1) == Some(&'>') {
             idx += 1;
