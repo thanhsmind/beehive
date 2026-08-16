@@ -29,3 +29,21 @@ variable). Operator cannot tell a gate refusal from a target-resolution miss.
 
 ## Open questions
 None.
+
+## P1 fix round (review rev-backlog-fixes-20260816, approved by user 2026-08-16)
+
+Review found two P1s in grw-1's implementation; user said fix.
+
+- D4: The shell-syntax classification applies ONLY to the Bash surface. It moves
+  out of the shared resolvers (`canonical_rel_path`, `resolve_target_realpath`)
+  so Edit/Write/MultiEdit `file_path` and apply_patch targets — literal strings
+  no shell expands — resolve exactly as before grw-1 (a file named `Foo$Bar.java`
+  is a valid literal there).
+- D5: On the Bash surface an unresolvable shell-syntax token DENIES outright,
+  before any companion/delegate branch. With `.bee/companion-session.json`
+  present, a `$`/backquote Bash target must still deny — never Delegate into the
+  dispatcher's fail-open allow.
+- D6: Tests: (a) edit()/patch() twins proving a literal `$`-named file_path is
+  allowed again on those surfaces and denied paths keep old wording; (b) a
+  companion-marker + `$VAR` Bash case asserting deny with the D2 wording;
+  (c) the three existing Bash regressions stay green unchanged.

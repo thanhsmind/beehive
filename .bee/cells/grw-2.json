@@ -1,0 +1,53 @@
+{
+  "id": "grw-2",
+  "title": "Scope the shell-syntax classification to the Bash surface and deny before the companion delegate",
+  "feature": "guard-refusal-wording",
+  "lane": "standard",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/guard-refusal-wording/CONTEXT.md"
+  ],
+  "decisions": [
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "must_haves": {
+    "truths": [
+      "An Edit/Write/MultiEdit file_path or apply_patch target literally named with $ or backquote resolves exactly as before grw-1 (allowed when in-tree; old wording when denied)",
+      "A Bash target with unexpanded shell syntax denies with the D2 resolution-failure wording even when .bee/companion-session.json exists — it never reaches the Delegate/fail-open path",
+      "The three grw-1 Bash regressions stay green unchanged; the full suite is green"
+    ]
+  },
+  "action": "Per CONTEXT.md P1 fix round D4-D6: (D4) move the has_unexpanded_shell_syntax early-returns OUT of the shared canonical_rel_path and resolve_target_realpath (hook_local.rs:238,:298) and apply the classification only on the Bash surface (main.rs Bash branch), so Edit/Write/MultiEdit (main.rs:267) and apply_patch (main.rs:156) resolve literal paths exactly as before grw-1. (D5) in the Bash branch, an unresolvable shell-syntax token produces the D2 denial BEFORE the companion_mount_rel branch can turn it into Err(Nd)/Delegate — with .bee/companion-session.json present the same command still exits 2 with the D2 wording, never the dispatcher's fail-open allow. (D6) tests: edit() and patch() cases proving a literal $-named target is allowed in-tree again on those surfaces (and a denied one keeps its old wording), a companion-marker + $VAR bash() case asserting the D2 denial, existing three grw-1 bash() regressions untouched.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "All three must_haves truths hold with named tests; cargo suite green",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "w-grw-2",
+    "outcome": "Scoped shell-syntax classification to Bash surface; Edit/Write/MultiEdit and apply_patch resolve literal targets again, Bash denies with D2 wording before companion delegate",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T02:04:57.172Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e499dfc3-c889-41e5-b4a7-381b38596b5e",
+    "claimed_at": "2026-08-16T01:49:32.935Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T02:04:38.289Z"
+  }
+}

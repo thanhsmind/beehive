@@ -1,0 +1,90 @@
+{
+  "id": "rev-backlog-fixes-20260816",
+  "requested_by": "user",
+  "requested_at": "2026-08-16T01:04:23.866Z",
+  "scope_description": "The two backlog fixes landed 2026-08-16: gate-help-drift (ghd-1, help payload + drift test) and guard-refusal-wording (grw-1, unresolvable Bash target refusal wording), cumulative diff from before the first merge to the second merge commit",
+  "included": [
+    {
+      "type": "cell",
+      "id": "ghd-1"
+    },
+    {
+      "type": "cell",
+      "id": "grw-1"
+    }
+  ],
+  "excluded": [],
+  "baseline": "c4a039b15f67fb6ce228222e3690d611da4b37dd",
+  "head": "90dd70aa8ff0d0bbec98214745f342d90aa25aa5",
+  "reviewer_manifest": [],
+  "verification_preflight": {
+    "checked_at": "2026-08-16T01:04:23.866Z",
+    "cells_checked": [],
+    "passed": true
+  },
+  "findings": [
+    {
+      "severity": "P1",
+      "cell": "grw-1",
+      "claim": "D1 shell-syntax classification reaches the Edit/Write/MultiEdit and apply_patch surfaces: a literal file named with $ or backquote flips allow-to-deny with the forbidden containment wording, and zero tests cover any non-Bash surface",
+      "evidence": "hook_local.rs:238,:298 shared resolvers; main.rs:156,:267 call sites; differential old-allow/new-deny proven by two reviewers; tests.rs additions are bash() only",
+      "remedy": "fix cell: scope classification to the Bash branch (or bash flag param); add edit()/patch() twins of the three Bash tests; decide and pin the Edit-surface wording"
+    },
+    {
+      "severity": "P1",
+      "cell": "grw-1",
+      "claim": "With .bee/companion-session.json present, a shell-syntax target the old binary denied natively now returns Delegate and the dispatcher fail-opens to allow (exit 0) — a new allow on a guard path",
+      "evidence": "companion_mount_rel Err(Nd) -> hooks/mod.rs:138 emit_undecidable; differential old exit 2 / new exit 0 proven; matches critical pattern: a fail-open host swallows fail-closed throws into an allow",
+      "remedy": "fix cell: shell-syntax classification must deny before the companion branch (never delegate an unresolvable token); add expect_delegate/deny test for companion-marker + $VAR"
+    },
+    {
+      "severity": "P2",
+      "cell": "ghd-1",
+      "claim": "Drift test hardcodes KNOWN_FLAGS as a const copy of set_gate.rs keys_known: it catches a payload deletion but cannot catch a NEW handler flag shipping unlisted — the exact defect p-62f0566d named can recur",
+      "evidence": "registry_contracts.rs:169-179; corroborated independently by two reviewers; kept P2 by severity definition (no shipped behavior wrong) despite the corroboration-promotes rule — named deviation",
+      "remedy": "derive the list from include_str of set_gate.rs per opencode_plugin_contracts.rs:163 precedent; optionally add exact-set and reverse-direction (declared-but-rejected) assertions"
+    },
+    {
+      "severity": "P3",
+      "cell": "grw-1",
+      "claim": "Refusal echoes the raw token verbatim, unbounded and unescaped, to stderr (quoted tokens may carry newlines/control chars)",
+      "evidence": "hook_local.rs:41-49; main.rs:464-467; guards.rs:283-292 tokenizer preserves newlines inside quotes",
+      "remedy": "bound token length and strip control characters in the message"
+    },
+    {
+      "severity": "P3",
+      "cell": "grw-1",
+      "claim": "A genuinely literal $ filename has no compliant Bash spelling and the FIX line prescribes expanding a variable that does not exist; quoting/escaping collapse post-tokenize",
+      "evidence": "hook_local.rs:33 post-tokenizer classification; probes C/D identical refusal",
+      "remedy": "message names the literal-$ case; tokenizer work stays out of scope per CONTEXT"
+    },
+    {
+      "severity": "P3",
+      "cell": "grw-1",
+      "claim": "Mixed command: an unguarded check_write loop overwrites the D2 resolution-failure message, so the operator never learns the unresolvable target",
+      "evidence": "main.rs:313-332 loop not guarded by denial.is_none(); probe K",
+      "remedy": "guard the loop or prefer the earlier denial; add mixed-command test"
+    },
+    {
+      "severity": "P3",
+      "cell": "grw-1",
+      "claim": "The backlog items second symptom remains: a mis-extracted non-path token (cp source operand, find {} braces) is still named as a path in refusals; p-aa37ec95 was closed with the remainder split to a new extractor PBI",
+      "evidence": "probe G writing {} is refused; follow-up PBI filed 2026-08-16 for extractor operand roles",
+      "remedy": "the filed extractor PBI covers it; no further action in this scope"
+    },
+    {
+      "severity": "P3",
+      "cell": "grw-1",
+      "claim": "Two new tests use the message function itself as their own expectation (self-referential assert_eq); only the contains() lines pin real content. Pre-existing guard family gaps put on record: brace expansion not classified, cd not modelled",
+      "evidence": "tests.rs:2869,:2880; no { handling and no cd handling in guards.rs",
+      "remedy": "pin literal message fragments; consider extending has_unexpanded_shell_syntax to brace/glob metacharacters and a cd-in-segment opaque flag as future work"
+    }
+  ],
+  "uat": [],
+  "decision": {
+    "status": "pending",
+    "review": null
+  },
+  "created_at": "2026-08-16T01:04:23.866Z",
+  "updated_at": "2026-08-16T01:13:53.389Z"
+}
