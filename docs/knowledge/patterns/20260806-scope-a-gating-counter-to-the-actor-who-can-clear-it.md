@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   decisions: [counter-teeth D4 (the first route-less claim keeps the warning; the second and later refuse), "64ad772d (D4 refined during execution: the counter is scoped per feature and session, and the already-claimed contention refusal outranks the no-route deny)"]
-  sources: ["counter-teeth cell ct-5 (per-(feature, session) counter under the control root, bumped only after a successful claim; trace .bee/cells/ct-5.json, commits 4a0d1b82 and 95ec0639, 2026-08-04 — cells 75 passed, concurrency 13 passed, full suite green)", "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:723-815 (the counter's key, path, and bump site)", "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs:1081-1113 (the ordering comment: a real race loser must see the contention refusal, never this one)"]
+  sources: ["counter-teeth cell ct-5 (per-(feature, session) counter under the control root, bumped only after a successful claim; trace .bee/cells/ct-5.json, commits 4a0d1b82 and 95ec0639, 2026-08-04 — cells 75 passed, concurrency 13 passed, full suite green)", "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs (no_route_claim_key / no_route_claim_count_path / bump_no_route_claim_count — the counter's key, path, and bump site)", "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs (the D4 ordering comment in the claim_cell_cross_session_ex flow: a real race loser must see the contention refusal, never this one)"]
   polarity: practice
   critical: false
   evidence: exercised

@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism, workflow-state]
   decisions: ["sweep-at-every-door: a feature worktree that runs the bee chain stays GRANTED; the split is by role, not by store — orchestration verbs run from main, the worker edits and caps in the worktree, 2026-08-13"]
-  sources: [".bee/decisions.jsonl events 884f4350, 3ccbfe9a, d7b83394 (the wrong claim, the supersession built on it, and the correction)", "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md:100-117 (the finish door was widened 2026-08-04, stating 'declared tests with cwd in the worktree — the changed code is the evidence')", "backlog finding: cells finish commit-trailer check scans main HEAD instead of the current worktree (filed against a symptom only the dropped grant produced)", "cells sad-1, sad-2 (.bee/cells/archive/sweep-at-every-door/)"]
+  sources: [".bee/decisions.jsonl events 884f4350, 3ccbfe9a, d7b83394 (the wrong claim, the supersession built on it, and the correction)", "docs/knowledge/areas/worktree-parallelism/control-plane-topology.md (### A worker caps its own cell, and a lane closes — the finish door was widened 2026-08-04, stating 'declared tests with cwd in the worktree — the changed code is the evidence')", "backlog finding: cells finish commit-trailer check scans main HEAD instead of the current worktree (filed against a symptom only the dropped grant produced)", "cells sad-1, sad-2 (.bee/cells/archive/sweep-at-every-door/)"]
   polarity: pitfall
   critical: true
   evidence: observed

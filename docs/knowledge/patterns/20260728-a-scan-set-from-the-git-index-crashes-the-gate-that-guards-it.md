@@ -7,7 +7,7 @@ timestamp: 2026-07-28
 bee:
   id: pattern-20260728-a-scan-set-from-the-git-index-crashes-the-gate-that-guards-it
   lifecycle: active
-  sources: ["validation-diet cell vd-13 (deriveScanSet existence filter, scripts/tests/test_doctrine_parity.mjs:136, trace .bee/cells/vd-13.json, commit 656407c9, 2026-07-28)", "scripts/tests/test_portable_paths.mjs:23-34 (same defect, still live at close)", "scripts/tests/test_installers_e2e.mjs:191-199 (same source, correctly guarded)", docs/history/learnings/20260728-validation-diet.md L2]
+  sources: ["validation-diet cell vd-13 (deriveScanSet existence filter, scripts/tests/test_doctrine_parity.mjs:136, trace .bee/cells/vd-13.json, commit 656407c9, 2026-07-28)", "removed 2026-08-16: scripts/tests/test_portable_paths.mjs no longer exists on disk (JS-era test, retired with the migration; illustrated the quiet non-crashing half of this pattern's defect — see the pattern body above)", "removed 2026-08-16: scripts/tests/test_installers_e2e.mjs no longer exists on disk (JS-era test, retired with the migration; illustrated the correctly fs.existsSync-guarded counter-example — see the pattern body above)", docs/history/learnings/20260728-validation-diet.md L2]
   polarity: pitfall
   critical: false
 ---

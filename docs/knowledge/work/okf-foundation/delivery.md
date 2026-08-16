@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   required_context: [work/okf-foundation/work-item.md]
   decisions: [D17-D38 active set (docs/history/okf-foundation/CONTEXT.md), "D29 (F1 proof area: docs/specs/advisor-protocol.md)", D30 (workflow-state.md decomposition locked as F2 input), D34 (ships list + guard propagation — ledger/manifest/plugin trees/session-close hook), "D35 (coverage report law: every numbered source anchor lands in exactly one concept)", D37 (pointer-stub anchor map — citations rewired in the same cell as the stub)]
-  sources: [docs/knowledge/work/okf-foundation/work-item.md, .bee/cells/okf-1.json, .bee/cells/okf-2.json, .bee/cells/okf-3.json, .bee/cells/okf-4.json, .bee/cells/okf-5.json, .bee/cells/okf-6.json, .bee/cells/okf-7.json, .bee/cells/okf-8.json, .bee/cells/okf-9.json]
+  sources: [docs/knowledge/work/okf-foundation/work-item.md, "removed 2026-08-16: .bee/cells/okf-1.json through .bee/cells/okf-9.json no longer exist on disk (cell traces, pruned after the okf-foundation feature closed, 2026-07-22) — every line in this delivery record's What Shipped/Verify/Deviations sections was copied verbatim from those traces at promote time and is the surviving record"]
   lane: high-risk
 ---
 
