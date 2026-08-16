@@ -188,6 +188,18 @@ fn capture_queue_blocker_line(ctx: &Ctx, cq: &Value) -> Option<String> {
     ))
 }
 
+/// D2's trigger-registry surfacing (`verbs/triggers`): a due predicate
+/// trigger or an unresolved manual trigger is a blocker — the whole point
+/// of the registry is that a deferred condition cannot sink silently.
+/// `None` when nothing is due and nothing awaits confirmation.
+fn trigger_queue_blocker_line(control: &Path) -> Option<String> {
+    let (due, awaiting) = crate::verbs::triggers::due_and_manual_counts(control);
+    if due == 0 && awaiting == 0 {
+        return None;
+    }
+    Some(format!("{due} trigger(s) due, {awaiting} awaiting confirmation"))
+}
+
 // ─── sweep door (sweep-at-every-door D1/D6) ────────────────────────────────
 //
 // `bee cells claim-next` (handlers_select.rs:620) and `bee orient` (below)
@@ -348,6 +360,15 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     }
     if let Some(cq) = status.get("capture_queue") {
         if let Some(line) = capture_queue_blocker_line(ctx, cq) {
+            blockers.push(json!(line));
+        }
+    }
+    // D2 (knowledge-distill-trigger C2): same control-root resolution
+    // sweep_on_orient already performed above — a deferred condition's
+    // registry entry surfaces here the moment it is due or awaiting a
+    // human's confirmation.
+    if let Ok(control) = sweep_cells::control_root(&ctx.root) {
+        if let Some(line) = trigger_queue_blocker_line(&control) {
             blockers.push(json!(line));
         }
     }

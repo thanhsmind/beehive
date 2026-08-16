@@ -336,7 +336,27 @@ mod tests {
         // `--bypass-level` are the two new spellings. This bump documents
         // flags the handler already accepted; it invents nothing new at the
         // CLI surface.
-        const PINNED_FLAG_COUNT: usize = 150;
+        // 150 -> 153 (knowledge-distill-trigger C2, kdt-2): `triggers add`/
+        // `list`/`resolve` land the deferred-decision trigger registry.
+        // Checked first: `--decision` and `--outcome` already exist
+        // (decisions.log/supersede's "decision" text, cells.finish's
+        // "outcome" result string) and are reused here for a related but
+        // distinct concept each (a decision's id rather than its text; a
+        // trigger's resolution outcome rather than a worker's) — the plan
+        // (docs/history/knowledge-distill-trigger/plan.md C2) names both
+        // flags explicitly, so neither is renamed to force a fresh
+        // reuse-check; no count cost either way since both names already
+        // existed. Three names are genuinely new: `--condition` (the
+        // prose firing condition — prospective, unlike the retrospective
+        // `--reason`/`--note` pair, and not the wait-subject `--subject`
+        // carries either); `--predicate` (a machine-checkable
+        // path-exists/path-missing spec — no existing flag names a
+        // checkable condition, only free text); `--due` (`triggers list`'s
+        // filter to triggers needing a human's attention now — closer to,
+        // but not the same concept as, `reservations.list`'s
+        // `--active-only`, which means "not yet released/expired" rather
+        // than "needs a look").
+        const PINNED_FLAG_COUNT: usize = 153;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

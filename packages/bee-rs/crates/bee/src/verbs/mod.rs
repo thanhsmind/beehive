@@ -33,6 +33,7 @@ pub mod status_full;
 pub mod test_runner;
 pub mod timings;
 pub mod tmp_group;
+pub mod triggers;
 pub mod workflow_store; // library module (no try_native) — never probed below
 pub mod workspace_store; // library module (no try_native) — never probed below
 pub mod worktree;
@@ -96,6 +97,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = tmp_group::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = triggers::try_native(args, t0) {
         return Some(code);
     }
     knowledge::try_native(args, t0)
