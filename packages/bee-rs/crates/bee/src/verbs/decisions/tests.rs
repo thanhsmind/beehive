@@ -1098,8 +1098,7 @@ use std::time::Instant;
         match do_render(tmp.path(), false, true) {
             Ok(Out::Thrown(msg)) => assert_eq!(
                 msg,
-                "decisions render --check: docs\\decisions\\index.md is out of date — run `bee decisions render` to regenerate (never hand-edit it)."
-                    .replace('\\', std::path::MAIN_SEPARATOR_STR)
+                "decisions render --check: docs/decisions/index.md is out of date — run `bee decisions render` to regenerate (never hand-edit it)."
             ),
             _ => panic!("expected drift refusal"),
         }
@@ -1171,7 +1170,6 @@ use std::time::Instant;
         // The sweep walks in readdirSync order (the Node oracle's own order),
         // which the filesystem chooses — so the three hits are asserted as a
         // set. `c.txt`'s "  11111111  " proves the excerpt is trimmed.
-        let native = |p: &str| p.replace('/', std::path::MAIN_SEPARATOR_STR);
         let mut hits: Vec<(String, u64, String)> = files
             .iter()
             .map(|f| {
@@ -1187,12 +1185,12 @@ use std::time::Instant;
             hits,
             vec![
                 (
-                    native("docs/a.md"),
+                    "docs/a.md".to_string(),
                     1,
                     "cites 11111111-2222-3333-4444-555555555555 here".to_string()
                 ),
-                (native("docs/a.md"), 2, "short 11111111 too".to_string()),
-                (native("docs/sub/c.txt"), 1, "11111111".to_string()),
+                ("docs/a.md".to_string(), 2, "short 11111111 too".to_string()),
+                ("docs/sub/c.txt".to_string(), 1, "11111111".to_string()),
             ]
         );
         assert!(text.starts_with("Superseded 11111111-2222-3333-4444-555555555555 with "));
@@ -1227,7 +1225,11 @@ use std::time::Instant;
         stub_files.sort();
         assert_eq!(
             stub_files,
-            vec![native("docs/a.md"), native("docs/a.md"), native("docs/sub/c.txt")]
+            vec![
+                "docs/a.md".to_string(),
+                "docs/a.md".to_string(),
+                "docs/sub/c.txt".to_string(),
+            ]
         );
     }
 
@@ -1699,15 +1701,14 @@ use std::time::Instant;
 
         let queue = read_jsonl(&capture_queue_path(root));
         assert_eq!(queue.len(), 2, "index.md and docfeat's own history excluded: {queue:?}");
-        let native = |p: &str| p.replace('/', std::path::MAIN_SEPARATOR_STR);
         let mut stub_files: Vec<String> =
             queue.iter().map(|s| s["files"][0].as_str().unwrap().to_string()).collect();
         stub_files.sort();
         assert_eq!(
             stub_files,
             vec![
-                native("docs/area.md"),
-                native("docs/history/otherfeat/CONTEXT.md"),
+                "docs/area.md".to_string(),
+                "docs/history/otherfeat/CONTEXT.md".to_string(),
             ]
         );
         for stub in &queue {
