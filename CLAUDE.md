@@ -20,6 +20,15 @@ When running as Opus 5: optimize for wall-clock speed. Finish tasks quickly.
 - Speed never trades away quality: same rigor, same verification, same "done means done". If parallelizing risks a worse result, slow down.
 - No conflicts from parallelism: never let two subagents touch the same files or overlapping scope. Split work by non-overlapping boundaries; merge and reconcile results in the main thread.
 
+## Release
+
+When the user asks for a release: bump the version in
+`.claude-plugin/plugin.json`, make the release commit, then run
+`scripts/release.sh` to the end. The release is done ONLY when the script
+prints its final `OK` line — tag pushed, release-binaries CI green, GitHub
+release carrying the binaries. A release commit without that OK is NOT a
+release; never report a release as done without it.
+
 ## Short responses
 
 It's been a long day and my brain is fried, talk to me like I'm 5.
