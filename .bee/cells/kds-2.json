@@ -1,0 +1,46 @@
+{
+  "id": "kds-2",
+  "feature": "doc-impact-synthesis",
+  "lane": "standard",
+  "tier": "generation",
+  "depends_on": [
+    "kds-1"
+  ],
+  "title": "Impact door at close: sweep the closing feature's decisions, block on surviving citation hits",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/doc-impact-synthesis/CONTEXT.md",
+    "docs/history/doc-impact-synthesis/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/render.rs"
+  ],
+  "action": "Per plan v2 kds-2 (D1b). build_impact_door in close.rs, stub-independent: (1) collect the closing feature's decision ids by reading .bee/decisions.jsonl for decide events whose feature field (kds-1) equals the closing feature — structured field ONLY, no time-window fallback (recorded deviation: pre-kds-1 decisions are kds-4/campaign debt). (2) For each id call sweep_decision_citations (render.rs:419), then EXCLUDE hits in docs/decisions/index.md, docs/history/<closing-feature>/, and the write-guard's generated-tree list (find its path list in hooks/write_guard and reuse, never hand-copy — if reuse is impossible name the deviation on the cap). (3) Any surviving hit => Door{blocking:true} with detail lines file:line + remedy: fix or annotate the citing doc and re-run close (the sweep re-runs fresh, a fixed doc clears itself). Recorded-deferral escape identical in shape to has_knowledge_freshness_deferral_decision (close.rs:687), tag impact-deferral. (4) Slot after the knowledge-freshness door: exit chain region close.rs:1403-1418 and all three doors vecs (close.rs:1182, 1232, 1301) plus the refusal branch listing. Tests (drivers/tests.rs): a doc outside exclusions citing a feature-stamped decision short8 refuses close naming file:line; fixing the doc clears on re-run; index.md and own-history citations never block; deferral decision demotes with reason quoted; a feature with no field-stamped decisions is clear; door absent nothing? no — door always present, detail clear when no hits.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "close refuses when an outside doc cites a closing-feature decision, naming file:line and the fix-and-rerun remedy",
+      "generated index, the feature's own history dir, and generated trees never block",
+      "no time-window collection exists — structured feature field only",
+      "recorded impact-deferral decision demotes the door with its reason in the detail"
+    ]
+  },
+  "status": "open",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
