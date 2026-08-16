@@ -1,0 +1,58 @@
+{
+  "id": "kdt-3",
+  "feature": "knowledge-distill-trigger",
+  "lane": "standard",
+  "tier": "generation",
+  "depends_on": [
+    "kdt-2"
+  ],
+  "title": "Required --relation on decisions log, deferral prose needs --trigger, every scripted call site updated",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/scanners.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/nudges.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee/AGENTS.block.md",
+    "skills/bee-hive/references/scout-and-ticks.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-capturing/references/promotion.md",
+    "docs/07-contracts.md",
+    "docs/03-workflow.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/knowledge-distill-trigger/CONTEXT.md",
+    "docs/history/knowledge-distill-trigger/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/read.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/supersede.rs"
+  ],
+  "action": "Per plan v2 C3 (D3 + D2 write-path law). Runs AFTER kdt-2 (needs trigger-id resolution). (1) New required flag on decisions log: --relation supersedes:<id>[,...] | touches:<id>[,...] | none. supersedes: reuses resolve_supersedes_target (read.rs:275-308) and the existing supersedes field; touches: persists a new touches array of resolved ids; none persists relation:'none'. Refusal without the flag quotes up to 3 dcc-1 conflict_candidates (read.rs:454-503) and teaches the flag in ONE line. Only new decide events owe it; supersede/tag/redact exempt; readers tolerate absent fields on legacy lines; dsh-1 prose-supersession guard still wins over --relation none. (2) D2 law: deferral-shaped decision text (defer/for now/revisit when|if/later) without --trigger <id> naming a registered trigger refuses with a create-the-trigger teach line (mirror dsh-1, verbs_read.rs:275-317); --trigger persists the trigger id on the decision. (3) Internal callers pass explicit relation none: set_gate.rs LogParams at :213,:243,:270. (4) Update every scripted call-site surface in files[]: nudges.rs teach-text (:330,:411,:421), registry_payload.json decisions.log required+example (registry_contracts.rs walks every example — keep green), AGENTS.block.md (+ bee dev regen => AGENTS.md), scout-and-ticks.md:79, gates-and-delegation.md:75 (gate-bypass audit line — must not silently refuse), promotion.md:156, docs/07-contracts.md:144, docs/03-workflow.md:156. Tests: refusal lists candidates; each relation form persists its field; unresolvable touches id refuses; deferral prose without --trigger refuses and with --trigger passes; set_gate waivers still log; legacy-line active/search unaffected; regen chain clean.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "decisions log without --relation refuses, listing up to 3 candidates and the one-line fix",
+      "deferral-shaped text without --trigger refuses with the create-the-trigger line; with --trigger it passes and persists the id",
+      "set_gate waiver decisions still write (explicit relation none)",
+      "every scripted decisions-log call site in the repo passes post-change (grep proves no stale invocation)",
+      "registry_contracts.rs and the regen chain are green"
+    ]
+  },
+  "status": "open",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
