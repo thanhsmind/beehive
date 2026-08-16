@@ -650,6 +650,103 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("otto holds \"src/held.txt\" (cell cell-1)"));
     }
 
+    // D1: cp checks only the destination operand — a source operand must
+    // never surface in a refusal.
+    #[test]
+    fn cp_under_a_gated_phase_refuses_naming_the_destination_only() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "src/dst.txt", "otto", "cell-1", None, "lease");
+        let e = expect_done(
+            json!({"tool_name":"Bash","tool_input":{"command":"cp src/held_source.txt src/dst.txt"},"agent_name":"mel"}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee reservation conflict"));
+        assert!(e.stderr.contains("otto holds \"src/dst.txt\" (cell cell-1)"));
+        assert!(!e.stderr.contains("held_source.txt"), "{}", e.stderr);
+    }
+
+    // P1-1: mv unlinks its source, so mv checks EVERY operand — a held
+    // destination still refuses even though the (unheld) source is also now
+    // extracted, and it names only the destination because that is the one
+    // path actually held.
+    #[test]
+    fn mv_under_a_gated_phase_refuses_naming_the_destination_only() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "src/dst.txt", "otto", "cell-1", None, "lease");
+        let e = expect_done(
+            json!({"tool_name":"Bash","tool_input":{"command":"mv src/held_source.txt src/dst.txt"},"agent_name":"mel"}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee reservation conflict"));
+        assert!(e.stderr.contains("otto holds \"src/dst.txt\" (cell cell-1)"));
+        assert!(!e.stderr.contains("held_source.txt"), "{}", e.stderr);
+    }
+
+    // P1-1: mv of a RESERVATION-HELD SOURCE now raises the conflict too —
+    // before this cell the source was dropped from extraction entirely, so
+    // this shape used to allow silently even though mv unlinks the source.
+    #[test]
+    fn mv_of_a_reservation_held_source_raises_the_conflict() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "src/held_source.txt", "otto", "cell-1", None, "lease");
+        let e = expect_done(
+            json!({"tool_name":"Bash","tool_input":{"command":"mv src/held_source.txt safe_dst.txt"},"agent_name":"mel"}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee reservation conflict"));
+        assert!(e.stderr.contains("otto holds \"src/held_source.txt\" (cell cell-1)"), "{}", e.stderr);
+    }
+
+    // P1-1: mv of a CLI-owned file is a direct-edit-guard hit again — before
+    // this cell, mv's source was never extracted so the guard never saw it.
+    // (An in-worktree destination is used rather than an absolute /tmp path
+    // so the containment check — a separate, pre-existing denial path for a
+    // target outside the worktree — never masks the direct-edit denial this
+    // test pins.)
+    #[test]
+    fn mv_of_a_cli_owned_state_file_denies_again() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("mv .bee/state.json elsewhere.txt"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee direct-edit guard"), "{}", e.stderr);
+        assert!(e.stderr.contains(".bee/state.json"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn cp_with_target_directory_flag_refuses_naming_the_directory_only() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "held_dir", "otto", "cell-1", None, "lease");
+        let e = expect_done(
+            json!({"tool_name":"Bash","tool_input":{"command":"cp a.txt b.txt -t held_dir"},"agent_name":"mel"}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("otto holds \"held_dir\" (cell cell-1)"));
+        assert!(!e.stderr.contains("a.txt") && !e.stderr.contains("b.txt"), "{}", e.stderr);
+    }
+
+    // A compound command ending in a null redirect must never be refused
+    // because of that redirect token — the extractor must not turn it into
+    // a bogus path operand.
+    #[test]
+    fn null_redirect_tail_never_becomes_a_refusable_target() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "src/held.txt", "otto", "cell-1", None, "lease");
+        for cmd in [
+            "cp src/held.txt safe.txt 2>/dev/null",
+            "rm safe.txt 2>>/dev/null",
+            "mv src/other.txt safe.txt &>/dev/null",
+        ] {
+            let e = expect_done(bash(cmd), &fx.root);
+            // None of these name the reserved file as a destination, so the
+            // guard must not deny on the redirect tail alone.
+            assert!(!e.stderr.contains("bee reservation conflict"), "{cmd}: {}", e.stderr);
+        }
+    }
+
     #[test]
     fn intent_reservation_allows_with_warning() {
         let fx = build_fixture("swarming", true);
@@ -2384,6 +2481,64 @@ use std::process::ExitCode;
         assert_eq!(t.paths, vec!["out.log"]);
     }
 
+    // ── D1: cp/mv operand roles + fd-digit/ampersand null redirects ────────
+
+    #[test]
+    fn extract_bash_targets_cp_takes_only_the_last_operand_as_target() {
+        let t = extract_bash_targets("cp src.txt dst.txt");
+        assert_eq!(t.paths, vec!["dst.txt"], "source must never be extracted");
+        // multiple sources, last operand still wins
+        let t = extract_bash_targets("cp a.txt b.txt c.txt dst_dir");
+        assert_eq!(t.paths, vec!["dst_dir"]);
+    }
+
+    // P1-1: mv unlinks its source — every operand mv touches is a write, so
+    // both source(s) and destination extract (unlike cp above).
+    #[test]
+    fn extract_bash_targets_mv_extracts_every_operand_source_and_destination() {
+        let t = extract_bash_targets("mv src.txt dst.txt");
+        assert_eq!(t.paths, vec!["src.txt", "dst.txt"], "{:?}", t.paths);
+        let t = extract_bash_targets("mv a.txt b.txt c.txt dst_dir");
+        assert_eq!(t.paths, vec!["a.txt", "b.txt", "c.txt", "dst_dir"], "{:?}", t.paths);
+    }
+
+    #[test]
+    fn extract_bash_targets_cp_mv_honors_target_directory_flag() {
+        let t = extract_bash_targets("cp -v a.txt b.txt -t dst_dir");
+        assert_eq!(t.paths, vec!["dst_dir"], "{:?}", t.paths);
+        let t = extract_bash_targets("cp a.txt --target-directory=dst_dir");
+        assert_eq!(t.paths, vec!["dst_dir"], "{:?}", t.paths);
+        // P1-1: mv -t extracts the directory PLUS every source (source is a
+        // write since mv unlinks it) — unlike cp, which drops sources.
+        let t = extract_bash_targets("mv a.txt b.txt --target-directory dst_dir");
+        assert_eq!(t.paths, vec!["a.txt", "b.txt", "dst_dir"], "{:?}", t.paths);
+    }
+
+    #[test]
+    fn extract_bash_targets_fd_digit_and_ampersand_null_redirects_never_become_targets() {
+        // Previously the rm/mv/cp/mkdir/touch/tee operand loop never called
+        // match_redirect, so a glued fd-digit redirect like `2>/dev/null`
+        // was collected as a literal, bogus path operand.
+        let t = extract_bash_targets("rm foo 2>/dev/null");
+        assert_eq!(t.paths, vec!["foo"], "{:?}", t.paths);
+        let t = extract_bash_targets("rm foo 2>>/dev/null");
+        assert_eq!(t.paths, vec!["foo"], "{:?}", t.paths);
+        // `&>/dev/null` glued: the tokenizer always splits a bare `&` into its
+        // own token, so this arrives as ["&", ">/dev/null"] — both forms must
+        // still resolve to no bogus target.
+        let t = extract_bash_targets("rm foo &>/dev/null");
+        assert_eq!(t.paths, vec!["foo"], "{:?}", t.paths);
+        let t = extract_bash_targets("cp src.txt dst.txt 2>/dev/null");
+        assert_eq!(t.paths, vec!["dst.txt"], "{:?}", t.paths);
+        // P1-1: mv extracts both source and destination.
+        let t = extract_bash_targets("mv src.txt dst.txt &>/dev/null");
+        assert_eq!(t.paths, vec!["src.txt", "dst.txt"], "{:?}", t.paths);
+        // a real (non-null) redirect glued to the operand list still extracts
+        assert!(match_redirect("&>/dev/null").is_some());
+        assert!(match_redirect("&>>/dev/null").is_some());
+        assert_eq!(match_redirect("&>out.log").as_deref(), Some("out.log"));
+    }
+
     #[test]
     fn extract_bash_targets_sees_through_a_wrapper_redirect() {
         for wrapper in [
@@ -2866,9 +3021,19 @@ use std::process::ExitCode;
         let fx = build_fixture("swarming", true);
         let e = expect_done(bash("printf x > \"$WT/foo.txt\""), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
         assert!(e.stderr.contains("could not be resolved"), "{}", e.stderr);
         assert!(e.stderr.contains("\"$WT/foo.txt\""), "{}", e.stderr);
+        // D3: names the literal-dollar-filename possibility, not only the
+        // variable-expansion remedy.
+        assert!(e.stderr.contains("literal filename"), "{}", e.stderr);
+        assert!(e.stderr.contains("dollar sign"), "{}", e.stderr);
         assert!(!e.stderr.contains("is blocked"), "{}", e.stderr);
         assert!(!e.stderr.contains("canonically contained"), "{}", e.stderr);
     }
@@ -2878,7 +3043,12 @@ use std::process::ExitCode;
         let fx = build_fixture("swarming", true);
         let e = expect_done(bash("touch `whoami`"), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, unresolvable_bash_target_message("`whoami`"));
+        assert!(
+            e.stderr
+                .starts_with("bee write guard denied Bash: the target \"`whoami`\" could not be resolved"),
+            "{}",
+            e.stderr
+        );
         assert!(e.stderr.contains("could not be resolved"), "{}", e.stderr);
         assert!(e.stderr.contains("`whoami`"), "{}", e.stderr);
         assert!(!e.stderr.contains("is blocked"), "{}", e.stderr);
@@ -2897,6 +3067,52 @@ use std::process::ExitCode;
         let e = expect_done(bash(&format!("printf x > \"{bash_target}\"")), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert_eq!(e.stderr, GENERIC_BASH_CONTAINMENT_MESSAGE);
+    }
+
+    // ── D3: bounded/sanitized token echo ────────────────────────────────────
+    // A raw token echoed into a refusal must never carry embedded control
+    // characters (a quoted token with an embedded newline cannot inject
+    // message-shaped lines) and must never run unbounded.
+
+    #[test]
+    fn unresolvable_bash_target_message_strips_control_chars() {
+        let raw = "$WT/foo\nbee write guard denied Bash: fake\x07line\r\ninjected";
+        let msg = unresolvable_bash_target_message(raw);
+        assert!(!msg.contains('\n'), "{}", msg);
+        assert!(!msg.contains('\r'), "{}", msg);
+        assert!(!msg.contains('\u{7}'), "{}", msg);
+        assert!(msg.contains("$WT/foobee write guard denied Bash: fakelineinjected"), "{}", msg);
+    }
+
+    #[test]
+    fn unresolvable_bash_target_message_bounds_long_tokens() {
+        let raw = format!("$WT/{}", "a".repeat(500));
+        let msg = unresolvable_bash_target_message(&raw);
+        assert!(msg.contains('…'), "{}", msg);
+        assert!(!msg.contains(&"a".repeat(500)), "{}", msg);
+    }
+
+    // ── D3: the first decisive refusal survives a mixed command ────────────
+    // A compound command that mixes an unresolvable shell-syntax target
+    // (denied first, by position in the command) with a second, fully
+    // resolved, direct-edit-guarded target must keep the FIRST denial's
+    // wording — the check_write loop over rel_paths must never overwrite a
+    // denial already decided for another candidate in the same command.
+
+    #[test]
+    fn bash_mixed_command_first_denial_wording_survives_check_write() {
+        let fx = build_fixture("swarming", true);
+        let cmd = "printf x > \"$WT/foo.txt\" && printf y > \".bee/state.json\"";
+        let e = expect_done(bash(cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
+        assert!(!e.stderr.contains("direct-edit guard"), "{}", e.stderr);
     }
 
     // ── guard-refusal-wording P1 fix round D4/D5/D6: shell-syntax
@@ -2956,7 +3172,154 @@ use std::process::ExitCode;
         .unwrap();
         let e = expect_done(bash("printf x > \"$WT/foo.txt\""), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
+    }
+
+    // ── write-guard-hardening D2: per-target denials decided before the
+    // delegate escape can fail open ─────────────────────────────────────────
+    // ADV-A/ADV-B: with the marker (or a declared guards.memory_root)
+    // present, a command mixing a shell-syntax target (native denial) and a
+    // containment-failing literal target (that same marker/root makes
+    // undecidable, hence Err(Nd)) must deny — the sibling's Err(Nd) must
+    // never swallow an already-earned denial into a fail-open delegate, in
+    // either target order.
+
+    fn outside_bash_target() -> (tempfile::TempDir, String) {
+        let outside = tempfile::tempdir().unwrap();
+        let target = dunce::canonicalize(outside.path()).unwrap().join("elsewhere.txt");
+        let bash_target = target.to_string_lossy().replace('\\', "/");
+        (outside, bash_target)
+    }
+
+    #[test]
+    fn bash_mixed_marker_denies_before_delegate_order_a() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("companion-session.json"),
+            "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        let cmd = format!("printf x > \"$WT/foo.txt\" && printf y > \"{bash_target}\"");
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
+    }
+
+    #[test]
+    fn bash_mixed_marker_denies_before_delegate_order_b() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("companion-session.json"),
+            "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        let cmd = format!("printf y > \"{bash_target}\" && printf x > \"$WT/foo.txt\"");
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
+    }
+
+    #[test]
+    fn bash_mixed_memory_root_denies_before_delegate_order_a() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("config.json"),
+            "{\"guards\":{\"memory_root\":\"~/.claude/projects/x/memory\"}}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        let cmd = format!("printf x > \"$WT/foo.txt\" && printf y > \"{bash_target}\"");
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
+    }
+
+    #[test]
+    fn bash_mixed_memory_root_denies_before_delegate_order_b() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("config.json"),
+            "{\"guards\":{\"memory_root\":\"~/.claude/projects/x/memory\"}}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        let cmd = format!("printf y > \"{bash_target}\" && printf x > \"$WT/foo.txt\"");
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
+    }
+
+    // Controls: the restructure is fail-closed ONLY. A genuinely undecidable
+    // lone target still delegates (never becomes a false deny), and a
+    // legitimately contained write still runs native (never becomes a
+    // false delegate or deny) even with the marker present.
+
+    #[test]
+    fn bash_lone_containment_failure_still_delegates_with_marker() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("companion-session.json"),
+            "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        expect_delegate(bash(&format!("printf x > \"{bash_target}\"")), &fx.root);
+    }
+
+    #[test]
+    fn bash_lone_containment_failure_still_delegates_with_memory_root() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("config.json"),
+            "{\"guards\":{\"memory_root\":\"~/.claude/projects/x/memory\"}}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        expect_delegate(bash(&format!("printf x > \"{bash_target}\"")), &fx.root);
+    }
+
+    #[test]
+    fn bash_contained_target_stays_native_with_marker_present() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("companion-session.json"),
+            "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n",
+        )
+        .unwrap();
+        let e = expect_done(bash("printf x > src/inside.txt"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
     }
 
     // ── D1 plan.md freeze (bh-1) — feature-from-path + lane-aware gate ─────
@@ -3112,5 +3475,177 @@ use std::process::ExitCode;
         let fx = plan_freeze_fixture("demo", true);
         write_lane(&fx.root, "demo", false);
         let e = expect_done(edit("docs/history/demo/plan.md"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    // ── write-guard-hardening D4: brace expansion and cd opacity are
+    // unresolvable; globs stay untouched ────────────────────────────────────
+
+    #[test]
+    fn brace_expansion_classifier_matches_comma_and_range_forms() {
+        assert!(has_brace_expansion("sta{t,t}e.json"));
+        assert!(has_brace_expansion("f{1..9}.txt"));
+        assert!(has_brace_expansion("f{a..z}.txt"));
+        // a nested comma group still carries a comma somewhere inside the
+        // outer braces — still classified, conservatively.
+        assert!(has_brace_expansion("a{b,{c,d}}e"));
+    }
+
+    #[test]
+    fn brace_expansion_classifier_leaves_singleton_braces_and_globs_alone() {
+        // A brace group with neither a comma nor a `..` range is not
+        // expanded by bash — a literal `{foo}` filename.
+        assert!(!has_brace_expansion("{foo}"));
+        assert!(!has_brace_expansion("plain.txt"));
+        // Plain glob characters are deliberately out of scope for D4.
+        assert!(!has_brace_expansion("*.log"));
+        assert!(!has_brace_expansion("file?.txt"));
+        assert!(!has_brace_expansion("[abc].txt"));
+        assert!(!has_brace_expansion("./*"));
+    }
+
+    #[test]
+    fn brace_expansion_message_quotes_the_bounded_token() {
+        let msg = brace_expansion_bash_target_message("sta{t,t}e.json");
+        assert!(msg.contains("\"sta{t,t}e.json\""), "{}", msg);
+        assert!(msg.contains("brace expansion"), "{}", msg);
+    }
+
+    #[test]
+    fn cd_opaque_message_quotes_the_bounded_token() {
+        let msg = cd_opaque_bash_target_message("out.txt");
+        assert!(msg.contains("\"out.txt\""), "{}", msg);
+        assert!(msg.contains("cd"), "{}", msg);
+    }
+
+    #[test]
+    fn extract_bash_targets_marks_cd_opaque_only_for_targets_after_cd() {
+        // No cd at all — every target is native.
+        let t = extract_bash_targets("touch out.txt");
+        assert_eq!(t.paths, vec!["out.txt"]);
+        assert_eq!(t.cd_opaque, vec![false]);
+
+        // The cd comes first — the target after it is opaque.
+        let t = extract_bash_targets("cd /tmp && touch out.txt");
+        assert_eq!(t.paths, vec!["out.txt"]);
+        assert_eq!(t.cd_opaque, vec![true]);
+
+        // The cd comes AFTER the target — unaffected.
+        let t = extract_bash_targets("touch out.txt && cd /tmp");
+        assert_eq!(t.paths, vec!["out.txt"]);
+        assert_eq!(t.cd_opaque, vec![false]);
+
+        // Mixed: one target before, one after.
+        let t = extract_bash_targets("touch before.txt && cd /tmp && touch after.txt");
+        assert_eq!(t.paths, vec!["before.txt", "after.txt"]);
+        assert_eq!(t.cd_opaque, vec![false, true]);
+    }
+
+    #[test]
+    fn bash_brace_comma_target_denies_naming_brace_expansion() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("touch .bee/sta{t,t}e.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("brace expansion"), "{}", e.stderr);
+        assert!(e.stderr.contains(".bee/sta{t,t}e.json"), "{}", e.stderr);
+        // Never the containment or direct-edit wording — this target was
+        // never resolved as a literal path in the first place.
+        assert!(!e.stderr.contains("direct-edit"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_brace_range_target_denies_naming_brace_expansion() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("touch f{1..9}.txt"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("brace expansion"), "{}", e.stderr);
+        assert!(e.stderr.contains("f{1..9}.txt"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_cd_then_write_denies_naming_cd_opacity() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("cd /tmp && touch out.txt"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("cd"), "{}", e.stderr);
+        assert!(e.stderr.contains("out.txt"), "{}", e.stderr);
+        assert!(e.stderr.contains("could not be resolved"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_write_before_cd_keeps_its_own_denial_wording() {
+        // A write BEFORE the cd is unaffected by D4 — it keeps whatever
+        // verdict it always had (here: the pre-existing direct-edit denial
+        // for .bee/state.json), never the cd-opacity wording.
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("printf x > .bee/state.json && cd /tmp"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee state"), "{}", e.stderr);
+        assert!(!e.stderr.contains("could not be resolved"), "{}", e.stderr);
+    }
+
+    // P1-2: bash sets up redirections before it runs a builtin — a redirect
+    // glued into a cd segment (`cd . > probe.json`) truncates the file for
+    // real, regardless of where cd lands, so it must extract as a native
+    // (non-cd-opaque) target and deny like any other direct write.
+    #[test]
+    fn extract_bash_targets_extracts_a_redirect_inside_a_cd_segment() {
+        let t = extract_bash_targets("cd . > probe.json");
+        assert_eq!(t.paths, vec!["probe.json"], "{:?}", t.paths);
+        assert_eq!(t.cd_opaque, vec![false], "redirect target must not be cd-opaque");
+    }
+
+    #[test]
+    fn bash_cd_segment_redirect_denies_the_protected_file_again() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("cd . > .bee/state.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee direct-edit guard"), "{}", e.stderr);
+        assert!(e.stderr.contains(".bee/state.json"), "{}", e.stderr);
+        // Must be the direct-edit denial, never the cd-opacity wording — the
+        // redirect is a real write that bash sets up before running cd.
+        assert!(!e.stderr.contains("could not be resolved"), "{}", e.stderr);
+    }
+
+    // P1-3: a separator right after -t/--target-directory is never its
+    // argument — swallowing it used to merge the NEXT command's tokens into
+    // this cp's operand list, hiding that command's own write target.
+    #[test]
+    fn extract_bash_targets_cp_target_directory_flag_never_eats_a_separator() {
+        let t = extract_bash_targets("cp -t ; rm -rf .bee/state.json");
+        assert_eq!(t.paths, vec![".bee/state.json"], "{:?}", t.paths);
+        let t = extract_bash_targets("mv -t ; rm -rf .bee/state.json");
+        assert_eq!(t.paths, vec![".bee/state.json"], "{:?}", t.paths);
+    }
+
+    #[test]
+    fn bash_cp_target_directory_separator_swallow_denies_the_next_command_again() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("cp -t ; rm -rf .bee/state.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee direct-edit guard"), "{}", e.stderr);
+        assert!(e.stderr.contains(".bee/state.json"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_plain_glob_target_behaves_exactly_as_before_d4() {
+        // rm *.log — a plain glob character is deliberately NOT classified
+        // by D4; this must resolve exactly as it always has (denied here by
+        // the pre-existing scratch-shape guard on the resolved ".log"
+        // target, never by the new brace-expansion/cd-opacity wording).
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("rm *.log"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("scratch-shape guard"), "{}", e.stderr);
+        assert!(!e.stderr.contains("brace expansion"), "{}", e.stderr);
+        assert!(!e.stderr.contains("could not be resolved"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_plain_glob_write_outside_scratch_shape_allows_as_before_d4() {
+        // A glob target that resolves to a plain path with no glob-specific
+        // guard opinion (unlike ".log") must still resolve and allow.
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("rm *.txt"), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
     }

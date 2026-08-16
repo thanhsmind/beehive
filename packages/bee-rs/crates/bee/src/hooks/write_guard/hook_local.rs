@@ -39,18 +39,116 @@ pub(crate) fn has_unexpanded_shell_syntax(raw: &str) -> bool {
     raw.contains('$') || raw.contains('`')
 }
 
-/// D2: the unresolvable-target refusal for a shell-syntax token — distinct
+/// D3: an echoed raw token can carry embedded ASCII control characters (a
+/// double-quoted Bash argument may hold a literal newline via `$'...'` or an
+/// actual embedded line break) — echoed unbounded, that token could inject
+/// message-shaped lines into stderr. It can also run arbitrarily long. This
+/// strips every ASCII control character (0x00-0x1F, 0x7F) and bounds the
+/// result to 120 chars, appending an ellipsis when truncated, so an echoed
+/// token can never inject fake lines or blow past a one-glance refusal.
+pub(crate) fn bound_echoed_token(raw: &str) -> String {
+    const MAX_CHARS: usize = 120;
+    let cleaned: String = raw.chars().filter(|c| !c.is_ascii_control()).collect();
+    if cleaned.chars().count() > MAX_CHARS {
+        let truncated: String = cleaned.chars().take(MAX_CHARS).collect();
+        format!("{truncated}…")
+    } else {
+        cleaned
+    }
+}
+
+/// D2/D3: the unresolvable-target refusal for a shell-syntax token — distinct
 /// from both `GENERIC_BASH_CONTAINMENT_MESSAGE` (a resolved-but-not-contained
 /// target) and the gate's "writing X is blocked" sentences (a resolved,
 /// in-repo target the phase itself denies). This message never lets the raw
 /// token stand in for a path: it names the resolution failure and quotes the
-/// token as the shell fragment it is.
+/// token as the shell fragment it is — bounded and control-char-stripped via
+/// `bound_echoed_token` so the echoed token can never inject message-shaped
+/// lines into stderr. D3 also widens the FIX sentence: a `$` in the token
+/// need not be an unexpanded variable — it may be a literal filename that
+/// happens to contain a dollar sign, and that possibility gets its own
+/// remedy rather than only ever prescribing variable expansion.
 pub(crate) fn unresolvable_bash_target_message(raw: &str) -> String {
+    let bounded = bound_echoed_token(raw);
     format!(
-        "bee write guard denied Bash: the target \"{raw}\" could not be resolved — it still carries \
+        "bee write guard denied Bash: the target \"{bounded}\" could not be resolved — it still carries \
 unexpanded shell syntax ($VAR or a backquote command substitution) the guard cannot see through, so it is \
 refused rather than risking an unchecked write. \
-FIX: expand the variable or command substitution yourself before invoking the write, or pass a plain in-worktree path."
+FIX: expand the variable or command substitution yourself before invoking the write, or pass a plain in-worktree \
+path — if this is actually a literal filename that happens to contain a dollar sign rather than a variable, \
+escape it (\\$) or quote it so the shell never expands it."
+    )
+}
+
+// ─── brace expansion and cd opacity (write-guard-hardening D4) ─────────────
+//
+// Two more shell rewrites the guard cannot see through: a brace group the
+// shell expands into several literal words before the write-verb ever sees
+// it (`{a,b}`, `{1..9}`), and a `cd` earlier in a compound command that
+// moves the shell's working directory out from under every target this
+// extractor resolves relative to the ORIGINAL cwd. Both are Bash-surface-
+// only, same reasoning as `has_unexpanded_shell_syntax` above — literal
+// Edit/Write/apply_patch file_path values are never shell-rewritten.
+//
+// Plain glob characters (`*`, `?`, `[`) are deliberately NOT classified
+// here — an `rm *.log` style command is everyday usage and its current
+// (unchanged) behavior stands; only a brace group is in scope.
+
+/// D4: true when `raw` carries a `{...}` group containing a comma or a `..`
+/// range — the two shapes bash actually expands (`{a,b,c}`, `{1..9}`,
+/// `{a..z}`). A singleton group with neither (`{foo}`) is not expanded by
+/// bash and is left alone. The tokenizer already collapsed quoted and
+/// unquoted spans into the same token by the time this runs (`tokenize` /
+/// `tokenize_deep`), so a QUOTED literal like `'sta{t,t}e.json'` — a real
+/// filename, never expanded by the shell — is classified the same as the
+/// unquoted form and denied. That is an accepted fail-closed false
+/// positive, consistent with the existing `$`/backquote classification
+/// above (a literal `$FOO` filename is denied the same way a real unexpanded
+/// variable would be).
+pub(crate) fn has_brace_expansion(raw: &str) -> bool {
+    let chars: Vec<char> = raw.chars().collect();
+    let mut i = 0usize;
+    while i < chars.len() {
+        if chars[i] == '{' {
+            if let Some(close_offset) = chars[i + 1..].iter().position(|&c| c == '}') {
+                let inner: String = chars[i + 1..i + 1 + close_offset].iter().collect();
+                if inner.contains(',') || inner.contains("..") {
+                    return true;
+                }
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+/// D4: the unresolvable-target refusal for a brace-expansion token —
+/// sibling of `unresolvable_bash_target_message`, same bounding/stripping
+/// via `bound_echoed_token`.
+pub(crate) fn brace_expansion_bash_target_message(raw: &str) -> String {
+    let bounded = bound_echoed_token(raw);
+    format!(
+        "bee write guard denied Bash: the target \"{bounded}\" could not be resolved — it carries brace \
+expansion ({{a,b}} or {{1..9}}) the shell rewrites into several literal targets before the write-verb ever runs, \
+which the guard cannot see through, so it is refused rather than risking an unchecked write. \
+FIX: expand the brace group yourself into the literal path(s) and invoke the write once per path, or pass a \
+plain in-worktree path — if this is actually a literal filename containing brace characters rather than an \
+expansion, escape or quote it so the shell never expands it."
+    )
+}
+
+/// D4: the unresolvable-target refusal for a target that follows a `cd`
+/// earlier in the same compound Bash command — the shell's working
+/// directory has moved by the time this target's write runs, so the
+/// guard's cwd-relative resolution of it can no longer be trusted.
+pub(crate) fn cd_opaque_bash_target_message(raw: &str) -> String {
+    let bounded = bound_echoed_token(raw);
+    format!(
+        "bee write guard denied Bash: the target \"{bounded}\" could not be resolved — a `cd` earlier in this \
+compound command moves the shell's working directory, so this target no longer resolves against the directory \
+the guard checked it against, and it is refused rather than risking an unchecked write. \
+FIX: run the write in its own Bash call without a preceding cd, or use a path that does not depend on the \
+shell having changed directory."
     )
 }
 
