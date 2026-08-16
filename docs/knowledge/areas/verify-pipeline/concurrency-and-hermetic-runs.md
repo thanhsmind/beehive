@@ -2,7 +2,7 @@
 type: bee.area
 title: Verify Pipeline — concurrency safety and hermetic runs
 description: "Keeping whole-tree regeneration lock-serialized and atomic-swapped, keeping every child suite hermetic to session identity, and the deterministic race/isolation proofs that back both claims."
-timestamp: 2026-07-22
+timestamp: 2026-08-16
 bee:
   id: verify-pipeline-concurrency-and-hermetic-runs
   lifecycle: active
@@ -90,8 +90,15 @@ place is `suite-topology-and-discovery.md`.
 
 ## Pointers (implementation)
 
-- Pointer erratum (2026-08-10): the `scripts/tests/*.mjs` suites named in
-  this concept retired with the Node runner; the race and isolation proofs
-  live in `packages/bee-rs/crates/bee/tests/concurrency.rs` now.
-- **P5** — `bee dev render-skill-trees`, `scripts/tests/test_render_race.mjs` —
-  locked tmp-swap render + race proof.
+- Race and isolation proofs: `packages/bee-rs/crates/bee/tests/concurrency.rs`
+  — five ported oracles (`test_claim_race.mjs` → `one_claimant_wins_*`,
+  `test_reservation_race.mjs` → `distinct_paths_*`/`one_reserver_wins_*`,
+  `test_store_lock.mjs` → `store_lock_*`, `test_state_write_concurrency.mjs`
+  → `a_concurrent_reader_never_sees_*`, `test_worktree_holds_race.mjs` →
+  `every_mirrored_hold_survives_*`). The `scripts/tests/*.mjs` Node suites
+  these ported are retired; no file under `scripts/tests/` exists anymore.
+- `bee dev render-skill-trees` (`packages/bee-rs/crates/bee/src/devtools/skill_trees.rs`)
+  still performs the locked tmp-swap render this concept describes; it has
+  no dedicated native race-suite pointer of its own today (the retired
+  `test_render_race.mjs` is not among the five ported above) — a named,
+  not silently dropped, gap.

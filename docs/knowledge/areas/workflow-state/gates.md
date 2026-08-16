@@ -2,7 +2,7 @@
 type: bee.area
 title: "Workflow State — starting a feature, the phase vocabulary, phase-owned routing, and closing"
 description: "The guarded doors of a feature's life: the all-or-nothing start that can never inherit the previous feature's approvals (now also creating that feature's own workflow record), the closed phase vocabulary, the adviser consult high-risk execution approval demands (the one gate scoped to a plan revision), the phase-owned generic routing mutation, the four-step tail that makes declaring a feature closed impossible, and the soft promote door riding the green path once that tail clears."
-timestamp: 2026-08-14
+timestamp: 2026-08-16
 bee:
   id: workflow-state-gates
   lifecycle: active
@@ -170,17 +170,10 @@ completed behavior-changing unit is still missing from the specs. The refusal
 names *every* such unit by identity — not a count — and discloses the waiver.
 A refused close is side-effect-free: the phase is left exactly as it was.
 
-**The door itself had gone dark, independent of any feature's real debt
-(terminal-phase-port, cell tpp-1, 2026-08-04).** Both routes into the terminal
-state — the default record's and a lane record's alike — had been left
-delegating to a runtime that no longer existed, since an earlier cutover
-replaced it and never carried this one door along. The write refused every
-time, with an error indistinguishable from a real precondition failure, so no
-feature and no lane could enter the terminal state at all — however clean its
-debt — until the door was rebuilt to run natively, the same day the gap was
-found. The door as it now stands has two halves, both native and both loud:
-the learning-capture freshness evidence described below, and the spec-debt
-threshold R78 already defines.
+**The terminal-state door runs natively, on both the default record's and a
+lane record's route alike (terminal-phase-port, cell tpp-1).** It has two
+loud halves: the learning-capture freshness evidence described below, and the
+spec-debt threshold R78 defines.
 
 **The waiver is a door, not a hole.** A feature whose settled behavior genuinely
 belongs in no spec may still be closed, by waiving the debt explicitly. The
@@ -209,92 +202,74 @@ phase is always legal (a failed feasibility check or a negative proof must be
 able to return to planning), and returning to idle — the way an abandoned
 exploration is dropped — is unaffected.
 
-**The wall stands at every door, not only the front one (scribing-integrity
-D1-D3, 8ef2bae6-adjacent decision of 2026-07-24).** Three holes let "done-looking"
-work escape the close wall silently: a session that died after completing its
-units never attempted the close at all; swapping the routing record to a NEW
-feature abandoned the old one's debt with no session left to hit its wall; and
-a per-feature lane close never computed debt (the wall read only the default
-record). Now: swapping away from a feature with standing debt refuses exactly
-like the close does (same exhaustive naming, same audited waiver); a lane close
-checks the LANE feature's own debt against that lane record's own sync stamp;
-and every sync stamp is also appended to a durable ledger
-(`.bee/logs/scribing-runs.jsonl`) — the repair verb may stamp a feature that is
-not the active one, so an orphan left by a dead session can be paid later. A
-global sweep over every completed behavior-changing unit versus its feature's
-best stamp (ledger, lane record, or the default record's own attributed stamp
-— attribution by the stamp's OWN feature field, never by which feature happens
-to be active) surfaces orphaned debt in the status payload and as one loud
-session-start line. Historical pre-ledger features received one audited
-backfill stamp (amnesty decision): the alarm starts at zero real debt, because
-an alarm born crying 119 teaches everyone to ignore the 120th.
+**The wall stands at every door a feature can leave through — the front close
+door, an abandoning swap, and a per-feature lane close alike (scribing-integrity
+D1-D3; feature-swap-door, cell fsd-1).** Swapping the routing record to a new
+feature refuses on the OUTGOING feature's standing debt exactly like close does
+— same exhaustive naming, same audited waiver, naming the ABANDONED feature
+(the waiver logs after the write succeeds, since by then the routing record
+already holds the new feature). A per-feature lane close checks the LANE
+feature's own debt against that lane record's own sync stamp. Every sync stamp
+is also appended to a durable ledger (`.bee/logs/scribing-runs.jsonl`) — a
+repair verb may stamp a feature that is not the active one, so an orphan left
+by a dead session can be paid later. A global sweep over every completed
+behavior-changing unit versus its feature's best stamp (ledger, lane record, or
+the default record's own attributed stamp — attribution by the stamp's OWN
+feature field, never by which feature happens to be active) surfaces orphaned
+debt in the status payload and as one loud session-start line; every
+pre-ledger feature carries one audited backfill stamp (amnesty decision), so
+the alarm starts at zero inherited debt.
 
-**Retiring a unit's records never retires its debt (debt-door-archive, cells
-dda-1/dda-2, 2026-08-06).** A green close moves the closed feature's units out
-of the active store into its archive. Every debt counter used to read the
-active store alone, so from that moment the count was structurally zero and a
-clear door was indistinguishable from a paid debt — the door reported on the
-enumeration, not on the question. Debt is now counted over the active store
-AND the feature's archive, one unit per id with the active copy winning when
-both hold the same id, and the threshold rule is unchanged: an archived unit
-counts exactly when it completed after the feature's best sync stamp. Four
-places compute this count — the close and swap walls, the status payload, the
+**Debt is counted over the active cell store AND the closing feature's
+archive, one unit per id with the active copy winning on a duplicate
+(debt-door-archive, cells dda-1/dda-2).** Retiring a unit's records into the
+archive on a green close never retires its debt: an archived unit counts
+exactly when it completed after the feature's best sync stamp. Four places
+compute this count — the close and swap walls, the status payload, the
 session-start line, and the mid-session nudge — and one parity test pins them
 to the same answer over a fixture that mixes an active unit, an archived one,
-and one id in both places. The wall's own precondition for retiring units is
-unchanged and needs no new door: with the counter honest, retiring records can
-no longer hide what they owe.
+and one id in both places.
 
-**The swap wall asks the same question the close wall asks, and takes the same
-two escapes (feature-swap-door, cell fsd-1, 2026-08-05).** Both doors now count
-debt through one shared counter and read one shared deferral record, so they
-can never disagree about what counts as unpaid: the swap door refuses on the
-OUTGOING feature's standing debt, and clears on either the explicit waiver flag
-or an already-logged capture-deferral decision naming that same outgoing
-feature — the escape the close door has always accepted, now reaching the swap
-too. A waived swap logs its own decision after the write succeeds, naming the
-ABANDONED feature rather than the newly-set one, because by then the routing
-record already holds the new feature and a record naming it would be a lie.
-Nothing reaches disk on a refusal.
-
-**The close door's own threshold now trusts the same ledger the sweep already
-reads (scribing-stamp-seam, decision 5b2f963d).** Before this, the front
-door's threshold came only from the record's own sync-stamp field, and that
-field's write does not always survive a workflow-record-backed feature's next
-rebuild (`workflow-records-and-projections.md` — the rebuild spreads a fresh
-read of the record over the in-memory mutation, so an in-flight stamp can
-vanish before it is ever read back). A feature whose sync had genuinely run
-could therefore still be refused at the close door and pushed into the
-audited waiver for no real reason. The threshold is now the later of the
-record's own stamp and the durable ledger's newest entry for that same
-feature — exactly the source the orphan sweep already trusts — so a sync that
-reached the ledger clears the close door even when the record-field write did
+**The close door's own threshold is the LATER of the record's own sync-stamp
+field and the durable ledger's newest entry for that feature, never the record
+field alone (scribing-stamp-seam, decision 5b2f963d).** A workflow-record
+rebuild spreads a fresh read of the record over the in-memory mutation, so an
+in-flight stamp write can vanish before it is ever read back
+(`workflow-records-and-projections.md`); trusting the ledger as a fallback —
+the same source the orphan sweep already trusts — means a sync that reached
+the ledger still clears the close door even when the record-field write did
 not. A cell capped after the true sync still counts as debt, and a ledger
 entry belonging to a different feature never clears this feature's own debt.
 
-**A soft promote door rides the green path, after the tests door and the
-scribing-debt door (knowledge-loop D2, cell kl-3).** Once a close request has
-already cleared both hard doors above, close now also runs `bee knowledge
-promote` for the closing feature in process, prints one headline naming its
-proposal counts, and writes the full proposal to
-`docs/history/<slug>/promote-proposals.md`. This door is SOFT: unlike the
-tests and scribing-debt doors, it never refuses the close and never changes
-close's exit code. A promote outcome of `None` (the retired Node delegate arm)
-and a `Thrown` outcome (e.g. an `unknown_work` refusal) both degrade to the
-same one warning line rather than two different failure shapes. Nothing the
-door writes lands under `docs/knowledge/` — `promote` still only proposes
-(B5/D38 in `context-and-promote.md`), so this door closes the loop only as far
-as the proposal, exactly as that guarantee promises.
+**A knowledge-freshness door blocks close on stale pointers inside the
+feature's own touched areas and work bundle (knowledge-distill-trigger D1,
+cell kdt-1).** After the tests, scribing-debt, judge-debt, and pattern-check
+doors, close reuses `bee knowledge check`'s own findings — filtered to
+`areas/<touched-area>/` (the same touched-file-to-area match `promote`'s own
+area-update section already applies) plus `work/<feature>/` — and blocks when
+a `dangling_source` or `dangling_required_context` warning falls inside that
+scope; a feature never blocks on a pointer it never touched, so an in-flight
+sibling feature's own stale pointers never tax this close. `not_canonical` and
+`invalid_evidence_state` findings stay report-only in the door's detail;
+prose contradictions (stale claims with no machine detector) are this door's
+named, not silently dropped, limitation. The refusal names every stale
+pointer and its remedy; the same escape the other hard doors use applies
+here too — fix each pointer, or clear it with a logged
+`knowledge-freshness-deferral` decision naming the feature.
 
-**The door computes its proposal before the close sequence retires the
-feature's cells (knowledge-loop D9, cell kl-5).** `build_promotion` mines
-`.bee/cells/*.json`, and the retirement step (`auto_archive_on_close`) moves a
-closing feature's capped cells into `.bee/cells/archive/` — so a door that ran
-after retirement always scanned an empty directory and the proposal came back
-empty on every real close. `build_promotion` is read-only, so moving the call
-ahead of retirement has no side effect other than letting it see the cells the
-closing feature just capped; the headline still prints at the same place in
-close's output.
+**Once every hard door above (tests, scribing-debt, judge-debt, pattern-check,
+knowledge-freshness) has cleared, close also runs `bee knowledge promote` for
+the closing feature in process — a SOFT door (knowledge-loop D2/D9, cells
+kl-3/kl-5).** It prints one headline naming its proposal counts and writes the
+full proposal to `docs/history/<slug>/promote-proposals.md`; it never refuses
+the close and never changes close's exit code — a `None` promote outcome (the
+retired Node delegate arm) and a `Thrown` outcome (e.g. an `unknown_work`
+refusal) both degrade to the same one warning line. `build_promotion` runs
+BEFORE `archive_feature_for_close` retires the closing feature's cells, since
+`build_promotion` mines `.bee/cells/*.json` and a door that ran after
+retirement would scan an empty directory. Nothing this door writes lands under
+`docs/knowledge/` — `promote` still only proposes (B5/D38 in
+`context-and-promote.md`).
 
 **What each actor observes.** The agent attempting a dishonest close gets a
 refusal that says which step was skipped and how to perform it, and the record is
