@@ -345,6 +345,8 @@
     "registry",
     "drift-guard",
     "refusal-wording",
-    "fail-closed"
+    "fail-closed",
+    "traceable-runs",
+    "knowledge-promote"
   ]
 }

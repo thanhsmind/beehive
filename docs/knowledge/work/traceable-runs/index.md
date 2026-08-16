@@ -6,11 +6,8 @@ Deterministic: byte-identical for the same bundle contents — path-sorted entri
 never a generation timestamp or any other wall-clock value.
 -->
 
-# work/
+# work/traceable-runs/
 
-## Sections
+## Concepts
 
-- [full-failure-evidence/](full-failure-evidence/index.md) — 1 concept(s)
-- [okf-foundation/](okf-foundation/index.md) — 3 concept(s)
-- [okf-migration-f2/](okf-migration-f2/index.md) — 1 concept(s)
-- [traceable-runs/](traceable-runs/index.md) — 1 concept(s)
+- [traceable-runs — delivery](delivery.md) — Delivery record proposed by bee knowledge promote for work item traceable-runs: 9 capped cell(s), 7 recorded deviation(s).
