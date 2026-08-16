@@ -350,6 +350,8 @@
     "knowledge-promote",
     "test-escalation",
     "extractor",
-    "cli-surface"
+    "cli-surface",
+    "doc-deferral",
+    "feature-local"
   ]
 }

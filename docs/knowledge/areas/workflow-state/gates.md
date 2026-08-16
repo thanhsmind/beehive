@@ -257,9 +257,36 @@ pointer and its remedy; the same escape the other hard doors use applies
 here too — fix each pointer, or clear it with a logged
 `knowledge-freshness-deferral` decision naming the feature.
 
+**An impact door blocks close when a doc still cites one of the closing
+feature's own decisions without having been reconciled (doc-impact-synthesis
+D1, cell kds-2).** Close collects the feature's decide events by their
+structured `feature` field (never a time window), sweeps `docs/**` for
+citations of each id, and blocks on every surviving hit with file:line and
+the fix-and-rerun remedy — the sweep re-runs fresh each close, so a fixed
+doc clears itself. Excluded, never blocking: the generated
+`docs/decisions/index.md`, the feature's own `docs/history/<feature>/`
+records, and the write-guard's generated trees. Escape: a logged
+`impact-deferral` decision naming the feature.
+
 **A routing door blocks close when a locked D-ID in the closing feature's own
 CONTEXT.md decision table has no area-spec citation and no feature-local
-record (doc-impact-synthesis D2).**
+record (doc-impact-synthesis D2, cell kds-3).** The parser reads the
+canonical `## Locked Decisions` pipe table only; a legacy-form CONTEXT
+(bullet list, split sub-tables) degrades to a loud report-only notice
+naming the historical campaign row — the door's teeth apply to every
+post-door shaping, never retroactively. Routed means the bundle carries
+`<slug> D<n>` (plain, range `D1-D3`, or slash `D1/D3` form) or the
+decision's logged short8; a D-ID cited in more than one area is a
+report-only duplication warning. Escape: `routing-deferral`.
+
+**A doc-deferral door blocks close when deferral-shaped prose in the
+feature's touched docs names no registered trigger (doc-impact-synthesis
+D3, cell kds-3).** The scan set is the capped cells' changed doc files plus
+the feature's own `docs/history/<feature>/` files — full text, bounded by
+that set, never a repo scan; fenced code is exempt. A flagged line clears
+with a same-line trigger citation (backtick trigger id or
+`[[trigger:<id>]]`) resolving in the trigger registry. Escape:
+`doc-deferral`.
 
 **Once every hard door above (tests, scribing-debt, judge-debt, pattern-check,
 knowledge-freshness) has cleared, close also runs `bee knowledge promote` for
