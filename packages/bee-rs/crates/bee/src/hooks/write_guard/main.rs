@@ -391,7 +391,16 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             }
         }
 
-        if !shared_denied {
+        // D3: guarded by `denial.is_none()` too — not only `!shared_denied`.
+        // rel_paths on the Bash surface holds every candidate that DID
+        // resolve, even when a sibling candidate already earned a denial
+        // above (unresolvable shell syntax, or a resolved-but-not-contained
+        // target). Without this guard, check_write's own Deny for one of
+        // those resolved siblings would overwrite the first, already-decided
+        // denial — the LAST reason in loop order would win instead of the
+        // FIRST decisive one. Same principle as the shared-checkout arm just
+        // above: once a denial exists, nothing after it may replace it.
+        if !shared_denied && denial.is_none() {
             for rel in &rel_paths {
                 match check_write(
                     &store_root,

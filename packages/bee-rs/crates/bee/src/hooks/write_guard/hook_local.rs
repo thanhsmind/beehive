@@ -39,18 +39,44 @@ pub(crate) fn has_unexpanded_shell_syntax(raw: &str) -> bool {
     raw.contains('$') || raw.contains('`')
 }
 
-/// D2: the unresolvable-target refusal for a shell-syntax token — distinct
+/// D3: an echoed raw token can carry embedded ASCII control characters (a
+/// double-quoted Bash argument may hold a literal newline via `$'...'` or an
+/// actual embedded line break) — echoed unbounded, that token could inject
+/// message-shaped lines into stderr. It can also run arbitrarily long. This
+/// strips every ASCII control character (0x00-0x1F, 0x7F) and bounds the
+/// result to 120 chars, appending an ellipsis when truncated, so an echoed
+/// token can never inject fake lines or blow past a one-glance refusal.
+pub(crate) fn bound_echoed_token(raw: &str) -> String {
+    const MAX_CHARS: usize = 120;
+    let cleaned: String = raw.chars().filter(|c| !c.is_ascii_control()).collect();
+    if cleaned.chars().count() > MAX_CHARS {
+        let truncated: String = cleaned.chars().take(MAX_CHARS).collect();
+        format!("{truncated}…")
+    } else {
+        cleaned
+    }
+}
+
+/// D2/D3: the unresolvable-target refusal for a shell-syntax token — distinct
 /// from both `GENERIC_BASH_CONTAINMENT_MESSAGE` (a resolved-but-not-contained
 /// target) and the gate's "writing X is blocked" sentences (a resolved,
 /// in-repo target the phase itself denies). This message never lets the raw
 /// token stand in for a path: it names the resolution failure and quotes the
-/// token as the shell fragment it is.
+/// token as the shell fragment it is — bounded and control-char-stripped via
+/// `bound_echoed_token` so the echoed token can never inject message-shaped
+/// lines into stderr. D3 also widens the FIX sentence: a `$` in the token
+/// need not be an unexpanded variable — it may be a literal filename that
+/// happens to contain a dollar sign, and that possibility gets its own
+/// remedy rather than only ever prescribing variable expansion.
 pub(crate) fn unresolvable_bash_target_message(raw: &str) -> String {
+    let bounded = bound_echoed_token(raw);
     format!(
-        "bee write guard denied Bash: the target \"{raw}\" could not be resolved — it still carries \
+        "bee write guard denied Bash: the target \"{bounded}\" could not be resolved — it still carries \
 unexpanded shell syntax ($VAR or a backquote command substitution) the guard cannot see through, so it is \
 refused rather than risking an unchecked write. \
-FIX: expand the variable or command substitution yourself before invoking the write, or pass a plain in-worktree path."
+FIX: expand the variable or command substitution yourself before invoking the write, or pass a plain in-worktree \
+path — if this is actually a literal filename that happens to contain a dollar sign rather than a variable, \
+escape it (\\$) or quote it so the shell never expands it."
     )
 }
 

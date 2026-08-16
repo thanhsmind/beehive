@@ -2975,9 +2975,19 @@ use std::process::ExitCode;
         let fx = build_fixture("swarming", true);
         let e = expect_done(bash("printf x > \"$WT/foo.txt\""), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
         assert!(e.stderr.contains("could not be resolved"), "{}", e.stderr);
         assert!(e.stderr.contains("\"$WT/foo.txt\""), "{}", e.stderr);
+        // D3: names the literal-dollar-filename possibility, not only the
+        // variable-expansion remedy.
+        assert!(e.stderr.contains("literal filename"), "{}", e.stderr);
+        assert!(e.stderr.contains("dollar sign"), "{}", e.stderr);
         assert!(!e.stderr.contains("is blocked"), "{}", e.stderr);
         assert!(!e.stderr.contains("canonically contained"), "{}", e.stderr);
     }
@@ -2987,7 +2997,12 @@ use std::process::ExitCode;
         let fx = build_fixture("swarming", true);
         let e = expect_done(bash("touch `whoami`"), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, unresolvable_bash_target_message("`whoami`"));
+        assert!(
+            e.stderr
+                .starts_with("bee write guard denied Bash: the target \"`whoami`\" could not be resolved"),
+            "{}",
+            e.stderr
+        );
         assert!(e.stderr.contains("could not be resolved"), "{}", e.stderr);
         assert!(e.stderr.contains("`whoami`"), "{}", e.stderr);
         assert!(!e.stderr.contains("is blocked"), "{}", e.stderr);
@@ -3006,6 +3021,52 @@ use std::process::ExitCode;
         let e = expect_done(bash(&format!("printf x > \"{bash_target}\"")), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert_eq!(e.stderr, GENERIC_BASH_CONTAINMENT_MESSAGE);
+    }
+
+    // ── D3: bounded/sanitized token echo ────────────────────────────────────
+    // A raw token echoed into a refusal must never carry embedded control
+    // characters (a quoted token with an embedded newline cannot inject
+    // message-shaped lines) and must never run unbounded.
+
+    #[test]
+    fn unresolvable_bash_target_message_strips_control_chars() {
+        let raw = "$WT/foo\nbee write guard denied Bash: fake\x07line\r\ninjected";
+        let msg = unresolvable_bash_target_message(raw);
+        assert!(!msg.contains('\n'), "{}", msg);
+        assert!(!msg.contains('\r'), "{}", msg);
+        assert!(!msg.contains('\u{7}'), "{}", msg);
+        assert!(msg.contains("$WT/foobee write guard denied Bash: fakelineinjected"), "{}", msg);
+    }
+
+    #[test]
+    fn unresolvable_bash_target_message_bounds_long_tokens() {
+        let raw = format!("$WT/{}", "a".repeat(500));
+        let msg = unresolvable_bash_target_message(&raw);
+        assert!(msg.contains('…'), "{}", msg);
+        assert!(!msg.contains(&"a".repeat(500)), "{}", msg);
+    }
+
+    // ── D3: the first decisive refusal survives a mixed command ────────────
+    // A compound command that mixes an unresolvable shell-syntax target
+    // (denied first, by position in the command) with a second, fully
+    // resolved, direct-edit-guarded target must keep the FIRST denial's
+    // wording — the check_write loop over rel_paths must never overwrite a
+    // denial already decided for another candidate in the same command.
+
+    #[test]
+    fn bash_mixed_command_first_denial_wording_survives_check_write() {
+        let fx = build_fixture("swarming", true);
+        let cmd = "printf x > \"$WT/foo.txt\" && printf y > \".bee/state.json\"";
+        let e = expect_done(bash(cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
+        assert!(!e.stderr.contains("direct-edit guard"), "{}", e.stderr);
     }
 
     // ── guard-refusal-wording P1 fix round D4/D5/D6: shell-syntax
@@ -3065,7 +3126,13 @@ use std::process::ExitCode;
         .unwrap();
         let e = expect_done(bash("printf x > \"$WT/foo.txt\""), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
     }
 
     // ── write-guard-hardening D2: per-target denials decided before the
@@ -3096,7 +3163,13 @@ use std::process::ExitCode;
         let cmd = format!("printf x > \"$WT/foo.txt\" && printf y > \"{bash_target}\"");
         let e = expect_done(bash(&cmd), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
     }
 
     #[test]
@@ -3111,7 +3184,13 @@ use std::process::ExitCode;
         let cmd = format!("printf y > \"{bash_target}\" && printf x > \"$WT/foo.txt\"");
         let e = expect_done(bash(&cmd), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
     }
 
     #[test]
@@ -3126,7 +3205,13 @@ use std::process::ExitCode;
         let cmd = format!("printf x > \"$WT/foo.txt\" && printf y > \"{bash_target}\"");
         let e = expect_done(bash(&cmd), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
     }
 
     #[test]
@@ -3141,7 +3226,13 @@ use std::process::ExitCode;
         let cmd = format!("printf y > \"{bash_target}\" && printf x > \"$WT/foo.txt\"");
         let e = expect_done(bash(&cmd), &fx.root);
         assert_eq!(e.code, 2, "{}", e.stderr);
-        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+        assert!(
+            e.stderr.starts_with(
+                "bee write guard denied Bash: the target \"$WT/foo.txt\" could not be resolved"
+            ),
+            "{}",
+            e.stderr
+        );
     }
 
     // Controls: the restructure is fail-closed ONLY. A genuinely undecidable
