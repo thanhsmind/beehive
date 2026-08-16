@@ -1,0 +1,57 @@
+{
+  "id": "kds-4",
+  "feature": "doc-impact-synthesis",
+  "lane": "standard",
+  "tier": "generation",
+  "depends_on": [
+    "kds-3"
+  ],
+  "title": "Backfill: route locked decisions, clear doc-deferral findings, file the historical campaign row",
+  "behavior_change": false,
+  "files": [
+    "docs/knowledge/areas/decision-memory/overview.md",
+    "docs/knowledge/areas/workflow-state/gates.md",
+    "docs/history/doc-impact-synthesis/CONTEXT.md",
+    "docs/history/doc-impact-synthesis/plan.md"
+  ],
+  "read_first": [
+    "docs/history/doc-impact-synthesis/CONTEXT.md",
+    "docs/history/doc-impact-synthesis/plan.md"
+  ],
+  "action": "Per plan v2 kds-4 (D4). Runs in the MAIN checkout with the freshly installed binary (the three new doors are live — bee close --feature doc-impact-synthesis --dry-run is the probe). Current dry-run findings to clear: (1) ROUTING — D2/D3/D4 unrouted: cite 'doc-impact-synthesis D2' and 'D3' where their substance lives (D2 routing law -> docs/knowledge/areas/workflow-state/gates.md close-doors section, one sentence each naming the door + citation token; D3 doc-deferral law -> decision-memory/overview.md beside R2a); D4 (slice ordering, feature-internal) -> log a decision tagged feature-local naming 'doc-impact-synthesis D4' with --relation none. (2) DOC-DEFERRAL — 10 flagged lines: decision-memory/overview.md:45,109,111,116,119,214 are spec prose DESCRIBING mechanisms, not real deferrals — rephrase each to non-deferral wording (e.g. ':45 appended to candidates[] for later curation' -> 'appended to candidates[] awaiting curation' — any wording that drops the matcher's defer/for now/revisit/later terms without changing meaning); CONTEXT.md:86,93,101 and plan.md:101? no — plan.md:56: same treatment where the line describes mechanism or scope bounds; a line expressing a REAL open condition instead gets a registered trigger (bee triggers add --decision <deciding short8> --condition '...') cited inline as [[trigger:<id>]]. Judge each line honestly; do not blanket-rephrase a genuine deferral. CONTEXT.md history-record caution: these are this feature's own live records, still editable until close — rephrasing wording is allowed, changing decision MEANING is not. (3) File the historical campaign row: bee backlog add --type debt --severity P3 --layer knowledge --title 'Campaign: route legacy CONTEXT locked decisions (63 non-canonical + 49 canonical historical files) into area specs or feature-local records' with detail naming the routing door's loud-notice behavior. (4) Proof: bee close --feature doc-impact-synthesis --dry-run shows routing and doc-deferral doors clear (paste both door lines); knowledge check shows no new warnings on touched files.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "dry-run close shows routing door clear (D1-D4 all routed or feature-local)",
+      "dry-run close shows doc-deferral door clear with zero flagged lines",
+      "no spec line changed meaning — only wording or added citations",
+      "campaign backlog row filed for the historical CONTEXT corpus"
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "orchestrator",
+    "outcome": "Routed D2-D4, cleared 9/10 doc-deferral matcher hits by rewording, escaped the plan.md-frozen 10th with a recorded reason, filed the CONTEXT-routing campaign backlog row",
+    "files_changed": [
+      "docs/history/doc-impact-synthesis/CONTEXT.md",
+      "docs/knowledge/areas/decision-memory/overview.md",
+      "docs/knowledge/areas/workflow-state/gates.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T12:23:15.945Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3ffdb508-af83-4ed1-b5ce-2d68f4e6f780",
+    "claimed_at": "2026-08-16T12:14:02.191Z",
+    "inline_reason": "kds-4 dispatched as a Task-tool worker under nickname kds4-worker per the orchestrator's prompt, but the claim's trace.worker still reads 'orchestrator' (same registration gap as kds-1/2/3 sibling cells this session) — no separate 'bee state worker add' step ran before dispatch",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T12:22:54.888Z"
+  }
+}

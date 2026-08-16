@@ -498,5 +498,10 @@
     "capped": 6,
     "dropped": 0,
     "archived_at": "2026-08-16T10:45:55.543Z"
+  },
+  "doc-impact-synthesis": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-16T12:24:02.438Z"
   }
 }

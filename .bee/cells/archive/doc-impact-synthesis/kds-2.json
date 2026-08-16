@@ -50,6 +50,41 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-16T11:52:16.860Z"
+    "ran_at": "2026-08-16T11:52:16.860Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "close-refuses-on-outside-doc-citation-with-file-line-and-remedy",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:896-948 build_impact_door pushes \"<file>:<line> cites decision <short8>, touched by closing feature <feature> — remedy: fix or annotate the citing doc, then re-run bee close --feature <feature> (the sweep re-runs fresh).\" and returns Door{door:impact, blocking:true}. Exit-chain refusal close.rs:1925-1943 emits \"Impact debt for <feature> — close stops at the impact door: <detail>\" plus remedy and next lines, exit code 1 (CLOSE_IMPACT_PREFIX close.rs:48-51). Tests drivers/tests.rs:2689-2705 assert blocking and detail contains docs/knowledge/areas/other/notes.md:1, remedy:, re-run bee close --feature demo; tests.rs:2706-2718 rewrites the doc and asserts detail==clear (re-derived fresh, no stub)."
+          },
+          {
+            "id": "index-own-history-and-generated-trees-never-block",
+            "status": "PASS",
+            "evidence": "close.rs:908-913 skips hits via crate::verbs::decisions::touches_sweep_excluded(&file, Some(feature)) (kds-1 exclusion reused) then impact_sweep_in_generated_tree (close.rs:878-884) which iterates crate::hooks::write_guard::SCOUT_DIRS rather than a hand-copied list. Tests tests.rs:2719-2744: docs/decisions/index.md + docs/history/demo/CONTEXT.md -> detail==clear; docs/vendor/upstream.md -> detail==clear."
+          },
+          {
+            "id": "no-time-window-collection-structured-feature-field-only",
+            "status": "PASS",
+            "evidence": "close.rs:840-851 feature_stamped_decision_ids filters active_decisions on type==decide && e.get(\"feature\")==Some(feature) only; no date/since_ms term appears in the impact-door region (DecisionFilters is used only by has_impact_deferral_decision, with tag+feature). Tests tests.rs:2778 impact_door_never_walks_a_decision_with_no_structured_feature_field and tests.rs:2766 impact_door_is_clear_with_no_feature_stamped_decisions."
+          },
+          {
+            "id": "impact-deferral-decision-demotes-with-reason",
+            "status": "PASS",
+            "evidence": "close.rs:859-871 has_impact_deferral_decision mirrors has_knowledge_freshness_deferral_decision with tag impact-deferral + feature and returns the deferring decision decision text; close.rs:925-935 returns Door{blocking:false, detail starting \"deferred — ... a logged impact-deferral decision names <feature>: <reason>\"}. Test tests.rs:2745-2765 asserts !door.blocking, detail.starts_with(\"deferred —\"), and detail contains \"defer the demo citation cleanup until the doc rewrite lands\"."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-16T12:19:16.940Z"
+      }
+    ]
   }
 }

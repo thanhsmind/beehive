@@ -50,6 +50,41 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-16T11:41:49.502Z"
+    "ran_at": "2026-08-16T11:41:49.502Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "touches-log-enqueues-stubs-excluding-index-and-own-history",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs:687-720 (commit 98f7f6bb): do_log, after the event append, loops over touches -> sweep_decision_citations(root, touched_id, short8), skips hits via touches_sweep_excluded, then add_capture_stub(root, outcome, [touched_id,new_id], [file], source \"touches-sweep\"). Exclusion fn verbs_read.rs:411-427 drops docs/decisions/index.md always and docs/history/<bound_feature>/ only when a feature is bound. Tests decisions/tests.rs:1638-1721 assert queue.len()==2 with stub_files == [docs/area.md, docs/history/otherfeat/CONTEXT.md] (index.md and docfeat own history excluded), source==touches-sweep, dids==[touched,new]; tests.rs:1760-1783 asserts no touches -> capture queue file never created."
+          },
+          {
+            "id": "feature-field-present-when-bound-absent-otherwise-legacy-tolerated",
+            "status": "PASS",
+            "evidence": "verbs_read.rs:603-617 resolves bound_feature via resolve_mutation_target(root, None, \"decisions log\", false).record().get(\"feature\") (session-bound-lane-else-default, the state route resolution), None when unresolved; verbs_read.rs:666-673 inserts event[feature] only when bound_feature is Some. Tests: tests.rs:1697 assert_eq!(event[\"feature\"], \"docfeat\") with .bee/state.json {\"feature\":\"docfeat\"}; tests.rs:1755 assert!(event.get(\"feature\").is_none()) on a fixture with no state.json; tests.rs:1781 same on the no-touches path. git show 98f7f6bb --name-only lists only verbs_read.rs, tests.rs, overview.md, so no reader changed and legacy lines lacking the field read as before."
+          },
+          {
+            "id": "supersede-sweep-unchanged",
+            "status": "PASS",
+            "evidence": "git diff 98f7f6bb~1 98f7f6bb --name-only = overview.md, decisions/tests.rs, decisions/verbs_read.rs — supersede.rs and render.rs untouched; git log --oneline 98f7f6bb~1..HEAD -- decisions/supersede.rs decisions/render.rs returns empty. do_supersede sweep call sites stay at supersede.rs:196 and supersede.rs:245 and do not route through do_log (no do_log reference in supersede.rs). The new sweep is scoped inside do_log under the touches branch."
+          },
+          {
+            "id": "overview-documents-feature-field-and-touches-sweep-canonical-frontmatter",
+            "status": "PASS",
+            "evidence": "docs/knowledge/areas/decision-memory/overview.md: diff hunk @@ -76,6 +76,14 adds the R2 paragraph documenting decisions log --relation touches:<id> running the same sweep at log time with source touches-sweep and both exclusions; hunk @@ -169,6 +177,12 adds the data-dictionary entry for the optional feature field on new decide events, its session-bound-lane-else-default resolution and legacy-absence tolerance. Frontmatter untouched by the commit and still canonical: type/title/description/timestamp/bee.{id,lifecycle,areas,decisions,sources,authoritative_for} at overview.md:1-15, timestamp 2026-08-16."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-16T12:19:16.934Z"
+      }
+    ]
   }
 }

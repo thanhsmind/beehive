@@ -1,0 +1,32 @@
+{
+  "id": "wcpf-3",
+  "feature": "windows-ci-path-fixes",
+  "lane": "small",
+  "title": "Emit forward-slash repo-relative paths from the decisions citation sweep (3 Windows-red tests)",
+  "action": "In packages/bee-rs/crates/bee/src/verbs/decisions/render.rs path_relative (~304-313), join components with \"/\" instead of std::path::MAIN_SEPARATOR_STR — repo-relative doc paths are spelled with forward slashes everywhere in bee (messages, stored decisions events); on Windows the native join leaks backslashes into sweep hits and door details. In packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs touches_sweep_excluded (~418-428), normalize the input with .replace('\\\\', \"/\") and compare against forward-slash literals directly (drop the native() closure); update the doc comment above it that currently says \"native separators\". No other files.",
+  "goal": "Windows CI: verbs::decisions::tests::touches_sweep_excluded_matches_generated_index_and_bound_own_history_only, verbs::drivers::tests::close_refuses_at_the_impact_door, verbs::drivers::tests::impact_door_refuses_when_an_outside_doc_cites_a_feature_stamped_decision go green (CI run 31946481526); Linux suite stays green.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/render.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "notes": "Third wave of issue #94. Tests assert docs/knowledge/areas/other/notes.md:1 with forward slashes; Windows emitted backslashes from path_relative. impact_sweep_in_generated_tree in drivers/close.rs already normalizes backslash-to-slash — same pattern.",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-wcpf-3",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6e83b991-dafe-45af-b6d8-7abac0afe364",
+    "claimed_at": "2026-08-16T12:21:10.184Z"
+  }
+}
