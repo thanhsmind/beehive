@@ -1648,6 +1648,7 @@ use std::time::Instant;
                 "door scribing-debt: clear\n",
                 "door capture-queue: clear\n",
                 "door pattern-check: clear\n",
+                "door knowledge-freshness: clear\n",
                 "next: bee close --feature demo — runs the declared tests and reports"
             )
         );
@@ -2389,6 +2390,167 @@ use std::time::Instant;
         };
         assert_eq!(code, 0);
         assert!(text.contains("door scribing-debt: clear"));
+    }
+
+    // ─── D1: knowledge-freshness close door ─────────────────────────────────
+
+    /// Writes one area concept tagged `areas: [<area>]` whose `bee.sources`
+    /// names `src/a.rs` — the same touched-file match `touched_bundle_areas`
+    /// applies elsewhere — so a capped cell touching `src/a.rs` puts `<area>`
+    /// in the door's scope, with no dangling pointer of its own.
+    fn write_freshness_touch_anchor(root: &Path, area: &str) {
+        // `src/a.rs` must be real on disk too — this concept's OWN sources
+        // entry is otherwise itself a dangling_source finding the door
+        // would (correctly) also see.
+        w(root, "src/a.rs", "// placeholder\n");
+        w(
+            root,
+            &format!("docs/knowledge/areas/{area}/overview.md"),
+            &format!(
+                "---\ntype: bee.area\ntitle: {area} area\ndescription: d\nbee:\n  id: {area}-area\n  lifecycle: active\n  areas: [{area}]\n  sources: [src/a.rs]\n---\nbody\n"
+            ),
+        );
+    }
+
+    /// A second concept living under `areas/<area>/` whose `bee.sources`
+    /// names a path that does not exist on disk — the dangling_source the
+    /// door's own scoping is meant to catch (or miss, when `<area>` is never
+    /// touched).
+    fn write_freshness_dangling(root: &Path, area: &str) {
+        w(
+            root,
+            &format!("docs/knowledge/areas/{area}/dangling.md"),
+            &format!(
+                "---\ntype: bee.area\ntitle: {area} dangling\ndescription: d\nbee:\n  id: {area}-dangling\n  lifecycle: active\n  areas: [{area}]\n  sources: [does/not/exist.md]\n---\nbody\n"
+            ),
+        );
+    }
+
+    fn write_freshness_capped_cell(root: &Path, feature: &str, file: &str) {
+        w(
+            root,
+            &format!(".bee/cells/{feature}-1.json"),
+            &format!(
+                r#"{{"id":"{feature}-1","feature":"{feature}","status":"capped","trace":{{"behavior_change":false,"outcome":"did the thing","files_changed":["{file}"],"capped_at":"2026-08-16T00:00:00.000Z"}}}}"#
+            ),
+        );
+    }
+
+    #[test]
+    fn knowledge_freshness_door_blocks_on_a_dangling_source_in_a_touched_area() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_freshness_touch_anchor(root, "demo");
+        write_freshness_dangling(root, "demo");
+        write_freshness_capped_cell(root, "demo", "src/a.rs");
+        let door = build_knowledge_freshness_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("areas/demo/dangling.md"), "{}", door.detail);
+        assert!(door.detail.contains("does/not/exist.md"), "{}", door.detail);
+        assert!(door.detail.contains("remedy:"), "{}", door.detail);
+    }
+
+    #[test]
+    fn knowledge_freshness_door_is_clear_when_the_dangling_source_is_outside_touched_areas() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_freshness_touch_anchor(root, "demo");
+        // The dangling pointer lives under a DIFFERENT area — never touched.
+        write_freshness_dangling(root, "other");
+        write_freshness_capped_cell(root, "demo", "src/a.rs");
+        let door = build_knowledge_freshness_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn knowledge_freshness_door_deferral_decision_demotes_to_non_blocking_with_the_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_freshness_touch_anchor(root, "demo");
+        write_freshness_dangling(root, "demo");
+        write_freshness_capped_cell(root, "demo", "src/a.rs");
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"defer the demo stale pointer until the retired-path migration lands\",\"rationale\":\"r\",\"tags\":[\"knowledge-freshness-deferral\"],\"scope\":\"repo\"}\n",
+        );
+        let door = build_knowledge_freshness_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert!(door.detail.starts_with("deferred —"), "{}", door.detail);
+        assert!(
+            door.detail.contains("defer the demo stale pointer until the retired-path migration lands"),
+            "{}",
+            door.detail
+        );
+    }
+
+    #[test]
+    fn knowledge_freshness_door_is_clear_with_no_bundle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_freshness_capped_cell(root, "demo", "src/a.rs");
+        let door = build_knowledge_freshness_door(root, "demo").unwrap();
+        assert!(!door.blocking);
+        assert_eq!(door.detail, "clear");
+    }
+
+    /// End-to-end: `close_handler` itself stops at the knowledge-freshness
+    /// door — tests GREEN, past every earlier door — naming the file and the
+    /// remedy in the refusal headline, exactly like the tests/scribing-debt/
+    /// judge-debt/pattern-check refusals above it.
+    #[test]
+    fn close_refuses_at_the_knowledge_freshness_door() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        write_freshness_touch_anchor(&root, "demo");
+        write_freshness_dangling(&root, "demo");
+        write_freshness_capped_cell(&root, "demo", "src/a.rs");
+        let declared = declared_test_commands(&root).unwrap();
+        let Out::Emit(result, text, code) =
+            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1);
+        assert!(
+            text.starts_with(&format!(
+                "{CLOSE_KNOWLEDGE_FRESHNESS_PREFIX} \"demo\" — close stops at the knowledge-freshness door:"
+            )),
+            "{text}"
+        );
+        assert!(text.contains("areas/demo/dangling.md"), "{text}");
+        assert!(text.contains("next: settle the stale pointer(s) above, then re-run bee close --feature demo"), "{text}");
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        let freshness = doors.iter().find(|d| d.get("door") == Some(&json!("knowledge-freshness"))).unwrap();
+        assert_eq!(freshness.get("blocking"), Some(&json!(true)));
+    }
+
+    /// C1's generator/check fix (check.rs): a promoted delivery concept's
+    /// `bee.required_context` names `docs/history/<feature>/...` paths —
+    /// repo-root-relative, per `promote.rs`'s history-anchor arm — which
+    /// used to be born dangling because `check_bundle` only ever tried the
+    /// bundle-relative resolution. Bundle-first-then-repo-root now resolves
+    /// it clean.
+    #[test]
+    fn check_bundle_resolves_a_history_anchor_required_context_at_the_repo_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, "docs/history/demo/CONTEXT.md", "# Demo context\n");
+        w(root, "docs/history/demo/plan.md", "# Demo plan\n");
+        w(
+            root,
+            "docs/knowledge/work/demo/delivery.md",
+            "---\ntype: bee.delivery\ntitle: Demo delivery\ndescription: d\nbee:\n  id: demo-delivery\n  lifecycle: active\n  required_context: [docs/history/demo/CONTEXT.md, docs/history/demo/plan.md]\n---\nbody\n",
+        );
+        let dir = crate::verbs::knowledge::bundle_dir(root).unwrap();
+        let report = crate::verbs::knowledge::check_bundle(&dir, false).unwrap();
+        assert!(
+            !report.warnings.iter().any(|w| w.get("code") == Some(&json!("dangling_required_context"))),
+            "{:?}",
+            report.warnings
+        );
     }
 
     // ── routing (every delegating shape returns None before any output) ─────

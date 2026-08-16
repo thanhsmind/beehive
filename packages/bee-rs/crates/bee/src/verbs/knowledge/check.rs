@@ -542,20 +542,29 @@ pub(crate) fn check_bundle(dir: &Path, strict: bool) -> Option<CheckReport> {
         let bee = bee_of(&concept.data);
         if let Some(Value::Array(targets)) = bee.get("required_context") {
             for target in targets {
-                let resolved = match target {
-                    Value::String(s) => match resolve_inside_bundle(dir, s) {
-                        Ok(r) => r,
-                        Err(()) => return None,
-                    },
-                    _ => None,
+                // Bundle-relative first (D19's own rule); a promote-generated
+                // history anchor (docs/history/<f>/CONTEXT.md, docs/history/<f>/plan.md)
+                // is repo-root-relative instead, so a miss inside the bundle
+                // falls back to the repo root before calling it dangling — the
+                // same two-root order dangling_source already uses below.
+                let exists = match target {
+                    Value::String(s) => {
+                        let in_bundle = match resolve_inside_bundle(dir, s) {
+                            Ok(r) => r,
+                            Err(()) => return None,
+                        }
+                        .map(|p| p.exists())
+                        .unwrap_or(false);
+                        in_bundle || repo_root.map(|root| root.join(s).exists()).unwrap_or(false)
+                    }
+                    _ => false,
                 };
-                let exists = resolved.map(|p| p.exists()).unwrap_or(false);
                 if !exists {
                     warnings.push(finding(
                         &concept.path,
                         "dangling_required_context",
                         format!(
-                            "required_context target \"{}\" does not resolve inside the bundle (D19: bundle-relative paths)",
+                            "required_context target \"{}\" does not resolve inside the bundle or at the repo root (D19)",
                             jsjson::js_to_string(target)
                         ),
                     ));
