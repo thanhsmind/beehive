@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.6.5",
+  "bee_version": "2.6.6",
   "managed": {
     "agents_block": "dee607bc8a012108b5de82c549e196b0fa289b71c51defa15dbffc70c26bc00c",
     "gitignore_block": "d5a82410e3d53acf08f6b97ce3fe9bfe0b2cc58731af40e095d1178be2b149a2",
@@ -45,7 +45,7 @@
     }
   },
   "agents_sync": {
-    "bee_version": "2.6.5",
+    "bee_version": "2.6.6",
     "files": [
       ".claude/agents/bee-build.md",
       ".claude/agents/bee-extract.md",
@@ -76,5 +76,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-16T08:17:12.631Z"
+  "updated_at": "2026-08-16T08:36:26.180Z"
 }
