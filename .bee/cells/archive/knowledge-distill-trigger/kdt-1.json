@@ -60,6 +60,46 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-16T09:45:38.895Z"
+    "ran_at": "2026-08-16T09:45:38.895Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "zero-dangling-required-context",
+            "status": "PASS",
+            "evidence": "Ran `.bee/bin/bee knowledge check --json` on the live tree: counts.warnings=7, every warning code is not_canonical or invalid_evidence_state — zero dangling_required_context, zero dangling_source. Binary is post-fix (`strings .bee/bin/bee | rg -c 'does not resolve inside the bundle or at the repo root'` = 1). Fix is packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs:552-559 (bundle-first, then `repo_root.map(|root| root.join(s).exists())`, repo_root defined check.rs:286). Unit proof: `bee-dbbd56077b8a9375 history_anchor_required_context` -> verbs::drivers::tests::check_bundle_resolves_a_history_anchor_required_context_at_the_repo_root ... ok (1 passed). The specific pre-fix count of 13 was not independently re-measured; the post-fix zero is observed."
+          },
+          {
+            "id": "close-refuses-on-touched-area-dangling",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1398-1420 returns exit 1 with `{CLOSE_KNOWLEDGE_FRESHNESS_PREFIX} \"<feature>\" — close stops at the knowledge-freshness door: <detail>` plus the remedy line; detail items are built at close.rs:733-741 as `{file}: {message} — remedy: point the pointer at its live target, or remove the entry with a one-line reason`, scoped to `areas/<touched>/` + `work/<feature>/` prefixes (close.rs:722-726). Ran prebuilt test binary: verbs::drivers::tests::close_refuses_at_the_knowledge_freshness_door ... ok and knowledge_freshness_door_blocks_on_a_dangling_source_in_a_touched_area ... ok (5 passed, 0 failed)."
+          },
+          {
+            "id": "deferral-decision-demotes-with-reason",
+            "status": "PASS",
+            "evidence": "close.rs has_knowledge_freshness_deferral_decision returns the deferring decision's own text (tag knowledge-freshness-deferral + feature filter), and the door emits `deferred — N stale pointer(s) ... : <reason>` with blocking:false. Ran: verbs::drivers::tests::knowledge_freshness_door_deferral_decision_demotes_to_non_blocking_with_the_reason ... ok (asserts detail starts_with \"deferred —\" and contains the decision text)."
+          },
+          {
+            "id": "six-areas-dangling-sources-gone",
+            "status": "PASS",
+            "evidence": "`git show --stat e79eca74` lists 5 docs/knowledge/areas/*.md files, each +1/-1; capture-queue-and-the-blocker-threshold.md repoints TWO retired paths in one sources line (status_full/orient.rs:134-181 -> state.rs, status_full/records.rs:215 -> drivers/close.rs), so 5 files carry the 6 repaired pointers. Live `.bee/bin/bee knowledge check --json` reports zero dangling_source warnings across 250 files / 222 concepts."
+          },
+          {
+            "id": "report-only-codes-never-block",
+            "status": "PASS",
+            "evidence": "close.rs:743 match arm `\"not_canonical\" | \"invalid_evidence_state\" => report_only_count += 1` — these codes are only counted, never pushed to blocking_items, and the door returns blocking:false with `clear — N report-only finding(s) ... never block` when blocking_items is empty (close.rs:747-758). Live corroboration: the repo currently holds 7 warnings, all of those two codes, and `bee knowledge check` is the door's own source. No dedicated unit test asserts this arm; the code path is unambiguous."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-16T10:45:31.525Z"
+      }
+    ]
   }
 }

@@ -98,6 +98,46 @@
     "warnings": [],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-16T10:13:08.498Z"
+    "ran_at": "2026-08-16T10:13:08.498Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "relation-required-refusal-with-candidates",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs: do_log refuses when `p.relation.as_deref().and_then(parse_relation)` is None (missing OR malformed) with relation_required_message(), which appends conflict_candidate_lines(conflict_candidates(...)) to RELATION_REQUIRED_MESSAGE (the one-line teach: \"--relation is required — pass --relation supersedes:<id>[,...] ... touches:<id>[,...] ... or --relation none\"). Ran prebuilt binary `bee-dbbd56077b8a9375 relation`: verbs::decisions::tests::log_refuses_without_relation_and_lists_candidates ... ok (asserts the message prefix, the quoted candidate line \"possible conflict: e1111111 ...\", and that nothing was appended), plus log_relation_touches_persists_and_stays_active and log_relation_touches_unresolvable_id_refuses — 3 passed, 0 failed."
+          },
+          {
+            "id": "deferral-prose-requires-trigger",
+            "status": "PASS",
+            "evidence": "verbs_read.rs: matches_deferral_prose (word-bounded defer/defers/deferred/deferring, \"for now\", \"revisit when|if\", \"later\") gates DEFERRAL_WITHOUT_TRIGGER_MESSAGE; a given --trigger is validated through crate::verbs::triggers::trigger_registered(root, id) before the event gains `event.insert(\"trigger\", ...)`. Ran: verbs::decisions::tests::log_deferral_prose_without_trigger_refuses ... ok, log_deferral_prose_with_trigger_persists_and_passes ... ok (asserts event[\"trigger\"] == \"g1__deadbeef\"), log_trigger_naming_an_unregistered_id_refuses_even_without_deferral_prose ... ok, deferral_prose_scanner_vectors ... ok."
+          },
+          {
+            "id": "set-gate-waivers-still-write",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs:223, :254, :282 — all three waiver LogParams now carry `relation: Some(\"none\".to_string()), trigger: None`. Their decision texts (\"Closed feature ... with scribing debt WAIVED ...\", \"Swapped away from feature ...\", \"Closed feature ... compounding-run freshness check WAIVED ...\") contain no deferral or supersession trigger words, so neither prose guard fires. The relation-none write path is exercised green by verbs::decisions::tests (log_deferral_prose_with_trigger_persists_and_passes and log_contends_on_the_shared_decisions_lock both build LogParams with relation Some(\"none\")). Caveat: no test in verbs/state_group/tests.rs asserts the waiver decision lands (`rg -n decisions packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs` returns nothing); the guarantee is compile-time plus the shared do_log path."
+          },
+          {
+            "id": "no-stale-scripted-call-site",
+            "status": "PASS",
+            "evidence": "Ran the repo-corpus test: `bee-dbbd56077b8a9375 documented_invocations` -> hooks::cli_shape::documented_invocations::no_shipped_command_spelling_is_refused_by_the_widened_guard ... ok (1 passed), with the single pinned KNOWN_HISTORICAL_EXCEPTIONS entry asserted to still be hit. Spot-checked the named surfaces: skills/bee-hive/references/scout-and-ticks.md:79-82 (`--relation none`), skills/bee-hive/references/gates-and-delegation.md:75, skills/bee-capturing/references/promotion.md:156, docs/07-contracts.md:144, docs/03-workflow.md:156, AGENTS.md:35 and packages/bee/AGENTS.block.md:28, hooks/session_close/nudges.rs:331/413/423 — every runnable spelling now carries --relation. `rg -U 'decisions log...' | rg -- --decision | rg -v -- --relation` leaves only prose mentions plus one non-executable drift: packages/bee-rs/crates/bee/src/verbs/decisions/mod.rs:9-11 still documents the ported argv shape as `decisions log --decision D --rationale R [--alternatives A] ...` with no --relation/--trigger. That is a source header comment, not a call site; worth a one-line follow-up."
+          },
+          {
+            "id": "registry-contracts-and-regen-green",
+            "status": "PASS",
+            "evidence": "Ran packages/bee-rs/target/release/deps/registry_contracts-e0c9a571bc31d5c1 against the live payload: `test result: ok. 7 passed; 0 failed`. registry_payload.json decisions.log now lists required=[decision, rationale, relation], properties include relation + trigger, and its single example reads `bee decisions log --decision ... --rationale ... --relation none --tags cli,registry --json`. Regen chain: `.bee/bin/bee dev release-manifest --check` -> \"210 file(s) match stored manifest, 1 unhashed artifact(s) present\", exit=0. Whole-suite corroboration: .bee/logs/test-results.json ran_at 2026-08-16T10:38:58Z, green=true, exit 0."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-16T10:45:31.534Z"
+      }
+    ]
   }
 }

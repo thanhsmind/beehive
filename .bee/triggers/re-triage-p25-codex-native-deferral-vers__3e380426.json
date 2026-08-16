@@ -1,0 +1,11 @@
+{
+  "id": "re-triage-p25-codex-native-deferral-vers__3e380426",
+  "decision": "3e380426",
+  "condition": "Re-triage P25 (codex-native deferral, version-scoped) when the pinned Codex runtime version changes",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-16T10:34:05.340Z",
+  "updated_at": "2026-08-16T10:34:05.340Z",
+  "outcome": null
+}

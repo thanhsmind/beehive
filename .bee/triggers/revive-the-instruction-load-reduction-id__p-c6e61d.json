@@ -1,0 +1,11 @@
+{
+  "id": "revive-the-instruction-load-reduction-id__p-c6e61d",
+  "decision": "p-c6e61d",
+  "condition": "Revive the instruction-load-reduction idea through shaping if the orchestrator instruction load becomes the bottleneck again",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-16T10:34:12.395Z",
+  "updated_at": "2026-08-16T10:34:12.395Z",
+  "outcome": null
+}

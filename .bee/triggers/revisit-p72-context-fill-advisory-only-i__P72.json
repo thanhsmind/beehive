@@ -1,0 +1,11 @@
+{
+  "id": "revisit-p72-context-fill-advisory-only-i__P72",
+  "decision": "P72",
+  "condition": "Revisit P72 (context-fill advisory) only if the harness exposes a context-usage metric to hooks — bee cannot measure it honestly itself",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-16T10:34:12.377Z",
+  "updated_at": "2026-08-16T10:34:12.377Z",
+  "outcome": null
+}

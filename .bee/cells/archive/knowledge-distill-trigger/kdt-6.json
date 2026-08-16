@@ -23,21 +23,29 @@
       "all writes made through the reinstalled binary honoring the new --relation surface"
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "orchestrator",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      ".bee/decisions.jsonl",
+      ".bee/triggers/"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-16T10:36:12.145Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "3ffdb508-af83-4ed1-b5ce-2d68f4e6f780",
-    "claimed_at": "2026-08-16T10:33:55.732Z"
+    "claimed_at": "2026-08-16T10:33:55.732Z",
+    "inline_reason": "control-plane record writes in main after merge: the old installed binary lacked the triggers verb, and .bee record writes cannot run from a worktree worker — solo integration-lane execution per AGENTS.md main-checkout clause",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T10:35:52.670Z"
   }
 }

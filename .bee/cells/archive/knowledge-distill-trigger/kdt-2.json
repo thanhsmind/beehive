@@ -55,6 +55,46 @@
     ],
     "tests": "green",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-16T09:48:01.793Z"
+    "ran_at": "2026-08-16T09:48:01.793Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "predicate-flip-persists",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs:245-252 — a predicate-tier record still `waiting` whose predicate_true() holds is set to `due`, updated_at refreshed, and written back with write_json_atomic on the read itself. predicate_true (mod.rs:143-159) handles path-exists:/path-missing: and resolves relative paths against the control root. Ran prebuilt test binary `bee-dbbd56077b8a9375 triggers::`: verbs::triggers::tests::predicate_flip_persists_across_reads ... ok (asserts waiting before the file lands, due after, and due again on a fresh read_json with no re-evaluation). 9 passed, 0 failed."
+          },
+          {
+            "id": "manual-never-auto-fires",
+            "status": "PASS",
+            "evidence": "mod.rs:245 gates the flip on `rec.tier == \"predicate\"`; due_and_manual_counts (mod.rs:290-303) counts manual+waiting into the awaiting-confirmation bucket only, and `triggers list` surfaces manual/waiting via `surfaced` at mod.rs:438. Ran: verbs::triggers::tests::manual_tier_never_auto_fires_even_with_a_predicate_shaped_condition ... ok (two consecutive reads both yield (due,manual)=(0,1)). Live: `.bee/bin/bee triggers list --json` shows the two real records with tier manual / status waiting, none flipped."
+          },
+          {
+            "id": "resolve-writes-outcome-only",
+            "status": "PASS",
+            "evidence": "run_resolve (mod.rs:458-496) reads the one trigger file, sets status=resolved + outcome + updated_at and write_json_atomic's it back — nothing else. `rg -n \"decisions\" packages/bee-rs/crates/bee/src/verbs/triggers/mod.rs` returns only comment lines (5, 269, 275) and test lines (580, 592); no decisions-store call exists in the module. Test verbs::triggers::tests::add_list_resolve_round_trip ... ok asserts status/outcome round-trip and `!tmp.join(\".bee/decisions.jsonl\").exists()`. Note: that test exercises the record round-trip via write_json_atomic rather than calling run_resolve itself; the no-decision guarantee rests on the module-wide grep above."
+          },
+          {
+            "id": "corrupt-file-remedy-no-crash",
+            "status": "PASS",
+            "evidence": "read_and_evaluate maps ReadJson::Corrupt and shape-invalid records to TriggerEntry::Unreadable (mod.rs:241-243), surfaced as `unreadable trigger <path> — remedy: delete the file` (mod.rs:213-215, emitted by triggers list at mod.rs:433-435 and by resolve at mod.rs:480/483). Ran: verbs::triggers::tests::corrupt_file_yields_the_delete_remedy_line_never_a_crash ... ok and a_shape_valid_json_file_missing_a_required_field_is_also_unreadable ... ok; due_and_manual_counts stays (0,0) instead of panicking."
+          },
+          {
+            "id": "registry-contracts-green",
+            "status": "PASS",
+            "evidence": "Ran the prebuilt integration binary packages/bee-rs/target/release/deps/registry_contracts-e0c9a571bc31d5c1 (built 2026-08-16 17:32, after the 17:10 kdt-3 commit) against the live payload: 7 tests, `test result: ok. 7 passed; 0 failed` (includes every_example_is_spelled_against_a_declared_command and known_flags_parser_would_catch_a_new_handler_flag). registry_payload.json carries commands 83/84/85 = triggers.add / triggers.list / triggers.resolve with descriptions and one example each; `.bee/bin/bee triggers add --help` and `triggers list --json` both answer natively, so the dispatch wiring is live."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-16T10:45:31.529Z"
+      }
+    ]
   }
 }

@@ -1,0 +1,11 @@
+{
+  "id": "restore-parallel-worker-dispatch-under-o__ddfd1835",
+  "decision": "ddfd1835",
+  "condition": "Restore parallel worker dispatch under OpenCode when upstream lands the fix for anomalyco/opencode#29638 (subagent tool-permission inheritance)",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-16T10:34:05.322Z",
+  "updated_at": "2026-08-16T10:34:05.322Z",
+  "outcome": null
+}
