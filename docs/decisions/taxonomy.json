@@ -348,6 +348,7 @@
     "fail-closed",
     "traceable-runs",
     "knowledge-promote",
-    "test-escalation"
+    "test-escalation",
+    "extractor"
   ]
 }

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "write-guard-hardening",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -10,7 +10,7 @@
     "review": false
   },
   "summary": "Feature \"write-guard-hardening\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"write-guard-hardening\" (lane).",
+  "next_action": "none",
   "created_at": "2026-08-16T02:36:39.638Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
@@ -22,5 +22,21 @@
     "rationale": "4 guard-hardening backlog items, machine-guard source, serial cells in one worktree",
     "updated_at": "2026-08-16T02:37:33.211Z",
     "feature": "write-guard-hardening"
+  },
+  "last_scribing_run": {
+    "feature": "write-guard-hardening",
+    "date": "2026-08-16",
+    "at": "2026-08-16T03:32:21.862Z",
+    "areas_synced": [
+      "hook-runtime"
+    ],
+    "next_action": "compounding-run"
+  },
+  "last_compounding_run": {
+    "feature": "write-guard-hardening",
+    "date": "2026-08-16",
+    "at": "2026-08-16T03:32:21.880Z",
+    "learnings": "operand-role table decision logged; review-before-merge caught 3 allow-regressions",
+    "next_action": "none"
   }
 }
