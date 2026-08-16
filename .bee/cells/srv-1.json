@@ -1,0 +1,51 @@
+{
+  "id": "srv-1",
+  "feature": "session-release-verb",
+  "lane": "standard",
+  "title": "bee state session release marks the open session not-live until the user returns",
+  "must_haves": {
+    "truths": [
+      "bee state session release writes status closed + closed_at + released:true on the resolved session record",
+      "A PostToolUse heartbeat does not revive a released record; a UserPromptSubmit revival clears status/closed_at/released and stamps revived_at",
+      "is_concurrent_mode and active_worker_session_ids read a released record as not-live"
+    ]
+  },
+  "action": "New verb `bee state session release` in packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs, registered exactly like `session unbind` (run_session_unbind is the template — find its dispatch/help/CLI-schema registration points by rg'ing 'session unbind' and 'unbind' across src, including the cli_shape hook schema if commands are pinned there, and mirror every one). Flags: --session-id optional; resolve via flag then BEE_SESSION_ID then CLAUDE_CODE_SESSION_ID (reuse claims.rs resolve_session_flag_env or the state_group equivalent). Behavior: under the sessions store lock read the record (missing record: typed no-op result, exit 0), set status:\"closed\", closed_at:<now ISO>, released:true; atomic write; JSON output {id, released:true, closed_at}. Revival split: in packages/bee-rs/crates/bee/src/hooks/state_sync.rs heartbeat_session's revival block, do NOT clear a record whose released is true (leave mark intact, still update last_heartbeat); in packages/bee-rs/crates/bee/src/hooks/prompt_context.rs's revival block, DO clear status/closed_at/released (+ stamp revived_at) — the user speaking is the re-engage signal. Session-init already recreates records on SessionStart; verify it clears the mark too (if not, make it). Tests: verb writes the mark (flag and env resolution); state_sync heartbeat leaves a released record marked but updates last_heartbeat; prompt_context revival clears everything and stamps revived_at; a released record reads not-live in claims.rs is_concurrent_mode and write_guard active_worker_session_ids.",
+  "intent": "A long-lived session holding nothing between tasks still blocks siblings for up to 900s; an explicit release drops the hold instantly and the next user message re-engages automatically.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "srv-1-builder",
+    "outcome": "Added bee state session release with the state_sync/prompt_context/session_init revival split, registered in set_gate.rs dispatch + router.rs index + registry_payload.json, with unit and CLI-integration tests.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/sessions.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/hooks/state_sync.rs",
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_init.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+      "packages/bee-rs/crates/bee/tests/session_release.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T06:04:05.092Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b905fa1b-3e59-4fdf-a234-af43a0398b55",
+    "claimed_at": "2026-08-16T05:47:32.909Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T06:03:45.949Z"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "id": "srv-2",
+  "feature": "session-release-verb",
+  "lane": "standard",
+  "title": "Care-for-the-session doctrine names the release step",
+  "must_haves": {
+    "truths": [
+      "The AGENTS block source tells agents to run bee state session release when ending substantial work, after caps and reservation release",
+      "Derived AGENTS.md files match the regenerated block and any pinning test is green"
+    ]
+  },
+  "action": "In packages/bee/AGENTS.block.md, section 'Care for the session', extend the 'Before ending substantial work' item: after capping cells and releasing reservations, run `bee state session release` so sibling sessions stop counting this one as a live worker (the next user message re-engages it automatically). Then regenerate every derived copy the way the repo does (find the regen: rg 'AGENTS.block' across src and dev verbs — likely `bee dev regen` or part of render manifests; AGENTS.md at repo root imports or embeds the block). Do NOT hand-edit derived files if a regen exists; if the regen chain is not runnable, name the gap and edit the minimal derived copies consistently. Update any test pinning the block text (rg 'Before ending substantial work' in tests).",
+  "intent": "The verb only helps if agents actually run it; the AGENTS block is where that discipline lives.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "srv-2-builder",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T05:55:20.266Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b905fa1b-3e59-4fdf-a234-af43a0398b55",
+    "claimed_at": "2026-08-16T05:47:32.926Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T05:55:01.078Z"
+  }
+}
