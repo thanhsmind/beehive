@@ -2899,6 +2899,66 @@ use std::process::ExitCode;
         assert_eq!(e.stderr, GENERIC_BASH_CONTAINMENT_MESSAGE);
     }
 
+    // ── guard-refusal-wording P1 fix round D4/D5/D6: shell-syntax
+    // classification scoped to the Bash surface only ─────────────────────
+    // D4: has_unexpanded_shell_syntax moved out of the shared resolvers
+    // (canonical_rel_path, resolve_target_realpath) — Edit/Write/MultiEdit
+    // file_path and apply_patch targets are literal strings no shell ever
+    // expands, so a `$`/backquote in a target name must resolve exactly as
+    // before grw-1 on those two surfaces.
+
+    #[test]
+    fn edit_dollar_named_target_resolves_literally_after_grw2() {
+        let fx = build_fixture("swarming", true);
+        // A literal in-tree target still carrying `$` is a valid file name
+        // on this surface — no shell ever touches it.
+        let allowed = expect_done(edit("src/Foo$Bar.java"), &fx.root);
+        assert_eq!(allowed.code, 0, "{}", allowed.stderr);
+        // A denied `$`-named target keeps the ordinary containment wording,
+        // never the Bash-only D2 resolution-failure wording.
+        let denied = expect_done(edit("../$outside.txt"), &fx.root);
+        assert_eq!(denied.code, 2, "{}", denied.stderr);
+        assert_eq!(denied.stderr, GENERIC_CONTAINMENT_MESSAGE);
+        assert!(!denied.stderr.contains("could not be resolved"), "{}", denied.stderr);
+    }
+
+    #[test]
+    fn apply_patch_dollar_named_target_resolves_literally_after_grw2() {
+        let fx = build_fixture("swarming", true);
+        let allowed = expect_done(
+            patch("*** Begin Patch\n*** Add File: src/Foo$Bar.java\n+hello\n*** End Patch"),
+            &fx.root,
+        );
+        assert_eq!(allowed.code, 0, "{}", allowed.stderr);
+        // A denied `$`-named target keeps apply_patch's own unresolved-target
+        // wording, never the Bash-only D2 resolution-failure wording.
+        let denied = expect_done(
+            patch("*** Begin Patch\n*** Add File: ../$outside.txt\n+hello\n*** End Patch"),
+            &fx.root,
+        );
+        assert_eq!(denied.code, 2, "{}", denied.stderr);
+        assert!(denied.stderr.contains("could not be fully proved inside the repo"), "{}", denied.stderr);
+        assert!(!denied.stderr.contains("still carries"), "{}", denied.stderr);
+    }
+
+    #[test]
+    fn bash_shell_syntax_target_denies_before_companion_delegate() {
+        // D5: on the Bash surface an unresolvable shell-syntax token must
+        // deny with the D2 wording BEFORE the companion_mount_rel branch can
+        // turn it into Err(Nd)/Delegate — with .bee/companion-session.json
+        // present the same command still exits 2 with the D2 wording, never
+        // the dispatcher's fail-open allow.
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("companion-session.json"),
+            "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n",
+        )
+        .unwrap();
+        let e = expect_done(bash("printf x > \"$WT/foo.txt\""), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+    }
+
     // ── D1 plan.md freeze (bh-1) — feature-from-path + lane-aware gate ─────
     // D7 red-first: these resolver tests land (and are run RED against a
     // stub) before the deny wires into check_write below.
