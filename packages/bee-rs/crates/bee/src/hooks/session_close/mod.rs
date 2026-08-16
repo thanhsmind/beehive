@@ -59,9 +59,11 @@
 //     performance.html report (never observable on stdout/stderr).
 
 
-use crate::hooks::adapter::{emit_hook_output, encode_block, log_crash, read_hook_context, HookContext};
+use crate::hooks::adapter::{emit_hook_output, encode_block, log_crash, now_iso, read_hook_context, HookContext};
 
 use crate::hooks::Outcome;
+
+use crate::lock::AcquireOnce;
 
 use crate::jsjson::js_to_string;
 
@@ -100,6 +102,16 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
         return Ok(());
     };
     if !crate::hooks::adapter::bee_installed(&root) {
+        return Ok(());
+    }
+    // SessionEnd: native-only (the Node wrapper never wired this event —
+    // Stop/PreCompact/SubagentStop were its whole surface). Best-effort marks
+    // the session record closed under the sessions store lock so a cleanly
+    // exited session stops counting as live before its heartbeat goes stale;
+    // fails open on a busy lock, a missing/corrupt record, or a mismatched
+    // id. Never prints, never delegates.
+    if ctx.event == "SessionEnd" {
+        close_session_record(&root, &ctx);
         return Ok(());
     }
     // PreCompact (intent anchor + compaction record + forced nudges): the
@@ -155,6 +167,40 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
         emit_hook_output(&ctx, &parts.join("\n"), "Stop");
     }
     Ok(())
+}
+
+/// Marks `.bee/sessions/<id>.json` closed: `status: "closed"` plus
+/// `closed_at: <now ISO>`. Mirrors state_sync.rs's `heartbeat_session` for
+/// the lock/read/write shape (acquire the "sessions" store lock once, read
+/// fail-open, write atomically), but never crash-logs and never touches the
+/// exit code or output — a SessionEnd hook has nothing left to report to.
+fn close_session_record(root: &Path, ctx: &HookContext) {
+    let Some(session_id) = get_session_id(&ctx.payload) else { return };
+    if !is_plain_id(&session_id) {
+        return;
+    }
+    let ctl = control_root(root, ctx);
+    let mut guard = match crate::lock::acquire_store_lock_once(&ctl, "sessions") {
+        AcquireOnce::Busy { .. } => return,
+        AcquireOnce::Acquired(guard) => guard,
+    };
+    let file = ctl.join(".bee").join("sessions").join(format!("{session_id}.json"));
+    let session = match crate::fsutil::read_json(&file) {
+        crate::fsutil::ReadJson::Parsed(Value::Object(m))
+            if m.get("id").and_then(Value::as_str) == Some(session_id.as_str()) =>
+        {
+            m
+        }
+        _ => {
+            guard.release();
+            return;
+        }
+    };
+    let mut session = session;
+    session.insert("status".to_string(), Value::String("closed".to_string()));
+    session.insert("closed_at".to_string(), Value::String(now_iso()));
+    let _ = crate::fsutil::write_json_atomic(&file, &Value::Object(session));
+    guard.release();
 }
 
 fn flush(stdout: &str, stderr: &str) {

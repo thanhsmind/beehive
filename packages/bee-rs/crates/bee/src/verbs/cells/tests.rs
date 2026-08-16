@@ -2055,6 +2055,21 @@ use std::time::Instant;
 
     const OLD: &str = "2020-01-01T00:00:00.000Z";
 
+    // ser-2: a session record marked `status: "closed"` (SessionEnd's clean
+    // exit) reads as heartbeat-stale unconditionally — the closed mark
+    // itself is what releases it, even with a heartbeat still inside the
+    // freshness window. Mirrors the existing "dead" reading this function
+    // already gave the sweep.
+    #[test]
+    fn heartbeat_stale_treats_closed_session_as_stale_regardless_of_recency() {
+        let fresh = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+        let mut session = Map::new();
+        session.insert("id".into(), json!("s1"));
+        session.insert("last_heartbeat".into(), json!(fresh));
+        session.insert("status".into(), json!("closed"));
+        assert!(heartbeat_stale(Some(&session), rsv::now_ms()).unwrap());
+    }
+
     #[test]
     fn sweep_resets_only_the_claim_it_actually_removed() {
         let tmp = cn_root();

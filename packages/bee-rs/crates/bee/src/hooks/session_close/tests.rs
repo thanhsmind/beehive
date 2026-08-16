@@ -441,8 +441,17 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(project_name(&Value::Null), "(unknown)");
     }
 
+    /// Serializes every test that mutates the process-global `BEEHIVE_PERF_DIR`
+    /// var — `cargo test` runs test fns on multiple threads in the SAME
+    /// process, so two such tests racing would each read the other's tempdir.
+    fn lock_perf_env() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     #[test]
     fn rollup_and_upsert_roundtrip_in_isolated_perf_dir() {
+        let _guard = lock_perf_env();
         // BEEHIVE_PERF_DIR isolates the machine-global store for this test.
         let perf = tempfile::tempdir().unwrap();
         unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
@@ -478,4 +487,62 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert!(html.contains("<title>bee performance</title>"));
         assert!(html.contains("sonnet-4"));
         unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+    }
+
+    // ─── SessionEnd (close the session record) ─────────────────────────────
+
+    #[test]
+    fn session_end_marks_the_session_record_closed() {
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(
+            &root.join(".bee").join("sessions").join("s-1.json"),
+            &json!({"id": "s-1", "started_at": "2026-01-01T00:00:00.000Z"}),
+        );
+        let body = json!({
+            "hook_event_name": "SessionEnd",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+        // The SessionEnd branch returns before the perf refresh runs, so no
+        // BEEHIVE_PERF_DIR isolation is needed here.
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+        let record: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("sessions").join("s-1.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(record["status"], "closed");
+        assert!(record["closed_at"].as_str().unwrap().ends_with('Z'), "{record}");
+        // The rest of the record survives the write untouched.
+        assert_eq!(record["started_at"], "2026-01-01T00:00:00.000Z");
+    }
+
+    #[test]
+    fn stop_payload_leaves_the_session_record_untouched() {
+        let fx = fixture();
+        let root = fx.path();
+        // BEEHIVE_PERF_DIR isolates the machine-global store the Stop path's
+        // perf refresh touches — see rollup_and_upsert_roundtrip_in_isolated_
+        // perf_dir above; lock_perf_env keeps the two tests from racing on it.
+        let _guard = lock_perf_env();
+        let perf = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        let record = json!({"id": "s-1", "started_at": "2026-01-01T00:00:00.000Z"});
+        write_json_file(&root.join(".bee").join("sessions").join("s-1.json"), &record);
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+        let _ = run_inner(&[], &stdin);
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        let after: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("sessions").join("s-1.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(after, record, "Stop must never touch status/closed_at");
     }

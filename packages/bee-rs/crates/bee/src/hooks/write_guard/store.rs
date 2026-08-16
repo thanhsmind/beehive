@@ -384,6 +384,9 @@ pub(crate) fn is_concurrent_mode(root: &str, exclude: Option<&str>, strict: bool
     let exclude = exclude.map(js_trim).unwrap_or("");
     let now = now_ms();
     for session in list_session_records(root, strict)? {
+        if matches!(session.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead") {
+            continue; // a closed/dead session is never counted toward concurrent mode.
+        }
         let id_matches = session.get("id") == Some(&Value::String(exclude.to_string()));
         if !id_matches && !heartbeat_stale(&session, now)? {
             return Ok(true);
@@ -405,6 +408,9 @@ pub(crate) fn active_worker_session_ids(control_root: &str, exclude: Option<&str
             Some(Value::String(s)) => s.clone(),
             _ => continue,
         };
+        if matches!(session.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead") {
+            continue; // a closed/dead session never counts as an active worker.
+        }
         if id != exclude && !heartbeat_stale(&session, now)? {
             live.push(id);
         }

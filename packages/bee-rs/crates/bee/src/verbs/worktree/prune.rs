@@ -234,6 +234,10 @@ pub(crate) fn live_session_holds(
             }
         };
 
+        if matches!(record.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead") {
+            continue; // a closed/dead session never holds a worktree.
+        }
+
         let fresh = match record.get("last_heartbeat") {
             Some(Value::String(s)) => match parse_iso_ms(s) {
                 Some(ms) => now_ms - ms <= liveness_seconds * 1000.0,

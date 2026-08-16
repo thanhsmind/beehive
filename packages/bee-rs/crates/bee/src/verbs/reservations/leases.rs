@@ -594,8 +594,13 @@ pub(crate) fn list_session_records(control_root: &str) -> Ex<Vec<Map<String, Val
     Ok(out)
 }
 
-/// provenance: claims.mjs heartbeatStale.
+/// provenance: claims.mjs heartbeatStale. A session marked "closed" (clean
+/// SessionEnd) or "dead" (crash-swept) reads as stale unconditionally,
+/// matching cells::heartbeat_stale.
 pub(crate) fn heartbeat_stale(session: &Map<String, Value>, now: f64) -> Ex<bool> {
+    if matches!(session.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead") {
+        return Ok(true);
+    }
     match date_parse_val(session.get("last_heartbeat"))? {
         None => Ok(true),
         Some(ms) => Ok(ms + HEARTBEAT_STALE_SECONDS * 1000.0 <= now),

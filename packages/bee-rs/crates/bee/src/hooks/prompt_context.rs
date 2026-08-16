@@ -1673,11 +1673,14 @@ fn heartbeat_session(root: &Path, sid: &str, now: i64) -> Result<(), String> {
             return Ok(()); // SESSION_MISSING — typed fail
         };
         session.insert("last_heartbeat".into(), Value::String(iso_from_ms(now)));
-        // D8: a session that renews its heartbeat is no longer dead —
-        // clear the mark and stamp the revival (most recent only).
-        if session.get("status").and_then(Value::as_str) == Some("dead") {
+        // D8: a session that renews its heartbeat is no longer dead
+        // (crash-swept) or closed (clean SessionEnd) — clear the mark and
+        // stamp the revival (most recent only).
+        let status = session.get("status").and_then(Value::as_str);
+        if status == Some("dead") || status == Some("closed") {
             session.remove("status");
             session.remove("dead_at");
+            session.remove("closed_at");
             session.insert("revived_at".into(), Value::String(iso_from_ms(now)));
         }
         write_json_retry(
@@ -2244,6 +2247,37 @@ mod tests {
         assert_eq!(after["lane"], json!("l1")); // untouched fields survive
         assert!(after.get("status").is_none(), "{after:?}");
         assert!(after.get("dead_at").is_none(), "{after:?}");
+        assert!(after["revived_at"].as_str().is_some(), "{after:?}");
+        assert_ne!(after["last_heartbeat"], json!("2020-01-01T00:00:00.000Z"));
+    }
+
+    #[test]
+    fn heartbeat_session_clears_closed_mark_and_stamps_revived_at() {
+        // ser-2: UserPromptSubmit's heartbeat path clears a "closed" mark
+        // (SessionEnd's clean exit) too, mirroring the "dead" revival above.
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(
+            tmp.path(),
+            ".bee/sessions/s1.json",
+            &serde_json::to_string(&json!({
+                "id": "s1",
+                "last_heartbeat": "2020-01-01T00:00:00.000Z",
+                "status": "closed",
+                "closed_at": "2020-01-01T00:05:00.000Z",
+                "lane": "l1"
+            }))
+            .unwrap(),
+        );
+        let now = now_ms();
+        heartbeat_session(tmp.path(), "s1", now).unwrap();
+        let after: Value = serde_json::from_str(
+            &std::fs::read_to_string(tmp.path().join(".bee/sessions/s1.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(after["lane"], json!("l1")); // untouched fields survive
+        assert!(after.get("status").is_none(), "{after:?}");
+        assert!(after.get("closed_at").is_none(), "{after:?}");
         assert!(after["revived_at"].as_str().is_some(), "{after:?}");
         assert_ne!(after["last_heartbeat"], json!("2020-01-01T00:00:00.000Z"));
     }

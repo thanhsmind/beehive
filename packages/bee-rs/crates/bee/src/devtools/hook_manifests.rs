@@ -200,6 +200,15 @@ const CATALOG: &[Event] = &[
             ]
         )],
     },
+    // Claude-only: Codex exposes no SessionEnd event to wire this against.
+    Event {
+        name: "SessionEnd",
+        groups: &[group!(
+            CLAUDE_ONLY,
+            None,
+            [("bee-session-close.mjs", "bee: session end close")]
+        )],
+    },
 ];
 
 /// The rendered command's hook NAME. The catalog still keys on the historical
@@ -375,10 +384,13 @@ pub fn run(flags: &[&str]) -> Option<ExitCode> {
 //   model-tier-guard-codex-spawn   PreToolUse "spawn_agent" bee-model-guard
 //   subagent-start-audit-codex-only  SubagentStart  bee-codex-subagent-audit
 //   subagent-stop-audit-codex-only   SubagentStop   bee-codex-subagent-audit
+//   session-end-claude-only          SessionEnd     bee-session-close
 //
-// The first two are one capability on two tool names. The last two exist
+// The first two are one capability on two tool names. The next two exist
 // because SubagentStart/Stop are events only Codex exposes today; bee records
-// bounded audit evidence there and claims no pre-spawn authority.
+// bounded audit evidence there and claims no pre-spawn authority. The last
+// exists because SessionEnd is an event only Claude Code exposes; Codex has
+// nothing to wire it against.
 
 #[cfg(test)]
 mod tests {
@@ -548,6 +560,7 @@ mod tests {
             ("PreToolUse", "spawn_agent", "model-guard"),
             ("SubagentStart", "*", "codex-subagent-audit"),
             ("SubagentStop", "*", "codex-subagent-audit"),
+            ("SessionEnd", "*", "session-close"),
         ];
         let is_approved = |t: &(String, String, String)| {
             approved.iter().any(|(e, m, s)| *e == t.0 && *m == t.1 && *s == t.2)

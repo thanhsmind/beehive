@@ -96,8 +96,8 @@ fn count_expired_claims(control: &Path, now: f64) -> sweep_cells::MR<usize> {
 fn count_heartbeat_stale_sessions(control: &Path, now: f64) -> sweep_cells::MR<usize> {
     let mut count = 0usize;
     for record in sweep_cells::list_session_records(control)? {
-        if matches!(record.get("status"), Some(Value::String(s)) if s == "dead") {
-            continue; // already marked — not a fresh mark this pass would make
+        if matches!(record.get("status"), Some(Value::String(s)) if s == "dead" || s == "closed") {
+            continue; // already marked, or cleanly closed — not a fresh mark this pass would make
         }
         if sweep_cells::heartbeat_stale(Some(&record), now)? {
             count += 1;
@@ -148,8 +148,8 @@ pub(crate) fn mark_stale_sessions(
         // skipped loudly — never aborts the pass (one bad record among
         // many session files must not stop the rest from being judged).
         let Some(record) = sweep_cells::read_session(control, id)? else { continue };
-        if matches!(record.get("status"), Some(Value::String(s)) if s == "dead") {
-            continue;
+        if matches!(record.get("status"), Some(Value::String(s)) if s == "dead" || s == "closed") {
+            continue; // already marked, or cleanly closed — never overwritten by the crash-MARK pass
         }
         if !sweep_cells::heartbeat_stale(Some(&record), now)? {
             continue;
@@ -159,8 +159,8 @@ pub(crate) fn mark_stale_sessions(
         };
         let outcome = (|| -> sweep_cells::MR<bool> {
             let Some(fresh) = sweep_cells::read_session(control, id)? else { return Ok(false) };
-            if matches!(fresh.get("status"), Some(Value::String(s)) if s == "dead") {
-                return Ok(false);
+            if matches!(fresh.get("status"), Some(Value::String(s)) if s == "dead" || s == "closed") {
+                return Ok(false); // already marked, or closed under the lock — never overwritten
             }
             if !sweep_cells::heartbeat_stale(Some(&fresh), now)? {
                 // THE RACE: a heartbeat landed between the pre-check read

@@ -594,9 +594,15 @@ pub(crate) fn list_session_records(control: &Path) -> MR<Vec<Map<String, Value>>
     Ok(out)
 }
 
-/// claims.mjs heartbeatStale.
+/// claims.mjs heartbeatStale. A session record marked "closed" (clean
+/// SessionEnd) or "dead" (crash-swept) reads as stale unconditionally — its
+/// heartbeat recency no longer matters once the record itself says the
+/// session is over.
 pub(crate) fn heartbeat_stale(session: Option<&Map<String, Value>>, now: f64) -> MR<bool> {
     let Some(session) = session else { return Ok(true) };
+    if matches!(session.get("status"), Some(Value::String(s)) if s == "closed" || s == "dead") {
+        return Ok(true);
+    }
     match rsv::date_parse_val(session.get("last_heartbeat")).map_err(|_| Fail::Delegate)? {
         None => Ok(true),
         Some(ms) => Ok(ms + HEARTBEAT_STALE_SECONDS * 1000.0 <= now),
