@@ -466,6 +466,19 @@ wait even if the agent forgets to; a session that dies mid-question still
 self-clears once its heartbeat goes stale; a session that is merely slow
 never loses its mark.
 
+**Clearing a recordless mark clears the pair, not half of it
+(waiting-on-pair-clear, wpc-1, 2026-08-16).** Trigger: the explicit clear
+runs on the default record (no workflow record exists). What happens: the
+setter on that layer wrote TWO fields — the mark and
+`run_state: "awaiting-approval"` — so the clear nulls both; before this
+rule the clear nulled only the mark and `run_state` read
+`awaiting-approval` forever, which a dashboard displayed as a stuck
+approval badge after the wait had ended. The `run_state` reset is guarded
+on that exact value: a `run_state` any other path derived (a workflow
+record's projection) is never touched by this clear. What each actor
+observes: after a set-then-clear with no feature active, a reader of the
+default record sees no mark and no waiting state.
+
 **The human-message clearing path is proven through the real hook entry
 point, not only its inner store function (awaiting-human D2, ah-2 rework,
 2026-08-14).** Two tests drive `prompt_context::run` — the exact `pub fn` the
