@@ -5,3 +5,11 @@
 {"ts":"2026-08-15T02:33:19.620Z","event":"add","id":"a83eea62-81cd-40df-bf29-d7d98c032c2f","kind":"promote","feature":"handbook-currency","cells":[],"areas":[],"files":["docs/history/handbook-currency/promote-proposals.md"],"reason":"Promote proposal for \"handbook-currency\" awaiting apply — docs/history/handbook-currency/promote-proposals.md."}
 {"ts":"2026-08-16T00:32:04.959Z","event":"claim","id":"093ee3c0-84a1-4178-a9ee-1ea29bb0572c","owner":"e499dfc3-c889-41e5-b4a7-381b38596b5e","claimed_at":"2026-08-16T00:32:04.959Z","ttl_seconds":3600}
 {"ts":"2026-08-16T00:32:04.979Z","event":"complete","id":"093ee3c0-84a1-4178-a9ee-1ea29bb0572c"}
+{"ts":"2026-08-16T00:51:22.591Z","event":"claim","id":"abdf0c81-a86a-4428-bc57-136829443856","owner":"e499dfc3-c889-41e5-b4a7-381b38596b5e","claimed_at":"2026-08-16T00:51:22.591Z","ttl_seconds":3600}
+{"ts":"2026-08-16T00:51:22.610Z","event":"complete","id":"abdf0c81-a86a-4428-bc57-136829443856"}
+{"ts":"2026-08-16T00:51:22.692Z","event":"claim","id":"d6f715d2-5bff-48ee-973c-ae8a77150d2d","owner":"e499dfc3-c889-41e5-b4a7-381b38596b5e","claimed_at":"2026-08-16T00:51:22.692Z","ttl_seconds":3600}
+{"ts":"2026-08-16T00:51:22.695Z","event":"complete","id":"d6f715d2-5bff-48ee-973c-ae8a77150d2d"}
+{"ts":"2026-08-16T00:51:22.796Z","event":"claim","id":"08cce0e4-2edb-413b-839c-1b4ba99e9142","owner":"e499dfc3-c889-41e5-b4a7-381b38596b5e","claimed_at":"2026-08-16T00:51:22.796Z","ttl_seconds":3600}
+{"ts":"2026-08-16T00:51:22.799Z","event":"complete","id":"08cce0e4-2edb-413b-839c-1b4ba99e9142"}
+{"ts":"2026-08-16T00:51:22.895Z","event":"claim","id":"a83eea62-81cd-40df-bf29-d7d98c032c2f","owner":"e499dfc3-c889-41e5-b4a7-381b38596b5e","claimed_at":"2026-08-16T00:51:22.895Z","ttl_seconds":3600}
+{"ts":"2026-08-16T00:51:22.898Z","event":"complete","id":"a83eea62-81cd-40df-bf29-d7d98c032c2f"}

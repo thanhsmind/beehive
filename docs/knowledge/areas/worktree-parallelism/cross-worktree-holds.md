@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/the-trust-model.md, areas/worktree-parallelism/control-plane-topology.md]
-  decisions: ["cross-worktree-holds D1-D6 (the shared ledger, 2026-07-20)", "hardening-1-7-10 (acquisition is one atomic step; holds renew on heartbeat, 2026-07-21)", "a0ab91b6 (release is scoped by cell, never by holder alone — live incident)", "multisession-native D4 (slice 3, issue #56: a foreign hold on a normal path downgrades to advisory allow+warning at write time; only a built-in-plus-configured exclusive-resource list keeps the old hard deny — docs/history/multisession-native/CONTEXT.md)", "multisession-native D2 (slice 4, msn-21: the write guard resolves topology exactly ONCE per call via resolveContext, replacing the two separate walks — resolveWriteRecord's own call and resolveHoldTopology's own resolveRoots call — this exclusive-resource-list class of deny previously required; the class's own policy stays byte-for-byte unchanged — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", worktree-reclaim D3 (a teardown either finishes or does not start — the shared teardown helper every worktree-removing path now calls through)]
+  decisions: ["cross-worktree-holds D1-D6 (the shared ledger, 2026-07-20)", "hardening-1-7-10 (acquisition is one atomic step; holds renew on heartbeat, 2026-07-21)", "a0ab91b6 (release is scoped by cell, never by holder alone — live incident)", "multisession-native D4 (slice 3, issue #56: a foreign hold on a normal path downgrades to advisory allow+warning at write time; only a built-in-plus-configured exclusive-resource list keeps the old hard deny — docs/history/multisession-native/CONTEXT.md)", "multisession-native D2 (slice 4, msn-21: the write guard resolves topology exactly ONCE per call via resolveContext, replacing the two separate walks — resolveWriteRecord's own call and resolveHoldTopology's own resolveRoots call — this exclusive-resource-list class of deny previously required; the class's own policy stays byte-for-byte unchanged — docs/history/multisession-native/CONTEXT.md, decision e1ceca12)", worktree-reclaim D3 (a teardown either finishes or does not start — the shared teardown helper every worktree-removing path now calls through), "hold-holder-attribution hha-1..3 (a hold belongs to the cell's owning worktree; one resolver seam asked by reserve/release/cap-release/claim-next; write-guard unchanged, 2026-08-14)"]
   sources: [docs/history/worktree-feature-parallelism/, "docs/specs/worktree-parallelism.md#S-cross-worktree-holds-the-shared-ledger-cross-worktree-holds-d1-d6-2026-07-20", "multisession-native cell multisession-native-14 (advisory cross-worktree hold on normal paths; exclusive-resource list; trace .bee/cells/multisession-native-14.json, commit 5bee967, 2026-07-25)", "multisession-native cell multisession-native-21 (guards.mjs checkWrite unified onto one resolveContext resolution feeding this class plus two new classes; trace .bee/cells/multisession-native-21.json, commit 3f56916, 2026-07-25; see areas/worktree-parallelism/control-plane-topology.md)", commit 430ec952 (lift teardown into one helper); packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs (teardown_worktree)]
   authoritative_for: "worktree-parallelism: the cross-worktree holds ledger, its acquisition, renewal, taps and release"
 ---
@@ -46,6 +46,14 @@ shared holds ledger closes that gap at WRITE time:
   for as long as it stays genuinely active; TTL expiry now fires only for a session that has
   actually gone silent (a dead or abandoned worker), not for one still working past the old
   fixed ceiling.
+- **A hold belongs to the cell's owning worktree, not the checkout that typed the command
+  (hold-holder-attribution hha-1..3, 2026-08-14).** Holder identity resolves through one
+  seam — the cell's granted worktree decides who owns the hold — and every mutating tap asks
+  that same seam: reserve, release, cap-time release, and claim-next's overlap skip. Before
+  this, a granted worktree's own worker could be denied by a hold the ledger attributed to
+  the checkout that happened to run the command (a false FOREIGN_HOLD against itself). The
+  write-guard's read tap deliberately does NOT change: its by-resource policy below stays
+  byte-identical.
 - **Three read taps, one voice — but the write-guard's own voice now splits by resource
   (revised multisession-native D4, slice 3, msn-14).** (1) `reservations reserve` — typed
   refusal before any local row is written, unchanged; (2) `claim-next` — silently skips a cell

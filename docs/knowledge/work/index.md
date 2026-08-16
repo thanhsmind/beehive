@@ -10,7 +10,12 @@ never a generation timestamp or any other wall-clock value.
 
 ## Sections
 
+- [awaiting-human/](awaiting-human/index.md) — 1 concept(s)
 - [full-failure-evidence/](full-failure-evidence/index.md) — 1 concept(s)
 - [okf-foundation/](okf-foundation/index.md) — 3 concept(s)
 - [okf-migration-f2/](okf-migration-f2/index.md) — 1 concept(s)
+- [retire-collation-guard/](retire-collation-guard/index.md) — 1 concept(s)
+- [sweep-at-every-door/](sweep-at-every-door/index.md) — 1 concept(s)
+- [sweep-recovery-door/](sweep-recovery-door/index.md) — 1 concept(s)
 - [traceable-runs/](traceable-runs/index.md) — 1 concept(s)
+- [worktree-first-teeth/](worktree-first-teeth/index.md) — 1 concept(s)
