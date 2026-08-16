@@ -21,7 +21,12 @@ is the **orchestrator**. `bee orient` shows where the work stands either way.
 ## Orchestrate
 
 You launch workers and tend results; you do not implement. The wave runs
-inside the feature's worktree (worktree-first — AGENTS.md). A `tiny` cell
+inside the feature's worktree (worktree-first — AGENTS.md). Claiming from
+main is control-plane and fine; a Task-tool worker inherits the session's
+OS cwd, so dispatching an execution worker while cwd is main cannot write
+into the worktree and dies on the write guard — enter the worktree first
+(EnterWorktree on Claude Code, or a session/pane opened at the worktree
+path) and dispatch from there. A `tiny` cell
 may run inline in this session;
 `small` and up always dispatches — one worker per cell
 (`references/swarming-reference.md` ("Single execution worker in full")),

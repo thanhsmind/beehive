@@ -599,6 +599,38 @@ pub(crate) fn run_update(flags: rsv::Flags, use_json: bool, t0: Instant) -> Opti
 
 // ── cells claim ────────────────────────────────────────────────────────────
 
+/// D1 (claim-time-worktree-redirect, plan.md C1) — the claim-time
+/// execution-location annotation shared by `cells claim` and `cells
+/// claim-next`. When the claimed cell's `feature` holds a granted
+/// worktree, appends one line to the success `text` and inserts
+/// `worktree_root` into the success JSON `obj`; otherwise leaves both
+/// untouched (fail open, D2/D6 — an `Unresolvable` grant entry, exactly
+/// like `NotFound`, must never become a confident annotation any more than
+/// it becomes a confident refusal). Threads an explicit `main_root` —
+/// never reads the acting cwd — so it is testable without
+/// `std::env::set_current_dir`.
+pub(crate) fn append_worktree_execution_annotation(
+    main_root: &Path,
+    feature: Option<&str>,
+    obj: &mut Map<String, Value>,
+    text: &mut String,
+) {
+    let Some(feature) = feature else { return };
+    let Some(main_root_s) = main_root.to_str() else { return };
+    let grant = match crate::hooks::write_guard::find_feature_worktree_grant(main_root_s, feature) {
+        Ok(g) => g,
+        Err(_) => return, // Nd — unproven input never becomes a confident annotation
+    };
+    let crate::hooks::write_guard::FeatureWorktreeGrant::Found(_id, worktree_root) = grant else {
+        return; // NotFound / Unresolvable — fail open
+    };
+    text.push_str(&format!(
+        "\nworktree: {worktree_root} — execution runs from a session rooted there; a subagent \
+dispatched from main inherits main's cwd and cannot write here."
+    ));
+    obj.insert("worktree_root".into(), Value::String(worktree_root));
+}
+
 pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !rsv::keys_known(&flags, &["id", "worker", "session-id", "ttl", "isolate", "fix-first"]) {
         return None;
@@ -623,7 +655,7 @@ pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
     };
     dispatch("cells claim", use_json, t0, move |ctx| {
         let root = ctx.root.clone();
-        let claimed = claim_cell_from_flags_ex(
+        let mut claimed = claim_cell_from_flags_ex(
             &root,
             &id,
             &worker,
@@ -636,11 +668,18 @@ pub(crate) fn run_claim(flags: rsv::Flags, use_json: bool, t0: Instant) -> Optio
             Some(v) => jsjson::js_to_string(v),
             None => "undefined".to_string(),
         };
-        let text = format!(
+        let mut text = format!(
             "Claimed {} for {}.",
             js_string_or_undefined(claimed.get("id")),
             worker_disp
         );
+        let feature = match claimed.get("feature") {
+            Some(Value::String(f)) => Some(f.clone()),
+            _ => None,
+        };
+        if let Value::Object(map) = &mut claimed {
+            append_worktree_execution_annotation(&root, feature.as_deref(), map, &mut text);
+        }
         Ok(Out::Emit(claimed, text, 0))
     })
 }

@@ -48,6 +48,33 @@ names that worktree and both remedies instead of the generic containment text (m
 only — the deny itself is unchanged; any grants-read error falls back to the generic
 message, never an allow).
 
+## The claim-time redirect chain (claim-time-worktree-redirect, 2026-08-16)
+
+The wrong flow — claim from main, then edit into a granted worktree, guard
+deny, self-correct — now meets three machine signals in order, each one a
+fallback for the last:
+
+1. **Claim annotates.** `cells claim` and `cells claim-next` append the
+   granted worktree root to their success output and JSON (`worktree_root`)
+   whenever the claimed cell's feature holds one: execution runs from a
+   session rooted there; a subagent dispatched while cwd is main inherits
+   main and cannot write into it. Unresolvable grant entries fail open —
+   the annotation is silently absent rather than manufacturing a refusal.
+2. **The worker self-checks.** `worker-cell.md`'s first instruction, ahead
+   of any work step, compares the effective cwd against `worktree_root` and
+   returns `[BLOCKED: session cwd is not the worktree]` with zero edit
+   attempts on a mismatch — the existing Location block still serves
+   pane/cockpit workers whose cwd already IS the worktree.
+3. **The write guard denies.** Unchanged: the containment check
+   (`hooks/write_guard/hook_local.rs`) is the backstop no annotation or
+   self-check can race past.
+
+No refusal was added at claim time itself — a v1 draft that refused `cells
+claim` inside a granted worktree deadlocked against the narrow door (claim
+verbs run only from main) and against `dispatch prepare --claim`/`wave`,
+which claim from main by design. The annotation is informational and
+unconditional; claim and claim-next semantics are otherwise unchanged.
+
 ## Contention is triage data, never a user question (worktree-first-enforcement, 2026-08-16)
 
 Cross-worktree same-path leases are advisory by design — a hard deny needs the holder's
