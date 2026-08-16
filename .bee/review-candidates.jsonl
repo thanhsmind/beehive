@@ -131,3 +131,4 @@
 {"id":"a13de76d-1a9e-4df3-b2e6-0d9ccd5a38dc","type":"candidate","date":"2026-08-16T03:32:21.922Z","feature":"registry-drift-derivation","head":"b07f6f3fefc4b6375753a3ce4852ad599553d24c","mode":"small","baseline":null,"cells":["rdd-1"]}
 {"id":"648fbeac-c102-4be7-b77d-f54b0ba3a9fe","type":"candidate","date":"2026-08-16T07:42:50.155Z","feature":"worktree-first-enforcement","head":"5a02c5060229037a3e06af86dbde6171bf71d07f","mode":"docs","baseline":"a7a0fa3e18ab640d789ab6e9fccf15f43d93cb2d","cells":[]}
 {"id":"e08a7814-db6c-46f6-be33-bc37e064dd56","type":"candidate","date":"2026-08-16T08:28:37.043Z","feature":"claim-time-worktree-redirect","head":"24c15891","mode":"standard","baseline":null,"cells":[]}
+{"id":"08e6a1f7-3668-4c9a-9f87-efebb32e465c","type":"candidate","date":"2026-08-16T08:47:31.707Z","feature":"waiting-on-pair-clear","head":"8bb60054","mode":"tiny","baseline":null,"cells":[]}
