@@ -1,0 +1,55 @@
+{
+  "id": "wcpf-1",
+  "feature": "windows-ci-path-fixes",
+  "lane": "small",
+  "title": "Fix 4 Windows-only test failures (issue #94): glob-char stat errno + fixture path canonicalization",
+  "action": "In hooks/write_guard/jspath.rs io_err_is_enoent (lines ~402-411), widen the cfg!(windows) arm to also match raw_os_error 123 (ERROR_INVALID_NAME) and 161 (ERROR_BAD_PATHNAME) so a stat on a literal glob token like *.log is classified not-found and walk_existing_ancestor climbs to the parent, matching POSIX behavior. In verbs/reservations/tests.rs worktree_fixture (~558-581) and verbs/cells/tests.rs wf_worktree_fixture (~4644-4667), canonicalize the tempdir root with dunce::canonicalize before any git init/worktree add or path join, following the build_fixture precedent in hooks/write_guard/tests.rs:54-64, so Windows 8.3 short paths (RUNNER~1) never enter byte-equality checks. Do NOT change production path-equality semantics in store.rs or hook_local.rs.",
+  "goal": "Windows CI verify green: the 4 red tests (bash_plain_glob_target_behaves_exactly_as_before_d4, bash_plain_glob_write_outside_scratch_shape_allows_as_before_d4, claim_annotation_names_the_granted_worktree_root, grant_key_linked_id_and_guard_workspace_id_are_one_string) pass on windows-latest; Linux suite stays green.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/jspath.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "notes": "Windows-only red; local run is Linux so full proof lands on Windows CI after push.",
+  "judge_obligation_ack": "guard diff is a 2-errno widening mirroring POSIX ENOENT semantics; an independent bee-review read over the guard diff runs before merge",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-wcpf-1",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/jspath.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T11:52:48.715Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6e83b991-dafe-45af-b6d8-7abac0afe364",
+    "claimed_at": "2026-08-16T11:46:07.137Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-16T11:50:17.390Z",
+        "claim_session": "6e83b991-dafe-45af-b6d8-7abac0afe364",
+        "claimed_at": "2026-08-16T11:50:08.657Z",
+        "acquired_at": "2026-08-16T11:46:07.137Z",
+        "worker": "w-wcpf-1",
+        "verdict": "tests-red",
+        "failure_signature": "e20cdf930496",
+        "note": "let _ = ok(start_default(root, root, \"feat-b\", Some(\"standard\"), \"shaping\", None, &[]));"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T11:52:29.116Z"
+  }
+}
