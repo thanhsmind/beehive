@@ -28,8 +28,13 @@ FIX: use plain in-worktree paths without traversal, outside absolute paths, or s
 /// `${VAR}`, or a backquote command substitution) was never expanded by a
 /// shell — the guard only ever sees the literal characters. Resolving it as
 /// though it were a plain relative path produces a fake in-repo path (e.g.
-/// `$WT/foo` lexically "resolves" under cwd), so every path-resolution entry
-/// point must classify it unresolvable BEFORE it is walked as a path.
+/// `$WT/foo` lexically "resolves" under cwd), so the Bash target loop
+/// (main.rs) must classify it unresolvable BEFORE it is walked as a path.
+/// D4: this classification is Bash-surface-only — it is NOT applied inside
+/// the shared resolvers (`canonical_rel_path`, `resolve_target_realpath`),
+/// because Edit/Write/MultiEdit `file_path` and apply_patch targets are
+/// literal strings no shell ever expands (a file named `Foo$Bar.java` is a
+/// valid literal target there).
 pub(crate) fn has_unexpanded_shell_syntax(raw: &str) -> bool {
     raw.contains('$') || raw.contains('`')
 }
@@ -234,10 +239,6 @@ pub(crate) fn canonical_rel_path(root: &str, cwd: &str, raw: Option<&Value>) -> 
         Some(Value::String(s)) if !s.is_empty() => s.clone(),
         _ => return Ok(None),
     };
-    // D1: unexpanded shell syntax never resolves as a literal path.
-    if has_unexpanded_shell_syntax(&raw_s) {
-        return Ok(None);
-    }
     if is_home_prefixed(&raw_s) {
         return Ok(None);
     }
@@ -294,10 +295,6 @@ pub(crate) fn resolve_target_realpath(cwd: &str, root: &str, raw: &Value) -> R<O
         Value::String(s) if !s.is_empty() => s.clone(),
         _ => return Ok(None),
     };
-    // D1: unexpanded shell syntax never resolves as a literal path.
-    if has_unexpanded_shell_syntax(&raw_s) {
-        return Ok(None);
-    }
     if is_home_prefixed(&raw_s) {
         return Ok(None);
     }

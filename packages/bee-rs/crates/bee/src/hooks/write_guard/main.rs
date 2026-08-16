@@ -193,6 +193,20 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                 }
                 let mut cands: Vec<Cand> = Vec::new();
                 for p in &targets.paths {
+                    // D4/D5: shell-syntax classification lives on the Bash
+                    // surface only. A token still carrying unexpanded `$` or
+                    // a backquote is never handed to canonical_rel_path (it
+                    // is not a literal path) and never reaches
+                    // companion_mount_rel — with .bee/companion-session.json
+                    // present that call would raise Err(Nd) and delegate
+                    // (fail-open), silently swapping the D2 denial for an
+                    // allow. Marking it unresolved here keeps it inside the
+                    // ordinary wall-failed-candidate flow below, which always
+                    // ends in a denial for this cand.
+                    if has_unexpanded_shell_syntax(p) {
+                        cands.push(Cand { raw: p.clone(), canonical: None, rel: None });
+                        continue;
+                    }
                     let canonical =
                         canonical_rel_path(&root, &cwd, Some(&Value::String(p.clone())))?;
                     let rel = match &canonical {
@@ -223,12 +237,18 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     // existing order and reach over in-repo targets.
                     let mut first_failing: Option<&Cand> = None;
                     for c in cands.iter().filter(|c| c.rel.is_none()) {
-                        if !harness_allowlisted_target(
-                            harness_roots,
-                            &root,
-                            &cwd,
-                            &Value::String(c.raw.clone()),
-                        )? {
+                        // A shell-syntax cand never reaches the harness
+                        // allowlist check: it was never resolved as a path,
+                        // so there is no resolved location to test against a
+                        // harness root.
+                        if has_unexpanded_shell_syntax(&c.raw)
+                            || !harness_allowlisted_target(
+                                harness_roots,
+                                &root,
+                                &cwd,
+                                &Value::String(c.raw.clone()),
+                            )?
+                        {
                             first_failing = Some(c);
                             break;
                         }
