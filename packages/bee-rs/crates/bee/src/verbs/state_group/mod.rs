@@ -30,7 +30,11 @@
 //       execution/merge approval (advisorRefStale, lib/state.mjs).
 //   state worker add / update / remove / clear / prune — always native for
 //     known flag shapes (they never consult lanes/sessions/workflows).
-//   state lanes / session list / session bind / session unbind — native.
+//   state lanes / session list / session bind / session unbind / session
+//     release — native. `session release` marks an OPEN session
+//     `status: "closed"`, `released: true` (instant lock release, no lane
+//     change) — `state_sync.rs`'s heartbeat leaves a `released` mark intact
+//     while `prompt_context.rs`'s UserPromptSubmit revival clears it.
 //   state scribing-run --show — native (read-only ledger/lane/state query).
 //   state handoff write / adopt / show — native in every repo shape: the
 //     legacy .bee/HANDOFF.json path when resolveHandoffWorkflowId answers
@@ -99,7 +103,7 @@
 // global order `workflow:<id>` → {'state' | lane:<feature>} (withMutationLock),
 // falling back to a single "state" hold when no live workflow names the
 // target; the worker verbs hold "state" alone; the handoff mailbox holds
-// `handoff:<workflow-id>`; session bind/unbind hold "sessions" through
+// `handoff:<workflow-id>`; session bind/unbind/release hold "sessions" through
 // claims.mjs's bounded 15×20ms acquire-once loop; adoptClaim uses the
 // per-claim `<cell>.adopting` gate file (no store lock). worker prune takes
 // no lock (read-only on state). All waits are lock.rs's 100×50ms

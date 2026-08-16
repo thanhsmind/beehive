@@ -1387,6 +1387,57 @@ use std::process::ExitCode;
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
 
+    // ser-3: an explicit `state session release` writes the SAME
+    // `status: "closed"` mark `add_closed_session` above pins, plus
+    // `released: true`. Neither `is_concurrent_mode` nor
+    // `active_worker_session_ids` inspects `released` — the closed mark
+    // alone already reads as not-live — so this only proves that reading
+    // holds true for a released record too, exactly as the "closed" test
+    // above proves it for a plain SessionEnd close.
+    fn add_released_session(root: &Path, id: &str) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        let now = ms_to_iso(now_ms()).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": id, "started_at": now, "last_heartbeat": now,
+                    "status": "closed", "closed_at": now, "released": true
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn worktree_first_docs_lane_released_peer_reads_as_no_peer() {
+        let wtf = build_worktree_first_no_grant("swarming", Some("docs"));
+        add_released_session(&wtf.root, "other-released");
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"src/app.js"},"session_id":"mine"}),
+            &wtf.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
+    #[test]
+    fn is_concurrent_mode_and_active_worker_session_ids_treat_a_released_session_as_not_live() {
+        let fx = wcg_root();
+        add_released_session(&fx.root, "other-released");
+        let root_s = fx.root.to_string_lossy().into_owned();
+        assert!(
+            !is_concurrent_mode(&root_s, None, false).unwrap(),
+            "a released session must not count toward concurrent mode"
+        );
+        assert!(
+            active_worker_session_ids(&root_s, None).unwrap().is_empty(),
+            "a released session must not read as an active worker"
+        );
+    }
+
     #[test]
     fn worktree_first_docs_lane_fails_open_on_corrupt_session_store() {
         let dir = tempfile::tempdir().unwrap();

@@ -502,9 +502,17 @@ fn heartbeat_session(ctrl: &Path, sid: &str, now: &DateTime<Utc>) -> Result<(), 
                 session.insert("last_heartbeat".to_string(), Value::String(iso_ms(now)));
                 // D8: a session that renews its heartbeat is no longer dead
                 // (crash-swept) or closed (clean SessionEnd) — clear the mark
-                // and stamp the revival (most recent only).
+                // and stamp the revival (most recent only). ser-3 split: a
+                // record marked `released: true` (an explicit
+                // `state session release`, not a crash or SessionEnd) is NOT
+                // revived here — otherwise the release command's own
+                // trailing PostToolUse hook call, or any same-turn tool use,
+                // would instantly undo the release it just wrote. The mark
+                // stays intact; only `last_heartbeat` (above) still moves, so
+                // a released session's record does not read as abandoned.
                 let status = session.get("status").and_then(Value::as_str);
-                if status == Some("dead") || status == Some("closed") {
+                let released = session.get("released") == Some(&Value::Bool(true));
+                if status == Some("dead") || (status == Some("closed") && !released) {
                     session.remove("status");
                     session.remove("dead_at");
                     session.remove("closed_at");
@@ -1410,6 +1418,40 @@ mod tests {
         assert!(after.get("status").is_none(), "{after:?}");
         assert!(after.get("closed_at").is_none(), "{after:?}");
         assert!(after["revived_at"].as_str().is_some(), "{after:?}");
+        assert_ne!(after["last_heartbeat"], json!("2020-01-01T00:00:00.000Z"));
+    }
+
+    #[test]
+    fn heartbeat_session_leaves_a_released_mark_intact_but_still_bumps_the_heartbeat() {
+        // ser-3: a PostToolUse (or SubagentStop/Stop) heartbeat must NOT undo
+        // an explicit `state session release` — otherwise the release
+        // command's own trailing hook call would erase the mark it just
+        // wrote. `last_heartbeat` still moves so the record does not read as
+        // abandoned; status/closed_at/released all survive untouched.
+        let tmp = setup_root();
+        let sessions = tmp.path().join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(
+            sessions.join("s1.json"),
+            serde_json::to_string(&json!({
+                "id": "s1",
+                "last_heartbeat": "2020-01-01T00:00:00.000Z",
+                "status": "closed",
+                "closed_at": "2020-01-01T00:05:00.000Z",
+                "released": true,
+                "lane": "l1"
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        heartbeat_session(tmp.path(), "s1", &Utc::now()).unwrap();
+        let after: Value =
+            serde_json::from_str(&std::fs::read_to_string(sessions.join("s1.json")).unwrap()).unwrap();
+        assert_eq!(after["lane"], json!("l1")); // untouched fields survive
+        assert_eq!(after["status"], json!("closed"), "{after:?}");
+        assert_eq!(after["closed_at"], json!("2020-01-01T00:05:00.000Z"), "{after:?}");
+        assert_eq!(after["released"], json!(true), "{after:?}");
+        assert!(after.get("revived_at").is_none(), "{after:?}");
         assert_ne!(after["last_heartbeat"], json!("2020-01-01T00:00:00.000Z"));
     }
 

@@ -2070,6 +2070,30 @@ use std::time::Instant;
         assert!(heartbeat_stale(Some(&session), rsv::now_ms()).unwrap());
     }
 
+    // ser-3: `state session release` writes exactly the same
+    // `status: "closed"` mark heartbeat_stale already special-cases above
+    // (plus `released: true`, which this reading never inspects) — a
+    // released record rides that existing not-live path without needing a
+    // status value of its own, so `is_concurrent_mode` reads a
+    // solely-released session as no peer even with a fresh heartbeat.
+    #[test]
+    fn is_concurrent_mode_reads_a_released_session_as_not_live() {
+        let tmp = cn_root();
+        let root = tmp.path();
+        let fresh = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+        write_session_fixture(root, "released-1", &fresh, None);
+        // Patch in the release marks write_session_fixture's fixed shape
+        // does not carry.
+        let file = sessions_dir(root).join("released-1.json");
+        let mut rec: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        rec["status"] = json!("closed");
+        rec["closed_at"] = json!(fresh);
+        rec["released"] = json!(true);
+        std::fs::write(&file, jsjson::stringify_pretty(&rec)).unwrap();
+
+        assert!(!is_concurrent_mode(root).unwrap(), "a released session must not read as a peer");
+    }
+
     #[test]
     fn sweep_resets_only_the_claim_it_actually_removed() {
         let tmp = cn_root();
