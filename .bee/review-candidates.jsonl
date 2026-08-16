@@ -132,3 +132,5 @@
 {"id":"648fbeac-c102-4be7-b77d-f54b0ba3a9fe","type":"candidate","date":"2026-08-16T07:42:50.155Z","feature":"worktree-first-enforcement","head":"5a02c5060229037a3e06af86dbde6171bf71d07f","mode":"docs","baseline":"a7a0fa3e18ab640d789ab6e9fccf15f43d93cb2d","cells":[]}
 {"id":"e08a7814-db6c-46f6-be33-bc37e064dd56","type":"candidate","date":"2026-08-16T08:28:37.043Z","feature":"claim-time-worktree-redirect","head":"24c15891","mode":"standard","baseline":null,"cells":[]}
 {"id":"08e6a1f7-3668-4c9a-9f87-efebb32e465c","type":"candidate","date":"2026-08-16T08:47:31.707Z","feature":"waiting-on-pair-clear","head":"8bb60054","mode":"tiny","baseline":null,"cells":[]}
+{"id":"2cd160de-9157-4178-ad74-9cf7ab0755f8","type":"candidate","date":"2026-08-16T08:56:24.291Z","feature":"waiting-on-pair-clear","head":"47da5ee323424cdfd17eced374bc638765339a71","mode":"tiny","baseline":null,"cells":[]}
+{"id":"1a5467d5-d152-4dac-aab3-93783c333911","type":"candidate","date":"2026-08-16T08:56:24.299Z","feature":"claim-time-worktree-redirect","head":"47da5ee323424cdfd17eced374bc638765339a71","mode":"tiny","baseline":null,"cells":[]}

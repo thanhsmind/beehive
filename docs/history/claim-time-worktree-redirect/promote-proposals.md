@@ -14,7 +14,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [docs/history/claim-time-worktree-redirect/CONTEXT.md, docs/history/claim-time-worktree-redirect/plan.md]
-  sources: [docs/history/claim-time-worktree-redirect/CONTEXT.md, docs/history/claim-time-worktree-redirect/plan.md, .bee/cells/cwr-1.json, .bee/cells/cwr-2.json]
+  sources: [docs/history/claim-time-worktree-redirect/CONTEXT.md, docs/history/claim-time-worktree-redirect/plan.md, .bee/cells/archive/claim-time-worktree-redirect/cwr-1.json, .bee/cells/archive/claim-time-worktree-redirect/cwr-2.json]
 ---
 
 # claim-time-worktree-redirect — Delivery
@@ -44,7 +44,7 @@ Proposed by `bee knowledge promote --work claim-time-worktree-redirect` from 2 c
 areas: from the scribing stamp for "claim-time-worktree-redirect" — .bee/logs/scribing-runs.jsonl's most recent entry (2026-08-16T08:26:26.699Z), the work item declares no bee.areas.
 
 area worktree-parallelism:
-  - [cwr-1] Claim/claim-next annotate success output with the granted worktree root, fail-open on unresolvable grants — feature-wide sync per the scribing stamp, 3 file(s) changed (trace .bee/cells/cwr-1.json)
+  - [cwr-1] Claim/claim-next annotate success output with the granted worktree root, fail-open on unresolvable grants — feature-wide sync per the scribing stamp, 3 file(s) changed (trace .bee/cells/archive/claim-time-worktree-redirect/cwr-1.json)
 
 (c) PATTERN CANDIDATES — candidate bee.pattern concepts, bee.polarity pitfall
 
