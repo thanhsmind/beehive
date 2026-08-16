@@ -6,6 +6,11 @@ Feature: {{feature}}
 Location — work here, the store is in the other checkout:
 - Work in: {{worktree_root}}
 - The bee store (cells, claims, reservations) lives in: {{control_root}}
+
+FIRST, before any work step: self-check the effective working directory. If
+it is not inside {{worktree_root}}, stop with zero edit attempts and return
+`[BLOCKED: session cwd is not the worktree — enter it or spawn this worker
+from a session rooted there]`.
 {{/if}}
 
 Cell (authoritative — do not re-fetch):
