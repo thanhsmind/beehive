@@ -191,7 +191,7 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         &flags,
         &[
             "decision", "rationale", "alternatives", "scope", "source", "confidence", "tags",
-            "supersedes",
+            "relation", "trigger",
         ],
     ) {
         return None;
@@ -218,12 +218,14 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
         Some(FlagV::S(s)) => Some(split_list(s)),
         Some(FlagV::Present) => return None,
     };
-    // dsh-1: --supersedes, same comma-separated-array shape as --tags.
-    let supersedes_flag: Option<Vec<String>> = match flags.get("supersedes") {
-        None => None,
-        Some(FlagV::S(s)) => Some(split_list(s)),
-        Some(FlagV::Present) => return None,
-    };
+    // D3: --relation supersedes:<id>[,...] | touches:<id>[,...] | none — the
+    // raw flag VALUE, `None` only when the flag is entirely absent (`Some`
+    // wraps even a malformed value; do_log owns both refusals through the
+    // same one-line teach so the flag stays a single required surface).
+    let relation_raw: Option<String> = str_flag(&flags, "relation")?;
+    // D2: --trigger <id> — a kdt-2 trigger registry id, required only when
+    // the decision text itself reads as a deferral (matches_deferral_prose).
+    let trigger_raw: Option<String> = str_flag(&flags, "trigger")?;
 
     let ctx = match decisions_prelude("decisions log", use_json, t0)? {
         Pre::Go(c) => c,
@@ -239,7 +241,8 @@ pub(crate) fn run_log(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitC
             source,
             confidence_raw,
             tags: tags_flag,
-            supersedes: supersedes_flag,
+            relation: relation_raw,
+            trigger: trigger_raw,
         },
         DECISIONS_LOCK_RETRY_ATTEMPTS,
     );
@@ -254,14 +257,24 @@ pub(crate) struct LogParams {
     pub(crate) source: String,
     pub(crate) confidence_raw: Option<String>,
     pub(crate) tags: Option<Vec<String>>,
-    /// dsh-1 (decision-supersede-hygiene): full ids or unique short8s of
-    /// decide/supersede events this decision retires. Resolved against the
-    /// currently ACTIVE set only (see read.rs's active_decide_or_supersede_
-    /// candidates/resolve_supersedes_target) and written onto the decide
-    /// event as a `supersedes` array — active_decisions() then excludes
-    /// every named target, the same way a type=="supersede" event's single
-    /// `supersedes` string always has.
-    pub(crate) supersedes: Option<Vec<String>>,
+    /// D3 (knowledge-distill-trigger): the raw `--relation` flag value —
+    /// `supersedes:<id>[,...]` | `touches:<id>[,...]` | `none`. `None` means
+    /// the flag was never passed at all; do_log refuses that exactly like a
+    /// malformed value, quoting up to 3 dcc-1 conflict candidates and
+    /// teaching the flag in one line. Every internal (non-CLI) caller must
+    /// now pass an explicit `Some("none".to_string())` — the same
+    /// "declared, never silent" law the flag enforces at the CLI.
+    /// `supersedes:` reuses dsh-1's resolve_supersedes_target (read.rs)
+    /// against the active decide/supersede set and writes the same
+    /// `supersedes` event field dsh-1 always has; `touches:` resolves the
+    /// same way onto a new `touches` array that does NOT exclude its
+    /// targets from `active_decisions()` (unlike `supersedes:`).
+    pub(crate) relation: Option<String>,
+    /// D2's write-path law: a kdt-2 trigger registry id. Required — and
+    /// validated against the registry — the moment `decision` reads as a
+    /// deferral (matches_deferral_prose); optional otherwise. Persisted
+    /// onto the event as `trigger` whenever given and valid.
+    pub(crate) trigger: Option<String>,
 }
 
 /// dsh-1's prose-supersession guard: decision text that reads as an inline
@@ -314,7 +327,129 @@ pub(crate) fn matches_supersession_prose(text: &str) -> bool {
     false
 }
 
-pub(crate) const SUPERSESSION_PROSE_GUARD_MESSAGE: &str = "logDecision: decision text reads as a supersession (\"supersede\"/\"supersedes\"/\"superseded\"/\"replaces\"/\"overrides\"/\"no longer applies\"/\"instead of the previous\") but names no earlier decision — pass --supersedes <id> to retire it here, or log it through `decisions supersede` instead.";
+pub(crate) const SUPERSESSION_PROSE_GUARD_MESSAGE: &str = "logDecision: decision text reads as a supersession (\"supersede\"/\"supersedes\"/\"superseded\"/\"replaces\"/\"overrides\"/\"no longer applies\"/\"instead of the previous\") but names no earlier decision — pass --relation supersedes:<id> to retire it here, or log it through `decisions supersede` instead.";
+
+/// D2's write-path law (mirror of dsh-1's prose guard above): decision text
+/// that reads as a deferral — "defer"/"defers"/"deferred"/"deferring",
+/// "for now", "revisit when"/"revisit if", or the whole word "later" — but
+/// names no `--trigger`. "No deferred condition may exist outside the
+/// [kdt-2] registry" (CONTEXT.md D2), so this is the only door a deferred
+/// condition can enter through. Word-bounded, case-insensitive; same
+/// hand-scanned primitives matches_supersession_prose uses (no regex crate
+/// in this workspace).
+pub(crate) fn matches_deferral_prose(text: &str) -> bool {
+    let chars: Vec<char> = text.chars().collect();
+    let whole_word = |kw: &str| -> bool {
+        for i in 0..chars.len() {
+            if starts_with_ci(&chars, i, kw) && boundary_before(&chars, i) {
+                let end = i + kw.chars().count();
+                if end == chars.len() || !is_word(chars[end]) {
+                    return true;
+                }
+            }
+        }
+        false
+    };
+    // defer / defers / deferred / deferring — shared "defer" stem.
+    const STEM: &str = "defer";
+    for i in 0..chars.len() {
+        if !starts_with_ci(&chars, i, STEM) || !boundary_before(&chars, i) {
+            continue;
+        }
+        let after = i + STEM.chars().count();
+        for suffix in ["", "s", "red", "ring"] {
+            if starts_with_ci(&chars, after, suffix) {
+                let end = after + suffix.chars().count();
+                if end == chars.len() || !is_word(chars[end]) {
+                    return true;
+                }
+            }
+        }
+    }
+    if whole_word("later") {
+        return true;
+    }
+    // "for now" — bounded "for", a whitespace run, then "now".
+    for i in 0..chars.len() {
+        if starts_with_ci(&chars, i, "for") && boundary_before(&chars, i) {
+            let after = i + 3;
+            let w = ws_run(&chars, after);
+            if w > 0 && starts_with_ci(&chars, after + w, "now") {
+                let end = after + w + 3;
+                if end == chars.len() || !is_word(chars[end]) {
+                    return true;
+                }
+            }
+        }
+    }
+    // "revisit when" / "revisit if" — bounded "revisit", whitespace, then
+    // either tail word, itself word-bounded on its own trailing edge.
+    for i in 0..chars.len() {
+        if starts_with_ci(&chars, i, "revisit") && boundary_before(&chars, i) {
+            let after = i + 7;
+            let w = ws_run(&chars, after);
+            if w == 0 {
+                continue;
+            }
+            for kw in ["when", "if"] {
+                if starts_with_ci(&chars, after + w, kw) {
+                    let end = after + w + kw.chars().count();
+                    if end == chars.len() || !is_word(chars[end]) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+pub(crate) const DEFERRAL_WITHOUT_TRIGGER_MESSAGE: &str = "logDecision: decision text reads as a deferral (\"defer\"/\"for now\"/\"revisit when\"/\"revisit if\"/\"later\") but names no --trigger — register the condition first with `bee triggers add --decision <id> --condition \"...\"`, then retry with --trigger <that trigger id>.";
+
+/// D3: the required-`--relation` refusal, same shape as the prose guard's
+/// own refusal — up to 3 dcc-1 conflict candidates, then the one-line teach.
+fn relation_required_message(root: &Path, p: &LogParams) -> R2<String> {
+    let raw_tags: Vec<String> = p
+        .tags
+        .clone()
+        .unwrap_or_default()
+        .iter()
+        .map(|t| js_trim(t).to_string())
+        .collect();
+    let active = active_decisions(root, false)?;
+    let candidates = conflict_candidates(&active, js_trim(&p.decision), &raw_tags, None);
+    let mut msg = RELATION_REQUIRED_MESSAGE.to_string();
+    msg.push_str(&conflict_candidate_lines(&candidates));
+    Ok(msg)
+}
+
+pub(crate) const RELATION_REQUIRED_MESSAGE: &str = "logDecision: --relation is required — pass --relation supersedes:<id>[,...] to retire earlier decisions here, --relation touches:<id>[,...] to note a related-but-not-retired decision, or --relation none if this decision relates to nothing active.";
+
+/// D3's declared relation, parsed from the raw `--relation` flag value.
+/// `None` from `parse_relation` means a malformed value — do_log folds that
+/// into the exact same required-flag refusal a missing flag gets, since
+/// both leave the relation undeclared.
+pub(crate) enum Relation {
+    Supersedes(Vec<String>),
+    Touches(Vec<String>),
+    None,
+}
+
+fn parse_relation(raw: &str) -> Option<Relation> {
+    let raw = js_trim(raw);
+    if raw == "none" {
+        return Some(Relation::None);
+    }
+    if let Some(rest) = raw.strip_prefix("supersedes:") {
+        let ids = split_list(rest);
+        return if ids.is_empty() { None } else { Some(Relation::Supersedes(ids)) };
+    }
+    if let Some(rest) = raw.strip_prefix("touches:") {
+        let ids = split_list(rest);
+        return if ids.is_empty() { None } else { Some(Relation::Touches(ids)) };
+    }
+    None
+}
 
 pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
     // handleDecisionsLog's confidence gate runs before logDecision.
@@ -343,13 +478,17 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
             return Ok(Out::Thrown(msg));
         }
     }
-    // dsh-1: resolve --supersedes against the currently active decide/
-    // supersede set. Runs BEFORE the prose guard, so the flag's presence —
-    // not merely its shape — is what silences the guard below.
-    let supersedes: Option<Vec<String>> = match &p.supersedes {
-        None => None,
-        Some(raw_ids) if raw_ids.is_empty() => None,
-        Some(raw_ids) => {
+    // D3: --relation is required — missing OR malformed both refuse the
+    // same way (relation stays undeclared either way).
+    let relation: Relation = match p.relation.as_deref().and_then(parse_relation) {
+        Some(r) => r,
+        None => return Ok(Out::Thrown(relation_required_message(root, &p)?)),
+    };
+    // supersedes: reuses dsh-1's resolve_supersedes_target against the
+    // currently active decide/supersede set, same as --supersedes always
+    // did — only the source of the raw ids moved (now --relation's value).
+    let supersedes: Option<Vec<String>> = match &relation {
+        Relation::Supersedes(raw_ids) => {
             let candidates = active_decide_or_supersede_candidates(root)?;
             let mut resolved: Vec<String> = Vec::new();
             for raw in raw_ids {
@@ -363,14 +502,44 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
             }
             Some(resolved)
         }
+        _ => None,
+    };
+    // touches: resolved the same way (full id or unique short8 against the
+    // active decide/supersede set) but persisted onto its OWN `touches`
+    // array — unlike `supersedes`, a touched id stays in active_decisions().
+    let touches: Option<Vec<String>> = match &relation {
+        Relation::Touches(raw_ids) => {
+            let candidates = active_decide_or_supersede_candidates(root)?;
+            let mut resolved: Vec<String> = Vec::new();
+            for raw in raw_ids {
+                match resolve_supersedes_target(&candidates, raw) {
+                    Ok(id) => {
+                        if !resolved.contains(&id) {
+                            resolved.push(id);
+                        }
+                    }
+                    Err(_) => {
+                        return Ok(Out::Thrown(format!(
+                            "decisions log: --relation touches:{} does not resolve to any active decide/supersede event.",
+                            js_quote(raw)
+                        )));
+                    }
+                }
+            }
+            Some(resolved)
+        }
+        _ => None,
     };
     // dsh-1's prose-supersession guard: refuses inline supersession prose
-    // that names no earlier decision via --supersedes.
+    // that names no earlier decision — still wins over --relation none (or
+    // touches), only an actual resolved --relation supersedes:<id> silences
+    // it.
     if supersedes.is_none() && matches_supersession_prose(js_trim(&p.decision)) {
         // dcc-1: the refusal names its own conflict candidates too, so the
-        // fix command (--supersedes / `decisions supersede`) is ready-made.
-        // Uses the raw (trimmed, not yet slug-validated) tags — matching
-        // purposes only, this refusal never writes the event either way.
+        // fix command (--relation supersedes:<id> / `decisions supersede`)
+        // is ready-made. Uses the raw (trimmed, not yet slug-validated)
+        // tags — matching purposes only, this refusal never writes the
+        // event either way.
         let raw_tags: Vec<String> = p
             .tags
             .clone()
@@ -384,6 +553,25 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
         let mut msg = SUPERSESSION_PROSE_GUARD_MESSAGE.to_string();
         msg.push_str(&conflict_candidate_lines(&candidates));
         return Ok(Out::Thrown(msg));
+    }
+    // D2's write-path law: a deferral-shaped decision names its --trigger,
+    // and that trigger must already be registered (kdt-2). A given-but-bad
+    // id refuses regardless of prose shape; a well-formed one is validated
+    // and persisted either way.
+    let trigger_id: Option<String> = match p.trigger.as_deref().map(js_trim).filter(|s| !s.is_empty()) {
+        None => None,
+        Some(id) => {
+            if !crate::verbs::triggers::trigger_registered(root, id) {
+                return Ok(Out::Thrown(format!(
+                    "decisions log: --trigger {} does not name a registered trigger — run `bee triggers add --decision <id> --condition \"...\"` first, then retry with --trigger <that id>.",
+                    js_quote(id)
+                )));
+            }
+            Some(id.to_string())
+        }
+    };
+    if trigger_id.is_none() && matches_deferral_prose(js_trim(&p.decision)) {
+        return Ok(Out::Thrown(DEFERRAL_WITHOUT_TRIGGER_MESSAGE.to_string()));
     }
     let normalized = match normalize_tags(p.tags.clone()) {
         Ok(n) => n,
@@ -424,6 +612,24 @@ pub(crate) fn do_log(root: &Path, p: LogParams, lock_retries: u32) -> R2<Out> {
             Value::Array(ids.iter().cloned().map(Value::String).collect()),
         );
     }
+    if let Some(ids) = &touches {
+        event.insert(
+            "touches".into(),
+            Value::Array(ids.iter().cloned().map(Value::String).collect()),
+        );
+    }
+    if let Some(id) = &trigger_id {
+        event.insert("trigger".into(), Value::String(id.clone()));
+    }
+    // D3: every new decide event carries its declared relation explicitly —
+    // legacy (pre-D3) lines simply lack the field, and readers tolerate
+    // that absence.
+    let relation_str = match &relation {
+        Relation::Supersedes(_) => "supersedes",
+        Relation::Touches(_) => "touches",
+        Relation::None => "none",
+    };
+    event.insert("relation".into(), Value::String(relation_str.into()));
     let mut event = Value::Object(event);
 
     let guard = acquire_decisions_lock(root, lock_retries).map_err(Err2::Msg)?;

@@ -41,6 +41,10 @@ pub(crate) const CLOSE_CAPTURE_DEBT_PREFIX: &str = "Capture debt for";
 /// surface). docs/history/workflow-lessons/plan.md wl-3.
 pub(crate) const CLOSE_JUDGE_DEBT_PREFIX: &str = "Judge debt for";
 
+/// D1: pinned prefix of the knowledge-freshness refusal headline (message-
+/// contract tests live in verbs/drivers/tests.rs). CONTEXT.md D1.
+pub(crate) const CLOSE_KNOWLEDGE_FRESHNESS_PREFIX: &str = "Knowledge freshness debt for";
+
 /// provenance: test-runner.mjs declaredTestCommands + state.mjs
 /// normalizeCommands (verbs/test_runner.rs:184 declared_test_commands).
 /// `None` == JS `null` (undeclared).
@@ -674,6 +678,109 @@ pub(crate) fn has_capture_deferral_decision(root: &Path, feature: &str) -> D<boo
     Ok(!filtered.is_empty())
 }
 
+/// D1 escape hatch for the knowledge-freshness door below: mirrors
+/// `has_capture_deferral_decision` above, tagged `knowledge-freshness-deferral`
+/// instead of `capture-deferral` — but returns the deferring decision's own
+/// `decision` text (not just a bool) so the door's detail line can quote the
+/// reason, never a silent pass (D1: "an explicit recorded deferral with
+/// reason, never a silent pass").
+pub(crate) fn has_knowledge_freshness_deferral_decision(root: &Path, feature: &str) -> D<Option<String>> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    let filtered = crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some("knowledge-freshness-deferral".to_string()),
+            feature: Some(feature.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| Delegate)?;
+    Ok(filtered.last().and_then(|d| d.get("decision")).and_then(Value::as_str).map(|s| s.to_string()))
+}
+
+// ── D1: knowledge-freshness close door ──────────────────────────────────────
+//
+// CONTEXT.md D1: dangling knowledge pointers and unsynced docs in areas a
+// feature touches BLOCK close — a hard door, like tests. Reuses `bee
+// knowledge check`'s own findings (check_bundle) rather than a second
+// detector, filtered post-walk to the file prefixes this close can fairly
+// demand freshness from: `areas/<touched-area>/` (touched_bundle_areas
+// above — the same touched-file -> area match promote.rs's own area-update
+// section already applies) plus `work/<feature>/` (the feature's own work
+// bundle) — a feature never blocks on a pointer it never touched, so an
+// in-flight sibling feature's own stale pointers never tax this close.
+// `dangling_source` and `dangling_required_context` warnings in scope block;
+// `not_canonical`/`invalid_evidence_state` stay report-only in the detail —
+// named limitation: prose contradictions (the "dark guards" class) have no
+// machine detector here, that is S2-c distill work, recorded, not silently
+// dropped.
+pub(crate) fn build_knowledge_freshness_door(root: &Path, feature: &str) -> D<Door> {
+    let Some(dir) = crate::verbs::knowledge::bundle_dir(root) else {
+        return Ok(Door { door: "knowledge-freshness", blocking: false, detail: "clear".to_string(), command: None });
+    };
+    let Some(report) = crate::verbs::knowledge::check_bundle(&dir, false) else {
+        return Ok(Door { door: "knowledge-freshness", blocking: false, detail: "clear".to_string(), command: None });
+    };
+    let touched_files = feature_touched_files(root, feature)?;
+    let touched_areas = touched_bundle_areas(&dir, &touched_files);
+    let mut prefixes: Vec<String> = touched_areas.iter().map(|a| format!("areas/{a}/")).collect();
+    prefixes.push(format!("work/{feature}/"));
+
+    let mut blocking_items: Vec<String> = Vec::new();
+    let mut report_only_count = 0usize;
+    for w in &report.warnings {
+        let code = w.get("code").and_then(Value::as_str).unwrap_or("");
+        let file = w.get("file").and_then(Value::as_str).unwrap_or("");
+        let message = w.get("message").and_then(Value::as_str).unwrap_or("");
+        match code {
+            "dangling_source" | "dangling_required_context" => {
+                if prefixes.iter().any(|p| file.starts_with(p.as_str())) {
+                    blocking_items.push(format!(
+                        "{file}: {message} — remedy: point the pointer at its live target, or remove the entry with a one-line reason"
+                    ));
+                }
+            }
+            "not_canonical" | "invalid_evidence_state" => report_only_count += 1,
+            _ => {}
+        }
+    }
+
+    if blocking_items.is_empty() {
+        let detail = if report_only_count == 0 {
+            "clear".to_string()
+        } else {
+            format!(
+                "clear — {report_only_count} report-only finding(s) (not_canonical/invalid_evidence_state) never block"
+            )
+        };
+        return Ok(Door { door: "knowledge-freshness", blocking: false, detail, command: None });
+    }
+
+    if let Some(reason) = has_knowledge_freshness_deferral_decision(root, feature)? {
+        return Ok(Door {
+            door: "knowledge-freshness",
+            blocking: false,
+            detail: format!(
+                "deferred — {} stale pointer(s) in touched area(s)/work bundle ({}); a logged knowledge-freshness-deferral decision names \"{feature}\": {reason}",
+                blocking_items.len(),
+                blocking_items.join("; ")
+            ),
+            command: None,
+        });
+    }
+
+    Ok(Door {
+        door: "knowledge-freshness",
+        blocking: true,
+        detail: format!(
+            "{} stale pointer(s) in touched area(s)/work bundle: {}",
+            blocking_items.len(),
+            blocking_items.join("; ")
+        ),
+        command: Some("bee knowledge check"),
+    })
+}
+
 pub(crate) struct Door {
     pub(crate) door: &'static str,
     pub(crate) blocking: bool,
@@ -1072,6 +1179,7 @@ pub(crate) fn close_handler(
         }];
         doors.extend(build_close_report_doors(root, feature)?);
         doors.push(build_pattern_check_door(root, feature, pattern_verdicts)?);
+        doors.push(build_knowledge_freshness_door(root, feature)?);
         let next_line = match &declared {
             Some(_) => format!("next: bee close --feature {feature} — runs the declared tests and reports"),
             None => format!(
@@ -1103,6 +1211,7 @@ pub(crate) fn close_handler(
     }
     let report_doors = build_close_report_doors(root, feature)?;
     let pattern_door = build_pattern_check_door(root, feature, pattern_verdicts)?;
+    let knowledge_freshness_door = build_knowledge_freshness_door(root, feature)?;
 
     if !run.undeclared && !run.green {
         let failing: Vec<&CommandResult> =
@@ -1120,6 +1229,7 @@ pub(crate) fn close_handler(
         }];
         doors.extend(report_doors);
         doors.push(pattern_door);
+        doors.push(knowledge_freshness_door);
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
@@ -1188,6 +1298,7 @@ pub(crate) fn close_handler(
     let mut doors = vec![tests_door];
     doors.extend(report_doors);
     doors.push(pattern_door);
+    doors.push(knowledge_freshness_door);
 
     // ── D1: refuse on uncaptured behavior_change cells ──────────────────────
     //
@@ -1280,6 +1391,32 @@ pub(crate) fn close_handler(
             ),
             "remedy: fix the violated pattern's finding, or re-run with a corrected --pattern-verdicts if it is a false positive.".to_string(),
             format!("next: settle the violated pattern(s) above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // ── D1: refuse on a stale knowledge pointer in a touched area ──────────
+    //
+    // Runs only here — tests GREEN (or undeclared) and past the capture-debt,
+    // judge-debt and pattern-check refusals above — same "stops close
+    // exactly like a red test" placement those doors already established.
+    if doors.iter().any(|d| d.door == "knowledge-freshness" && d.blocking) {
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
+        result.insert("tests".into(), tests_result_value(&run));
+        let freshness_detail = doors
+            .iter()
+            .find(|d| d.door == "knowledge-freshness")
+            .map(|d| d.detail.clone())
+            .unwrap_or_default();
+        let lines = vec![
+            format!(
+                "{CLOSE_KNOWLEDGE_FRESHNESS_PREFIX} \"{feature}\" — close stops at the knowledge-freshness door: {freshness_detail}"
+            ),
+            "remedy: fix each pointer above (bee knowledge check names the same findings), or log a decision tagged knowledge-freshness-deferral naming this feature with the reason.".to_string(),
+            format!("next: settle the stale pointer(s) above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }

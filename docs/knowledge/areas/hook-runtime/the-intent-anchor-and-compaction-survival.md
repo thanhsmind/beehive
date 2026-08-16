@@ -9,7 +9,7 @@ bee:
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/advisories-and-turn-control.md, areas/hook-runtime/post-compaction-orientation-and-the-compact-capsule.md]
   decisions: ["intent-anchor D1, D2, D3, D4, D5, D6", 089905ba (compaction-hardening D19 — the hook keeps owning the anchor after a compaction), "compaction-hardening D10, D11 (the missing-anchor nudge and its forced PreCompact assertion)"]
-  sources: ["intent-anchor cell ia-1 (the anchor, the PreCompact re-assertion, the compact-resume lead; trace in `.bee/cells/`, 2026-07-23)", .bee/spikes/intent-anchor/FINDINGS.md (the measurement that justified it), CONTEXT.md `docs/history/intent-anchor/CONTEXT.md`, "advisor issue #54 (the compact-resume checkpoint field set)", "compaction-hardening cells cz-3, cz-4, cz-7 (the nudge module, its verb surface, and its two advisory wirings; traces in `.bee/cells/`, 2026-07-23)", "docs/history/compaction-hardening/CONTEXT.md D10, D11, D19"]
+  sources: ["intent-anchor cell ia-1 (the anchor, the PreCompact re-assertion, the compact-resume lead; trace in `.bee/cells/`, 2026-07-23)", "removed 2026-08-16: .bee/spikes/intent-anchor/FINDINGS.md no longer exists on disk (spike investigation notes, retired after the feature landed) — cell ia-1's trace above is the surviving record of the measurement that justified it", CONTEXT.md `docs/history/intent-anchor/CONTEXT.md`, "advisor issue #54 (the compact-resume checkpoint field set)", "compaction-hardening cells cz-3, cz-4, cz-7 (the nudge module, its verb surface, and its two advisory wirings; traces in `.bee/cells/`, 2026-07-23)", "docs/history/compaction-hardening/CONTEXT.md D10, D11, D19"]
   authoritative_for: "hook-runtime: the intent anchor and compaction survival"
 ---
 

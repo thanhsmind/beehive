@@ -2,7 +2,7 @@
 type: bee.area
 title: Workflow State — isolated linked worktrees and the transactional merge-back
 description: "The opt-in dispatch mode that removes Git index contention without changing the ownership primitive: validated linked pointers, one main coordination store, canonical containment proved before every write, a concurrency-aware refusal for a shared nested checkout that fails closed on its own detection errors and is scoped to the coordination root rather than the physical checkout, and a merge-back that verifies committed main or preserves the worker recovery identity."
-timestamp: 2026-07-26
+timestamp: 2026-08-16
 bee:
   id: workflow-state-worktree-isolation
   lifecycle: active
@@ -77,8 +77,16 @@ checkout at all, nothing about this behavior changes today's write.
 ## Business Rules
 
 - R32 — Worktree isolation removes Git index contention only; reservations
-  remain the ownership primitive. Isolation is opt-in for enabled Claude
-  multi-worker waves, never a new default (worktree-isolation D1).
+  remain the ownership primitive (worktree-isolation D1). Two distinct
+  worktree models coexist: this concept's swarm-worker worktrees (P40) share
+  ONE coordination store and one feature's single gate — an orchestrator
+  performance device the swarm may opt into for an eligible multi-worker
+  wave, never a new default. A second, independent-feature model (default
+  since worktree-first doctrine, AGENTS.md) runs each feature in its OWN
+  worktree with its own phase, gates, and store from the start — an
+  isolation device, not a performance one. The two models coexist and never
+  substitute for each other; see `worktree-parallelism/overview.md` for the
+  full distinction and boundary.
 - R33 — All linked worktrees share exactly one validated main coordination
   store. Onboarding markers are neither consent nor proof, and invalid linked
   metadata always fails closed (worktree-isolation D2).
@@ -145,26 +153,34 @@ checkout at all, nothing about this behavior changes today's write.
 ## Pointers (implementation)
 
 - Worktree isolation (B20/R32-R35): root resolution in
-  `packages/bee/lib/state.mjs`; hook transport and containment in
-  `packages/bee/hooks/adapter.mjs` and `packages/bee/hooks/bee-write-guard.mjs`; dispatch, attestation,
-  merge-back, recovery, and disposal contracts in `skills/bee-swarming/SKILL.md`,
+  `packages/bee-rs/crates/bee/src/roots.rs` (`resolve_roots_core` and its
+  callers); hook transport in
+  `packages/bee-rs/crates/bee/src/hooks/adapter.rs` and write containment in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/` (`checks.rs`'s
+  `check_write` plus `guards.rs`, `detectors.rs`, `paths.rs`); dispatch,
+  attestation, merge-back, recovery, and disposal contracts in
+  `skills/bee-swarming/SKILL.md`,
   `skills/bee-swarming/references/swarming-reference.md`, and
   `skills/bee-swarming/references/worker-details.md`. Evidence: capped cells
   `.bee/cells/worktree-isolation-{1..4}.json`, reports
-  `docs/history/worktree-isolation/reports/`, 333 passing library checks, and
-  the green configured repository verify on 2026-07-16.
+  `docs/history/worktree-isolation/reports/`.
 - Concurrency-aware shared-checkout refusal (B21/R36): detection primitive
-  `packages/bee/lib/guards.mjs`'s `isSharedNestedCheckoutTarget` (point-check)
-  and `hasAnySharedNestedCheckout` (directory-scan), plus their shared
-  companion-marker verification and submodule-registration exclusion helpers;
-  wired into `packages/bee/hooks/bee-write-guard.mjs`'s dispatch, ahead of
-  `checkWrite`, and into `the bee binary`'s `handleWorktreeNew`. Both
-  detection functions take the coordination root as an `opts.controlRoot`
-  field (falling back to the physical root when omitted) so the concurrency
+  `has_any_shared_nested_checkout` (directory-scan) in
+  `packages/bee-rs/crates/bee/src/nested_checkout.rs`, and
+  `is_shared_nested_checkout_target` (point-check) in
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs`, plus
+  their shared companion-marker verification and submodule-registration
+  exclusion helpers; wired into
+  `packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs`'s dispatch,
+  ahead of `check_write` (`checks.rs`), and into
+  `packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs`'s worktree-new
+  handler. Both detection functions take the coordination root (via
+  `control_root_for` in `verbs/reservations/leases.rs`) so the concurrency
   check can consult a coordination root that differs from the physical
   checkout, while the on-disk scan stays physical-root-scoped. Evidence:
-  capped cells `.bee/cells/wcg-1.json`, `.bee/cells/wcg-2.json`,
-  `.bee/cells/port-1.json` (relocation + controlRoot-scoping), reports
-  `docs/history/worktree-concurrency-guard/reports/`, and the green
-  `packages/bee/hooks/test_write_guard.mjs` suite (87 rows, including the
-  bidirectional controlRoot-vs-root scoping proof) on 2026-07-26.
+  capped cells `.bee/cells/wcg-1.json`,
+  `.bee/cells/wcg-2.json`, `.bee/cells/port-1.json` (relocation +
+  control-root scoping), reports
+  `docs/history/worktree-concurrency-guard/reports/`, and the Rust
+  `hooks::write_guard` test suite (`tests.rs`, including the bidirectional
+  control-root-vs-root scoping proof).

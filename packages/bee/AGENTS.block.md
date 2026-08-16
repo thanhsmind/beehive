@@ -25,8 +25,9 @@ Four boundaries hold in every mode:
   the user to run.
 - Modify bee state only through the CLI (`.bee/bin/bee …`),
   never by hand-editing `.bee/*.json(l)`. Log agreements with
-  `bee decisions log`; `docs/history/<feature>/CONTEXT.md` holds the
-  locked ones — cite them, never reinterpret them.
+  `bee decisions log --relation supersedes:<id>|touches:<id>|none`
+  (the relation is required); `docs/history/<feature>/CONTEXT.md` holds
+  the locked ones — cite them, never reinterpret them.
 - Code-touching feature work lives in its feature worktree from the
   start (`bee worktree new --feature <slug>`); the main checkout takes
   integration and release work, plus docs-lane and a solo `tiny` fix

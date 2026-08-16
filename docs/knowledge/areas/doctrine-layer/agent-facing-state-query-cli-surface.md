@@ -9,7 +9,7 @@ bee:
   areas: [doctrine-layer]
   required_context: [areas/doctrine-layer/overview.md]
   decisions: [5ca69717 state-query-surface B1 -- decisions --cell/--feature word-boundary token match not a structural field, e0d130c1 state-query-surface META -- a harness must own its own state-query contract]
-  sources: [state-query-surface feature close 2026-07-24, .bee/bin/bee handleDecisionsActive/handleDecisionsSearch/handleBacklogFindings/scribing-run --show branch, .bee/bin/lib/decisions.mjs matchesWholeToken word-boundary helper]
+  sources: [state-query-surface feature close 2026-07-24, .bee/bin/bee handleDecisionsActive/handleDecisionsSearch/handleBacklogFindings/scribing-run --show branch, packages/bee-rs/crates/bee/src/verbs/decisions/read.rs matches_whole_token word-boundary helper (rust-port equivalent of the retired .bee/bin/lib/decisions.mjs)]
   authoritative_for: "doctrine-layer: agent-facing state query CLI surface"
 ---
 

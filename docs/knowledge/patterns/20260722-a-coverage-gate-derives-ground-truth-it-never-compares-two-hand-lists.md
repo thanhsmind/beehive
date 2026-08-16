@@ -8,7 +8,7 @@ bee:
   id: pattern-20260722-coverage-gate-derives-ground-truth
   lifecycle: active
   areas: [okf-profile]
-  sources: [docs/history/learnings/20260722-okf-foundation.md, scripts/okf_migrate.mjs (ANCHOR_REGISTRY), docs/history/okf-foundation/reports/advisor-digest-s1.md]
+  sources: [docs/history/learnings/20260722-okf-foundation.md, "removed 2026-08-16: scripts/okf_migrate.mjs no longer exists on disk (the okf-foundation coverage-gate script this pattern diagnoses, retired with the JS→Rust migration) — the defect described is historical; bee knowledge check (packages/bee-rs/crates/bee/src/verbs/knowledge/check.rs) is the current coverage gate for this bundle", docs/history/okf-foundation/reports/advisor-digest-s1.md]
   polarity: pitfall
   critical: true
 ---

@@ -193,7 +193,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["billing".into(), "recall".into()]),
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -203,6 +204,7 @@ use std::time::Instant;
         assert_eq!(events.len(), 1);
         assert_eq!(events[0]["type"], "decide");
         assert_eq!(events[0]["tags"], json!(["billing", "recall"]));
+        assert_eq!(events[0]["relation"], "none");
         // Invalid slug refuses with Node's exact message.
         let bad = LogParams {
             decision: "d".into(),
@@ -212,7 +214,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["Bad_Tag".into()]),
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         match do_log(tmp.path(), bad, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -240,12 +243,14 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: Some(vec!["a1".into()]),
+            relation: Some("supersedes:a1".to_string()),
+            trigger: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
         };
         assert_eq!(event["supersedes"], json!(["a1"]));
+        assert_eq!(event["relation"], "supersedes");
         // active_decisions() excludes a1 — a `supersedes` field's exclusion
         // weight is not limited to type=="supersede" events anymore.
         let active = active_decisions(tmp.path(), false).ok().unwrap();
@@ -273,7 +278,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: Some(vec!["bbbb2222".into()]),
+            relation: Some("supersedes:bbbb2222".to_string()),
+            trigger: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -289,7 +295,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: Some(vec!["aaaa1111".into()]),
+            relation: Some("supersedes:aaaa1111".to_string()),
+            trigger: None,
         };
         match do_log(tmp.path(), ambiguous, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -308,7 +315,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: Some(vec!["deadbeef".into()]),
+            relation: Some("supersedes:deadbeef".to_string()),
+            trigger: None,
         };
         match do_log(tmp.path(), unknown, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -337,7 +345,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: Some(vec!["c1".into()]),
+            relation: Some("supersedes:c1".to_string()),
+            trigger: None,
         };
         match do_log(tmp.path(), stale, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(
@@ -363,14 +372,16 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         match do_log(tmp.path(), no_edge, 0) {
             Ok(Out::Thrown(msg)) => assert_eq!(msg, SUPERSESSION_PROSE_GUARD_MESSAGE),
             _ => panic!("expected prose-supersession refusal"),
         }
-        // With --supersedes, the same prose passes and the earlier decision
-        // is named explicitly instead of left implicit in free text.
+        // With --relation supersedes:<id>, the same prose passes and the
+        // earlier decision is named explicitly instead of left implicit in
+        // free text.
         let with_edge = LogParams {
             decision: "This supersedes the earlier billing threshold.".into(),
             rationale: "r".into(),
@@ -379,12 +390,210 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: Some(vec!["a1".into()]),
+            relation: Some("supersedes:a1".to_string()),
+            trigger: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), with_edge, 0) else {
             panic!("expected log emit once --supersedes names the target");
         };
         assert_eq!(event["supersedes"], json!(["a1"]));
+    }
+
+    // ── kdt-3 (knowledge-distill-trigger, D3 + D2's write-path law):
+    //    `decisions log --relation` and `--trigger` ─────────────────────────
+
+    fn write_trigger(root: &Path, id: &str) {
+        let dir = root.join(".bee").join("triggers");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            format!(
+                r#"{{"id":"{id}","decision":"deadbeef","condition":"upstream lands","tier":"manual","predicate":null,"status":"waiting","created_at":"2026-08-16T00:00:00.000Z","updated_at":"2026-08-16T00:00:00.000Z","outcome":null}}"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn log_refuses_without_relation_and_lists_candidates() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[r#"{"id":"e1111111-0000-0000-0000-000000000001","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"Weekly invoice run kept","rationale":"r","tags":["billing"]}"#],
+        );
+        let missing = LogParams {
+            decision: "Switch invoice run to daily".into(),
+            rationale: "ops requested".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: Some(vec!["billing".into()]),
+            relation: None,
+            trigger: None,
+        };
+        match do_log(tmp.path(), missing, 0) {
+            Ok(Out::Thrown(msg)) => {
+                assert!(msg.starts_with(RELATION_REQUIRED_MESSAGE), "{msg}");
+                assert!(msg.contains(
+                    "possible conflict: e1111111 Weekly invoice run kept — if replaced, run decisions supersede --id e1111111"
+                ));
+            }
+            _ => panic!("expected --relation-required refusal with conflict candidates"),
+        }
+        // A malformed value refuses the exact same way.
+        let malformed = LogParams {
+            decision: "Switch invoice run to daily".into(),
+            rationale: "ops requested".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("sideways:a1".to_string()),
+            trigger: None,
+        };
+        match do_log(tmp.path(), malformed, 0) {
+            Ok(Out::Thrown(msg)) => assert!(msg.starts_with(RELATION_REQUIRED_MESSAGE), "{msg}"),
+            _ => panic!("expected --relation-required refusal on a malformed value"),
+        }
+        // Nothing was written by either refused call.
+        assert_eq!(read_jsonl(&decisions_path(tmp.path())).len(), 1);
+    }
+
+    #[test]
+    fn log_relation_touches_persists_and_stays_active() {
+        let tmp = fixture_root();
+        write_events(
+            tmp.path(),
+            &[r#"{"id":"f1","type":"decide","date":"2026-01-01T00:00:00.000Z","decision":"first","rationale":"r"}"#],
+        );
+        let p = LogParams {
+            decision: "A related but separate decision".into(),
+            rationale: "because".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("touches:f1".to_string()),
+            trigger: None,
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit");
+        };
+        assert_eq!(event["touches"], json!(["f1"]));
+        assert_eq!(event["relation"], "touches");
+        assert!(event.get("supersedes").is_none());
+        // Unlike --relation supersedes:, touches never excludes its target —
+        // both the touched decision AND the new one stay active.
+        let active = active_decisions(tmp.path(), false).ok().unwrap();
+        assert_eq!(active.len(), 2);
+    }
+
+    #[test]
+    fn log_relation_touches_unresolvable_id_refuses() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "d".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("touches:deadbeef".to_string()),
+            trigger: None,
+        };
+        match do_log(tmp.path(), p, 0) {
+            Ok(Out::Thrown(msg)) => assert_eq!(
+                msg,
+                "decisions log: --relation touches:\"deadbeef\" does not resolve to any active decide/supersede event."
+            ),
+            _ => panic!("expected unresolved touches refusal"),
+        }
+        assert!(!decisions_path(tmp.path()).exists());
+    }
+
+    #[test]
+    fn deferral_prose_scanner_vectors() {
+        assert!(matches_deferral_prose("Defer this decision until Q3."));
+        assert!(matches_deferral_prose("Deferred pending upstream."));
+        assert!(matches_deferral_prose("Deferring the rollout."));
+        assert!(matches_deferral_prose("For now, keep the old default."));
+        assert!(matches_deferral_prose("We will revisit when upstream lands the fix."));
+        assert!(matches_deferral_prose("Revisit if budgets still miss."));
+        assert!(matches_deferral_prose("This can wait until later."));
+        assert!(!matches_deferral_prose(
+            "A perfectly normal decision with no deferral language."
+        ));
+        assert!(!matches_deferral_prose("deferendum is unrelated to the pattern")); // \b guard
+    }
+
+    #[test]
+    fn log_deferral_prose_without_trigger_refuses() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "For now, keep the manual review step.".into(),
+            rationale: "automation not ready".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: None,
+        };
+        match do_log(tmp.path(), p, 0) {
+            Ok(Out::Thrown(msg)) => assert_eq!(msg, DEFERRAL_WITHOUT_TRIGGER_MESSAGE),
+            _ => panic!("expected deferral-without-trigger refusal"),
+        }
+        assert!(!decisions_path(tmp.path()).exists());
+    }
+
+    #[test]
+    fn log_deferral_prose_with_trigger_persists_and_passes() {
+        let tmp = fixture_root();
+        write_trigger(tmp.path(), "g1__deadbeef");
+        let p = LogParams {
+            decision: "For now, keep the manual review step.".into(),
+            rationale: "automation not ready".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: Some("g1__deadbeef".to_string()),
+        };
+        let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
+            panic!("expected log emit once a registered --trigger is named");
+        };
+        assert_eq!(event["trigger"], "g1__deadbeef");
+    }
+
+    #[test]
+    fn log_trigger_naming_an_unregistered_id_refuses_even_without_deferral_prose() {
+        let tmp = fixture_root();
+        let p = LogParams {
+            decision: "A perfectly normal decision".into(),
+            rationale: "r".into(),
+            alternatives: None,
+            scope: "repo".into(),
+            source: "user".into(),
+            confidence_raw: None,
+            tags: None,
+            relation: Some("none".to_string()),
+            trigger: Some("no-such-trigger".to_string()),
+        };
+        match do_log(tmp.path(), p, 0) {
+            Ok(Out::Thrown(msg)) => assert!(
+                msg.contains("--trigger \"no-such-trigger\" does not name a registered trigger"),
+                "{msg}"
+            ),
+            _ => panic!("expected unregistered-trigger refusal"),
+        }
+        assert!(!decisions_path(tmp.path()).exists());
     }
 
     #[test]
@@ -414,7 +623,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         match do_log(tmp.path(), p, 0) {
             Err(Err2::Msg(msg)) => {
@@ -447,7 +657,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         match do_log(tmp.path(), zero, 0) {
             Err(Err2::Msg(msg)) => assert_eq!(msg, UNTAGGED_REFUSED_MESSAGE),
@@ -461,7 +672,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["newtag".into()]),
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         assert!(matches!(do_log(tmp.path(), unknown, 0), Ok(Out::Emit(_, _, 0))));
         let tax_after: Value = serde_json::from_str(&std::fs::read_to_string(&tax).unwrap()).unwrap();
@@ -573,7 +785,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["billing".into()]),
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         assert!(matches!(do_log(tmp.path(), p, 0), Ok(Out::Emit(_, _, 0))));
     }
@@ -1101,7 +1314,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["billing".into()]),
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1136,7 +1350,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["finance".into()]),
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1167,7 +1382,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["billing".into()]),
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         let Ok(Out::Emit(event, _, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1192,7 +1408,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         let Ok(Out::Emit(event, text, 0)) = do_log(tmp.path(), p, 0) else {
             panic!("expected log emit");
@@ -1208,7 +1425,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         let Ok(Out::Emit(event2, text2, 0)) = do_log(tmp.path(), unrelated, 0) else {
             panic!("expected log emit");
@@ -1232,7 +1450,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: Some(vec!["billing".into()]),
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         match do_log(tmp.path(), no_edge, 0) {
             Ok(Out::Thrown(msg)) => {
@@ -1338,7 +1557,8 @@ use std::time::Instant;
             source: "user".into(),
             confidence_raw: None,
             tags: None,
-            supersedes: None,
+            relation: Some("none".to_string()),
+            trigger: None,
         };
         let Ok(Out::Emit(..)) = do_log(&ctx.root, p, 0) else {
             panic!("expected decisions log to succeed against the worktree's own store");

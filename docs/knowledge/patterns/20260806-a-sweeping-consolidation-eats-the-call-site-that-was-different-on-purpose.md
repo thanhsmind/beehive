@@ -9,7 +9,7 @@ bee:
   lifecycle: active
   areas: [rust-runtime, hook-runtime]
   decisions: ["js-parity-cleanup D3 (consolidate the helpers, switch display caps to character counting, keep one named exception)", "bc2e2d44 (judge pass over the consolidation: two findings — the question-heading guard had been swept with everything else, and the surviving exception's rationale was inverted — spawning fix cell jp-9)"]
-  sources: ["js-parity-cleanup cell jp-5 (seven duplicated helpers plus three inline copies folded into one module across eighteen files; trace .bee/cells/jp-5.json, 2026-08-04 — 1004 passed, 0 failed)", "js-parity-cleanup cell jp-9 (the guard restored, the rationale corrected; trace .bee/cells/jp-9.json, 2026-08-04 — 1006 passed, 0 failed)", "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs:155-161 (the restored call site, with the reason written beside it)", docs/knowledge/areas/rust-runtime/text-measurement-and-the-two-counting-units.md]
+  sources: ["js-parity-cleanup cell jp-5 (seven duplicated helpers plus three inline copies folded into one module across eighteen files; trace .bee/cells/jp-5.json, 2026-08-04 — 1004 passed, 0 failed)", "js-parity-cleanup cell jp-9 (the guard restored, the rationale corrected; trace .bee/cells/jp-9.json, 2026-08-04 — 1006 passed, 0 failed)", "packages/bee-rs/crates/bee/src/hooks/write_guard/detectors.rs (the AskUserQuestion header-length guard — the restored call site, measured in utf16 code units with the reason written beside it)", docs/knowledge/areas/rust-runtime/text-measurement-and-the-two-counting-units.md]
   polarity: pitfall
   critical: false
   evidence: wired

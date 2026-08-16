@@ -2,7 +2,7 @@
 type: bee.area
 title: Decision Memory — what the system remembers about its own decisions
 description: "How a decision event is classified, reversed and reconciled against its citing artifacts, recalled through a derived index, kept bounded by an explicit archive, and honored by a backlog row's own done-flip rule — all one topic at this source's size."
-timestamp: 2026-07-23
+timestamp: 2026-08-16
 bee:
   id: decision-memory-overview
   lifecycle: active
@@ -76,27 +76,35 @@ Three field failures (reported against a host repo, fixed generically):
   recorded reason; each hit also becomes a capture stub so an unreconciled
   citation resurfaces at every flush. Historical records (reports) are
   reconciled by appended dated correction notes, never by rewriting history.
-- **R2a — Supersession is an edge, never prose** (`252102b5`, 2026-08-08,
-  `d2c0a33e`). A decision that invalidates an earlier one must carry a
-  machine-readable link, not a verbal claim: either `decisions supersede`
-  (R2's own path) or `decisions log --supersedes <id[,id...]>` — full ids or
-  unique short8s, resolved against the currently ACTIVE decide/supersede set
-  only (an already-superseded or already-redacted target cannot be named
-  again). Either path lands the same shape: the retiring event carries a
-  `supersedes` field (a bare string for `decisions supersede`, an array for
-  `--supersedes`), and `active_decisions()` excludes every named target on
-  ANY event type, not only `type=="supersede"` — the flag carries the same
-  exclusion weight the dedicated verb always has. Decision text that reads as
-  an inline supersession claim — the word stem "supersed(e/es/ed)",
-  "replaces", "overrides", "no longer applies", "instead of the previous" —
-  is refused at `decisions log` write time unless `--supersedes` names the
-  earlier decision: free text was previously the only way to hide a
-  supersession from the active set, silently, and the store audit that
-  triggered this rule found 70 decide events doing exactly that against 29
-  proper supersede events. `active_decisions()` — the projection behind R5's
-  derived index — stays the single read surface for current truth; the
-  append-only log itself is never re-read for "is this still true," only for
-  "why."
+- **R2a — Supersession is an edge, never prose, and every write now declares
+  its relation to what's already active** (`252102b5`; knowledge-distill-trigger
+  D3, cell kdt-3). Every `decisions log` call requires `--relation
+  supersedes:<id>[,...]|touches:<id>[,...]|none`; a missing or malformed value
+  refuses the write outright (`RELATION_REQUIRED_MESSAGE`), and the refusal
+  names up to 3 conflict candidates from the same area/tags so the fix command
+  is ready-made (dcc-1). `supersedes:` ids resolve against the currently
+  ACTIVE decide/supersede set only (an already-superseded or already-redacted
+  target cannot be named again); `supersedes:` and the dedicated `decisions
+  supersede` verb (R2's own path) land the same shape — the retiring event
+  carries a `supersedes` field (an array for `--relation supersedes:`, a bare
+  string for `decisions supersede`) — and `active_decisions()` excludes every
+  named target on ANY event type, not only `type=="supersede"`. `touches:` ids
+  resolve the same way but persist onto their own `touches` array; a touched
+  id stays active, unlike a superseded one. Decision text that reads as an
+  inline supersession claim — the word stem "supersed(e/es/ed)", "replaces",
+  "overrides", "no longer applies", "instead of the previous" — is refused
+  unless `--relation supersedes:<id>` resolves it (`--relation none` or
+  `touches:` never silences this guard): free text was previously the only
+  way to hide a supersession from the active set, silently, and the store
+  audit that triggered this rule found 70 decide events doing exactly that
+  against 29 proper supersede events. Decision text that reads as a deferral
+  — "defer", "for now", "revisit when/if", "later" — is refused unless
+  `--trigger <id>` names an already-registered trigger id (`bee triggers add
+  --decision <id> --condition "..."` registers one first): no deferred
+  condition may exist outside the trigger registry. `active_decisions()` —
+  the projection behind R5's derived index — stays the single read surface
+  for current truth; the append-only log itself is never re-read for "is
+  this still true," only for "why."
 - **R3 — Reversals inherit their place** (D6, `b9b9fee3`). A supersede without
   explicit tags/scope inherits both from the (overlay-applied) decision it
   supersedes, so the reversal is discoverable exactly where the original
@@ -137,11 +145,15 @@ Three field failures (reported against a host repo, fixed generically):
 ## Data dictionary
 
 - **Decision event** — append-only record: `decide` (id, date, decision,
-  rationale, alternatives, scope, source, confidence, tags[], optional
-  `supersedes` array from `decisions log --supersedes`), `supersede` (adds
-  `supersedes` as a single string, `sweep`), `redact`, `tag` (target, tags[],
-  scope?). A `supersedes` field excludes its targets from `active_decisions()`
-  on any event type, string or array alike (R2a).
+  rationale, alternatives, scope, source, confidence, tags[], a required
+  `--relation` declared as either an optional `supersedes` array from
+  `decisions log --relation supersedes:<id>[,...]`, an optional `touches`
+  array from `--relation touches:<id>[,...]`, or neither for `--relation
+  none`; plus an optional `trigger` id from `--trigger <id>` on a
+  deferral-shaped decision), `supersede` (adds `supersedes` as a single
+  string, `sweep`), `redact`, `tag` (target, tags[], scope?). A `supersedes`
+  field excludes its targets from `active_decisions()` on any event type,
+  string or array alike (R2a); a `touches` field never excludes its targets.
 - **Taxonomy** — `docs/decisions/taxonomy.json`: `tags[] {name, description}`
   (canonical, human-curated) + `candidates[]` (strings awaiting promotion;
   CLI-appended).

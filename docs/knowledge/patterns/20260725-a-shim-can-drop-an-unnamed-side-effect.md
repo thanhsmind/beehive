@@ -7,7 +7,7 @@ timestamp: 2026-07-25
 bee:
   id: pattern-20260725-a-shim-can-drop-an-unnamed-side-effect
   lifecycle: active
-  sources: [multisession-native-16 (reservations.mjs shim over lease-store.mjs; advisor consult slice 3 condition B named the atomic findForeignHolds+reserve()+insertHold cross-worktree mirror-write seam in bee.mjs as the biggest risk of the cell; the seam was deliberately left byte-for-byte untouched and a new CLI-level regression test was written specifically to prove the mirror write and the foreign-hold deny still fire through the shim), docs/history/multisession-native/reports/advisor-digest-slice3.md (condition B), .bee/cells/multisession-native-16.json]
+  sources: [multisession-native-16 (reservations.mjs shim over lease-store.mjs; advisor consult slice 3 condition B named the atomic findForeignHolds+reserve()+insertHold cross-worktree mirror-write seam in bee.mjs as the biggest risk of the cell; the seam was deliberately left byte-for-byte untouched and a new CLI-level regression test was written specifically to prove the mirror write and the foreign-hold deny still fire through the shim), docs/history/multisession-native/reports/advisor-digest-slice3.md (condition B), "removed 2026-08-16: .bee/cells/multisession-native-16.json no longer exists on disk (cell trace, pruned after the multisession-native feature closed) — the first sources entry above and advisor-digest-slice3.md carry the surviving account"]
   polarity: pitfall
   critical: false
 ---
