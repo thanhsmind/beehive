@@ -1,0 +1,37 @@
+{
+  "id": "wcpf-4",
+  "feature": "windows-ci-path-fixes",
+  "lane": "tiny",
+  "title": "Drop native-separator expectations in decisions tests (follow-up to wcpf-3)",
+  "action": "In packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs: after wcpf-3 made path_relative emit forward slashes on every platform, three tests still translate expected paths to native separators and are red on Windows (CI run 31947061772). At ~1099-1102 rewrite the expected message literal to plain docs/decisions/index.md and drop the .replace('\\\\', MAIN_SEPARATOR_STR); at ~1174 and ~1702 remove the native closures and use the forward-slash literals directly.",
+  "goal": "render_writes_atomically_and_check_reports_drift, supersede_sweeps_docs_inherits_metadata_and_queues_stubs, log_touches_sweeps_docs_excludes_index_and_own_history_queues_the_rest green on windows-latest; Linux stays green.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "notes": "Test-only; expectations align with the forward-slash canon wcpf-3 set.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "w-wcpf-4",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/decisions/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T12:35:49.423Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "6e83b991-dafe-45af-b6d8-7abac0afe364",
+    "claimed_at": "2026-08-16T12:33:24.315Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T12:35:29.887Z"
+  }
+}
