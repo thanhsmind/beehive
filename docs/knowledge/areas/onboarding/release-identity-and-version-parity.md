@@ -217,19 +217,18 @@ and the strongest of them is the one that reports success.
   and an engine copy invoked from a projection-shaped root reports
   `blocked_no_source`). Evidence: `.bee/cells/packages-engine-move-1.json`,
   `docs/history/packages-engine-move/reports/packages-engine-move-1.md`.
-- Release-version single-source (decision cba8b832): the four physical homes of
-  the version — `packages/bee/lib/state.mjs` + its `.bee/bin/lib` mirror, and the
-  two plugin manifests' `.version` — are enumerated once in
-  `scripts/lib/release-tuple.mjs` (a side-effect-free registry of location +
-  read/write). `scripts/tests/test_release_tuple.mjs` (check) and
-  `scripts/bump_version.mjs` (write) both import it, so a release sets every
-  member from one command — `node scripts/bump_version.mjs <version>` — which
-  also regenerates the hash manifest. The split-brain regression fixture's
-  "current version" is derived at runtime from the canonical
-  `packages/bee/lib/state.mjs` (no hand-edited anchor); `scripts/tests/test_bump_version.mjs`
-  proves the writer covers every registry component and preserves each file's
-  surrounding bytes. Plugin manifests keep a literal `.version` because external
-  plugin systems read them as raw JSON and cannot import the JS const.
+- Release-version single-source (decision cba8b832; reshaped by the R6 Node
+  cutover, 2026-08-01): `BEE_VERSION` is embedded at compile time in
+  `packages/bee-rs/crates/bee/src/version.rs:1-27` via
+  `parse_version(PLUGIN_MANIFEST)`, which reads `.claude-plugin/plugin.json`'s
+  `.version`; `.codex-plugin/plugin.json` mirrors the same literal. The old
+  Node registry (`scripts/lib/release-tuple.mjs`) and writer
+  (`scripts/bump_version.mjs`) were deleted with the Node tree — the live bump
+  procedure is: edit both plugin manifests' `.version`, `cargo build --release
+  --manifest-path packages/bee-rs/Cargo.toml`, copy the built binary to
+  `.bee/bin/bee`, then `bee dev regen`. Plugin manifests keep a literal
+  `.version` because external plugin systems read them as raw JSON and cannot
+  import a compiled constant.
 - Release manifest payload/hook roles (packages-restructure D5-D6; decision
   a25ef382; cell packages-restructure-3): `scripts/release_manifest.mjs` walks
   `packages/bee/` (excluding its `hooks/` subtree) under a new role,
