@@ -521,6 +521,12 @@ mod tests {
     /// store) worktree — mirrors status_full/tests.rs's `worktree_fixture`,
     /// re-derived locally since that helper is private to its own module.
     fn worktree_fixture(tmp: &Path) -> (PathBuf, PathBuf) {
+        // On Windows the tempdir can come back in 8.3 short form
+        // (RUNNER~1); `n()` only repairs paths that exist, so a not-yet-created
+        // `.bee/triggers` keeps the raw spelling and a byte compare fails on
+        // spelling alone. One canonical root keeps every derived path in the
+        // long form git itself reports.
+        let tmp = dunce::canonicalize(tmp).unwrap_or_else(|_| tmp.to_path_buf());
         let main = tmp.join("main");
         std::fs::create_dir_all(&main).unwrap();
         write(&main, ".bee/onboarding.json", "{}");
