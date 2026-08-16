@@ -190,6 +190,7 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     raw: String,
                     canonical: Option<String>,
                     rel: Option<String>,
+                    delegate: bool,
                 }
                 let mut cands: Vec<Cand> = Vec::new();
                 for p in &targets.paths {
@@ -204,21 +205,41 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     // ordinary wall-failed-candidate flow below, which always
                     // ends in a denial for this cand.
                     if has_unexpanded_shell_syntax(p) {
-                        cands.push(Cand { raw: p.clone(), canonical: None, rel: None });
+                        cands.push(Cand {
+                            raw: p.clone(),
+                            canonical: None,
+                            rel: None,
+                            delegate: false,
+                        });
                         continue;
                     }
                     let canonical =
                         canonical_rel_path(&root, &cwd, Some(&Value::String(p.clone())))?;
+                    // D2: an Err(Nd) from THIS candidate must never abort the
+                    // loop and skip its siblings — that would let one
+                    // undecidable target swallow a denial already earned by
+                    // another. Capture it on the candidate instead; the
+                    // escalation to Outcome::Delegate happens once, below,
+                    // only after every candidate has had its chance to deny.
+                    let mut delegate = false;
                     let rel = match &canonical {
                         Some(c) => Some(c.clone()),
-                        None => companion_mount_rel(&root)?, // marker present → Nd
+                        None => match companion_mount_rel(&root) {
+                            Ok(rel) => rel, // marker absent → still native
+                            Err(Nd) => {
+                                delegate = true; // marker present → undecidable
+                                None
+                            }
+                        },
                     };
-                    if rel.is_none() {
+                    if rel.is_none() && !delegate {
                         // gmr-3: memory-root consult only for wall-failed
                         // targets; a declared root delegates.
-                        let _ = memory_root_hit(&store_root_pb)?;
+                        if memory_root_hit(&store_root_pb).is_err() {
+                            delegate = true;
+                        }
                     }
-                    cands.push(Cand { raw: p.clone(), canonical, rel });
+                    cands.push(Cand { raw: p.clone(), canonical, rel, delegate });
                 }
                 rel_paths = cands.iter().filter_map(|c| c.rel.clone()).collect();
                 for c in &cands {
@@ -235,8 +256,13 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     // containment deny — and ONLY that deny; an exempt target
                     // never enters rel_paths, so every check below keeps its
                     // existing order and reach over in-repo targets.
+                    //
+                    // D2: a delegate-flagged candidate is excluded from this
+                    // native-denial search entirely — native code could not
+                    // decide it, so it must never manufacture a denial for
+                    // it. It only ever reaches the escalation below.
                     let mut first_failing: Option<&Cand> = None;
-                    for c in cands.iter().filter(|c| c.rel.is_none()) {
+                    for c in cands.iter().filter(|c| c.rel.is_none() && !c.delegate) {
                         // A shell-syntax cand never reaches the harness
                         // allowlist check: it was never resolved as a path,
                         // so there is no resolved location to test against a
@@ -274,6 +300,14 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                         }
                     }
                 }
+                if denial.is_none() && cands.iter().any(|c| c.delegate) {
+                    // D2: only once no sibling candidate earned a native
+                    // denial does an undecidable candidate get to hand the
+                    // whole request to the companion — the same escape point
+                    // as before this restructure (ahead of shared-checkout,
+                    // check_write, worktree-first, and CLI-shape checks).
+                    return Err(Nd);
+                }
                 if denial.is_none() && rel_paths.is_empty() && targets.broad_write {
                     rel_paths = vec!["**".to_string()];
                 }
@@ -285,9 +319,34 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                 _ => Value::String(String::new()),
             };
             let canonical = canonical_rel_path(&root, &cwd, Some(&raw_v))?;
+            // D2: mirror of the Bash-branch restructure above — a
+            // companion/memory-root Nd on this single target must not
+            // escape before it is clear no OTHER check here already has a
+            // verdict for it. With a single target there is no sibling to
+            // swallow, so this only changes shape, not observed behavior:
+            // the delegate escalation below fires at the same point the
+            // naked `?` used to.
+            let mut delegate = false;
             let rel = match &canonical {
                 Some(c) => Some(c.clone()),
-                None => companion_mount_rel(&root)?,
+                None => match companion_mount_rel(&root) {
+                    Ok(rel) => rel,
+                    Err(Nd) => {
+                        delegate = true;
+                        None
+                    }
+                },
+            };
+            let mem_hit = if rel.is_none() && !delegate {
+                match memory_root_hit(&store_root_pb) {
+                    Ok(hit) => hit,
+                    Err(Nd) => {
+                        delegate = true;
+                        false
+                    }
+                }
+            } else {
+                false
             };
             if let Some(rel) = rel {
                 rel_paths = vec![rel];
@@ -297,7 +356,9 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                             .push((canonical, lexical_abs_target(&root, &cwd, raw_s)?));
                     }
                 }
-            } else if memory_root_hit(&store_root_pb)? {
+            } else if delegate {
+                return Err(Nd);
+            } else if mem_hit {
                 // gmr-3 D6: pre-approved short-circuit (unreachable natively —
                 // a declared memory root delegates; kept for shape parity).
             } else if harness_allowlisted_target(harness_roots, &root, &cwd, &raw_v)? {

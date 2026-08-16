@@ -3068,6 +3068,123 @@ use std::process::ExitCode;
         assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
     }
 
+    // ── write-guard-hardening D2: per-target denials decided before the
+    // delegate escape can fail open ─────────────────────────────────────────
+    // ADV-A/ADV-B: with the marker (or a declared guards.memory_root)
+    // present, a command mixing a shell-syntax target (native denial) and a
+    // containment-failing literal target (that same marker/root makes
+    // undecidable, hence Err(Nd)) must deny — the sibling's Err(Nd) must
+    // never swallow an already-earned denial into a fail-open delegate, in
+    // either target order.
+
+    fn outside_bash_target() -> (tempfile::TempDir, String) {
+        let outside = tempfile::tempdir().unwrap();
+        let target = dunce::canonicalize(outside.path()).unwrap().join("elsewhere.txt");
+        let bash_target = target.to_string_lossy().replace('\\', "/");
+        (outside, bash_target)
+    }
+
+    #[test]
+    fn bash_mixed_marker_denies_before_delegate_order_a() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("companion-session.json"),
+            "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        let cmd = format!("printf x > \"$WT/foo.txt\" && printf y > \"{bash_target}\"");
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+    }
+
+    #[test]
+    fn bash_mixed_marker_denies_before_delegate_order_b() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("companion-session.json"),
+            "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        let cmd = format!("printf y > \"{bash_target}\" && printf x > \"$WT/foo.txt\"");
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+    }
+
+    #[test]
+    fn bash_mixed_memory_root_denies_before_delegate_order_a() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("config.json"),
+            "{\"guards\":{\"memory_root\":\"~/.claude/projects/x/memory\"}}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        let cmd = format!("printf x > \"$WT/foo.txt\" && printf y > \"{bash_target}\"");
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+    }
+
+    #[test]
+    fn bash_mixed_memory_root_denies_before_delegate_order_b() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("config.json"),
+            "{\"guards\":{\"memory_root\":\"~/.claude/projects/x/memory\"}}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        let cmd = format!("printf y > \"{bash_target}\" && printf x > \"$WT/foo.txt\"");
+        let e = expect_done(bash(&cmd), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert_eq!(e.stderr, unresolvable_bash_target_message("$WT/foo.txt"));
+    }
+
+    // Controls: the restructure is fail-closed ONLY. A genuinely undecidable
+    // lone target still delegates (never becomes a false deny), and a
+    // legitimately contained write still runs native (never becomes a
+    // false delegate or deny) even with the marker present.
+
+    #[test]
+    fn bash_lone_containment_failure_still_delegates_with_marker() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("companion-session.json"),
+            "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        expect_delegate(bash(&format!("printf x > \"{bash_target}\"")), &fx.root);
+    }
+
+    #[test]
+    fn bash_lone_containment_failure_still_delegates_with_memory_root() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("config.json"),
+            "{\"guards\":{\"memory_root\":\"~/.claude/projects/x/memory\"}}\n",
+        )
+        .unwrap();
+        let (_outside, bash_target) = outside_bash_target();
+        expect_delegate(bash(&format!("printf x > \"{bash_target}\"")), &fx.root);
+    }
+
+    #[test]
+    fn bash_contained_target_stays_native_with_marker_present() {
+        let fx = build_fixture("swarming", true);
+        std::fs::write(
+            fx.root.join(".bee").join("companion-session.json"),
+            "{\"sessionId\":\"s1\",\"worktreePath\":\"/x\",\"mountPath\":\"repo\"}\n",
+        )
+        .unwrap();
+        let e = expect_done(bash("printf x > src/inside.txt"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
     // ── D1 plan.md freeze (bh-1) — feature-from-path + lane-aware gate ─────
     // D7 red-first: these resolver tests land (and are run RED against a
     // stub) before the deny wires into check_write below.
