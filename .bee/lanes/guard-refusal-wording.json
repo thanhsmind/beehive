@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "guard-refusal-wording",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "compounding-complete",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -10,7 +10,7 @@
     "review": false
   },
   "summary": "Feature \"guard-refusal-wording\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"guard-refusal-wording\" (lane).",
+  "next_action": "none",
   "created_at": "2026-08-15T23:53:21.113Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
@@ -22,5 +22,21 @@
     "rationale": "P1 fix round from review rev-backlog-fixes-20260816: scope shell-syntax classification to Bash surface, deny before companion delegate; machine-guard source",
     "updated_at": "2026-08-16T01:49:15.761Z",
     "feature": "guard-refusal-wording"
+  },
+  "last_scribing_run": {
+    "feature": "guard-refusal-wording",
+    "date": "2026-08-16",
+    "at": "2026-08-16T02:15:05.912Z",
+    "areas_synced": [
+      "hook-runtime"
+    ],
+    "next_action": "compounding-run"
+  },
+  "last_compounding_run": {
+    "feature": "guard-refusal-wording",
+    "date": "2026-08-16",
+    "at": "2026-08-16T02:15:05.927Z",
+    "learnings": "review rev-backlog-fixes-20260816 findings + delta re-review; residual fail-open PBI filed",
+    "next_action": "none"
   }
 }

@@ -80,11 +80,27 @@
       "remedy": "pin literal message fragments; consider extending has_unexpanded_shell_syntax to brace/glob metacharacters and a cd-in-segment opaque flag as future work"
     }
   ],
-  "uat": [],
+  "uat": [
+    {
+      "item": "RUN: installed bee state gate --help --json lists actor, bypass-level, reason",
+      "result": "Pass",
+      "evidence": "verified 2026-08-16 against installed .bee/bin/bee after merge"
+    },
+    {
+      "item": "RUN: Bash write-guard denies an unexpanded $VAR target with the resolution-failure wording (installed binary)",
+      "result": "Pass",
+      "evidence": "live probe post grw-2 merge: tee with a $WT path denied, D2 wording, raw token quoted"
+    },
+    {
+      "item": "RUN: Edit of a literal $-named in-tree file is allowed again on the installed binary (P1-A regression check)",
+      "result": "Pass",
+      "evidence": "live probe: Edit src/Foo$Bar.java exit 0 after grw-2"
+    }
+  ],
   "decision": {
     "status": "pending",
     "review": null
   },
   "created_at": "2026-08-16T01:04:23.866Z",
-  "updated_at": "2026-08-16T01:13:53.389Z"
+  "updated_at": "2026-08-16T02:15:05.909Z"
 }
