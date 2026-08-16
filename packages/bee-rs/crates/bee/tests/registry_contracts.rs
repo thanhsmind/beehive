@@ -158,25 +158,67 @@ fn the_payload_declares_the_schema_version_the_binary_was_built_against() {
     );
 }
 
+/// `run_gate`'s own source (verbs/state_group/set_gate.rs) — the ground
+/// truth `parse_known_flags_from_source` below derives the flag list from,
+/// so the two never drift apart the way a hand-copied const did (the exact
+/// p-62f0566d defect: a new handler flag shipped unlisted in the help
+/// payload and stayed green because nothing re-derived the const).
+const SET_GATE_SOURCE: &str = include_str!("../src/verbs/state_group/set_gate.rs");
+
+/// Parses the `keys_known(&flags, &[...])` array literal out of `run_gate`'s
+/// own body (not `run_gate_body`, and not the unrelated `keys_known` calls
+/// in `run_set` / `run_plan_rev_bump` elsewhere in the same file) —
+/// precedent for parsing a source string for its own ground truth:
+/// `opencode_plugin_contracts.rs`'s `include_str!` + scan pattern. Anchored
+/// on `run_gate`'s exact signature so it can never pick up a sibling
+/// handler's flag list by accident.
+fn parse_known_flags_from_source(source: &str) -> Vec<String> {
+    let anchor = "pub(crate) fn run_gate(";
+    let fn_start = source
+        .find(anchor)
+        .unwrap_or_else(|| panic!("set_gate.rs: could not find {anchor:?} to anchor the keys_known parse"));
+    let after_fn = &source[fn_start..];
+
+    let kk = "keys_known(";
+    let kk_at = after_fn
+        .find(kk)
+        .unwrap_or_else(|| panic!("set_gate.rs: run_gate has no keys_known(...) call to parse"));
+    let after_kk = &after_fn[kk_at + kk.len()..];
+
+    let open = after_kk
+        .find('[')
+        .unwrap_or_else(|| panic!("set_gate.rs: run_gate's keys_known(...) has no array literal"));
+    let close = after_kk[open..]
+        .find(']')
+        .unwrap_or_else(|| panic!("set_gate.rs: run_gate's keys_known(...) array literal never closes"));
+    let body = &after_kk[open + 1..open + close];
+
+    body.split(',')
+        .filter_map(|entry| {
+            let entry = entry.trim();
+            let entry = entry.strip_prefix('"')?;
+            let entry = entry.strip_suffix('"')?;
+            Some(entry.to_string())
+        })
+        .collect()
+}
+
 #[test]
 fn state_gate_and_gate_list_every_flag_set_gate_rs_actually_accepts() {
     // set_gate.rs's `run_gate`'s own known-flags list (verbs/state_group/set_gate.rs)
-    // is the ground truth for what `state gate` / `gate` accept. The payload is
-    // hand-maintained (the generator that used to derive it no longer exists —
-    // see docs/history/gate-help-drift/CONTEXT.md), so a new flag landing in the
-    // handler without a matching payload entry must fail loudly here rather than
+    // is the ground truth for what `state gate` / `gate` accept. Derived here by
+    // parsing that source (D1) rather than hand-copied, so a new flag landing in
+    // the handler without a matching payload entry fails loudly rather than
     // silently understating `--help --json` again.
-    const KNOWN_FLAGS: &[&str] = &[
-        "name",
-        "merge",
-        "approved",
-        "lane",
-        "no-lane",
-        "owner",
-        "actor",
-        "bypass-level",
-        "reason",
-    ];
+    let known_flags = parse_known_flags_from_source(SET_GATE_SOURCE);
+    // D2: a parse that silently returns too few names must not pass vacuously.
+    assert!(
+        known_flags.len() >= 5,
+        "set_gate.rs: parsed only {} known flags from run_gate's keys_known(...) — defensive \
+         floor is 5, a silent empty (or near-empty) parse must fail loudly",
+        known_flags.len()
+    );
+
     let p = payload();
     for cmd_name in ["state.gate", "gate"] {
         let entry = commands(&p)
@@ -186,12 +228,57 @@ fn state_gate_and_gate_list_every_flag_set_gate_rs_actually_accepts() {
         let props = entry["parameters"]["properties"]
             .as_object()
             .unwrap_or_else(|| panic!("{cmd_name}: parameters.properties must be an object"));
-        for flag in KNOWN_FLAGS {
+        for flag in &known_flags {
             assert!(
-                props.contains_key(*flag),
+                props.contains_key(flag),
                 "{cmd_name}: set_gate.rs accepts --{flag} but the registry payload does not \
                  declare it as a parameter — bee --help --json would understate the command"
             );
         }
+    }
+}
+
+#[test]
+fn known_flags_parser_would_catch_a_new_handler_flag() {
+    // Deletion coverage (D3): the parser must still find every flag `run_gate`
+    // accepts today.
+    for expected in [
+        "name", "merge", "approved", "lane", "no-lane", "owner", "actor", "bypass-level", "reason",
+    ] {
+        assert!(
+            parse_known_flags_from_source(SET_GATE_SOURCE)
+                .iter()
+                .any(|f| f == expected),
+            "parser missed known real flag {expected:?} — deletion coverage would silently pass"
+        );
+    }
+
+    // Addition coverage, proven red-first WITHOUT touching the real
+    // set_gate.rs: inject a fake flag into a COPY of the source and confirm
+    // the parser (and therefore the drift test above) would pick it up.
+    let injected = SET_GATE_SOURCE.replacen(
+        "\"name\", \"merge\", \"approved\"",
+        "\"name\", \"merge\", \"approved\", \"totally-fake-injected-flag\"",
+        1,
+    );
+    assert_ne!(
+        injected, SET_GATE_SOURCE,
+        "replacen found no anchor in set_gate.rs to inject a fake flag into — the parse anchor drifted"
+    );
+    let injected_flags = parse_known_flags_from_source(&injected);
+    assert!(
+        injected_flags.iter().any(|f| f == "totally-fake-injected-flag"),
+        "parser did not pick up a flag injected into a copy of run_gate's keys_known(...) — it \
+         would silently miss a real addition too, recreating the p-62f0566d defect"
+    );
+
+    let p = payload();
+    for cmd_name in ["state.gate", "gate"] {
+        let entry = commands(&p).iter().find(|e| e["name"] == cmd_name).unwrap();
+        let props = entry["parameters"]["properties"].as_object().unwrap();
+        assert!(
+            !props.contains_key("totally-fake-injected-flag"),
+            "sanity check invalid: the real payload unexpectedly declares the injected fake flag"
+        );
     }
 }
