@@ -23,11 +23,11 @@
       "all writes made through the reinstalled binary honoring the new --relation surface"
     ]
   },
-  "status": "open",
+  "status": "claimed",
   "deps": [],
   "decisions": [],
   "trace": {
-    "worker": null,
+    "worker": "orchestrator",
     "outcome": null,
     "files_changed": [],
     "deviations": [],
@@ -37,6 +37,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "3ffdb508-af83-4ed1-b5ce-2d68f4e6f780",
+    "claimed_at": "2026-08-16T10:33:55.732Z"
   }
 }
