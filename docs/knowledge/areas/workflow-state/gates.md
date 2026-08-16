@@ -257,6 +257,10 @@ pointer and its remedy; the same escape the other hard doors use applies
 here too — fix each pointer, or clear it with a logged
 `knowledge-freshness-deferral` decision naming the feature.
 
+**A routing door blocks close when a locked D-ID in the closing feature's own
+CONTEXT.md decision table has no area-spec citation and no feature-local
+record (doc-impact-synthesis D2).**
+
 **Once every hard door above (tests, scribing-debt, judge-debt, pattern-check,
 knowledge-freshness) has cleared, close also runs `bee knowledge promote` for
 the closing feature in process — a SOFT door (knowledge-loop D2/D9, cells

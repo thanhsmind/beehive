@@ -42,7 +42,7 @@ Three field failures (reported against a host repo, fixed generically):
   description}`) governs tags. Once the taxonomy exists, an untagged
   decide/supersede is refused with a typed error; before it exists (bootstrap),
   untagged writes warn and proceed. An unknown tag is never refused — it is
-  accepted onto the event and appended to `candidates[]` for later curation.
+  accepted onto the event and appended to `candidates[]` awaiting curation.
   `candidates[]` never holds an already-canonical tag.
 - **R1a — The write-time refusal binds the system's OWN callers, and they are
   swept by a derived census.** R1 governs every writer, not only the ones a human
@@ -105,18 +105,22 @@ Three field failures (reported against a host repo, fixed generically):
   `touches:` never silences this guard): free text was previously the only
   way to hide a supersession from the active set, silently, and the store
   audit that triggered this rule found 70 decide events doing exactly that
-  against 29 proper supersede events. Decision text that reads as a deferral
-  — "defer", "for now", "revisit when/if", "later" — is refused unless
-  `--trigger <id>` names an already-registered trigger id (`bee triggers add
-  --decision <id> --condition "..."` registers one first): no deferred
-  condition may exist outside the trigger registry. `active_decisions()` —
+  against 29 proper supersede events. Decision text that reads as
+  postponement — the guard's own stem/phrase list (`matches_deferral_prose`)
+  — is refused unless `--trigger <id>` names an already-registered trigger id
+  (`bee triggers add --decision <id> --condition "..."` registers one
+  first): no postponed condition may exist outside the trigger registry.
+  The same list, unchanged, gates postponement-shaped prose written straight
+  into a closing feature's own touched docs (doc-impact-synthesis D3) — the
+  check that gave decision text a way in gives doc prose the identical one.
+  `active_decisions()` —
   the projection behind R5's derived index — stays the single read surface
   for current truth; the append-only log itself is never re-read for "is
   this still true," only for "why."
-- **R2a — Deferred conditions live in a two-tier trigger registry**
+- **R2a — Postponed conditions live in a two-tier trigger registry**
   (knowledge-distill-trigger D2, kdt-2). One record per trigger in the
   shared control-root store (`.bee/triggers/<slug>__<short8>.json`), each
-  citing its deferring decision. Predicate-tier records
+  citing the decision that named it. Predicate-tier records
   (`path-exists:`/`path-missing:`) are re-evaluated on every registry
   read; a predicate that has come true flips the record `waiting → due`
   and the flip persists. Manual-tier records never auto-fire — they
@@ -211,7 +215,7 @@ Three field failures (reported against a host repo, fixed generically):
   citation hit a supersede's sweep surfaces.
 - **The taxonomy** — `docs/decisions/taxonomy.json` — governs which tags are
   canonical; an unknown tag is accepted onto an event and appended to
-  `candidates[]` for later curation, never refused.
+  `candidates[]` awaiting curation, never refused.
 - **bee-capturing** — successor of the scribing and compounding skills, which
   held the backlog done-flip rule text (R7) as their own, identical,
   never-looser fallback; the consolidated skill carries no separate copy, and

@@ -83,19 +83,20 @@ machinery wherever it fits.
 
 ## Outstanding Questions
 
-### Deferred To Planning
+### Sent To Planning
 
 - [ ] CONTEXT.md table parsing: exact grammar bee can rely on (header row, D-ID column) — check bee-briefing/render precedents before writing a parser.
 - [ ] D1 close-walk scope: new decision ids of the closing feature — where recorded (decisions.jsonl has no feature field; ids may need collecting via the feature's decision-log calls or scribing stamp window).
 - [ ] D2 "exactly one spec" enforcement: is one citation anywhere enough, or must the spec's frontmatter decisions list carry it.
 - [ ] D3 word list false positives in historical quotes — the door reads the diff's ADDED lines only?
 
-## Deferred Ideas
+## Ideas Filed Out Of Scope
 
-- Full historical routing sweep of 110+ CONTEXT files — backlog campaign row (D4), filed at close of this feature.
+- Full historical routing sweep of 110+ CONTEXT files — filed as a backlog
+  campaign row (D4) by this feature's kds-4 close backfill.
 
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning reads
-locked decisions, code context, canonical references, and
-deferred-to-planning questions.
+locked decisions, code context, canonical references, and the questions
+sent to planning.
