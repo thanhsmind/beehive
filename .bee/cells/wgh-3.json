@@ -1,0 +1,46 @@
+{
+  "id": "wgh-3",
+  "title": "Harden refusal messages: bounded token echo, literal-dollar wording, first-denial priority, literal pins",
+  "feature": "write-guard-hardening",
+  "lane": "standard",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/write-guard-hardening/CONTEXT.md"
+  ],
+  "decisions": [
+    "D3"
+  ],
+  "deps": [
+    "wgh-2"
+  ],
+  "judge_obligation_ack": "standard lane: feature-close independent review pass covers the judge read",
+  "must_haves": {
+    "truths": [
+      "A refusal echoing a raw token truncates it to a bounded length and strips control characters (a quoted token with an embedded newline cannot inject message-shaped lines)",
+      "The unresolvable-target message names the literal-dollar-filename possibility instead of only prescribing variable expansion",
+      "In a mixed command the FIRST decisive refusal wording survives — the check_write loop no longer overwrites an earlier denial (guarded by denial.is_none())",
+      "New-message tests pin literal fragments, not the message function itself"
+    ]
+  },
+  "action": "Per CONTEXT.md D3: (a) in hook_local.rs bound the echoed token (e.g. 120 chars + ellipsis) and strip ASCII control chars in unresolvable_bash_target_message and any refusal interpolating a raw token; (b) extend the FIX sentence to name the literal-dollar-filename case; (c) in main.rs guard the check_write loop (previously :313-332) with denial.is_none() so an earlier resolution-failure denial is not overwritten; (d) rewrite the self-referential assert_eq tests (message function as its own expectation) to pin literal message fragments; add a mixed-command test asserting the resolution-failure wording wins.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "All four must_haves truths hold with named tests; suite green",
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

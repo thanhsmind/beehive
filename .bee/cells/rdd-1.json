@@ -1,0 +1,42 @@
+{
+  "id": "rdd-1",
+  "title": "Derive the registry drift-test flag list from set_gate.rs source",
+  "feature": "registry-drift-derivation",
+  "lane": "small",
+  "files": [
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "read_first": [
+    "docs/history/registry-drift-derivation/CONTEXT.md"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3"
+  ],
+  "action": "Per CONTEXT.md D1-D3: replace the hardcoded KNOWN_FLAGS const (registry_contracts.rs:169) with a list parsed at test time from include_str of ../src/verbs/state_group/set_gate.rs — locate the keys_known array literal and extract its string entries (precedent: tests/opencode_plugin_contracts.rs:163 include_str pattern). Assert every parsed flag appears as a parameter of BOTH the state.gate and gate payload entries. Defensive parse: fewer than 5 parsed names fails the test loudly. Keep deletion coverage. Reverse direction (payload-declared but handler-rejected, e.g. owner) stays out of scope.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "Adding a new flag name to keys_known in set_gate.rs without touching the payload makes the test fail; suite green as-is",
+  "status": "capped",
+  "deps": [],
+  "trace": {
+    "worker": "w-rdd-1",
+    "outcome": "Derived state.gate/gate flag list from set_gate.rs source via include_str! parse, replacing hardcoded const; full suite green",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T02:42:37.627Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e499dfc3-c889-41e5-b4a7-381b38596b5e",
+    "claimed_at": "2026-08-16T02:38:20.952Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T02:42:18.238Z"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "id": "wgh-1",
+  "title": "Teach the Bash extractor operand roles for cp/mv and fd-digit null redirects",
+  "feature": "write-guard-hardening",
+  "lane": "standard",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/write-guard-hardening/CONTEXT.md"
+  ],
+  "decisions": [
+    "D1"
+  ],
+  "judge_obligation_ack": "standard lane: feature-close independent review pass covers the judge read",
+  "must_haves": {
+    "truths": [
+      "cp SRC DST and mv SRC DST check only DST (and the -t DIR argument when given); a SOURCE operand never appears in a refusal",
+      "A command carrying 2>/dev/null (or 2>>, &>/dev/null) is never refused because of that redirect token",
+      "rm/mkdir/touch/tee keep all-operand extraction; every existing extractor test stays green"
+    ]
+  },
+  "action": "Per CONTEXT.md D1: in extract_bash_targets (guards.rs:607-732), give cp and mv operand roles — collect only the LAST non-flag operand as the write target, or the argument of -t/--target-directory when present; source operands are reads and are never extracted. Handle fd-digit and ampersand redirects to /dev/null (2>/dev/null, 2>>/dev/null, &>/dev/null, attached or spaced) so they never yield a refusable target. Do not change rm/mkdir/touch/tee. Red-first regression tests for: cp src dst under a gated phase refuses naming dst only; cp with -t; a compound command ending in 2>/dev/null passes clean; mv parity.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "All three must_haves truths hold with named tests; suite green",
+  "status": "claimed",
+  "deps": [],
+  "trace": {
+    "worker": "w-wgh-1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e499dfc3-c889-41e5-b4a7-381b38596b5e",
+    "claimed_at": "2026-08-16T02:38:20.979Z"
+  }
+}
