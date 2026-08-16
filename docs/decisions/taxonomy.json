@@ -349,6 +349,7 @@
     "traceable-runs",
     "knowledge-promote",
     "test-escalation",
-    "extractor"
+    "extractor",
+    "cli-surface"
   ]
 }
