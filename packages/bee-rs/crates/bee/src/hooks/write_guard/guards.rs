@@ -576,6 +576,14 @@ pub(crate) fn fence_heredocs(command: &str) -> String {
 pub(crate) struct BashTargets {
     pub(crate) paths: Vec<String>,
     pub(crate) broad_write: bool,
+    /// D4: parallel to `paths` (same index, same length) — true when this
+    /// target was extracted after a `cd` was seen earlier in the command.
+    /// This extractor has no way to know where `cd` actually leaves the
+    /// shell (a relative argument, a variable, `-` for OLDPWD are all
+    /// invisible to it), so ANY write-verb target appearing anywhere after
+    /// a `cd` token is conservatively marked opaque — fail-closed, never
+    /// fail-open, and a target before the `cd` is left exactly as before.
+    pub(crate) cd_opaque: Vec<bool>,
 }
 
 pub(crate) fn is_flag(t: &str) -> bool {
@@ -612,6 +620,12 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
     // A wrapper nested past the depth bound could hide a redirect we cannot
     // see — treat it as broad/opaque rather than silently finding no target.
     let mut broad_write = deep.truncated;
+    // D4: index into `paths` at the moment a `cd` command token was first
+    // seen — every target pushed at or after this index is cd-opaque.
+    // `paths` fills strictly in left-to-right token order, so this single
+    // marker is enough to classify every target without threading a flag
+    // through `add_target` and every one of its call sites.
+    let mut cd_marker: Option<usize> = None;
     let add_target = |target: &str, broad: &mut bool, paths: &mut Vec<String>| {
         if target.is_empty() || target == "/dev/null" || target == "NUL" {
             return;
@@ -645,6 +659,22 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
         }
         let cmd = token.replace('\\', "/");
         let cmd = cmd.rsplit('/').next().unwrap_or("");
+        if cmd == "cd" {
+            // D4: mark every target from here on cd-opaque (once set, never
+            // cleared — a second `cd` changes nothing already opaque) and
+            // consume the rest of this segment the same way the git-commit
+            // and sed branches below do; `cd`'s own argument is never a
+            // write target.
+            if cd_marker.is_none() {
+                cd_marker = Some(paths.len());
+            }
+            let mut end = i + 1;
+            while end < tokens.len() && !is_separator(&tokens[end]) {
+                end += 1;
+            }
+            i = end;
+            continue;
+        }
         if cmd == "git" && matches!(tokens.get(i + 1).map(String::as_str), Some("add") | Some("mv") | Some("rm")) {
             let git_verb = tokens[i + 1].clone();
             let mut end = i + 2;
@@ -793,7 +823,11 @@ pub(crate) fn extract_bash_targets(command: &str) -> BashTargets {
         }
         i += 1;
     }
-    BashTargets { paths, broad_write }
+    let cd_opaque = match cd_marker {
+        Some(marker) => (0..paths.len()).map(|idx| idx >= marker).collect(),
+        None => vec![false; paths.len()],
+    };
+    BashTargets { paths, broad_write, cd_opaque }
 }
 
 /// /^(\d|&)?>{1,2}(.*)$/ → Some(captured tail) when the token is a redirect.

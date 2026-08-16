@@ -186,14 +186,25 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
             };
             if !command.is_empty() {
                 let targets = extract_bash_targets(&command);
+                // D4: which unresolvable-shell-syntax refusal wording a cand
+                // gets — shell syntax, brace expansion, or cd opacity are
+                // mutually exclusive per-candidate classifications, checked
+                // in that order.
+                #[derive(Clone, Copy)]
+                enum Unresolved {
+                    ShellSyntax,
+                    BraceExpansion,
+                    CdOpaque,
+                }
                 struct Cand {
                     raw: String,
                     canonical: Option<String>,
                     rel: Option<String>,
                     delegate: bool,
+                    unresolved: Option<Unresolved>,
                 }
                 let mut cands: Vec<Cand> = Vec::new();
-                for p in &targets.paths {
+                for (idx, p) in targets.paths.iter().enumerate() {
                     // D4/D5: shell-syntax classification lives on the Bash
                     // surface only. A token still carrying unexpanded `$` or
                     // a backquote is never handed to canonical_rel_path (it
@@ -210,6 +221,37 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                             canonical: None,
                             rel: None,
                             delegate: false,
+                            unresolved: Some(Unresolved::ShellSyntax),
+                        });
+                        continue;
+                    }
+                    // D4: a brace group (`{a,b}`, `{1..9}`) is expanded by
+                    // the shell into several literal targets before this
+                    // write-verb ever runs — same reasoning and same
+                    // unresolved-candidate path as shell syntax above. Plain
+                    // glob characters (`*`, `?`, `[`) are deliberately NOT
+                    // checked here — globs stay exactly as today.
+                    if has_brace_expansion(p) {
+                        cands.push(Cand {
+                            raw: p.clone(),
+                            canonical: None,
+                            rel: None,
+                            delegate: false,
+                            unresolved: Some(Unresolved::BraceExpansion),
+                        });
+                        continue;
+                    }
+                    // D4: a target extracted after a `cd` earlier in this
+                    // compound command no longer resolves against the
+                    // directory the guard tracked — `extract_bash_targets`
+                    // marks this in `targets.cd_opaque`, parallel to `paths`.
+                    if targets.cd_opaque.get(idx).copied().unwrap_or(false) {
+                        cands.push(Cand {
+                            raw: p.clone(),
+                            canonical: None,
+                            rel: None,
+                            delegate: false,
+                            unresolved: Some(Unresolved::CdOpaque),
                         });
                         continue;
                     }
@@ -239,7 +281,7 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                             delegate = true;
                         }
                     }
-                    cands.push(Cand { raw: p.clone(), canonical, rel, delegate });
+                    cands.push(Cand { raw: p.clone(), canonical, rel, delegate, unresolved: None });
                 }
                 rel_paths = cands.iter().filter_map(|c| c.rel.clone()).collect();
                 for c in &cands {
@@ -263,11 +305,11 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                     // it. It only ever reaches the escalation below.
                     let mut first_failing: Option<&Cand> = None;
                     for c in cands.iter().filter(|c| c.rel.is_none() && !c.delegate) {
-                        // A shell-syntax cand never reaches the harness
-                        // allowlist check: it was never resolved as a path,
-                        // so there is no resolved location to test against a
-                        // harness root.
-                        if has_unexpanded_shell_syntax(&c.raw)
+                        // D4: a shell-syntax, brace-expansion, or cd-opaque
+                        // cand never reaches the harness allowlist check: it
+                        // was never resolved as a path, so there is no
+                        // resolved location to test against a harness root.
+                        if c.unresolved.is_some()
                             || !harness_allowlisted_target(
                                 harness_roots,
                                 &root,
@@ -280,24 +322,28 @@ lines naming plain in-repo relative paths (no path traversal, no unresolvable es
                         }
                     }
                     if let Some(c) = first_failing {
-                        // D1/D2: a target still carrying unexpanded shell
-                        // syntax was never a literal path — name the
-                        // resolution failure and quote the raw token instead
-                        // of the containment-denial wording.
-                        if has_unexpanded_shell_syntax(&c.raw) {
-                            denial = Some(unresolvable_bash_target_message(&c.raw));
-                        } else {
-                            let enriched = describe_cross_worktree_target(
-                                &root,
-                                &cwd,
-                                &Value::String(c.raw.clone()),
-                            )?;
-                            denial = Some(
+                        // D1/D2/D4: a target that was never a literal path —
+                        // still-unexpanded shell syntax, a brace group, or a
+                        // target stranded after a `cd` — names its own
+                        // resolution failure and quotes the raw token,
+                        // instead of the containment-denial wording.
+                        denial = Some(match c.unresolved {
+                            Some(Unresolved::ShellSyntax) => unresolvable_bash_target_message(&c.raw),
+                            Some(Unresolved::BraceExpansion) => {
+                                brace_expansion_bash_target_message(&c.raw)
+                            }
+                            Some(Unresolved::CdOpaque) => cd_opaque_bash_target_message(&c.raw),
+                            None => {
+                                let enriched = describe_cross_worktree_target(
+                                    &root,
+                                    &cwd,
+                                    &Value::String(c.raw.clone()),
+                                )?;
                                 enriched.unwrap_or_else(|| {
                                     GENERIC_BASH_CONTAINMENT_MESSAGE.to_string()
-                                }),
-                            );
-                        }
+                                })
+                            }
+                        });
                     }
                 }
                 if denial.is_none() && cands.iter().any(|c| c.delegate) {

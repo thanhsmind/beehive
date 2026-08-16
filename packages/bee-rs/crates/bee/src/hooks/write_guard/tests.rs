@@ -3431,3 +3431,132 @@ use std::process::ExitCode;
         let e = expect_done(edit("docs/history/demo/plan.md"), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
+
+    // ── write-guard-hardening D4: brace expansion and cd opacity are
+    // unresolvable; globs stay untouched ────────────────────────────────────
+
+    #[test]
+    fn brace_expansion_classifier_matches_comma_and_range_forms() {
+        assert!(has_brace_expansion("sta{t,t}e.json"));
+        assert!(has_brace_expansion("f{1..9}.txt"));
+        assert!(has_brace_expansion("f{a..z}.txt"));
+        // a nested comma group still carries a comma somewhere inside the
+        // outer braces — still classified, conservatively.
+        assert!(has_brace_expansion("a{b,{c,d}}e"));
+    }
+
+    #[test]
+    fn brace_expansion_classifier_leaves_singleton_braces_and_globs_alone() {
+        // A brace group with neither a comma nor a `..` range is not
+        // expanded by bash — a literal `{foo}` filename.
+        assert!(!has_brace_expansion("{foo}"));
+        assert!(!has_brace_expansion("plain.txt"));
+        // Plain glob characters are deliberately out of scope for D4.
+        assert!(!has_brace_expansion("*.log"));
+        assert!(!has_brace_expansion("file?.txt"));
+        assert!(!has_brace_expansion("[abc].txt"));
+        assert!(!has_brace_expansion("./*"));
+    }
+
+    #[test]
+    fn brace_expansion_message_quotes_the_bounded_token() {
+        let msg = brace_expansion_bash_target_message("sta{t,t}e.json");
+        assert!(msg.contains("\"sta{t,t}e.json\""), "{}", msg);
+        assert!(msg.contains("brace expansion"), "{}", msg);
+    }
+
+    #[test]
+    fn cd_opaque_message_quotes_the_bounded_token() {
+        let msg = cd_opaque_bash_target_message("out.txt");
+        assert!(msg.contains("\"out.txt\""), "{}", msg);
+        assert!(msg.contains("cd"), "{}", msg);
+    }
+
+    #[test]
+    fn extract_bash_targets_marks_cd_opaque_only_for_targets_after_cd() {
+        // No cd at all — every target is native.
+        let t = extract_bash_targets("touch out.txt");
+        assert_eq!(t.paths, vec!["out.txt"]);
+        assert_eq!(t.cd_opaque, vec![false]);
+
+        // The cd comes first — the target after it is opaque.
+        let t = extract_bash_targets("cd /tmp && touch out.txt");
+        assert_eq!(t.paths, vec!["out.txt"]);
+        assert_eq!(t.cd_opaque, vec![true]);
+
+        // The cd comes AFTER the target — unaffected.
+        let t = extract_bash_targets("touch out.txt && cd /tmp");
+        assert_eq!(t.paths, vec!["out.txt"]);
+        assert_eq!(t.cd_opaque, vec![false]);
+
+        // Mixed: one target before, one after.
+        let t = extract_bash_targets("touch before.txt && cd /tmp && touch after.txt");
+        assert_eq!(t.paths, vec!["before.txt", "after.txt"]);
+        assert_eq!(t.cd_opaque, vec![false, true]);
+    }
+
+    #[test]
+    fn bash_brace_comma_target_denies_naming_brace_expansion() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("touch .bee/sta{t,t}e.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("brace expansion"), "{}", e.stderr);
+        assert!(e.stderr.contains(".bee/sta{t,t}e.json"), "{}", e.stderr);
+        // Never the containment or direct-edit wording — this target was
+        // never resolved as a literal path in the first place.
+        assert!(!e.stderr.contains("direct-edit"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_brace_range_target_denies_naming_brace_expansion() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("touch f{1..9}.txt"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("brace expansion"), "{}", e.stderr);
+        assert!(e.stderr.contains("f{1..9}.txt"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_cd_then_write_denies_naming_cd_opacity() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("cd /tmp && touch out.txt"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("cd"), "{}", e.stderr);
+        assert!(e.stderr.contains("out.txt"), "{}", e.stderr);
+        assert!(e.stderr.contains("could not be resolved"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_write_before_cd_keeps_its_own_denial_wording() {
+        // A write BEFORE the cd is unaffected by D4 — it keeps whatever
+        // verdict it always had (here: the pre-existing direct-edit denial
+        // for .bee/state.json), never the cd-opacity wording.
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("printf x > .bee/state.json && cd /tmp"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee state"), "{}", e.stderr);
+        assert!(!e.stderr.contains("could not be resolved"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_plain_glob_target_behaves_exactly_as_before_d4() {
+        // rm *.log — a plain glob character is deliberately NOT classified
+        // by D4; this must resolve exactly as it always has (denied here by
+        // the pre-existing scratch-shape guard on the resolved ".log"
+        // target, never by the new brace-expansion/cd-opacity wording).
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("rm *.log"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("scratch-shape guard"), "{}", e.stderr);
+        assert!(!e.stderr.contains("brace expansion"), "{}", e.stderr);
+        assert!(!e.stderr.contains("could not be resolved"), "{}", e.stderr);
+    }
+
+    #[test]
+    fn bash_plain_glob_write_outside_scratch_shape_allows_as_before_d4() {
+        // A glob target that resolves to a plain path with no glob-specific
+        // guard opinion (unlike ".log") must still resolve and allow.
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("rm *.txt"), &fx.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
