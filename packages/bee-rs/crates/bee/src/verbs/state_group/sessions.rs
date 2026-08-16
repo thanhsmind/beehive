@@ -274,6 +274,84 @@ pub(crate) fn run_session_unbind(flags: Flags, use_json: bool, t0: Instant) -> O
     finish(&ctx, out)
 }
 
+/// The plain flag→env resolver `state session release` targets its own
+/// session with: `--session-id` wins, then `BEE_SESSION_ID`, then
+/// `CLAUDE_CODE_SESSION_ID` — mirrors claims.rs's `resolve_session_flag_env`
+/// exactly, deliberately WITHOUT `resolve_session_id`'s single-live-session
+/// adoption fallback: a release names its own session, never guesses one
+/// from the sessions directory.
+fn resolve_release_session_id(flag: Option<&str>) -> Option<String> {
+    if let Some(f) = flag {
+        if !js_trim(f).is_empty() {
+            return Some(js_trim(f).to_string());
+        }
+    }
+    env_nonempty("BEE_SESSION_ID").or_else(|| env_nonempty("CLAUDE_CODE_SESSION_ID"))
+}
+
+/// `bee state session release` — marks an OPEN session `status: "closed"`,
+/// `released: true` so it stops holding write-guard/concurrency locks
+/// instantly instead of waiting out the 900s heartbeat-stale window, while
+/// the record itself stays open for the split revival: `state_sync.rs`'s
+/// PostToolUse heartbeat leaves a `released` mark intact (so the release
+/// command's own trailing hook call can't immediately undo it), while
+/// `prompt_context.rs`'s UserPromptSubmit revival DOES clear it — the user
+/// speaking again is the re-engage signal.
+pub(crate) fn run_session_release(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(&flags, &["session-id"]) {
+        return None;
+    }
+    let ctx = match go("state session release", use_json, t0)? {
+        Ok(c) => c,
+        Err(code) => return Some(code),
+    };
+    let out = (|| -> R2<Out> {
+        let session_id_flag = flag_value(&flags, "session-id");
+        let Some(session_raw) = resolve_release_session_id(session_id_flag.as_deref()) else {
+            return Ok(Out::Thrown(
+                "state session release: no session id resolved — pass --session-id, or run \
+                 inside a session exporting BEE_SESSION_ID / CLAUDE_CODE_SESSION_ID."
+                    .to_string(),
+            ));
+        };
+        let session = match require_id(&session_raw, "session id") {
+            Ok(v) => v,
+            Err(Err2::Msg(m)) => return Ok(Out::Thrown(m)),
+            Err(Err2::Ex) => return Err(Err2::Ex),
+        };
+        let Some(guard) = acquire_sessions_lock(&ctx.root) else {
+            return Ok(Out::Thrown(format!(
+                "state session release: session \"{session}\" release could not acquire the sessions lock after 15 bounded attempts — never waited unboundedly."
+            )));
+        };
+        let record = read_session(&ctx.root, &session)?;
+        let Some(mut record) = record else {
+            drop(guard);
+            return Ok(Out::Emit(
+                json!({"id": session, "released": false, "reason": "no_session_record"}),
+                format!("Session \"{session}\" has no record — nothing to release."),
+                0,
+            ));
+        };
+        let closed_at = now_iso();
+        record.insert("status".into(), json!("closed"));
+        record.insert("closed_at".into(), json!(closed_at));
+        record.insert("released".into(), json!(true));
+        write_json_atomic(
+            &sessions_dir(&ctx.root).join(format!("{session}.json")),
+            &Value::Object(record),
+        )
+        .map_err(|_| Err2::Ex)?;
+        drop(guard);
+        Ok(Out::Emit(
+            json!({"id": session, "released": true, "closed_at": closed_at}),
+            format!("Session \"{session}\" released — marked closed until the user returns."),
+            0,
+        ))
+    })();
+    finish(&ctx, out)
+}
+
 // ─── state handoff write / adopt / show ────────────────────────────────────
 //
 // multisession-native-15 (D5): each verb first resolves WHICH workflow it

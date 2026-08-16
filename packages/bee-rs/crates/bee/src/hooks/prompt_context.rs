@@ -1675,12 +1675,17 @@ fn heartbeat_session(root: &Path, sid: &str, now: i64) -> Result<(), String> {
         session.insert("last_heartbeat".into(), Value::String(iso_from_ms(now)));
         // D8: a session that renews its heartbeat is no longer dead
         // (crash-swept) or closed (clean SessionEnd) — clear the mark and
-        // stamp the revival (most recent only).
+        // stamp the revival (most recent only). ser-3: UserPromptSubmit is
+        // the ONE heartbeat path that also revives an explicit
+        // `state session release` (`released: true`) — the user speaking
+        // again is the re-engage signal, unlike the PostToolUse heartbeat
+        // (state_sync.rs), which deliberately leaves a released mark alone.
         let status = session.get("status").and_then(Value::as_str);
         if status == Some("dead") || status == Some("closed") {
             session.remove("status");
             session.remove("dead_at");
             session.remove("closed_at");
+            session.remove("released");
             session.insert("revived_at".into(), Value::String(iso_from_ms(now)));
         }
         write_json_retry(
@@ -2278,6 +2283,42 @@ mod tests {
         assert_eq!(after["lane"], json!("l1")); // untouched fields survive
         assert!(after.get("status").is_none(), "{after:?}");
         assert!(after.get("closed_at").is_none(), "{after:?}");
+        assert!(after["revived_at"].as_str().is_some(), "{after:?}");
+        assert_ne!(after["last_heartbeat"], json!("2020-01-01T00:00:00.000Z"));
+    }
+
+    #[test]
+    fn heartbeat_session_revives_a_released_mark_and_clears_it() {
+        // ser-3: unlike state_sync.rs's PostToolUse heartbeat (which
+        // deliberately leaves `released: true` intact), UserPromptSubmit IS
+        // the re-engage signal for an explicit `state session release` — the
+        // user speaking again clears status/closed_at/released exactly like
+        // the plain "closed" revival above, and stamps revived_at.
+        let tmp = tempfile::tempdir().unwrap();
+        bee_repo(tmp.path());
+        write(
+            tmp.path(),
+            ".bee/sessions/s1.json",
+            &serde_json::to_string(&json!({
+                "id": "s1",
+                "last_heartbeat": "2020-01-01T00:00:00.000Z",
+                "status": "closed",
+                "closed_at": "2020-01-01T00:05:00.000Z",
+                "released": true,
+                "lane": "l1"
+            }))
+            .unwrap(),
+        );
+        let now = now_ms();
+        heartbeat_session(tmp.path(), "s1", now).unwrap();
+        let after: Value = serde_json::from_str(
+            &std::fs::read_to_string(tmp.path().join(".bee/sessions/s1.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(after["lane"], json!("l1")); // untouched fields survive
+        assert!(after.get("status").is_none(), "{after:?}");
+        assert!(after.get("closed_at").is_none(), "{after:?}");
+        assert!(after.get("released").is_none(), "{after:?}");
         assert!(after["revived_at"].as_str().is_some(), "{after:?}");
         assert_ne!(after["last_heartbeat"], json!("2020-01-01T00:00:00.000Z"));
     }

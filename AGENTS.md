@@ -187,7 +187,9 @@ skill ("Communication contract").
 - Before ending substantial work: cap or release every claimed cell,
   release reservations, leave `.bee/state.json` honest, run
   `commands.test` over what changed when one is recorded, and name the
-  blockers and next action in the final message.
+  blockers and next action in the final message. Then run
+  `bee state session release` — sibling sessions stop counting this
+  one as a live worker, and the next user message re-engages it.
 
 ## Guardrails
 

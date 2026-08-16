@@ -536,6 +536,20 @@ fn heartbeat_session(control_root: &Path, session_id: &str, source: &str) -> Res
             return Ok(());
         }
         session.insert("last_heartbeat".into(), Value::String(now_iso()));
+        // ser-3: a SessionStart for an id whose record already exists (the
+        // SESSION_EXISTS branch that routes here instead of create_session)
+        // is at least as strong a re-engage signal as a UserPromptSubmit —
+        // clear any dead/closed/released mark left over from a crash, a
+        // clean SessionEnd, or an explicit `state session release`, so a
+        // resumed session id never comes back reading as still ended.
+        let status = session.get("status").and_then(Value::as_str);
+        if status == Some("dead") || status == Some("closed") {
+            session.remove("status");
+            session.remove("dead_at");
+            session.remove("closed_at");
+            session.remove("released");
+            session.insert("revived_at".into(), Value::String(now_iso()));
+        }
         // D4 (bh-4): restamp `source` on every SessionStart, not only at
         // creation — a session that started fresh and later mid-work-
         // compacts must be readable as "no longer at a fresh boundary". A

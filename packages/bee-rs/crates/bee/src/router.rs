@@ -68,7 +68,7 @@ pub const PORTED: &[&str] = &[
     "cells judge|judge-record|reset-budget|schedule|archive|unarchive",
     "state worker add|update|remove|clear|prune",
     "state lanes",
-    "state session list|bind|unbind",
+    "state session list|bind|unbind|release",
     "state set|gate|scribing-run|compounding-run|plan-rev bump|handoff (no-lane/no-workflow repos)",
     "intent set|show|advance|clear",
     "reviews create|list|show|record|candidate add|candidates|status (--file shapes)",
