@@ -986,7 +986,7 @@
     },
     {
       "path": "packages/bee/AGENTS.block.md",
-      "sha256": "311a81e43acda6695ee3830b63a7386a0bbca5304157e30bf4a72f8176b83519",
+      "sha256": "79bcd5f7b6ab3d5aee02420e655f421f3bcadbd4079985dcf1e6901dfc4c796f",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/AGENTS.block.md"
@@ -1028,7 +1028,7 @@
     },
     {
       "path": "packages/bee/hooks/claude-hooks.json",
-      "sha256": "cb5d828dffbeee03b47d871592247a0a43bd1e18bae2c3da2503fcbe86fcc953",
+      "sha256": "983c667d6661c412c722e48226adb1d1b45645a5e9f815c3f4ffb6b32ba7bb5a",
       "mode": "644",
       "role": "plugin_hook",
       "packagePath": "packages/bee/hooks/claude-hooks.json"
