@@ -1,0 +1,54 @@
+{
+  "id": "ser-2",
+  "feature": "session-end-release",
+  "lane": "standard",
+  "title": "Liveness readers treat a closed session as not live",
+  "must_haves": {
+    "truths": [
+      "A session record with status \"closed\" is not counted by active_worker_session_ids, reads stale in claims.rs heartbeat_stale, and does not hold a worktree in live_session_holds",
+      "perform_cleanup removes a worktree whose only holding session is closed",
+      "A fresh heartbeat on a closed record clears status/closed_at and stamps revived_at, mirroring the dead-revival path"
+    ]
+  },
+  "action": "Make a status of \"closed\" (alongside the existing \"dead\") read as not-live at every work-gating session-liveness site: (1) packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs active_worker_session_ids — skip records whose status is closed or dead before the heartbeat_stale check; (2) packages/bee-rs/crates/bee/src/verbs/cells/claims.rs heartbeat_stale (the session-map one at ~line 598 feeding is_concurrent_mode) — status closed/dead returns stale=true; (3) packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs live_session_holds — a record with status closed/dead does not hold (keep the existing unreadable-record fail-closed behavior); this automatically covers merge cleanup's liveness check. (4) packages/bee-rs/crates/bee/src/hooks/state_sync.rs heartbeat_session — clear status/closed_at on revival exactly as it clears dead/dead_at (extend the existing D8 block; stamp revived_at). Do NOT touch the throttle-only heartbeat_stale in state_sync.rs:463. Tests: one per touched predicate — closed record excluded from active_worker_session_ids; closed record reads stale in claims.rs; closed record does not hold in live_session_holds (and thus perform_cleanup removes); heartbeat clears closed and stamps revived_at.",
+  "intent": "A closed mark is only useful if the guards that count live workers, concurrent mode, and worktree holds all release on it; revival on heartbeat keeps a resumed same-id session safe.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ser-2-builder",
+    "outcome": "Closed sessions now release every work-gating liveness reader (active-worker count, concurrent mode, write-guard ownership, claim/reservation adoption, worktree holds) and revive cleanly on a fresh heartbeat",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+      "packages/bee-rs/crates/bee/src/hooks/state_sync.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/store.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/leases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/recovery_verb.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T05:34:53.046Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b905fa1b-3e59-4fdf-a234-af43a0398b55",
+    "claimed_at": "2026-08-16T05:17:12.831Z",
+    "inline_reason": "worker dispatched directly by orchestrator without a bee state worker add registration step; cell claim and reservations were already owned under this worker's claim_session per cells show",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T05:34:33.791Z"
+  }
+}

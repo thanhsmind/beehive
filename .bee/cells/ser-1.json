@@ -1,0 +1,58 @@
+{
+  "id": "ser-1",
+  "feature": "session-end-release",
+  "lane": "standard",
+  "title": "SessionEnd hook marks the session record closed",
+  "must_haves": {
+    "truths": [
+      "A SessionEnd hook invocation with a session record on disk leaves that record with status \"closed\" and a closed_at timestamp",
+      "A Stop or PreCompact invocation never writes a closed mark",
+      "Claude hook wiring registers SessionEnd -> bee-session-close.mjs and the rendered manifests match the wiring tests"
+    ]
+  },
+  "action": "In packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs run_inner: add an early branch for ctx.event == \"SessionEnd\" — resolve session_id via get_session_id(&ctx.payload); if present, under the sessions store lock (same acquire pattern as state_sync.rs heartbeat_session, fail-open on Busy/missing record) set status:\"closed\" and closed_at:<now ISO> on .bee/sessions/<id>.json, print nothing, return Ok(()). Never mark on Stop/PreCompact. In packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs: add a SessionEnd entry pointing at bee-session-close.mjs in the Claude wiring arms (same repo_entry shape as the existing Stop entry); Codex runtime has no SessionEnd event — leave codex arms unchanged with a one-line comment naming the gap. Regenerate rendered hook manifests exactly as the repo does (find the regen path: bee dev render-hook-manifests or the build step that renders packages/bee/hooks/*.json) and update the wiring/installer tests that pin the manifest content (packages/bee-rs/crates/bee/tests/installer_contracts.rs and hooks_wiring tests). Add a session_close test: SessionEnd payload with a session record → record gains status closed + closed_at; Stop payload → record untouched.",
+  "intent": "bee wires Stop/PreCompact/SubagentStop but not SessionEnd, so a cleanly exited session is indistinguishable from a live one until its heartbeat goes stale (900s). Recording closure at exit is the safe signal guards can release on.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "files": [],
+  "read_first": [],
+  "trace": {
+    "worker": "ser-1-builder",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/devtools/hook_manifests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+      "packages/bee-rs/crates/bee/src/onboard/hooks_wiring.rs",
+      "packages/bee/hooks/claude-hooks.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T05:34:08.729Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b905fa1b-3e59-4fdf-a234-af43a0398b55",
+    "claimed_at": "2026-08-16T05:17:12.812Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-16T05:29:19.073Z",
+        "claim_session": "b905fa1b-3e59-4fdf-a234-af43a0398b55",
+        "claimed_at": "2026-08-16T05:29:08.924Z",
+        "acquired_at": "2026-08-16T05:17:12.812Z",
+        "worker": "ser-1-builder",
+        "verdict": "tests-red",
+        "failure_signature": "dbcc2f8a7b26",
+        "note": "ndard\"), \"shaping\", None, &[]));"
+      }
+    ],
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T05:33:49.190Z"
+  }
+}
