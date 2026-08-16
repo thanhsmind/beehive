@@ -29,18 +29,27 @@
   "action": "Per CONTEXT.md D3: (a) in hook_local.rs bound the echoed token (e.g. 120 chars + ellipsis) and strip ASCII control chars in unresolvable_bash_target_message and any refusal interpolating a raw token; (b) extend the FIX sentence to name the literal-dollar-filename case; (c) in main.rs guard the check_write loop (previously :313-332) with denial.is_none() so an earlier resolution-failure denial is not overwritten; (d) rewrite the self-referential assert_eq tests (message function as its own expectation) to pin literal message fragments; add a mixed-command test asserting the resolution-failure wording wins.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "acceptance": "All four must_haves truths hold with named tests; suite green",
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-wgh-3",
+    "outcome": "Bounded/sanitized the Bash-target echo, named the literal-$-filename FIX, guarded the check_write loop with denial.is_none(), and repinned message tests to literal fragments",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/hook_local.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-16T03:03:37.311Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "e499dfc3-c889-41e5-b4a7-381b38596b5e",
+    "claimed_at": "2026-08-16T02:56:59.927Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T03:03:17.663Z"
   }
 }

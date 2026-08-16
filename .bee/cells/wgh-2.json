@@ -27,18 +27,26 @@
   "action": "Per CONTEXT.md D2: restructure the Bash per-target loop in main.rs so native verdicts (shell-syntax denial, containment denial) are decided and retained BEFORE any Err(Nd) from companion_mount_rel or memory_root_hit can escape as Outcome::Delegate — if any target already produced a native denial, the hook returns that denial; Nd escapes only when no denial exists. Mirror the same ordering on the Edit branch (main.rs:290/:300) where the identical class lives. Red-first tests from probes ADV-A/ADV-B (both orders, marker and memory_root variants) plus a control proving a lone legitimately-delegating payload still delegates.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "acceptance": "All three must_haves truths hold with named tests; suite green",
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-wgh-2",
+    "outcome": "Deferred companion_mount_rel/memory_root_hit Nd escape past per-target native denial decision in Bash and mirrored Edit branch; 7 new tests (ADV-A/ADV-B both orders, marker+memory_root, lone-delegate and native-allow controls) plus full suite green (1825 passed)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/main.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-16T02:56:49.064Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "e499dfc3-c889-41e5-b4a7-381b38596b5e",
+    "claimed_at": "2026-08-16T02:47:39.038Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T02:56:29.526Z"
   }
 }

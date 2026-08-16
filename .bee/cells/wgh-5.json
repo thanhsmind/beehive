@@ -1,0 +1,53 @@
+{
+  "id": "wgh-5",
+  "title": "Close the three feature-close-review allow regressions: mv source, cd redirect swallow, cp -t separator eat",
+  "feature": "write-guard-hardening",
+  "lane": "standard",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/write-guard-hardening/CONTEXT.md"
+  ],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "deps": [
+    "wgh-4"
+  ],
+  "judge_obligation_ack": "fix cell from the feature-close independent review itself; delta re-verified before merge",
+  "must_haves": {
+    "truths": [
+      "mv extracts BOTH its source operands and its destination (and with -t: the dir plus every source) — mv .bee/state.json /tmp/x is denied again by the direct-edit guard, and an mv of a reservation-held source raises the conflict; cp keeps sources dropped",
+      "cd . > <protected-file> is denied again: the cd segment-consume loop still routes redirect operators through match_redirect (or stops at the first redirect), so a redirect target inside a cd segment is extracted",
+      "cp -t followed by a separator no longer eats it: the -t/--target-directory lookahead refuses a separator token, the loop stops at the separator, and the NEXT command's targets are extracted — cp -t ; rm -rf .bee/state.json is denied again"
+    ]
+  },
+  "action": "Fix three P1 allow-regressions found by the feature-close review, all in guards.rs extract_bash_targets: (1) split the cp/mv operand-role rule — cp drops sources (keep wgh-1 behavior and its tests), mv extracts every operand (sources are unlinked, so they are writes; retarget tests.rs:2455-area pins that currently assert mv source-dropping, red-first); (2) in the wgh-4 cd segment-consume loop (guards.rs:662-677) run each consumed token through match_redirect so a redirect and its file inside a cd segment still extract (or stop consuming at the first redirect operator); (3) guard the -t/--target-directory lookahead (guards.rs:780-788) with an is_separator check so a separator is never taken as the argument and the scan resumes at the separator. Red-first regression tests for all three concrete inputs above plus mv -t parity.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "acceptance": "All three must_haves truths hold with named tests; every pre-branch denial in these three shapes denies again; suite green",
+  "status": "capped",
+  "trace": {
+    "worker": "w-wgh-5",
+    "outcome": "Closed the three P1 allow-regressions: mv now extracts every operand (source+dest), a redirect inside a cd segment still extracts, and -t/--target-directory never eats a following separator",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-16T03:30:01.506Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e499dfc3-c889-41e5-b4a7-381b38596b5e",
+    "claimed_at": "2026-08-16T03:21:47.761Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-16T03:29:42.150Z"
+  }
+}
