@@ -650,7 +650,7 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("otto holds \"src/held.txt\" (cell cell-1)"));
     }
 
-    // D1: cp/mv check only the destination operand — a source operand must
+    // D1: cp checks only the destination operand — a source operand must
     // never surface in a refusal.
     #[test]
     fn cp_under_a_gated_phase_refuses_naming_the_destination_only() {
@@ -666,6 +666,10 @@ use std::process::ExitCode;
         assert!(!e.stderr.contains("held_source.txt"), "{}", e.stderr);
     }
 
+    // P1-1: mv unlinks its source, so mv checks EVERY operand — a held
+    // destination still refuses even though the (unheld) source is also now
+    // extracted, and it names only the destination because that is the one
+    // path actually held.
     #[test]
     fn mv_under_a_gated_phase_refuses_naming_the_destination_only() {
         let fx = build_fixture("swarming", true);
@@ -678,6 +682,37 @@ use std::process::ExitCode;
         assert!(e.stderr.contains("bee reservation conflict"));
         assert!(e.stderr.contains("otto holds \"src/dst.txt\" (cell cell-1)"));
         assert!(!e.stderr.contains("held_source.txt"), "{}", e.stderr);
+    }
+
+    // P1-1: mv of a RESERVATION-HELD SOURCE now raises the conflict too —
+    // before this cell the source was dropped from extraction entirely, so
+    // this shape used to allow silently even though mv unlinks the source.
+    #[test]
+    fn mv_of_a_reservation_held_source_raises_the_conflict() {
+        let fx = build_fixture("swarming", true);
+        seed_lease(&fx.root, "src/held_source.txt", "otto", "cell-1", None, "lease");
+        let e = expect_done(
+            json!({"tool_name":"Bash","tool_input":{"command":"mv src/held_source.txt safe_dst.txt"},"agent_name":"mel"}),
+            &fx.root,
+        );
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee reservation conflict"));
+        assert!(e.stderr.contains("otto holds \"src/held_source.txt\" (cell cell-1)"), "{}", e.stderr);
+    }
+
+    // P1-1: mv of a CLI-owned file is a direct-edit-guard hit again — before
+    // this cell, mv's source was never extracted so the guard never saw it.
+    // (An in-worktree destination is used rather than an absolute /tmp path
+    // so the containment check — a separate, pre-existing denial path for a
+    // target outside the worktree — never masks the direct-edit denial this
+    // test pins.)
+    #[test]
+    fn mv_of_a_cli_owned_state_file_denies_again() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("mv .bee/state.json elsewhere.txt"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee direct-edit guard"), "{}", e.stderr);
+        assert!(e.stderr.contains(".bee/state.json"), "{}", e.stderr);
     }
 
     #[test]
@@ -2449,14 +2484,22 @@ use std::process::ExitCode;
     // ── D1: cp/mv operand roles + fd-digit/ampersand null redirects ────────
 
     #[test]
-    fn extract_bash_targets_cp_mv_take_only_the_last_operand_as_target() {
+    fn extract_bash_targets_cp_takes_only_the_last_operand_as_target() {
         let t = extract_bash_targets("cp src.txt dst.txt");
-        assert_eq!(t.paths, vec!["dst.txt"], "source must never be extracted");
-        let t = extract_bash_targets("mv src.txt dst.txt");
         assert_eq!(t.paths, vec!["dst.txt"], "source must never be extracted");
         // multiple sources, last operand still wins
         let t = extract_bash_targets("cp a.txt b.txt c.txt dst_dir");
         assert_eq!(t.paths, vec!["dst_dir"]);
+    }
+
+    // P1-1: mv unlinks its source — every operand mv touches is a write, so
+    // both source(s) and destination extract (unlike cp above).
+    #[test]
+    fn extract_bash_targets_mv_extracts_every_operand_source_and_destination() {
+        let t = extract_bash_targets("mv src.txt dst.txt");
+        assert_eq!(t.paths, vec!["src.txt", "dst.txt"], "{:?}", t.paths);
+        let t = extract_bash_targets("mv a.txt b.txt c.txt dst_dir");
+        assert_eq!(t.paths, vec!["a.txt", "b.txt", "c.txt", "dst_dir"], "{:?}", t.paths);
     }
 
     #[test]
@@ -2465,8 +2508,10 @@ use std::process::ExitCode;
         assert_eq!(t.paths, vec!["dst_dir"], "{:?}", t.paths);
         let t = extract_bash_targets("cp a.txt --target-directory=dst_dir");
         assert_eq!(t.paths, vec!["dst_dir"], "{:?}", t.paths);
+        // P1-1: mv -t extracts the directory PLUS every source (source is a
+        // write since mv unlinks it) — unlike cp, which drops sources.
         let t = extract_bash_targets("mv a.txt b.txt --target-directory dst_dir");
-        assert_eq!(t.paths, vec!["dst_dir"], "{:?}", t.paths);
+        assert_eq!(t.paths, vec!["a.txt", "b.txt", "dst_dir"], "{:?}", t.paths);
     }
 
     #[test]
@@ -2485,8 +2530,9 @@ use std::process::ExitCode;
         assert_eq!(t.paths, vec!["foo"], "{:?}", t.paths);
         let t = extract_bash_targets("cp src.txt dst.txt 2>/dev/null");
         assert_eq!(t.paths, vec!["dst.txt"], "{:?}", t.paths);
+        // P1-1: mv extracts both source and destination.
         let t = extract_bash_targets("mv src.txt dst.txt &>/dev/null");
-        assert_eq!(t.paths, vec!["dst.txt"], "{:?}", t.paths);
+        assert_eq!(t.paths, vec!["src.txt", "dst.txt"], "{:?}", t.paths);
         // a real (non-null) redirect glued to the operand list still extracts
         assert!(match_redirect("&>/dev/null").is_some());
         assert!(match_redirect("&>>/dev/null").is_some());
@@ -3536,6 +3582,49 @@ use std::process::ExitCode;
         assert_eq!(e.code, 2, "{}", e.stderr);
         assert!(e.stderr.contains("bee state"), "{}", e.stderr);
         assert!(!e.stderr.contains("could not be resolved"), "{}", e.stderr);
+    }
+
+    // P1-2: bash sets up redirections before it runs a builtin — a redirect
+    // glued into a cd segment (`cd . > probe.json`) truncates the file for
+    // real, regardless of where cd lands, so it must extract as a native
+    // (non-cd-opaque) target and deny like any other direct write.
+    #[test]
+    fn extract_bash_targets_extracts_a_redirect_inside_a_cd_segment() {
+        let t = extract_bash_targets("cd . > probe.json");
+        assert_eq!(t.paths, vec!["probe.json"], "{:?}", t.paths);
+        assert_eq!(t.cd_opaque, vec![false], "redirect target must not be cd-opaque");
+    }
+
+    #[test]
+    fn bash_cd_segment_redirect_denies_the_protected_file_again() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("cd . > .bee/state.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee direct-edit guard"), "{}", e.stderr);
+        assert!(e.stderr.contains(".bee/state.json"), "{}", e.stderr);
+        // Must be the direct-edit denial, never the cd-opacity wording — the
+        // redirect is a real write that bash sets up before running cd.
+        assert!(!e.stderr.contains("could not be resolved"), "{}", e.stderr);
+    }
+
+    // P1-3: a separator right after -t/--target-directory is never its
+    // argument — swallowing it used to merge the NEXT command's tokens into
+    // this cp's operand list, hiding that command's own write target.
+    #[test]
+    fn extract_bash_targets_cp_target_directory_flag_never_eats_a_separator() {
+        let t = extract_bash_targets("cp -t ; rm -rf .bee/state.json");
+        assert_eq!(t.paths, vec![".bee/state.json"], "{:?}", t.paths);
+        let t = extract_bash_targets("mv -t ; rm -rf .bee/state.json");
+        assert_eq!(t.paths, vec![".bee/state.json"], "{:?}", t.paths);
+    }
+
+    #[test]
+    fn bash_cp_target_directory_separator_swallow_denies_the_next_command_again() {
+        let fx = build_fixture("swarming", true);
+        let e = expect_done(bash("cp -t ; rm -rf .bee/state.json"), &fx.root);
+        assert_eq!(e.code, 2, "{}", e.stderr);
+        assert!(e.stderr.contains("bee direct-edit guard"), "{}", e.stderr);
+        assert!(e.stderr.contains(".bee/state.json"), "{}", e.stderr);
     }
 
     #[test]
