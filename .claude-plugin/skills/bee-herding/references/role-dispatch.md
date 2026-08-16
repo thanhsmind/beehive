@@ -238,6 +238,17 @@ required; neither substitutes for the other.
 
 "Highest impact" is your own judgement over the survivors — there is no stored
 priority field, and none should be added. Read their full text and choose.
+
+**Rank overlap-aware.** Before choosing, list what in-flight work already
+holds: from MAIN, `bee reservations list --json` plus each live feature's
+claimed cells (`bee cells list --feature <label>` for every occupied slot's
+label from §4). A candidate whose stated scope overlaps those files is
+skipped this iteration with one chat-pane note — `dispatch: skipping
+<PBI-ID> — overlaps <cell/feature>` — never spawned into a known merge
+collision. Overlap defers that candidate only; while a disjoint survivor
+remains, pick it and continue. Overlap judgement is your own reading of
+the candidate's text against the held paths — no keyword script.
+
 Before taking any action:
 
 ```

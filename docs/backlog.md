@@ -10,11 +10,11 @@ never a generation timestamp or any other wall-clock value.
 
 | ID | Story | CoS | Status | Feature |
 |----|-------|-----|--------|---------|
-| p-9fb64d0f | Reservation refusal must never write an unreleased cross-worktree hold mirror (self-poisoning deny loop) | Reproduced in workflow-lessons wfl-4: a reservations reserve that REFUSES writes a fresh unreleased entry into .bee/runtime/cross-worktree-holds.json naming the refused path, so every retry recreates the block it reports; holds also refresh expires on read instead of counting down. Fix: refusal path is read-only (no mirror write), mirror entries for a cell release when the cell caps, and sweep clears entries whose cell is terminal. Regression test: reserve-deny twice leaves ledger unchanged. | proposed | workflow-lessons |
-| p-ead9b2d4 | A bundle-only handover is proven: an area is rebuilt from its concepts alone, with no runtime and no source tree | Pick one mid-size area; hand its docs/knowledge concepts (Pointers stripped) to a fresh session on another stack; the rebuild reproduces the documented behaviors; gaps found feed back as spec fixes. This is P69's last clause, isolated so it ranks on its own. | proposed | knowledge-handover-proof |
+| p-ead9b2d4 | A bundle-only handover is proven: an area is rebuilt from its concepts alone, with no runtime and no source tree | TRIAGED 2026-08-16: parked — valid experiment (rebuild one area from docs/knowledge concepts alone on another stack) but it is a human-priced cross-stack session, not a code fix; needs the user to choose the area and spend the session. Evidence and scope unchanged from P69's last clause. | parked | knowledge-handover-proof |
 
 ## Done / Declined
 
+- [p-06af049e] Bash write-guard extractor treats every non-flag token after cp/mv as a write target, so a READ operand can trigger a refusal — done
 - [p-0a0fda78] 22 promote-proposals.md la kenh chet: bee close sinh proposal moi feature nhung 0/22 delivery draft duoc apply — duong promote thuc te la capture-queue — done
 - [p-0a47ea8d] Per-check filter in suite harness (BEE_CHECK_ONLY): cell verify runs only relevant checks, full suite stays at slice tail + CI — done
 - [p-0aa807b9] run_verify --impacted gains --level 1: direct-edge-only selection for the dev loop, transitive closure reserved for wave-close/merge — done
@@ -22,7 +22,9 @@ never a generation timestamp or any other wall-clock value.
 - [p-10e22a70] knowledge check bat con tro chet: path trong frontmatter sources/body Integration Points tro file khong ton tai — lop ri set lam ks-2 BLOCKED (bee-executing khai tu) — done
 - [p-19b21cf2] Doc-link integrity test for docs/knowledge: every relative md link and [[wiki-link]] must resolve, enforced in cargo test — done
 - [p-21583c96] Cua kiem luc close: solution co pham pattern da biet khong — check nhe truoc khi cap/close doi chieu diff voi critical patterns cua area cham toi — done
+- [p-2eb26c53] Extend the unresolvable-shell-syntax family: brace/glob expansion and cd are not modelled by the Bash write-guard — done
 - [p-3416fb38] multisession-native slice 2: workflow-first state (D1/D6/D7) — done
+- [p-349ee32a] worktree merge deadlocks: it demands a clean main, but the worktree-first guard refuses the commit that would clean it — done
 - [p-355d4740] Nhan 'critical' loang: 85/101 pattern (84%) gan critical — digest 4 dong chon tu tap gan-toan-bo, mat gia tri loc — done
 - [p-3d6877c2] Skill token diet wave 2: migrate remaining skills (exploring, reviewing-remainder, briefing, herding, compounding, executing, qualifying...) to thin-body doctrine, remove grandfather exceptions — done
 - [p-4072163a] Widen decisions * verbs from the narrow door to the wide door so a granted feature worktree can read/write its own workspace-local decision store — done
@@ -32,6 +34,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-4f055a6f] multisession-native slice 5: integration queue + 15-invariant closure — done
 - [p-50de38d7] Ship visibility: draft PR on first cap, walking-skeleton slice 1, evidence-based lane demotion, progress ticks (spec ak/plans/reports/spec-260727-1632-bee-ship-visibility.md) — done
 - [p-50f3af4d] bee cells schedule should detect shared regen-obligation side-effects, not rely solely on declared cell files — done
+- [p-62f0566d] bee --help --json does not list state gate's --actor / --bypass-level / --reason flags — done
 - [p-6ec778c5] Step ticks: mandatory ak-style per-step progress lines (route/gates/dispatch/cap/verify/barrier/sync/close), fixed format, user language, bypass never silences — done
 - [p-7037485e] Anchor miss lam digest roi ve recency fallback ngay ca khi feature dang bound (vd decisions-worktree-door) — pattern lien quan khong duoc uu tien — done
 - [p-71d014e7] Reap orphaned workflow record on default feature swap — done
@@ -40,6 +43,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-7484c2ad] One wave-batch dispatch call replaces per-cell prepare ceremony — done
 - [p-7f564c5e] Workflow-record lifecycle: every startFeature path creates a record; close covers by feature; workflows list/close CLI verb — done
 - [p-7fceeba1] Feature-close events: scribing+compounding run once at full feature completion; per-slice keeps only capture stubs — done
+- [p-804bb35b] Three copies of scribing_debt exist; only one was reconciled with the deferred queue — done
 - [p-808487c4] Session-close mid-phase warning omits the decision-0017 remedy: work finished inline mid-phase should stub to capture-queue + close, not only 'finish/cap or HANDOFF' — done
 - [p-81a97109] Pure-binary installer: Node-free onboarding once queen-bee ships — done
 - [p-8aae1301] Skill token diet: thin-body doctrine + byte budget fence for bee skills (spec ak/plans/reports/spec-260727-1619-bee-skill-token-diet.md) — done
@@ -48,6 +52,8 @@ never a generation timestamp or any other wall-clock value.
 - [p-94ecc5a2] bee state gate does not reject an unknown gate name or a non-boolean --approved — done
 - [p-9c48a67c] bee worktree new/register copies ALL .bee/cells files into a new worktree, including other features' stale uncapped claimed cells — done
 - [p-9d7b36fc] repeat bash install rewrites managed files (timestamp churn) — done
+- [p-a07607cb] Worktree-first enforcement: any code-touching action forks a feature worktree from the start instead of editing on main and hitting hold blocks — done
+- [p-aa37ec95] Write-guard Bash refusals name a shell token instead of a path when the target cannot be resolved — done
 - [p-b11732c2] bee worktree new must require --with-companion (or refuse) when a live concurrent session touches a shared companion checkout — done
 - [p-b595a094] Main-verifies: feature-level verify by the orchestrator; workers implement+commit+report only; cap pending path + close-door gate — done
 - [p-c15fb6f5] As a doctrine author, I want the pointer checks to read a citation naming more than one heading, so its target file and every heading it names are verified instead of the citation being skipped. — done
@@ -62,9 +68,12 @@ never a generation timestamp or any other wall-clock value.
 - [p-e0234de4] Judge is a mandatory close door for standard and high-risk lanes — done
 - [p-e0efd4fe] Longitudinal validation for bee-evolving: a friction fix counts done only when the next comparable run stays clean — done
 - [p-e20d82c9] multisession-native slice 3: sharded leases + handoff mailboxes (D4/D5) — done
+- [p-e7b82571] A Bash command with any containment-failing literal target delegates the WHOLE command to fail-open, swallowing already-decided denials — done
 - [p-e8a153e2] Validation speedup: delta validation, merged review wave, deferred presentation (spec ak/plans/reports/spec-260727-1610-bee-validation-speedup.md) — done
+- [p-e8b98793] Registry drift test derives its flag list from set_gate.rs instead of a hardcoded copy — done
 - [p-ed2de0d0] multisession-native slice 4: workspace isolation by default (D2/D3) — done
 - [p-f5e682e7] bee-compounding rule: a pattern that recurs escalates to a durable owner (hook/guard/test), not another doc line — done
+- [p-f82b037d] Write-guard refusal message hardening: bound token echo, literal-$ wording, mixed-command priority, literal message pins — done
 - [p-f893dcba] Ap suat flush cho capture queue: qua nguong (vd 5 stub hoac 7 ngay) thi close/preamble chuyen tu nhac nhe sang ep manh, va flush chay duoc tu session thuong — done
 - [p-fa847e3a] Parallel-by-default doctrine: cells in a slice run concurrently on disjoint ownership; serial names its conflict; wave-barrier regen — done
 - [P1] A greenfield repo with no build gets an init lane on its first onboard — done
@@ -134,6 +143,7 @@ never a generation timestamp or any other wall-clock value.
 - [p-78448452] Quy ước import trong suite scripts/: 8 suite import .bee/bin/lib thay vì templates/lib — thống nhất theo test_compaction_module convention — declined
 - [p-842955b5] verify_policy deferred cho host project — cap nhận targeted-run, full chain thuần CI — declined
 - [p-86f2bfc1] compact-check mutates .bee/ across consecutive runs — declined
+- [p-9fb64d0f] Reservation refusal must never write an unreleased cross-worktree hold mirror (self-poisoning deny loop) — declined
 - [p-acc0e108] Test-prune đợt 2: race-harness scaffold chung cho 6 suite race (argVal/spawnRacer trùng byte-for-byte, ~250-350 dòng) — declined
 - [p-c6e61dfb] P7 stage-instruction offload: self-contained pipeline stages (exploring/scribing/compounding) run in workers loading their own skill; orchestrator keeps hive+swarming+gates only — declined
 - [p-cb0e94e3] Test-prune đợt 2: cắt scripts/test_worktree_store.mjs phần grants trùng test_worktree_cli, giữ replayLog; đổi tên tránh trùng basename với templates/tests/test_worktree_store.mjs — declined

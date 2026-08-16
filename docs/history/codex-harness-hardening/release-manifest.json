@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "e1be0ecd0d9b082a4c37479e4c6c4aec35e3a8e4ef9f3371832beb136bd16456",
+      "sha256": "c56c41f71a5911f79522127a5f919ae11fb54c434609e16edbd9e3bc8978b24f",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -248,7 +248,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/role-dispatch.md",
-      "sha256": "3e7c6e951dbf11e508e3e36d0a63ed4cb9a49d92aa7184050487eccb8ae5db24",
+      "sha256": "8619d906bceaa16ca553044dc170bc1989ebdb849691c219c213c49b436453ce",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/role-dispatch.md"
@@ -507,7 +507,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "4c575dc766fbafba2fa044fe5333d8c870da10db378472bcb3dd99995f8f1689",
+      "sha256": "ff8eafce2fe65644dda4f783c92523de1d6b8ab383fd08d6239ed920424febce",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -619,7 +619,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/role-dispatch.md",
-      "sha256": "3e7c6e951dbf11e508e3e36d0a63ed4cb9a49d92aa7184050487eccb8ae5db24",
+      "sha256": "8619d906bceaa16ca553044dc170bc1989ebdb849691c219c213c49b436453ce",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/role-dispatch.md"
@@ -986,7 +986,7 @@
     },
     {
       "path": "packages/bee/AGENTS.block.md",
-      "sha256": "6802093c8bd6f11ab9872abfafe4cf57d70a370d6bd5db4a48ed1ffd41aa70f9",
+      "sha256": "311a81e43acda6695ee3830b63a7386a0bbca5304157e30bf4a72f8176b83519",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/AGENTS.block.md"
@@ -1194,7 +1194,7 @@
     },
     {
       "path": "skills/bee-herding/references/role-dispatch.md",
-      "sha256": "3e7c6e951dbf11e508e3e36d0a63ed4cb9a49d92aa7184050487eccb8ae5db24",
+      "sha256": "8619d906bceaa16ca553044dc170bc1989ebdb849691c219c213c49b436453ce",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/role-dispatch.md"

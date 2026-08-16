@@ -48,6 +48,21 @@ names that worktree and both remedies instead of the generic containment text (m
 only — the deny itself is unchanged; any grants-read error falls back to the generic
 message, never an allow).
 
+## Contention is triage data, never a user question (worktree-first-enforcement, 2026-08-16)
+
+Cross-worktree same-path leases are advisory by design — a hard deny needs the holder's
+`workspace_id` to match the acting session's (`hooks/write_guard/checks.rs:366-374`) — so
+two worktrees may edit the same file and queue at `bee worktree merge` instead of at
+reserve time. What that leaves open is semantic overlap: a backlog item whose files an
+in-flight cell already holds is likely to be swallowed by that cell, and doing it anyway
+buys a merge conflict plus duplicated work. The doctrine (AGENTS block, Multi-session
+etiquette): overlap is handled by the agent, not escalated — disjoint items first, a
+natural scope split to the disjoint files second, and the overlapped remainder deferred
+with a recorded reason and one report line. The user is asked only when the deferred set
+is the entire explicit ask. Herding's dispatch role applies the same rule before spawning
+(role-dispatch.md §7, "Rank overlap-aware"): candidates overlapping held files are skipped
+for the iteration, never dispatched into a known collision.
+
 ## What the write guard actually judges (cells wtf-1, wtf-3, wtf-4, 2026-08-12)
 
 The routing rule is prose, but the main-checkout write guard is what makes it bite, and it

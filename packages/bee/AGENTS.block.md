@@ -114,6 +114,13 @@ never by browsing for open cells. On a hold or reservation deny, pick
 other work and report the conflict — the guard is never worked around
 or waited out in silence.
 
+File overlap with an in-flight cell or live worktree is triage data,
+never a user question: take disjoint items first, split scope to the
+disjoint files when the split is natural, and defer the overlapped
+remainder with a recorded reason ("likely swallowed by <cell>;
+re-triage after its merge") — one report line, then keep working. Ask
+the user only when the deferred set is the entire explicit ask.
+
 ## Capture what settles
 
 Lanes scale ceremony, never memory. The moment a rule, behavior, or
