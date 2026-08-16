@@ -531,6 +531,30 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
         assert_eq!(cleared.get("waiting_on"), Some(&Value::Null));
         let on_disk = ok(crate::verbs::state_group::read_state_strict(tmp.path()));
         assert_eq!(on_disk.get("waiting_on"), Some(&Value::Null));
+        // The setter wrote the pair — the clear must clear the pair.
+        assert_eq!(cleared.get("run_state"), Some(&Value::Null));
+        assert_eq!(on_disk.get("run_state"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn clear_default_state_waiting_on_leaves_a_foreign_run_state_untouched() {
+        let tmp = tmp_root();
+        ok(crate::verbs::state_group::set_default_state_waiting_on(
+            tmp.path(),
+            "question",
+            "why?",
+            "sess-1",
+        ));
+        // Another path re-derived run_state after the mark was set: the clear
+        // owns only the value its setter wrote, never a record-derived one.
+        {
+            let mut current = ok(crate::verbs::state_group::read_state_strict(tmp.path()));
+            current.insert("run_state".into(), json!("running"));
+            write_state_file(tmp.path(), &serde_json::to_string(&current).unwrap());
+        }
+        let cleared = ok(clear_default_state_waiting_on(tmp.path()));
+        assert_eq!(cleared.get("waiting_on"), Some(&Value::Null));
+        assert_eq!(cleared.get("run_state"), Some(&json!("running")));
     }
 
     #[test]

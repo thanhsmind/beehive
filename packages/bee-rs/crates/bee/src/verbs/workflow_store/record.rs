@@ -491,6 +491,14 @@ pub(crate) fn clear_default_state_waiting_on(root: &Path) -> Result<Map<String, 
             return Ok(current); // raced clear (hook + agent both firing) — still a no-op
         }
         current.insert("waiting_on".into(), Value::Null);
+        // The setter wrote the PAIR (waiting_on + run_state:"awaiting-approval",
+        // set_default_state_waiting_on); the clear must clear the pair, or
+        // run_state reads "awaiting-approval" forever on this recordless layer.
+        // Guarded on the exact value so a run_state some other path derived is
+        // never clobbered here.
+        if current.get("run_state") == Some(&json!("awaiting-approval")) {
+            current.insert("run_state".into(), Value::Null);
+        }
         write_state(root, &current)?;
         Ok(current)
     })();
