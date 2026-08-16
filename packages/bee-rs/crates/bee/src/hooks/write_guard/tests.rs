@@ -1354,6 +1354,39 @@ use std::process::ExitCode;
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
 
+    // ser-2: a session record marked `status: "closed"` (SessionEnd's clean
+    // exit) reads as no-peer here too, even with a heartbeat that is still
+    // WITHIN the freshness window — the closed mark itself is what releases
+    // it, independent of timing.
+    fn add_closed_session(root: &Path, id: &str) {
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        let now = ms_to_iso(now_ms()).unwrap();
+        std::fs::write(
+            dir.join(format!("{id}.json")),
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(&json!({
+                    "id": id, "started_at": now, "last_heartbeat": now,
+                    "status": "closed", "closed_at": now
+                }))
+                .unwrap()
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn worktree_first_docs_lane_closed_peer_reads_as_no_peer() {
+        let wtf = build_worktree_first_no_grant("swarming", Some("docs"));
+        add_closed_session(&wtf.root, "other-closed");
+        let e = expect_done(
+            json!({"tool_name":"Edit","tool_input":{"file_path":"src/app.js"},"session_id":"mine"}),
+            &wtf.root,
+        );
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
     #[test]
     fn worktree_first_docs_lane_fails_open_on_corrupt_session_store() {
         let dir = tempfile::tempdir().unwrap();

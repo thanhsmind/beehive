@@ -264,6 +264,9 @@ pub(crate) fn check_workspace_ownership(control_root: &str, ctx: &JsCtx, session
     };
     let owner_session = read_session(control_root, &owner_str)?;
     let live = match owner_session {
+        Some(s) if matches!(s.get("status"), Some(Value::String(st)) if st == "closed" || st == "dead") => {
+            false // a closed/dead owner session never holds the path live.
+        }
         Some(s) => !heartbeat_stale(&s, now_ms())?,
         None => false,
     };

@@ -1005,6 +1005,40 @@ use std::time::Instant;
         );
     }
 
+    /// ser-2: the same session record, but its status is `"closed"`
+    /// (SessionEnd's clean exit) and its heartbeat is still FRESH — the
+    /// closed mark itself releases the hold, independent of heartbeat
+    /// timing; cleanup must proceed exactly as it does for a stale peer.
+    #[test]
+    fn cleanup_ignores_a_session_marked_closed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "closed", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+
+        let now = chrono::Utc::now();
+        std::fs::create_dir_all(main.join(".bee").join("sessions")).unwrap();
+        std::fs::write(
+            main.join(".bee").join("sessions").join("sess-closed.json"),
+            jsjson::stringify(&json!({
+                "id": "sess-closed",
+                "last_heartbeat": now.to_rfc3339(),
+                "workspace_id": created.id,
+                "status": "closed",
+                "closed_at": now.to_rfc3339(),
+            })),
+        )
+        .unwrap();
+
+        let out = perform_cleanup(&main, &wt, &created.branch, &created.id, false);
+        assert_eq!(out["ok"], Value::Bool(true), "{out:?}");
+        assert_eq!(out["removed"], Value::Bool(true));
+        assert!(!wt.exists(), "a closed-session hold must not block cleanup");
+    }
+
     /// attachCleanupOutcome's `cleanup=false` branch NEVER runs anything — it
     /// attaches the suggestion (decision D8b: "never prompt"). D1/D1a: the
     /// caller now passes the EFFECTIVE decision (`--no-cleanup`, a `false`

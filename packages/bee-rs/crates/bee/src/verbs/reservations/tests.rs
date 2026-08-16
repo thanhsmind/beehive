@@ -470,6 +470,45 @@ use std::time::Instant;
     }
 
     #[test]
+    fn closed_sessions_never_trigger_session_required_or_adoption() {
+        // ser-2: two sessions with FRESH heartbeats but `status: "closed"`
+        // (SessionEnd's clean exit) — closed peers are never "concurrent"
+        // (no SESSION_REQUIRED refusal) and are never adopted either (the
+        // reserve proceeds sessionless, exactly as with zero session
+        // records at all).
+        if ambient_session() {
+            return;
+        }
+        let tmp = fixture_root();
+        let root_s = root_str(tmp.path());
+        let sessions = tmp.path().join(".bee").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        let hb = now_iso();
+        for id in ["other", "second"] {
+            std::fs::write(
+                sessions.join(format!("{id}.json")),
+                format!(
+                    "{{\n  \"id\": \"{id}\",\n  \"started_at\": \"{hb}\",\n  \"last_heartbeat\": \"{hb}\",\n  \"status\": \"closed\",\n  \"closed_at\": \"{hb}\"\n}}\n"
+                ),
+            )
+            .unwrap();
+        }
+        let Ok(Out::Emit(result, _, 0)) =
+            reserve_exec(main_topo(tmp.path()), &root_s, &params("a", "c", "src/x.ts"), 1)
+        else {
+            panic!("expected a sessionless reserve, not a SESSION_REQUIRED refusal");
+        };
+        assert_eq!(result["ok"], Value::Bool(true));
+        assert!(
+            result["reservation"].get("session").is_none(),
+            "no session adopted: {result:?}"
+        );
+        let file = path_lease_file(&root_s, "src/x.ts");
+        let parsed: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        assert_eq!(parsed["session_id"], SESSIONLESS_SESSION_ID);
+    }
+
+    #[test]
     fn parse_flags_mirrors_node() {
         let (flags, json) = parse_flags(&["--agent", "a", "--json", "--cell=c1"]).unwrap();
         assert!(json);

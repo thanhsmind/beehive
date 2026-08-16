@@ -1652,6 +1652,38 @@ use crate::version::BEE_VERSION;
         assert!(record.get("status").is_none(), "record must be untouched: {record:?}");
     }
 
+    /// ser-2: a session record SessionEnd already marked `status: "closed"`
+    /// is heartbeat-stale by design (its `heartbeat_stale` now reads
+    /// unconditionally true for a closed record — see cells::heartbeat_stale)
+    /// — the MARK pass must treat it exactly like an already-`"dead"` record
+    /// and leave it untouched, never overwriting `closed`/`closed_at` with
+    /// `dead`/`dead_at`.
+    #[test]
+    fn mark_pass_never_overwrites_an_already_closed_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let dir = root.join(".bee").join("sessions");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("closed1.json"),
+            serde_json::to_string(&json!({
+                "id": "closed1",
+                "last_heartbeat": SWEEP_OLD,
+                "status": "closed",
+                "closed_at": SWEEP_OLD,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let marked = recovery_verb::mark_stale_sessions(root, now_ms(), "caller-x").unwrap();
+        assert!(!marked.contains("closed1"), "must not (re)mark an already-closed session");
+        let record = read_session_record(root, "closed1");
+        assert_eq!(record.get("status"), Some(&json!("closed")), "{record:?}");
+        assert_eq!(record.get("closed_at"), Some(&json!(SWEEP_OLD)), "{record:?}");
+        assert!(record.get("dead_at").is_none(), "{record:?}");
+    }
+
     /// `verbs/timings.rs:46-58`'s own argv-matching discipline: exactly the
     /// two served shapes, everything else — including every `recovery
     /// window …` shape (D3: stays unbuilt) — falls through to `None` before
