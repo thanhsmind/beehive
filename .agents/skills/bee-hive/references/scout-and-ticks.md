@@ -78,7 +78,8 @@ It fires on whichever path came first, and a feature that passed through explori
 ```bash
 .bee/bin/bee decisions log \
   --decision "re-laned <from> → <to> (evidence checkpoint): <feature>" \
-  --rationale "<n> product files scouted, 0 hard-gate flags, 0 open gray areas"
+  --rationale "<n> product files scouted, 0 hard-gate flags, 0 open gray areas" \
+  --relation none
 ```
 
 Alongside the decision, `bee route --set` rewrites the same route record's `lane` in place ("Route record" above) — never a second record — so the decision log and the route record agree on the target lane.

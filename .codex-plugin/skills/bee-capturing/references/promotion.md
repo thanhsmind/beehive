@@ -153,11 +153,18 @@ not promote.
 ## Decision Logging
 
 ```
-bee decisions log --decision "..." --rationale "..." [--alternatives "..."] [--confidence N]
+bee decisions log --decision "..." --rationale "..." --relation supersedes:<id>|touches:<id>|none [--trigger <id>] [--alternatives "..."] [--confidence N]
 ```
 
 - Log only decisions with forward force: conventions adopted,
   approaches rejected with reasons, constraints discovered.
+- `--relation` is required: `supersedes:<id>` retires an earlier
+  decision here (or use `bee decisions supersede` instead — never
+  rewrite the log), `touches:<id>` notes a related one without
+  retiring it, `none` when nothing active is related. A deferral-shaped
+  decision ("defer"/"for now"/"revisit when"/"later") also needs
+  `--trigger <id>` naming a registered trigger (`bee triggers add`) —
+  no deferred condition may exist outside that registry.
 - Include `--alternatives` whenever real alternatives were weighed;
   add `--confidence N` when the evidence was partial.
 - To change a past decision: `bee decisions supersede` — never rewrite

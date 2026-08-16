@@ -141,7 +141,7 @@ bee reservations reserve --agent A --cell C --path P [--ttl N]
                     | release --agent A [--cell C]
                     | list [--active-only] | sweep
 
-bee decisions log --decision D --rationale R [--alternatives A] [--scope S] [--confidence N]
+bee decisions log --decision D --rationale R --relation supersedes:<id>|touches:<id>|none [--trigger T] [--alternatives A] [--scope S] [--confidence N]
                  | supersede --id UUID --decision D --rationale R
                  | redact --id UUID --reason R
                  | active [--recent N] | search --text T

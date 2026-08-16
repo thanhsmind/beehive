@@ -153,7 +153,8 @@ Loop: **Initialize → Accept assigned cell → Reserve → Implement → Verify
 ### bee-capturing — Compound (honey)
 
 - **Reads:** feature history, cells and traces, review findings, commit history. Missing artifacts → session summary + git diff; never fabricate.
-- **Does:** three parallel analysis subagents — pattern extractor, decision analyst, failure analyst; orchestrator synthesizes (subagents never write durable files); write one dated `docs/history/learnings/YYYYMMDD-<slug>.md` (what happened / root cause / imperative future rule); promote only genuinely critical, cross-feature lessons to `critical-patterns.md`; log durable decisions to `bee decisions log` (with rationale + alternatives); **guard the state layer** — verify the Scribe sync ran for the feature (state record); if not, run it, never sync specs inline (decisions 0001/0002); file unresolved friction into `.bee/backlog.jsonl` with predicted impact.
+- **Does:** three parallel analysis subagents — pattern extractor, decision analyst, failure analyst; orchestrator synthesizes (subagents never write durable files); write one dated `docs/history/learnings/YYYYMMDD-<slug>.md` (what happened / root cause / imperative future rule); promote only genuinely critical, cross-feature lessons to `critical-patterns.md`; log durable decisions to `bee decisions log` (with rationale + alternatives + a
+declared `--relation`); **guard the state layer** — verify the Scribe sync ran for the feature (state record); if not, run it, never sync specs inline (decisions 0001/0002); file unresolved friction into `.bee/backlog.jsonl` with predicted impact.
 - **Never:** skip compounding for meaningful work; promote everything as critical; write "test more carefully"-grade advice; close out while a spec is older than the behavior it describes (`behavior_change` cells capped but the Scribe sync never ran).
 
 ### bee-grooming (undertaker bees) — on demand

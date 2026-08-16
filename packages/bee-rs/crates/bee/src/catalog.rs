@@ -356,7 +356,15 @@ mod tests {
         // but not the same concept as, `reservations.list`'s
         // `--active-only`, which means "not yet released/expired" rather
         // than "needs a look").
-        const PINNED_FLAG_COUNT: usize = 153;
+        // kdt-3 (knowledge-distill-trigger, D3 + D2's write-path law):
+        // `decisions.log` drops `--supersedes` (-1) for a required
+        // `--relation supersedes:<id>|touches:<id>|none` (+1, reused for the
+        // supersedes:<id> case rather than adding a second flag) plus a new
+        // `--trigger <id>` (+1) naming a registered kdt-2 trigger — no
+        // existing flag names "a decision's own relation to prior ones" or
+        // "the trigger this decision's deferral registers against", so both
+        // are genuinely new concepts. Net +1: 153 -> 154.
+        const PINNED_FLAG_COUNT: usize = 154;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

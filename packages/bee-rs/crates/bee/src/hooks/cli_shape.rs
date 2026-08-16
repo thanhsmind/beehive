@@ -737,7 +737,7 @@ parameters (see `bee cells show --help --json`)."
 
     #[test]
     fn a_flag_value_beginning_with_dash_dash_is_consumed_as_the_value() {
-        allow("node .bee/bin/bee_decisions.mjs log --decision \"--foo\" --rationale bar");
+        allow("node .bee/bin/bee_decisions.mjs log --decision \"--foo\" --rationale bar --relation none");
     }
 
     #[test]
@@ -859,7 +859,7 @@ parameters (see `bee cells show --help --json`)."
         allow("bee status --json");
         allow("bee cells ready --json");
         allow("bee state worker add --nickname w1 --cell c1 --json");
-        allow("bee decisions log --decision d --rationale r");
+        allow("bee decisions log --decision d --rationale r --relation none");
     }
 
     #[test]
@@ -1122,6 +1122,21 @@ mod documented_invocations {
         out
     }
 
+    /// A handful of pinned exceptions: fenced lines inside `docs/history/**`
+    /// that are transcript BYTES of a command someone actually ran in the
+    /// past, not a spelling anyone would copy going forward — that history
+    /// is immutable (cited, never reinterpreted), so a later required-flag
+    /// addition naturally leaves an old real invocation behind. Each entry
+    /// says which cell dated it obsolete, so a fixed extractor or a rewritten
+    /// history file makes this row go red and the exception comes out.
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 1] = [
+        // kdt-3 (knowledge-distill-trigger): `decisions log` gained a
+        // required `--relation` after this codex-native-runtime-v2 advisor
+        // session ran; the report is a raw shell-transcript line, not a
+        // spelling to keep current.
+        r#"node .bee/bin/bee.mjs decisions log --decision "auto-approved Gate 3 (bypass): proceed with required validation repairs" --rationale "Advisor verdict was PROCEED-WITH-CHANGES; repairs are bounded and required before implementation."' in /home/thanhsmind/projects/goglbe/beegog"#,
+    ];
+
     #[test]
     fn no_shipped_command_spelling_is_refused_by_the_widened_guard() {
         let root = repo_root();
@@ -1134,6 +1149,7 @@ mod documented_invocations {
         }
         let mut checked = 0usize;
         let mut denied: Vec<String> = Vec::new();
+        let mut known_hits = 0usize;
         for f in &files {
             let Ok(text) = std::fs::read_to_string(f) else { continue };
             let mut fenced = false;
@@ -1148,11 +1164,21 @@ mod documented_invocations {
                 for command in invocations(line) {
                     checked += 1;
                     if let Some(reason) = check_cli_shape(&command) {
+                        if KNOWN_HISTORICAL_EXCEPTIONS.contains(&command.as_str()) {
+                            known_hits += 1;
+                            continue;
+                        }
                         denied.push(format!("{}\n    {command}\n    {reason}", f.display()));
                     }
                 }
             }
         }
+        assert_eq!(
+            known_hits,
+            KNOWN_HISTORICAL_EXCEPTIONS.len(),
+            "a pinned historical-transcript exception stopped being refused — delete it from \
+KNOWN_HISTORICAL_EXCEPTIONS instead of leaving a dead exception"
+        );
         // Never vacuous: a corpus this small would mean the extractor broke or
         // the tree is not the repo checkout.
         println!("fenced runnable invocations checked: {checked}");

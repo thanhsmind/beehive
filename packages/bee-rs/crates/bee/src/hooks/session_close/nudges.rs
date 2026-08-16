@@ -328,7 +328,8 @@ pub(crate) fn maybe_decision_nudge(root: &Path) -> Result<Option<String>, Flow> 
         "bee decision review: {count} source file(s) changed with no bee flow active \
 and no recent decision logged. Before finishing, ask the user: is there a durable \
 decision or convention here worth recording? If yes: bee decisions log \
---decision \"...\" --rationale \"...\" (or a dated learning in docs/history/learnings/). \
+--decision \"...\" --rationale \"...\" --relation none (or supersedes:<id>/touches:<id> \
+if it changes an earlier one) (or a dated learning in docs/history/learnings/). \
 If not, carry on."
     )))
 }
@@ -409,7 +410,8 @@ pub(crate) fn maybe_bypass_block(
         "High-risk execution requires a live advisor consult first: resolve the advisor from \
 config (models.<runtime>.advisor), run it read-only with the evidence bundle on stdin, then \
 record it with bee decisions log --decision \"advisor consult: <identity>\" \
---rationale \"<the digest, or the path holding it>\" — do this BEFORE setting the gate. "
+--rationale \"<the digest, or the path holding it>\" --relation none — do this BEFORE \
+setting the gate. "
     } else {
         ""
     };
@@ -419,7 +421,7 @@ record it with bee decisions log --decision \"advisor consult: <identity>\" \
 this lane — do NOT ask the human. {consult_sentence}Set the gate yourself now: \
 bee state gate --merge --approved true ; log a one-line \
 audit decision (bee decisions log --decision \"auto-approved Gate \
-{gate_no} (bypass): <choice>\" --rationale \"<why>\"); post the short \"⚡ auto-approved \
+{gate_no} (bypass): <choice>\" --rationale \"<why>\" --relation none); post the short \"⚡ auto-approved \
 Gate {gate_no} (bypass)\" line; then CONTINUE to the next phase. Do not re-emit the \
 gate question. (If you genuinely need information only the human holds — not a \
 rubber-stamp — ask that specific question instead; this net blocks once, then steps \

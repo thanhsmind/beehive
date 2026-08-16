@@ -266,6 +266,27 @@ fn read_and_evaluate(control: &Path) -> Vec<TriggerEntry> {
 /// for a human, then gets `resolve`d). Read-only from the caller's
 /// perspective; the predicate flip this performs is the same
 /// write-on-read `triggers list` performs.
+/// D2's write-path law (`decisions log`'s `--trigger` flag,
+/// knowledge-distill-trigger's kdt-3): true when `id` names a shape-valid
+/// trigger record file under `control`'s `.bee/triggers/` — the same
+/// fail-open shape check `read_and_evaluate` applies, so a corrupt or
+/// malformed file never counts as "registered" (it only ever surfaces
+/// separately, via `triggers list`'s unreadable line). `root` is the
+/// caller's OWN root (a decisions-store root, possibly a worktree); this
+/// re-roots onto the control root itself, the same way every other
+/// trigger-store access in this module does.
+pub(crate) fn trigger_registered(root: &Path, id: &str) -> bool {
+    if !is_plain_id(id) {
+        return false;
+    }
+    let control = control_root_path(root);
+    let path = triggers_dir(&control).join(format!("{id}.json"));
+    match read_json(&path) {
+        ReadJson::Parsed(v) => TriggerRecord::from_value(&v).is_some(),
+        _ => false,
+    }
+}
+
 pub(crate) fn due_and_manual_counts(control: &Path) -> (usize, usize) {
     let mut due = 0usize;
     let mut manual_waiting = 0usize;
