@@ -343,6 +343,8 @@
     "documentation",
     "cli-help",
     "registry",
-    "drift-guard"
+    "drift-guard",
+    "refusal-wording",
+    "fail-closed"
   ]
 }
