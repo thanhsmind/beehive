@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "feature": "docs-lane-liveness",
+  "mode": "feature",
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"docs-lane-liveness\" started at phase \"exploring\".",
+  "next_action": "Continue bee-exploring for \"docs-lane-liveness\".",
+  "created_at": "2026-08-15T09:31:44.645Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null
+}
