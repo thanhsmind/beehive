@@ -19,8 +19,8 @@ orchestrator's own session.
 ## Outputs
 - File edits *within the reserved `files`* of the cell.
 - A capped cell whose `trace` carries `{outcome, files_changed, deviations,
-  tests, results, ran_at}` — `tests: "green"` pointing at
-  `.bee/logs/test-results.json`, or `"undeclared"` in a repo with no
+  tests}` — `tests: "boundary"` (the declared suite proves later, at `bee
+  close`/`bee worktree merge`), or `"undeclared"` in a repo with no
   `commands.test`.
 - **One commit per cell**: the subject describes the change in imperative mood, and
   the cell id rides the last line of the body.
@@ -32,8 +32,9 @@ None — workers never approve gates.
 ## State touched
 [`reservations reserve`](../register.md#beereservationsjson) for any *additional*
 path discovered mid-work,
-[`bee finish`](../register.md#beecellsfeature-njson) (`cells finish` — runs the
-declared tests, caps on green, releases the cell's reservations, all in one verb),
+[`bee finish`](../register.md#beecellsfeature-njson) (`cells finish` —
+commit-only proof, caps and releases the cell's reservations, all in one
+verb; tests prove at the boundary, `bee close`/`bee worktree merge`),
 the cell's `trace`, one git commit.
 
 ## Key rules
@@ -42,21 +43,24 @@ the cell's `trace`, one git commit.
 - **Conform before you code.** Scout adjacent patterns, reuse existing helpers,
   match the codebase's idiom. Authoring tests? Judge existing coverage first
   (`.bee/expertise/tests.md`).
-- **`bee finish` is the completion door, and it runs the tests.** Green caps and
-  releases; red refuses the cap, carries the failing excerpt, and appends a
-  `tests-red` attempt to the trace — that red is now your work. There is no proof
-  tier to satisfy, no red-first evidence flag, and no `cells verify` step: the
-  cell's own `verify` field is plan text MAIN runs once at feature close
-  (`verify_owner`), never the worker.
-- **Never build on a red base** — a red is its own fix-first cell. The claim door
-  refuses against a recorded red run unless it carries `--fix-first "<reason>"`.
+- **`bee finish` is the completion door, and it is commit-only proof.** It caps
+  and releases; tests prove at the boundary — `bee close` runs `commands.test`
+  when the feature has no worktree, `bee worktree merge` runs it when it does
+  — and a red there refuses that door, carries the failing excerpt, and that
+  red is now the next work. There is no proof tier to satisfy, no red-first
+  evidence flag, and no `cells verify` step: the cell's own `verify` field is
+  plan text MAIN runs once at feature close (`verify_owner`), never the
+  worker.
+- **Never build on a red base** — a red at close or merge is its own fix-first
+  cell. The claim door refuses against a recorded red run unless it carries
+  `--fix-first "<reason>"`.
 - **Commit before you cap.** A cap on a cell that changed files refuses unless a
   commit in the last 50 carries the trailer `cell: <id>`; `--commit-pending
   "<reason>"` is the one recorded exception. On a `small`+ lane the cap also refuses
   when `trace.worker` names no registered execution worker, unless it carries
   `--inline-reason`.
 - **`bee finish` may run from the feature's worktree.** It resolves the cell and its
-  claim at the main store while running the declared tests in the worktree's own
+  claim at the main store while recording commit-only proof in the worktree's own
   directory — every other mutating `cells` verb still refuses there and names the
   main checkout.
 - **No stubs, TODO-only, or dead code.**

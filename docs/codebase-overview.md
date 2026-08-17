@@ -87,8 +87,10 @@ cargo test --release --manifest-path packages/bee-rs/Cargo.toml
 ```
 
 That exact command is what `.bee/config.json` records as `commands.test`, so
-`bee test` and the `bee cells finish` / `bee close` doors all run it. Green caps
-the work; red refuses the cap and becomes the next piece of work.
+`bee test` runs it directly, and tests prove at the boundary: `bee close`
+runs it when the feature has no worktree; `bee worktree merge` runs it when
+it does. A cap is commit-only proof and records `tests: boundary`; a red at
+the boundary refuses it and becomes the next piece of work.
 
 Integration suites under `packages/bee-rs/crates/bee/tests/`:
 

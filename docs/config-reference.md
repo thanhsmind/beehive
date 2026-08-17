@@ -123,7 +123,7 @@ Captured at onboarding (or the first natural moment in exploring), three standar
 |---|---|---|
 | `setup` | install dependencies from scratch | onboarding checks, fresh-clone bootstrap |
 | `start` | run the app/dev server | on demand (`/run`-style checks) |
-| `test` | **the project's ONE declared test command** | every door, and the same command each time: the green base check before the first claim, `bee finish` at each cap, the orchestrator's wave-close check, `bee close` for the feature, the `bee worktree merge` semantic gate (run against the staged merge), and CI on the host's own cadence |
+| `test` | **the project's ONE declared test command** | the same command each time, run at the boundary: the green base check before the first claim, `bee close` for the feature when it has no worktree, the `bee worktree merge` semantic gate when it has one (run against the staged merge), and CI on the host's own cadence. `bee finish` is commit-only proof and records `tests: boundary` — it does not run `test` |
 
 **`commands.verify` is retired.** It used to sit above `test` as a second, full-suite, CI-owned command. Two repo-wide commands meant every surface had to say which door ran which — and they disagreed: this reference called `verify` "never a local obligation" while the green base check told agents to run it locally before their first claim. One command ends the question. A host that wants a slower full sweep runs it in CI on its own schedule; bee needs no config key to know about it.
 
@@ -135,7 +135,7 @@ A project that deliberately runs no tests declares that in config instead of lea
 
 ### Per-language recipes
 
-`commands.test` runs on every cap, so pick something you are willing to pay for that often. A changed-only mode is ideal where the runner has one; a whole-suite command is fine when the suite is fast.
+`commands.test` runs at the boundary (`bee close`/`bee worktree merge`), so pick something you are willing to pay for that often. A changed-only mode is ideal where the runner has one; a whole-suite command is fine when the suite is fast.
 
 | Language | `commands.test` |
 |---|---|
@@ -154,7 +154,7 @@ agent session started before rustup (or before a PATH change) otherwise fails th
 as tooling noise and is in fact the door never having run at all.
 
 Notes:
-- A command that takes the changed-file list from git itself (jest `--onlyChanged`, testmon) is the best `test` value — it stays correct with zero per-change editing. Where the runner has no such mode (Go, Rust, PHP), record the *narrow invocation shape* and let the session substitute the changed package/crate/class per change — the doctrine cares that the door stays cheap enough to run at every cap, not which selector you use.
+- A command that takes the changed-file list from git itself (jest `--onlyChanged`, testmon) is the best `test` value — it stays correct with zero per-change editing. Where the runner has no such mode (Go, Rust, PHP), record the *narrow invocation shape* and let the session substitute the changed package/crate/class per change — the doctrine cares that the door stays cheap enough to run at the boundary, not which selector you use.
 - CI should run `commands.test` verbatim (bee's own `ci.yml` does exactly that with `cargo test --release`, and files a deduped `verify-red` issue on red).
 - Where the "which tests relate to this file" answer needs a lookup, use the language's native graph (Go: `go list -deps` reversed; Rust: the crate graph; Python: testmon's coverage map). bee's own repo used to ship a derived impact registry for this; it was retired at the R6 Node cutover, because its subject was the `.mjs` suite graph and the Rust suite that replaced it runs whole in ~20s.
 
@@ -162,7 +162,7 @@ Notes:
 
 **`commands.verify`** was retired in **2.1.0**. `commands.test` is now the one declared test command and every door runs it. If your `.bee/config.json` still has a `verify`, onboarding warns and it is ignored — delete it. Two migrations matter:
 
-- **You recorded both.** Nothing to do beyond deleting `verify` — `test` already governed the dev loop, and it now governs merge and CI too. If your `verify` was materially broader, decide whether that breadth belongs in `test` (paid at every cap) or in your CI workflow (paid on push).
+- **You recorded both.** Nothing to do beyond deleting `verify` — `test` already governed the dev loop, and it now governs merge and CI too. If your `verify` was materially broader, decide whether that breadth belongs in `test` (paid at the boundary) or in your CI workflow (paid on push).
 - **You recorded ONLY `verify`.** You currently have **no test gate at all** — onboarding says so loudly. Move the command to `commands.test`, or set `commands.test` to `"none"` if the repo is deliberately test-free. `"none"` on `verify` no longer declares a no-test repo.
 
 The **top-level** `advisor` key (old "advisor mode") was removed in v0.1.23 (decision fanout-delegation D1). If your `.bee/config.json` still has one, onboarding warns about the stale key and ignores it — delete it. This is **not** the same thing as the `models.<runtime>.advisor` slot above, which is current and valid.

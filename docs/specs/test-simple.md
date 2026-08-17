@@ -14,11 +14,12 @@ since the migration; this stub closes the loop by retiring the second copy.
 **Changed since this source was written (2.1.0):** it described `commands.verify`
 as "the close/merge-time chain" sitting above `commands.test`. That second
 repo-wide command is RETIRED. `commands.test` is now the one declared test
-command, and the green base check, every cap, `bee close`, `bee worktree merge`
-and CI all run it. Two commands meant every surface had to say which door ran
-which, and they disagreed — the config reference called `verify` "never a local
-obligation" while the green base check told agents to run it locally before
-their first claim.
+command. Tests prove at the boundary: the green base check, `bee close`, `bee
+worktree merge`, and CI all run it; a cap is commit-only proof and records
+`tests: boundary` (test-cadence-boundary D1, decision `13ce1858`). Two commands
+meant every surface had to say which door ran which, and they disagreed — the
+config reference called `verify` "never a local obligation" while the green
+base check told agents to run it locally before their first claim.
 
 This path stays alive as a pointer stub — a migrated source path is never
 deleted (okf-foundation D20) — so existing citations keep resolving.
