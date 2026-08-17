@@ -62,6 +62,46 @@
     "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
     "claimed_at": "2026-08-17T14:11:31.009Z",
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-regen-clean",
+            "status": "PASS",
+            "evidence": "c46d34ab carries rendered trees + manifest; release-manifest --check: 219 files match"
+          },
+          {
+            "id": "artifact-three-edits-cited",
+            "status": "PASS",
+            "evidence": "entry check (D6.4) above triage table, Qualify park-to-stub (D6.3), Lock map consumption (D8) all present in skills/bee-shaping/SKILL.md"
+          },
+          {
+            "id": "key-link-stub-verbatim",
+            "status": "PASS",
+            "evidence": "Qualify names bee discovery stub --effort <slug> --from '<item text>' verbatim, matching discovery.rs:289"
+          },
+          {
+            "id": "prohibition-gate-and-single-writer",
+            "status": "PASS",
+            "evidence": "+15/-2, deletions are rewraps; Lock (single writer) heading and gate wording untouched"
+          },
+          {
+            "id": "decisions-D6-D8",
+            "status": "PASS",
+            "evidence": "semi-hard entry check with Gate 1 backstop; risk parks unchanged; no new gate"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-17T14:36:33.501Z"
+      }
+    ]
   }
 }

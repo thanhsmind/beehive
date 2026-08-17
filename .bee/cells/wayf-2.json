@@ -60,7 +60,52 @@
     "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
     "claimed_at": "2026-08-17T14:01:37.613Z",
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-list-reports-stub-frontier",
+            "status": "PASS",
+            "evidence": "tests/discovery_verbs.rs:55-93 stub then list asserts frontier==1"
+          },
+          {
+            "id": "truth-stub-refuses-typed",
+            "status": "PASS",
+            "evidence": "discovery.rs:346-352 exists->emit_error before write; tests assert byte-identical MAP.md after refusal"
+          },
+          {
+            "id": "artifact-discovery-module",
+            "status": "PASS",
+            "evidence": "discovery.rs 554 lines: parse_ticket/scan_tickets/scan_discovery/run_list/run_stub + 17 tests"
+          },
+          {
+            "id": "key-link-router-dispatch",
+            "status": "PASS",
+            "evidence": "verbs/mod.rs discovery::try_native wired, router.rs PORTED lists both verbs, binary-spawning tests prove end-to-end"
+          },
+          {
+            "id": "prohibitions-held",
+            "status": "PASS",
+            "evidence": "numstat cb2d8839: 4 files only, no route enum, no status/orient/preamble"
+          },
+          {
+            "id": "decisions-D2-D4-D6",
+            "status": "PASS",
+            "evidence": "stub_map_content discovery.rs:222-233 sections per D2; scan_discovery shared per D4; stub is park landing per D6.3"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-17T14:36:28.112Z"
+      }
+    ]
   },
   "tier": "generation"
 }

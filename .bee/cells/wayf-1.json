@@ -75,7 +75,47 @@
     "warnings": [
       "advisory: this cap's commit changes 1491 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-rendered-trees",
+            "status": "PASS",
+            "evidence": "bee-wayfinding present in .claude-plugin/skills/ and .codex-plugin/skills/, rendered SKILL.md byte-identical; release-manifest --check: 219 files match"
+          },
+          {
+            "id": "artifacts-substantive",
+            "status": "PASS",
+            "evidence": "skills/bee-wayfinding/SKILL.md:18-113 full flow; references/wayfinding-reference.md:7-113 templates + protocol"
+          },
+          {
+            "id": "key-link-route-row",
+            "status": "PASS",
+            "evidence": "skills/bee-hive/SKILL.md:31 bee-wayfinding row above bee-shaping row"
+          },
+          {
+            "id": "prohibitions-held",
+            "status": "PASS",
+            "evidence": "git show --stat 1860fb3a: no bee-shaping edits, no Rust"
+          },
+          {
+            "id": "decisions-D1-D2-D3-D7-D8",
+            "status": "PASS",
+            "evidence": "D1/D3 SKILL.md:2; D2 SKILL.md:40,44; D7 SKILL.md:52-63,79-80,101; D8 SKILL.md:71-75,82-93"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-17T14:36:23.486Z"
+      }
+    ]
   },
   "tier": "generation"
 }

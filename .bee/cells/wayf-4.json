@@ -54,7 +54,47 @@
     "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
     "claimed_at": "2026-08-17T14:19:57.402Z",
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-idle-only-override",
+            "status": "PASS",
+            "evidence": "pipeline_idle_for_wayfinding refuses on handoff/open/claimed/non-terminal phase; 3 tests both ways"
+          },
+          {
+            "id": "artifact-named-predicate",
+            "status": "PASS",
+            "evidence": "orient.rs named helpers pipeline_idle_for_wayfinding + first_frontier_effort, reused by blocker and override branches"
+          },
+          {
+            "id": "key-link-next-command",
+            "status": "PASS",
+            "evidence": "override sets next.command=bee discovery list --json, asserted tests.rs:3920-3921"
+          },
+          {
+            "id": "prohibition-handoff-wins",
+            "status": "PASS",
+            "evidence": "handoff truthiness is the first check; test orient_never_overrides_next_while_a_handoff_is_pending"
+          },
+          {
+            "id": "decision-D5",
+            "status": "PASS",
+            "evidence": "deterministic code path; mid-feature degrades to report-only blocker line"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-17T14:36:31.421Z"
+      }
+    ]
   },
   "tier": "generation"
 }

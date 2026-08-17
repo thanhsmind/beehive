@@ -60,7 +60,47 @@
     "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
     "claimed_at": "2026-08-17T14:11:30.889Z",
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-both-surfaces-guarded",
+            "status": "PASS",
+            "evidence": "render.rs:+429-444 and budget.rs open_maps_lines +445-467 both guarded; 5 tests across status_full/tests.rs and session_preamble/tests.rs"
+          },
+          {
+            "id": "artifact-render-section",
+            "status": "PASS",
+            "evidence": "render.rs +20 lines: Open discovery map(s) section + unreadable remedy line"
+          },
+          {
+            "id": "key-link-build-status-field",
+            "status": "PASS",
+            "evidence": "build.rs:+322-345 status[open_maps] from scan_discovery; preamble calls scan_discovery in-process as the action required"
+          },
+          {
+            "id": "prohibition-no-reorder",
+            "status": "PASS",
+            "evidence": "d808d37f: 0 deletions, 184 insertions; pure insertion before Recommended next"
+          },
+          {
+            "id": "decision-D4",
+            "status": "PASS",
+            "evidence": "both surfaces name effort + frontier count from v1; absent when no discovery dir"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-17T14:36:30.033Z"
+      }
+    ]
   },
   "tier": "generation"
 }
