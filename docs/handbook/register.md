@@ -38,7 +38,15 @@ file marked *projection* below is derived from it.
 | `runtime/integration/queue/<seq>.json` | the durable merge queue `bee worktree merge` drains, one file per queued worktree, plus the processor lease that keeps two mergers from draining it at once |
 
 Each `gates` entry (one per name in `GATE_NAMES` — `context`, `shape`,
-`execution`, `review`) carries more than the boolean flag:
+`execution`, `review`, `uat`) carries more than the boolean flag. `uat` is
+the acceptance stop before `bee worktree merge`: user-only approval — an
+`--actor auto` call is refused outright for `uat` at any `gate_bypass`
+level, including `total` (uat-gate-before-merge D1) — and it is only
+enforced for `standard`/`high-risk` features (a missing or unrecognized
+lane fails closed as standard); `tiny`/`small`/`docs`/`spike` are exempt.
+`bee worktree merge` refuses `WORKTREE_MERGE_UAT_PENDING` until the gate is
+approved, unless `--skip-uat` is passed for that one merge or config
+`uat_before_merge` is `false` repo-wide (below).
 
 | Field | Holds |
 |-------|-------|
@@ -69,7 +77,7 @@ of the live workflow record, kept for compatibility. Same keys as before:
 | `phase` | current chain phase — the closed nine: `idle` · `exploring` · `planning` · `swarming` · `reviewing` · `scribing` · `compounding` · `grooming` · `compounding-complete` |
 | `feature` | active feature slug |
 | `mode` | lane (`tiny` · `small` · `standard` · `high-risk` · `spike` · `docs`) |
-| `approved_gates` | `{context, shape, execution, review}` booleans — four fields, three gates: `shape` and `execution` flip together as Gate 2. This is a flattened projection: the workflow record's own `gates` entry carries `state`/`actor`/`at`/`reason`/`bypass_level` too ([above](#the-control-plane-beeruntime)) — read the record, not this boolean, when the richer shape matters |
+| `approved_gates` | `{context, shape, execution, review, uat}` booleans — five fields: `shape` and `execution` flip together as Gate 2, and `uat` is the acceptance stop before merge, never the same call as Gates 1-2. This is a flattened projection: the workflow record's own `gates` entry carries `state`/`actor`/`at`/`reason`/`bypass_level` too ([above](#the-control-plane-beeruntime)) — read the record, not this boolean, when the richer shape matters |
 | `gate_revoked_at` | map of gate name → ISO timestamp (revocation audit) |
 | `run_state` | the run's own closed-vocabulary lifecycle name — `shaping` · `awaiting-approval` · `running` · `blocked` · `done` (or `null` pre-migration). Projected from the workflow record, never computed at read time; exposed by `bee status --json` |
 | `waiting_on` | the persisted wait mark, or `null` when nothing is waited on: `{kind, subject, asked_at, session}` — `kind` is `gate` (a formal approval) or `question` (something the agent asked and has not been answered). Written by `bee state waiting-on set`, cleared by `bee state waiting-on clear` |
@@ -113,7 +121,8 @@ Per-repo configuration.
 | `cells_archive_on_close` | default true — a capped cell is relocated to `.bee/cells/archive/<feature>/` at close |
 | `ship_visibility` | how much of the ship line a session prints |
 | `dogfood_repos` | the foreign repos `bee feedback` collects a digest from |
-| `worktree_cleanup_on_merge` | boolean, absent means on — whether `worktree merge` tears down the merged worktree after a clean merge; `false` leaves it in place |
+| `worktree_cleanup_on_merge` | boolean, absent means KEEP (worktree-keep-on-merge D1) — `worktree merge` leaves the merged worktree in place unless this is explicitly `true` or the one-merge `--cleanup` flag is passed; `--no-cleanup` wins over both and always keeps |
+| `uat_before_merge` | boolean, absent means ON — whether `worktree merge` enforces the `uat` gate for standard/high-risk features; explicit `false` turns the door off repo-wide, a non-boolean value refuses `WORKTREE_MERGE_UAT_CONFIG_INVALID` rather than guessing (uat-gate-before-merge D1) |
 | `doc_viewer` | `{base_url, project}` — an opt-in URL prefix. When set, the session preamble and the compaction capsule give doc links as this URL plus the repo-relative path, instead of the bare path |
 
 Read by hive (bypass level), planning (test scoping), swarming (model tiers),
@@ -411,6 +420,7 @@ reason, never a silent skip — it is written onto the record it excuses.
 | write-guard, `docs/history/<feature>/plan.md` | that feature's `approved_gates.shape` is true — plan.md freezes once shape is locked | `bee state plan-rev bump --lane <feature>`, or unapprove shape to redraft |
 | model-guard, `Agent`/`Task` | the dispatch declares no tier and names no pinned subagent type. A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` now *derives* its tier instead of refusing | declare `[bee-tier: <tier>]` or a `model` param. A derived `cli` tier still refuses — an external process is not dispatchable as an agent |
 | `worktree merge`, dirty main | before this row's own refusal can fire, dirt confined to `.bee/` (plus `docs/history/<the-merging-feature>/` when the feature is known) is auto-committed first, warn-never-block; dirt found ANYWHERE ELSE still refuses, named by path | `worktree_merge_commit_bookkeeping: false` in config turns the auto-commit off — then a dirty main refuses unconditionally, exactly as before. Mirrors `bee close`'s own bookkeeping auto-commit |
+| `worktree merge` (`WORKTREE_MERGE_UAT_PENDING`) | the feature's lane is standard/high-risk (missing/unrecognized lane fails closed as standard) and its `uat` gate is not approved | approve it (`bee gate --name uat --approved true`), or skip uat for JUST this merge (`bee worktree merge --id <id> --skip-uat`), or turn the door off repo-wide (`uat_before_merge: false`). Never auto-approved — `uat` is user-only at every `gate_bypass` level (uat-gate-before-merge D1) |
 
 Three notes on doors that are not refusals:
 
