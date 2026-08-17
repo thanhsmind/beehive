@@ -21,11 +21,12 @@ bee:
 > evidence doors, the deferred-proof/absence-of-proof markers and the
 > feature-boundary debt doors they arm (B41–B43, R89–R93), and the
 > test-volume brakes — is deleted wholesale. The current completion door is
-> one declared test path: `bee cells finish` runs `commands.test` through
-> the deterministic `bee test` runner and writes
-> `.bee/logs/test-results.json`; green caps, red refuses with the failing
-> excerpt, an undeclared suite caps `tests: undeclared`, and `bee close`
-> re-runs the full declared suite for the feature. The judge-verdict rules
+> one declared test path, run at the boundary (decision 13ce1858,
+> 2026-08-17): a cap is commit-only proof — `bee cells finish` runs no
+> tests and records `tests: boundary` (an undeclared suite still caps
+> `tests: undeclared`); `bee close` runs `commands.test` fresh when the
+> feature has no worktree, and `bee worktree merge` runs it when it has
+> one; CI runs the same command on every push. The judge-verdict rules
 > (B31/B32, R48–R50) and the archive transaction (B34–B36, R53/R54) remain
 > current. Everything below about proof tiers is kept intact as the
 > historical record of the superseded system.

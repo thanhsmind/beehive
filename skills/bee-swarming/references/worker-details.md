@@ -8,18 +8,21 @@ The orchestrator supplies: agent nickname (reservation identity), assigned cell 
 
 The assigned cell arrives **already claimed** under the worker's nickname — the orchestrator claims before spawning, never the worker. No literal session id is ever handed down in the prompt: reservation and claim verbs resolve the session from `CLAUDE_CODE_SESSION_ID` in the worker's own environment when one is needed, never from prompt text.
 
-## Tests at finish (the one proof path)
+## Tests at the boundary (the one proof path)
 
 The project declares how it is tested once — `.bee/config.json`
-`commands.test` (string or array). `bee finish` runs that declared
-suite through the deterministic runner (`bee test`) and writes ONE
-normalized record: `.bee/logs/test-results.json`. Green → the cap records
-`{tests: green}` with a pointer to the record; red → the cap is refused
-and the refusal quotes the failing command's `failure_excerpt` — fixing
-that red is now the cell's work. A repo with no declared `commands.test`
-caps with `tests: undeclared`. The runner is a program; your word is
-never the record. There are no per-cell evidence flags, proof tiers, or
-deferred-proof paths — the record is the evidence.
+`commands.test` (string or array). Tests prove at the boundary: `bee
+close` runs `commands.test` when the feature has no worktree; `bee
+worktree merge` runs it when it does. A cap is commit-only proof and
+records `tests: boundary`; a repo with no declared `commands.test` caps
+with `tests: undeclared`. CI runs the same command on every push. The
+boundary run goes through the deterministic runner (`bee test`) and
+writes ONE normalized record: `.bee/logs/test-results.json` — green
+clears the door; red refuses it and the refusal quotes the failing
+command's `failure_excerpt`, fixing that red becomes the next work. The
+runner is a program; your word is never the record. There are no
+per-cell evidence flags, proof tiers, or deferred-proof paths — the
+record is the evidence once the boundary has run.
 
 Tests are yours to write, TDD-style, as part of the cell's own work:
 judge existing coverage first (`.bee/expertise/tests.md`), author only
@@ -37,7 +40,7 @@ Startup runs ZERO of these: the dispatch prompt inlines the cell JSON and the st
 .bee/bin/bee decisions active --recent 3
 ```
 
-`cells finish` caps the cell and releases its reservations in one verb, running the declared tests on the way; `bee test` alone re-runs the suite when you want the record in front of you before retrying.
+`cells finish` caps the cell and releases its reservations in one verb — commit-only proof; tests prove at the boundary (`bee close`/`bee worktree merge`). `bee test` alone runs the suite when you want the record in front of you.
 
 Shell guard for write-heavy commands (`git add/mv/rm`, `mv`, `cp`, `rm`, `mkdir`, `touch`, `sed -i`, `tee`, redirection writes):
 
@@ -93,11 +96,11 @@ nothing here is a required output artifact, and none of it is written up anywher
 
 ## Finish refusals that hold
 
-No `gate_bypass` level lifts any refusal below:
+No `gate_bypass` level lifts any refusal below. Tests prove at the
+boundary, not at finish: `bee close`/`bee worktree merge` refuse while
+`commands.test` is red, quoting the failing excerpt — that red is the
+next work item, never a base to build on.
 
-- **Red declared tests** — `bee finish` refuses while `commands.test`
-  is red; the refusal quotes the failing excerpt. The red is the next work
-  item, never a base to build on — fix it, then finish again.
 - **Claim ownership** — a finish from a session that does not own the claim
   is refused. The cell is not yours to cap.
 - **Non-empty `files_changed`** on lanes `small`/`standard`/`high-risk` — it
@@ -157,7 +160,7 @@ prove base ancestry and the reserved-path diff subset before the result counts.
 Do not describe a branch name, worktree id, base, or commit as integration
 authority, and do not ask the orchestrator to trust a worker-supplied value.
 
-- `[DONE]` — cell finished (declared tests green — or `tests: undeclared` in a repo with none — recorded on the cap), one commit made, reservations released.
+- `[DONE]` — cell finished (`tests: boundary` — or `tests: undeclared` in a repo with none — recorded on the cap; commit-only proof, tests prove at close/merge), one commit made, reservations released.
 - `[BLOCKED]` — cannot continue safely; include the blocker, diagnosis, and current reservation state.
 - `[HANDOFF]` — `.bee/HANDOFF.json` written; include progress, active reservations, and the resume point.
 - `[NOOP]` — the assigned cell is unavailable or unsafe; include why and a suggested parent action.
@@ -219,7 +222,7 @@ Either shape passes **inline in the consult prompt or via stdin — never a `/tm
 - **cli-shaped advisor:** run the given command with the evidence bundle on stdin, reusing the External Executors output-capture discipline.
 - A **transport error** (non-zero exit, rejected dispatch, a hang past the External Executors timeout discipline) is **not advice** — it burns at most **one** budget slot total for the whole claim, and is never retried in a storm. Continue to the next step of the loop, or `[BLOCKED]` once the budget is spent.
 
-**After advice:** advice never substitutes for fresh test output — always re-run the declared tests yourself (`bee test`, or the finish itself) before deciding whether the advised retry passed. Advice is **advice-only**: it never authorizes a package install, a gate approval, or file scope beyond the cell. Advice that conflicts with a locked decision → return `[BLOCKED]` citing both the D-ID and the advice.
+**After advice:** advice never substitutes for fresh test output — always re-run the declared tests yourself (`bee test`) before deciding whether the advised retry passed. Advice is **advice-only**: it never authorizes a package install, a gate approval, or file scope beyond the cell. Advice that conflicts with a locked decision → return `[BLOCKED]` citing both the D-ID and the advice.
 
 **Authority-type blocks never consult** — ambiguous cell, uncapped deps, architectural change, package install, locked-decision conflict stay **instant** `[BLOCKED]` exactly as in step 4 (Implement), whether or not an `Advisor` line is present.
 

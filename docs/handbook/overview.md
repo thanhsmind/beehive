@@ -128,12 +128,15 @@ net before a semantic conflict reaches main.
 
 **Proof is one declared test path (test-simple).** A project declares how it is
 tested exactly once, in `.bee/config.json` `commands.test`. `bee test` runs it and
-writes one normalized record, `.bee/logs/test-results.json`. `bee cells finish`
-runs that suite at every cap: green caps, red refuses and carries the failing
-excerpt — and that red becomes the next work. There are no per-cell proof tiers,
-no `change_class × lane` matrix, no red-first evidence flags; coverage judgment
-survives as craft in `.bee/expertise/tests.md`, enforced by review, not by a cap
-door. Close, merge, and CI all re-run that same command — `commands.verify` is retired.
+writes one normalized record, `.bee/logs/test-results.json`. Tests prove at the
+boundary: `bee close` runs `commands.test` when the feature has no worktree;
+`bee worktree merge` runs it when it does. A cap is commit-only proof and
+records `tests: boundary`. CI runs the same command on every push. A red at the
+boundary refuses it and carries the failing excerpt — and that red becomes the
+next work. There are no per-cell proof tiers, no `change_class × lane` matrix,
+no red-first evidence flags; coverage judgment survives as craft in
+`.bee/expertise/tests.md`, enforced by review, not by a cap door.
+`commands.verify` is retired.
 
 **Capture is deferred, never dropped.** A green `bee close` records capture as
 *pending* and names what remains; Scribe and Compound run when the owner chooses,

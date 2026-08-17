@@ -29,164 +29,17 @@ pub(crate) fn test_results_path(root: &Path) -> PathBuf {
     root.join(".bee").join("logs").join("test-results.json")
 }
 
-pub(crate) struct CmdRun {
-    pub(crate) command: String,
-    pub(crate) exit: Option<f64>,
-    pub(crate) duration_ms: f64,
-    pub(crate) failure_excerpt: Option<String>,
-    /// full-failure-evidence: the path of the complete-output log for a
-    /// failing command (relative, `.bee/logs/test-failure-finish-<index>.log`),
-    /// or `None` when the command passed or the log write failed.
-    pub(crate) failure_log: Option<String>,
-}
-
-pub(crate) struct TestsRun {
-    pub(crate) green: bool,
-    pub(crate) ran_at: String,
-    pub(crate) commands: Vec<CmdRun>,
-}
-
-/// posixShell(): on win32 the shared resolver's Git Bash (never the WSL
-/// launcher — see crate::shell); elsewhere `shell: true` already IS a POSIX
-/// sh, which this verb's own cmd.exe/`/bin/sh` fork below handles.
-pub(crate) fn posix_shell() -> Option<&'static str> {
-    if !cfg!(windows) {
-        return None;
-    }
-    crate::shell::posix_shell()
-}
-
-/// spawnDeclaredCommand — POSIX sh (Git Bash) on win32 when available, the
-/// platform shell otherwise. Output captured lossily (Node utf8 decode).
-///
-/// `bee cells finish` runs the proof command through here, so it takes the
-/// SAME resolution `bee test` and `bee close` take: a cap must not depend on
-/// which of three copies of this function the caller happened to reach.
-pub(crate) fn spawn_declared(command: &str, cwd: &Path) -> Result<(Option<i32>, String, String), String> {
-    let mut cmd = if posix_shell().is_some() {
-        let mut c = crate::shell::command().expect("resolver just answered Some");
-        c.args(["-c", command]);
-        c
-    } else if cfg!(windows) {
-        // Node shell:true on win32: cmd.exe /d /s /c "<command>".
-        let mut c = std::process::Command::new("cmd.exe");
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            c.raw_arg(format!("/d /s /c \"{command}\""));
-        }
-        c
-    } else {
-        let mut c = std::process::Command::new("/bin/sh");
-        c.args(["-c", command]);
-        c
-    };
-    match cmd.current_dir(cwd).output() {
-        Ok(out) => Ok((
-            out.status.code(),
-            String::from_utf8_lossy(&out.stdout).into_owned(),
-            String::from_utf8_lossy(&out.stderr).into_owned(),
-        )),
-        Err(e) => Err(format!("{e}")), // spawn error — Node embeds its own message (residual)
-    }
-}
-
-/// runDeclaredTests over an already-normalized declared command list.
-pub(crate) fn run_declared_tests(root: &Path, commands: &[String]) -> MR<TestsRun> {
-    let ran_at = utc_now();
-    let mut results: Vec<CmdRun> = Vec::new();
-    let mut green = true;
-    for (index, command) in commands.iter().enumerate() {
-        let started = std::time::Instant::now();
-        let spawn = spawn_declared(command, root);
-        let duration_ms = started.elapsed().as_millis() as f64;
-        let (exit, output, passed) = match spawn {
-            Ok((code, stdout, stderr)) => {
-                let out = format!("{stdout}{stderr}");
-                (code.map(|c| c as f64), out, code == Some(0))
-            }
-            Err(message) => {
-                let out = format!("\n[bee test] spawn error: {message}");
-                (None, out, false)
-            }
-        };
-        if !passed {
-            green = false;
-        }
-        let excerpt = if passed {
-            None
-        } else {
-            let trimmed = js_trim(&output).to_string();
-            Some(fsutil::failure_excerpt(&trimmed, exit.map(|e| e as i64)))
-        };
-        // full-failure-evidence D1/D3: the complete output survives past the
-        // bounded excerpt above, on disk; a command that just passed leaves
-        // no stale evidence of an earlier red at this index. Best-effort in
-        // both directions — a log write failure leaves `failure_log` null
-        // and never touches `green` or the excerpt above.
-        let failure_log = if passed {
-            fsutil::clear_failure_log(root, "finish", index);
-            None
-        } else {
-            fsutil::write_failure_log(root, "finish", index, &output)
-        };
-        results.push(CmdRun { command: command.clone(), exit, duration_ms, failure_excerpt: excerpt, failure_log });
-    }
-    let record = tests_record_value(&ran_at, green, &results);
-    write_json_atomic(&test_results_path(root), &record).map_err(|e| Fail::Thrown(format!("{e}")))?;
-    Ok(TestsRun { green, ran_at, commands: results })
-}
-
-pub(crate) fn tests_record_value(ran_at: &str, green: bool, commands: &[CmdRun]) -> Value {
-    let rows: Vec<Value> = commands
-        .iter()
-        .map(|c| {
-            let mut row = Map::new();
-            row.insert("command".into(), Value::String(c.command.clone()));
-            row.insert(
-                "exit".into(),
-                c.exit.and_then(Number::from_f64).map(Value::Number).unwrap_or(Value::Null),
-            );
-            row.insert(
-                "duration_ms".into(),
-                Number::from_f64(c.duration_ms).map(Value::Number).unwrap_or(Value::Null),
-            );
-            row.insert(
-                "failure_excerpt".into(),
-                c.failure_excerpt.clone().map(Value::String).unwrap_or(Value::Null),
-            );
-            // Appended LAST — the frozen key order (close.rs's own
-            // command_result_value carries the same comment) grows rather
-            // than shifts.
-            row.insert(
-                "failure_log".into(),
-                c.failure_log.clone().map(Value::String).unwrap_or(Value::Null),
-            );
-            Value::Object(row)
-        })
-        .collect();
-    let mut record = Map::new();
-    record.insert("ran_at".into(), Value::String(ran_at.to_string()));
-    record.insert("green".into(), Value::Bool(green));
-    record.insert("commands".into(), Value::Array(rows));
-    Value::Object(record)
-}
-
-/// firstFailureLine — first non-empty line of the first failing excerpt.
-pub(crate) fn first_failure_line(run: &TestsRun) -> Option<String> {
-    let failing = run
-        .commands
-        .iter()
-        .find(|c| c.failure_excerpt.as_deref().map(|e| !e.is_empty()).unwrap_or(false))?;
-    failing
-        .failure_excerpt
-        .as_deref()
-        .unwrap_or("")
-        .split('\n')
-        .map(|l| js_trim(l.trim_end_matches('\r')))
-        .find(|l| !l.is_empty())
-        .map(str::to_string)
-}
+// decision 13ce1858 (test-cadence-boundary D1): the cap's own copy of the
+// declared-test runner (spawn_declared/run_declared_tests/CmdRun/TestsRun/
+// tests_record_value/first_failure_line, plus this file's own posix_shell)
+// is DELETED here — `cap_cell_from_flags` no longer runs any test command,
+// so nothing in this crate called this copy anymore. `bee close` and
+// `bee worktree merge` keep running the declared command through their own
+// copies (drivers/close.rs, worktree/phases.rs) — the boundary is now the
+// only place a test process runs locally; CI runs the same command on every
+// push. `TEST_RESULTS_RELATIVE`/`test_results_path` above stay: other doors
+// (the D2 red-base claim check, `cells finish --report`'s trace, the
+// verify-none check) still read the last recorded record.
 
 // ─── wfl-1 (docs/history/workflow-lessons/plan.md) — the structured worker
 // Result form ─────────────────────────────────────────────────────────────
@@ -262,11 +115,24 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
             ))
         }
     }
+    // decision 13ce1858 (test-cadence-boundary D1a): a cap never claims
+    // green/red — the boundary (`bee close`/`bee worktree merge`) is the
+    // only place a test process runs, so a worker's own report can only
+    // name where its proof lives, never assert a verdict this door cannot
+    // check. "green"/"red" are refused by name, with the canonical
+    // wording, so a cold worker learns the new cadence instead of guessing
+    // why the old value stopped working.
     match map.get("tests") {
-        Some(Value::String(s)) if s == "green" || s == "red" => {}
+        Some(Value::String(s)) if s == "boundary" || s == "undeclared" => {}
+        Some(Value::String(s)) if s == "green" || s == "red" => {
+            return Err(Fail::Thrown(
+                "cells finish: --report key \"tests\" must be \"boundary\" or \"undeclared\" — \"green\"/\"red\" no longer apply. Tests prove at the boundary: bee close runs commands.test when the feature has no worktree; bee worktree merge runs it when it does. A cap is commit-only proof and records tests: boundary."
+                    .to_string(),
+            ))
+        }
         _ => {
             return Err(Fail::Thrown(
-                "cells finish: --report key \"tests\" must be the string \"green\" or \"red\"."
+                "cells finish: --report key \"tests\" must be the string \"boundary\" or \"undeclared\"."
                     .to_string(),
             ))
         }
@@ -360,22 +226,20 @@ pub(crate) fn commit_trailer_present(cwd: &Path, id: &str) -> bool {
 // ─── FULL-door topology (wf-1) ──────────────────────────────────────────────
 // `cells finish`'s own split of `resolve_store_root_worktree`'s
 // `StoreRoots`, per the logged decision: the cell record and its claim
-// resolve at MAIN (one ledger, and the claim being validated already lives
-// there); the declared test command's cwd is the calling worktree when
-// granted (the changed code is the evidence); the hold-release topology is
-// `StoreRoots::hold_topology()` unchanged (roots.rs:541-551). A pure
-// function of `StoreRoots` — no cwd read — so it is exercisable directly
-// against a `resolve_store_root_worktree` fixture, the same shape
+// resolve at MAIN — one ledger, and the claim being validated already lives
+// there; the hold-release topology is `StoreRoots::hold_topology()`
+// unchanged (roots.rs:541-551). decision 13ce1858 (test-cadence-boundary
+// D1) dropped this function's third return value, the calling worktree's
+// own root — it existed only as the declared test command's cwd, and the
+// cap no longer runs that command at all. A pure function of `StoreRoots`
+// — no cwd read — so it is exercisable directly against a
+// `resolve_store_root_worktree` fixture, the same shape
 // reservations/tests.rs's `hold_topology_matches_node_for_every_checkout_kind`
 // already uses.
-pub(crate) fn finish_topology(roots: &StoreRoots) -> (PathBuf, PathBuf, Option<(PathBuf, String)>) {
+pub(crate) fn finish_topology(roots: &StoreRoots) -> (PathBuf, Option<(PathBuf, String)>) {
     let cells_root = roots.main_root();
-    let test_root = match &roots.linked {
-        Some(l) if l.granted() => l.worktree_root.clone(),
-        _ => cells_root.clone(),
-    };
     let topo = roots.hold_topology();
-    (cells_root, test_root, topo)
+    (cells_root, topo)
 }
 
 // ─── reservations-release subset (finish's release half) ───────────────────

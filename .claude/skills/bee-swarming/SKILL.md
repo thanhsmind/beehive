@@ -63,9 +63,10 @@ cells up, state the one-line concurrency plan before dispatching.
    `bee close` refuses (`judge-debt`), so run the slice judge before you
    reach for close.
 6. Slice clean: `bee close --feature <slug> --dry-run` names every
-   remaining door with the command that settles it; the final slice runs
-   `bee close --feature <slug>`, which re-runs the declared tests
-   (`bee test`) for the feature. Doors are never waived.
+   remaining door with the command that settles it; tests prove at the
+   boundary: the final slice runs `bee close --feature <slug>`, which
+   runs `commands.test` when the feature has no worktree; `bee worktree
+   merge` runs it when it does. Doors are never waived.
 
 **`[BLOCKED]` rescue ladder:** (1) re-dispatch the same cell with the
 missing context; (2) next model tier up — the ceiling is this session, so
@@ -74,16 +75,10 @@ worker's diagnosis. If it invalidates the plan, return to bee-planning.
 
 **Completion:** slice done with more approved work remaining → return to
 bee-planning for the next batch (an approved plan stays frozen; planning
-shapes the next batch, never reopens it). Final slice green → stop in the
-worktree and present the work as ready for user testing: what changed,
-how to run or see it, and the fixed question "Ready to merge?" — never
-merge on your own read of green tests. Mark the wait:
-`bee state waiting-on set --kind gate --subject "uat: <feature>"`. Capture
-is recorded as pending (bee-capturing runs later, at the owner's pace);
-landing is `bee worktree merge` from main, and for `standard`/`high-risk`
-features that refuses `WORKTREE_MERGE_UAT_PENDING` until the user approves
-the `uat` gate (`bee gate --name uat --approved true`) — merge only after
-that approval. Before declaring done: no active reservations, no in-flight
+shapes the next batch, never reopens it). Final slice green → tell the
+user execution is complete; capture is recorded as pending (bee-capturing
+runs later, at the owner's pace) and landing is `bee worktree merge` from
+main. Before declaring done: no active reservations, no in-flight
 workers recorded.
 
 The 65%-context handoff (AGENTS.md) holds mid-wave — never push through
@@ -117,9 +112,10 @@ outputs — when a verb refuses, its message names the fix.
    --report '<json>'` — cap and release in one verb, `--report` carrying
    the same Result form you return (`{outcome, commit, files, tests,
    deviations}`), which finish validates key-for-key onto the trace.
-   Finish runs the declared tests (`commands.test`): green caps; a red
-   refuses, and the refusal carries the failing test excerpt — that red is
-   now your work. Tests run at finish; close re-runs them for the feature.
+   Tests prove at the boundary: `bee close` runs `commands.test` when the
+   feature has no worktree; `bee worktree merge` runs it when it does. A
+   cap is commit-only proof and records `tests: boundary`. CI runs the
+   same command on every push.
 6. Return exactly one token, first thing in your final message, and the
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your

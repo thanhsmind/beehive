@@ -437,10 +437,11 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   philosophy decision 2026-07-28).
 - R82 — *(Superseded 2026-07-31 — decision 412e9b3a,
   docs/specs/test-simple.md: the pending-cap path, the feature-verify
-  record, and both debt markers are deleted. Live rule: `bee cells finish`
-  runs the declared `commands.test` at every cap — green caps, red refuses
-  with the failing excerpt — and `bee close` re-runs the full declared
-  suite for the feature. Kept below as the historical record.)*
+  record, and both debt markers are deleted. Live rule since 2026-08-17
+  (decision 13ce1858): tests prove at the boundary — `bee close` runs
+  `commands.test` when the feature has no worktree, `bee worktree merge`
+  runs it when it does; a cap is commit-only proof and records
+  `tests: boundary`. Kept below as the historical record.)*
   **The delegator verifies, at the shippable unit.** Workers implement,
   commit, and report — they run no suites; a cell caps through the sanctioned
   pending path with no per-cell proof. MAIN produces all evidence: red proof
