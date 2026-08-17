@@ -31,6 +31,13 @@ pub(crate) const TEST_RESULTS_RELATIVE: &str = ".bee/logs/test-results.json";
 /// provenance: bee.mjs CLOSE_TESTS_UNDECLARED_DETAIL.
 pub(crate) const CLOSE_TESTS_UNDECLARED_DETAIL: &str = "no commands.test declared — close has no test door here; declare commands.test in .bee/config.json (string or array) to give it one";
 
+/// test-cadence-boundary D1/D1b (decision 13ce1858): the boundary run
+/// happens exactly once. A feature with a granted worktree — including one
+/// kept pending-cleanup after its merge — proves tests at `bee worktree
+/// merge`, never a second time here; wording is tense-neutral because the
+/// merge run has not happened yet when close reports this.
+pub(crate) const CLOSE_TESTS_DEFERRED_TO_MERGE_DETAIL: &str = "tests prove at bee worktree merge — a granted worktree exists for this feature, so close does not re-run the declared suite here";
+
 /// Pinned prefix of the D1 capture-debt refusal headline (message-contract
 /// test: `close_refuses_uncaptured_behavior_change_cells`). Cite: CONTEXT.md
 /// D1 (c2a7bd4f item 1).
@@ -1647,18 +1654,37 @@ pub(crate) fn close_handler(
         )));
     }
 
+    // test-cadence-boundary D1/D1b (decision 13ce1858): the boundary run
+    // happens exactly once. A granted worktree for this feature — INCLUDING
+    // one kept pending-cleanup after a merge — means `bee worktree merge`
+    // is where tests prove; close reports and defers instead of re-running
+    // the suite a second time. No worktree: close runs fresh exactly as
+    // before (same root from resolve_store_root, red still stops close).
+    let worktree_deferred = declared.is_some()
+        && crate::verbs::status_full::find_granted_worktree_for_feature(root, feature).is_some();
+
     if dry_run {
         let mut doors = vec![Door {
             door: "tests",
             blocking: false,
-            detail: match &declared {
-                Some(cmds) => format!(
-                    "commands.test declared ({} command(s)) — close runs the full declared suite fresh; a stale test-results record is never trusted",
-                    cmds.len()
-                ),
-                None => CLOSE_TESTS_UNDECLARED_DETAIL.to_string(),
+            detail: if worktree_deferred {
+                CLOSE_TESTS_DEFERRED_TO_MERGE_DETAIL.to_string()
+            } else {
+                match &declared {
+                    Some(cmds) => format!(
+                        "commands.test declared ({} command(s)) — close runs the full declared suite fresh; a stale test-results record is never trusted",
+                        cmds.len()
+                    ),
+                    None => CLOSE_TESTS_UNDECLARED_DETAIL.to_string(),
+                }
             },
-            command: if declared.is_some() { Some("bee test") } else { None },
+            command: if worktree_deferred {
+                Some("bee worktree merge")
+            } else if declared.is_some() {
+                Some("bee test")
+            } else {
+                None
+            },
         }];
         doors.extend(build_close_report_doors(root, feature)?);
         doors.push(build_pattern_check_door(root, feature, pattern_verdicts)?);
@@ -1666,11 +1692,17 @@ pub(crate) fn close_handler(
         doors.push(build_impact_door(root, feature)?);
         doors.push(build_routing_door(root, feature)?);
         doors.push(build_doc_deferral_door(root, feature)?);
-        let next_line = match &declared {
-            Some(_) => format!("next: bee close --feature {feature} — runs the declared tests and reports"),
-            None => format!(
-                "next: feature \"{feature}\" has no test door — close proceeds; capture stays pending for bee-capturing"
-            ),
+        let next_line = if worktree_deferred {
+            format!(
+                "next: bee close --feature {feature} — tests prove at bee worktree merge, not here; close reports and proceeds"
+            )
+        } else {
+            match &declared {
+                Some(_) => format!("next: bee close --feature {feature} — runs the declared tests and reports"),
+                None => format!(
+                    "next: feature \"{feature}\" has no test door — close proceeds; capture stays pending for bee-capturing"
+                ),
+            }
         };
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
@@ -1680,16 +1712,28 @@ pub(crate) fn close_handler(
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 0));
     }
 
-    // The real run: the tests door is the full declared run, fresh.
-    let run = match (&declared, shell) {
-        (Some(commands), Some(shell)) => run_declared_tests(root, commands, shell),
-        _ => TestRun {
+    // The real run: the tests door is the full declared run, fresh — unless
+    // a granted worktree already owns proving it (worktree_deferred above),
+    // in which case no test process runs here at all.
+    let run = if worktree_deferred {
+        TestRun {
             ran_at: String::new(),
             green: false,
             undeclared: true,
             commands: Vec::new(),
             write_error: None,
-        },
+        }
+    } else {
+        match (&declared, shell) {
+            (Some(commands), Some(shell)) => run_declared_tests(root, commands, shell),
+            _ => TestRun {
+                ran_at: String::new(),
+                green: false,
+                undeclared: true,
+                commands: Vec::new(),
+                write_error: None,
+            },
+        }
     };
     if let Some(msg) = &run.write_error {
         // Node: writeJsonAtomic throws -> main's catch -> emitError.
@@ -1759,7 +1803,14 @@ pub(crate) fn close_handler(
     }
 
     // Green (or no declared test path): what remains is the capture checklist.
-    let tests_door = if run.undeclared {
+    let tests_door = if worktree_deferred {
+        Door {
+            door: "tests",
+            blocking: false,
+            detail: CLOSE_TESTS_DEFERRED_TO_MERGE_DETAIL.to_string(),
+            command: Some("bee worktree merge"),
+        }
+    } else if run.undeclared {
         Door {
             door: "tests",
             blocking: false,
@@ -1994,7 +2045,11 @@ pub(crate) fn close_handler(
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
-    let headline = if run.undeclared {
+    let headline = if worktree_deferred {
+        format!(
+            "Tests for \"{feature}\" prove at bee worktree merge — a granted worktree owns this feature, so close does not run them here."
+        )
+    } else if run.undeclared {
         format!(
             "No commands.test declared for \"{feature}\" — nothing gated close; declare commands.test in .bee/config.json to give close a test door."
         )
