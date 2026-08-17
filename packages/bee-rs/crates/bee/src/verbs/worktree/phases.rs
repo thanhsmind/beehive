@@ -47,6 +47,7 @@ pub(crate) fn merge_stage(
     main_root: &Path,
     id: &str,
     companion_end_command: Option<&str>,
+    skip_uat: bool,
 ) -> MR<StageOut> {
     // `typeof id !== 'string' || !id` is already enforced by run_merge's
     // requireFlag gate, so WORKTREE_MERGE_INVALID_ID is unreachable here.
@@ -210,6 +211,43 @@ pub(crate) fn merge_stage(
                 p(&worktree_root)
             ),
         ));
+    }
+
+    // uat-gate-before-merge D1: the LAST zero-mutation precondition — a
+    // standard/high-risk feature whose "uat" gate is not yet approved
+    // refuses here, before the companion is torn down or anything else
+    // mutates. `identity` was already resolved above (line ~97) for the
+    // bookkeeping auto-commit's scope; reused here rather than re-resolved.
+    // `uat_before_merge_config`'s `None` (a present-but-non-boolean config
+    // value) refuses UNCONDITIONALLY, before the lane/gate reads even run —
+    // a typo'd config must never silently resolve to either outcome, on ANY
+    // merge, not just the ones that would otherwise be gated.
+    let Some(uat_before_merge) = uat_before_merge_config(main_root) else {
+        return Err(refuse_merge(
+            "WORKTREE_MERGE_UAT_CONFIG_INVALID",
+            format!(
+                "\"uat_before_merge\" in {}/.bee/config.json must be a boolean (true or false) \u{2014} merge refuses rather than guess which way to resolve it. FIX: set it to true or false, or remove the key entirely to use the default (true, uat-gate-before-merge D1).",
+                p(main_root)
+            ),
+        ));
+    };
+    if uat_before_merge && !skip_uat {
+        let precheck = uat_merge_precheck(main_root, identity.feature.as_deref());
+        if precheck.lane_applies && !precheck.gate_approved {
+            let feature_disp = identity.feature.as_deref().unwrap_or("(unresolved)");
+            let lane_tail = identity
+                .feature
+                .as_deref()
+                .map(|f| format!(" --lane {f}"))
+                .unwrap_or_default();
+            return Err(refuse_merge(
+                "WORKTREE_MERGE_UAT_PENDING",
+                format!(
+                    "worktree {id}'s feature \"{feature_disp}\" has not been approved for the \"uat\" gate, and its lane is standard/high-risk (a missing or unrecognized lane classification fails closed the same way, uat-gate-before-merge D1) \u{2014} \"bee worktree merge\" refuses until the user accepts it, exactly once, or the repo opts out. FIX: approve it (\"bee gate --name uat --approved true{lane_tail}\"), or skip uat for JUST this merge (\"bee worktree merge --id {id} --skip-uat\"), or turn the door off repo-wide (set \"uat_before_merge\": false in {}/.bee/config.json).",
+                    p(main_root)
+                ),
+            ));
+        }
     }
 
     // worktree-companion-hook: every zero-mutation refusal above (both
@@ -515,21 +553,110 @@ pub(crate) fn merge_finish(
     outcome
 }
 
+/// uat-gate-before-merge D1: `uat_before_merge` in `.bee/config.json` — ON
+/// by default (absent \u{2192} true, so the door protects every repo until
+/// someone opts it off), an explicit `false` disables it repo-wide, and any
+/// other shape refuses (`None`) rather than guessing which way to resolve a
+/// typo. Models `worktree_cleanup_on_merge_config`'s fail-closed shape
+/// (handlers.rs:415-421) with the default flipped to ON.
+pub(crate) fn uat_before_merge_config(main_root: &Path) -> Option<bool> {
+    match crate::state::read_config_raw(main_root).get("uat_before_merge") {
+        None => Some(true),
+        Some(Value::Bool(b)) => Some(*b),
+        Some(_) => None,
+    }
+}
+
+/// uat-gate-before-merge D1: does `mode` (a record's risk-lane
+/// classification) require uat approval before merge? Only the known
+/// LOW-risk lanes are exempt (`tiny`/`small`/`docs`/`spike`, i.e.
+/// `ROUTE_LANE_VALUES` minus `standard`/`high-risk`) — a missing record, a
+/// null mode, or any value this port does not recognize fails CLOSED as
+/// "standard", because an unclassified feature is exactly the case a silent
+/// skip would be most dangerous for.
+fn uat_gate_applies_to_lane(mode: Option<&str>) -> bool {
+    !matches!(mode, Some("tiny") | Some("small") | Some("docs") | Some("spike"))
+}
+
+/// The merge-time uat precondition's two fail-closed reads.
+struct UatPrecheck {
+    lane_applies: bool,
+    gate_approved: bool,
+}
+
+/// uat-gate-before-merge D1: `lane_applies` prefers the live workflow
+/// record's own `mode` field (present regardless of whether the feature was
+/// ever bound to an explicit `--as-lane` file), falling back to
+/// `.bee/lanes/<feature>.json` (`read_lane_display` — the same fail-open
+/// display read `close`'s own scoping already reuses, drivers/close.rs:305)
+/// when no live workflow names the feature. `gate_approved` reads the live
+/// workflow record's own `gates.uat.approved` (GATE_NAMES-driven, written by
+/// `bee state gate --name uat`), falling back to the plain default
+/// `.bee/state.json` record's `approved_gates.uat` ONLY when that record is
+/// presently tracking THIS feature — a foreign feature's approval must
+/// never leak through as "approved" for a different one. A feature that
+/// could not even be resolved (`feature` is `None`) fails closed on both: an
+/// unclassifiable lane (standard) and an unapprovable gate (false). Every
+/// read here is fail-open/fail-closed by construction (`list_workflows`,
+/// `read_lane_display`, `read_state_peek` never throw for an ordinary
+/// missing/corrupt shape), so an unreadable store never delegates — it
+/// reads as "not approved", the safe direction.
+fn uat_merge_precheck(main_root: &Path, feature: Option<&str>) -> UatPrecheck {
+    let Some(feature) = feature else {
+        return UatPrecheck { lane_applies: true, gate_approved: false };
+    };
+    let workflows = crate::verbs::workflow_store::list_workflows(main_root).unwrap_or_default();
+    let live = crate::verbs::workflow_store::find_live_workflow(&workflows, feature);
+
+    let mode = live
+        .and_then(|wf| wf.get("mode"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or_else(|| {
+            crate::verbs::workflow_store::read_lane_display(main_root, feature)
+                .ok()
+                .flatten()
+                .and_then(|rec| rec.get("mode").and_then(Value::as_str).map(str::to_string))
+        });
+    let lane_applies = uat_gate_applies_to_lane(mode.as_deref());
+
+    let gate_approved = if let Some(wf) = live {
+        matches!(
+            wf.get("gates").and_then(|g| g.get("uat")).and_then(|e| e.get("approved")),
+            Some(Value::Bool(true))
+        )
+    } else {
+        crate::verbs::state_group::read_state_peek(main_root)
+            .ok()
+            .filter(|state| matches!(state.get("feature"), Some(Value::String(f)) if f == feature))
+            .is_some_and(|state| {
+                matches!(
+                    state.get("approved_gates").and_then(|g| g.get("uat")),
+                    Some(Value::Bool(true))
+                )
+            })
+    };
+
+    UatPrecheck { lane_applies, gate_approved }
+}
+
 /// mergeFeatureWorktree — P1 / (P2) / P3 with the lock released across the
 /// verify child. `Err(MErr::Ex)` is only ever produced by P1, before any
 /// mutation; the caller has already taken the queue lock by then, so it is the
 /// documented late-delegation residual, never an ordinary shape.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn merge_feature_worktree(
     main_root: &Path,
     id: &str,
     cleanup: bool,
     verify_command: Option<&str>,
     companion_end_command: Option<&str>,
+    skip_uat: bool,
     hooks: Option<&crate::integration_queue::Hooks<'_>>,
 ) -> MR<MergeAnswer> {
     let mut guard = lock::acquire_store_lock(main_root, WORKTREE_ADMIN_LOCK, lock::MAX_ATTEMPTS)
         .map_err(|b| MErr::Thrown(b.message()))?;
-    let staged = merge_stage(main_root, id, companion_end_command);
+    let staged = merge_stage(main_root, id, companion_end_command, skip_uat);
     guard.release();
     let staged = match staged? {
         StageOut::Done(answer) => return Ok(answer),

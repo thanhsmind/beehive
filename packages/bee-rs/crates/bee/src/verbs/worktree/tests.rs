@@ -1157,7 +1157,7 @@ use std::time::Instant;
         let cleanup = resolve_cleanup_on_merge(&main, false, false).unwrap();
         assert!(!cleanup, "no flags, no config -> the worktree is kept by default (D1)");
 
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge threw: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -1226,7 +1226,7 @@ use std::time::Instant;
         let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
         assert!(cleanup, "--cleanup opts this merge into teardown (D1)");
 
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge threw: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -1269,7 +1269,7 @@ use std::time::Instant;
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         assert!(!cleanup, "--no-cleanup opts this merge out (D1a)");
 
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge threw: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -1337,7 +1337,7 @@ use std::time::Instant;
         let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
         assert!(cleanup, "--cleanup would run on a REAL merge (D1)");
 
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge threw: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -1404,7 +1404,7 @@ use std::time::Instant;
         git_ok(&main, &["config", "gpg.program", stub.to_str().unwrap()]);
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge threw: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -1482,7 +1482,7 @@ use std::time::Instant;
         assert!(is_tree_dirty(&main).unwrap(), "main must start dirty for this test to mean anything");
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge refused instead of auto-committing .bee dirt: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -1535,7 +1535,7 @@ use std::time::Instant;
         std::fs::write(main.join("unrelated.txt"), "surprise\n").unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None);
         let Err(err) = result else { panic!("a dirty path outside .bee/ must still refuse") };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
         assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
@@ -1560,7 +1560,7 @@ use std::time::Instant;
         std::fs::write(main.join("unrelated.txt"), "surprise\n").unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None);
         let Err(err) = result else { panic!("a dirty path outside the swept roots must still refuse") };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
         assert!(msg.contains(".bee/"), "{msg}");
@@ -1587,7 +1587,7 @@ use std::time::Instant;
         .unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge refused instead of auto-committing docs/history/demo: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -1617,7 +1617,7 @@ use std::time::Instant;
         std::fs::write(main.join("docs").join("decisions").join("taxonomy.json"), "{\"a\": 1}\n").unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge refused instead of auto-committing docs/decisions: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -1661,7 +1661,7 @@ use std::time::Instant;
         .unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge refused instead of auto-committing docs/knowledge: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -1699,7 +1699,7 @@ use std::time::Instant;
         .unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None);
         let Err(err) = result else { panic!("another feature's docs/history dirt must still refuse") };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
         assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
@@ -1746,7 +1746,7 @@ use std::time::Instant;
         std::fs::set_permissions(&hook, perms).unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("a failing bookkeeping commit must warn, not refuse: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -1778,7 +1778,7 @@ use std::time::Instant;
         .unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None);
         let Err(err) = result else { panic!("the opt-out must fall back to refusing on any dirty main") };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
         assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
@@ -2235,7 +2235,7 @@ use std::time::Instant;
         // pathspec below is doing real work.
         assert!(is_tree_dirty(&wt).unwrap(), "the mount+marker read as dirty");
 
-        let answer = merge_feature_worktree(&main, &created.id, false, None, Some("exit 0"), None)
+        let answer = merge_feature_worktree(&main, &created.id, false, None, Some("exit 0"), true, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge threw: {m}"),
                 MErr::Ex => panic!("merge delegated"),
@@ -3155,4 +3155,287 @@ use std::time::Instant;
         .unwrap();
         let after = merged_pending_map(&main, &ids);
         assert_eq!(after.get(&created.id), Some(&Value::Bool(false)), "{after:?}");
+    }
+
+    // ── uat-gate-before-merge D1: the merge-time uat precondition ──────────
+
+    /// A live workflow record for `feature`, naming its risk lane and
+    /// whether the uat gate has been approved — the primary source both
+    /// `uat_merge_precheck` reads consult first.
+    fn write_live_workflow_uat(main: &Path, feature: &str, mode: &str, uat_approved: bool) {
+        let id = format!("wf-{feature}-uat-test");
+        let dir = main.join(".bee").join("runtime").join("workflows").join(&id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("state.json"),
+            jsjson::stringify(&json!({
+                "id": id,
+                "feature": feature,
+                "status": "active",
+                "mode": mode,
+                "gates": { "uat": { "approved": uat_approved } },
+            })),
+        )
+        .unwrap();
+    }
+
+    /// A `.bee/lanes/<feature>.json` record naming only the risk lane — the
+    /// fallback `uat_merge_precheck` reads when no LIVE workflow names the
+    /// feature (e.g. a lane started but never turned into a running
+    /// workflow, or a feature classified without `--as-lane`).
+    fn write_lane_mode(main: &Path, feature: &str, mode: &str) {
+        let dir = main.join(".bee").join("lanes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{feature}.json")),
+            jsjson::stringify(&json!({ "feature": feature, "mode": mode })),
+        )
+        .unwrap();
+    }
+
+    /// Truth 1: a standard-lane feature with an unapproved uat gate refuses,
+    /// typed, and touches NOTHING — the worktree, its branch, and main's
+    /// tree all stand exactly as before the call.
+    #[test]
+    fn merge_of_a_standard_lane_feature_without_uat_approval_refuses_zero_mutation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_live_workflow_uat(&main, "demo", "standard", false);
+
+        let pre_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, false, None);
+        let Err(err) = result else { panic!("an unapproved uat gate on a standard lane must refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_UAT_PENDING"), "{msg}");
+        // The remedy names all three exits.
+        assert!(msg.contains("--skip-uat"), "{msg}");
+        assert!(msg.contains("bee gate --name uat --approved true"), "{msg}");
+        assert!(msg.contains("uat_before_merge"), "{msg}");
+
+        // Zero mutation: main's HEAD is unchanged, no MERGE_HEAD exists, the
+        // worktree directory and branch both stand.
+        let post_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        assert_eq!(pre_merge_head, post_merge_head);
+        assert!(!main.join(".git").join("MERGE_HEAD").exists());
+        assert!(created.worktree_root.exists());
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", &created.branch])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(!String::from_utf8_lossy(&branches.stdout).trim().is_empty());
+    }
+
+    /// Truth 2a: the same standard-lane feature merges once its uat gate is
+    /// approved on the live workflow record.
+    #[test]
+    fn merge_proceeds_once_the_live_workflow_uat_gate_is_approved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_live_workflow_uat(&main, "demo", "standard", true);
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge refused despite an approved uat gate: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// Truth 2b: `--skip-uat` bypasses an unapproved gate for JUST this
+    /// merge call.
+    #[test]
+    fn skip_uat_flag_bypasses_an_unapproved_gate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_live_workflow_uat(&main, "demo", "standard", false);
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("--skip-uat must bypass an unapproved gate: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// Truth 2c: an explicit repo-wide `uat_before_merge: false` bypasses
+    /// the precondition entirely, without `--skip-uat`.
+    #[test]
+    fn uat_before_merge_config_false_bypasses_an_unapproved_gate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_live_workflow_uat(&main, "demo", "standard", false);
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            "{\"uat_before_merge\": false}",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("uat_before_merge: false must bypass an unapproved gate: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// Truth 2d: a `tiny` lane merges without any uat approval — the door
+    /// only ever applies to standard/high-risk. This exercises the LANE
+    /// fallback read (`.bee/lanes/<feature>.json`, no live workflow at all).
+    #[test]
+    fn tiny_lane_merges_without_uat_approval() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_lane_mode(&main, "demo", "tiny");
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a tiny lane must never require uat approval: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// Truth 3: a present-but-non-boolean `uat_before_merge` config value is
+    /// refused outright, typed, even on an otherwise-exempt tiny lane — a
+    /// typo'd config must never silently resolve to either outcome.
+    #[test]
+    fn uat_before_merge_config_non_boolean_is_refused_regardless_of_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_lane_mode(&main, "demo", "tiny");
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            "{\"uat_before_merge\": \"nope\"}",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, false, None);
+        let Err(err) = result else { panic!("a non-boolean uat_before_merge must refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_UAT_CONFIG_INVALID"), "{msg}");
+        assert!(created.worktree_root.exists());
+    }
+
+    /// Truth 4: with no live workflow AND no lane record, `uat_merge_precheck`
+    /// falls back to the plain default `.bee/state.json` record's
+    /// `approved_gates.uat` — but ONLY when that record is presently
+    /// tracking THIS feature.
+    #[test]
+    fn merge_proceeds_via_the_default_state_record_fallback_when_it_names_this_feature() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        std::fs::write(
+            main.join(".bee").join("state.json"),
+            jsjson::stringify(&json!({
+                "feature": "demo",
+                "mode": "standard",
+                "approved_gates": { "uat": true },
+            })),
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the default state.json fallback must approve this feature's uat gate: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// Truth 4a (the safety half of Truth 4): a default state.json record
+    /// naming a DIFFERENT feature's approval must never leak through as
+    /// this feature's own uat approval.
+    #[test]
+    fn a_different_features_state_json_approval_does_not_leak_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        std::fs::write(
+            main.join(".bee").join("state.json"),
+            jsjson::stringify(&json!({
+                "feature": "some-other-feature",
+                "mode": "standard",
+                "approved_gates": { "uat": true },
+            })),
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, false, None);
+        let Err(err) = result else {
+            panic!("a different feature's approved_gates.uat must never approve THIS feature's merge")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_UAT_PENDING"), "{msg}");
+    }
+
+    /// `uat_before_merge_config` on its own: absent -> ON, explicit false ->
+    /// off, non-boolean -> refused. Mirrors
+    /// `worktree_cleanup_on_merge_config_defaults_off_and_validates_the_present_shape`
+    /// with the default flipped.
+    #[test]
+    fn uat_before_merge_config_defaults_on_and_validates_the_present_shape() {
+        let tmp = tempfile::tempdir().unwrap();
+        // No .bee/config.json at all -> ON (the door protects by default).
+        assert_eq!(uat_before_merge_config(tmp.path()), Some(true));
+
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"uat_before_merge\": false}",
+        )
+        .unwrap();
+        assert_eq!(uat_before_merge_config(tmp.path()), Some(false));
+
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"uat_before_merge\": true}",
+        )
+        .unwrap();
+        assert_eq!(uat_before_merge_config(tmp.path()), Some(true));
+
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"uat_before_merge\": \"no\"}",
+        )
+        .unwrap();
+        assert_eq!(uat_before_merge_config(tmp.path()), None);
+    }
+
+    /// `--skip-uat` parses as a bare boolean (FLAG_ALONE_BOOLEANS) and its
+    /// non-boolean shape is refused outright, the same discipline
+    /// `no_cleanup_with_a_non_boolean_value_is_refused_not_defaulted` pins
+    /// for `--no-cleanup`.
+    #[test]
+    fn skip_uat_flag_parses_as_a_bare_boolean_and_refuses_a_non_boolean_value() {
+        let (bare, _) = parse_flags(&["--skip-uat"]).unwrap();
+        assert!(bool_flag_ok(&bare, "skip-uat"));
+        assert!(bool_flag_true(&bare, "skip-uat"));
+        let (explicit_false, _) = parse_flags(&["--skip-uat=false"]).unwrap();
+        assert!(bool_flag_ok(&explicit_false, "skip-uat"));
+        assert!(!bool_flag_true(&explicit_false, "skip-uat"));
+        let (bad, _) = parse_flags(&["--skip-uat=yes"]).unwrap();
+        assert!(!bool_flag_ok(&bad, "skip-uat"), "a non-boolean --skip-uat must refuse outright");
     }
