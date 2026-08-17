@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "bc12f62fd164d07af7e31d984c0369d032f1a6acae1f4d013c63c54ee45900e9",
+      "sha256": "d83864e6dead48a0ac2e9b19127338d289cdd1cbe1405a37cc9f9b3ea66896f8",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -332,7 +332,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-hive/SKILL.md",
-      "sha256": "04c3dee3eea6ad49dc3b73baeed80f197af3fec915058a075bbae1d838fc0438",
+      "sha256": "720cd6482d0e2412b44d05c436f40a800ae5d0b1f317c5b8957e5e26d1f2f207",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/SKILL.md"
@@ -499,6 +499,27 @@
       "packagePath": ".claude-plugin/skills/bee-swarming/SKILL.md"
     },
     {
+      "path": ".claude-plugin/skills/bee-wayfinding/agents/openai.yaml",
+      "sha256": "47dde661860263ff432b3f13ecda615aa83b1861f9f382942849fc3889b52411",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-wayfinding/agents/openai.yaml"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-wayfinding/references/wayfinding-reference.md",
+      "sha256": "03bb1af20eda8625720e4536daa984ff8878f044c0febb66740ea2732c9157e0",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-wayfinding/references/wayfinding-reference.md"
+    },
+    {
+      "path": ".claude-plugin/skills/bee-wayfinding/SKILL.md",
+      "sha256": "f3393b58df28762aeabcf201f008050cd2818f66808890d6b8595216754b9861",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-wayfinding/SKILL.md"
+    },
+    {
       "path": ".codex-plugin/plugin.json",
       "sha256": "97a1e0dfb7b8cdca2700698630e8f2366982c0f7ea3d2a9978de4ddca41b0284",
       "mode": "644",
@@ -507,7 +528,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "4814619f9a97a9564a4c7a8bb98e15f7d7ce41238095e90cea2e92b276325d28",
+      "sha256": "670e641231550d2eeb9b96176db7dafc436671ec6fcf0060bb8a5d07c695dd39",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -703,7 +724,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-hive/SKILL.md",
-      "sha256": "04c3dee3eea6ad49dc3b73baeed80f197af3fec915058a075bbae1d838fc0438",
+      "sha256": "720cd6482d0e2412b44d05c436f40a800ae5d0b1f317c5b8957e5e26d1f2f207",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/SKILL.md"
@@ -868,6 +889,27 @@
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-swarming/SKILL.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-wayfinding/agents/openai.yaml",
+      "sha256": "47dde661860263ff432b3f13ecda615aa83b1861f9f382942849fc3889b52411",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-wayfinding/agents/openai.yaml"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-wayfinding/references/wayfinding-reference.md",
+      "sha256": "03bb1af20eda8625720e4536daa984ff8878f044c0febb66740ea2732c9157e0",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-wayfinding/references/wayfinding-reference.md"
+    },
+    {
+      "path": ".codex-plugin/skills/bee-wayfinding/SKILL.md",
+      "sha256": "f3393b58df28762aeabcf201f008050cd2818f66808890d6b8595216754b9861",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-wayfinding/SKILL.md"
     },
     {
       "path": ".opencode/plugins/bee-guard.ts",
@@ -1278,7 +1320,7 @@
     },
     {
       "path": "skills/bee-hive/SKILL.md",
-      "sha256": "04c3dee3eea6ad49dc3b73baeed80f197af3fec915058a075bbae1d838fc0438",
+      "sha256": "720cd6482d0e2412b44d05c436f40a800ae5d0b1f317c5b8957e5e26d1f2f207",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/SKILL.md"
@@ -1443,6 +1485,27 @@
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/SKILL.md"
+    },
+    {
+      "path": "skills/bee-wayfinding/agents/openai.yaml",
+      "sha256": "47dde661860263ff432b3f13ecda615aa83b1861f9f382942849fc3889b52411",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-wayfinding/agents/openai.yaml"
+    },
+    {
+      "path": "skills/bee-wayfinding/references/wayfinding-reference.md",
+      "sha256": "03bb1af20eda8625720e4536daa984ff8878f044c0febb66740ea2732c9157e0",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-wayfinding/references/wayfinding-reference.md"
+    },
+    {
+      "path": "skills/bee-wayfinding/SKILL.md",
+      "sha256": "f3393b58df28762aeabcf201f008050cd2818f66808890d6b8595216754b9861",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-wayfinding/SKILL.md"
     }
   ]
 }

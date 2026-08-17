@@ -28,6 +28,7 @@ current stop. Out-of-band requests:
 
 | Skill | When |
 |---|---|
+| `bee-wayfinding` | A fog-state idea, no nameable outcome yet, or an open discovery map with frontier tickets — chart or resume `docs/discovery/<effort>/MAP.md` before shaping. |
 | `bee-shaping` | Gray areas or unlocked decisions — lock them (also backlog triage, parking, the implement-plan brief). |
 | `bee-planning` | Decisions locked, or scope already clear ("just fix this") — route the lane, shape the work, present the gate. A code-touching route creates the feature's worktree in the same step (worktree-first — AGENTS.md). |
 | `bee-swarming` | Merged shape+execution gate approved, cells open — orchestrate workers, or execute one assigned cell, inside the feature's worktree. A `tiny` cell may run inline; `small` and up runs through a dispatched execution worker. |
