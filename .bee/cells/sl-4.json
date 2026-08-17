@@ -36,19 +36,37 @@
     "sl-2",
     "sl-3"
   ],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "sl-w4",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "docs/handbook/register.md",
+      ".claude/skills/bee-swarming/SKILL.md",
+      ".claude/skills/bee-herding/references/role-merge.md",
+      "docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md",
+      ".claude/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude/skills/bee-planning/SKILL.md",
+      "AGENTS.md",
+      "docs/knowledge/areas/worktree-parallelism/index.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/index.md"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-17T11:43:18.276Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "f5668bee-17cf-4109-aed8-0b530e26f636",
-    "claimed_at": "2026-08-17T11:36:17.389Z"
+    "claimed_at": "2026-08-17T11:36:17.389Z",
+    "inline_reason": "worker registration missing for cold-pickup dispatch; worked cell sl-4 directly per orchestrator dispatch",
+    "warnings": [
+      "advisory: this cap's commit changes 185 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T11:42:58.482Z"
   }
 }
