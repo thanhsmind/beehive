@@ -136,3 +136,4 @@
 {"id":"1a5467d5-d152-4dac-aab3-93783c333911","type":"candidate","date":"2026-08-16T08:56:24.299Z","feature":"claim-time-worktree-redirect","head":"47da5ee323424cdfd17eced374bc638765339a71","mode":"tiny","baseline":null,"cells":[]}
 {"id":"47677683-3a33-41aa-9fed-8c556f192f66","type":"candidate","date":"2026-08-16T10:47:35.592Z","feature":"knowledge-distill-trigger","head":"78b6930341422ae7a28a33f78a85b32a4d89bdba","mode":"standard","baseline":null,"cells":[]}
 {"id":"8e2d019b-8775-49ff-b5bb-a84a837941d3","type":"candidate","date":"2026-08-16T12:26:05.886Z","feature":"doc-impact-synthesis","head":"0b50eb19ad24556f93d19e0a7d3cb6a5772dc744","mode":"standard","baseline":null,"cells":[]}
+{"id":"92338ad2-4d06-4208-bd6c-e6f0af38c501","type":"candidate","date":"2026-08-17T08:42:12.798Z","feature":"worktree-keep-on-merge","head":"8ae9ffda1c708296a6d2c4a587eaf13b8097824a","mode":"standard","baseline":"abde5ca7","cells":["wkm-1","wkm-2","wkm-3"]}

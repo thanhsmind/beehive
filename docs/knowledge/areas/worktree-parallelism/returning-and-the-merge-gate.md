@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/entering-creating-and-registering.md]
-  decisions: [worktree-session-routing D8 (worktree merge --id <id> is the return path), D2-REVISED (the merge is a staged transaction — user review P1-2), D8a (dirty is git status --porcelain without --ignored), "D8b/D8c (--cleanup ran post-commit only, opt-in, before worktree-reclaim D1 made cleanup the default outcome)", "I47 (issues-46-53 — cleanup on ALREADY_UP_TO_DATE, superseded by worktree-reclaim D1a below)", "multisession-native D10b (issue #56 3.9 — the worktree-admin lock releases around the verify child and re-acquires behind a four-part fence before any commit)", "multisession-native D8 stage 5 / D9 invariant 12 (issue #56 3.9/mục queue — bee worktree merge requests against the same main checkout serialize through a durable integration queue and a single processor lease instead of racing the coordination lock; a busy processor bounded-waits and a timeout returns a typed, unambiguous not-run result)", "worktree-reclaim D1 (cleanup is the default outcome of a merge that merged something, not a favour a caller has to ask for)", "worktree-reclaim D1a (cleanup-by-default fires only on a merge that actually merged something, so the ALREADY_UP_TO_DATE arm removes nothing; a non-boolean --no-cleanup value is refused outright, never silently read either way)", "c117994b (traceable-runs trun-4, logged at capture 2026-08-14 — a discovered-live deadlock fix: the dirty-MAIN precondition auto-commits path-scoped .bee/ and the merging feature's own docs/history/<feature>/ before refusing, closing the deadlock against the worktree-first guard, reusing bee close's own bookkeeping-commit helper and opt-out key; cell trun-4, commit 9e01807d)"]
+  decisions: [worktree-session-routing D8 (worktree merge --id <id> is the return path), D2-REVISED (the merge is a staged transaction — user review P1-2), D8a (dirty is git status --porcelain without --ignored), "D8b/D8c (--cleanup ran post-commit only, opt-in, before worktree-reclaim D1 made cleanup the default outcome)", "I47 (issues-46-53 — cleanup on ALREADY_UP_TO_DATE, superseded by worktree-reclaim D1a below)", "multisession-native D10b (issue #56 3.9 — the worktree-admin lock releases around the verify child and re-acquires behind a four-part fence before any commit)", "multisession-native D8 stage 5 / D9 invariant 12 (issue #56 3.9/mục queue — bee worktree merge requests against the same main checkout serialize through a durable integration queue and a single processor lease instead of racing the coordination lock; a busy processor bounded-waits and a timeout returns a typed, unambiguous not-run result)", "worktree-reclaim D1 (cleanup is the default outcome of a merge that merged something, not a favour a caller has to ask for)", "worktree-reclaim D1a (cleanup-by-default fires only on a merge that actually merged something, so the ALREADY_UP_TO_DATE arm removes nothing; a non-boolean --no-cleanup value is refused outright, never silently read either way)", "c117994b (traceable-runs trun-4, logged at capture 2026-08-14 — a discovered-live deadlock fix: the dirty-MAIN precondition auto-commits path-scoped .bee/ and the merging feature's own docs/history/<feature>/ before refusing, closing the deadlock against the worktree-first guard, reusing bee close's own bookkeeping-commit helper and opt-out key; cell trun-4, commit 9e01807d)", "worktree-keep-on-merge D1 (2026-08-17, supersedes worktree-reclaim D1 — a green merge KEEPS the worktree by default and queues a worktree-cleanup entry in the pending-work ledger; --cleanup re-armed as the per-merge immediate-teardown opt-in, worktree_cleanup_on_merge: true as the repo-wide opt-in, --no-cleanup an explicit keep that wins over config; prune drains and resolves the entry; cells wkm-1..3, commits f1b6a19f/3e32e605/6ff041f8)"]
   sources: [docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-returning-worktree-merge-id-id-d8", "issues-46-53 cell i-2 (GH #47 — the safety property is \"nothing would be lost\", not \"a commit happened\"; trace in `.bee/cells/`, 2026-07-23)", "multisession-native cell multisession-native-2 (three-phase lock split around the verify child, four-part fence, WORKTREE_MERGE_FENCE_DRIFT; trace .bee/cells/multisession-native-2.json, commit b8fc926, 2026-07-24)", "multisession-native cell multisession-native-22 (integration-queue.mjs: durable queue + processor lease serializing worktree merge; async verify child (runVerifyChild) replacing spawnSync so a heartbeat can interleave; checkProcessorLease as the P3 fence's first line; trace .bee/cells/multisession-native-22.json, commit 546d532, 2026-07-25)", "multisession-native cell multisession-native-23 (test_msn_invariants.mjs, invariant 7's fresh two-worktree merge-time MERGE_CONFLICT proof chained to the write-time advisory-allow+warning; trace .bee/cells/multisession-native-23.json, commit 06cd209, 2026-07-25)", "docs/history/multisession-native/reports/advisor-digest-slice5.md (conditions A/B/C, verdict proceed-with-conditions)", "docs/history/worktree-reclaim/CONTEXT.md and plan.md (D1, D1a, wr-4); commit e9fe0fd8 (cleanup by default, on a real merge only); packages/bee-rs/crates/bee/src/verbs/worktree/{handlers.rs,merge.rs,phases.rs}", "traceable-runs cell trun-4 (trace .bee/cells/trun-4.json, commit 9e01807d, capped 2026-08-14 — worktree/phases.rs, git.rs, tests.rs, drivers/close.rs)"]
   authoritative_for: "worktree-parallelism: the return path, the merge verify gate, the integration queue that serializes concurrent merges, and cleanup"
 ---
@@ -81,21 +81,27 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   'verify_mutated_tracked_files'` instead of silently treating the tree as equivalent to the
   commit. Recovery for a merge commit that only fails a LATER independent verify: `git revert
   -m 1 <merge-commit>` (documented, not automated).
-- **Cleanup is the default outcome now, not a favour a caller asks for (worktree-reclaim D1).**
-  On a merge that stages and commits something — a clean stage with a green or skipped verify —
-  cleanup runs unconditionally afterward: worktree remove, then `git branch -d` (never `-D`),
-  then grant removal, then workspace-record removal, in that order, through the same shared
-  teardown helper the return path and `worktree unregister` both call (see "one teardown, explicit
-  removal" in `entering-creating-and-registering.md`). It refuses (typed; the merge result stays
-  ok) when the worktree still holds tracked-modified or untracked files. Skipped-verify cleanup
-  always carries a warning that nothing was checked.
-- **Two ways to opt out, one flag that no longer does anything (D1, D1a).** `--no-cleanup` opts a
-  single merge out. `.bee/config.json`'s `worktree_cleanup_on_merge: false` opts a whole repo out
-  (absent, or any non-`false` value, still means on). The old `--cleanup` flag stays accepted, so
-  every script that already passes it keeps working, but it is now a no-op: cleanup was already
-  going to run. A non-boolean value passed to `--no-cleanup` is refused outright, never silently
-  read as "cleanup stays on" — the destructive direction, now that cleanup is the default rather
-  than the opt-in.
+- **Keeping the worktree is the default outcome now; teardown is the opt-in
+  (worktree-keep-on-merge D1, supersedes worktree-reclaim D1).** On a merge that stages and
+  commits something, the worktree, its branch, and its registration all stay in place, and the
+  merge appends exactly one `worktree-cleanup` entry to the pending-work queue ledger
+  (`.bee/deferred-queue.jsonl`) naming the worktree id, branch, merge commit, worktree root, and
+  `bee worktree prune` as the remove command. That entry is the owner's cross-check record: the
+  merged tree stays on disk for comparison and audit until an explicit prune drains it, and
+  pruning resolves the entry (see `pruning-dead-worktrees.md`). The merge result still carries
+  `cleanup_suggested_command` for an immediate manual teardown.
+- **Three switches, one clear precedence (D1).** `--cleanup` — re-armed from its former no-op —
+  forces the old immediate teardown on one merge: worktree remove, then `git branch -d` (never
+  `-D`), then grant removal, then workspace-record removal, through the same shared teardown
+  helper the return path and `worktree unregister` both call (see "one teardown, explicit
+  removal" in `entering-creating-and-registering.md`); a forced teardown refuses (typed; the
+  merge result stays ok) when the worktree still holds tracked-modified or untracked files, and
+  a teardown after a skipped verify carries a warning that nothing was checked. Repo-wide,
+  `.bee/config.json`'s `worktree_cleanup_on_merge: true` — now an explicit opt-IN, where it used
+  to be the opt-out — restores always-teardown; absent or any other value means keep.
+  `--no-cleanup` stays an explicit per-merge keep and wins over a `true` config. A non-boolean
+  `--no-cleanup` value is still refused outright, never silently read toward the destructive
+  direction.
 - **The safety property is still "nothing would be lost", not "a commit happened."** Cleanup never
   runs after a textual conflict or a red verify: on those paths the branch's work is **not
   integrated**, so removing the worktree would destroy the only copy of it. Every refusal that

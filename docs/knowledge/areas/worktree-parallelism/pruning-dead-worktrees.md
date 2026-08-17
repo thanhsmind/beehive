@@ -47,6 +47,14 @@ worktrees, and a linked worktree cannot prune itself:
   worktree whose branch-delete step fails after its directory is already gone is reported as
   *removed, with a caveat* — the directory and its reflog are already gone, so calling that
   "kept" would be a lie.
+- **A real removal also settles the merged worktree's queue record (worktree-keep-on-merge D1).**
+  Since a green merge keeps its worktree and appends a `worktree-cleanup` entry to the
+  pending-work queue ledger (see `returning-and-the-merge-gate.md`), prune is the drain: when it
+  actually removes a worktree — dead verdict or record-only orphan, never on `--dry-run` — it
+  resolves the matching unclaimed entry with a completion event appended through the queue's own
+  event model, matched by worktree root (fallback: the worktree id named in the entry). A kept
+  verdict leaves the entry pending, so the queue keeps telling the truth about what is still on
+  disk.
 - **`--older-than-days` overrides the default age threshold (7 days)** for one run; there is no
   config key behind it, and no lock bookkeeping of its own is needed to honour a permanent
   opt-out — `git worktree lock` already is one: `git worktree remove --force`, prune's first

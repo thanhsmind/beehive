@@ -27,6 +27,11 @@ bootstrapped store inside the worktree.
   worktree's own store: copies the main store's onboarding + config, writes a FRESH lifecycle
   state (the named feature, phase idle, all gates unapproved). An independent-feature worktree
   runs its OWN feature, so it inherits none of main's state/gates/log.
+- `worktree list` also names which granted worktrees are already merged and only waiting for
+  cleanup (worktree-keep-on-merge D1): an id whose root still has a pending `worktree-cleanup`
+  entry in the queue ledger renders `(granted, merged — pending cleanup)` (JSON: a
+  `merged_pending` map), a plain grant stays `(granted)` — so the list answers "what is still on
+  disk only for cross-checking" without opening the ledger.
 - `worktree list` / `worktree unregister [--id <id>]` — read the grants in the main store; unregister drops
   the grant AND the workspace record in the same call (worktree-reclaim D3), never one without the
   other, through the same shared teardown helper `worktree merge` cleanup and `worktree prune` call

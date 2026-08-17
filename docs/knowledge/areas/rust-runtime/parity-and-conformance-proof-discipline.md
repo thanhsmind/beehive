@@ -59,6 +59,14 @@ A port is only as good as the instrument that says it is faithful. This is the h
 
 - **R10** — A test that asserts a guard DISABLES a command is asserting the defect once the guard is retired. Such assertions are inverted, never deleted: the new case asserts the command succeeds AND produces a specific stable order. A test reduced to "it does not fail" has traded coverage for green (retire-collation-guard, cell rcg-1, 2026-08-14).
 
+- **R11** — Repo-relative doc paths in output and stored records are spelled with forward
+  slashes on every platform; a Windows-native spelling is normalized at the boundary before
+  comparison or storage, never leaked into a record another platform will read. Tests assert
+  the forward-slash spelling on every platform, not per-OS variants (windows-ci-path-fixes,
+  cells wcpf-1..4, issue #94, 2026-08-16; decision logged same day). The same sweep settled two
+  siblings: errno-class checks widened to cover Windows' error codes, and path fixtures
+  canonicalized so a symlinked temp dir compares equal to its resolved form.
+
 ## Edge Cases Settled
 
 - **A meta-test guards the instrument, not the code.** Because parsed-value equality is order-blind under the serializer configuration this workspace uses, a permanent test asserts both halves — that parsed equality really is order-blind here, and that the byte comparator really does flag the same pair — and says so loudly if the premise ever changes.
