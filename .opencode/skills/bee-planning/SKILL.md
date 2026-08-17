@@ -87,10 +87,12 @@ full protocol: `references/planning-reference.md` ("Tiny/small merged gate").
 
 ## Prep
 
-After approval only: current-slice cells, one batched `bee cells add
---stdin` call — later slices keep one-line headlines, not cells
-(`references/planning-reference.md` ("Cell quality rules")). A user-visible
-surface makes slice 1 a walking skeleton: end-to-end, real behavior, no stubs.
+After approval only: current-slice cells, walked through pre-flight and a
+clean `--dry-run` before the one batched `bee cells add --stdin` call —
+later slices keep one-line headlines, not cells
+(`references/planning-reference.md` ("Pre-flight before cells add", "Cell
+quality rules")). A user-visible surface makes slice 1 a walking skeleton:
+end-to-end, real behavior, no stubs.
 
 The writer owns tests TDD-style as part of each cell — coverage judgment
 first: cite existing tests by file and case, author only the gap

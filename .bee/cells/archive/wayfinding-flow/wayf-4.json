@@ -1,0 +1,100 @@
+{
+  "id": "wayf-4",
+  "feature": "wayfinding-flow",
+  "lane": "standard",
+  "status": "capped",
+  "title": "Orient recommends bee-wayfinding when a map has frontier and work is idle",
+  "deps": [
+    "wayf-2"
+  ],
+  "decisions": [
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+    "packages/bee-rs/crates/bee/tests/*"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+  ],
+  "action": "In build_orient (orient.rs:298): when the discovery scan (wf-2) finds at least one map with frontier tickets AND the pipeline is idle — no open/claimed cells, no pending handoff, phase terminal or lane idle (derive idleness from the fields build_orient already reads; keep the predicate in one named helper so the condition is testable) — set next.skill to 'bee-wayfinding' (overriding the ORIENT_PHASE_SKILL lookup at orient.rs:471-481), set next.command to 'bee discovery list --json', and set next.action to a one-line resume recommendation naming the map. When work is active, add only a report-only blockers[] line ('open discovery map <name> — N frontier') following the capture-queue blocker shape at orient.rs:354-365, and leave next untouched. Tests both ways per the plan matrix: fires when idle with frontier; silent (blocker line only) mid-feature; silent when frontier is zero. Run cargo test for touched suites; commit.",
+  "must_haves": {
+    "truths": [
+      "orient returns skill=bee-wayfinding only in the idle+frontier case, never while cells are open or claimed"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "substantive": "named idle+frontier predicate plus next/blockers wiring"
+      }
+    ],
+    "key_links": [
+      "next.command points at bee discovery list --json"
+    ],
+    "prohibitions": [
+      "Never override next while a handoff is pending — the handoff rule wins"
+    ]
+  },
+  "trace": {
+    "worker": "w-wayf-4",
+    "outcome": "orient recommends bee-wayfinding when idle with open frontier tickets; report-only blocker mid-feature",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-17T14:27:03.373Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
+    "claimed_at": "2026-08-17T14:19:57.402Z",
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-idle-only-override",
+            "status": "PASS",
+            "evidence": "pipeline_idle_for_wayfinding refuses on handoff/open/claimed/non-terminal phase; 3 tests both ways"
+          },
+          {
+            "id": "artifact-named-predicate",
+            "status": "PASS",
+            "evidence": "orient.rs named helpers pipeline_idle_for_wayfinding + first_frontier_effort, reused by blocker and override branches"
+          },
+          {
+            "id": "key-link-next-command",
+            "status": "PASS",
+            "evidence": "override sets next.command=bee discovery list --json, asserted tests.rs:3920-3921"
+          },
+          {
+            "id": "prohibition-handoff-wins",
+            "status": "PASS",
+            "evidence": "handoff truthiness is the first check; test orient_never_overrides_next_while_a_handoff_is_pending"
+          },
+          {
+            "id": "decision-D5",
+            "status": "PASS",
+            "evidence": "deterministic code path; mid-feature degrades to report-only blocker line"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-17T14:36:31.421Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

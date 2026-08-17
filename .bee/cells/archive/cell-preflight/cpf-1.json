@@ -1,0 +1,76 @@
+{
+  "id": "cpf-1",
+  "feature": "cell-preflight",
+  "lane": "small",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "title": "Teach cell-authoring pre-flight: constraint checklist plus mandatory dry-run before cells add",
+  "files": [
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "verify": "/home/thanhsmind/projects/goglbe/beehive--wt--cell-preflight/.bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-planning/SKILL.md"
+  ],
+  "action": "In skills/bee-planning/references/planning-reference.md, insert a compact 'Pre-flight before cells add' subsection immediately before the cells-add invocation instructions (the `.bee/bin/bee cells add --stdin` heredoc around lines 188-198): a numbered checklist the planner walks BEFORE drafting cells — (1) ids match ^[A-Za-z0-9][A-Za-z0-9._-]*$ and follow the <feature-slug-abbrev>-<n> convention, and collide with no existing cell id (list existing ids first: `bee cells list`); (2) required non-empty string fields: id, feature, title, action, verify — and verify \"none\" is legal only in a repo whose commands.test declares itself no-test; (3) lane is one of tiny|small|standard|high-risk|spike, and standard/high-risk cells carry non-empty must_haves.truths; (4) scope-derived obligations: any files path under a release-manifest or onboarding-ledger root obliges the verify command to carry `bee dev release-manifest --check`, the files list to carry the manifest record, and the cell to run the regen chain (`bee dev regen`) — or a reasoned regen_obligation_ack (recognized value \"wave-barrier\" defers to wave close); a guard-source path on a lane below standard obliges judge_obligation_ack or a raised lane; (5) deps acyclic, current slice only, feature's execution gate approved. Close the subsection with the mandate: pipe the drafted batch through `bee cells add --stdin --dry-run` and run the real add only after a clean dry-run — a dirty dry-run's problems list is the fix list, applied before anything persists; the validator stays the source of truth, the checklist is the map to it. State the id convention as prose (today it exists only by example). In skills/bee-planning/SKILL.md 'Prep' section, extend the cells-add sentence to name pre-flight + dry-run with a pointer to the new subsection. In skills/bee-hive/references/routing-and-contracts.md tiny/small fast path (lines ~167-169), add that draft cells previewed in the gate message are dry-run-validated first. Match the register and density of surrounding text; keep the checklist under ~20 lines. Then run the full regen chain /home/thanhsmind/projects/goglbe/beehive--wt--cell-preflight/.bee/bin/bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order — REGEN_OBLIGATION for touching skills/) and commit everything as one commit.",
+  "must_haves": {
+    "truths": [
+      "planning-reference.md carries a pre-flight checklist naming id pattern+convention, required fields, lane values, truths requirement, and both path obligations, and mandates cells add --dry-run before the real add",
+      "bee dev regen chain exits clean after the edits"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-planning/references/planning-reference.md",
+        "substantive": "Pre-flight subsection before the invocation heredoc, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "skills/bee-planning/SKILL.md Prep names the pre-flight + dry-run step"
+    ],
+    "prohibitions": [
+      "No Rust changes",
+      "No edits outside the three named skill files and the regenerated trees/manifest"
+    ]
+  },
+  "trace": {
+    "worker": "w-cpf-1",
+    "outcome": "done",
+    "files_changed": [
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      ".claude-plugin/skills/*",
+      ".codex-plugin/skills/*",
+      ".agents/skills/*",
+      ".claude/skills/*",
+      ".opencode/skills/*",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [
+      "regen also wrote .agents/skills/*, .claude/skills/*, .opencode/skills/*, and bumped .bee/onboarding.json's updated_at timestamp — byproducts of the mandated regen chain (render-skill-trees syncs all rendered targets, onboard --apply touches the ledger), not named in the cell's files list but within the 'regenerated trees ... are in-scope' guardrail."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-17T14:25:34.456Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "dec65f4b-c7ad-4b53-b011-a089668d5b32",
+    "claimed_at": "2026-08-17T14:22:08.446Z",
+    "inline_reason": "trace.worker w-cpf-1 was pre-claimed by the orchestrator dispatch but never registered in state.json workers[]; worker has no state-write access to fix registration, so capping via the sanctioned --inline-reason escape instead of blocking.",
+    "warnings": [
+      "advisory: this cap's commit changes 278 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

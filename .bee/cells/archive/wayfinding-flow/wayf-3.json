@@ -1,0 +1,106 @@
+{
+  "id": "wayf-3",
+  "feature": "wayfinding-flow",
+  "lane": "standard",
+  "status": "capped",
+  "title": "Surface open discovery maps in bee status and the session preamble",
+  "deps": [
+    "wayf-2"
+  ],
+  "decisions": [
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/tests/*"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "action": "Using wf-2's discovery scan: add an open-maps field to the status JSON in build_status (status_full/build.rs — locate with rg 'fn build_status'), render one guarded section in render_status_text (render.rs:100, push-lines pattern; insert before the 'Recommended next' push near render.rs:427, following the capture_queue block shape at render.rs:291-299) reading like '### Open discovery map(s): <name> — N frontier ticket(s)' with one line per effort plus any unreadable-map remedy line; add the same guarded section to build_session_preamble (session_preamble/budget.rs:448, per D4 — the hook renders in-process via hooks/session_init.rs, NOT via bee status, so both builders need the block). No section at all when docs/discovery/ is absent or empty. Tests: section renders with an effort present; absent when no discovery dir; preamble builder shows the same. Run cargo test for touched suites; commit.",
+  "must_haves": {
+    "truths": [
+      "bee status text and the session preamble both print the open-maps section when a map exists and omit it when none does"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+        "substantive": "guarded open-maps section"
+      }
+    ],
+    "key_links": [
+      "build_status exposes the field render and preamble both consume"
+    ],
+    "prohibitions": [
+      "No reordering or rewording of existing status sections (public contract)"
+    ]
+  },
+  "trace": {
+    "worker": "w-wayf-3",
+    "outcome": "Open discovery maps now surface in bee status (JSON open_maps field + guarded text section) and the session preamble, both reading verbs::discovery::scan_discovery independently",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/build.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-17T14:19:45.979Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
+    "claimed_at": "2026-08-17T14:11:30.889Z",
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-both-surfaces-guarded",
+            "status": "PASS",
+            "evidence": "render.rs:+429-444 and budget.rs open_maps_lines +445-467 both guarded; 5 tests across status_full/tests.rs and session_preamble/tests.rs"
+          },
+          {
+            "id": "artifact-render-section",
+            "status": "PASS",
+            "evidence": "render.rs +20 lines: Open discovery map(s) section + unreadable remedy line"
+          },
+          {
+            "id": "key-link-build-status-field",
+            "status": "PASS",
+            "evidence": "build.rs:+322-345 status[open_maps] from scan_discovery; preamble calls scan_discovery in-process as the action required"
+          },
+          {
+            "id": "prohibition-no-reorder",
+            "status": "PASS",
+            "evidence": "d808d37f: 0 deletions, 184 insertions; pure insertion before Recommended next"
+          },
+          {
+            "id": "decision-D4",
+            "status": "PASS",
+            "evidence": "both surfaces name effort + frontier count from v1; absent when no discovery dir"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-17T14:36:30.033Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

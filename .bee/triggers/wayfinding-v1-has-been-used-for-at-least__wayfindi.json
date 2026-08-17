@@ -1,0 +1,11 @@
+{
+  "id": "wayfinding-v1-has-been-used-for-at-least__wayfindi",
+  "decision": "wayfindi",
+  "condition": "wayfinding v1 has been used for at least one real discovery map end-to-end; revisit the three deferred ideas: stale-map triggers nudge, orient route-table entry for brand-new fog, CLI guard for ticket claim/block lines",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-17T14:38:48.775Z",
+  "updated_at": "2026-08-17T14:38:48.775Z",
+  "outcome": null
+}

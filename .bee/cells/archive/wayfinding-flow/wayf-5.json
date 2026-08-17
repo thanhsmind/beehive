@@ -1,0 +1,107 @@
+{
+  "id": "wayf-5",
+  "feature": "wayfinding-flow",
+  "lane": "standard",
+  "status": "capped",
+  "title": "Wire bee-shaping to wayfinding: entry fog check, park-to-stub, Lock hand-off",
+  "deps": [
+    "wayf-1",
+    "wayf-2"
+  ],
+  "decisions": [
+    "D6",
+    "D8"
+  ],
+  "files": [
+    "skills/bee-shaping/SKILL.md",
+    "skills/bee-shaping/references/shaping-reference.md",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "verify": "/home/thanhsmind/projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "skills/bee-shaping/SKILL.md",
+    "docs/history/wayfinding-flow/CONTEXT.md",
+    "skills/bee-wayfinding/SKILL.md"
+  ],
+  "action": "Three prose edits to bee-shaping, citing wayfinding-flow D6/D8. (1) Entry check as the FIRST move of Explore: if the request names no outcome the user can state — pure fog — stop and route to bee-wayfinding instead of interviewing; one sentence plus the triage-table row hook, per D6.4. (2) Qualify: on a park verdict whose cause is vagueness (not risk), run bee discovery stub --effort <slug> --from '<item text>' so the parked fog becomes a visible map stub (D6.3); risk parks keep today's Outstanding Questions path unchanged. (3) Lock: when a docs/discovery/<effort>/ map backs the feature, Lock consumes the map's Decisions-so-far D-IDs into CONTEXT.md citing them, never re-asking (D8). Keep each edit as small as the surrounding prose allows; update shaping-reference.md only if its Interview craft section needs the entry-check mention. Then run the full regen chain /home/thanhsmind/projects/goglbe/beehive/.bee/bin/bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write — REGEN_OBLIGATION for touching skills/) and commit.",
+  "must_haves": {
+    "truths": [
+      "bee dev render-skill-trees exits clean after the edits"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-shaping/SKILL.md",
+        "substantive": "entry fog check, park-to-stub line, Lock map-consumption line, each citing D6 or D8"
+      }
+    ],
+    "key_links": [
+      "Qualify park path names bee discovery stub verbatim"
+    ],
+    "prohibitions": [
+      "No change to shaping's gate wording or Lock's single-writer rule"
+    ]
+  },
+  "trace": {
+    "worker": "w-wayf-5",
+    "outcome": "Wired bee-shaping entry fog check, Qualify park-to-stub, and Lock map hand-off, citing D6/D8",
+    "files_changed": [
+      "skills/bee-shaping/SKILL.md",
+      ".claude-plugin/skills/bee-shaping/SKILL.md",
+      ".codex-plugin/skills/bee-shaping/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-17T14:14:20.272Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
+    "claimed_at": "2026-08-17T14:11:31.009Z",
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-regen-clean",
+            "status": "PASS",
+            "evidence": "c46d34ab carries rendered trees + manifest; release-manifest --check: 219 files match"
+          },
+          {
+            "id": "artifact-three-edits-cited",
+            "status": "PASS",
+            "evidence": "entry check (D6.4) above triage table, Qualify park-to-stub (D6.3), Lock map consumption (D8) all present in skills/bee-shaping/SKILL.md"
+          },
+          {
+            "id": "key-link-stub-verbatim",
+            "status": "PASS",
+            "evidence": "Qualify names bee discovery stub --effort <slug> --from '<item text>' verbatim, matching discovery.rs:289"
+          },
+          {
+            "id": "prohibition-gate-and-single-writer",
+            "status": "PASS",
+            "evidence": "+15/-2, deletions are rewraps; Lock (single writer) heading and gate wording untouched"
+          },
+          {
+            "id": "decisions-D6-D8",
+            "status": "PASS",
+            "evidence": "semi-hard entry check with Gate 1 backstop; risk parks unchanged; no new gate"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "medium",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-17T14:36:33.501Z"
+      }
+    ]
+  }
+}
