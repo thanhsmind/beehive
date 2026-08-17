@@ -378,7 +378,22 @@ mod tests {
         // skipping a merge; no existing flag means "exclude these features
         // from this run without dropping them from staging" — genuinely
         // new. Net +1: 155 -> 156.
-        const PINNED_FLAG_COUNT: usize = 156;
+        // wayfinding-flow wayf-6: `discovery list`/`discovery stub` (built
+        // by wayf-2, catalog.rs left untouched) gain `--effort` (+1) and
+        // `--from` (+1) — this cell only documents flags the handler
+        // already accepted (verbs/discovery.rs), same as wfl-5's `--report`
+        // bump; it invents nothing new at the CLI surface. Checked first:
+        // `--name` (gate/state.gate) is a closed enum of gate names, not a
+        // free slug naming a new directory; `--note` (perf.stop/section) is
+        // an optional RETROSPECTIVE summary, not a required seed for new
+        // content; `--text` (decisions/backlog/knowledge search) is a
+        // search-term filter, not prose to store; `--context`
+        // (herding.herdr-result) names an error-line label, unrelated. None
+        // of those is "a new artifact's directory-naming slug" or "prose
+        // seeded into a fresh document's body" — `--effort` and `--from`
+        // are the two new spellings. `discovery list`'s `--json` reuses the
+        // existing name unchanged, no count cost. Net +2: 156 -> 158.
+        const PINNED_FLAG_COUNT: usize = 158;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
