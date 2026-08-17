@@ -154,8 +154,8 @@ ground:
 
 Domain-probe menus by output shape (SEE/CALL/RUN/READ/ORGANIZE) and the
 materiality test that caps how many probes get asked: bee-shaping's
-`skills/bee-shaping/references/gray-area-probes.md` and its own
-"Interview craft" (`skills/bee-shaping/references/shaping-reference.md`).
+`bee-shaping/references/gray-area-probes.md` and its own
+"Interview craft" (`bee-shaping/references/shaping-reference.md`).
 
 ## Spike rules
 

@@ -76,7 +76,7 @@ craft").
 
 | Type | Who | Resolves by |
 |---|---|---|
-| grilling (default) | with user | conversation, in interview-craft rounds (above; deeper craft and bee-shaping's probe menu — `references/wayfinding-reference.md` "Interview craft" and bee-shaping's `skills/bee-shaping/references/gray-area-probes.md` plus its own "Interview craft") — the agent never answers its own question |
+| grilling (default) | with user | conversation, in interview-craft rounds (above; deeper craft and bee-shaping's probe menu — `references/wayfinding-reference.md` "Interview craft" and bee-shaping's `bee-shaping/references/gray-area-probes.md` plus its own "Interview craft") — the agent never answers its own question |
 | research | agent alone | bee-researching / gather-tier subagent; findings linked from the ticket |
 | prototype | with user | a cheap mock under `.bee/spikes/`, built to `references/wayfinding-reference.md` ("Spike rules"); the user reacts to it |
 | task | either | manual work that unblocks a decision (provision access, move data) |
