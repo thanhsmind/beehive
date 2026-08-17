@@ -1,0 +1,47 @@
+{
+  "id": "ug-3",
+  "feature": "uat-gate-before-merge",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Teach the flow surfaces about the uat stop",
+  "behavior_change": false,
+  "files": [
+    ".claude/skills/bee-herding/references/role-merge.md",
+    "docs/handbook/register.md",
+    ".claude/skills/bee-hive/references/gates-and-delegation.md",
+    ".claude/skills/bee-swarming/SKILL.md"
+  ],
+  "read_first": [
+    "docs/history/uat-gate-before-merge/plan.md",
+    ".claude/skills/bee-herding/references/role-merge.md",
+    "docs/handbook/register.md"
+  ],
+  "action": "Docs/flow sync for the uat gate. role-merge.md section 5: add a WORKTREE_MERGE_UAT_PENDING branch — stop, report 'awaiting user acceptance', never retry, never self-approve, skip on future passes until the gate flips. docs/handbook/register.md: document the uat gate (who approves, when), uat_before_merge config (absent=on, explicit false=off, non-bool refused), --skip-uat; ALSO fix the stale line ~116 claiming worktree_cleanup_on_merge absent means on — code default is keep. bee-hive references/gates-and-delegation.md and any 'three gates' wording: the uat gate joins as the acceptance stop before merge, never auto-approved at any bypass level. bee-swarming SKILL.md close step: after the last cell caps, stop in the worktree, present 'ready for user testing' with how to run it, and set waiting-on --kind gate --subject 'uat: <feature>'. Keep each edit minimal and in the file's own voice. Depends on ug-2 (error code name final).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "role-merge.md handles WORKTREE_MERGE_UAT_PENDING as a clean stop",
+      "register.md documents gate+config+flag and the cleanup-default line is fixed"
+    ]
+  },
+  "decisions": [
+    "uat-gate-before-merge D1"
+  ],
+  "deps": [
+    "ug-2"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "id": "ug-2",
+  "feature": "uat-gate-before-merge",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "worktree merge refuses standard/high-risk features without uat approval",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/flags.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/uat-gate-before-merge/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs"
+  ],
+  "action": "New zero-mutation merge precondition in merge_stage (phases.rs), after the branch-mismatch check (~:213) and before companion teardown (~:215): resolve the feature via existing resolve_worktree_feature (merge.rs:413-426), map feature to lane from main_root's lane/workflow record; when lane is standard or high-risk (missing/unknown lane counts as standard — fail closed) AND the feature's uat gate is unapproved AND --skip-uat absent AND config uat_before_merge is not explicit false, refuse typed WORKTREE_MERGE_UAT_PENDING with a remedy naming all three exits (approve via bee gate --name uat, or --skip-uat, or config uat_before_merge=false). Config reader models handlers.rs:415-421 but default-ON: absent means true, explicit false disables, non-bool refuses. Wire --skip-uat: FLAG_ALONE_BOOLEANS (flags.rs:31-37), keys_known allowlist (handlers.rs:440), bool validation like cleanup (:446-456), registry_payload.json (try bee dev regen from the main binary first; if no generator, hand-edit and keep registry_contracts.rs green, record which path was taken). Tests: refuse on standard+unapproved; pass on gate approved, on --skip-uat, on config false, on tiny lane; non-bool config refused; refusal is zero-mutation (no teardown started). Depends on ug-1.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Merge of a standard-lane feature without uat approval refuses, zero mutation",
+      "Approved gate / --skip-uat / config false / tiny lane all merge",
+      "Refusal message names all three exits"
+    ]
+  },
+  "decisions": [
+    "uat-gate-before-merge D1"
+  ],
+  "deps": [
+    "ug-1"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

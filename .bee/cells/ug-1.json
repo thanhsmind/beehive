@@ -1,0 +1,47 @@
+{
+  "id": "ug-1",
+  "feature": "uat-gate-before-merge",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Add the uat gate to state, never auto-approvable",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/state.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+  ],
+  "read_first": [
+    "docs/history/uat-gate-before-merge/plan.md",
+    "packages/bee-rs/crates/bee/src/state.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "action": "Add \"uat\" to GATE_NAMES (state.rs:31) and default_gates (state.rs:22-29). bee gate --name uat works with default/user actor; --actor auto with --name uat is REFUSED with a typed message stating the uat gate is never bypass-approved (D1) — refusal before any write. Preamble visible_gates (render.rs:49-58): show \"uat\" only when the execution gate is approved (noise otherwise); orient's gates line (orient.rs:498-508) follows the array automatically — verify it renders. Update the unknown-name refusal test to keep refusing garbage while accepting uat; add tests: uat approval persists to state.json and the workflow record; auto-actor refusal; visibility before/after execution approval.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee gate --name uat --approved true records the gate",
+      "--name uat --actor auto is refused, nothing written",
+      "preamble shows uat only after execution gate approved"
+    ]
+  },
+  "decisions": [
+    "uat-gate-before-merge D1"
+  ],
+  "deps": [],
+  "status": "claimed",
+  "trace": {
+    "worker": "ug-w1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f5668bee-17cf-4109-aed8-0b530e26f636",
+    "claimed_at": "2026-08-17T09:16:40.113Z"
+  }
+}
