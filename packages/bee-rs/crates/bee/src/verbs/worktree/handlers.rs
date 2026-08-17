@@ -714,6 +714,15 @@ pub(crate) fn merge_text_lines(id: &str, main_root: &Path, answer: &MergeAnswer)
                 jsjson::js_to_string(cmd)
             ));
         }
+        // staging-lane D0a (trigger 3): the one nudge line, present only
+        // when a staging record exists (phases.rs's merge_finish is the
+        // sole writer of this key).
+        if let Some(cmd) = r.get("staging_rebuild_suggested") {
+            lines.push(format!(
+                "  staging: main moved — run `{}` to catch staging up.",
+                jsjson::js_to_string(cmd)
+            ));
+        }
     } else if code == "MERGE_VERIFY_RED" {
         lines.push(format!(
             "Merge of worktree {id} (branch {}) was TEXTUALLY CLEAN, but verify is RED (semantic-conflict alarm).",

@@ -62,8 +62,33 @@ pub(crate) fn merge_stage(
     }
 
     let main_store_root = main_root.join(".bee");
-    let grants = read_grants_strict(&main_store_root).ok_or(MErr::Ex)?;
     let id_json = jsjson::stringify(&Value::String(id.to_string()));
+
+    // staging-lane D0 (teeth #1): the staging branch/worktree can NEVER land
+    // into main via `bee worktree merge` — checked before the grant lookup
+    // below (staging is never granted, so "no granted worktree" would
+    // otherwise be the misleading message a staging merge attempt hits) and
+    // before ANY mutation, zero-mutation, NO escape flag: staging is a
+    // disposable mixing ground, never a source of truth (D0/D0a); its
+    // history is garbage that must never land. Matched by branch name
+    // and/or worktree root — either alone is enough, since `id` on this CLI
+    // surface is the git-internal worktree dir name, not always the branch.
+    if let Ok(Some(staging_record)) = crate::verbs::staging::read_staging_record(main_root) {
+        let by_branch = id == staging_record.branch;
+        let by_worktree_root = resolve_worktree_by_id(main_root, id).is_some_and(|root| {
+            crate::path_identity::canonical_paths_equal(&root, &staging_record.worktree_root)
+        });
+        if by_branch || by_worktree_root {
+            return Err(refuse_merge(
+                "WORKTREE_MERGE_STAGING_FORBIDDEN",
+                format!(
+                    "{id_json} names the staging worktree/branch \u{2014} \"bee worktree merge\" refuses to land it into main, with no escape flag (staging-lane D0: staging is a disposable mixing ground, never a source of truth; its history is garbage that never lands). FIX: merge the FEATURE branch itself after its \"uat\" gate is approved \u{2014} never staging."
+                ),
+            ));
+        }
+    }
+
+    let grants = read_grants_strict(&main_store_root).ok_or(MErr::Ex)?;
     if grants.get(id) != Some(&Value::Bool(true)) {
         return Err(refuse_merge(
             "WORKTREE_MERGE_UNKNOWN_ID",
@@ -535,6 +560,15 @@ pub(crate) fn merge_finish(
             cleanup,
             verify_field == "skipped",
         );
+        // staging-lane D0a (trigger 3): a successful merge just moved main,
+        // which is exactly what makes any existing staging record stale —
+        // nudge, never force, a rebuild. Only reachable here (a REAL commit
+        // landed); ALREADY_UP_TO_DATE (merge_stage's own early-return arm)
+        // never reaches merge_finish, so it never nudges — nothing on main
+        // moved for staging to be stale against.
+        if crate::verbs::staging::read_staging_record(main_root).ok().flatten().is_some() {
+            result.insert("staging_rebuild_suggested".into(), json!("bee staging rebuild"));
+        }
         // wkm-1 (D1): the keep path (cleanup == false) queues its one
         // cross-check entry AFTER attach_cleanup_outcome runs — this is the
         // real-merge success path only; ALREADY_UP_TO_DATE (merge_stage's

@@ -27,6 +27,7 @@ pub mod intent_group;
 pub mod knowledge;
 pub mod reservations;
 pub mod reviews;
+pub mod staging;
 pub mod state_group;
 pub mod status_brief;
 pub mod status_full;
@@ -73,6 +74,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = worktree::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = staging::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = decisions::try_native(args, t0) {
