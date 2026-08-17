@@ -1,0 +1,30 @@
+{
+  "id": "windows-ci-test-fix-1",
+  "feature": "windows-ci-test-fix",
+  "title": "Make staging and worktree tests hermetic on Windows (autocrlf, 8.3 short paths)",
+  "action": "Set core.autocrlf false in the staging main_repo fixture; compare the queued worktree-cleanup path by canonical identity (canonical_paths_equal) instead of string equality in the worktree merge test.",
+  "lane": "tiny",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- one_conflicting_feature_never_blocks_the_others_on_rebuild merge_with_no_flags_keeps_the_worktree_by_default_and_queues_one_entry",
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "read_first": [],
+  "trace": {
+    "worker": "main-session",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f3c710b8-04c6-461c-9757-2e02a01314e0",
+    "claimed_at": "2026-08-17T23:53:32.376Z"
+  }
+}
