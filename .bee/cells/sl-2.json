@@ -1,0 +1,45 @@
+{
+  "id": "sl-2",
+  "feature": "staging-lane",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "staging rebuild and status: invariant re-derivation",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/staging-lane/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs"
+  ],
+  "action": "Subcommands `staging rebuild [--without <slug,...>]` and `staging status` per D0a trigger 3. rebuild: refuse when no staging record; in the staging worktree run git reset --hard main; recompute the awaiting-UAT set = staged features whose uat gate is unapproved (read the feature's workflow/lane record gates from main) AND whose branch still exists; drop the rest from staged[] (auto-drop on UAT pass/merge — the invariant re-derives); merge each remaining branch minus --without exclusions; per-feature conflict: abort that merge, typed STAGING_MERGE_CONFLICT naming the feature, CONTINUE with the rest, report all conflicts at the end; update base_sha; run commands.staging_build when present. status: staged set with each feature's uat gate state, plus stale-base warning when base_sha != current main sha (the trigger-3 reminder). Tests: rebuild resets to new main and re-merges only unapproved-gate features; --without excludes; UAT-approved feature auto-drops; one conflicting feature does not block the others; status reports stale base.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "rebuild = reset --hard main + re-merge awaiting-UAT features",
+      "UAT-passed features drop out automatically",
+      "one conflict never blocks the remaining features"
+    ]
+  },
+  "decisions": [
+    "staging-lane D0a"
+  ],
+  "deps": [
+    "sl-1"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

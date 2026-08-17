@@ -1,0 +1,49 @@
+{
+  "id": "sl-4",
+  "feature": "staging-lane",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Docs and skill surfaces: staging is where the user tests",
+  "behavior_change": false,
+  "files": [
+    "docs/handbook/register.md",
+    ".claude/skills/bee-swarming/SKILL.md",
+    ".claude/skills/bee-herding/references/role-merge.md",
+    "docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md"
+  ],
+  "read_first": [
+    "docs/history/staging-lane/plan.md",
+    "docs/handbook/register.md",
+    ".claude/skills/bee-swarming/SKILL.md"
+  ],
+  "action": "Docs sync per D0/D0a. handbook/register.md: staging commands, staging.json store, commands.staging_build config, the two refusal codes, the no-escape rule for staging-into-main. New area concept doc docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md: the invariant 'staging = main + sum of features awaiting UAT', three triggers, disposability, history-is-garbage, teeth — cite D0/D0a and uat-gate D1; add index/frontmatter per bundle conventions (look at a sibling concept file). bee-swarming SKILL.md close step: 'ready for user testing' now points at bee staging add + the staging build, not the raw feature worktree, when the host repo records a staging build. role-merge.md: after a landed merge, run/suggest bee staging rebuild (trigger 3). Keep edits minimal, each file's own voice. Tests: suite green (skill-tree fixtures may pin text — align if red).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "register.md documents commands, store, config, refusals",
+      "area doc states the invariant and three triggers with citations"
+    ]
+  },
+  "decisions": [
+    "staging-lane D0",
+    "staging-lane D0a"
+  ],
+  "deps": [
+    "sl-2",
+    "sl-3"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

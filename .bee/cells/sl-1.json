@@ -1,0 +1,46 @@
+{
+  "id": "sl-1",
+  "feature": "staging-lane",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "staging add: lazy create from main, merge feature, staged-set store, build hook",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/staging-lane/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs"
+  ],
+  "action": "New verb group `bee staging` with subcommand `add --feature <slug>` per staging-lane D0/D0a. Store .bee/runtime/staging.json on main: {branch:'staging', worktree_root, created_at, base_sha, staged:[{feature, branch, last_merged_sha, at}]} — CLI-only writes, atomic write pattern like existing runtime stores. Behavior: refuse outside the main checkout (reuse the ordinary-checkout check); lazily create branch 'staging' FROM CURRENT MAIN ONLY plus a worktree directory (sibling naming like bee worktree new: <repo>--wt--staging) when no staging record exists; merge the feature's branch (resolve via lane/worktree records like worktree merge does) into staging with --no-ff; on conflict: git merge --abort, typed STAGING_MERGE_CONFLICT naming feature+files, staged set unchanged; on success: upsert the feature into staged[], run config commands.staging_build when present (visible skip note when absent, never an error). Re-running add for the same feature re-merges (git picks up only new commits) and updates last_merged_sha. Register the verb in the dispatcher and registry_payload.json (hand-edit; no generator — keep tests/registry_contracts.rs green). Tests: scratch-repo fixture — lazy creation from main only; add merges and records; re-add after new commit fast-forwards content; conflict aborts clean with staging still usable; build cmd invoked when configured, skipped visibly when not.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "staging branch+worktree lazily created from main, never from a feature branch",
+      "add merges the feature branch and records it in staging.json",
+      "conflict aborts with typed error, no partial state"
+    ]
+  },
+  "decisions": [
+    "staging-lane D0",
+    "staging-lane D0a"
+  ],
+  "deps": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
