@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"wayfinding-craft\" started at phase \"planning\" (lane).",
   "next_action": "bee close --feature wayfinding-craft",
   "created_at": "2026-08-17T15:25:07.818Z",
-  "run_state": "awaiting-approval",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
