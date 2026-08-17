@@ -183,6 +183,91 @@ pub(crate) fn write_grants_file_atomic(main_store_root: &Path, grants: &Map<Stri
 
 // ─── worktree list ────────────────────────────────────────────────────────
 
+/// wkm-3 (D1): every worktree root named by a NOT-YET-completed
+/// `worktree-cleanup` deferred-queue entry — `bee worktree merge`'s
+/// keep-path cross-check record (wkm-1). `deferred_queue::items_for` is
+/// feature-scoped and strips `files`, so it cannot answer "does this
+/// worktree root have a pending entry"; `deferred_queue.rs` is a sibling
+/// cell's file for this slice, so rather than widen its export this stays a
+/// narrow, local, read-only replay of the same event log — `add` records a
+/// pending root, `complete` (prune's resolution, wkm-2) clears it. An
+/// unreadable/missing queue file is simply "nothing pending" (mirrors
+/// `read_grants_strict`'s missing-file delegate).
+pub(crate) fn pending_worktree_cleanup_roots(main_store_root: &Path) -> Vec<PathBuf> {
+    let queue_file = main_store_root.join("deferred-queue.jsonl");
+    let Ok(contents) = std::fs::read_to_string(&queue_file) else {
+        return Vec::new();
+    };
+    let mut order: Vec<String> = Vec::new();
+    let mut kinds: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut files: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut completed: HashSet<String> = HashSet::new();
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(Value::Object(m)) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        let Some(id) = m.get("id").and_then(Value::as_str).filter(|s| !s.is_empty()) else {
+            continue;
+        };
+        match m.get("event").and_then(Value::as_str) {
+            Some("add") => {
+                if kinds.contains_key(id) {
+                    continue; // first add wins, mirrors deferred_queue::fold
+                }
+                let kind = m.get("kind").and_then(Value::as_str).unwrap_or("").to_string();
+                let entry_files: Vec<String> = match m.get("files") {
+                    Some(Value::Array(a)) => {
+                        a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()
+                    }
+                    _ => Vec::new(),
+                };
+                kinds.insert(id.to_string(), kind);
+                files.insert(id.to_string(), entry_files);
+                order.push(id.to_string());
+            }
+            Some("complete") => {
+                completed.insert(id.to_string());
+            }
+            _ => {}
+        }
+    }
+    order
+        .iter()
+        .filter(|id| kinds.get(*id).map(String::as_str) == Some("worktree-cleanup"))
+        .filter(|id| !completed.contains(*id))
+        .filter_map(|id| files.get(id))
+        .flatten()
+        .map(PathBuf::from)
+        .collect()
+}
+
+/// wkm-3 (D1): id -> "does its worktree root have a pending
+/// `worktree-cleanup` entry" — the pure computation `run_list` reads
+/// verbatim, factored out so it is testable without a cwd-bound `prelude()`
+/// fixture. An id whose worktree root is named by a pending entry is a
+/// merge that KEPT the worktree — the queue entry is the user's cross-check
+/// record; list surfaces it. A dead/unresolvable id (link already gone)
+/// never matches.
+pub(crate) fn merged_pending_map(main_root: &Path, ids: &[&String]) -> Map<String, Value> {
+    let pending_roots = pending_worktree_cleanup_roots(&main_root.join(".bee"));
+    ids.iter()
+        .map(|id| {
+            let pending = resolve_worktree_by_id(main_root, id)
+                .map(|root| {
+                    pending_roots
+                        .iter()
+                        .any(|p| crate::path_identity::canonical_paths_equal(p, &root))
+                })
+                .unwrap_or(false);
+            ((*id).clone(), Value::Bool(pending))
+        })
+        .collect()
+}
+
 pub(crate) fn run_list(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(&flags, &[]) {
         return None;
@@ -200,16 +285,24 @@ pub(crate) fn run_list(flags: Flags, use_json: bool, t0: Instant) -> Option<Exit
         .filter(|(_, v)| **v == Value::Bool(true))
         .map(|(k, _)| k)
         .collect();
+    let merged_pending = merged_pending_map(&main_root, &ids);
     let text = if ids.is_empty() {
         "No worktree grants.".to_string()
     } else {
         ids.iter()
-            .map(|id| format!("{id} (granted)"))
+            .map(|id| {
+                if merged_pending.get(*id) == Some(&Value::Bool(true)) {
+                    format!("{id} (granted, merged — pending cleanup)")
+                } else {
+                    format!("{id} (granted)")
+                }
+            })
             .collect::<Vec<_>>()
             .join("\n")
     };
     let mut result = Map::new();
     result.insert("grants".into(), Value::Object(grants.clone()));
+    result.insert("merged_pending".into(), Value::Object(merged_pending));
     result.insert("main_root".into(), json!(p(&main_root)));
     Some(ctx.emit(&Value::Object(result), &text))
 }

@@ -404,37 +404,45 @@ pub(crate) fn radix_value(digits: &str, radix: u32) -> f64 {
     acc
 }
 
-/// D1/D1a: `worktree_cleanup_on_merge` in `.bee/config.json`, read the same
-/// way `archive_on_close_enabled` reads `cells_archive_on_close`
-/// (close.rs:827) — absent means ON. Unlike that helper, a present-but-non-
-/// boolean value here is REFUSED (`None`) rather than silently read as ON: a
-/// typo'd config value must never resolve to cleanup running unasked, and it
-/// must never resolve to cleanup being silently skipped either.
+/// wkm-1 (D1): `worktree_cleanup_on_merge` in `.bee/config.json`, read the
+/// same shape `archive_on_close_enabled` reads `cells_archive_on_close`
+/// (close.rs:827) — but the MEANING of "absent" flips here: a merge KEEPS
+/// the worktree by default now, so an absent key reads as `false` (no
+/// config opt-in), not `true`. A present-but-non-boolean value stays
+/// REFUSED (`None`), same as before: a typo'd config value must never
+/// resolve to cleanup running unasked, and it must never resolve to cleanup
+/// being silently skipped either.
 pub(crate) fn worktree_cleanup_on_merge_config(main_root: &Path) -> Option<bool> {
     match crate::state::read_config_raw(main_root).get("worktree_cleanup_on_merge") {
-        None => Some(true),
+        None => Some(false),
         Some(Value::Bool(b)) => Some(*b),
         Some(_) => None,
     }
 }
 
-/// D1/D1a: the merge's effective cleanup decision — cleanup runs UNLESS
-/// `--no-cleanup` was passed for this one merge or the repo's config opts
-/// out. `no_cleanup_flag` is already validated boolean-shaped by the caller
-/// (`bool_flag_ok`); `None` here means the CONFIG value was invalid and the
-/// merge must refuse rather than guess.
-pub(crate) fn resolve_cleanup_on_merge(main_root: &Path, no_cleanup_flag: bool) -> Option<bool> {
+/// wkm-1 (D1): the merge's effective cleanup decision — KEEP by default.
+/// Teardown runs only when `--cleanup` was passed for this one merge, OR
+/// the repo's config explicitly opts in (`worktree_cleanup_on_merge:
+/// true`). `--no-cleanup` is an explicit keep and wins over BOTH of those —
+/// even a config `true`. Both flags are already validated boolean-shaped by
+/// the caller (`bool_flag_ok`); `None` here means the CONFIG value was
+/// invalid and the merge must refuse rather than guess.
+pub(crate) fn resolve_cleanup_on_merge(
+    main_root: &Path,
+    cleanup_flag: bool,
+    no_cleanup_flag: bool,
+) -> Option<bool> {
     let config_enabled = worktree_cleanup_on_merge_config(main_root)?;
-    Some(!no_cleanup_flag && config_enabled)
+    Some(!no_cleanup_flag && (cleanup_flag || config_enabled))
 }
 
 pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(&flags, &["id", "cleanup", "no-cleanup", "queue-wait-ms"]) {
         return None;
     }
-    // `--cleanup` stays accepted and validated (D1) — existing scripts that
-    // pass it keep working — but it no longer drives any behavior below;
-    // cleanup-by-default replaced its old opt-in meaning.
+    // `--cleanup` (wkm-1, D1): re-armed. The default flipped to KEEP, so
+    // this flag is what opts a single merge back into teardown — the same
+    // one-merge opt-in `--no-cleanup` is an opt-out for.
     if !bool_flag_ok(&flags, "cleanup") {
         return None;
     }
@@ -475,6 +483,7 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         Some(FlagV::S(s)) if !s.is_empty() => s.clone(),
         _ => return None,
     };
+    let cleanup_flag = bool_flag_true(&flags, "cleanup");
     let no_cleanup_flag = bool_flag_true(&flags, "no-cleanup");
 
     let ctx = match prelude("worktree merge", use_json, t0)? {
@@ -489,11 +498,12 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     }
     let main_root = ctx.work_root.clone();
 
-    // D1/D1a: cleanup runs by default; `--no-cleanup` or a `false`
-    // `worktree_cleanup_on_merge` opt out. This is decided before the first
-    // lock, same as every other gate below, and refuses (rather than
-    // guesses) on an invalid config value.
-    let cleanup = resolve_cleanup_on_merge(&main_root, no_cleanup_flag)?;
+    // wkm-1 (D1): the worktree is KEPT by default; `--cleanup` or an
+    // explicit `worktree_cleanup_on_merge: true` opts a merge into
+    // teardown, and `--no-cleanup` always wins as an explicit keep. This is
+    // decided before the first lock, same as every other gate below, and
+    // refuses (rather than guesses) on an invalid config value.
+    let cleanup = resolve_cleanup_on_merge(&main_root, cleanup_flag, no_cleanup_flag)?;
 
     // ── every delegation gate, decided BEFORE the first lock ──────────────
     // Campaign rule 2: lock.rs appends a `result: "acquired"` row to
@@ -536,13 +546,13 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         return None;
     }
     // performCleanup's releaseAllForHolder reads the holds ledger the same
-    // way. D1/D1a: cleanup is the default outcome now, so this branch fires
-    // on nearly every merge (`--no-cleanup` or a `false`
-    // `worktree_cleanup_on_merge` are the only ways to skip it) — a corrupt
-    // ledger must therefore degrade gracefully rather than refuse the whole
-    // merge. `release_all_for_holder` itself already treats an unparseable
-    // ledger as empty (best-effort), so this probe matches that: it reads
-    // the bytes but never turns a parse failure into a refusal.
+    // way. wkm-1 (D1): cleanup is now the OPT-IN outcome — `--cleanup` or an
+    // explicit `worktree_cleanup_on_merge: true` are the only ways this
+    // branch fires — so a corrupt ledger degrading gracefully still matters
+    // on every merge that does opt in. `release_all_for_holder` itself
+    // already treats an unparseable ledger as empty (best-effort), so this
+    // probe matches that: it reads the bytes but never turns a parse
+    // failure into a refusal.
     if cleanup {
         let ledger = main_root
             .join(".bee")

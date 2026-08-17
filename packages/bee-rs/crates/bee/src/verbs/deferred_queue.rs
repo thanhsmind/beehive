@@ -8,7 +8,7 @@
 // `None`; `None` is reserved for an argv this group does not claim at all).
 //
 // Verbs:
-//   deferred-queue add     --kind <capture|scribe|review|promote>
+//   deferred-queue add     --kind <capture|scribe|review|promote|worktree-cleanup>
 //                           --feature <v> --reason <v>
 //                           [--cells <c1,c2>] [--areas <a1,a2>] [--files <f1,f2>]
 //                           [--json]
@@ -60,7 +60,10 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const KINDS: [&str; 4] = ["capture", "scribe", "review", "promote"];
+// wkm-1: `worktree-cleanup` is the keep-by-default cross-check record —
+// `bee worktree merge` queues one instead of tearing down; `bee worktree
+// prune` is the drain that resolves it.
+const KINDS: [&str; 5] = ["capture", "scribe", "review", "promote", "worktree-cleanup"];
 const DEFAULT_LEASE_SECONDS: f64 = 3600.0;
 const QUEUE_LOCK_NAME: &str = "deferred-queue";
 const LOCK_RETRY_ATTEMPTS: u32 = 15;
@@ -237,6 +240,86 @@ pub(crate) fn enqueue(
     Ok((id, ts))
 }
 
+// ─── wkm-2: prune resolves the worktree-cleanup entry it drains ───────────
+//
+// `bee worktree merge`'s keep path (wkm-1, above) appends one `worktree-
+// cleanup` entry per merge; `bee worktree prune` is the drain named in its
+// own reason text. A matched entry is resolved the same way `run_complete`
+// resolves any other item — one `complete` event appended under this
+// module's own store lock — so prune never hand-edits or rewrites the
+// JSONL, and a reader folding the file sees exactly the append/fold model
+// every other verb here already uses. Unlike the CLI `complete` verb, this
+// path carries no owner/claim precondition: prune is resolving an
+// UNCLAIMED cross-check record left behind by a merge, not handing back
+// mid-flight work someone else picked up — an already-claimed or already-
+// completed match is left untouched on purpose (`worktree_cleanup_matches`,
+// below), never raced or overwritten.
+fn worktree_cleanup_matches(item: &Item, worktree_root: Option<&Path>, worktree_id: &str) -> bool {
+    if item.kind != "worktree-cleanup" || item.completed || item.claim.is_some() {
+        return false;
+    }
+    if let Some(root) = worktree_root {
+        let root_s = root.to_string_lossy();
+        if item.files.iter().any(|f| f == root_s.as_ref()) {
+            return true;
+        }
+    }
+    // Fallback: the worktree id named the way `enqueue_worktree_cleanup_
+    // deferral` (merge.rs) formats its reason — "Worktree <id> (branch
+    // ...)". Only reached when the root match above fails (a record whose
+    // directory is already gone, e.g. the orphan verdict).
+    let needle = format!("Worktree {worktree_id} (branch");
+    item.reason.contains(&needle)
+}
+
+/// Resolves every unclaimed `worktree-cleanup` entry matching `worktree_id`
+/// (by root string, falling back to the id named in the reason) with one
+/// `complete` event each. Best-effort, the same shape `enqueue_worktree_
+/// cleanup_deferral` already uses for its own append: a busy lock or a
+/// write failure returns an empty/partial resolved list rather than
+/// failing the prune run that already removed the worktree on disk — the
+/// queue entry is a cross-check record, not the removal itself.
+pub(crate) fn resolve_worktree_cleanup(
+    root: &Path,
+    worktree_root: Option<&Path>,
+    worktree_id: &str,
+) -> Vec<String> {
+    let mut attempt = 0u32;
+    let mut guard = loop {
+        match acquire_store_lock_once(root, QUEUE_LOCK_NAME) {
+            AcquireOnce::Acquired(g) => break g,
+            AcquireOnce::Busy { .. } => {
+                if attempt >= LOCK_RETRY_ATTEMPTS {
+                    return Vec::new();
+                }
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(LOCK_RETRY_DELAY_MS));
+            }
+        }
+    };
+    let f = fold(root);
+    let matches: Vec<String> = f
+        .order
+        .iter()
+        .filter_map(|id| f.items.get(id))
+        .filter(|item| worktree_cleanup_matches(item, worktree_root, worktree_id))
+        .map(|item| item.id.clone())
+        .collect();
+    let mut resolved = Vec::new();
+    for id in &matches {
+        let ts = now_iso();
+        let mut event = Map::new();
+        event.insert("ts".into(), Value::String(ts));
+        event.insert("event".into(), Value::String("complete".into()));
+        event.insert("id".into(), Value::String(id.clone()));
+        if append_jsonl(&queue_path(root), &Value::Object(event)).is_ok() {
+            resolved.push(id.clone());
+        }
+    }
+    guard.release();
+    resolved
+}
+
 // ─── claim exclusivity: the dual-condition stale rule ──────────────────────
 //
 // Pattern re-derived from cells/claims.rs (claim_expired + heartbeat_stale +
@@ -392,7 +475,7 @@ fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     };
     let Some(kind) = flag(&parsed, "kind").filter(|k| KINDS.contains(k)) else {
         let msg = format!(
-            "bee {cmd}: --kind is required and must be one of capture, scribe, review, promote."
+            "bee {cmd}: --kind is required and must be one of capture, scribe, review, promote, worktree-cleanup."
         );
         return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
     };
@@ -442,7 +525,7 @@ fn run_list(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let kind_filter = match flag(&parsed, "kind") {
         Some(k) if KINDS.contains(&k) => Some(k.to_string()),
         Some(_) => {
-            let msg = format!("bee {cmd}: --kind must be one of capture, scribe, review, promote.");
+            let msg = format!("bee {cmd}: --kind must be one of capture, scribe, review, promote, worktree-cleanup.");
             return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
         }
         None => None,
@@ -973,5 +1056,92 @@ mod tests {
             ClaimDecision::NotFound => {}
             _ => panic!("expected NotFound"),
         }
+    }
+
+    // ── wkm-2: `resolve_worktree_cleanup` ───────────────────────────────────
+
+    #[test]
+    fn resolve_worktree_cleanup_completes_the_matching_unclaimed_entry_by_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let wt_root = root.join("wt-a");
+        let (id, _) = enqueue(
+            root,
+            "worktree-cleanup",
+            "demo",
+            &[],
+            &[],
+            &[wt_root.to_string_lossy().into_owned()],
+            "Worktree wt-a (branch wt/a) merged into main at deadbeef and kept per default (D1) — remove it with `bee worktree prune`.",
+        )
+        .unwrap();
+
+        let resolved = resolve_worktree_cleanup(root, Some(wt_root.as_path()), "wt-a");
+        assert_eq!(resolved, vec![id.clone()]);
+
+        let f = fold(root);
+        assert!(f.items.get(&id).unwrap().completed, "the matching entry must be completed");
+    }
+
+    #[test]
+    fn resolve_worktree_cleanup_falls_back_to_the_id_named_in_the_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // The root the caller hands in (e.g. re-read from the workspace
+        // record) does not string-match the queued `files` entry — an
+        // orphan verdict's directory string can drift even though it is the
+        // same worktree — so this must fall through to the reason match.
+        let (id, _) = enqueue(
+            root,
+            "worktree-cleanup",
+            "demo",
+            &[],
+            &[],
+            &["/some/other/path".to_string()],
+            "Worktree wt-orphan (branch wt/orphan) merged into main at deadbeef and kept per default (D1) — remove it with `bee worktree prune`.",
+        )
+        .unwrap();
+
+        let resolved = resolve_worktree_cleanup(root, None, "wt-orphan");
+        assert_eq!(resolved, vec![id.clone()]);
+        assert!(fold(root).items.get(&id).unwrap().completed);
+    }
+
+    #[test]
+    fn resolve_worktree_cleanup_never_touches_a_claimed_or_completed_or_other_kind_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let wt_root = root.join("wt-b");
+
+        let (claimed_id, _) = enqueue(
+            root,
+            "worktree-cleanup",
+            "demo",
+            &[],
+            &[],
+            &[wt_root.to_string_lossy().into_owned()],
+            "Worktree wt-b (branch wt/b) merged...",
+        )
+        .unwrap();
+        let mut claim = Map::new();
+        claim.insert("ts".into(), Value::String(now_iso()));
+        claim.insert("event".into(), Value::String("claim".into()));
+        claim.insert("id".into(), Value::String(claimed_id.clone()));
+        claim.insert("owner".into(), Value::String("someone".into()));
+        claim.insert("claimed_at".into(), Value::String(now_iso()));
+        claim.insert("ttl_seconds".into(), json!(3600));
+        append_jsonl(&queue_path(root), &Value::Object(claim)).unwrap();
+
+        let (other_kind_id, _) =
+            enqueue(root, "capture", "demo", &[], &[], &[wt_root.to_string_lossy().into_owned()], "unrelated")
+                .unwrap();
+
+        let resolved = resolve_worktree_cleanup(root, Some(wt_root.as_path()), "wt-b");
+        assert!(resolved.is_empty(), "a claimed worktree-cleanup entry must not be resolved: {resolved:?}");
+
+        let f = fold(root);
+        assert!(!f.items.get(&claimed_id).unwrap().completed);
+        assert!(f.items.get(&claimed_id).unwrap().claim.is_some(), "the claim must survive untouched");
+        assert!(!f.items.get(&other_kind_id).unwrap().completed);
     }
 }

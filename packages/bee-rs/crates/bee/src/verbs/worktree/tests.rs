@@ -1061,16 +1061,15 @@ use std::time::Instant;
 
     // ── D1/D1a: cleanup by default ──────────────────────────────────────────
 
-    /// `worktree_cleanup_on_merge`'s config half, read the same way
-    /// `archive_on_close_enabled` reads `cells_archive_on_close`
-    /// (close.rs:827) — absent means ON — but unlike that helper, a
-    /// present-but-non-boolean value is REFUSED (`None`), never silently
-    /// read as ON.
+    /// wkm-1 (D1): `worktree_cleanup_on_merge`'s config half — unlike
+    /// `archive_on_close_enabled` (close.rs:827), absent means OFF now (the
+    /// worktree is kept by default), and a present-but-non-boolean value is
+    /// still REFUSED (`None`), never silently read as either outcome.
     #[test]
-    fn worktree_cleanup_on_merge_config_matches_archive_on_close_enabled_except_it_validates() {
+    fn worktree_cleanup_on_merge_config_defaults_off_and_validates_the_present_shape() {
         let tmp = tempfile::tempdir().unwrap();
-        // No .bee/config.json at all -> on.
-        assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), Some(true));
+        // No .bee/config.json at all -> off (wkm-1's new default: keep).
+        assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), Some(false));
 
         std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
         std::fs::write(
@@ -1097,32 +1096,49 @@ use std::time::Instant;
         assert_eq!(worktree_cleanup_on_merge_config(tmp.path()), None);
     }
 
-    /// Truth 1 + truth 3: with no `--no-cleanup` flag and no config, the
-    /// merge cleans up by default; a `false` `worktree_cleanup_on_merge`
-    /// beats the absent flag.
+    /// wkm-1 (D1): with no `--cleanup`, no `--no-cleanup`, and no config,
+    /// the merge KEEPS by default; an explicit `worktree_cleanup_on_merge:
+    /// true` opts a merge into teardown even without the flag.
     #[test]
-    fn resolve_cleanup_on_merge_defaults_on_and_config_off_beats_the_absent_flag() {
+    fn resolve_cleanup_on_merge_defaults_off_and_config_true_opts_in() {
         let tmp = tempfile::tempdir().unwrap();
-        // No flags at all (no --no-cleanup), no config -> cleanup runs (D1).
-        assert_eq!(resolve_cleanup_on_merge(tmp.path(), false), Some(true));
+        // No flags at all, no config -> keep (D1's new default).
+        assert_eq!(resolve_cleanup_on_merge(tmp.path(), false, false), Some(false));
 
         std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
         std::fs::write(
             tmp.path().join(".bee").join("config.json"),
-            "{\"worktree_cleanup_on_merge\": false}",
+            "{\"worktree_cleanup_on_merge\": true}",
         )
         .unwrap();
-        // The flag was never passed (no_cleanup_flag = false) — config alone
-        // beats the absent flag.
-        assert_eq!(resolve_cleanup_on_merge(tmp.path(), false), Some(false));
+        // The --cleanup flag was never passed — config alone opts this
+        // merge into teardown.
+        assert_eq!(resolve_cleanup_on_merge(tmp.path(), false, false), Some(true));
     }
 
-    /// Truth 1, end to end: a merge with no `--no-cleanup` flag and no config
-    /// resolves cleanup ON, and running the merge with that DEFAULT-computed
-    /// value actually removes the worktree directory and deletes its branch
-    /// — the same call shape `run_merge` makes when handed no flags at all.
+    /// wkm-1 (D1): `--no-cleanup` is an explicit keep and wins over BOTH a
+    /// config `true` opt-in AND a `--cleanup` flag for the same merge.
     #[test]
-    fn merge_with_no_flags_cleans_up_by_default() {
+    fn no_cleanup_flag_wins_over_a_cleanup_flag_and_a_config_true_opt_in() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join(".bee")).unwrap();
+        std::fs::write(
+            tmp.path().join(".bee").join("config.json"),
+            "{\"worktree_cleanup_on_merge\": true}",
+        )
+        .unwrap();
+        assert_eq!(resolve_cleanup_on_merge(tmp.path(), false, true), Some(false));
+        assert_eq!(resolve_cleanup_on_merge(tmp.path(), true, true), Some(false));
+    }
+
+    /// wkm-1 (D1), end to end: a merge with no `--cleanup`, no `--no-cleanup`,
+    /// and no config resolves cleanup OFF, and running the merge with that
+    /// DEFAULT-computed value KEEPS the worktree directory, its branch, and
+    /// its grant/workspace registration — the same call shape `run_merge`
+    /// makes when handed no flags at all — while queuing exactly one
+    /// `worktree-cleanup` deferred-queue entry as the cross-check record.
+    #[test]
+    fn merge_with_no_flags_keeps_the_worktree_by_default_and_queues_one_entry() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
         let mut lock_busy = None;
@@ -1135,10 +1151,80 @@ use std::time::Instant;
         git_ok(&wt, &["config", "user.name", "t"]);
         git_ok(&wt, &["commit", "-qam", "work"]);
 
-        // No --no-cleanup flag, no config -> the same value run_merge would
-        // compute for a plain "bee worktree merge --id <id>" invocation.
-        let cleanup = resolve_cleanup_on_merge(&main, false).unwrap();
-        assert!(cleanup, "no flags, no config -> cleanup runs by default (D1)");
+        // No --cleanup flag, no --no-cleanup flag, no config -> the same
+        // value run_merge would compute for a plain "bee worktree merge --id
+        // <id>" invocation.
+        let cleanup = resolve_cleanup_on_merge(&main, false, false).unwrap();
+        assert!(!cleanup, "no flags, no config -> the worktree is kept by default (D1)");
+
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert!(!answer.result.contains_key("cleanup"));
+        assert_eq!(
+            answer.result["cleanup_suggested_command"],
+            json!(format!("bee worktree merge --id {} --json", created.id))
+        );
+        assert!(wt.exists(), "the worktree directory stands");
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", &created.branch])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "the branch stands"
+        );
+        // Registration (grants + workspace record) stays — prune must still
+        // find the worktree later.
+        let grants = read_grants_strict(&main.join(".bee")).expect("grants must still parse");
+        assert!(grants.contains_key(&created.id), "the grant is still registered");
+
+        let queued = crate::verbs::deferred_queue::items_for(&main, "worktree-cleanup", "demo");
+        assert_eq!(queued.len(), 1, "exactly one worktree-cleanup entry");
+        assert!(!queued[0].completed);
+        // `QueuedItem` strips `files`/`reason` (nobody else needs them) —
+        // read the raw event to check the entry actually names the
+        // worktree root, id, and branch the reader needs to cross-check it.
+        let raw = std::fs::read_to_string(main.join(".bee").join("deferred-queue.jsonl")).unwrap();
+        let add_line = raw
+            .lines()
+            .map(|l| serde_json::from_str::<Value>(l).unwrap())
+            .find(|v| v["kind"] == json!("worktree-cleanup"))
+            .expect("one worktree-cleanup add event");
+        assert_eq!(add_line["files"], json!([p(&wt)]));
+        assert!(add_line["reason"].as_str().unwrap().contains(&created.id), "{add_line}");
+        assert!(add_line["reason"].as_str().unwrap().contains(&created.branch), "{add_line}");
+        assert!(
+            add_line["reason"].as_str().unwrap().contains("bee worktree prune"),
+            "{add_line}"
+        );
+    }
+
+    /// wkm-1 (D1): `--cleanup` re-arms teardown — a merge with the flag on
+    /// (no config, no `--no-cleanup`) actually removes the worktree
+    /// directory, deletes its branch, and queues NOTHING (the entry only
+    /// exists for the keep path).
+    #[test]
+    fn cleanup_flag_tears_down_and_queues_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["commit", "-qam", "work"]);
+
+        let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
+        assert!(cleanup, "--cleanup opts this merge into teardown (D1)");
 
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
             .unwrap_or_else(|e| match e {
@@ -1158,10 +1244,14 @@ use std::time::Instant;
             String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
             "the branch is gone"
         );
+        let queued = crate::verbs::deferred_queue::items_for(&main, "worktree-cleanup", "demo");
+        assert!(queued.is_empty(), "the teardown path never queues a cross-check entry");
     }
 
     /// Truth 2: `--no-cleanup` resolves to cleanup=false, and a real merge
-    /// with that value leaves the worktree directory and its branch standing.
+    /// with that value leaves the worktree directory and its branch
+    /// standing — and, being a keep path, still queues its cross-check
+    /// entry exactly like the default does.
     #[test]
     fn no_cleanup_flag_resolves_off_and_leaves_the_worktree_and_branch_standing() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1176,7 +1266,7 @@ use std::time::Instant;
         git_ok(&wt, &["config", "user.name", "t"]);
         git_ok(&wt, &["commit", "-qam", "work"]);
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         assert!(!cleanup, "--no-cleanup opts this merge out (D1a)");
 
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
@@ -1191,6 +1281,8 @@ use std::time::Instant;
             answer.result["cleanup_suggested_command"],
             json!(format!("bee worktree merge --id {} --json", created.id))
         );
+        let queued = crate::verbs::deferred_queue::items_for(&main, "worktree-cleanup", "demo");
+        assert_eq!(queued.len(), 1, "--no-cleanup is still a keep path: one entry");
         assert!(wt.exists(), "the worktree directory still stands");
         let branches = std::process::Command::new("git")
             .args(["branch", "--list", &created.branch])
@@ -1226,9 +1318,11 @@ use std::time::Instant;
     }
 
     /// Truth 5 (D1a): the ALREADY_UP_TO_DATE arm removes nothing — even when
-    /// called with the default-computed `cleanup = true`, because merging
-    /// nothing is not a real merge. A second worktree merged with zero new
-    /// commits on its branch is the smallest fixture that reaches this arm.
+    /// called with an explicit `--cleanup`-computed `cleanup = true`,
+    /// because merging nothing is not a real merge. A second worktree
+    /// merged with zero new commits on its branch is the smallest fixture
+    /// that reaches this arm. It never queues a `worktree-cleanup` entry
+    /// either — that entry only exists for a merge that actually merged.
     #[test]
     fn already_up_to_date_merge_removes_nothing_even_with_cleanup_on() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1240,8 +1334,8 @@ use std::time::Instant;
         let wt = created.worktree_root.clone();
         // Nothing new committed on the branch — main already contains it.
 
-        let cleanup = resolve_cleanup_on_merge(&main, false).unwrap();
-        assert!(cleanup, "no flag, no config -> cleanup would run on a REAL merge (D1)");
+        let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
+        assert!(cleanup, "--cleanup would run on a REAL merge (D1)");
 
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
             .unwrap_or_else(|e| match e {
@@ -1268,6 +1362,8 @@ use std::time::Instant;
             !String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
             "the branch is untouched"
         );
+        let queued = crate::verbs::deferred_queue::items_for(&main, "worktree-cleanup", "demo");
+        assert!(queued.is_empty(), "nothing merged -> no cross-check entry either");
     }
 
     /// B-P1-2: pins `--no-gpg-sign` on the merge commit (phases.rs's
@@ -1307,7 +1403,7 @@ use std::time::Instant;
         git_ok(&main, &["config", "commit.gpgsign", "true"]);
         git_ok(&main, &["config", "gpg.program", stub.to_str().unwrap()]);
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge threw: {m}"),
@@ -1385,7 +1481,7 @@ use std::time::Instant;
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
         assert!(is_tree_dirty(&main).unwrap(), "main must start dirty for this test to mean anything");
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge refused instead of auto-committing .bee dirt: {m}"),
@@ -1438,7 +1534,7 @@ use std::time::Instant;
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
         std::fs::write(main.join("unrelated.txt"), "surprise\n").unwrap();
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
         let Err(err) = result else { panic!("a dirty path outside .bee/ must still refuse") };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
@@ -1463,7 +1559,7 @@ use std::time::Instant;
         std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
         std::fs::write(main.join("unrelated.txt"), "surprise\n").unwrap();
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
         let Err(err) = result else { panic!("a dirty path outside the swept roots must still refuse") };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
@@ -1490,7 +1586,7 @@ use std::time::Instant;
         )
         .unwrap();
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge refused instead of auto-committing docs/history/demo: {m}"),
@@ -1520,7 +1616,7 @@ use std::time::Instant;
         // leaves behind.
         std::fs::write(main.join("docs").join("decisions").join("taxonomy.json"), "{\"a\": 1}\n").unwrap();
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge refused instead of auto-committing docs/decisions: {m}"),
@@ -1564,7 +1660,7 @@ use std::time::Instant;
         )
         .unwrap();
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("merge refused instead of auto-committing docs/knowledge: {m}"),
@@ -1602,7 +1698,7 @@ use std::time::Instant;
         )
         .unwrap();
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
         let Err(err) = result else { panic!("another feature's docs/history dirt must still refuse") };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
@@ -1649,7 +1745,7 @@ use std::time::Instant;
         perms.set_mode(0o755);
         std::fs::set_permissions(&hook, perms).unwrap();
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, None, None)
             .unwrap_or_else(|e| match e {
                 MErr::Thrown(m) => panic!("a failing bookkeeping commit must warn, not refuse: {m}"),
@@ -1681,7 +1777,7 @@ use std::time::Instant;
         )
         .unwrap();
 
-        let cleanup = resolve_cleanup_on_merge(&main, true).unwrap();
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let result = merge_feature_worktree(&main, &created.id, cleanup, None, None, None);
         let Err(err) = result else { panic!("the opt-out must fall back to refusing on any dirty main") };
         let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
@@ -2948,4 +3044,115 @@ use std::time::Instant;
             ws::read_workspace(&main, &created.id).is_err(),
             "the orphan workspace record must be dropped along with the directory"
         );
+    }
+
+    // ── registry.rs: wkm-3 — `worktree list` marks kept-merged worktrees ──
+
+    /// The pure fold half of the marker: an `add` for `worktree-cleanup`
+    /// leaves its file pending; a matching `complete` (wkm-2's prune
+    /// resolution) clears it; a different `kind` is never counted even
+    /// though it shares the queue file.
+    #[test]
+    fn pending_worktree_cleanup_roots_reads_pending_and_skips_completed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store_root = tmp.path().join(".bee");
+        std::fs::create_dir_all(&main_store_root).unwrap();
+
+        crate::verbs::deferred_queue::enqueue(
+            tmp.path(),
+            "worktree-cleanup",
+            "demo-a",
+            &[],
+            &[],
+            &[String::from("/wt/pending")],
+            "kept per default",
+        )
+        .unwrap();
+        let (resolved_id, _) = crate::verbs::deferred_queue::enqueue(
+            tmp.path(),
+            "worktree-cleanup",
+            "demo-b",
+            &[],
+            &[],
+            &[String::from("/wt/resolved")],
+            "kept per default",
+        )
+        .unwrap();
+        crate::verbs::deferred_queue::enqueue(
+            tmp.path(),
+            "capture",
+            "demo-c",
+            &[],
+            &[],
+            &[String::from("/wt/other-kind")],
+            "not a worktree-cleanup entry",
+        )
+        .unwrap();
+        // Fold in the resolution by hand — the same `complete` event shape
+        // wkm-2's prune resolution appends (no hand-edit of the JSONL: this
+        // goes through `fsutil::append_jsonl`, exactly what a real
+        // `complete` writes).
+        crate::fsutil::append_jsonl(
+            &main_store_root.join("deferred-queue.jsonl"),
+            &json!({
+                "ts": now_iso(),
+                "event": "complete",
+                "id": resolved_id,
+            }),
+        )
+        .unwrap();
+
+        let roots = pending_worktree_cleanup_roots(&main_store_root);
+        assert_eq!(roots, vec![PathBuf::from("/wt/pending")], "{roots:?}");
+    }
+
+    /// A missing queue file is "nothing pending", not a delegate — the same
+    /// shape `read_grants_strict` gives a missing grants file.
+    #[test]
+    fn pending_worktree_cleanup_roots_is_empty_for_a_missing_queue_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(pending_worktree_cleanup_roots(&tmp.path().join(".bee")).is_empty());
+    }
+
+    /// The must_have, end to end over a real `git worktree add` fixture: an
+    /// id whose worktree root is named by a pending `worktree-cleanup`
+    /// entry is `true`; the same id is `false` again once that entry is
+    /// marked `complete` — `resolve_worktree_by_id`'s real git-verified path
+    /// resolution is exactly what `run_list` calls, so this proves the
+    /// marker survives the id -> root lookup, not just a string compare.
+    #[test]
+    fn merged_pending_map_is_true_only_for_a_pending_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let ids = vec![&created.id];
+
+        // No entry at all: never pending.
+        let before = merged_pending_map(&main, &ids);
+        assert_eq!(before.get(&created.id), Some(&Value::Bool(false)), "{before:?}");
+
+        let (id, _) = crate::verbs::deferred_queue::enqueue(
+            &main,
+            "worktree-cleanup",
+            "demo",
+            &[],
+            &[],
+            &[p(&created.worktree_root)],
+            &format!(
+                "Worktree {} (branch {}) merged into main at deadbeef and kept per default (D1) — remove it with `bee worktree prune`.",
+                created.id, created.branch
+            ),
+        )
+        .unwrap();
+
+        let pending = merged_pending_map(&main, &ids);
+        assert_eq!(pending.get(&created.id), Some(&Value::Bool(true)), "{pending:?}");
+
+        // Resolved (wkm-2's `complete`): the marker clears again.
+        crate::fsutil::append_jsonl(
+            &main.join(".bee").join("deferred-queue.jsonl"),
+            &json!({ "ts": now_iso(), "event": "complete", "id": id }),
+        )
+        .unwrap();
+        let after = merged_pending_map(&main, &ids);
+        assert_eq!(after.get(&created.id), Some(&Value::Bool(false)), "{after:?}");
     }

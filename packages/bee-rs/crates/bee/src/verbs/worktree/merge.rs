@@ -677,12 +677,12 @@ pub(crate) fn perform_cleanup(
 }
 
 /// attachCleanupOutcome — runs cleanup, or attaches the suggested command
-/// (decision D8b: "never prompt"). D1/D1a: `cleanup` here is already the
-/// EFFECTIVE decision (default on, `--no-cleanup` or a `false`
-/// `worktree_cleanup_on_merge` opt out, and the ALREADY_UP_TO_DATE caller
-/// hardcodes it false) — so a `false` reaching this function means one of
-/// those opt-outs fired, or nothing was merged, and the suggested command is
-/// simply "run merge again", not "pass `--cleanup`" (a no-op now).
+/// (decision D8b: "never prompt"). wkm-1 (D1): `cleanup` here is already the
+/// EFFECTIVE decision — KEEP by default, `--cleanup` or an explicit
+/// `worktree_cleanup_on_merge: true` opt a merge in, `--no-cleanup` always
+/// wins as an opt-out, and the ALREADY_UP_TO_DATE caller hardcodes it
+/// false — so a `false` reaching this function means the default fired, one
+/// of the opt-outs fired, or nothing was merged.
 pub(crate) fn attach_cleanup_outcome(
     result: &mut Map<String, Value>,
     main_root: &Path,
@@ -708,6 +708,40 @@ pub(crate) fn attach_cleanup_outcome(
             id,
             verify_skipped,
         )),
+    );
+}
+
+/// wkm-1 (D1): the keep path's cross-check record. A green (or
+/// verify-skipped) merge that does NOT tear down the worktree appends
+/// exactly one `worktree-cleanup` deferred-queue entry, so the user has a
+/// durable pointer back to it — `bee worktree prune` is the drain that
+/// resolves the entry once it removes the worktree. `feature` prefers the
+/// worktree's IMMUTABLE creation-identity slug (`resolve_worktree_feature`,
+/// issues-46-53 D4) and falls back to the worktree id when no creation
+/// record exists. Best-effort, the same shape close.rs's own scribe/promote
+/// enqueues use: a queue-append failure here must never fail an
+/// already-committed merge.
+pub(crate) fn enqueue_worktree_cleanup_deferral(
+    main_root: &Path,
+    worktree_root: &Path,
+    id: &str,
+    branch: &str,
+    merge_commit: &str,
+) {
+    let feature = resolve_worktree_feature(worktree_root)
+        .created
+        .unwrap_or_else(|| id.to_string());
+    let reason = format!(
+        "Worktree {id} (branch {branch}) merged into main at {merge_commit} and kept per default (D1) — remove it with `bee worktree prune`."
+    );
+    let _ = crate::verbs::deferred_queue::enqueue(
+        main_root,
+        "worktree-cleanup",
+        &feature,
+        &[],
+        &[],
+        &[p(worktree_root)],
+        &reason,
     );
 }
 
