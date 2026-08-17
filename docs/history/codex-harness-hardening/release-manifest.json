@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "bc12f62fd164d07af7e31d984c0369d032f1a6acae1f4d013c63c54ee45900e9",
+      "sha256": "117cbf069c1869398bfb74370bf069a5e8dc57681e614e457698dc8a3b6afd75",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -318,7 +318,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "f181483e2a356fd59014bf60a3f745665e8d7095296b941ebe425e58db2970b0",
+      "sha256": "84d5ac13fc6ff1363213010d0d8d4b61b4ced2ac1e2df6d715b4f54289b1386e",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md"
@@ -353,14 +353,14 @@
     },
     {
       "path": ".claude-plugin/skills/bee-planning/references/planning-reference.md",
-      "sha256": "bf89a38efa63aa283fd96d24baad0d764e0f623ded4a8271ad832439c64d53ae",
+      "sha256": "94baf96cf3b96fe179c45c079d019684fc7aa59754cbe26fd3e2fc7b05629ed9",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/references/planning-reference.md"
     },
     {
       "path": ".claude-plugin/skills/bee-planning/SKILL.md",
-      "sha256": "db38e4c1c75478148cc36bfbb87293b2f79f0d0b2eba716fe22d314c7554d2d2",
+      "sha256": "26157e30f5b793e22f2f6f43044ab68d0f8759a934c98462fdeee75ab0843ee6",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-planning/SKILL.md"
@@ -507,7 +507,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "4814619f9a97a9564a4c7a8bb98e15f7d7ce41238095e90cea2e92b276325d28",
+      "sha256": "50ca3bbf79f0d3bb8139929b6fecc2a7f4631b02089d7e82ea13818fed42f44c",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -689,7 +689,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "f181483e2a356fd59014bf60a3f745665e8d7095296b941ebe425e58db2970b0",
+      "sha256": "84d5ac13fc6ff1363213010d0d8d4b61b4ced2ac1e2df6d715b4f54289b1386e",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md"
@@ -724,14 +724,14 @@
     },
     {
       "path": ".codex-plugin/skills/bee-planning/references/planning-reference.md",
-      "sha256": "bf89a38efa63aa283fd96d24baad0d764e0f623ded4a8271ad832439c64d53ae",
+      "sha256": "94baf96cf3b96fe179c45c079d019684fc7aa59754cbe26fd3e2fc7b05629ed9",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/references/planning-reference.md"
     },
     {
       "path": ".codex-plugin/skills/bee-planning/SKILL.md",
-      "sha256": "db38e4c1c75478148cc36bfbb87293b2f79f0d0b2eba716fe22d314c7554d2d2",
+      "sha256": "26157e30f5b793e22f2f6f43044ab68d0f8759a934c98462fdeee75ab0843ee6",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-planning/SKILL.md"
@@ -1264,7 +1264,7 @@
     },
     {
       "path": "skills/bee-hive/references/routing-and-contracts.md",
-      "sha256": "f181483e2a356fd59014bf60a3f745665e8d7095296b941ebe425e58db2970b0",
+      "sha256": "84d5ac13fc6ff1363213010d0d8d4b61b4ced2ac1e2df6d715b4f54289b1386e",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/references/routing-and-contracts.md"
@@ -1299,14 +1299,14 @@
     },
     {
       "path": "skills/bee-planning/references/planning-reference.md",
-      "sha256": "bf89a38efa63aa283fd96d24baad0d764e0f623ded4a8271ad832439c64d53ae",
+      "sha256": "94baf96cf3b96fe179c45c079d019684fc7aa59754cbe26fd3e2fc7b05629ed9",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/references/planning-reference.md"
     },
     {
       "path": "skills/bee-planning/SKILL.md",
-      "sha256": "db38e4c1c75478148cc36bfbb87293b2f79f0d0b2eba716fe22d314c7554d2d2",
+      "sha256": "26157e30f5b793e22f2f6f43044ab68d0f8759a934c98462fdeee75ab0843ee6",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-planning/SKILL.md"

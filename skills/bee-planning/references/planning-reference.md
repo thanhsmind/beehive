@@ -185,6 +185,33 @@ history.
 }
 ```
 
+## Pre-flight before cells add
+
+Walk this checklist BEFORE drafting cells — it is the map, the validator
+stays the source of truth:
+
+1. **Ids.** Match `^[A-Za-z0-9][A-Za-z0-9._-]*$` and follow the
+   `<feature-slug-abbrev>-<n>` convention (e.g. `auth-3`); collide with no
+   existing cell id — list current ids first: `bee cells list`.
+2. **Required fields.** `id`, `feature`, `title`, `action`, `verify` are all
+   non-empty strings; `verify: "none"` is legal only in a repo whose
+   `commands.test` declares itself no-test (the `"none"` sentinel).
+3. **Lane.** One of `tiny`/`small`/`standard`/`high-risk`/`spike`;
+   `standard`/`high-risk` cells carry non-empty `must_haves.truths`.
+4. **Scope-derived obligations.** Any `files` path under a release-manifest
+   or onboarding-ledger root obliges `verify` to carry `bee dev
+   release-manifest --check`, `files` to carry the manifest record, and the
+   cell to run the regen chain (`bee dev regen`) — or a reasoned
+   `regen_obligation_ack` (recognized value `"wave-barrier"` defers to wave
+   close). A guard-source path on a lane below `standard` obliges
+   `judge_obligation_ack` or a raised lane.
+5. **Deps and slice.** `deps` are acyclic; current slice only; the
+   feature's execution gate is approved.
+
+Then pipe the drafted batch through `bee cells add --stdin --dry-run` and
+run the real add only after a clean dry-run — a dirty dry-run's problems
+list is the fix list, applied before anything persists.
+
 Create the whole slice with one batched stdin call (a JSON array; a single
 object works for a one-cell slice — no per-cell scratchpad files):
 
