@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "wayfinding-craft",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"wayfinding-craft\" started at phase \"planning\" (lane).",
-  "next_action": "bee close --feature wayfinding-craft",
+  "next_action": "Merged to main (80787eb6); lane closed.",
   "created_at": "2026-08-17T15:25:07.818Z",
   "run_state": "shaping",
   "waiting_on": null,
