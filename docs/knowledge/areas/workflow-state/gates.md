@@ -32,7 +32,7 @@ prior feature has no nonterminal cell. An intentionally abandoned cell must
 first be dropped through the explicit drop verb, which records the reason —
 the start operation never clears work as a side effect. When the preconditions
 hold, one atomic write sets the feature, its mode, a valid phase, resets all
-four gate fields to ungranted, and updates the summary/next-action. Observers (the
+gate fields (all five, since uat joined the vocabulary) to ungranted, and updates the summary/next-action. Observers (the
 next session's preamble, the status command) see either the old record intact
 or the new feature fully reset — never a mixture.
 
@@ -313,8 +313,8 @@ never refusing the close over what it finds.
 **B53 — A stored approvals map is read as an object or not at all
 (js-parity-cleanup D2, 2026-08-04).** Trigger: any read of a record's approvals
 field, by any of the many surfaces that project it. What happens: when the stored
-value is an object, its keys are laid over the four defaults, so a record that
-names only one gate still answers for all four; when it is anything else at all —
+value is an object, its keys are laid over the defaults (five since uat joined), so a record that
+names only one gate still answers for all of them; when it is anything else at all —
 absent, empty, a list, a string, a number, a flag — the defaults are taken whole
 and the stored value contributes nothing. There is no third outcome: no partial
 read, and no refusal to answer. Why it is stated: the previous behavior derived
@@ -328,10 +328,20 @@ a malformed record has earned none.
 
 ## Business Rules
 
-- R104 — An approvals map merges over the four defaults only when it is stored as
+- R106 — The gate vocabulary is five names: context, shape, execution, review,
+  and uat (uat-gate-before-merge D1, cells ug-1..3, 2026-08-17). The uat gate
+  is the user's acceptance stop between execution-complete and the merge to
+  main: `bee worktree merge` refuses a standard or high-risk feature whose uat
+  gate is unapproved (typed, zero-mutation, the refusal naming its three
+  exits — user approval, a one-merge skip flag, or the repo-wide config
+  opt-out). No bypass level ever auto-approves it: recording it with the auto
+  actor is refused outright, so the approval can only carry the user's own
+  word. It becomes visible in the preamble only once the execution gate is
+  approved.
+- R104 — An approvals map merges over the gate defaults only when it is stored as
   an object; every other shape yields the defaults untouched, and no shape is
   read partially or refused (js-parity-cleanup D2, cell jp-4, 2026-08-04).
-- R1 — A new feature can never inherit gate approvals: all four gate fields reset in
+- R1 — A new feature can never inherit gate approvals: every gate field resets in
   the same atomic write that sets the feature (codex-runtime-parity D2;
   plan-review P1 repair).
 - R2 — Feature start never destroys evidence of unfinished work; abandonment

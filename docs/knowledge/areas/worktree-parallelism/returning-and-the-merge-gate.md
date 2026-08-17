@@ -28,6 +28,13 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   tree, detached HEAD or branch mismatch in the worktree. **Dirty** (D8a) =
   `git status --porcelain` without `--ignored`: the worktree's gitignored `.bee` store never
   counts as dirt.
+- **The last zero-mutation refusal is the user's acceptance stop (uat-gate-before-merge D1,
+  cells ug-1..3, 2026-08-17).** A standard or high-risk feature whose `uat` gate is
+  unapproved refuses `WORKTREE_MERGE_UAT_PENDING` before any mutation, the message naming
+  its three exits: the user approves (`bee gate --name uat --approved true` — user actor
+  only, never auto), a one-merge `--skip-uat`, or repo config `uat_before_merge: false`
+  (absent means on; a non-boolean value refuses). Tiny/small/docs lanes are exempt; a
+  missing or unreadable lane reads as standard — fail closed.
 - **A `--with-companion` mount survives every zero-mutation refusal** (GH #84, gh-fix-batch
   cell gfb-3, 2026-07-28 — two prior live incidents where a refused merge destroyed a
   healthy, in-use mount): the companion teardown (symlink + marker removal + best-effort
