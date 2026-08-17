@@ -3823,3 +3823,201 @@ use crate::version::BEE_VERSION;
         let waiting_on = status.get("waiting_on").expect("new key waiting_on is gone");
         assert!(waiting_on.is_object() || waiting_on.is_null(), "waiting_on changed kind: {waiting_on:?}");
     }
+
+    // ── D4 (wayfinding-flow): open discovery maps in status ────────────────
+
+    /// Happy path: an effort with one frontier ticket shows both in the JSON
+    /// `open_maps` field and as a guarded line in the text renderer.
+    #[test]
+    fn open_maps_section_renders_with_an_effort_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write(
+            root,
+            "docs/discovery/onboarding-flow/MAP.md",
+            "# onboarding-flow\n\n## Destination\n\nA spec for the new flow.\n",
+        );
+        write(root, "docs/discovery/onboarding-flow/tickets/001-a.md", "status: open\n");
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let om = status.get("open_maps").expect("open_maps key is gone");
+        let efforts = vget(om, "efforts").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(efforts.len(), 1);
+        assert_eq!(vget(&efforts[0], "name"), Some(&json!("onboarding-flow")));
+        assert_eq!(vget(&efforts[0], "frontier"), Some(&json!(1)));
+        let text = render_status_text(&status);
+        assert!(
+            text.contains("### Open discovery map(s): onboarding-flow — 1 frontier ticket(s)"),
+            "{text}"
+        );
+    }
+
+    /// No `docs/discovery/` directory at all: `open_maps` stays present in
+    /// the JSON with empty arrays (additive-only shape), but the text
+    /// renderer prints no section for it at all.
+    #[test]
+    fn open_maps_section_absent_with_no_discovery_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let om = status.get("open_maps").expect("open_maps key is gone");
+        assert_eq!(vget(om, "efforts"), Some(&json!([])));
+        assert_eq!(vget(om, "unreadable"), Some(&json!([])));
+        let text = render_status_text(&status);
+        assert!(!text.contains("Open discovery map(s)"), "{text}");
+    }
+
+    /// An unreadable MAP.md never crashes the scan or the render — it
+    /// surfaces as a visible remedy line instead, same fail-open shape
+    /// `verbs::discovery::scan_discovery` already documents.
+    #[test]
+    fn open_maps_section_shows_a_remedy_line_for_an_unreadable_map() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let dir = root.join("docs").join("discovery").join("broken");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("MAP.md"), [0xFF, 0xFE, 0x00, 0xFF]).unwrap();
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let text = render_status_text(&status);
+        assert!(text.contains("unreadable "), "{text}");
+        assert!(text.contains(" — remedy: fix or delete"), "{text}");
+    }
+
+    // ── D5 (wayfinding-flow): orient resume routing ─────────────────────────
+
+    fn write_open_map(root: &Path, name: &str) {
+        write(
+            root,
+            &format!("docs/discovery/{name}/MAP.md"),
+            &format!("# {name}\n\n## Destination\n\n(unknown — charting session needed)\n"),
+        );
+        write(root, &format!("docs/discovery/{name}/tickets/001-a.md"), "status: open\n");
+    }
+
+    /// Happy path: idle pipeline (no open/claimed cells, no handoff, phase
+    /// idle) plus an open map with a frontier ticket — `bee orient` returns
+    /// `next.skill=bee-wayfinding` deterministically, naming the map and
+    /// pointing `next.command` at `bee discovery list --json`. This is D5's
+    /// must_have truth, pinned directly.
+    #[test]
+    fn orient_recommends_bee_wayfinding_when_idle_with_open_frontier() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write_open_map(root, "onboarding-flow");
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        let next = packet.get("next").unwrap();
+        assert_eq!(vget(next, "skill"), Some(&json!("bee-wayfinding")));
+        assert_eq!(vget(next, "command"), Some(&json!("bee discovery list --json")));
+        let action = vget(next, "action").and_then(Value::as_str).unwrap_or("");
+        assert!(action.contains("onboarding-flow"), "{action}");
+        let blockers: Vec<String> = vget(packet.get("work").unwrap(), "blockers")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect();
+        assert!(
+            !blockers.iter().any(|b| b.starts_with("open discovery map")),
+            "idle resume is carried by next, not a blocker line: {blockers:?}"
+        );
+    }
+
+    /// Edge: work is active (a claimed cell mid-feature) — `next` stays on
+    /// its ordinary phase-driven routing (never `bee-wayfinding`), and the
+    /// open map surfaces only as a report-only blocker line, same voice as
+    /// scribing debt / capture queue.
+    #[test]
+    fn orient_stays_silent_mid_feature_despite_open_frontier() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"swarming","feature":"f1","mode":"standard"}"#,
+        );
+        write(root, ".bee/cells/c-1.json", r#"{"id":"c-1","feature":"f1","status":"claimed","lane":"standard","title":"t"}"#);
+        write_open_map(root, "onboarding-flow");
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        let next = packet.get("next").unwrap();
+        assert_ne!(vget(next, "skill"), Some(&json!("bee-wayfinding")));
+        assert_eq!(vget(next, "skill"), Some(&json!("bee-swarming")), "ORIENT_PHASE_SKILL, untouched");
+        let blockers: Vec<String> = vget(packet.get("work").unwrap(), "blockers")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect();
+        assert!(
+            blockers.iter().any(|b| b == "open discovery map onboarding-flow — 1 frontier"),
+            "{blockers:?}"
+        );
+    }
+
+    /// Edge: idle pipeline, but every ticket on the open map is claimed —
+    /// zero frontier — `bee orient` stays silent both ways: no
+    /// `bee-wayfinding` recommendation, no blocker line.
+    #[test]
+    fn orient_silent_when_frontier_is_zero() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write(
+            root,
+            "docs/discovery/onboarding-flow/MAP.md",
+            "# onboarding-flow\n\n## Destination\n\n(unknown — charting session needed)\n",
+        );
+        write(
+            root,
+            "docs/discovery/onboarding-flow/tickets/001-a.md",
+            "status: open\nclaimed-by: session-1\n",
+        );
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        let next = packet.get("next").unwrap();
+        assert_ne!(vget(next, "skill"), Some(&json!("bee-wayfinding")));
+        let blockers: Vec<String> = vget(packet.get("work").unwrap(), "blockers")
+            .and_then(Value::as_array)
+            .unwrap()
+            .iter()
+            .map(|v| v.as_str().unwrap().to_string())
+            .collect();
+        assert!(
+            !blockers.iter().any(|b| b.starts_with("open discovery map")),
+            "{blockers:?}"
+        );
+    }
+
+    /// Prohibition: a pending handoff wins over the idle+frontier resume —
+    /// `next` must never be overridden while a handoff is waiting on the
+    /// human, even when the pipeline otherwise reads idle with a frontier.
+    #[test]
+    fn orient_never_overrides_next_while_a_handoff_is_pending() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write(
+            root,
+            ".bee/HANDOFF.json",
+            r#"{"written_at":"2026-08-17T00:00:00.000Z","kind":"pause"}"#,
+        );
+        write_open_map(root, "onboarding-flow");
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        let next = packet.get("next").unwrap();
+        assert_ne!(
+            vget(next, "skill"),
+            Some(&json!("bee-wayfinding")),
+            "the handoff rule wins over the D5 override"
+        );
+    }

@@ -22,6 +22,11 @@ one. `bee orient` shows which move the work needs.
 
 ## Explore (interactive)
 
+**Entry check, before anything else.** If the request names no outcome
+the user can state — pure fog, not a gray area — stop here and route to
+bee-wayfinding instead of interviewing (D6.4); the triage table below is
+for requests that already name a destination.
+
 The craft is interviewing, not writing. Scout lightly, then triage the
 request. With a bundle, the scout starts at the touched area's
 `docs/knowledge/areas/<area>/index.md` and its Open Gaps (no bundle:
@@ -85,7 +90,11 @@ on this path; everything unresolved is written down, never guessed.
    instead of interviewing.
 4. `bee route` records the call. Proceed → Lock, then planning.
    Park → Lock writes the evidence and open questions into `Outstanding
-   Questions`; a later human Explore starts there, not from scratch.
+   Questions`; a later human Explore starts there, not from scratch. When
+   the park cause is vagueness, not risk, also run `bee discovery stub
+   --effort <slug> --from '<item text>'` so the parked fog becomes a
+   visible map stub instead of sinking silently (D6.3); risk parks keep
+   the Outstanding Questions path unchanged.
 
 ## Lock (single writer)
 
@@ -95,7 +104,11 @@ what Explore or Qualify resolved — it never originates a decision, term,
 boundary, or scope note; a section the input left silent is an Open
 Question, never a guess. Concrete language only. Deferred ideas that are
 real future work get `bee backlog add` in the same turn. Downstream work
-cites D-IDs, never reinterprets them (AGENTS.md).
+cites D-IDs, never reinterprets them (AGENTS.md). When a
+`docs/discovery/<effort>/` map backs the feature, Lock consumes the
+map's Decisions so far — the settled answers and their D-IDs — straight
+into CONTEXT.md, citing them; it never re-asks a question the map
+already resolved (D8).
 
 **The `tiny`/`docs` brief (D1, traceable-runs).** Every file-touching
 request, at every lane, needs a brief written before any source edit —

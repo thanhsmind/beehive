@@ -1263,3 +1263,37 @@ use crate::version::BEE_VERSION;
         assert!(text[digest_at..].contains("\"f-active\""), "{text}");
         assert!(!text[digest_at..].contains("stale-closed"), "{text}");
     }
+
+    // ── D4 (wayfinding-flow): open discovery maps in the preamble ──────────
+    //
+    // This hook renders in-process (never through `bee status`), so it
+    // reads `scan_discovery` independently — same scan, same guarded shape
+    // as `render_status_text` (verbs/status_full/render.rs), asserted here
+    // over the preamble's own builder.
+
+    /// An open map with a frontier ticket shows up as its own section,
+    /// same "empty means silent" shape as Reclaimable worktree(s) above it.
+    #[test]
+    fn open_maps_section_renders_with_an_effort_present() {
+        let tmp = minimal_repo();
+        let root = tmp.path();
+        write(
+            root,
+            "docs/discovery/onboarding-flow/MAP.md",
+            "# onboarding-flow\n\n## Destination\n\nA spec for the new flow.\n",
+        );
+        write(root, "docs/discovery/onboarding-flow/tickets/001-a.md", "status: open\n");
+        let text = render(root);
+        assert!(
+            text.contains("### Open discovery map(s): onboarding-flow — 1 frontier ticket(s)"),
+            "{text}"
+        );
+    }
+
+    /// No `docs/discovery/` directory at all: the section never appears.
+    #[test]
+    fn open_maps_section_absent_with_no_discovery_dir() {
+        let tmp = minimal_repo();
+        let text = render(tmp.path());
+        assert!(!text.contains("Open discovery map(s)"), "{text}");
+    }

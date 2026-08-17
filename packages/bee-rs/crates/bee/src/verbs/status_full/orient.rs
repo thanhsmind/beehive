@@ -294,6 +294,55 @@ fn sweep_on_orient(ctx: &Ctx) -> R<Option<String>> {
     Ok(None)
 }
 
+// ─── wayfinding resume (D5, wayfinding-flow) ───────────────────────────────
+//
+// `bee orient` is the hard, deterministic resume path CONTEXT.md's D5 asks
+// for: once the whole pipeline is idle AND an open discovery map still has
+// frontier tickets, `next.skill` must read `bee-wayfinding` — never model
+// judgment. Both halves below read fields `build_orient` already has in
+// hand from `build_status` (D4's `open_maps`, the global cell counts, the
+// handoff flag, the phase) — no second scan, no new field.
+
+/// True once the pipeline is idle enough to safely hand `next` over to
+/// wayfinding: no pending handoff, no open or claimed cell anywhere (the
+/// SAME global counts `work.cells` already reports), and the phase itself
+/// reads as one of the terminal lane phases (`TERMINAL_LANE_PHASES`, mod.rs
+/// — idle / compounding-complete, the same resting set a lane's own record
+/// is judged against elsewhere in this module). Standalone and named so the
+/// idle/active split is unit-testable without assembling a full packet.
+fn pipeline_idle_for_wayfinding(status: &JMap) -> bool {
+    if opt_truthy(status.get("handoff")) {
+        return false;
+    }
+    let cells = status.get("cells");
+    let open = cells.and_then(|c| vget(c, "open")).and_then(|v| v.as_i64()).unwrap_or(0);
+    let claimed = cells.and_then(|c| vget(c, "claimed")).and_then(|v| v.as_i64()).unwrap_or(0);
+    if open != 0 || claimed != 0 {
+        return false;
+    }
+    status
+        .get("phase")
+        .and_then(|v| v.as_str())
+        .map(|p| TERMINAL_LANE_PHASES.contains(&p))
+        .unwrap_or(false)
+}
+
+/// The first open discovery map (already alphabetical — `scan_discovery`'s
+/// own order) carrying a nonzero frontier, read back from
+/// `status["open_maps"]["efforts"]` (D4's ONE scan; never re-scanned here).
+/// `None` when there is no open map, or every open map's frontier is zero.
+fn first_frontier_effort(status: &JMap) -> Option<(String, i64)> {
+    let efforts = vget(status.get("open_maps")?, "efforts")?.as_array()?;
+    efforts.iter().find_map(|e| {
+        let frontier = vget(e, "frontier").and_then(|v| v.as_i64()).unwrap_or(0);
+        if frontier <= 0 {
+            return None;
+        }
+        let name = vget(e, "name").and_then(|v| v.as_str())?.to_string();
+        Some((name, frontier))
+    })
+}
+
 /// bee.mjs buildOrient.
 pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     // D1 (sweep-at-every-door): orient's own sweep door, before anything
@@ -331,6 +380,11 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
         .take(5)
         .map(|c| vget(c, "id").cloned().unwrap_or(Value::Null))
         .collect();
+    // D5: computed once, reused by both the report-only blocker below (mid-
+    // feature) and the `next` override further down (idle) — never two
+    // different reads of the same D4 scan.
+    let wayfinding_idle = pipeline_idle_for_wayfinding(&status);
+    let wayfinding_frontier = first_frontier_effort(&status);
     let mut blockers: Vec<Value> = Vec::new();
     if let Some(line) = sweep_blocker {
         blockers.push(json!(line));
@@ -398,6 +452,14 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
             reclaimable.len()
         )));
     }
+    // D5: mid-feature, an open discovery map with frontier tickets stays a
+    // report-only line — `next` is untouched (the idle-only override sits
+    // below) so a live feature's routing is never interrupted.
+    if !wayfinding_idle {
+        if let Some((name, frontier)) = &wayfinding_frontier {
+            blockers.push(json!(format!("open discovery map {name} — {frontier} frontier")));
+        }
+    }
     if let Some(Value::Array(warnings)) = status.get("staleness_warnings") {
         for warning in warnings {
             if let Value::String(w) = warning {
@@ -463,29 +525,46 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
         packet.insert("worktree".into(), Value::Object(worktree.clone()));
     }
     {
+        // D5: idle + an open map with frontier tickets overrides the
+        // ORIENT_PHASE_SKILL lookup below deterministically — this is the
+        // hard resume path, not a suggestion competing with it.
+        // `pipeline_idle_for_wayfinding` already refuses while a handoff is
+        // pending, so the handoff rule always wins first.
+        let wayfinding_resume = if wayfinding_idle { wayfinding_frontier.as_ref() } else { None };
         let mut next = JMap::new();
-        next.insert(
-            "action".into(),
-            status.get("recommended_next").cloned().unwrap_or(Value::Null),
-        );
-        let skill = status
-            .get("phase")
-            .and_then(|v| v.as_str())
-            .and_then(|p| {
-                ORIENT_PHASE_SKILL
-                    .iter()
-                    .find(|(phase, _)| *phase == p)
-                    .map(|(_, s)| *s)
-            })
-            .unwrap_or("bee-hive");
-        next.insert("skill".into(), json!(skill));
-        let command = match &worktree {
-            Some(w) if str_eq(w.get("location"), "main") => {
-                w.get("guidance").cloned().unwrap_or(Value::Null)
-            }
-            _ => orient_next_command(&status, &ready_ids),
-        };
-        next.insert("command".into(), command);
+        if let Some((name, frontier)) = wayfinding_resume {
+            next.insert(
+                "action".into(),
+                json!(format!(
+                    "resume discovery map \"{name}\" ({frontier} frontier ticket(s)) — switch to bee-wayfinding."
+                )),
+            );
+            next.insert("skill".into(), json!("bee-wayfinding"));
+            next.insert("command".into(), json!("bee discovery list --json"));
+        } else {
+            next.insert(
+                "action".into(),
+                status.get("recommended_next").cloned().unwrap_or(Value::Null),
+            );
+            let skill = status
+                .get("phase")
+                .and_then(|v| v.as_str())
+                .and_then(|p| {
+                    ORIENT_PHASE_SKILL
+                        .iter()
+                        .find(|(phase, _)| *phase == p)
+                        .map(|(_, s)| *s)
+                })
+                .unwrap_or("bee-hive");
+            next.insert("skill".into(), json!(skill));
+            let command = match &worktree {
+                Some(w) if str_eq(w.get("location"), "main") => {
+                    w.get("guidance").cloned().unwrap_or(Value::Null)
+                }
+                _ => orient_next_command(&status, &ready_ids),
+            };
+            next.insert("command".into(), command);
+        }
         packet.insert("next".into(), Value::Object(next));
     }
     Ok(packet)

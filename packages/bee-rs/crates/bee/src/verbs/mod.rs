@@ -20,6 +20,7 @@ pub mod capture;
 pub mod cells;
 pub mod decisions;
 pub mod deferred_queue;
+pub mod discovery;
 pub mod drivers;
 pub mod feedback;
 pub mod help;
@@ -89,6 +90,9 @@ pub fn try_native(args: &[OsString], t0: Instant) -> Option<ExitCode> {
         return Some(code);
     }
     if let Some(code) = deferred_queue::try_native(args, t0) {
+        return Some(code);
+    }
+    if let Some(code) = discovery::try_native(args, t0) {
         return Some(code);
     }
     if let Some(code) = feedback::try_native(args, t0) {

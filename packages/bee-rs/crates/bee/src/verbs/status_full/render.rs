@@ -424,6 +424,26 @@ pub(crate) fn render_status_text(status: &JMap) -> String {
             }
         }
     }
+    // D4 (wayfinding-flow): open discovery maps — resume must be
+    // un-missable. Guarded on `open_maps` carrying at least one effort or
+    // one unreadable MAP.md; absent or empty `docs/discovery/` prints
+    // nothing at all.
+    if let Some(om) = s("open_maps") {
+        let efforts = vget(om, "efforts").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let unreadable = vget(om, "unreadable").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        if !efforts.is_empty() || !unreadable.is_empty() {
+            for e in &efforts {
+                lines.push(format!(
+                    "### Open discovery map(s): {} — {} frontier ticket(s)",
+                    tpl(vget(e, "name")),
+                    tpl(vget(e, "frontier"))
+                ));
+            }
+            for u in &unreadable {
+                lines.push(format!("unreadable {} — remedy: fix or delete", tpl(Some(u))));
+            }
+        }
+    }
     lines.push(format!("Recommended next: {}", tpl(s("recommended_next"))));
     lines.join("\n")
 }

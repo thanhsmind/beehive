@@ -91,11 +91,15 @@ gather report before shaping cells.
 
 ## Deferred Ideas
 
+Revisit condition registered: [[trigger:wayfinding-v1-has-been-used-for-at-least__wayfindi]]
+
 - `bee triggers` predicate-tier nudge ("map X still has tickets after N
-  days") — deferred, not in v1.
+  days") — not in v1, per the trigger above.
 - `bee orient` full route-table entry for brand-new fog (beyond resume)
-  — v1 relies on explicit invocation + shaping entry check (D6).
-- CLI guard for ticket claim/blocked lines — convention-only in v1 (D7).
+  — v1 relies on explicit invocation + shaping entry check (D6), per
+  the trigger above.
+- CLI guard for ticket claim/blocked lines — convention-only in v1
+  (D7), per the trigger above.
 
 ## Handoff Note
 
