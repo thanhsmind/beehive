@@ -353,6 +353,9 @@
     "cli-surface",
     "doc-deferral",
     "feature-local",
-    "worktree-keep-on-merge"
+    "worktree-keep-on-merge",
+    "uat-gate-before-merge",
+    "staging-lane",
+    "uat"
   ]
 }

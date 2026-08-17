@@ -30,18 +30,52 @@
   "deps": [
     "ug-2"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "ug-w3",
+    "outcome": "Docs + flow surfaces taught about the uat merge-acceptance stop",
+    "files_changed": [
+      ".claude/skills/bee-herding/references/role-merge.md",
+      ".claude/skills/bee-hive/SKILL.md",
+      ".claude/skills/bee-hive/references/gates-and-delegation.md",
+      ".claude/skills/bee-swarming/SKILL.md",
+      "docs/handbook/register.md"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-17T10:12:00.578Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "ug-w3-cold",
+    "claimed_at": "2026-08-17T10:06:19.537Z",
+    "ownership_overrides": [
+      {
+        "verb": "capCell",
+        "forced_by": "f5668bee-17cf-4109-aed8-0b530e26f636",
+        "owner_bypassed": "ug-w3-cold",
+        "at": "2026-08-17T10:12:00.578Z"
+      }
+    ],
+    "report": {
+      "outcome": "Docs + flow surfaces taught about the uat merge-acceptance stop",
+      "commit": "b6fee6d4",
+      "files": [
+        ".claude/skills/bee-herding/references/role-merge.md",
+        ".claude/skills/bee-hive/SKILL.md",
+        ".claude/skills/bee-hive/references/gates-and-delegation.md",
+        ".claude/skills/bee-swarming/SKILL.md",
+        "docs/handbook/register.md"
+      ],
+      "tests": "green",
+      "deviations": [
+        "Also edited .claude/skills/bee-hive/SKILL.md (not in cell.files) per explicit dispatch-prompt authorization to fix its own \"three gates, and only three\" wording; reserved under ug-3 before writing."
+      ]
+    },
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T10:11:40.865Z"
   }
 }

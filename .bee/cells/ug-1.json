@@ -29,19 +29,36 @@
     "uat-gate-before-merge D1"
   ],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "ug-w1",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/render.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/state.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-17T09:42:16.939Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "f5668bee-17cf-4109-aed8-0b530e26f636",
-    "claimed_at": "2026-08-17T09:16:40.113Z"
+    "claimed_at": "2026-08-17T09:16:40.113Z",
+    "inline_reason": "worker ug-w1 dispatched directly by orchestrator, not pre-registered in state.json workers[]",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T09:41:58.085Z"
   }
 }

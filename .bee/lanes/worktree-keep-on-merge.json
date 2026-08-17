@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "feature": "worktree-keep-on-merge",
+  "mode": "feature",
+  "phase": "compounding-complete",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false
+  },
+  "summary": "Feature \"worktree-keep-on-merge\" started at phase \"planning\".",
+  "next_action": "Feature worktree-keep-on-merge closed; new merge-keep behavior ships with next release.",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "UAT-before-merge flow: chọn kiểu chặn (gate cứng trong CLI hay chỉ dừng theo nếp)",
+    "asked_at": "2026-08-17T08:52:31.355Z",
+    "session": "f5668bee-17cf-4109-aed8-0b530e26f636"
+  },
+  "created_at": "2026-08-17T08:02:32.245Z"
+}
