@@ -6,9 +6,12 @@
 //   worktree register   --feature F     [--json]
 //   worktree unregister [--id ID]       [--json]
 //   worktree new    --feature F [--base-ref R] [--with-companion] [--json]
-//   worktree merge  --id ID [--no-cleanup] [--queue-wait-ms N]      [--json]
-//     (cleanup runs by default now — D1/D1a; `--cleanup` is still accepted,
-//     validated, and a no-op, kept only so existing scripts keep working)
+//   worktree merge  --id ID [--cleanup] [--no-cleanup] [--queue-wait-ms N]  [--json]
+//     (wkm-1, D1: the worktree is KEPT by default now; `--cleanup`, or an
+//     explicit `worktree_cleanup_on_merge: true` in config, opts a merge
+//     into teardown, and `--no-cleanup` always wins as an explicit keep. A
+//     kept worktree enqueues one `worktree-cleanup` deferred-queue entry —
+//     `bee worktree prune` is the drain)
 //   worktree prune  [--dry-run] [--older-than-days N]              [--json]
 //
 // `worktree new` — NATIVE (R6), including the creating path from the MAIN

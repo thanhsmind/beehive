@@ -447,6 +447,11 @@ pub(crate) fn merge_finish(
             ));
         }
         committed = true;
+        // wkm-1 (D1): the sha the keep-path deferred-queue entry names, read
+        // right after the merge commit lands.
+        let merge_commit_sha =
+            js_trim(&run_git(main_root, &["rev-parse", "HEAD"]).stdout.unwrap_or_default())
+                .to_string();
 
         let mut result = Map::new();
         result.insert("ok".into(), Value::Bool(true));
@@ -492,6 +497,13 @@ pub(crate) fn merge_finish(
             cleanup,
             verify_field == "skipped",
         );
+        // wkm-1 (D1): the keep path (cleanup == false) queues its one
+        // cross-check entry AFTER attach_cleanup_outcome runs — this is the
+        // real-merge success path only; ALREADY_UP_TO_DATE (merge_stage's
+        // own arm above) never reaches merge_finish at all.
+        if !cleanup {
+            enqueue_worktree_cleanup_deferral(main_root, worktree_root, id, branch, &merge_commit_sha);
+        }
         Ok(MergeAnswer { result, ok: true })
     })();
 

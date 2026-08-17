@@ -8,7 +8,7 @@
 // `None`; `None` is reserved for an argv this group does not claim at all).
 //
 // Verbs:
-//   deferred-queue add     --kind <capture|scribe|review|promote>
+//   deferred-queue add     --kind <capture|scribe|review|promote|worktree-cleanup>
 //                           --feature <v> --reason <v>
 //                           [--cells <c1,c2>] [--areas <a1,a2>] [--files <f1,f2>]
 //                           [--json]
@@ -60,7 +60,10 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-const KINDS: [&str; 4] = ["capture", "scribe", "review", "promote"];
+// wkm-1: `worktree-cleanup` is the keep-by-default cross-check record —
+// `bee worktree merge` queues one instead of tearing down; `bee worktree
+// prune` is the drain that resolves it.
+const KINDS: [&str; 5] = ["capture", "scribe", "review", "promote", "worktree-cleanup"];
 const DEFAULT_LEASE_SECONDS: f64 = 3600.0;
 const QUEUE_LOCK_NAME: &str = "deferred-queue";
 const LOCK_RETRY_ATTEMPTS: u32 = 15;
@@ -392,7 +395,7 @@ fn run_add(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     };
     let Some(kind) = flag(&parsed, "kind").filter(|k| KINDS.contains(k)) else {
         let msg = format!(
-            "bee {cmd}: --kind is required and must be one of capture, scribe, review, promote."
+            "bee {cmd}: --kind is required and must be one of capture, scribe, review, promote, worktree-cleanup."
         );
         return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
     };
@@ -442,7 +445,7 @@ fn run_list(parsed: ParsedArgs, t0: Instant) -> Option<ExitCode> {
     let kind_filter = match flag(&parsed, "kind") {
         Some(k) if KINDS.contains(&k) => Some(k.to_string()),
         Some(_) => {
-            let msg = format!("bee {cmd}: --kind must be one of capture, scribe, review, promote.");
+            let msg = format!("bee {cmd}: --kind must be one of capture, scribe, review, promote, worktree-cleanup.");
             return Some(emit_error(&ctx.root, cmd, parsed.json, &msg, t0));
         }
         None => None,
