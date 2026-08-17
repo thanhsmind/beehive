@@ -684,6 +684,18 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
         }
     }
 
+    // staging-lane D0 (teeth #2): a direct `git commit` (including
+    // `--amend`) with cwd inside the REGISTERED staging worktree is refused
+    // unless BEE_STAGING_MACHINERY=1 — the env marker `bee staging add` /
+    // `bee staging rebuild` set around their OWN merge commits
+    // (verbs/staging/mod.rs). Staging is a disposable mixing ground
+    // (D0/D0a); its branch has exactly two sanctioned writers, never a
+    // hand-run commit. Phase-independent, like gc-2 above — a direct commit
+    // on staging is wrong in every phase, not just the terminal one.
+    if let Some(reason) = staging_worktree_commit_denial(cwd, subcommand)? {
+        return Ok(Some(WV::Deny(reason)));
+    }
+
     if !is_terminal_phase(phase) {
         return Ok(None);
     }
@@ -767,6 +779,50 @@ A genuinely path-scoped `git commit -- <your paths>` is allowed too.",
         &format!("running `git {}`", named),
         "This git subcommand is not recognized as read-only or as a modeled bookkeeping-eligible mutation, so it is refused rather than assumed safe. ",
     ))))
+}
+
+/// staging-lane D0 teeth #2. `Ok(None)` on every "not applicable" path (not
+/// a commit, the machinery env is set, no staging record yet, cwd resolves
+/// outside staging) — fail OPEN, because an unreadable/absent staging
+/// record must never block an ordinary commit that has nothing to do with
+/// staging. Resolves `cwd` FRESH through `resolve_context` rather than
+/// reusing the caller's `Topo` — `Topo.ctx.workspace_root` comes from
+/// `resolve_write_topology`'s `root` (bee's own store-root resolution,
+/// which substitutes the MAIN root for an ungranted linked worktree, and
+/// the staging worktree is never granted), so it would silently miss every
+/// staging commit; `cwd` is the git invocation's REAL location and always
+/// resolves to the worktree it actually runs in, grant or no grant. Path
+/// comparison goes through `path_identity::canonical_paths_equal` (the same
+/// windows-path-identity wpi-1 fix `resolve_worktree_by_id` already uses),
+/// never a byte compare.
+fn staging_worktree_commit_denial(cwd: &str, subcommand: Option<&str>) -> R<Option<String>> {
+    if subcommand != Some("commit") {
+        return Ok(None);
+    }
+    if std::env::var("BEE_STAGING_MACHINERY").as_deref() == Ok("1") {
+        return Ok(None);
+    }
+    let ctx = match resolve_context(cwd)? {
+        CtxOutcome::Ok(c) => c,
+        CtxOutcome::Threw => return Ok(None),
+    };
+    let (Some(workspace_root), Some(control_root)) = (ctx.workspace_root, ctx.control_root) else {
+        return Ok(None);
+    };
+    let record = match crate::verbs::staging::read_staging_record(Path::new(&control_root)) {
+        Ok(Some(r)) => r,
+        _ => return Ok(None),
+    };
+    if !crate::path_identity::canonical_paths_equal(Path::new(&workspace_root), &record.worktree_root) {
+        return Ok(None);
+    }
+    Ok(Some(format!(
+        "bee staging-worktree commit guard: `git commit` is refused inside the staging worktree ({}) — \
+staging-lane D0/D0a: staging is a disposable mixing ground, and its branch has exactly two sanctioned \
+writers (\"bee staging add\", \"bee staging rebuild\"), never a hand-run commit. FIX: fix on the feature \
+branch, then \"bee staging add --feature <slug>\" to re-merge it into staging.",
+        record.worktree_root.display()
+    )))
 }
 
 /// Idle-gate safe-form table: per-verb predicates that admit a read-only

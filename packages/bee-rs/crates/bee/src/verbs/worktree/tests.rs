@@ -3230,6 +3230,129 @@ use std::time::Instant;
         assert!(!String::from_utf8_lossy(&branches.stdout).trim().is_empty());
     }
 
+    // ── staging-lane D0 teeth #1 & #3 ───────────────────────────────────────
+
+    /// Teeth #1: the staging worktree/branch can never land into main via
+    /// `bee worktree merge`, matched by EITHER the git-internal worktree id
+    /// (the surface's own `--id`) or the branch name itself — no escape
+    /// flag, and the refusal touches nothing (main's HEAD, the staging
+    /// worktree/branch, and its record all stand exactly as before).
+    #[test]
+    fn merge_refuses_the_staging_branch_by_id_and_by_branch_zero_mutation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        worktree_with_a_real_commit(&main, "demo");
+        let add = crate::verbs::staging::staging_add(&main, "demo")
+            .unwrap_or_else(|e| panic!("staging add must succeed: {e}"));
+        let staging_root = add.staging_worktree_root.clone();
+        let staging_id = read_worktree_git_verified_id(&staging_root)
+            .unwrap_or_else(|e| panic!("could not resolve the staging worktree's git id: {e}"));
+
+        let pre_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        let record_before = crate::verbs::staging::read_staging_record(&main).unwrap().unwrap();
+
+        // Matched by the git-internal worktree id.
+        let by_id = merge_feature_worktree(&main, &staging_id, false, None, None, true, None);
+        match by_id {
+            Err(MErr::Thrown(msg)) => {
+                assert!(msg.contains("WORKTREE_MERGE_STAGING_FORBIDDEN"), "{msg}");
+                assert!(msg.contains("no escape flag"), "{msg}");
+                assert!(msg.contains("uat"), "{msg}");
+            }
+            Err(MErr::Ex) => panic!("expected a typed refusal, got MErr::Ex"),
+            Ok(answer) => panic!("a staging merge by id must refuse: ok={} {:?}", answer.ok, answer.result),
+        }
+
+        // Matched by the branch name alone.
+        let by_branch = merge_feature_worktree(&main, "staging", false, None, None, true, None);
+        match by_branch {
+            Err(MErr::Thrown(msg)) => assert!(msg.contains("WORKTREE_MERGE_STAGING_FORBIDDEN"), "{msg}"),
+            Err(MErr::Ex) => panic!("expected a typed refusal, got MErr::Ex"),
+            Ok(answer) => panic!("a staging merge by branch must refuse: ok={} {:?}", answer.ok, answer.result),
+        }
+
+        // Zero mutation across both attempts.
+        let post_merge_head =
+            js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
+        assert_eq!(pre_merge_head, post_merge_head, "main HEAD must not move");
+        assert!(!main.join(".git").join("MERGE_HEAD").exists());
+        assert!(staging_root.exists(), "the staging worktree must still stand");
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", "staging"])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "the staging branch must still stand"
+        );
+        let record_after = crate::verbs::staging::read_staging_record(&main).unwrap().unwrap();
+        assert_eq!(record_after.base_sha, record_before.base_sha);
+        assert_eq!(record_after.staged.len(), record_before.staged.len());
+    }
+
+    /// Teeth #3 (D0a trigger 3): a real merge to main carries the rebuild
+    /// nudge in its result JSON only when a staging record exists — its
+    /// mere presence is what triggers the nudge, not this merge's own
+    /// feature (the staged feature here is a DIFFERENT one than the one
+    /// being merged).
+    #[test]
+    fn merge_result_carries_the_staging_rebuild_nudge_only_when_a_staging_record_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+
+        // No staging record yet — the nudge must be absent.
+        let created_first = worktree_with_a_real_commit(&main, "demo");
+        let answer_first = merge_feature_worktree(&main, &created_first.id, false, None, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer_first.ok, "{:?}", answer_first.result);
+        assert!(
+            !answer_first.result.contains_key("staging_rebuild_suggested"),
+            "no staging record yet -> no nudge: {:?}",
+            answer_first.result
+        );
+
+        // Stage a (third, still-unmerged) feature so a staging record now
+        // exists, then merge a SECOND feature to main. `-qam` only stages
+        // MODIFICATIONS to already-tracked files, never a brand-new
+        // untracked path — so every worktree below keeps writing the SAME
+        // already-tracked `f.txt`, just with content unique enough that
+        // `-a` always has something real to pick up (main's HEAD already
+        // carries `f.txt` = "y" from the "demo" merge above).
+        let mut lock_busy = None;
+        let staged_third =
+            create_feature_worktree(&main, "already-staged", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        std::fs::write(staged_third.worktree_root.join("f.txt"), "z1").unwrap();
+        git_ok(&staged_third.worktree_root, &["config", "user.email", "a@b.c"]);
+        git_ok(&staged_third.worktree_root, &["config", "user.name", "t"]);
+        git_ok(&staged_third.worktree_root, &["commit", "-qam", "staged work"]);
+        crate::verbs::staging::staging_add(&main, "already-staged")
+            .unwrap_or_else(|e| panic!("staging add must succeed: {e}"));
+
+        let created_second =
+            create_feature_worktree(&main, "second", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        std::fs::write(created_second.worktree_root.join("f.txt"), "z2").unwrap();
+        git_ok(&created_second.worktree_root, &["config", "user.email", "a@b.c"]);
+        git_ok(&created_second.worktree_root, &["config", "user.name", "t"]);
+        git_ok(&created_second.worktree_root, &["commit", "-qam", "second work"]);
+        let answer_second = merge_feature_worktree(&main, &created_second.id, false, None, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer_second.ok, "{:?}", answer_second.result);
+        assert_eq!(
+            answer_second.result["staging_rebuild_suggested"],
+            json!("bee staging rebuild")
+        );
+    }
+
     /// Truth 2a: the same standard-lane feature merges once its uat gate is
     /// approved on the live workflow record.
     #[test]

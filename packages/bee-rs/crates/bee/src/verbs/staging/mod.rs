@@ -57,6 +57,42 @@ fn refuse(code: &str, message: String) -> String {
     format!("[{code}] {message}")
 }
 
+/// staging-lane D0 teeth #2: the write-guard hook (hooks/write_guard/
+/// checks.rs's `staging_worktree_commit_denial`) refuses a `git commit`
+/// with cwd inside the staging worktree unless this marker is set — set it
+/// around this module's OWN merge commits (the two sanctioned writers of
+/// the staging branch) so `staging add`/`staging rebuild` never trip their
+/// own guard. Scoped RAII, same shape `worktree/tests.rs`'s
+/// `GitCeilingGuard` uses for `GIT_CEILING_DIRECTORIES`: `new` records
+/// whatever value (or absence) was already there and restores it on
+/// `Drop`, so a caller can never forget to unwind it, even on an early
+/// return via `?`.
+struct StagingMachineryGuard {
+    prior: Option<std::ffi::OsString>,
+}
+
+impl StagingMachineryGuard {
+    fn new() -> Self {
+        let prior = std::env::var_os("BEE_STAGING_MACHINERY");
+        // SAFETY: `staging add`/`staging rebuild` run their own merge
+        // commits under the `staging-admin` lock, single-threaded within
+        // this process — no other thread reads or writes this var while
+        // this guard is live.
+        unsafe { std::env::set_var("BEE_STAGING_MACHINERY", "1") };
+        StagingMachineryGuard { prior }
+    }
+}
+
+impl Drop for StagingMachineryGuard {
+    fn drop(&mut self) {
+        // SAFETY: see `new` above.
+        match self.prior.take() {
+            Some(v) => unsafe { std::env::set_var("BEE_STAGING_MACHINERY", v) },
+            None => unsafe { std::env::remove_var("BEE_STAGING_MACHINERY") },
+        }
+    }
+}
+
 // ─── the staged-set store ───────────────────────────────────────────────
 
 pub(crate) fn staging_file(main_root: &Path) -> PathBuf {
@@ -334,7 +370,10 @@ pub(crate) fn staging_add(main_root: &Path, feature: &str) -> Result<AddOutcome,
         Ok(g) => g,
         Err(busy) => return Err(busy.message()),
     };
-    let staged = staging_add_locked(main_root, feature);
+    let staged = {
+        let _machinery = StagingMachineryGuard::new();
+        staging_add_locked(main_root, feature)
+    };
     guard.release();
     staged
 }
@@ -497,7 +536,10 @@ pub(crate) fn staging_rebuild(main_root: &Path, without: &[String]) -> Result<Re
         Ok(g) => g,
         Err(busy) => return Err(busy.message()),
     };
-    let result = staging_rebuild_locked(main_root, without);
+    let result = {
+        let _machinery = StagingMachineryGuard::new();
+        staging_rebuild_locked(main_root, without)
+    };
     guard.release();
     let mut outcome = result?;
 

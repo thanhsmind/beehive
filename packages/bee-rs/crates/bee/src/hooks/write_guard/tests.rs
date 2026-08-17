@@ -1856,6 +1856,114 @@ use std::process::ExitCode;
         assert_eq!(e.code, 0, "{}", e.stderr);
     }
 
+    // ── staging-lane D0 teeth #2: a direct `git commit` inside the
+    // REGISTERED staging worktree is refused unless BEE_STAGING_MACHINERY=1
+    // is set — phase-independent, like gc-2, so `build_linked`'s "swarming"
+    // fixture (already proven above to let a plain `git commit` through)
+    // isolates this one new denial cleanly. ──────────────────────────────
+
+    /// `BEE_STAGING_MACHINERY` is process environment, so a bare `set_var`
+    /// around one assertion would leak into every other test that spawns a
+    /// `git commit` check while it was set. Scoped to exactly the life of
+    /// one test, same shape `verbs/worktree/tests.rs`'s `GitCeilingGuard`
+    /// uses for `GIT_CEILING_DIRECTORIES`.
+    struct StagingMachineryEnvGuard {
+        prior: Option<std::ffi::OsString>,
+    }
+
+    impl StagingMachineryEnvGuard {
+        fn new() -> Self {
+            let prior = std::env::var_os("BEE_STAGING_MACHINERY");
+            // SAFETY: no other thread reads/writes this specific var across
+            // this guard's lifetime — nothing else in this crate consults
+            // BEE_STAGING_MACHINERY outside this one test and the staging
+            // verbs' own scoped guard (verbs/staging/mod.rs).
+            unsafe { std::env::set_var("BEE_STAGING_MACHINERY", "1") };
+            StagingMachineryEnvGuard { prior }
+        }
+    }
+
+    impl Drop for StagingMachineryEnvGuard {
+        fn drop(&mut self) {
+            // SAFETY: see `new` above.
+            match self.prior.take() {
+                Some(v) => unsafe { std::env::set_var("BEE_STAGING_MACHINERY", v) },
+                None => unsafe { std::env::remove_var("BEE_STAGING_MACHINERY") },
+            }
+        }
+    }
+
+    fn write_staging_record_fixture(main_root: &Path, worktree_root: &Path) {
+        let dir = main_root.join(".bee").join("runtime");
+        std::fs::create_dir_all(&dir).unwrap();
+        let record = json!({
+            "branch": "staging",
+            "worktree_root": worktree_root.to_string_lossy(),
+            "created_at": "2026-01-01T00:00:00.000Z",
+            "base_sha": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            "staged": [],
+        });
+        std::fs::write(
+            dir.join("staging.json"),
+            format!("{}\n", serde_json::to_string_pretty(&record).unwrap()),
+        )
+        .unwrap();
+    }
+
+    struct SecondWorktree {
+        _dir: tempfile::TempDir,
+        root: PathBuf,
+    }
+
+    /// A second, independently-fabricated linked worktree off the SAME
+    /// `main_root` `build_linked` already set up — proves the guard is
+    /// scoped to the staging worktree's OWN path, never a blanket denial of
+    /// every linked worktree's commits.
+    fn add_sibling_worktree(main_root: &Path, wt_id: &str) -> SecondWorktree {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(dir.path()).unwrap();
+        let gitdir = main_root.join(".git").join("worktrees").join(wt_id);
+        std::fs::create_dir_all(&gitdir).unwrap();
+        std::fs::write(root.join(".git"), format!("gitdir: {}\n", gitdir.to_string_lossy())).unwrap();
+        std::fs::write(
+            gitdir.join("gitdir"),
+            format!("{}\n", root.join(".git").to_string_lossy()),
+        )
+        .unwrap();
+        SecondWorktree { _dir: dir, root }
+    }
+
+    // One test, not two: `BEE_STAGING_MACHINERY` is process environment
+    // (like `GIT_CEILING_DIRECTORIES` above), and `cargo test` runs cases in
+    // PARALLEL THREADS by default — a separate "allowed with the env" test
+    // setting it concurrently would race this one's "denied without it"
+    // assertion. Sequencing both inside one function is race-free by
+    // construction: nothing ELSE in this suite touches the var.
+    #[test]
+    fn staging_worktree_direct_commit_denied_without_env_allowed_with_it() {
+        let lx = build_linked(true);
+        write_staging_record_fixture(&lx.main_root, &lx.work_root);
+
+        let denied = expect_done(bash("git commit -m \"by hand\""), &lx.work_root);
+        assert_eq!(denied.code, 2, "{}", denied.stderr);
+        assert!(denied.stderr.contains("staging-worktree commit guard"), "{}", denied.stderr);
+        assert!(denied.stderr.contains("bee staging add"), "{}", denied.stderr);
+
+        let _guard = StagingMachineryEnvGuard::new();
+        let allowed = expect_done(bash("git commit -m \"machinery merge\""), &lx.work_root);
+        assert_eq!(allowed.code, 0, "{}", allowed.stderr);
+    }
+
+    #[test]
+    fn commit_outside_the_staging_worktree_is_unaffected() {
+        let lx = build_linked(true);
+        let other = add_sibling_worktree(&lx.main_root, "other");
+        // Staging points at lx.work_root, NOT other.root.
+        write_staging_record_fixture(&lx.main_root, &lx.work_root);
+        let e = expect_done(bash("git commit -m \"normal feature work\""), &other.root);
+        assert_eq!(e.code, 0, "{}", e.stderr);
+    }
+
     // ── guard-parser-depth (gpd-1): every git invocation is classified, and
     // sh/bash/dash/zsh/ksh -c / eval wrappers no longer hide a command from
     // the guard ────────────────────────────────────────────────────────────
