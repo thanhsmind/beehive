@@ -12,12 +12,7 @@
   },
   "summary": "Feature \"release-2-8-0\" started at phase \"planning\".",
   "next_action": "release 2.8.0 shipped (tag v2.8.0, CI green, binaries live); lane idle",
+  "created_at": "2026-08-17T11:57:04.924Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat acceptance for cell-preflight merge (skip once, or user reviews diff first)",
-    "asked_at": "2026-08-17T14:27:27.946Z",
-    "session": "dec65f4b-c7ad-4b53-b011-a089668d5b32"
-  },
-  "created_at": "2026-08-17T11:57:04.924Z"
+  "waiting_on": null
 }
