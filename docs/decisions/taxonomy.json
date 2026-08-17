@@ -356,6 +356,9 @@
     "worktree-keep-on-merge",
     "uat-gate-before-merge",
     "staging-lane",
-    "uat"
+    "uat",
+    "test-cadence-boundary",
+    "regen",
+    "wave-barrier"
   ]
 }

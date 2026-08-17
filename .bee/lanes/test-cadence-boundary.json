@@ -13,7 +13,12 @@
   "next_action": "Close test-cadence-boundary, then UAT before merge.",
   "created_at": "2026-08-17T10:49:39.853Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "UAT: accept boundary-only test cadence before worktree merge",
+    "asked_at": "2026-08-17T11:35:47.347Z",
+    "session": "44a1bf6b-ba95-47df-809a-ae679ce59c46"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",

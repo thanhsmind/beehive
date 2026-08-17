@@ -15,21 +15,29 @@
     "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
     "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
   ],
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "w-cap-1",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/validate.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-17T11:36:24.115Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "9ff00c4f-175c-499a-bf90-ab2cda28dbff",
-    "claimed_at": "2026-08-17T11:26:38.728Z"
+    "claimed_at": "2026-08-17T11:26:38.728Z",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T11:36:04.046Z"
   }
 }
