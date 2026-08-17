@@ -170,12 +170,7 @@ pub(crate) fn build_add_cells_report(root: &Path, cells: &[Value]) -> MR<(bool, 
             Some(Value::String(s)) if !s.is_empty() => s.clone(),
             _ => format!("(index {index})"),
         };
-        let mut problems: Vec<String> = Vec::new();
-        match validate_new_cell(root, cell) {
-            Ok(()) => {}
-            Err(Fail::Thrown(message)) => problems.push(message),
-            Err(Fail::Delegate) => return Err(Fail::Delegate),
-        }
+        let mut problems: Vec<String> = validate_new_cell_problems(root, cell)?;
         // D3: gated-phase refusal folds into the SAME whole-batch problem
         // list every other addCells check uses — one gated cell fails the
         // whole batch, nothing written, exactly like a duplicate id or a

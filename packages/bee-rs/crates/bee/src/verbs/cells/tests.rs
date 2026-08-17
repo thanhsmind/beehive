@@ -456,7 +456,11 @@ use std::time::Instant;
         );
         assert_eq!(
             thrown(validate_new_cell(root, &json!({"id": "a-1"}))),
-            "addCell: cell is missing required field \"feature\" (non-empty string)."
+            "addCell: cell is missing required field \"feature\" (non-empty string). \
+             addCell: cell is missing required field \"title\" (non-empty string). \
+             addCell: cell is missing required field \"action\" (non-empty string). \
+             addCell: cell is missing required field \"verify\" (non-empty string). \
+             addCell: invalid lane \"undefined\" — must be one of: tiny, small, standard, high-risk, spike."
         );
         let base = |lane: &str| {
             json!({"id": "a-1", "feature": "f", "title": "t", "action": "a", "verify": "v", "lane": lane})
@@ -510,6 +514,41 @@ use std::time::Instant;
                 "claim_session"
             ]
         );
+    }
+
+    // cap-1: validate_new_cell_problems collects EVERY schema problem from
+    // one call, not just the first — and the batch path (build_add_cells_report)
+    // reports that same list per cell rather than one Thrown message.
+    #[test]
+    fn validate_new_cell_problems_collects_every_problem_in_one_call() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // Missing id, feature, action, verify — title present so it does not
+        // fire — plus an invalid lane: five independent problems, none of
+        // them a dependent-check side effect (id absent skips id
+        // pattern/already-exists; lane invalid skips must_haves.truths).
+        let broken = json!({"title": "t", "lane": "nope"});
+        let expected = vec![
+            "addCell: cell is missing required field \"id\" (non-empty string).".to_string(),
+            "addCell: cell is missing required field \"feature\" (non-empty string).".to_string(),
+            "addCell: cell is missing required field \"action\" (non-empty string).".to_string(),
+            "addCell: cell is missing required field \"verify\" (non-empty string).".to_string(),
+            "addCell: invalid lane \"nope\" — must be one of: tiny, small, standard, high-risk, spike."
+                .to_string(),
+        ];
+        assert_eq!(validate_new_cell_problems(root, &broken).unwrap(), expected);
+        // validate_new_cell wraps the same list into one Thrown message.
+        assert_eq!(thrown(validate_new_cell(root, &broken)), expected.join(" "));
+        // The batch path reports the identical list on that cell's row —
+        // nothing else (no feature is a string, so no gate check fires; no
+        // id is a string, so no duplicate-id check fires).
+        let (ok, rows, normalized) = build_add_cells_report(root, &[broken]).unwrap();
+        assert!(!ok);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, "(index 0)");
+        assert!(!rows[0].ok);
+        assert_eq!(rows[0].problems, expected);
+        assert!(normalized.is_none());
     }
 
     // P3-5: a cell authored with change_class "behavior" and no explicit
