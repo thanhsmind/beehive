@@ -45,16 +45,23 @@ pub(crate) fn is_no_work_phase(record: &JMap) -> bool {
 
 /// inject.mjs visibleGates — the review gate (Gate 3) is user-invoked, so it
 /// is pending only inside a live review session, and a terminal record owes no
-/// gate at all.
+/// gate at all. uat-gate-before-merge D1: the uat gate sits AFTER execution,
+/// so it is noise before execution is approved — shown only once it is.
 pub(crate) fn visible_gates(record: &JMap) -> Vec<&'static str> {
     if is_no_work_phase(record) {
         return Vec::new();
     }
-    if str_eq(record.get("phase"), "reviewing") {
-        GATE_NAMES.to_vec()
-    } else {
-        GATE_NAMES.iter().copied().filter(|g| *g != "review").collect()
-    }
+    let showing_review = str_eq(record.get("phase"), "reviewing");
+    let execution_approved = matches!(
+        record.get("approved_gates").and_then(|v| vget(v, "execution")),
+        Some(Value::Bool(true))
+    );
+    GATE_NAMES
+        .iter()
+        .copied()
+        .filter(|g| *g != "review" || showing_review)
+        .filter(|g| *g != "uat" || execution_approved)
+        .collect()
 }
 
 /// The first gate this record still owes, or `None`. Shared with the compact

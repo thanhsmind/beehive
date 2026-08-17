@@ -67,7 +67,7 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
         ));
         assert_eq!(
             jsjson::stringify(&merged),
-            r#"{"context":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"shape":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"execution":{"approved":true,"approved_for_plan_rev":2,"state":"approved","actor":null,"at":null,"reason":null,"bypass_level":null},"review":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"fifth":{"approved":true,"approved_for_plan_rev":null,"state":"approved","actor":null,"at":null,"reason":null,"bypass_level":null}}"#
+            r#"{"context":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"shape":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"execution":{"approved":true,"approved_for_plan_rev":2,"state":"approved","actor":null,"at":null,"reason":null,"bypass_level":null},"review":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"uat":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"fifth":{"approved":true,"approved_for_plan_rev":null,"state":"approved","actor":null,"at":null,"reason":null,"bypass_level":null}}"#
         );
         // A patch carrying only `approved` PRESERVES the base's rev stamp —
         // and, per D3, re-derives `state` from the fresh boolean rather than
@@ -285,11 +285,14 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
 
         // Once every earlier gate is settled and the LAST gate in the
         // sequence is the rejection, nothing later can ever supersede it.
+        // uat-gate-before-merge D1: uat is now the last gate in the fixed
+        // sequence, so it is the one that carries the trailing rejection.
         let trailing_rejection = json!({
             "context": {"state": "approved"},
             "shape": {"state": "approved"},
             "execution": {"state": "approved"},
-            "review": {"state": "rejected"},
+            "review": {"state": "approved"},
+            "uat": {"state": "rejected"},
         });
         assert_eq!(derive_run_state("active", &trailing_rejection, &counts), "blocked");
     }
@@ -301,6 +304,7 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
             "shape": {"state": "approved"},
             "execution": {"state": "approved"},
             "review": {"state": "approved"},
+            "uat": {"state": "approved"},
         });
         let mut counts = CellCounts::default();
         assert_eq!(derive_run_state("active", &all_approved, &counts), "shaping", "no cells yet");
@@ -345,6 +349,7 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
                 "shape": {"approved": true, "state": "approved"},
                 "execution": {"approved": true, "state": "approved"},
                 "review": {"approved": true, "state": "approved"},
+                "uat": {"approved": true, "state": "approved"},
             }),
         );
         // A caller-supplied run_state is a valid vocabulary value, but the
@@ -408,6 +413,7 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
                 "shape": {"approved": true, "state": "approved"},
                 "execution": {"approved": true, "state": "approved"},
                 "review": {"approved": true, "state": "approved"},
+                "uat": {"approved": true, "state": "approved"},
             }),
         );
         let approved = ok(update_workflow(tmp.path(), &id, approve));
@@ -490,6 +496,7 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
                 "shape": {"approved": true, "state": "approved"},
                 "execution": {"approved": true, "state": "approved"},
                 "review": {"approved": true, "state": "approved"},
+                "uat": {"approved": true, "state": "approved"},
             }),
         );
         ok(update_workflow(tmp.path(), &id, approve));
@@ -1007,12 +1014,12 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         // plan_rev 3: the stamped execution gate is effective.
         assert_eq!(
             jsjson::stringify(&workflow_gates_to_approved_gates(Some(&gates), Some(&json!(3)))),
-            r#"{"context":true,"shape":true,"execution":true,"review":false}"#
+            r#"{"context":true,"shape":true,"execution":true,"review":false,"uat":false}"#
         );
         // plan_rev 4 (a bump): execution goes ineffective, the rest are immune.
         assert_eq!(
             jsjson::stringify(&workflow_gates_to_approved_gates(Some(&gates), Some(&json!(4)))),
-            r#"{"context":true,"shape":true,"execution":false,"review":false}"#
+            r#"{"context":true,"shape":true,"execution":false,"review":false,"uat":false}"#
         );
     }
 
@@ -1087,7 +1094,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         assert_eq!(out["phase"], json!("swarming"));
         assert_eq!(
             out["approved_gates"],
-            json!({"context":false,"shape":false,"execution":false,"review":false})
+            json!({"context":false,"shape":false,"execution":false,"review":false,"uat":false})
         );
 
         // (3) feature-matched branch, pass-through fields survive.
@@ -1113,7 +1120,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         assert_eq!(out["workers"], json!(["w"]));
         assert_eq!(
             out["approved_gates"],
-            json!({"context":true,"shape":false,"execution":true,"review":false})
+            json!({"context":true,"shape":false,"execution":true,"review":false,"uat":false})
         );
     }
 
@@ -1240,7 +1247,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         assert!(lane.contains_key("last_scribing_run"));
         assert_eq!(
             jsjson::stringify(lane.get("approved_gates").unwrap()),
-            r#"{"context":false,"shape":true,"execution":false,"review":false}"#
+            r#"{"context":false,"shape":true,"execution":false,"review":false,"uat":false}"#
         );
         // No live workflow → no-op, existing record returned.
         let none = ok(rebuild_lane_projection(tmp.path(), "nolane"));
@@ -1305,7 +1312,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         assert_eq!(rec.get("schema_version"), Some(&json!("1.0")));
         assert_eq!(
             jsjson::stringify(rec.get("approved_gates").unwrap()),
-            r#"{"context":false,"shape":false,"execution":false,"review":false}"#
+            r#"{"context":false,"shape":false,"execution":false,"review":false,"uat":false}"#
         );
     }
 
@@ -1591,13 +1598,13 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         ];
         assert_eq!(
             jsjson::stringify(&gates_patch_from_record(&updated, &stamps)),
-            r#"{"context":{"approved":true,"state":"approved"},"shape":{"approved":true,"state":"approved","approved_for_plan_rev":4},"execution":{"approved":true,"state":"approved","approved_for_plan_rev":4},"review":{"approved":false,"state":"pending"}}"#
+            r#"{"context":{"approved":true,"state":"approved"},"shape":{"approved":true,"state":"approved","approved_for_plan_rev":4},"execution":{"approved":true,"state":"approved","approved_for_plan_rev":4},"review":{"approved":false,"state":"pending"},"uat":{"approved":false,"state":"pending"}}"#
         );
         // No stamps at all: every gate carries `approved` (+ `state`) only,
         // so mergeGates preserves whatever rev each entry already had.
         assert_eq!(
             jsjson::stringify(&gates_patch_from_record(&updated, &[])),
-            r#"{"context":{"approved":true,"state":"approved"},"shape":{"approved":true,"state":"approved"},"execution":{"approved":true,"state":"approved"},"review":{"approved":false,"state":"pending"}}"#
+            r#"{"context":{"approved":true,"state":"approved"},"shape":{"approved":true,"state":"approved"},"execution":{"approved":true,"state":"approved"},"review":{"approved":false,"state":"pending"},"uat":{"approved":false,"state":"pending"}}"#
         );
     }
 
@@ -1687,7 +1694,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
         // `state:"approved"` since the override never named `state` itself.
         assert_eq!(
             jsjson::stringify(&record["gates"]),
-            r#"{"context":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"shape":{"approved":true,"approved_for_plan_rev":null,"state":"approved","actor":null,"at":null,"reason":null,"bypass_level":null},"execution":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"review":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null}}"#
+            r#"{"context":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"shape":{"approved":true,"approved_for_plan_rev":null,"state":"approved","actor":null,"at":null,"reason":null,"bypass_level":null},"execution":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"review":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null},"uat":{"approved":false,"approved_for_plan_rev":null,"state":"pending","actor":null,"at":null,"reason":null,"bypass_level":null}}"#
         );
 
         // The record is on disk at .bee/runtime/workflows/<id>/state.json.
@@ -1701,7 +1708,7 @@ state (gates, phase) while reporting success. FIX: inspect/restore the file (e.g
             .replace(record["created_at"].as_str().unwrap(), "<now>");
         assert_eq!(
             on_disk,
-            "{\n  \"mode\": \"swarm\",\n  \"phase\": \"planning\",\n  \"plan_rev\": 2,\n  \"summary\": \"s\",\n  \"next_action\": \"n\",\n  \"status\": \"paused\",\n  \"route\": null,\n  \"run_state\": \"awaiting-approval\",\n  \"waiting_on\": null,\n  \"id\": \"wf-explicit\",\n  \"feature\": \"billing-refunds\",\n  \"gates\": {\n    \"context\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"shape\": {\n      \"approved\": true,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"approved\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"execution\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"review\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    }\n  },\n  \"created_at\": \"<now>\"\n}\n"
+            "{\n  \"mode\": \"swarm\",\n  \"phase\": \"planning\",\n  \"plan_rev\": 2,\n  \"summary\": \"s\",\n  \"next_action\": \"n\",\n  \"status\": \"paused\",\n  \"route\": null,\n  \"run_state\": \"awaiting-approval\",\n  \"waiting_on\": null,\n  \"id\": \"wf-explicit\",\n  \"feature\": \"billing-refunds\",\n  \"gates\": {\n    \"context\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"shape\": {\n      \"approved\": true,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"approved\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"execution\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"review\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    },\n    \"uat\": {\n      \"approved\": false,\n      \"approved_for_plan_rev\": null,\n      \"state\": \"pending\",\n      \"actor\": null,\n      \"at\": null,\n      \"reason\": null,\n      \"bypass_level\": null\n    }\n  },\n  \"created_at\": \"<now>\"\n}\n"
         );
         // … and readWorkflowRecord round-trips it with no drift at all.
         let read_back = read_workflow_record(root, "wf-explicit").ok().expect("readable");

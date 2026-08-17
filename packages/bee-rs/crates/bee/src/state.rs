@@ -25,10 +25,14 @@ fn default_gates() -> Map<String, Value> {
     m.insert("shape".into(), Value::Bool(false));
     m.insert("execution".into(), Value::Bool(false));
     m.insert("review".into(), Value::Bool(false));
+    // uat-gate-before-merge D1: the uat gate sits between execution-complete
+    // and `bee worktree merge`; never bypass-approved (see set_gate.rs's
+    // --actor auto refusal for --name uat).
+    m.insert("uat".into(), Value::Bool(false));
     m
 }
 
-pub const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
+pub const GATE_NAMES: [&str; 5] = ["context", "shape", "execution", "review", "uat"];
 
 /// The slice of readState() that buildStatusBrief consumes.
 pub struct BriefState {
@@ -326,7 +330,7 @@ mod tests {
         assert_eq!(s.phase, json!("idle"));
         assert_eq!(s.feature, Value::Null);
         assert_eq!(jsjson::stringify(&Value::Object(s.gates)),
-            r#"{"context":false,"shape":false,"execution":false,"review":false}"#);
+            r#"{"context":false,"shape":false,"execution":false,"review":false,"uat":false}"#);
     }
 
     #[test]
@@ -338,7 +342,7 @@ mod tests {
         assert_eq!(s.feature, json!("f1"));
         // Default key order first, extras appended in file order.
         assert_eq!(jsjson::stringify(&Value::Object(s.gates)),
-            r#"{"context":false,"shape":true,"execution":false,"review":false,"extra":1}"#);
+            r#"{"context":false,"shape":true,"execution":false,"review":false,"uat":false,"extra":1}"#);
     }
 
     /// Corrupt state.json warns on stderr and falls back to the default
@@ -354,7 +358,7 @@ mod tests {
         assert_eq!(s.route, Value::Null);
         assert_eq!(
             jsjson::stringify(&Value::Object(s.gates)),
-            r#"{"context":false,"shape":false,"execution":false,"review":false}"#
+            r#"{"context":false,"shape":false,"execution":false,"review":false,"uat":false}"#
         );
     }
 
@@ -394,7 +398,7 @@ mod tests {
     /// the defaults untouched.
     #[test]
     fn approved_gates_merge_is_object_or_defaults() {
-        let defaults = r#"{"context":false,"shape":false,"execution":false,"review":false}"#;
+        let defaults = r#"{"context":false,"shape":false,"execution":false,"review":false,"uat":false}"#;
         let s = |v: Option<Value>| jsjson::stringify(&Value::Object(spread_gates(v.as_ref())));
         assert_eq!(s(None), defaults);
         assert_eq!(s(Some(json!(null))), defaults);
@@ -409,7 +413,7 @@ mod tests {
         // An object still merges its keys over the defaults.
         assert_eq!(
             s(Some(json!({"context": true}))),
-            r#"{"context":true,"shape":false,"execution":false,"review":false}"#
+            r#"{"context":true,"shape":false,"execution":false,"review":false,"uat":false}"#
         );
     }
 
@@ -422,7 +426,7 @@ mod tests {
         assert_eq!(s.phase, json!("executing"));
         assert_eq!(
             jsjson::stringify(&Value::Object(s.gates)),
-            r#"{"context":false,"shape":false,"execution":false,"review":false}"#
+            r#"{"context":false,"shape":false,"execution":false,"review":false,"uat":false}"#
         );
     }
 

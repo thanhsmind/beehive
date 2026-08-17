@@ -78,8 +78,9 @@ type JMap = Map<String, Value>;
 // ─── constants (state.mjs / cells.mjs / knowledge.mjs / backlog.mjs) ───────
 
 
-/// state.mjs GATE_NAMES.
-const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
+/// state.mjs GATE_NAMES. uat-gate-before-merge D1 added "uat" — render.rs's
+/// `visible_gates` shows it only once the execution gate is approved.
+const GATE_NAMES: [&str; 5] = ["context", "shape", "execution", "review", "uat"];
 
 /// COMMAND_KEYS. `verify` was retired — `commands.test` is the one declared
 /// test command (dev loop, cap door, feature close, and the merge gate).
