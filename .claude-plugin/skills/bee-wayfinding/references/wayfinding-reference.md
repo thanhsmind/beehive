@@ -44,7 +44,10 @@ Section rules:
   source.
 - **Not yet specified** is the fog list: questions the map knows exist
   but cannot phrase precisely yet. A line here graduates to a ticket
-  once an answer (or a sharper question) makes it phraseable.
+  once an answer (or a sharper question) makes it phraseable. A line
+  the agent suspects but the user has not confirmed carries the
+  `(agent-suspected)` marker until a round of Interview craft (below)
+  confirms or drops it.
 - **Out of scope** is one-way. A line that lands here never returns to
   this map; it can only come back as a fresh effort.
 
@@ -85,6 +88,93 @@ under>
 Frontmatter is convention-only in v1 (no CLI guard): agents read and
 write these lines by hand, and the frontier is computed by reading
 them, not by a tool enforcing them.
+
+## Interview craft
+
+Round mechanics, restated in full:
+
+- The **frontier** is every question askable now without guessing an
+  answer not yet heard. Ask the whole frontier in one round, numbered,
+  each carrying the agent's recommended answer — the recommendation
+  never substitutes for the user's own pick.
+- A question whose answer depends on another question still open this
+  round belongs to the *next* round, not this one.
+- Facts are the agent's job, never the user's. A frontier item that
+  needs a repo or environment fact is not asked at all — dispatch a
+  gather-tier subagent or a direct read for it, and ship the rest of
+  the frontier now; only the questions that depend on that fact wait.
+- Each round the user's answers reshape the map: settled decisions
+  push the frontier outward and unblock what depended on them.
+  Recompute the frontier before sending the next round.
+
+Emit format — the exact shape a round goes out in:
+
+```
+❓ **Q1** - **<question title>**: <question body — states the choice
+plainly, options where useful>
+
+➡️ <the agent's recommended answer>
+```
+
+Worked example — charting "onboarding is wrong somewhere", round 1:
+
+```
+Frontier this round: Q1 and Q2 go to the user now. A third open item —
+whether onboarding already has a tracked completion metric — is a
+fact, not a decision: dispatched to a gather-tier subagent instead of
+asked. Round 1 ships without waiting on it.
+
+❓ **Q1** - **Who feels the onboarding pain?**: new signups, migrating
+teams, or both? Decides whether the map splits into two destinations.
+
+➡️ Both — the friction reports named both cohorts, but confirm before
+splitting the map.
+
+❓ **Q2** - **What does "wrong" mean here?**: drop-off, support load,
+or time-to-value. Each points at a different destination.
+
+➡️ Drop-off — the last retro flagged that number specifically.
+
+(Q3, "which metric proves it's fixed", depends on Q2's answer and the
+dispatched fact-read — held for round 2.)
+```
+
+Domain-modeling moves — pull these into any round when the interview
+touches vocabulary or a stated behavior, not only when charting new
+ground:
+
+- **Challenge a term** that conflicts with an earlier pinned meaning —
+  name the conflict, ask which one is meant.
+- **Propose a canonical term** for a word the user is using loosely —
+  offer the precise replacement, let the user confirm or correct it.
+- **Invent a concrete edge scenario** to force precision when a
+  relationship or boundary stays fuzzy in the abstract.
+- **Cross-check a claim against the code** — when the user states how
+  something works, verify it and surface any contradiction.
+
+Domain-probe menus by output shape (SEE/CALL/RUN/READ/ORGANIZE) and the
+materiality test that caps how many probes get asked: bee-shaping's
+`references/gray-area-probes.md` and its own "Interview craft"
+(`references/shaping-reference.md`).
+
+## Spike rules
+
+For prototype tickets — the cheap mock a with-user ticket resolves on.
+
+- The ticket's `## Question` is stated at the top of the spike, in the
+  file or the first line of output — a reader sees what it's answering
+  before anything else.
+- Runnable in one command or one double-click. No setup step, no
+  reading required to start it.
+- No persistence, no polish, no tests. State lives in memory; the
+  point is answering the question fast, not shipping code.
+- The full relevant state is shown after every action, so the user
+  sees what changed without asking.
+- When the ticket's question is "which shape", build several variants
+  side by side — one polished take answers nothing a menu wouldn't.
+- On close: the verdict and what it settled go into the ticket's
+  `## Answer`. The spike itself stays under `.bee/spikes/` as history —
+  never deleted, never promoted in place.
 
 ## Resolution protocol
 
