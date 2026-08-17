@@ -131,12 +131,11 @@ pub(crate) fn registered_worker_for_cell(root: &Path, id: &str, worker: Option<&
 }
 
 /// capCellFromFlags — the ONE cap door cap and finish share.
-/// `test_root` is the declared-test command's cwd — `root` itself for `cap`
-/// and for `finish` from an ordinary checkout or an ungranted worktree, the
-/// calling worktree's own physical directory for `finish` from a GRANTED
-/// one (wf-1: the changed code is the evidence). Every other read/write here
-/// stays keyed at `root`, the cell/claim store — always MAIN's.
-pub(crate) fn cap_cell_from_flags(root: &Path, test_root: &Path, f: &CapFlags, finish: bool) -> MR<Value> {
+/// decision 13ce1858 (test-cadence-boundary D1): no test command runs here
+/// anymore — the declared-test cwd split (`test_root`) this signature used
+/// to carry is gone with it. Every read/write here is keyed at `root`, the
+/// cell/claim store — always MAIN's.
+pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR<Value> {
     let id = &f.id;
     // Pre-scan (see the pre-scan section header).
     prescan_claim(root, id)?;
@@ -185,71 +184,21 @@ pub(crate) fn cap_cell_from_flags(root: &Path, test_root: &Path, f: &CapFlags, f
         None => None,
     };
 
-    // The one test door (test-simple, decision 412e9b3a).
+    // decision 13ce1858 (test-cadence-boundary D1): the one test door used
+    // to run the declared command HERE and refuse a red cap — that run and
+    // its red-refusal path are gone, for both `cells finish` and
+    // `cells cap` (no `!finish` guard ever separated them). Tests prove at
+    // the boundary now: `bee close` runs `commands.test` when the feature
+    // has no worktree; `bee worktree merge` runs it when it does. A cap is
+    // commit-only proof — `declared` below only decides which sentinel
+    // (`boundary` vs `undeclared`) the cap's own trace records, at
+    // `:capped_at` time near the end of this function; nothing here spawns
+    // a process.
     let declared = commands
         .test
         .as_ref()
         .map(|list| list.iter().filter(|c| *c != NO_TEST_SENTINEL).cloned().collect::<Vec<_>>())
         .filter(|l| !l.is_empty());
-    let tests_run: Option<TestsRun> = match &declared {
-        Some(list) => Some(run_declared_tests(test_root, list)?),
-        None => None,
-    };
-    if let Some(run) = &tests_run {
-        if !run.green {
-            let excerpt_line = first_failure_line(run);
-            // Record the tests-red attempt BEFORE refusing.
-            let mut guard = acquire_named_lock(root, &format!("cells:{id}"))?;
-            let recorded = (|| -> MR<()> {
-                assert_not_archived(root, "recordTestsRedAttempt", id)?;
-                let cell = read_cell_norm(root, id)?;
-                let Some(cell) = cell else {
-                    return Err(Fail::Thrown(format!(
-                        "recordTestsRedAttempt: cell \"{id}\" not found."
-                    )));
-                };
-                let Value::Object(mut cell_map) = cell else { return Err(Fail::Delegate) };
-                let trace = merge_trace(cell_map.get("trace"))?;
-                let trace = append_attempt(
-                    root,
-                    id,
-                    trace,
-                    "tests-red",
-                    excerpt_line.as_deref().map(normalize_failure_signature),
-                    excerpt_line.as_deref(),
-                )?;
-                cell_map.insert("trace".into(), Value::Object(trace));
-                write_cell(root, &Value::Object(cell_map))
-            })();
-            guard.release();
-            recorded?;
-            let failing: Vec<&CmdRun> = run
-                .commands
-                .iter()
-                .filter(|c| c.failure_excerpt.as_deref().map(|e| !e.is_empty()).unwrap_or(false))
-                .collect();
-            let mut lines = vec![format!(
-                "refusing to cap \"{id}\" — the declared test run is RED ({} of {} command(s) failed; record: {TEST_RESULTS_RELATIVE}).",
-                failing.len(),
-                run.commands.len()
-            )];
-            for c in &failing {
-                lines.push(format!(
-                    "--- {} (exit {}) ---\n{}",
-                    c.command,
-                    c.exit.map(jsjson::js_f64_to_string).unwrap_or_else(|| "spawn-failed".to_string()),
-                    c.failure_excerpt.as_deref().unwrap_or("")
-                ));
-                if let Some(log) = &c.failure_log {
-                    lines.push(format!("log: {log}"));
-                }
-            }
-            lines.push(format!(
-                "The red is the work: fix what the failing output names, then re-run bee cells finish --id {id}. Never build on a red base."
-            ));
-            return Err(Fail::Thrown(lines.join("\n")));
-        }
-    }
 
     // D6 (hook-teeth CONTEXT.md) — the one-commit-per-cell trailer check.
     // Runs AFTER the test-green door above (a red run refuses first, same
@@ -458,16 +407,16 @@ pub(crate) fn cap_cell_from_flags(root: &Path, test_root: &Path, f: &CapFlags, f
             }
         }
         trace.insert("warnings".into(), Value::Array(warnings));
-        match &tests_run {
-            None => {
-                trace.insert("tests".into(), Value::String("undeclared".into()));
-            }
-            Some(run) => {
-                trace.insert("tests".into(), Value::String("green".into()));
-                trace.insert("results".into(), Value::String(TEST_RESULTS_RELATIVE.into()));
-                trace.insert("ran_at".into(), Value::String(run.ran_at.clone()));
-            }
-        }
+        // D1a (cap record honesty): a cap never claims a test run it did not
+        // perform. A declared-test repo records `boundary` — tests prove at
+        // `bee close`/`bee worktree merge`, not here; the `undeclared`
+        // sentinel is unchanged for a repo with no declared test command.
+        // `trace.results`/`trace.ran_at` are no longer written at cap —
+        // there is no run to point at.
+        trace.insert(
+            "tests".into(),
+            Value::String(if declared.is_some() { "boundary" } else { "undeclared" }.into()),
+        );
         cell_map.insert("trace".into(), Value::Object(trace));
         let cell_value = Value::Object(cell_map);
         write_cell(root, &cell_value)?;
@@ -573,7 +522,7 @@ pub(crate) fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Insta
                 cap_flags.deviations = parse_deviations_file(file)?;
             }
         }
-        let cell = cap_cell_from_flags(&root, &root, &cap_flags, false)?;
+        let cell = cap_cell_from_flags(&root, &cap_flags, false)?;
         let text = cap_text(&cell);
         Ok(Out::Emit(cell, text, 0))
     })
@@ -588,17 +537,18 @@ pub(crate) fn run_cap(finish: bool, flags: rsv::Flags, use_json: bool, t0: Insta
 /// after merge instead). Root split, per the logged decision:
 ///   * the cell record and its claim resolve at `StoreRoots::main_root()` —
 ///     one ledger, and the claim `finish` validates already lives there;
-///   * the declared test command's cwd is the calling worktree when granted
-///     (`finish_topology`, finish_support.rs) — the changed code is the
-///     evidence;
 ///   * reservation/hold release threads `StoreRoots::hold_topology()`
 ///     (main_root, holder) instead of the ordinary-only assumption
 ///     `release_reservations_for_agent` used to hardcode (holder `"main"`,
 ///     ledger at whatever `root` happened to be) — the un-ported piece
 ///     roots.rs:91-100 names as the reason cells stayed narrow.
 /// From the MAIN checkout `roots.linked` is `None`, so `finish_topology`
-/// answers `(root, root, Some((root, "main")))` — byte-identical to what the
-/// narrow door produced before this cell.
+/// answers `(root, Some((root, "main")))` — byte-identical to what the
+/// narrow door produced before this cell. decision 13ce1858
+/// (test-cadence-boundary D1): `finish_topology` used to also answer the
+/// calling worktree's own root, the declared test command's cwd — dropped
+/// with the per-cap test run itself; the cap no longer spawns that command
+/// from either root.
 fn run_finish(
     cmd: &'static str,
     use_json: bool,
@@ -614,7 +564,7 @@ fn run_finish(
         }
         RootsWt::None => return Some(emit_no_root_error(&cwd, cmd, use_json, t0)),
     };
-    let (cells_root, test_root, topo) = finish_topology(&roots);
+    let (cells_root, topo) = finish_topology(&roots);
     let drift = check_manifest_drift(&cells_root);
     let ctx = rsv::Ctx {
         root: cells_root,
@@ -625,13 +575,7 @@ fn run_finish(
         drift_hint: drift.hint,
     };
     let topo_ref = topo.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
-    let out = finish_cap_and_release(
-        &ctx.root,
-        &test_root,
-        topo_ref,
-        cap_flags_owned,
-        deviations_file.as_deref(),
-    );
+    let out = finish_cap_and_release(&ctx.root, topo_ref, cap_flags_owned, deviations_file.as_deref());
     rsv::finish(&ctx, to_r2(out))
 }
 
@@ -642,7 +586,6 @@ fn run_finish(
 /// `reserve_exec`/`release_exec` are the same shape, tested the same way).
 pub(crate) fn finish_cap_and_release(
     root: &Path,
-    test_root: &Path,
     topo: Option<(&Path, &str)>,
     cap_flags_owned: CapFlags,
     deviations_file: Option<&str>,
@@ -654,7 +597,7 @@ pub(crate) fn finish_cap_and_release(
             cap_flags.deviations = parse_deviations_file(file)?;
         }
     }
-    let cell = cap_cell_from_flags(root, test_root, &cap_flags, true)?;
+    let cell = cap_cell_from_flags(root, &cap_flags, true)?;
 
     // cells.finish: release every reservation the claiming agent holds.
     let agent = match cell.get("trace").and_then(|t| t.get("worker")) {

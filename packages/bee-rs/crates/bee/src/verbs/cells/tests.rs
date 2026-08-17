@@ -1681,87 +1681,107 @@ use std::time::Instant;
     }
 
     // ── test runner ───────────────────────────────────────────────────────
-    #[test]
-    fn test_runner_green_and_red_record_shapes() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        // Green run.
-        let run = run_declared_tests(root, &["exit 0".to_string()]).unwrap();
-        assert!(run.green);
-        assert!(run.commands[0].failure_excerpt.is_none());
-        assert!(run.commands[0].failure_log.is_none());
-        let record: Value =
-            serde_json::from_str(&std::fs::read_to_string(test_results_path(root)).unwrap()).unwrap();
-        assert_eq!(record["green"], json!(true));
-        assert_eq!(record["commands"][0]["command"], json!("exit 0"));
-        assert_eq!(record["commands"][0]["exit"], json!(0));
-        assert_eq!(record["commands"][0]["failure_excerpt"], Value::Null);
-        assert_eq!(record["commands"][0]["failure_log"], Value::Null);
-        // Red run: excerpt carries the tail, firstFailureLine picks line 1.
-        let run = run_declared_tests(root, &["echo boom && exit 3".to_string()]).unwrap();
-        assert!(!run.green);
-        let excerpt = run.commands[0].failure_excerpt.as_deref().unwrap();
-        assert_eq!(js_trim(excerpt), "boom");
-        assert_eq!(run.commands[0].exit, Some(3.0));
-        assert_eq!(first_failure_line(&run).as_deref(), Some("boom"));
-        // full-failure-evidence D1: a red command's complete output survives
-        // on disk, named by the record's own failure_log path.
-        let log_rel = run.commands[0].failure_log.clone().unwrap();
-        assert_eq!(log_rel, fsutil::failure_log_relative("finish", 0));
-        let logged = std::fs::read_to_string(root.join(&log_rel)).unwrap();
-        assert_eq!(js_trim(&logged), "boom");
-        let record: Value =
-            serde_json::from_str(&std::fs::read_to_string(test_results_path(root)).unwrap()).unwrap();
-        assert_eq!(record["green"], json!(false));
-        assert_eq!(record["commands"][0]["failure_log"], json!(log_rel));
-        // Silent red: the "(no output; exit N)" placeholder.
-        let run = run_declared_tests(root, &["exit 7".to_string()]).unwrap();
-        assert_eq!(run.commands[0].failure_excerpt.as_deref(), Some("(no output; exit 7)"));
+    // decision 13ce1858 (test-cadence-boundary D1): `cap_cell_from_flags`
+    // no longer spawns the declared test command at all, in any shape —
+    // this whole section (formerly exercising finish_support's own now-
+    // deleted `run_declared_tests` copy directly) now proves the ABSENCE
+    // of that spawn through the one door left that could still trigger it,
+    // the cap.
+    fn wf_boundary_cap_flags(id: &str) -> CapFlags {
+        CapFlags {
+            id: id.to_string(),
+            outcome: None,
+            friction: None,
+            files_changed: Vec::new(),
+            deviations: Vec::new(),
+            deviation: None,
+            override_reason: String::new(),
+            session_flag: None,
+            force_ownership: false,
+            commit_pending: None,
+            inline_reason: None,
+            report: None,
+        }
     }
 
-    // ── full-failure-evidence (ffe-2) ───────────────────────────────────────
-
-    #[test]
-    fn green_run_clears_a_stale_failure_log_from_a_previous_red() {
-        // D3: a green run leaves no stale evidence of a failure that no
-        // longer reproduces, at the SAME command index.
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
-        let red = run_declared_tests(root, &["echo boom && exit 3".to_string()]).unwrap();
-        let log_rel = red.commands[0].failure_log.clone().unwrap();
-        assert!(root.join(&log_rel).exists());
-        let green = run_declared_tests(root, &["exit 0".to_string()]).unwrap();
-        assert!(green.commands[0].failure_log.is_none());
-        assert!(!root.join(&log_rel).exists(), "the stale log from the earlier red must be gone");
+    fn wf_boundary_cell_body(id: &str) -> Value {
+        json!({
+            "id": id, "feature": "f", "title": "t", "action": "a",
+            "verify": "npm test", "lane": "tiny", "status": "claimed",
+            "deps": [], "files": [], "trace": {},
+        })
     }
 
     #[test]
-    fn mixed_run_writes_a_log_only_for_the_failing_index() {
+    fn cap_never_spawns_a_process_for_green_red_or_silent_looking_commands() {
+        // A command that would pass, one that would print then fail, and
+        // one that would fail silently — none of the three are ever run;
+        // every cap lands green with "boundary", and no test-results.json
+        // is ever written (there is no run to record).
+        for cmd in ["exit 0", "echo boom && exit 3", "exit 7"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            write_bee_config(root, &json!({"commands": {"test": cmd}}));
+            write_cell_fixture(root, "cn-1", &wf_boundary_cell_body("cn-1"));
+            let capped = cap_cell_from_flags(root, &wf_boundary_cap_flags("cn-1"), false)
+                .unwrap_or_else(|e| panic!("cmd {cmd:?} must never be spawned, so it cannot refuse: {e:?}"));
+            assert_eq!(capped["status"], json!("capped"));
+            assert_eq!(capped["trace"]["tests"], json!("boundary"));
+            assert!(!test_results_path(root).exists(), "cmd {cmd:?}: nothing ran, so nothing was recorded");
+        }
+    }
+
+    // ── full-failure-evidence (ffe-2) — cap side is dead, boundary owns it ──
+
+    #[test]
+    fn a_cap_never_touches_an_existing_stale_failure_log() {
+        // A stale record left behind by an earlier `bee close`/`bee
+        // worktree merge` red survives a later cap byte-for-byte — the cap
+        // neither runs a fresh command nor clears the old evidence; only
+        // the boundary verbs own that lifecycle now.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        let run = run_declared_tests(
+        write_bee_config(root, &json!({"commands": {"test": "exit 0"}}));
+        let log_rel = fsutil::write_failure_log(root, "finish", 0, "boom\n").unwrap();
+        let logged_before = std::fs::read_to_string(root.join(&log_rel)).unwrap();
+
+        write_cell_fixture(root, "cn-2", &wf_boundary_cell_body("cn-2"));
+        let capped = cap_cell_from_flags(root, &wf_boundary_cap_flags("cn-2"), false).unwrap();
+        assert_eq!(capped["trace"]["tests"], json!("boundary"));
+
+        let logged_after = std::fs::read_to_string(root.join(&log_rel)).unwrap();
+        assert_eq!(logged_after, logged_before, "the cap must not touch the stale log at all");
+    }
+
+    #[test]
+    fn multiple_declared_commands_all_skip_the_test_door_at_cap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(
             root,
-            &["exit 0".to_string(), "echo boom && exit 3".to_string()],
-        )
-        .unwrap();
-        assert!(!run.green);
-        assert!(run.commands[0].failure_log.is_none(), "the passing command gets no log");
-        assert!(root.join(run.commands[1].failure_log.clone().unwrap()).exists());
+            &json!({"commands": {"test": ["exit 0", "echo boom && exit 3"]}}),
+        );
+        write_cell_fixture(root, "cn-3", &wf_boundary_cell_body("cn-3"));
+        let capped = cap_cell_from_flags(root, &wf_boundary_cap_flags("cn-3"), false)
+            .expect("a multi-command declared list is never run at cap either");
+        assert_eq!(capped["trace"]["tests"], json!("boundary"));
+        assert!(!root.join(fsutil::failure_log_relative("finish", 0)).exists());
+        assert!(!root.join(fsutil::failure_log_relative("finish", 1)).exists());
     }
 
     #[test]
-    fn unwritable_log_dir_leaves_failure_log_null_without_touching_the_verdict() {
-        // The DELIBERATE divergence: a lost log must never turn a red into
-        // an error or hide which command failed.
+    fn an_unwritable_log_target_never_blocks_a_cap_because_nothing_is_written() {
+        // Pre-occupy the log target with a directory — a real run would
+        // have to fail to write there; the cap never even tries.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        // Pre-occupy the log target with a directory so the write must fail.
+        write_bee_config(root, &json!({"commands": {"test": "echo boom && exit 3"}}));
         let rel = fsutil::failure_log_relative("finish", 0);
         std::fs::create_dir_all(root.join(&rel)).unwrap();
-        let run = run_declared_tests(root, &["echo boom && exit 3".to_string()]).unwrap();
-        assert!(!run.green, "the verdict is untouched by the lost log");
-        assert!(run.commands[0].failure_log.is_none());
-        assert_eq!(js_trim(run.commands[0].failure_excerpt.as_deref().unwrap()), "boom");
+        write_cell_fixture(root, "cn-4", &wf_boundary_cell_body("cn-4"));
+        let capped = cap_cell_from_flags(root, &wf_boundary_cap_flags("cn-4"), false)
+            .expect("an occupied log target can never block a cap that never writes to it");
+        assert_eq!(capped["trace"]["tests"], json!("boundary"));
     }
 
     // ── decision log ──────────────────────────────────────────────────────
@@ -3383,7 +3403,7 @@ use std::time::Instant;
     }
 
     #[test]
-    fn capping_in_a_no_test_repo_runs_no_tests_but_a_declared_red_still_refuses() {
+    fn capping_in_a_no_test_repo_and_a_declared_test_repo_both_run_no_tests_at_cap() {
         let cap_flags = |id: &str| CapFlags {
             id: id.to_string(),
             outcome: None,
@@ -3407,12 +3427,12 @@ use std::time::Instant;
         };
 
         // A repo that declares itself no-test: the sentinel is filtered out of
-        // commands.test, the test door never opens, and the cap lands.
+        // commands.test, no test process is ever spawned, and the cap lands.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
         write_cell_fixture(root, "nt-1", &cell_body("nt-1"));
-        let capped = cap_cell_from_flags(root, root, &cap_flags("nt-1"), false).unwrap();
+        let capped = cap_cell_from_flags(root, &cap_flags("nt-1"), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
         assert_eq!(
             capped["trace"]["tests"],
@@ -3421,28 +3441,25 @@ use std::time::Instant;
         );
         assert!(!test_results_path(root).exists(), "nothing ran, so nothing was recorded");
 
-        // Control: the same cell shape in a repo declaring a real, RED command
-        // refuses the cap — proving the door above was genuinely closed by the
-        // sentinel rather than by an absent test runner.
+        // decision 13ce1858 (test-cadence-boundary D1): a repo declaring a
+        // real command that would fail if run — "exit 3" — is NOT run at
+        // cap either, so the cap lands green with `tests: "boundary"`.
+        // Tests prove at the boundary (`bee close`/`bee worktree merge`)
+        // now, not here.
         let tmp2 = tempfile::tempdir().unwrap();
         let root2 = tmp2.path();
         write_bee_config(root2, &json!({"commands": {"test": "exit 3"}}));
         write_cell_fixture(root2, "nt-2", &cell_body("nt-2"));
-        let refusal = thrown(cap_cell_from_flags(root2, root2, &cap_flags("nt-2"), false));
-        assert!(
-            refusal.starts_with("refusing to cap \"nt-2\" — the declared test run is RED"),
-            "{refusal}"
+        let capped2 = cap_cell_from_flags(root2, &cap_flags("nt-2"), false)
+            .expect("a cap never spawns the declared command, so it cannot go red");
+        assert_eq!(capped2["status"], json!("capped"));
+        assert_eq!(
+            capped2["trace"]["tests"],
+            json!("boundary"),
+            "a declared-test repo records boundary, not a verdict earned here"
         );
-        // full-failure-evidence: the refusal names the complete-output log
-        // right after the excerpt block.
-        assert!(
-            refusal.contains("\nlog: .bee/logs/test-failure-finish-0.log\n"),
-            "{refusal}"
-        );
-        assert!(root2.join(".bee/logs/test-failure-finish-0.log").exists());
-        let after = read_cell_norm(root2, "nt-2").ok().unwrap().unwrap();
-        assert_eq!(after.get("status"), Some(&json!("claimed")), "a red run never caps");
-        assert!(test_results_path(root2).exists(), "the red run IS recorded");
+        assert!(!test_results_path(root2).exists(), "nothing ran, so nothing was recorded");
+        assert!(!root2.join(".bee/logs/test-failure-finish-0.log").exists());
     }
 
     // ══ frd-1 — `--deviation "<one line>"` on cells cap/finish ══
@@ -3482,7 +3499,7 @@ use std::time::Instant;
         // land in the same array, in that order — --deviation appends, it
         // never replaces.
         let flags = cap_flags_frd("frd-1a", vec!["from the file"], Some("  from the flag  "));
-        let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
         assert_eq!(
             capped["trace"]["deviations"],
             json!(["from the file", "from the flag"]),
@@ -3500,7 +3517,7 @@ use std::time::Instant;
 
         for bad in ["", "   ", "\t\n "] {
             let flags = cap_flags_frd("frd-1b", Vec::new(), Some(bad));
-            let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
             assert!(
                 refusal.contains("--deviation") && refusal.contains("non-empty"),
                 "refusal must name the flag: {refusal}"
@@ -3526,7 +3543,7 @@ use std::time::Instant;
         // No --deviation, no --deviations-file: trace.deviations is the
         // same empty array cap has always written.
         let flags = cap_flags_frd("frd-1c", Vec::new(), None);
-        let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
         assert_eq!(capped["trace"]["deviations"], json!([]));
     }
 
@@ -3556,7 +3573,11 @@ use std::time::Instant;
         }
     }
 
-    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"green","deviations":[]}"#;
+    // decision 13ce1858 (test-cadence-boundary D1a): the worker's own
+    // `tests` claim can only ever be "boundary" (a declared-test repo,
+    // proven at `bee close`/`bee worktree merge`) or "undeclared" (a
+    // no-test repo) — never a verdict this door cannot check itself.
+    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"boundary","deviations":[]}"#;
 
     #[test]
     fn valid_report_is_validated_and_stored_on_trace() {
@@ -3566,17 +3587,31 @@ use std::time::Instant;
         write_cell_fixture(root, "wfl-r1", &cell("wfl-r1", "claimed", "f", json!([])));
 
         let flags = cap_flags_report("wfl-r1", Some(VALID_REPORT));
-        let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
         assert_eq!(
             capped["trace"]["report"],
             json!({
                 "outcome": "did the thing",
                 "commit": "abc123",
                 "files": ["a.rs"],
-                "tests": "green",
+                "tests": "boundary",
                 "deviations": [],
             })
         );
+    }
+
+    #[test]
+    fn report_tests_key_accepts_undeclared_too() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r1u", &cell("wfl-r1u", "claimed", "f", json!([])));
+
+        let report =
+            r#"{"outcome":"did the thing","commit":"abc123","files":[],"tests":"undeclared","deviations":[]}"#;
+        let flags = cap_flags_report("wfl-r1u", Some(report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(capped["trace"]["report"]["tests"], json!("undeclared"));
     }
 
     #[test]
@@ -3588,7 +3623,7 @@ use std::time::Instant;
         let before = std::fs::read_to_string(cell_file(root, "wfl-r2")).unwrap();
 
         let flags = cap_flags_report("wfl-r2", Some("{not json"));
-        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
         assert!(
             refusal.contains("--report") && refusal.contains("not valid JSON"),
             "{refusal}"
@@ -3608,7 +3643,7 @@ use std::time::Instant;
 
         let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"green","deviations":[],"extra":"nope"}"#;
         let flags = cap_flags_report("wfl-r3", Some(bad));
-        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
         assert!(
             refusal.contains("unknown key \"extra\""),
             "refusal must name the offending key: {refusal}"
@@ -3624,7 +3659,7 @@ use std::time::Instant;
 
         let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"green"}"#; // no "deviations"
         let flags = cap_flags_report("wfl-r4", Some(bad));
-        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
         assert!(
             refusal.contains("missing required key \"deviations\""),
             "refusal must name the missing key: {refusal}"
@@ -3632,7 +3667,7 @@ use std::time::Instant;
     }
 
     #[test]
-    fn report_tests_key_must_be_green_or_red() {
+    fn report_tests_key_must_be_boundary_or_undeclared() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
@@ -3640,11 +3675,37 @@ use std::time::Instant;
 
         let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"maybe","deviations":[]}"#;
         let flags = cap_flags_report("wfl-r5", Some(bad));
-        let refusal = thrown(cap_cell_from_flags(root, root, &flags, false));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
         assert!(
-            refusal.contains("\"tests\" must be the string \"green\" or \"red\""),
+            refusal.contains("\"tests\" must be the string \"boundary\" or \"undeclared\""),
             "{refusal}"
         );
+    }
+
+    /// decision 13ce1858 (test-cadence-boundary D1a): the retired
+    /// "green"/"red" values are refused with a NAMED teach line quoting the
+    /// canonical boundary wording — a cold worker learns the new cadence
+    /// instead of guessing why the old value stopped working.
+    #[test]
+    fn report_tests_key_green_or_red_is_refused_with_the_boundary_teach_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r5b", &cell("wfl-r5b", "claimed", "f", json!([])));
+
+        for verdict in ["green", "red"] {
+            let bad = format!(
+                r#"{{"outcome":"o","commit":"c","files":[],"tests":"{verdict}","deviations":[]}}"#
+            );
+            let flags = cap_flags_report("wfl-r5b", Some(&bad));
+            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+            assert!(refusal.contains("no longer apply"), "{verdict}: {refusal}");
+            assert!(
+                refusal.contains("Tests prove at the boundary"),
+                "{verdict}: {refusal}"
+            );
+            assert!(refusal.contains("bee worktree merge"), "{verdict}: {refusal}");
+        }
     }
 
     #[test]
@@ -3655,7 +3716,7 @@ use std::time::Instant;
         write_cell_fixture(root, "wfl-r6", &cell("wfl-r6", "claimed", "f", json!([])));
 
         let flags = cap_flags_report("wfl-r6", None);
-        let capped = cap_cell_from_flags(root, root, &flags, false).unwrap();
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
         assert!(
             capped["trace"].get("report").is_none(),
             "absent --report must never add a trace.report key"
@@ -3759,7 +3820,6 @@ use std::time::Instant;
 
         let refusal = thrown(cap_cell_from_flags(
             root,
-            root,
             &cap_flags_d6("bh-6a", vec!["a.rs"], None),
             true, // finish
         ));
@@ -3780,7 +3840,7 @@ use std::time::Instant;
         commit_with_message(root, "y", "Wire the thing\n\ncell: bh-6b");
 
         let capped =
-            cap_cell_from_flags(root, root, &cap_flags_d6("bh-6b", vec!["a.rs"], None), true).unwrap();
+            cap_cell_from_flags(root, &cap_flags_d6("bh-6b", vec!["a.rs"], None), true).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
@@ -3792,7 +3852,6 @@ use std::time::Instant;
         write_cell_fixture(root, "bh-6c", &cell_body_d6("bh-6c"));
 
         let capped = cap_cell_from_flags(
-            root,
             root,
             &cap_flags_d6("bh-6c", vec!["a.rs"], Some("commit lands after cap, batching two")),
             true,
@@ -3813,7 +3872,7 @@ use std::time::Instant;
         // shells out to git when files_changed is empty.
         write_cell_fixture(root, "bh-6d", &cell_body_d6("bh-6d"));
 
-        let capped = cap_cell_from_flags(root, root, &cap_flags_d6("bh-6d", vec![], None), true).unwrap();
+        let capped = cap_cell_from_flags(root, &cap_flags_d6("bh-6d", vec![], None), true).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
@@ -3827,7 +3886,7 @@ use std::time::Instant;
         write_cell_fixture(root, "bh-6e", &cell_body_d6("bh-6e"));
 
         let capped =
-            cap_cell_from_flags(root, root, &cap_flags_d6("bh-6e", vec!["a.rs"], None), false).unwrap();
+            cap_cell_from_flags(root, &cap_flags_d6("bh-6e", vec!["a.rs"], None), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
@@ -3885,7 +3944,7 @@ use std::time::Instant;
 
         // No .bee/state.json at all — the emptiest possible "no registry".
         let refusal =
-            thrown(cap_cell_from_flags(root, root, &cap_flags_wp("wp-a", vec!["a.rs"], None), false));
+            thrown(cap_cell_from_flags(root, &cap_flags_wp("wp-a", vec!["a.rs"], None), false));
         assert!(
             refusal.starts_with("capCell: lane \"standard\" cell \"wp-a\" refused"),
             "{refusal}"
@@ -3909,7 +3968,7 @@ use std::time::Instant;
         );
 
         let refusal =
-            thrown(cap_cell_from_flags(root, root, &cap_flags_wp("wp-e", vec!["a.rs"], None), false));
+            thrown(cap_cell_from_flags(root, &cap_flags_wp("wp-e", vec!["a.rs"], None), false));
         assert!(refusal.contains("no registered execution worker"), "{refusal}");
     }
 
@@ -3924,7 +3983,7 @@ use std::time::Instant;
         );
 
         let capped =
-            cap_cell_from_flags(root, root, &cap_flags_wp("wp-b", vec!["a.rs"], None), false).unwrap();
+            cap_cell_from_flags(root, &cap_flags_wp("wp-b", vec!["a.rs"], None), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
@@ -3936,7 +3995,6 @@ use std::time::Instant;
 
         // No state.json at all — the escape must still cap.
         let capped = cap_cell_from_flags(
-            root,
             root,
             &cap_flags_wp("wp-c", vec!["a.rs"], Some("solo session, no dispatch available")),
             false,
@@ -3957,7 +4015,7 @@ use std::time::Instant;
 
         // No workers[] entry at all — a tiny cap must never even look.
         let capped =
-            cap_cell_from_flags(root, root, &cap_flags_wp("wp-d", vec!["a.rs"], None), false).unwrap();
+            cap_cell_from_flags(root, &cap_flags_wp("wp-d", vec!["a.rs"], None), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
     }
 
@@ -4102,7 +4160,7 @@ use std::time::Instant;
         commit_lines(root, "big.rs", 20, "Wire the thing\n\ncell: fa-f");
 
         let capped =
-            cap_cell_from_flags(root, root, &cap_flags_d6("fa-f", vec!["big.rs"], None), true).unwrap();
+            cap_cell_from_flags(root, &cap_flags_d6("fa-f", vec!["big.rs"], None), true).unwrap();
         assert_eq!(capped["status"], json!("capped"));
         let warnings = capped["trace"]["warnings"].as_array().unwrap();
         assert_eq!(warnings.len(), 1, "{warnings:?}");
@@ -4119,7 +4177,7 @@ use std::time::Instant;
         // No trailer commit needed: `cells cap` never runs D6's own
         // trailer check OR this advisory (finish == false gates both).
         let capped =
-            cap_cell_from_flags(root, root, &cap_flags_d6("fa-g", vec!["a.rs"], None), false).unwrap();
+            cap_cell_from_flags(root, &cap_flags_d6("fa-g", vec!["a.rs"], None), false).unwrap();
         assert_eq!(capped["status"], json!("capped"));
         assert_eq!(capped["trace"]["warnings"], json!([]));
     }
@@ -4715,38 +4773,37 @@ use std::time::Instant;
     }
 
     /// `finish_topology` (finish_support.rs) is the exact split wf-1's
-    /// must-haves depend on: the cell/claim root is ALWAYS main, the
-    /// declared-test cwd is the calling worktree only when granted, and the
+    /// must-haves depend on: the cell/claim root is ALWAYS main, and the
     /// hold topology matches `StoreRoots::hold_topology()` unchanged. From
     /// MAIN itself the answer is byte-identical to what the narrow door
-    /// produced before this cell (must-have 4).
+    /// produced before this cell (must-have 4). decision 13ce1858
+    /// (test-cadence-boundary D1): the function's third return value, the
+    /// declared-test cwd, is gone with the per-cap test run — this test no
+    /// longer has a cwd to assert on granted vs ungranted.
     #[test]
-    fn finish_topology_puts_the_cell_root_at_main_and_the_test_cwd_at_a_granted_worktree() {
+    fn finish_topology_puts_the_cell_root_at_main_for_every_checkout_kind() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, granted, ungranted) = wf_worktree_fixture(tmp.path());
 
-        // ORDINARY (from main): root == test_root == main, holder "main".
-        let (cr, tr, topo) = finish_topology(&wf_roots_at(&main));
+        // ORDINARY (from main): root == main, holder "main".
+        let (cr, topo) = finish_topology(&wf_roots_at(&main));
         assert_eq!(wf_nrm(&cr), wf_nrm(&main));
-        assert_eq!(wf_nrm(&tr), wf_nrm(&main));
         let (m, h) = topo.expect("ordinary always has a topology");
         assert_eq!(wf_nrm(&m), wf_nrm(&main));
         assert_eq!(h, "main");
 
-        // GRANTED worktree: cell root at MAIN, test cwd at the worktree
-        // itself, holder the git-verified worktree id.
-        let (cr, tr, topo) = finish_topology(&wf_roots_at(&granted));
+        // GRANTED worktree: cell root still at MAIN, holder the
+        // git-verified worktree id.
+        let (cr, topo) = finish_topology(&wf_roots_at(&granted));
         assert_eq!(wf_nrm(&cr), wf_nrm(&main), "the cell record and claim resolve at MAIN");
-        assert_eq!(wf_nrm(&tr), wf_nrm(&granted), "the declared test cwd is the calling worktree");
         let (m, h) = topo.expect("a granted worktree holds");
         assert_eq!(wf_nrm(&m), wf_nrm(&main));
         assert_eq!(h, "wt-granted");
 
         // UNGRANTED worktree: unchanged from today — root already IS main's
         // store, and hold release is skipped entirely (topology === null).
-        let (cr, tr, topo) = finish_topology(&wf_roots_at(&ungranted));
+        let (cr, topo) = finish_topology(&wf_roots_at(&ungranted));
         assert_eq!(wf_nrm(&cr), wf_nrm(&main));
-        assert_eq!(wf_nrm(&tr), wf_nrm(&main));
         assert!(topo.is_none());
     }
 
@@ -4767,25 +4824,32 @@ use std::time::Instant;
         assert!(matches!(resolve_store_root_worktree(&granted), RootsWt::Go(_)));
     }
 
-    /// must-have 1 + 2: `finish_cap_and_release` — `cells finish`'s tested
-    /// core — caps the cell at the MAIN store (never writing anything under
-    /// the worktree's own `.bee/cells`) and runs the declared test command
-    /// with cwd in the WORKTREE, not main. The red control on the same
-    /// command against `root` itself proves the green above is not
-    /// vacuous.
+    /// must-have 1: `finish_cap_and_release` — `cells finish`'s tested core
+    /// — caps the cell at the MAIN store (never writing anything under the
+    /// worktree's own `.bee/cells`). decision 13ce1858
+    /// (test-cadence-boundary D1): the cap no longer spawns the declared
+    /// test command at all — a repo whose declared command would fail
+    /// (no marker.txt anywhere) still caps green, records `tests:
+    /// "boundary"`, and never runs a process; a no-test repo records
+    /// `"undeclared"` instead. Tests prove at the boundary now (`bee
+    /// close`/`bee worktree merge`), not at this door.
     #[test]
-    fn finish_caps_at_main_and_runs_declared_tests_against_the_worktree_tree() {
+    fn finish_caps_at_main_without_running_the_declared_test_and_records_boundary() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, granted, _ungranted) = wf_worktree_fixture(tmp.path());
         write_bee_config(&main, &json!({"commands": {"test": "test -f marker.txt"}}));
-        std::fs::write(granted.join("marker.txt"), "present").unwrap();
+        // Deliberately no marker.txt anywhere — if the cap spawned this
+        // command from either root it would fail RED; it must not spawn it
+        // at all.
 
         write_cell_fixture(&main, "wf-cwd-a", &wf_cell_body("wf-cwd-a", None));
-        let out = finish_cap_and_release(&main, &granted, None, wf_cap_flags("wf-cwd-a"), None)
-            .expect("the declared test finds marker.txt in the worktree");
+        let out = finish_cap_and_release(&main, None, wf_cap_flags("wf-cwd-a"), None)
+            .expect("a cap never runs the declared command, so it cannot go red on a missing marker");
         let Out::Emit(cell, _, 0) = out else { panic!("expected a green cap") };
         assert_eq!(cell["status"], json!("capped"));
-        assert_eq!(cell["trace"]["tests"], json!("green"));
+        assert_eq!(cell["trace"]["tests"], json!("boundary"));
+        assert!(cell["trace"].get("results").is_none(), "no run means no results path recorded");
+        assert!(cell["trace"].get("ran_at").is_none(), "no run means no ran_at recorded");
         assert!(
             !granted.join(".bee").join("cells").join("wf-cwd-a.json").exists(),
             "the cell record is never written to the worktree's own store"
@@ -4796,14 +4860,13 @@ use std::time::Instant;
             "it lands in MAIN's store instead"
         );
 
-        // Control: the identical command run with cwd=root (no marker.txt
-        // there) refuses RED.
+        // A no-test repo still records the "undeclared" sentinel.
+        write_bee_config(&main, &json!({"commands": {"test": "none"}}));
         write_cell_fixture(&main, "wf-cwd-b", &wf_cell_body("wf-cwd-b", None));
-        let refusal = thrown(finish_cap_and_release(&main, &main, None, wf_cap_flags("wf-cwd-b"), None));
-        assert!(
-            refusal.starts_with("refusing to cap \"wf-cwd-b\" — the declared test run is RED"),
-            "{refusal}"
-        );
+        let out = finish_cap_and_release(&main, None, wf_cap_flags("wf-cwd-b"), None)
+            .expect("a no-test repo caps clean");
+        let Out::Emit(cell, _, 0) = out else { panic!("expected a green cap") };
+        assert_eq!(cell["trace"]["tests"], json!("undeclared"));
     }
 
     /// must-have 3: reservation/hold release names the worktree id as
@@ -4841,9 +4904,9 @@ use std::time::Instant;
 
         // `cells finish`, from the granted worktree, releases BOTH the
         // local lease and the mirrored MAIN hold under that same id.
-        let (cells_root, test_root, topo) = finish_topology(&g);
+        let (cells_root, topo) = finish_topology(&g);
         let topo_ref = topo.as_ref().map(|(m, h)| (m.as_path(), h.as_str()));
-        let out = finish_cap_and_release(&cells_root, &test_root, topo_ref, wf_cap_flags("wf-rel-a"), None)
+        let out = finish_cap_and_release(&cells_root, topo_ref, wf_cap_flags("wf-rel-a"), None)
             .expect("a clean finish");
         let Out::Emit(result, text, 0) = out else { panic!("expected a green finish") };
         assert_eq!(result["released"], json!(["src/shared.ts"]));
@@ -4877,14 +4940,8 @@ use std::time::Instant;
         let root_s = root.to_str().unwrap().to_string();
         assert!(matches!(rsv::reserve_exec(m_topo, &root_s, &params, 1), Ok(Out::Emit(_, _, 0))));
 
-        let out = finish_cap_and_release(
-            root,
-            root,
-            Some((root, "main")),
-            wf_cap_flags("wf-rel-main"),
-            None,
-        )
-        .expect("a clean finish");
+        let out = finish_cap_and_release(root, Some((root, "main")), wf_cap_flags("wf-rel-main"), None)
+            .expect("a clean finish");
         let Out::Emit(result, _, 0) = out else { panic!("expected a green finish") };
         assert_eq!(result["released"], json!(["src/only.ts"]));
     }
