@@ -513,5 +513,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-17T11:39:31.887Z"
+  },
+  "cell-preflight": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-17T14:37:28.190Z"
   }
 }
