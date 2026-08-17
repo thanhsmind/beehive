@@ -1,0 +1,51 @@
+{
+  "id": "wkm-3",
+  "feature": "worktree-keep-on-merge",
+  "lane": "small",
+  "tier": "generation",
+  "title": "worktree list marks kept-merged worktrees",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs"
+  ],
+  "read_first": [
+    "docs/history/worktree-keep-on-merge/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs"
+  ],
+  "action": "run_list (registry.rs:186-215) cross-references pending worktree-cleanup queue entries: an id with a pending entry prints '<id> (granted, merged — pending cleanup)'; JSON output gains merged_pending:bool. Tests: list output with and without a pending entry.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Pending-cleanup marker visible in bee worktree list"
+    ]
+  },
+  "decisions": [
+    "worktree-keep-on-merge D1"
+  ],
+  "deps": [
+    "wkm-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "wkm-w3",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-17T08:39:20.941Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f5668bee-17cf-4109-aed8-0b530e26f636",
+    "claimed_at": "2026-08-17T08:22:55.205Z",
+    "inline_reason": "worker registration is orchestrator-side; not present in state.json workers[]",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T08:39:01.454Z"
+  }
+}

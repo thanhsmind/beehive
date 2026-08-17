@@ -352,6 +352,7 @@
     "extractor",
     "cli-surface",
     "doc-deferral",
-    "feature-local"
+    "feature-local",
+    "worktree-keep-on-merge"
   ]
 }

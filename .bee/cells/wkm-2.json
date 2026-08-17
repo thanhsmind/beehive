@@ -1,0 +1,53 @@
+{
+  "id": "wkm-2",
+  "feature": "worktree-keep-on-merge",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Prune resolves worktree-cleanup queue entry on removal",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs",
+    "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs"
+  ],
+  "read_first": [
+    "docs/history/worktree-keep-on-merge/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs"
+  ],
+  "action": "When run_prune_core removes a worktree (Verdict::Dead, including record-only orphans), resolve unclaimed worktree-cleanup entries matching that worktree root in files (fallback: worktree id named in reason) via the queue's existing event-append model — never hand-edit the JSONL. --dry-run resolves nothing. Tests: removal resolves the matching entry; kept verdict leaves it pending; dry-run untouched.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Prune removal resolves the matching queue entry",
+      "Dry-run and kept verdicts leave entries pending"
+    ]
+  },
+  "decisions": [
+    "worktree-keep-on-merge D1"
+  ],
+  "deps": [
+    "wkm-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "wkm-w2",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/prune.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-17T08:37:26.060Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f5668bee-17cf-4109-aed8-0b530e26f636",
+    "claimed_at": "2026-08-17T08:22:55.200Z",
+    "inline_reason": "dispatched as a bee-swarming execution worker; orchestrator did not pre-register worker wkm-w2 in state.json",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T08:37:03.343Z"
+  }
+}

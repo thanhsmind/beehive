@@ -1,0 +1,61 @@
+{
+  "id": "wkm-1",
+  "feature": "worktree-keep-on-merge",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Merge keeps worktree by default; queue worktree-cleanup entry",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs"
+  ],
+  "read_first": [
+    "docs/history/worktree-keep-on-merge/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs"
+  ],
+  "action": "Flip merge cleanup default to KEEP: teardown only when --cleanup passed or worktree_cleanup_on_merge=true explicit in config; --no-cleanup stays explicit keep and wins over config true. Re-arm --cleanup (no-op today, worktree/mod.rs:9-11; resolver resolve_cleanup_on_merge handlers.rs:426). On keep path after green merge: add kind worktree-cleanup to KINDS in deferred_queue.rs and enqueue one entry — feature = creation-identity slug (fallback worktree id), files=[worktree_root], reason names worktree id, branch, merge sha, and 'bee worktree prune' as the remove command. Keep cleanup_suggested_command in output. Registration (grants+workspace record) stays. Sweep KINDS consumers (status_full, session_preamble/store.rs, chain_nudge.rs) for exhaustive-match breaks. Flip existing default-cleanup test assertions; add: default merge keeps and enqueues exactly one entry; --cleanup tears down and enqueues nothing.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Default green merge keeps worktree, branch, registration",
+      "Exactly one worktree-cleanup entry appended on keep path",
+      "--cleanup restores immediate teardown"
+    ]
+  },
+  "decisions": [
+    "worktree-keep-on-merge D1"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "wkm-w1",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/deferred_queue.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "Wiring the keep-path enqueue required touching phases.rs (merge_finish's post-commit success arm), not in the cell's declared files — the actual git-commit success path lives there, not in merge.rs; reserved it before commit after confirming no conflict."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-17T08:22:38.646Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "f5668bee-17cf-4109-aed8-0b530e26f636",
+    "claimed_at": "2026-08-17T08:07:39.795Z",
+    "inline_reason": "Dispatched as execution worker wkm-w1 by the orchestrator for cell wkm-1 (per dispatch prompt), but state.json workers[] has no registration entry for this worker/cell — registering it is orchestrator-side (bee state worker add), not something this worker performs; proceeding per the documented --inline-reason path rather than guessing at control-plane state.",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T08:22:19.774Z"
+  }
+}
