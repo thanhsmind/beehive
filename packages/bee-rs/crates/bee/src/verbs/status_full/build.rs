@@ -319,6 +319,32 @@ pub(crate) fn build_status(ctx: &mut Ctx, lanes_full: bool) -> R<JMap> {
         status.insert("scribing_debt".into(), Value::Object(sd));
     }
     status.insert("capture_queue".into(), Value::Object(capture_queue_summary(ctx)));
+    // D4 (wayfinding-flow): open discovery maps under docs/discovery/ —
+    // resume must be un-missable. `scan_discovery` (verbs/discovery.rs) is
+    // the ONE scan; the session preamble (hooks/session_preamble/budget.rs)
+    // calls the same scan independently since it renders in-process, never
+    // through `bee status`. Always present (empty arrays when no map
+    // exists) — `render_status_text` below is what guards the visible line.
+    {
+        let (efforts, unreadable) = crate::verbs::discovery::scan_discovery(&ctx.root);
+        let effort_values: Vec<Value> = efforts
+            .iter()
+            .map(|e| {
+                json!({
+                    "name": e.name,
+                    "destination": e.destination,
+                    "open": e.open,
+                    "frontier": e.frontier,
+                })
+            })
+            .collect();
+        let unreadable_values: Vec<Value> =
+            unreadable.iter().map(|p| json!(p.display().to_string())).collect();
+        let mut om = JMap::new();
+        om.insert("efforts".into(), Value::Array(effort_values));
+        om.insert("unreadable".into(), Value::Array(unreadable_values));
+        status.insert("open_maps".into(), Value::Object(om));
+    }
     status.insert(
         "pbi".into(),
         match &backlog {

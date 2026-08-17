@@ -442,6 +442,31 @@ fn active_record(
     read_lane(&control_root, Some(&feature_val)).unwrap_or_else(|| default_record.clone())
 }
 
+/// D4 (wayfinding-flow, docs/history/wayfinding-flow/CONTEXT.md): open
+/// discovery maps under `docs/discovery/` — one line per effort naming its
+/// frontier ticket count, plus one line per MAP.md this scan could not
+/// read. Same "empty means silent" shape as `promote_proposal_lines` /
+/// `reclaimable_worktree_lines` just above: no `docs/discovery/` at all, or
+/// every effort directory empty of both efforts and unreadable maps, prints
+/// nothing.
+fn open_maps_lines(root: &Path) -> Vec<String> {
+    let (efforts, unreadable) = crate::verbs::discovery::scan_discovery(root);
+    if efforts.is_empty() && unreadable.is_empty() {
+        return Vec::new();
+    }
+    let mut lines = Vec::new();
+    for e in &efforts {
+        lines.push(format!(
+            "### Open discovery map(s): {} — {} frontier ticket(s)",
+            e.name, e.frontier
+        ));
+    }
+    for p in &unreadable {
+        lines.push(format!("unreadable {} — remedy: fix or delete", p.display()));
+    }
+    lines
+}
+
 /// inject.mjs `buildSessionPreamble(root, { sessionId, handoffOutcome })`.
 /// Pure: reads state, never writes. Fail-open everywhere — orientation is
 /// never a place to fail a session.
@@ -699,6 +724,18 @@ pub fn build_session_preamble(
     if !reclaimable_lines.is_empty() {
         lines.push(String::new());
         lines.extend(reclaimable_lines);
+    }
+
+    // D4 (wayfinding-flow): open discovery maps under docs/discovery/ —
+    // resume must be un-missable. This hook renders in-process (never
+    // through `bee status`, per hooks/session_init.rs), so it calls
+    // `scan_discovery` (verbs/discovery.rs) independently — the same scan
+    // `build_status` (verbs/status_full/build.rs) reads for the JSON status
+    // field and text renderer.
+    let open_maps_lines = open_maps_lines(root);
+    if !open_maps_lines.is_empty() {
+        lines.push(String::new());
+        lines.extend(open_maps_lines);
     }
 
     // P7: keep the ceiling model scarce.

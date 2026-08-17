@@ -3823,3 +3823,70 @@ use crate::version::BEE_VERSION;
         let waiting_on = status.get("waiting_on").expect("new key waiting_on is gone");
         assert!(waiting_on.is_object() || waiting_on.is_null(), "waiting_on changed kind: {waiting_on:?}");
     }
+
+    // ── D4 (wayfinding-flow): open discovery maps in status ────────────────
+
+    /// Happy path: an effort with one frontier ticket shows both in the JSON
+    /// `open_maps` field and as a guarded line in the text renderer.
+    #[test]
+    fn open_maps_section_renders_with_an_effort_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        write(
+            root,
+            "docs/discovery/onboarding-flow/MAP.md",
+            "# onboarding-flow\n\n## Destination\n\nA spec for the new flow.\n",
+        );
+        write(root, "docs/discovery/onboarding-flow/tickets/001-a.md", "status: open\n");
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let om = status.get("open_maps").expect("open_maps key is gone");
+        let efforts = vget(om, "efforts").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(efforts.len(), 1);
+        assert_eq!(vget(&efforts[0], "name"), Some(&json!("onboarding-flow")));
+        assert_eq!(vget(&efforts[0], "frontier"), Some(&json!(1)));
+        let text = render_status_text(&status);
+        assert!(
+            text.contains("### Open discovery map(s): onboarding-flow — 1 frontier ticket(s)"),
+            "{text}"
+        );
+    }
+
+    /// No `docs/discovery/` directory at all: `open_maps` stays present in
+    /// the JSON with empty arrays (additive-only shape), but the text
+    /// renderer prints no section for it at all.
+    #[test]
+    fn open_maps_section_absent_with_no_discovery_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let om = status.get("open_maps").expect("open_maps key is gone");
+        assert_eq!(vget(om, "efforts"), Some(&json!([])));
+        assert_eq!(vget(om, "unreadable"), Some(&json!([])));
+        let text = render_status_text(&status);
+        assert!(!text.contains("Open discovery map(s)"), "{text}");
+    }
+
+    /// An unreadable MAP.md never crashes the scan or the render — it
+    /// surfaces as a visible remedy line instead, same fail-open shape
+    /// `verbs::discovery::scan_discovery` already documents.
+    #[test]
+    fn open_maps_section_shows_a_remedy_line_for_an_unreadable_map() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(root, ".bee/state.json", r#"{"phase":"idle"}"#);
+        let dir = root.join("docs").join("discovery").join("broken");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("MAP.md"), [0xFF, 0xFE, 0x00, 0xFF]).unwrap();
+        let mut ctx = ctx_for(root);
+        let status = build_status(&mut ctx, false).unwrap();
+        let text = render_status_text(&status);
+        assert!(text.contains("unreadable "), "{text}");
+        assert!(text.contains(" — remedy: fix or delete"), "{text}");
+    }
