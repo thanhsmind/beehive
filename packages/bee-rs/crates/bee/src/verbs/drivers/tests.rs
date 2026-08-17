@@ -1941,6 +1941,52 @@ use std::time::Instant;
         assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
     }
 
+    /// test-cadence-boundary D1/D1b (decision 13ce1858): a granted worktree
+    /// for the feature — the SAME grant shape `find_granted_worktree_for_feature`
+    /// resolves for a live worktree AND one merged but kept pending-cleanup,
+    /// since `read_grants` never distinguishes them (worktree/registry.rs's
+    /// "pending cleanup" label is a display-only overlay computed from a
+    /// SEPARATE pending-cleanup queue, not a second grant flag) — means
+    /// close defers instead of re-running the declared suite a second time.
+    #[test]
+    fn close_defers_the_tests_door_to_worktree_merge_when_a_granted_worktree_exists() {
+        let Some(shell) = posix_shell() else { return };
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, _granted) = dp1_worktree_fixture(tmp.path());
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            r#"{"commands":{"test":"echo should-not-run"}}"#,
+        )
+        .unwrap();
+        let declared = declared_test_commands(&main).unwrap();
+        assert!(declared.is_some(), "fixture must declare commands.test");
+        let Out::Emit(result, text, code) =
+            close_handler(&main, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
+        // No test process ran at all: the results record close.rs's own
+        // run_declared_tests writes is never created.
+        assert!(!main.join(".bee/logs/test-results.json").exists());
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(doors[0].get("door"), Some(&json!("tests")));
+        assert_eq!(doors[0].get("blocking"), Some(&json!(false)));
+        let detail = doors[0].get("detail").unwrap().as_str().unwrap();
+        assert!(
+            detail.contains("tests prove at bee worktree merge"),
+            "detail: {detail}"
+        );
+        assert_eq!(doors[0].get("command"), Some(&json!("bee worktree merge")));
+        assert_eq!(result.get("ran_tests"), Some(&json!(false)));
+        assert_eq!(result.get("tests"), Some(&Value::Null));
+        assert!(
+            text.contains("prove at bee worktree merge"),
+            "text: {text}"
+        );
+        assert!(text.contains("Tests for \"demo\""), "text: {text}");
+    }
+
     #[test]
     fn close_surfaces_pending_capture_reminders() {
         let tmp = tempfile::tempdir().unwrap();

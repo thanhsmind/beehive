@@ -91,9 +91,9 @@ stateDiagram-v2
     state swarming {
         direction TB
         orchestrate --> execute : dispatch prepare --claim
-        execute --> orchestrate : cells finish — green caps, red refuses
+        execute --> orchestrate : cells finish — commit-only cap, tests: boundary
     }
-    swarming --> closed : bee close — reruns commands.test
+    swarming --> closed : bee close/worktree merge — tests prove at the boundary
     closed --> scribing : deferred — owner's pace
     scribing --> compounding : state scribing-run
     compounding --> compounding_complete : state compounding-run + close commit
@@ -145,9 +145,9 @@ sequenceDiagram
     O->>W: spawn with that prompt (inside the worktree)
     W->>S: edit reserved files, one commit (cell: id trailer)
     W->>B: cells finish --id
-    B->>S: run commands.test — green caps, red refuses with excerpt
+    B->>S: cap — commit-only proof, tests: boundary
     W-->>O: [DONE] / [BLOCKED] / [HANDOFF] / [NOOP]
-    O->>B: bee close --feature (reruns tests, retires cells)
+    O->>B: bee close --feature (tests prove at the boundary: runs commands.test when no worktree, retires cells)
     O->>B: worktree merge --id (auto-commit .bee + this feature's docs/history,<br/>refuse and NAME anything dirty outside those, verify green, worktree removed)
     O-->>U: outcome + capture line
     Note over O: scribing + compounding later,<br/>at the owner's pace

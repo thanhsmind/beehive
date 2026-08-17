@@ -70,8 +70,10 @@ source edits happen until `approved_gates.execution` is true.
 - **Tests are the writer's, TDD-style, inside each cell** — coverage judgment
   first: cite existing tests by file and case, author only the gap
   (`.bee/expertise/tests.md`). There is no trailing test cell per slice, and no
-  per-cell proof tier: `bee cells finish` runs the declared `commands.test` at
-  every cap — and close, merge, and CI all re-run that same one command.
+  per-cell proof tier: tests prove at the boundary — `bee close` runs the
+  declared `commands.test` when the feature has no worktree, `bee worktree
+  merge` runs it when it does; a cap is commit-only proof and records `tests:
+  boundary`. CI runs the same command on every push.
 - **Scope integrity**: when the shape will not fit the budget, never quietly shrink
   a locked decision or drop a must-have. Answer SPLIT RECOMMENDED and let the user
   choose what waits; a cheaper swap needs a supersede.

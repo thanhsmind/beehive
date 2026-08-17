@@ -28,18 +28,32 @@
   "deps": [
     "sl-1"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
+    "worker": "sl-w2",
     "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [
+      "catalog.rs (not in cell.files) needed a PINNED_FLAG_COUNT bump for the new --without flag to keep the pinned flag-vocabulary test green — a mechanical, test-forced follow-on of the declared change."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-17T11:01:21.264Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f5668bee-17cf-4109-aed8-0b530e26f636",
+    "claimed_at": "2026-08-17T10:47:36.445Z",
+    "inline_reason": "worker sl-w2 dispatched directly by orchestrator prompt, not pre-registered in state.json workers[]",
+    "warnings": [
+      "advisory: this cap's commit changes 592 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T11:01:02.062Z"
   }
 }

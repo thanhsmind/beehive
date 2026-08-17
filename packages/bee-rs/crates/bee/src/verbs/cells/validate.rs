@@ -72,121 +72,167 @@ pub(crate) fn js_is_integer(v: &Value) -> Option<f64> {
     }
 }
 
-/// lib/cells.mjs validateNewCell — throws (Fail::Thrown) the FIRST problem.
-pub(crate) fn validate_new_cell(root: &Path, cell: &Value) -> MR<()> {
+/// lib/cells.mjs validateNewCell, as a collector — gathers EVERY schema
+/// problem (in the original check order) into one list instead of throwing
+/// on the first. A dependent check is skipped when its prerequisite already
+/// failed (id pattern/already-exists need a non-blank id; must_haves.truths
+/// needs a valid lane; the verify-sentinel check needs a non-blank verify) —
+/// skipping never manufactures a second problem for the same root cause. A
+/// real IO/Delegate failure (config read, cell-store read, guard discovery)
+/// still propagates as Err immediately; it is never collected as a problem.
+pub(crate) fn validate_new_cell_problems(root: &Path, cell: &Value) -> MR<Vec<String>> {
     let map = match cell {
         Value::Object(m) => m,
-        _ => return Err(Fail::Thrown("addCell: cell must be a JSON object.".into())),
+        _ => return Ok(vec!["addCell: cell must be a JSON object.".into()]),
     };
+    let mut problems: Vec<String> = Vec::new();
     for field in ["id", "feature", "title", "action", "verify"] {
         if !nonblank_string(map.get(field)) {
-            return Err(Fail::Thrown(format!(
+            problems.push(format!(
                 "addCell: cell is missing required field \"{field}\" (non-empty string)."
-            )));
+            ));
         }
     }
-    assert_verify_sentinel_allowed(root, "addCell", map.get("verify").unwrap_or(&Value::Null))?;
-    let id = match map.get("id") {
-        Some(Value::String(s)) => s.clone(),
-        _ => unreachable!("checked above"),
+    if nonblank_string(map.get("verify")) {
+        match assert_verify_sentinel_allowed(root, "addCell", map.get("verify").unwrap()) {
+            Ok(()) => {}
+            Err(Fail::Thrown(message)) => problems.push(message),
+            Err(Fail::Delegate) => return Err(Fail::Delegate),
+        }
+    }
+    let id = if nonblank_string(map.get("id")) {
+        match map.get("id") {
+            Some(Value::String(s)) => Some(s.clone()),
+            _ => unreachable!("nonblank_string only matches Value::String"),
+        }
+    } else {
+        None
     };
-    if !id_pattern_ok(&id) {
-        return Err(Fail::Thrown(format!(
-            "addCell: invalid id \"{id}\" — use letters, digits, dot, dash, underscore (e.g. \"auth-3\")."
-        )));
+    if let Some(id) = &id {
+        if !id_pattern_ok(id) {
+            problems.push(format!(
+                "addCell: invalid id \"{id}\" — use letters, digits, dot, dash, underscore (e.g. \"auth-3\")."
+            ));
+        }
     }
     let lane_ok = matches!(map.get("lane"), Some(Value::String(s)) if LANES.contains(&s.as_str()));
     if !lane_ok {
-        return Err(Fail::Thrown(format!(
+        problems.push(format!(
             "addCell: invalid lane \"{}\" — must be one of: {}.",
             js_string_or_undefined(map.get("lane")),
             LANES.join(", ")
-        )));
+        ));
     }
-    let lane = match map.get("lane") {
-        Some(Value::String(s)) => s.clone(),
-        _ => unreachable!(),
-    };
-    if lane == "standard" || lane == "high-risk" {
-        let truths = map
-            .get("must_haves")
-            .filter(|m| js_truthy(m))
-            .and_then(|m| m.get("truths"));
-        let ok = matches!(truths, Some(Value::Array(a)) if !a.is_empty());
-        if !ok {
-            return Err(Fail::Thrown(format!(
-                "addCell: lane \"{lane}\" requires non-empty must_haves.truths (observable truths to verify)."
-            )));
+    if lane_ok {
+        let lane = match map.get("lane") {
+            Some(Value::String(s)) => s.clone(),
+            _ => unreachable!(),
+        };
+        if lane == "standard" || lane == "high-risk" {
+            let truths = map
+                .get("must_haves")
+                .filter(|m| js_truthy(m))
+                .and_then(|m| m.get("truths"));
+            let ok = matches!(truths, Some(Value::Array(a)) if !a.is_empty());
+            if !ok {
+                problems.push(format!(
+                    "addCell: lane \"{lane}\" requires non-empty must_haves.truths (observable truths to verify)."
+                ));
+            }
         }
     }
     if let Some(pbi) = map.get("pbi") {
         if !matches!(pbi, Value::Null | Value::String(_)) {
-            return Err(Fail::Thrown(
-                "addCell: optional \"pbi\" must be a string backlog id when present.".into(),
-            ));
+            problems.push("addCell: optional \"pbi\" must be a string backlog id when present.".into());
         }
     }
     if let Some(tier) = map.get("tier") {
         let ok = matches!(tier, Value::Null)
             || matches!(tier, Value::String(s) if MODEL_TIERS.contains(&s.as_str()));
         if !ok {
-            return Err(Fail::Thrown(format!(
+            problems.push(format!(
                 "addCell: optional \"tier\" must be one of {} when present.",
                 MODEL_TIERS.join(", ")
-            )));
+            ));
         }
     }
     if let Some(class) = map.get("change_class") {
         let ok = matches!(class, Value::Null)
             || matches!(class, Value::String(s) if CHANGE_CLASSES.contains(&s.as_str()));
         if !ok {
-            return Err(Fail::Thrown(format!(
+            problems.push(format!(
                 "addCell: optional \"change_class\" must be one of {} when present.",
                 CHANGE_CLASSES.join(", ")
-            )));
+            ));
         }
     }
     if let Some(budgets) = map.get("budgets") {
         if !matches!(budgets, Value::Null) {
-            let Value::Object(budget_map) = budgets else {
-                return Err(Fail::Thrown(
+            match budgets {
+                Value::Object(budget_map) => {
+                    let unknown_key = budget_map.keys().find(|key| !BUDGET_KEYS.contains(&key.as_str()));
+                    if let Some(key) = unknown_key {
+                        problems.push(format!(
+                            "addCell: unknown \"budgets\" key \"{key}\" — must be one of: {}.",
+                            BUDGET_KEYS.join(", ")
+                        ));
+                    } else {
+                        for (idx, key) in BUDGET_KEYS.iter().enumerate() {
+                            let Some(value) = budget_map.get(*key) else { continue };
+                            let hard_max = BUDGET_HARD_MAX[idx];
+                            let ok = js_is_integer(value).map(|f| f >= 1.0 && f <= hard_max).unwrap_or(false);
+                            if !ok {
+                                problems.push(format!(
+                                    "addCell: \"budgets.{key}\" must be an integer in [1, {}] when present, got {}.",
+                                    jsjson::js_f64_to_string(hard_max),
+                                    jsjson::stringify(value)
+                                ));
+                                break;
+                            }
+                        }
+                    }
+                }
+                _ => problems.push(
                     "addCell: optional \"budgets\" must be a plain object when present.".into(),
-                ));
-            };
-            for key in budget_map.keys() {
-                if !BUDGET_KEYS.contains(&key.as_str()) {
-                    return Err(Fail::Thrown(format!(
-                        "addCell: unknown \"budgets\" key \"{key}\" — must be one of: {}.",
-                        BUDGET_KEYS.join(", ")
-                    )));
-                }
-            }
-            for (idx, key) in BUDGET_KEYS.iter().enumerate() {
-                let Some(value) = budget_map.get(*key) else { continue };
-                let hard_max = BUDGET_HARD_MAX[idx];
-                let ok = js_is_integer(value).map(|f| f >= 1.0 && f <= hard_max).unwrap_or(false);
-                if !ok {
-                    return Err(Fail::Thrown(format!(
-                        "addCell: \"budgets.{key}\" must be an integer in [1, {}] when present, got {}.",
-                        jsjson::js_f64_to_string(hard_max),
-                        jsjson::stringify(value)
-                    )));
-                }
+                ),
             }
         }
     }
     if let Some(ack) = map.get(REGEN_ACK_FIELD) {
         if !matches!(ack, Value::Null) && !nonblank_string(Some(ack)) {
-            return Err(Fail::Thrown(format!(
+            problems.push(format!(
                 "addCell: optional \"{REGEN_ACK_FIELD}\" must be a non-empty string (the one-line reason the derived regen obligation is being skipped)."
-            )));
+            ));
         }
     }
-    if read_cell_norm(root, &id)?.map(|v| js_truthy(&v)).unwrap_or(false) {
-        return Err(Fail::Thrown(format!("addCell: cell \"{id}\" already exists.")));
+    if let Some(id) = &id {
+        if read_cell_norm(root, id)?.map(|v| js_truthy(&v)).unwrap_or(false) {
+            problems.push(format!("addCell: cell \"{id}\" already exists."));
+        }
     }
-    assert_regen_obligation(map, "addCell")?;
-    assert_judge_obligation(map, "addCell")
+    match assert_regen_obligation(map, "addCell") {
+        Ok(()) => {}
+        Err(Fail::Thrown(message)) => problems.push(message),
+        Err(Fail::Delegate) => return Err(Fail::Delegate),
+    }
+    match assert_judge_obligation(map, "addCell") {
+        Ok(()) => {}
+        Err(Fail::Thrown(message)) => problems.push(message),
+        Err(Fail::Delegate) => return Err(Fail::Delegate),
+    }
+    Ok(problems)
+}
+
+/// lib/cells.mjs validateNewCell — throws (Fail::Thrown) every problem the
+/// collector found, joined into one message; each collected sentence keeps
+/// its own exact wording.
+pub(crate) fn validate_new_cell(root: &Path, cell: &Value) -> MR<()> {
+    let problems = validate_new_cell_problems(root, cell)?;
+    if problems.is_empty() {
+        Ok(())
+    } else {
+        Err(Fail::Thrown(problems.join(" ")))
+    }
 }
 
 /// The shared behavior-door default (E6 / B-P2-8): a call that sets

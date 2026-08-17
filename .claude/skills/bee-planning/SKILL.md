@@ -94,11 +94,13 @@ surface makes slice 1 a walking skeleton: end-to-end, real behavior, no stubs.
 
 The writer owns tests TDD-style as part of each cell — coverage judgment
 first: cite existing tests by file and case, author only the gap
-(`.bee/expertise/tests.md`) — and `bee finish` runs the declared
-suite (`commands.test`) at every cap.
+(`.bee/expertise/tests.md`) — and tests prove at the boundary: `bee
+close` runs `commands.test` when the feature has no worktree; `bee
+worktree merge` runs it when it does. A cap is commit-only proof and
+records `tests: boundary`.
 
-Cells run `commands.test` at finish — the one declared command, which
-close, merge, and CI all re-run (`references/planning-reference.md`
+Tests prove at the boundary — the one declared command, which CI also
+runs on every push (`references/planning-reference.md`
 ("Test scoping")); then
 `bee state set --owner planning --phase swarming --next-action "Invoke bee-swarming."`
 

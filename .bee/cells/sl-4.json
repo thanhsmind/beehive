@@ -3,25 +3,29 @@
   "feature": "staging-lane",
   "lane": "small",
   "tier": "generation",
-  "title": "Docs and skill surfaces: staging is where the user tests",
+  "title": "Docs and skill guidance: the topology is taught, not only enforced",
   "behavior_change": false,
   "files": [
     "docs/handbook/register.md",
     ".claude/skills/bee-swarming/SKILL.md",
     ".claude/skills/bee-herding/references/role-merge.md",
-    "docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md"
+    "docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md",
+    ".claude/skills/bee-hive/references/routing-and-contracts.md",
+    ".claude/skills/bee-planning/SKILL.md",
+    "AGENTS.md"
   ],
   "read_first": [
     "docs/history/staging-lane/plan.md",
     "docs/handbook/register.md",
     ".claude/skills/bee-swarming/SKILL.md"
   ],
-  "action": "Docs sync per D0/D0a. handbook/register.md: staging commands, staging.json store, commands.staging_build config, the two refusal codes, the no-escape rule for staging-into-main. New area concept doc docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md: the invariant 'staging = main + sum of features awaiting UAT', three triggers, disposability, history-is-garbage, teeth — cite D0/D0a and uat-gate D1; add index/frontmatter per bundle conventions (look at a sibling concept file). bee-swarming SKILL.md close step: 'ready for user testing' now points at bee staging add + the staging build, not the raw feature worktree, when the host repo records a staging build. role-merge.md: after a landed merge, run/suggest bee staging rebuild (trigger 3). Keep edits minimal, each file's own voice. Tests: suite green (skill-tree fixtures may pin text — align if red).",
+  "action": "Docs AND skill guidance per staging-lane D0/D0a plus the user's 2026-08-17 direction: beyond CLI teeth, the skills must TEACH the main/staging/worktree flow so an agent understands it before any guard fires. (1) handbook/register.md: staging commands, staging.json store, commands.staging_build config, both refusal codes, the no-escape rule for staging-into-main. (2) New area doc docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md: the invariant 'staging = main + sum of features awaiting UAT', the three update triggers, disposability, history-is-garbage, teeth — cite D0/D0a and uat-gate-before-merge D1; frontmatter/index per bundle conventions (copy a sibling concept file's shape). (3) bee-hive references/routing-and-contracts.md: one short 'Topology' passage — main clean and integration-only, feature worktrees the only place code truth changes, staging the disposable mixing ground the user tests at, uat gate the switch between them; where routing mentions worktrees, point to it. (4) bee-swarming SKILL.md close step: 'ready for user testing' points at bee staging add + the staging build (falling back to the feature worktree when the host repo has no staging build); after the user's uat approval the merge to main follows, then the staging rebuild nudge. (5) bee-planning SKILL.md: the worktree-first route line names the topology in one clause (feature worktree now, staging at close, main only after uat). (6) role-merge.md: after a landed merge, run/suggest bee staging rebuild (trigger 3). (7) AGENTS.md: extend the existing worktree-first bullet by one sentence naming staging as the user-testing ground and the uat gate as the door to main — smallest possible edit, AGENTS.md is always-loaded context. Keep every edit minimal and in each file's own voice; guidance teaches the WHY (invariant + triggers), guards keep the teeth. Tests: suite green (skill-tree/prompt fixtures may pin text — align them as part of the cell).",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "must_haves": {
     "truths": [
       "register.md documents commands, store, config, refusals",
-      "area doc states the invariant and three triggers with citations"
+      "area doc states the invariant and three triggers with citations",
+      "bee-hive, bee-planning, bee-swarming, and AGENTS.md each teach their slice of the topology"
     ]
   },
   "decisions": [
@@ -32,18 +36,37 @@
     "sl-2",
     "sl-3"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
+    "worker": "sl-w4",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "docs/handbook/register.md",
+      ".claude/skills/bee-swarming/SKILL.md",
+      ".claude/skills/bee-herding/references/role-merge.md",
+      "docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md",
+      ".claude/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude/skills/bee-planning/SKILL.md",
+      "AGENTS.md",
+      "docs/knowledge/areas/worktree-parallelism/index.md",
+      "docs/knowledge/areas/index.md",
+      "docs/knowledge/index.md"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-17T11:43:18.276Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f5668bee-17cf-4109-aed8-0b530e26f636",
+    "claimed_at": "2026-08-17T11:36:17.389Z",
+    "inline_reason": "worker registration missing for cold-pickup dispatch; worked cell sl-4 directly per orchestrator dispatch",
+    "warnings": [
+      "advisory: this cap's commit changes 185 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T11:42:58.482Z"
   }
 }

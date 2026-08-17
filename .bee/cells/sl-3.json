@@ -32,18 +32,31 @@
   "deps": [
     "sl-1"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "sl-w3",
+    "outcome": "Add staging-lane teeth: merge refusal, commit guard, rebuild nudge",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-17T11:35:58.757Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f5668bee-17cf-4109-aed8-0b530e26f636",
+    "claimed_at": "2026-08-17T11:01:35.467Z",
+    "inline_reason": "dispatched worker sl-w3 has no state.json workers[] registration for this cell (cold-pickup dispatch, no prior registration step run)",
+    "warnings": [],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T11:35:37.582Z"
   }
 }

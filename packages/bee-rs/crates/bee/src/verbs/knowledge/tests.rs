@@ -889,7 +889,9 @@ use std::time::Instant;
             inline_reason: None,
             report: None,
         };
-        crate::verbs::cells::cap_cell_from_flags(root, root, &flags, false)
+        // decision 13ce1858 (test-cadence-boundary D1): `cap_cell_from_flags`
+        // dropped its `test_root` parameter with the per-cap test run.
+        crate::verbs::cells::cap_cell_from_flags(root, &flags, false)
             .expect("cap through --deviation must succeed");
 
         let Some(Promo::Ok(p)) = build_promotion(root, &kn, "frd-mine") else {
