@@ -35,8 +35,12 @@ no map: route straight to bee-shaping.
    what "arrived" looks like: a spec to hand off, a decision to lock,
    or a change made. This is the one thing session 1 must produce; it
    fixes scope for everything that follows.
-2. **Sweep wide, not deep.** Breadth-first across the whole space:
-   surface the open decisions, don't resolve them.
+2. **Sweep wide, not deep, as an interview with the user.**
+   Breadth-first across the whole space, in rounds of frontier
+   questions (Interview craft, below) — surface the open decisions,
+   don't resolve them. A fog line the agent suspects but the user has
+   not confirmed still goes in "Not yet specified" — mark it
+   `(agent-suspected)`.
 3. **Write the map** at `docs/discovery/<effort>/MAP.md` — Destination,
    Notes, Decisions so far, Not yet specified, Out of scope. Template
    and exact section rules: `references/wayfinding-reference.md`.
@@ -49,13 +53,32 @@ no map: route straight to bee-shaping.
    subagents (bee-researching). Everything else waits for a session.
 6. Stop. Charting is one session's work.
 
+## Interview craft
+
+Interviews run in **rounds** over a **question frontier** — every
+question askable now without guessing an answer not yet heard. Ask the
+whole frontier in one round, numbered, each carrying the agent's
+recommended answer — recommending is not answering for the user; the
+user still picks. A question that depends on an answer still open this
+round waits for the next round.
+
+Facts are the agent's job, never the user's. A frontier question that
+needs a repo or environment fact gets a dispatched read — a
+gather-tier subagent or a direct read — instead of a question to the
+user, and the rest of the frontier goes out while the read runs.
+
+Round mechanics, the exact question format, a worked example, and the
+domain-modeling moves (term challenges, edge scenarios, code
+cross-checks): `references/wayfinding-reference.md` ("Interview
+craft").
+
 ## Ticket types
 
 | Type | Who | Resolves by |
 |---|---|---|
-| grilling (default) | with user | conversation — the agent never answers its own question |
+| grilling (default) | with user | conversation, in interview-craft rounds (above; deeper craft and bee-shaping's probe menu — `references/wayfinding-reference.md` "Interview craft" and bee-shaping's `bee-shaping/references/gray-area-probes.md` plus its own "Interview craft") — the agent never answers its own question |
 | research | agent alone | bee-researching / gather-tier subagent; findings linked from the ticket |
-| prototype | with user | a cheap mock under `.bee/spikes/`; the user reacts to it |
+| prototype | with user | a cheap mock under `.bee/spikes/`, built to `references/wayfinding-reference.md` ("Spike rules"); the user reacts to it |
 | task | either | manual work that unblocks a decision (provision access, move data) |
 
 A with-user ticket only resolves through live exchange. `blocked-by:`
@@ -109,4 +132,4 @@ at the features it spawned.
 
 | File | When to load |
 |---|---|
-| `references/wayfinding-reference.md` | MAP.md template, ticket file template, and the resolution protocol — exact section wording, frontmatter shape, decision-log and link mechanics |
+| `references/wayfinding-reference.md` | MAP.md template, ticket file template, the resolution protocol, Interview craft (round mechanics, worked example, domain-modeling moves), and Spike rules — exact section wording, frontmatter shape, decision-log and link mechanics |
