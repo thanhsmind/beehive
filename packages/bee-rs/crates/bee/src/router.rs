@@ -114,6 +114,9 @@ pub const PORTED: &[&str] = &[
     // authoritative flipped/delegated split lives in roots.rs's header.
     "status|status --lanes-full|orient (inside linked worktrees)",
     "reservations list|reserve|release|sweep (inside linked worktrees)",
+    // wayfinding-flow — the discovery map registry (D2, D4, D6.3)
+    "discovery list [--json]",
+    "discovery stub --effort <slug> --from <text> [--json]",
 ];
 
 // ── the front door's two namespaces ────────────────────────────────────────
