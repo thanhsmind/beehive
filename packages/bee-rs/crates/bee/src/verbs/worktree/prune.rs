@@ -615,6 +615,12 @@ pub(crate) fn run_prune_core(
                     }));
                     continue;
                 }
+                // wkm-2: read the record's own root BEFORE teardown removes
+                // it — the orphan verdict's directory is already gone, but
+                // the workspace record (still readable here) is the same
+                // string `enqueue_worktree_cleanup_deferral` wrote into the
+                // matching queue entry's `files`.
+                let worktree_root_opt = dead_worktree_target(main_root, id).map(|(root, _)| root);
                 let mut guard = match lock::acquire_store_lock(main_root, WORKTREE_ADMIN_LOCK, lock::MAX_ATTEMPTS) {
                     Ok(g) => g,
                     Err(busy) => {
@@ -630,6 +636,11 @@ pub(crate) fn run_prune_core(
                 };
                 let _ = teardown_worktree(main_root, id, None);
                 guard.release();
+                let _ = crate::verbs::deferred_queue::resolve_worktree_cleanup(
+                    main_root,
+                    worktree_root_opt.as_deref(),
+                    id,
+                );
                 removed_ids.push(id.clone());
                 lines.push(format!(
                     "{id}: removed (record only — no directory or branch existed), reclaimed 0 B — {reason}"
@@ -684,6 +695,16 @@ pub(crate) fn run_prune_core(
 
                 match teardown {
                     Ok(()) => {
+                        // wkm-2: `worktree_root` (from `dead_worktree_
+                        // target`, above) is the exact string wkm-1's
+                        // `enqueue_worktree_cleanup_deferral` wrote into the
+                        // matching entry's `files` — resolve it now that the
+                        // worktree is actually gone.
+                        let _ = crate::verbs::deferred_queue::resolve_worktree_cleanup(
+                            main_root,
+                            Some(&worktree_root),
+                            id,
+                        );
                         removed_ids.push(id.clone());
                         reclaimed_bytes += size;
                         lines.push(format!("{id}: removed, reclaimed {} — {reason}", format_bytes(size)));
@@ -702,6 +723,11 @@ pub(crate) fn run_prune_core(
                     Err(TeardownFailure::BranchDeleteFailed(why)) => {
                         // The directory (and its reflog) is already gone —
                         // this is a removal with a caveat, not a keep.
+                        let _ = crate::verbs::deferred_queue::resolve_worktree_cleanup(
+                            main_root,
+                            Some(&worktree_root),
+                            id,
+                        );
                         removed_ids.push(id.clone());
                         reclaimed_bytes += size;
                         lines.push(format!(
@@ -799,4 +825,132 @@ pub(crate) fn run_prune(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
 
     let text = outcome.lines.join("\n");
     Some(ctx.emit(&Value::Object(result), &text))
+}
+
+// wkm-2: prune resolves the worktree-cleanup entry it drains — kept in this
+// module's own test block (not worktree/tests.rs) because this cell's
+// reserved files are prune.rs and deferred_queue.rs only; a sibling cell
+// holds worktree/tests.rs concurrently. A tiny local fixture (`main_repo`,
+// `git_ok`) stands in for the ones already living there rather than
+// reaching across the reservation boundary.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn git_ok(cwd: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()
+            .expect("git must be on PATH for the prune fixtures");
+        assert!(out.status.success(), "git {args:?} failed: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    fn main_repo(tmp: &Path) -> PathBuf {
+        let main = tmp.join("main");
+        std::fs::create_dir_all(main.join(".bee")).unwrap();
+        std::fs::write(main.join(".bee").join("onboarding.json"), "{}\n").unwrap();
+        std::fs::write(main.join(".gitignore"), ".bee/*\n!.bee/companion-session.json\n").unwrap();
+        std::fs::write(main.join("f.txt"), "x").unwrap();
+        git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        git_ok(&main, &["config", "user.email", "a@b.c"]);
+        git_ok(&main, &["config", "user.name", "t"]);
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "init"]);
+        main
+    }
+
+    /// A freshly-created feature worktree, branched off main's current HEAD
+    /// with no divergent commits — the same fixture worktree/tests.rs's own
+    /// `prune_fixture` builds, reproduced here for this module's own test
+    /// block: `classify_worktree` reads it as merged (its branch IS main's
+    /// HEAD), clean, untouched, and old enough — `Verdict::Dead` by default,
+    /// unless a test diverges it on purpose.
+    fn prune_fixture(tmp: &Path) -> (PathBuf, Created) {
+        let main = main_repo(tmp);
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|e| match e {
+                    CErr::Refuse(m) => panic!("refused: {m}"),
+                    CErr::Ex => panic!("delegated"),
+                });
+        (main, created)
+    }
+
+    /// The reason text `enqueue_worktree_cleanup_deferral` (merge.rs) writes
+    /// for a real merge — reproduced here rather than driving a full merge,
+    /// since only the entry's shape (files + reason) matters to prune.
+    fn worktree_cleanup_reason(created: &Created) -> String {
+        format!(
+            "Worktree {} (branch {}) merged into main at deadbeef and kept per default (D1) — remove it with `bee worktree prune`.",
+            created.id, created.branch
+        )
+    }
+
+    fn queue_worktree_cleanup(main: &Path, created: &Created) {
+        crate::verbs::deferred_queue::enqueue(
+            main,
+            "worktree-cleanup",
+            "demo",
+            &[],
+            &[],
+            &[p(&created.worktree_root)],
+            &worktree_cleanup_reason(created),
+        )
+        .unwrap();
+    }
+
+    fn worktree_cleanup_completed(main: &Path) -> bool {
+        let queued = crate::verbs::deferred_queue::items_for(main, "worktree-cleanup", "demo");
+        assert_eq!(queued.len(), 1, "exactly one worktree-cleanup entry");
+        queued[0].completed
+    }
+
+    /// must_have: prune removing a worktree resolves the matching,
+    /// previously-unclaimed `worktree-cleanup` entry.
+    #[test]
+    fn prune_removal_resolves_the_matching_worktree_cleanup_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        queue_worktree_cleanup(&main, &created);
+
+        let outcome = run_prune_core(&main, false, 0.0).unwrap();
+        assert_eq!(outcome.removed_ids, vec![created.id.clone()], "{:?}", outcome.entries);
+        assert!(worktree_cleanup_completed(&main), "a real prune removal must resolve the matching entry");
+    }
+
+    /// must_have's other half: a `Kept` verdict removes nothing, so the
+    /// entry stays pending — a worktree diverged from base (not provably
+    /// merged) never reaches the removal step at all.
+    #[test]
+    fn prune_kept_verdict_leaves_the_worktree_cleanup_entry_pending() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        std::fs::write(created.worktree_root.join("f.txt"), "unmerged").unwrap();
+        git_ok(&created.worktree_root, &["config", "user.email", "a@b.c"]);
+        git_ok(&created.worktree_root, &["config", "user.name", "t"]);
+        git_ok(&created.worktree_root, &["commit", "-qam", "unmerged work"]);
+        queue_worktree_cleanup(&main, &created);
+
+        let outcome = run_prune_core(&main, false, 0.0).unwrap();
+        assert_eq!(outcome.kept_ids, vec![created.id.clone()], "{:?}", outcome.entries);
+        assert!(outcome.removed_ids.is_empty(), "{:?}", outcome.removed_ids);
+        assert!(!worktree_cleanup_completed(&main), "a kept verdict must leave the entry pending");
+    }
+
+    /// `--dry-run` classifies but removes nothing — it must resolve nothing
+    /// in the deferred queue either.
+    #[test]
+    fn prune_dry_run_resolves_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        queue_worktree_cleanup(&main, &created);
+
+        let outcome = run_prune_core(&main, true, 0.0).unwrap();
+        assert!(outcome.dry_run);
+        assert!(outcome.removed_ids.is_empty(), "{:?}", outcome.removed_ids);
+        assert!(!worktree_cleanup_completed(&main), "--dry-run must resolve nothing");
+        assert!(created.worktree_root.exists(), "--dry-run must remove nothing either");
+    }
 }
