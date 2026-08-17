@@ -9,7 +9,7 @@ bee:
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
   decisions: ["lane-ceremony-v3 D1/D2/D9 (docs/history/lane-ceremony-v3/CONTEXT.md, 2026-07-19 — plan document frozen at shape approval, slice-in-units)", self-correcting-loop D3 with Validating amendment Δ4 (change classification and the advisory verification standard), "regen-obligation-derived D1/D2 (derived regen obligation refuses at authoring, recorded escape hatch; roots derived from the tools, never hard-coded — 2026-07-23)", "8ef2bae6 (cli-ergonomics D2 — whole-batch exhaustive refusal + --dry-run preview, 2026-07-24)", "worker-conformance D4/D5/D6 (the trailing test unit stays unconditional but its first mandated step is a coverage judgement, not authoring; test shape below the highest-risk lane is the happy-path/edge-cases/error-paths triad and the twelve-dimension checklist applies only to high-risk/hard-gate work; no numeric per-group test cap is added — 2026-07-29)", "worker-conformance D13 (the doctrine-vs-machine disagreement over batching the trailing test unit at high risk is recorded as an open gap, not fixed — the close-door predicate was deliberately left unchanged)", "hook-teeth D3/D7 (docs/history/hook-teeth/CONTEXT.md, 2026-08-04 — no units before the gate: authoring into an ungated feature refuses the whole batch, documentation-lane work exempt)", "counter-teeth D3/D6 (docs/history/counter-teeth/CONTEXT.md, 2026-08-04 — the ceiling tier's 40% share becomes a refusal with a recorded-reason escape; decision 0012's threshold value unchanged)"]
-  sources: [cells-update-verb cell cuv-1 (2026-07-12), dispatcher-unify cells-batch-add suite rows (v0.1.27), "post-advisor-hardening cell pah-2 (cells add/update manifest-lint advisory, 2026-07-18)", "lane-ceremony-v3 cells lcv3-1..lcv3-5 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19)", "worker-conformance cells wc-3/wc-6/wc-7 (coverage-judgement-first trailing test unit, triad test shape, ten doctrine overstatements corrected against the live predicates; traces .bee/cells/wc-{3,6,7}.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "regen-obligation-derived cell ro-1 (12 suite rows + mutation red, commit e4ae329, 2026-07-23)", "docs/specs/workflow-state.md#B7", "docs/specs/workflow-state.md#B10", "docs/specs/workflow-state.md#B25", "docs/specs/workflow-state.md#B29", "docs/specs/workflow-state.md#R46", "docs/specs/workflow-state.md#E14", "docs/specs/workflow-state.md#P9", "docs/specs/workflow-state.md#P12", "hook-teeth cell bh-3 (gated authoring refuses the whole batch, lane record beats the default, docs lane exempt; trace .bee/cells/bh-3.json, 2026-08-04 — cells slice 83 passed)", "counter-teeth cell ct-4 (ceiling-share refusal with the --reason override persisted as trace.tier_reason; trace .bee/cells/ct-4.json, commit a5e564fa, 2026-08-04 — cells 71 passed, 0 failed)"]
+  sources: [cells-update-verb cell cuv-1 (2026-07-12), dispatcher-unify cells-batch-add suite rows (v0.1.27), "post-advisor-hardening cell pah-2 (cells add/update manifest-lint advisory, 2026-07-18)", "lane-ceremony-v3 cells lcv3-1..lcv3-5 (traces in .bee/cells/, reports docs/history/lane-ceremony-v3/reports/, 2026-07-19)", "worker-conformance cells wc-3/wc-6/wc-7 (coverage-judgement-first trailing test unit, triad test shape, ten doctrine overstatements corrected against the live predicates; traces .bee/cells/wc-{3,6,7}.json, reports docs/history/worker-conformance/reports/, CONTEXT docs/history/worker-conformance/CONTEXT.md, 2026-07-29)", "regen-obligation-derived cell ro-1 (12 suite rows + mutation red, commit e4ae329, 2026-07-23)", "docs/specs/workflow-state.md#B7", "docs/specs/workflow-state.md#B10", "docs/specs/workflow-state.md#B25", "docs/specs/workflow-state.md#B29", "docs/specs/workflow-state.md#R46", "docs/specs/workflow-state.md#E14", "docs/specs/workflow-state.md#P9", "docs/specs/workflow-state.md#P12", "hook-teeth cell bh-3 (gated authoring refuses the whole batch, lane record beats the default, docs lane exempt; trace .bee/cells/bh-3.json, 2026-08-04 — cells slice 83 passed)", "counter-teeth cell ct-4 (ceiling-share refusal with the --reason override persisted as trace.tier_reason; trace .bee/cells/ct-4.json, commit a5e564fa, 2026-08-04 — cells 71 passed, 0 failed)", "addcell-all-problems cell cap-1 (single-cell path joins all problems via the shared collector, 2026-08-17)", "cell-preflight cell cpf-1 (pre-flight checklist + mandatory dry-run in the planning flow, commit ea64d5b4, 2026-08-17)"]
   authoritative_for: "workflow-state: unit-of-work authoring, plan revision, and the frozen plan document"
 ---
 
@@ -30,7 +30,13 @@ runs the three-step regen chain (render-skill-trees → onboard --repo-root .
 entry points, stopping at the first red with that step named; the
 REGEN_OBLIGATION refusal text routes to the verb (three steps kept in
 parentheses for cold readers). The remembered-sequence failure mode — source
-shipped without the chain — is closed by construction.
+shipped without the chain — is closed by construction. The chain writes
+byproducts beyond a cell's named scope by design (cell-preflight cpf-1,
+2026-08-17): the skill-tree render syncs every rendered target
+(`.agents/skills/*`, `.claude/skills/*`, `.opencode/skills/*`) and the
+onboarding apply touches its ledger record, so a unit whose scope names the
+skill sources and the manifest record need not enumerate those mirrors —
+they ride the mandated regen, not the unit's own edit set.
 
 **B7 — Cell plans are revisable in place, execution records never.** A unit of
 work's PLAN fields (title, action, scope files, reading list, dependencies,
@@ -55,6 +61,17 @@ single-unit request still works the same way. The refusal is exhaustive
 (cli-ergonomics D2, 8ef2bae6): every failing unit is named with every one of
 its problems — regeneration obligations included — in the one combined
 refusal, so a large batch never needs re-sending to discover the next error.
+Since addcell-all-problems (cell cap-1, 2026-08-17) the single-unit spelling
+gives the same guarantee: one refusal joins every problem that one unit has,
+through the same problem collector the batch rows read, so no path discovers
+errors one at a time.
+The authoring flow itself pre-flights before it drafts (cell-preflight
+cpf-1, 2026-08-17, from user feedback after three avoidable rejections):
+the planner walks the constraint checklist — id pattern and the
+`<feature-slug>-<n>` convention, required fields, lane values, the
+scope-derived obligations — then pipes the drafted batch through the
+preview mode below and submits the real create only after a clean pass,
+so first-submission rejections are the exception, not the loop.
 The same door also offers a preview mode (`--dry-run`): the identical
 validation pass over the whole batch, reporting per-unit verdicts, persisting
 nothing in any outcome, and succeeding only when the batch is clean. After a successful create or
