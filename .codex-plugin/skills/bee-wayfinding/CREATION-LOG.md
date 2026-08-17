@@ -51,9 +51,10 @@ the agent's own judgment rather than a rule.
 
 Cross-references added rather than inlined, per scope: the "grilling"
 row in SKILL.md's Ticket types table now points at this skill's own
-Interview craft plus bee-shaping's `references/gray-area-probes.md`
-and bee-shaping's own "Interview craft" (`references/
-shaping-reference.md`); the "prototype" row points at this reference's
+Interview craft plus bee-shaping's `skills/bee-shaping/references/gray-area-probes.md`
+and bee-shaping's own "Interview craft"
+(`skills/bee-shaping/references/shaping-reference.md`); the
+"prototype" row points at this reference's
 new "Spike rules".
 
 ## GREEN verification
