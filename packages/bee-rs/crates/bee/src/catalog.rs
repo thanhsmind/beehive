@@ -370,7 +370,15 @@ mod tests {
         // opt-out" shape but names a DIFFERENT concept (skip teardown, not
         // skip a gate check); no existing flag means "skip this one merge's
         // gate precondition", so it is genuinely new. Net +1: 154 -> 155.
-        const PINNED_FLAG_COUNT: usize = 155;
+        // staging-lane sl-2: `staging.rebuild` gets a new `--without` (+1) —
+        // a comma-separated list of features to keep MEMBERS of the staged
+        // set but skip merging this one rebuild run. Checked first:
+        // `--skip-uat` is a bare boolean gate bypass, a different concept
+        // entirely; `--no-cleanup` again names skipping teardown, not
+        // skipping a merge; no existing flag means "exclude these features
+        // from this run without dropping them from staging" — genuinely
+        // new. Net +1: 155 -> 156.
+        const PINNED_FLAG_COUNT: usize = 156;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
