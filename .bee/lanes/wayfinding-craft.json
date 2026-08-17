@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "feature": "wayfinding-craft",
+  "mode": "feature",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"wayfinding-craft\" started at phase \"planning\" (lane).",
+  "next_action": "bee close --feature wayfinding-craft",
+  "created_at": "2026-08-17T15:25:07.818Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 3,
+    "rationale": "Deepen bee-wayfinding prose: interview craft, fact-vs-decision rule, cross-skill grilling pointers, spike rules; skill files only, no Rust",
+    "updated_at": "2026-08-17T15:25:07.842Z",
+    "feature": "wayfinding-craft"
+  },
+  "last_scribing_run": {
+    "feature": "wayfinding-craft",
+    "date": "2026-08-17",
+    "at": "2026-08-17T15:35:36.351Z",
+    "areas_synced": [
+      "discovery-wayfinding"
+    ],
+    "next_action": "bee close --feature wayfinding-craft"
+  }
+}

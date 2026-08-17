@@ -1,0 +1,82 @@
+{
+  "id": "wayfc-1",
+  "feature": "wayfinding-craft",
+  "lane": "small",
+  "status": "capped",
+  "title": "Deepen bee-wayfinding: interview craft, fact rule, spike rules, cross-skill pointers",
+  "deps": [],
+  "decisions": [],
+  "files": [
+    "skills/bee-wayfinding/SKILL.md",
+    "skills/bee-wayfinding/references/wayfinding-reference.md",
+    "skills/bee-wayfinding/CREATION-LOG.md",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "verify": "/home/thanhsmind/projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/wayfinding-craft/CONTEXT.md",
+    "skills/bee-wayfinding/SKILL.md",
+    "skills/bee-wayfinding/references/wayfinding-reference.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/productivity/grilling/SKILL.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/domain-modeling/SKILL.md",
+    "/home/thanhsmind/projects/AI/mattpocock-skill/skills/engineering/prototype/SKILL.md",
+    "skills/bee-shaping/references/gray-area-probes.md"
+  ],
+  "action": "GREEN phase of a TDD-for-skills edit (bee-writing-skills). The RED evidence is in CONTEXT.md ('What was found') — address EXACTLY those observed failures, nothing hypothetical. Three writes. (1) skills/bee-wayfinding/SKILL.md: add a compact 'Interview craft' section to the BODY (per-turn chat rules never live only in references): interviews run in ROUNDS over a question frontier — the frontier is every question askable now without guessing an unheard answer; ask the WHOLE frontier in one round, numbered, and EVERY question carries the agent's recommended answer beside it (recommending is not answering for the user — the user still picks; targets RED S1/S2 bare-question failures); a question depending on an answer still open this round waits for the next round; FACTS ARE THE AGENT'S JOB — a question needing a repo/environment fact gets a dispatched read (gather subagent or direct read), never a question to the user, and the rest of the frontier is asked while it runs (targets RED S2 'mental note' failure). Amend Session 1 step 2 so the breadth-first sweep is explicitly an interview WITH the user — rounds of frontier questions — and any agent-suspected fog line the user has not confirmed is marked (agent-suspected) in Not yet specified (targets RED S1 'tôi tự làm hết không hỏi gì thêm' monologue failure). Point the grilling ticket row at the Interview craft section plus bee-shaping's references/gray-area-probes.md and its Interview craft (cross-reference by skill and file name, never inline). Point the prototype row at the reference's new Spike rules. Keep the body tight — detail overflows to the reference; do not grow the body beyond what changes behavior. (2) skills/bee-wayfinding/references/wayfinding-reference.md: add 'Interview craft' (round mechanics restated with a short worked example — one round of 3 numbered questions with recommendations in the exact format the agent should emit, including the dependency rule and the fact-dispatch rule; plus the domain-modeling moves as one compact list: challenge a term that conflicts with an earlier pinned meaning, propose a canonical term for a fuzzy one, invent a concrete edge scenario to force precision, cross-check a user claim against the code and surface the contradiction) and 'Spike rules' for prototype tickets (the ticket's Question is stated at the top of the spike; runnable in one command or one double-click; no persistence, no polish, no tests; the full relevant state is shown after every action so the user sees what changed; several variants beat one polished take when the question is 'which shape'; on close the verdict and what it settled go into the ticket's Answer, and the spike stays under .bee/spikes/ as history). (3) skills/bee-wayfinding/CREATION-LOG.md: record the TDD pass — RED scenario summaries with the verbatim rationalizations quoted in CONTEXT.md, the GREEN content mapping each failure to the section that addresses it, and a note that GREEN re-verification runs orchestrator-side after this cell. Register: match the existing skill's voice (short declaratives, em-dash asides, no headers-for-show). Then run the full regen chain /home/thanhsmind/projects/goglbe/beehive/.bee/bin/bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write — REGEN_OBLIGATION for touching skills/) and commit once.",
+  "must_haves": {
+    "truths": [
+      "bee dev release-manifest --check exits clean after regen",
+      "SKILL.md body carries rounds+frontier+recommendation+fact-dispatch as per-turn rules, not only the reference"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-wayfinding/references/wayfinding-reference.md",
+        "substantive": "Interview craft with worked example in emit-format + Spike rules, no TODO"
+      },
+      {
+        "path": "skills/bee-wayfinding/CREATION-LOG.md",
+        "substantive": "RED verbatim quotes mapped to GREEN sections"
+      }
+    ],
+    "key_links": [
+      "grilling ticket row names bee-shaping's gray-area-probes.md",
+      "prototype ticket row names the reference's Spike rules"
+    ],
+    "prohibitions": [
+      "No edit to bee-shaping or any other skill",
+      "No Rust changes",
+      "Never weaken 'the agent never answers its own question' — recommending beside the question is the permitted form"
+    ]
+  },
+  "trace": {
+    "worker": "w-wayfc-1",
+    "outcome": "Deepened bee-wayfinding interview craft, fact-dispatch rule, spike rules, and cross-skill pointers; synced .codex-plugin/plugin.json release tuple; regen chain green",
+    "files_changed": [
+      "skills/bee-wayfinding/SKILL.md",
+      "skills/bee-wayfinding/references/wayfinding-reference.md",
+      "skills/bee-wayfinding/CREATION-LOG.md",
+      ".claude-plugin/skills/bee-wayfinding/SKILL.md",
+      ".claude-plugin/skills/bee-wayfinding/references/wayfinding-reference.md",
+      ".codex-plugin/skills/bee-wayfinding/SKILL.md",
+      ".codex-plugin/skills/bee-wayfinding/references/wayfinding-reference.md",
+      ".codex-plugin/plugin.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-17T15:33:42.430Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
+    "claimed_at": "2026-08-17T15:27:43.209Z",
+    "warnings": [
+      "advisory: this cap's commit changes 1252 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

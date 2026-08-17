@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "wayfinding-flow",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"wayfinding-flow\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature wayfinding-flow",
+  "next_action": "Feature merged to main (f34d6af8); lane closed.",
   "created_at": "2026-08-17T13:53:18.759Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
