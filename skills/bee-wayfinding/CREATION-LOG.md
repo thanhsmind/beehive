@@ -58,11 +58,26 @@ new "Spike rules".
 
 ## GREEN verification
 
-Re-running the same three scenarios against the edited files is
-orchestrator-side work, out of this cell's scope (small lane, one
-worker, one cell). This log records the RED evidence and the GREEN
-content mapping; re-verification against S1–S3 happens next, before
-any further edit builds on this one.
+Re-run 2026-08-17, same three scenarios, same model tier (sonnet),
+against the edited files. All three passed:
+
+- S1 (charting, time pressure): sent one round of two numbered
+  questions, each with a `➡️` recommendation; facts split out to a
+  dispatched read ("phần dữ liệu thực tế mình tự tra, không hỏi bạn");
+  no agent monologue — the RED promise "mình tự làm hết phần còn lại
+  không hỏi gì thêm" did not recur.
+- S2 (grilling, fact trap): read the auth module before replying,
+  emitted the `❓ Q1` + `➡️` format, held the decision open for the
+  user despite "chốt vậy đi".
+- S3 (prototype): cited Spike rules by name — question at the top of
+  the file, one double-click to run, two variants side by side,
+  state redisplayed after every action, verdict protocol into the
+  ticket's Answer.
+
+Residual (not a violation): S3 asked whether placeholder data is
+enough fidelity for a "which shape" spike and guessed yes — the
+correct default (realism is polish). Left as a known micro-ambiguity
+rather than a new rule; promote it only if a future run guesses wrong.
 
 ## Register
 
