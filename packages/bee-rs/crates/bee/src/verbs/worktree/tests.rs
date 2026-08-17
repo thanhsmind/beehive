@@ -3045,3 +3045,114 @@ use std::time::Instant;
             "the orphan workspace record must be dropped along with the directory"
         );
     }
+
+    // ── registry.rs: wkm-3 — `worktree list` marks kept-merged worktrees ──
+
+    /// The pure fold half of the marker: an `add` for `worktree-cleanup`
+    /// leaves its file pending; a matching `complete` (wkm-2's prune
+    /// resolution) clears it; a different `kind` is never counted even
+    /// though it shares the queue file.
+    #[test]
+    fn pending_worktree_cleanup_roots_reads_pending_and_skips_completed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store_root = tmp.path().join(".bee");
+        std::fs::create_dir_all(&main_store_root).unwrap();
+
+        crate::verbs::deferred_queue::enqueue(
+            tmp.path(),
+            "worktree-cleanup",
+            "demo-a",
+            &[],
+            &[],
+            &[String::from("/wt/pending")],
+            "kept per default",
+        )
+        .unwrap();
+        let (resolved_id, _) = crate::verbs::deferred_queue::enqueue(
+            tmp.path(),
+            "worktree-cleanup",
+            "demo-b",
+            &[],
+            &[],
+            &[String::from("/wt/resolved")],
+            "kept per default",
+        )
+        .unwrap();
+        crate::verbs::deferred_queue::enqueue(
+            tmp.path(),
+            "capture",
+            "demo-c",
+            &[],
+            &[],
+            &[String::from("/wt/other-kind")],
+            "not a worktree-cleanup entry",
+        )
+        .unwrap();
+        // Fold in the resolution by hand — the same `complete` event shape
+        // wkm-2's prune resolution appends (no hand-edit of the JSONL: this
+        // goes through `fsutil::append_jsonl`, exactly what a real
+        // `complete` writes).
+        crate::fsutil::append_jsonl(
+            &main_store_root.join("deferred-queue.jsonl"),
+            &json!({
+                "ts": now_iso(),
+                "event": "complete",
+                "id": resolved_id,
+            }),
+        )
+        .unwrap();
+
+        let roots = pending_worktree_cleanup_roots(&main_store_root);
+        assert_eq!(roots, vec![PathBuf::from("/wt/pending")], "{roots:?}");
+    }
+
+    /// A missing queue file is "nothing pending", not a delegate — the same
+    /// shape `read_grants_strict` gives a missing grants file.
+    #[test]
+    fn pending_worktree_cleanup_roots_is_empty_for_a_missing_queue_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        assert!(pending_worktree_cleanup_roots(&tmp.path().join(".bee")).is_empty());
+    }
+
+    /// The must_have, end to end over a real `git worktree add` fixture: an
+    /// id whose worktree root is named by a pending `worktree-cleanup`
+    /// entry is `true`; the same id is `false` again once that entry is
+    /// marked `complete` — `resolve_worktree_by_id`'s real git-verified path
+    /// resolution is exactly what `run_list` calls, so this proves the
+    /// marker survives the id -> root lookup, not just a string compare.
+    #[test]
+    fn merged_pending_map_is_true_only_for_a_pending_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, created) = prune_fixture(tmp.path());
+        let ids = vec![&created.id];
+
+        // No entry at all: never pending.
+        let before = merged_pending_map(&main, &ids);
+        assert_eq!(before.get(&created.id), Some(&Value::Bool(false)), "{before:?}");
+
+        let (id, _) = crate::verbs::deferred_queue::enqueue(
+            &main,
+            "worktree-cleanup",
+            "demo",
+            &[],
+            &[],
+            &[p(&created.worktree_root)],
+            &format!(
+                "Worktree {} (branch {}) merged into main at deadbeef and kept per default (D1) — remove it with `bee worktree prune`.",
+                created.id, created.branch
+            ),
+        )
+        .unwrap();
+
+        let pending = merged_pending_map(&main, &ids);
+        assert_eq!(pending.get(&created.id), Some(&Value::Bool(true)), "{pending:?}");
+
+        // Resolved (wkm-2's `complete`): the marker clears again.
+        crate::fsutil::append_jsonl(
+            &main.join(".bee").join("deferred-queue.jsonl"),
+            &json!({ "ts": now_iso(), "event": "complete", "id": id }),
+        )
+        .unwrap();
+        let after = merged_pending_map(&main, &ids);
+        assert_eq!(after.get(&created.id), Some(&Value::Bool(false)), "{after:?}");
+    }
