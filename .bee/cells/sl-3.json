@@ -32,9 +32,9 @@
   "deps": [
     "sl-1"
   ],
-  "status": "open",
+  "status": "claimed",
   "trace": {
-    "worker": null,
+    "worker": "sl-w3",
     "outcome": null,
     "files_changed": [],
     "deviations": [],
@@ -44,6 +44,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "f5668bee-17cf-4109-aed8-0b530e26f636",
+    "claimed_at": "2026-08-17T11:01:35.467Z"
   }
 }

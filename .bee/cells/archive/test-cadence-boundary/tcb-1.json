@@ -1,0 +1,113 @@
+{
+  "id": "tcb-1",
+  "feature": "test-cadence-boundary",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "The cap stops running tests; trace records tests: boundary",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/test-cadence-boundary/CONTEXT.md",
+    "docs/history/test-cadence-boundary/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+  ],
+  "action": "Decision 13ce1858 (test-cadence-boundary D1/D1a): the per-cap test run is removed entirely. In cap_cell_from_flags (handlers_close.rs:139) DELETE the declared-test run (:195) and the red-refusal path (:198-245) — this path serves BOTH cells finish and cells cap (caller :576, finish=false); no !finish guard, the path dies for both. A cap in a declared-test repo records trace.tests = \"boundary\"; \"undeclared\" stays for the none sentinel; trace.results and ran_at are no longer written at cap (:461-469). The cap line formatter (:536-549) prints tests: boundary unchanged in form. The tests-red attempt-verdict writer (:217 block) dies with the path; readers in cells/validate.rs:458 and drivers/prepare.rs:160 stay for historical cells. Remove the dead ripple inside these files: the test_root parameter of cap_cell_from_flags and finish_topology's third return value (finish_support.rs:373-378, consumed at handlers_close.rs:617,630). Change --report tests validation (finish_support.rs:265-272): accept exactly \"boundary\" (declared repo) or \"undeclared\" (no-test repo); \"green\"/\"red\" refuse with a teach line: Tests prove at the boundary: bee close runs commands.test when the feature has no worktree; bee worktree merge runs it when it does. A cap is commit-only proof and records tests: boundary. Remove the now-dead cells copy of run_declared_tests (finish_support.rs:95) if nothing else calls it. Rewrite the affected tests in cells/tests.rs — known set: test_runner_green_and_red_record_shapes (:1685), green_run_clears_a_stale_failure_log_from_a_previous_red (:1725), verify_none_is_accepted_only_in_a_declared_no_test_repo (:3343), capping_in_a_no_test_repo_runs_no_tests_but_a_declared_red_still_refuses (:3386), finish_refuses_a_non_empty_files_cap_with_no_trailer_commit (:3754), finish_caps_once_the_trailer_commit_exists (:3775), finish_caps_at_main_and_runs_declared_tests_against_the_worktree_tree (:4777) — plus any the compiler flags. Assert: no test process runs at cap, trace.tests == \"boundary\" (declared) / \"undeclared\" (none), new report validation accepts boundary and refuses green/red. Rewrite, never delete bare.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "No test command executes during cells finish or cells cap, in a declared-test repo or otherwise",
+      "A cap in a declared-test repo records trace.tests == \"boundary\"; a none-sentinel repo still records \"undeclared\"",
+      "--report tests \"green\" and \"red\" are refused with a teach line; \"boundary\" is accepted",
+      "The seven named tests are rewritten to the new behavior, none deleted without a replacement",
+      "cargo test green"
+    ]
+  },
+  "decisions": [
+    "13ce1858-1d05-4ca3-9e31-23c26980a772"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-tcb-1",
+    "outcome": "cap stops running tests; cap records tests: boundary; --report tests validation accepts boundary/undeclared, refuses green/red with a teach line",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-17T11:24:53.166Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "44a1bf6b-ba95-47df-809a-ae679ce59c46",
+    "claimed_at": "2026-08-17T11:02:57.044Z",
+    "attempts": [
+      {
+        "n": 1,
+        "at": "2026-08-17T11:21:33.513Z",
+        "claim_session": "44a1bf6b-ba95-47df-809a-ae679ce59c46",
+        "claimed_at": "2026-08-17T11:20:41.189Z",
+        "acquired_at": "2026-08-17T11:02:57.044Z",
+        "worker": "w-tcb-1",
+        "verdict": "tests-red",
+        "failure_signature": "5ad24de89c82",
+        "note": "let _ = ...` to ignore the resulting value"
+      }
+    ],
+    "warnings": [
+      "advisory: this cap's commit changes 630 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T11:24:33.659Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "no-test-run-at-cap",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:138 signature cap_cell_from_flags(root, f, finish) with test_root removed; :197-201 keeps declared only as sentinel selector; rg over src/verbs/ finds run_declared_tests only in test_runner.rs:251 and drivers/close.rs:134 — no cells copy left"
+          },
+          {
+            "id": "boundary-trace-honesty",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:416-419 writes tests=boundary (declared) / undeclared (none); no trace.results or ran_at write remains (only comment at :414); cells/tests.rs:4849-4852 asserts their absence"
+          },
+          {
+            "id": "report-validation",
+            "status": "PASS",
+            "evidence": "finish_support.rs:125-138 accepts boundary|undeclared and refuses green|red with the canonical teach line"
+          },
+          {
+            "id": "tests-rewritten-and-green",
+            "status": "PASS",
+            "evidence": "7 named tests present rewritten (cells/tests.rs:1716,1737,3363,3406,3815,3835,4837) plus 3 added (:3604,:3670,:3690); cargo test verbs::cells:: 172 passed 0 failed"
+          },
+          {
+            "id": "undeclared-file-touch",
+            "status": "PASS",
+            "evidence": "knowledge/tests.rs +3/-1 mechanical arity fix only, matches recorded deviation; nit: stale comment handlers_close.rs:203-204 mentions removed door (non-blocking)"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "fable-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-17T11:30:37.891Z"
+      }
+    ]
+  }
+}

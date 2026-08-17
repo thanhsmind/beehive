@@ -1,0 +1,92 @@
+{
+  "id": "tcb-3",
+  "feature": "test-cadence-boundary",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Sync every instruction surface to the boundary cadence, one wording",
+  "behavior_change": false,
+  "regen_obligation_ack": "wave-barrier",
+  "files": [
+    "AGENTS.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-shaping/references/mini-brief-template.md",
+    "skills/bee-shaping/references/implement-plan-template.md",
+    "docs/config-reference.md",
+    "docs/handbook/register.md",
+    "docs/handbook/overview.md",
+    "docs/handbook/architecture-map.md",
+    "docs/handbook/stages/planning.md",
+    "docs/handbook/stages/executing.md",
+    "docs/handbook/stages/swarming.md",
+    "docs/codebase-overview.md",
+    "docs/specs/test-simple.md"
+  ],
+  "read_first": [
+    "docs/history/test-cadence-boundary/CONTEXT.md",
+    "docs/history/test-cadence-boundary/plan.md"
+  ],
+  "action": "Decision 13ce1858 (test-cadence-boundary D1): every instruction surface that says the cap runs the declared tests is updated to the ONE canonical wording from plan.md (quote or tight paraphrase, never a third idea): Tests prove at the boundary: bee close runs commands.test when the feature has no worktree; bee worktree merge runs it when it does. A cap is commit-only proof and records tests: boundary. CI runs the same command on every push. Anchors (line numbers approximate — verify on read, sweep each file for stragglers with rg 'finish runs|green caps|red refuses|every cap'): AGENTS.md:84; skills/bee-swarming/SKILL.md:67,114; skills/bee-swarming/references/swarming-reference.md:25,60,218,240,379; skills/bee-swarming/references/worker-details.md:14-22; skills/bee-planning/SKILL.md:95-98; skills/bee-planning/references/planning-reference.md:141,201,204-205,214,317 (incl. the Test scoping section); skills/bee-hive/references/gates-and-delegation.md:111,160 (the canonical cross-reference table); skills/bee-hive/references/routing-and-contracts.md:158,173; skills/bee-shaping/references/mini-brief-template.md:28; skills/bee-shaping/references/implement-plan-template.md:118,151; docs/config-reference.md:138,157,165; docs/handbook/register.md:114,129-130,163,165-167 (register documents trace.tests values — add \"boundary\", keep \"green\"/\"undeclared\" as historical values); docs/handbook/overview.md:130-132; docs/handbook/architecture-map.md:96,148; docs/handbook/stages/planning.md:73-74; docs/handbook/stages/executing.md:24,46; docs/handbook/stages/swarming.md:68; docs/codebase-overview.md:89-91; docs/specs/test-simple.md:37. Worker Result form documentation: the tests field value becomes boundary. ALSO .bee/config-sample.json:6 (the test command comment) — if the .bee write is hook-denied, record the deny and its remedy in the deviation, never work around it. Historical pattern files under docs/knowledge/patterns/ stay as written (records, not instructions). docs/knowledge/ area concepts ride scribing after execution, not this cell. The rendered-skill-tree regen is deferred to the orchestrator at wave close (wave-barrier).",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Every listed surface states the canonical wording; rg for the old claims returns no instruction-surface hit",
+      "docs/handbook/register.md documents the boundary trace value",
+      "Historical pattern files and docs/knowledge/ areas are untouched",
+      "No hand-edit of any generated file"
+    ]
+  },
+  "decisions": [
+    "13ce1858-1d05-4ca3-9e31-23c26980a772"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-tcb-3",
+    "outcome": "Synced every instruction surface to the boundary-only test cadence wording (D1)",
+    "files_changed": [
+      "AGENTS.md",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-swarming/references/worker-details.md",
+      "skills/bee-planning/SKILL.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "skills/bee-shaping/references/mini-brief-template.md",
+      "skills/bee-shaping/references/implement-plan-template.md",
+      "docs/config-reference.md",
+      "docs/handbook/register.md",
+      "docs/handbook/overview.md",
+      "docs/handbook/architecture-map.md",
+      "docs/handbook/stages/planning.md",
+      "docs/handbook/stages/executing.md",
+      "docs/handbook/stages/swarming.md",
+      "docs/codebase-overview.md",
+      "docs/specs/test-simple.md",
+      ".bee/config-sample.json"
+    ],
+    "deviations": [
+      "Reserved .bee/config-sample.json (an additional path outside the cell's declared files list, named in the cell action text) after writing it, not before"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-17T11:13:07.468Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "44a1bf6b-ba95-47df-809a-ae679ce59c46",
+    "claimed_at": "2026-08-17T11:02:57.134Z",
+    "warnings": [
+      "advisory: this cap's commit changes 340 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "green",
+    "results": ".bee/logs/test-results.json",
+    "ran_at": "2026-08-17T11:12:47.473Z"
+  }
+}
