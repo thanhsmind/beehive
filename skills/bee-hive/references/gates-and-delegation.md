@@ -17,6 +17,18 @@ Gates 1-2 are the default chain every lane closes through. Gate 3 is
 additive: it is asked once, inside a review session the user actually
 invoked, and never automatically at the end of any lane.
 
+**A fourth stop, `uat`, sits later still** — not part of the chain above,
+so "the three gates" stays accurate for Gates 1-3. It sits at
+`bee worktree merge`, after execution is done: the user's acceptance of
+the finished work, required before merge for `standard`/`high-risk`
+features (`tiny`/`small`/`docs`/`spike` exempt), refused with
+`WORKTREE_MERGE_UAT_PENDING` until approved. No `gate_bypass` level
+auto-approves it — not even `total` — because unlike Gates 1-2, `uat` has
+no `--actor auto` path at all: `bee gate --name uat --actor auto` is
+refused outright (uat-gate-before-merge D1). Its own escape hatches are
+per-merge (`--skip-uat`) or repo-wide (config `uat_before_merge: false`),
+never bypass.
+
 **Reading older records.** bee had four gates until validation-diet D2
 merged shape and execution into one call. The review gate was numbered 4
 then and is numbered 3 now; the standalone execution gate that used to
@@ -69,7 +81,12 @@ Off by default. Set from `bee-hive`'s Gates section — on the user's instructio
 | `full` | `"full"` | **all** Gates 1-2 at every lane, high-risk/hard-gate included | secret-file reads · a review P1 finding |
 | `total` | `"total"` | **everything** — all Gates 1-2 any lane, secret-file reads, Gate 3 UAT, review P1 findings | **nothing — zero stops** |
 
-Legacy `true` maps to `normal`. At **Gate 1 or Gate 2** when the level bypasses that gate:
+Legacy `true` maps to `normal`. The table's "Gate 3 UAT" cell names Gate 3's
+own user-acceptance-testing checklist item inside a review session — a
+different thing from the `uat` gate above, which sits at merge time and no
+row of this table ever auto-approves, at any level.
+
+At **Gate 1 or Gate 2** when the level bypasses that gate:
 
 1. **Safety floor is level-scoped, not absolute.** Under `normal` the floor holds: a `high-risk` lane or any hard-gate flag (auth · authorization · data loss · audit/security · external provider · validation removal · database migration/schema change) is **NOT** bypassed — present it to the human normally. Under `full` and `total` the high-risk/hard-gate floor is **lifted** — the human lifted it by choosing the level — so those gates auto-approve too.
 2. Do not ask. Instead: the brief (Lock's `CONTEXT.md`, full or short per lane — D1) is already written by this point; bypass never skips its authoring. Select the option the RECOMMENDATION favors and record it with `bee gate --merge --approved true --actor auto --bypass-level <level> --reason "<why>"` (or `--name <gate>` in place of `--merge` for a single gate) — the same write the human's "yes" would trigger, now stamping the record `actor: "auto"` plus `bypass_level` and `reason` instead of `actor: "user"`; still write the machine-layer report to `docs/history/<feature>/reports/`; log a one-line audit entry — `.bee/bin/bee decisions log --decision "auto-approved Gate N (bypass): <choice>" --rationale "<the recommendation's why>" --relation none` — so the approval is never silent; then post a **short chat line** (not a question) — `⚡ auto-approved Gate N (bypass): <what/why in one plain sentence>` — and continue. The human sees what happened and can still interrupt.

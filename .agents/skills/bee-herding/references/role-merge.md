@@ -150,7 +150,10 @@ the result:
   it: `herdr pane close <pane_id>`. This is the **only** circumstance in which
   this role closes a pane — it frees the slot dispatch's §4 occupancy count
   watches next. No pane carries that label (already closed, or the agent never
-  claimed one) → nothing to close; not an error.
+  claimed one) → nothing to close; not an error. The merge result carrying
+  `staging_rebuild_suggested` means a staging record already exists and main
+  just moved (staging-lane D0a trigger 3) — run `bee staging rebuild` (or
+  report the nudge in the chat pane) so staging stops testing a stale base.
 - **`MERGE_CONFLICT` or `MERGE_VERIFY_RED`.** **STOP for this worktree: no
   retry of the verify, no merge, no cleanup, no pane closed.** The merge verb
   already refused cleanup, so there is nothing to undo — main is byte-untouched.
@@ -162,6 +165,22 @@ the result:
   Then continue to the next finished worktree — one red result says nothing
   about another's (worktrees, panes, and agents map 1:1:1). The marker, not the
   chat line, is what §4 checks later; the chat line is for human visibility.
+- **`WORKTREE_MERGE_UAT_PENDING`.** **A clean stop, not an anomaly.** The
+  feature's `uat` gate is not approved and its lane is standard/high-risk —
+  `bee worktree merge` refused before touching anything; main is
+  byte-untouched. This role never retries, never self-approves the gate (the
+  user is the only approver — uat-gate-before-merge D1), and never passes
+  `--skip-uat` on its own initiative. Report it once, then move on:
+  ```
+  herdr pane send-text <chat_pane_id> "merge: <slug> is awaiting user acceptance (uat gate not approved) — stopped, no retry, main untouched. Approve with \"bee gate --name uat --approved true\", or skip this one merge with \"bee worktree merge --id <grant-key> --skip-uat\", once the human is ready."
+  ```
+  No marker file: unlike §4's red-stop, this is not a failed safety check
+  waiting on cleanup — it is ordinary work still in flight from the merge
+  door's own point of view. Bee's own gate state is already the durable
+  record (§3's four conditions read it fresh every pass), so re-checking it
+  next pass costs nothing and needs no local bookkeeping; skip the worktree
+  for the rest of this pass and let a later invocation find it again once
+  the gate flips. Continue to the next finished worktree.
 - **`WORKTREE_MERGE_MAIN_DIRTY`.** **An anomaly, not a silent skip.** The MAIN
   checkout has uncommitted changes — something wrote to it outside this loop's
   own read-only checks — and every merge will keep refusing until a human
@@ -204,3 +223,4 @@ integration transaction.
 | Close it (only after a successful merge) | `herdr pane close <pane_id>` |
 | On red, write the marker then report, once, no retry | `mkdir -p .bee/tmp && touch .bee/tmp/bee-herding.red.<slug>`, then `herdr pane send-text <chat_pane_id> "..."` |
 | `WORKTREE_MERGE_MAIN_DIRTY` | Anomaly, report it — never a silent skip |
+| `WORKTREE_MERGE_UAT_PENDING` | Clean stop, report it once, no marker, no retry — skip until the gate flips (§5) |

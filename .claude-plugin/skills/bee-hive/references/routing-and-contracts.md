@@ -22,6 +22,17 @@ Gate bypass is set from `bee-hive` (Gates); developing bee itself
 (authoring skills, the self-improvement loop) is maintainer territory in
 the bee source repo's handbook, never product routing in a host repo.
 
+## Topology
+
+Three checkouts, three jobs: main stays clean and integration-only, never where code
+truth changes; a feature worktree is the only place code truth changes, one worktree
+per independent feature; staging is the disposable mixing ground where finished
+features sit together for the user to test at one place, rebuilt from main plus every
+feature still awaiting approval. The `uat` gate is the door between staging and main —
+a feature only lands on main once its uat gate is approved. See
+`docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md` (staging-lane
+D0/D0a) for the mechanics.
+
 ## First-Skill Routing
 
 | Request type | First skill | Notes |

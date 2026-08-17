@@ -75,11 +75,22 @@ worker's diagnosis. If it invalidates the plan, return to bee-planning.
 
 **Completion:** slice done with more approved work remaining → return to
 bee-planning for the next batch (an approved plan stays frozen; planning
-shapes the next batch, never reopens it). Final slice green → tell the
-user execution is complete; capture is recorded as pending (bee-capturing
-runs later, at the owner's pace) and landing is `bee worktree merge` from
-main. Before declaring done: no active reservations, no in-flight
-workers recorded.
+shapes the next batch, never reopens it). Final slice green → put the work
+where the user actually tests it: `bee staging add --feature <slug>` plus
+the staging build, when the host repo records `commands.staging_build`;
+fall back to presenting the feature worktree itself when it does not.
+Present what changed, how to run or see it, and the fixed question "Ready
+to merge?" — never merge on your own read of green tests. Mark the wait:
+`bee state waiting-on set --kind gate --subject "uat: <feature>"`. Capture
+is recorded as pending (bee-capturing runs later, at the owner's pace).
+After the user approves uat (`bee gate --name uat --approved true`), land
+with `bee worktree merge` from main on the FEATURE's own branch — never
+staging's — which refuses `WORKTREE_MERGE_UAT_PENDING` for
+`standard`/`high-risk` features until that approval; a green merge that
+finds a staging record then carries the trigger-3 nudge
+`staging_rebuild_suggested: "bee staging rebuild"`, run or suggested next.
+Before declaring done: no active reservations, no in-flight workers
+recorded.
 
 The 65%-context handoff (AGENTS.md) holds mid-wave — never push through
 the budget. When a unit finishes and approved work remains, continue
