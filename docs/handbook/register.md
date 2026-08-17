@@ -137,6 +137,40 @@ deliberately absent from the write guard's direct-edit deny list — so changing
 field, and logging a one-line audit decision in the same turn. This is a named
 exception to invariant 1, not a licence that generalizes.
 
+### `.bee/runtime/staging.json`
+The disposable mixing-ground record (staging-lane D0/D0a): staging = main plus every
+feature still awaiting uat. Written only by `bee staging add`/`bee staging rebuild`.
+
+| Field | Holds |
+|-------|-------|
+| `branch` | always `"staging"` |
+| `worktree_root` | the staging worktree's path — a sibling `<repo>--wt--staging`, lazily created from main's CURRENT HEAD the first time `staging add` runs, never from a feature branch |
+| `created_at` | ISO timestamp of that lazy create |
+| `base_sha` | the exact commit staging was cut from |
+| `staged` | `[{feature, branch, last_merged_sha, at}]` — one entry per feature currently merged in |
+
+Commands: `bee staging add --feature <slug>` (trigger 1/2 — lazy-create-from-main if
+needed, merge the feature's branch in, record it, run the build; re-running after a fix
+re-merges the same branch); `bee staging rebuild [--without <slug,...>]` (trigger 3 —
+`reset --hard main`, re-merge every feature still staged and awaiting uat minus the
+exclusions, then build — a feature whose uat gate is approved, or whose branch already
+merged to main, drops out of the staged set on its own); `bee staging status` (the
+staged set, each feature's uat gate state, staging's base sha vs main). Build hook:
+config `commands.staging_build` (optional) — absent skips the step with a visible note,
+never an error.
+
+Refusals: a merge conflict while staging a feature (add or rebuild) aborts that one
+merge and reports `STAGING_MERGE_CONFLICT`, naming the feature and files — on rebuild
+the remaining features still build, so one broken feature never blocks testing the
+others. **No escape into main**: `bee worktree merge` refuses
+`WORKTREE_MERGE_STAGING_FORBIDDEN`, zero mutation, whenever the worktree/branch being
+merged IS staging itself — no bypass flag exists ([doors table](#the-doors-that-refuse));
+the only legitimate path to main is `bee worktree merge` on the FEATURE's own branch,
+after its uat gate. A direct `git commit` inside the staging worktree is separately
+refused by the write guard unless `BEE_STAGING_MACHINERY=1` (the env marker bee's own
+staging commands set around their own merge commits) — remedy: fix on the feature
+branch, `bee staging add` again.
+
 ### `.bee/onboarding.json`
 Onboarding state + managed-file version hashes (drift detection).
 
@@ -421,6 +455,7 @@ reason, never a silent skip — it is written onto the record it excuses.
 | model-guard, `Agent`/`Task` | the dispatch declares no tier and names no pinned subagent type. A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` now *derives* its tier instead of refusing | declare `[bee-tier: <tier>]` or a `model` param. A derived `cli` tier still refuses — an external process is not dispatchable as an agent |
 | `worktree merge`, dirty main | before this row's own refusal can fire, dirt confined to `.bee/` (plus `docs/history/<the-merging-feature>/` when the feature is known) is auto-committed first, warn-never-block; dirt found ANYWHERE ELSE still refuses, named by path | `worktree_merge_commit_bookkeeping: false` in config turns the auto-commit off — then a dirty main refuses unconditionally, exactly as before. Mirrors `bee close`'s own bookkeeping auto-commit |
 | `worktree merge` (`WORKTREE_MERGE_UAT_PENDING`) | the feature's lane is standard/high-risk (missing/unrecognized lane fails closed as standard) and its `uat` gate is not approved | approve it (`bee gate --name uat --approved true`), or skip uat for JUST this merge (`bee worktree merge --id <id> --skip-uat`), or turn the door off repo-wide (`uat_before_merge: false`). Never auto-approved — `uat` is user-only at every `gate_bypass` level (uat-gate-before-merge D1) |
+| `worktree merge` (`WORKTREE_MERGE_STAGING_FORBIDDEN`) | the worktree/branch being merged IS the staging branch — staging is disposable, never a source main merges from | none — the catastrophic direction has no hatch; the only exit is removing the staging config/record by hand (staging-lane D0) |
 
 Three notes on doors that are not refusals:
 

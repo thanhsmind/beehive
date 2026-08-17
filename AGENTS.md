@@ -39,6 +39,9 @@ Four boundaries hold in every mode:
   start (`bee worktree new --feature <slug>`); the main checkout takes
   integration and release work, plus docs-lane and a solo `tiny` fix
   when no other session is live — land through `bee worktree merge`.
+  The user tests at staging (`bee staging add`), the disposable ground
+  between a feature worktree and main; the `uat` gate is the door
+  through to main.
 
 `bee --help --json` prints the porcelain flow surface; `--names` adds a
 one-line-per-command index (plain `bee --help` / `bee --help --all` are the

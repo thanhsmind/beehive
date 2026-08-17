@@ -43,7 +43,9 @@ Record: `bee route --set --class <c> --lane <l> --flags <f> --files <n>`;
 re-route upward on new evidence any time, de-escalate only on cited evidence.
 A code-touching route's next action includes creating the feature worktree
 and opening the session there (worktree-first — AGENTS.md; `docs` and a solo
-`tiny` stay in main).
+`tiny` stay in main) — the topology this opens onto: code truth changes only
+in the feature worktree, the user tests at staging once the slice is ready,
+and main receives the branch only after its uat gate.
 
 ## Research
 

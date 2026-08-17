@@ -150,7 +150,10 @@ the result:
   it: `herdr pane close <pane_id>`. This is the **only** circumstance in which
   this role closes a pane — it frees the slot dispatch's §4 occupancy count
   watches next. No pane carries that label (already closed, or the agent never
-  claimed one) → nothing to close; not an error.
+  claimed one) → nothing to close; not an error. The merge result carrying
+  `staging_rebuild_suggested` means a staging record already exists and main
+  just moved (staging-lane D0a trigger 3) — run `bee staging rebuild` (or
+  report the nudge in the chat pane) so staging stops testing a stale base.
 - **`MERGE_CONFLICT` or `MERGE_VERIFY_RED`.** **STOP for this worktree: no
   retry of the verify, no merge, no cleanup, no pane closed.** The merge verb
   already refused cleanup, so there is nothing to undo — main is byte-untouched.
