@@ -1196,7 +1196,18 @@ use std::time::Instant;
             .map(|l| serde_json::from_str::<Value>(l).unwrap())
             .find(|v| v["kind"] == json!("worktree-cleanup"))
             .expect("one worktree-cleanup add event");
-        assert_eq!(add_line["files"], json!([p(&wt)]));
+        // Windows spells the same temp dir two ways (8.3 short vs long
+        // form) and git resolves one while tempfile hands out the other —
+        // compare path identity, not string spelling.
+        let queued_files = add_line["files"].as_array().expect("files is an array");
+        assert_eq!(queued_files.len(), 1, "{add_line}");
+        assert!(
+            crate::path_identity::canonical_paths_equal(
+                Path::new(queued_files[0].as_str().unwrap()),
+                &wt
+            ),
+            "{add_line}"
+        );
         assert!(add_line["reason"].as_str().unwrap().contains(&created.id), "{add_line}");
         assert!(add_line["reason"].as_str().unwrap().contains(&created.branch), "{add_line}");
         assert!(

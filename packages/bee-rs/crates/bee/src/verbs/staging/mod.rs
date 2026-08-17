@@ -952,6 +952,9 @@ mod tests {
         std::fs::write(main.join(".gitignore"), ".bee/*\n").unwrap();
         std::fs::write(main.join("f.txt"), "start\n").unwrap();
         git_ok(&main, &["init", "-q", "-b", "main", "."]);
+        // Windows runners ship git with core.autocrlf=true; the fixtures
+        // assert exact LF bytes after checkout, so pin conversion off.
+        git_ok(&main, &["config", "core.autocrlf", "false"]);
         git_ok(&main, &["config", "user.email", "a@b.c"]);
         git_ok(&main, &["config", "user.name", "t"]);
         git_ok(&main, &["add", "-A"]);
