@@ -1,0 +1,61 @@
+{
+  "id": "wayf-6",
+  "feature": "wayfinding-flow",
+  "lane": "standard",
+  "status": "capped",
+  "title": "Register discovery verbs in the help catalog",
+  "deps": [
+    "wayf-2"
+  ],
+  "decisions": [
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/verbs/discovery.rs"
+  ],
+  "action": "wayf-2 added `bee discovery list` and `bee discovery stub` (verbs/discovery.rs, router.rs) but left catalog.rs untouched, so the verbs are absent from `bee --help --all` and the names index. Add catalog entries for both verbs following the shape of an existing small verb group (e.g. triggers): group `discovery`, per-verb description and flags (list: --json; stub: --effort required, --from required). Keep descriptions to the catalog's register — one to three sentences naming behavior and refusal semantics (stub refuses when the effort dir exists; list marks an unreadable MAP.md with its remedy line). Run cargo test for any catalog-count or help-surface suites; commit.",
+  "must_haves": {
+    "truths": [
+      "bee --help --all names discovery list and discovery stub"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/catalog.rs",
+        "substantive": "discovery group entries with flags"
+      }
+    ],
+    "key_links": [
+      "catalog group name matches the router dispatch name discovery"
+    ],
+    "prohibitions": [
+      "No behavior change to the verbs themselves"
+    ]
+  },
+  "trace": {
+    "worker": "w-wayf-6",
+    "outcome": "Registered discovery list/stub in registry_payload.json so bee --help --all names both verbs; bumped catalog.rs PINNED_FLAG_COUNT 156->158",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [
+      "cell listed only catalog.rs but catalog entries() is data-driven off generated/registry_payload.json; also touched and reserved that file, matching sibling cell kdt-2's precedent"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-17T14:18:57.680Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
+    "claimed_at": "2026-08-17T14:14:32.742Z",
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

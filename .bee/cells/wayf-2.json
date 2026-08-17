@@ -1,0 +1,66 @@
+{
+  "id": "wayf-2",
+  "feature": "wayfinding-flow",
+  "lane": "standard",
+  "status": "capped",
+  "title": "Add discovery module and verbs: scan maps, compute frontier, create stub",
+  "deps": [],
+  "decisions": [
+    "D2",
+    "D4",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/discovery*",
+    "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/tests/discovery*"
+  ],
+  "verify": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/wayfinding-flow/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/router.rs"
+  ],
+  "action": "Create a discovery module in packages/bee-rs/crates/bee/src/verbs/ owning: (a) scan of docs/discovery/*/MAP.md returning per-effort {name, destination line, open/frontier ticket counts} where a ticket file under tickets/ is frontier when status open, no claimed-by, and every blocked-by target is closed (per D7 conventions; ticket frontmatter keys: type, status, claimed-by, blocked-by); (b) verb `bee discovery list` (json flag like siblings) printing the scan; (c) verb `bee discovery stub --effort <slug> --from <text>` creating docs/discovery/<slug>/MAP.md with Destination '(unknown — charting session needed)', the --from text under Notes, empty remaining sections per D2 — typed refusal if the effort dir already exists, nothing written on refusal. An unreadable MAP.md yields a visible 'unreadable <path> — remedy: fix or delete' line in list output, never a crash (repo pattern: triggers list). Wire the verb group into router.rs following an existing small verb group's registration. Unit/integration tests per the plan's test matrix rows for scan, frontier calc, stub create, stub refuse, malformed map. Run cargo test for the touched suites; commit.",
+  "must_haves": {
+    "truths": [
+      "bee discovery list reports an effort created by bee discovery stub with its frontier count",
+      "stub onto an existing slug refuses typed and writes nothing"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/discovery.rs",
+        "substantive": "scan + frontier + stub logic with tests (module layout at worker discretion, discovery/ dir also fine)"
+      }
+    ],
+    "key_links": [
+      "router.rs dispatches discovery list and discovery stub"
+    ],
+    "prohibitions": [
+      "No change to bee route lane enum or route verb (plan: Out of scope)",
+      "No status/orient/preamble edits (wf-3, wf-4)"
+    ]
+  },
+  "trace": {
+    "worker": "w-wayf-2",
+    "outcome": "Added discovery module + list/stub verbs, wired into router",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/discovery.rs",
+      "packages/bee-rs/crates/bee/src/verbs/mod.rs",
+      "packages/bee-rs/crates/bee/src/router.rs",
+      "packages/bee-rs/crates/bee/tests/discovery_verbs.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-17T14:10:46.389Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
+    "claimed_at": "2026-08-17T14:01:37.613Z",
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

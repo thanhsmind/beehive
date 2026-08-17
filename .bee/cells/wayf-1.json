@@ -1,0 +1,81 @@
+{
+  "id": "wayf-1",
+  "feature": "wayfinding-flow",
+  "lane": "standard",
+  "status": "capped",
+  "title": "Author bee-wayfinding skill and register it in the hive route table",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D7",
+    "D8"
+  ],
+  "files": [
+    "skills/bee-wayfinding/SKILL.md",
+    "skills/bee-wayfinding/agents/openai.yaml",
+    "skills/bee-wayfinding/references/wayfinding-reference.md",
+    "skills/bee-hive/SKILL.md",
+    ".claude-plugin/skills/*",
+    ".codex-plugin/skills/*",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "verify": "/home/thanhsmind/projects/goglbe/beehive/.bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/wayfinding-flow/CONTEXT.md",
+    "docs/history/wayfinding-flow/design-draft.md",
+    "skills/bee-researching/SKILL.md",
+    "skills/bee-researching/agents/openai.yaml"
+  ],
+  "action": "Create skills/bee-wayfinding/ implementing the flow in design-draft.md ('The flow'): SKILL.md (entry signals, session-1 charting with destination-first per D7, MAP.md sections Destination/Notes/Decisions so far/Not yet specified/Out of scope per D2, the 4 ticket types per D7, one-ticket-per-session loop, exit hand-off to bee-shaping Lock per D8, hard rules); references/wayfinding-reference.md carrying the MAP.md template, the ticket file template (frontmatter: type, status, claimed-by, blocked-by; body: ## Question then ## Answer on close), and the resolution protocol (answer in ticket + bee decisions log, map gists and links per D8). Match the register and length of skills/bee-researching/SKILL.md; write agents/openai.yaml in the same shape. Add one row for bee-wayfinding to the Route table in skills/bee-hive/SKILL.md ('fog-state idea, no nameable outcome, or an open discovery map'). Then run the full regen chain /home/thanhsmind/projects/goglbe/beehive/.bee/bin/bee dev regen (render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order — REGEN_OBLIGATION for touching skills/) and commit everything as one commit.",
+  "must_haves": {
+    "truths": [
+      "bee dev render-skill-trees exits clean with bee-wayfinding present in both rendered trees"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-wayfinding/SKILL.md",
+        "substantive": "full flow per design-draft.md, no TODO stubs"
+      },
+      {
+        "path": "skills/bee-wayfinding/references/wayfinding-reference.md",
+        "substantive": "MAP.md + ticket templates and resolution protocol"
+      }
+    ],
+    "key_links": [
+      "skills/bee-hive/SKILL.md route table names bee-wayfinding"
+    ],
+    "prohibitions": [
+      "No edit to bee-shaping (that is wf-5)",
+      "No Rust changes"
+    ]
+  },
+  "trace": {
+    "worker": "w-wayf-1",
+    "outcome": "Authored bee-wayfinding skill (SKILL.md, openai.yaml, reference doc) and registered it in the bee-hive route table; full regen chain green",
+    "files_changed": [
+      "skills/bee-wayfinding/SKILL.md",
+      "skills/bee-wayfinding/agents/openai.yaml",
+      "skills/bee-wayfinding/references/wayfinding-reference.md",
+      "skills/bee-hive/SKILL.md",
+      ".claude-plugin/skills/bee-wayfinding",
+      ".codex-plugin/skills/bee-wayfinding",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-17T14:05:36.755Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "eb8311ae-0927-41d7-b9f7-c215ae2bd836",
+    "claimed_at": "2026-08-17T14:01:37.495Z",
+    "warnings": [
+      "advisory: this cap's commit changes 1491 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

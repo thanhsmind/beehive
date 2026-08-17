@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "wayfinding-flow",
+  "mode": "feature",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"wayfinding-flow\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-17T13:53:18.759Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 12,
+    "rationale": "New bee-wayfinding skill + Rust changes to status/orient/route surfaces; status output shape is a public contract",
+    "updated_at": "2026-08-17T13:54:40.386Z",
+    "feature": "wayfinding-flow"
+  }
+}
