@@ -63,9 +63,10 @@ cells up, state the one-line concurrency plan before dispatching.
    `bee close` refuses (`judge-debt`), so run the slice judge before you
    reach for close.
 6. Slice clean: `bee close --feature <slug> --dry-run` names every
-   remaining door with the command that settles it; the final slice runs
-   `bee close --feature <slug>`, which re-runs the declared tests
-   (`bee test`) for the feature. Doors are never waived.
+   remaining door with the command that settles it; tests prove at the
+   boundary: the final slice runs `bee close --feature <slug>`, which
+   runs `commands.test` when the feature has no worktree; `bee worktree
+   merge` runs it when it does. Doors are never waived.
 
 **`[BLOCKED]` rescue ladder:** (1) re-dispatch the same cell with the
 missing context; (2) next model tier up — the ceiling is this session, so
@@ -111,9 +112,10 @@ outputs — when a verb refuses, its message names the fix.
    --report '<json>'` — cap and release in one verb, `--report` carrying
    the same Result form you return (`{outcome, commit, files, tests,
    deviations}`), which finish validates key-for-key onto the trace.
-   Finish runs the declared tests (`commands.test`): green caps; a red
-   refuses, and the refusal carries the failing test excerpt — that red is
-   now your work. Tests run at finish; close re-runs them for the feature.
+   Tests prove at the boundary: `bee close` runs `commands.test` when the
+   feature has no worktree; `bee worktree merge` runs it when it does. A
+   cap is commit-only proof and records `tests: boundary`. CI runs the
+   same command on every push.
 6. Return exactly one token, first thing in your final message, and the
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your

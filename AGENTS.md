@@ -80,12 +80,10 @@ context before planning or executing.
 
 ## Prove, then say so
 
-- The project declares its tests once (`commands.test`). Tests prove
-  at the boundary: `bee close` runs `commands.test` when the feature
-  has no worktree; `bee worktree merge` runs it when it does. A cap is
-  commit-only proof and records `tests: boundary`. CI runs the same
-  command on every push. Never build on a red base — a red at close or
-  merge becomes its own fix-first cell.
+- The project declares its tests once (`commands.test`); `bee cells
+  finish` runs them. Green caps the cell; red refuses the cap, quotes
+  the failing excerpt, and that red becomes the work. Never build on a
+  red base — a red is its own fix-first cell.
 - Write "done", "green", or "fixed" only beside fresh command output
   in the same message, naming the command or path first.
 - Evidence is what the build already emits — red test output, a diff,
