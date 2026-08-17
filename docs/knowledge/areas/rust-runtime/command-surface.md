@@ -102,6 +102,10 @@ bought a smaller help output at the price of a blind guard.
   an implementation or a test set.
 - R6 — `bee internal` refuses a flow verb by name, pointing at the flow
   spelling.
+- R7 — A new verb is not shipped until the registry names it: it enters
+  the registry record (so the full help surface lists it) and the pinned
+  flag-count assertion moves with it in the same change (wayfinding-flow
+  wayf-6, 2026-08-17: discovery list/stub registered, count 156→158).
 
 ## Edge Cases Settled
 

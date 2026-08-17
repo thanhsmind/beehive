@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [discovery-wayfinding]
   decisions: ["wayfinding-flow D1 (separate bee-wayfinding skill)", "wayfinding-flow D2 (map as markdown under docs/discovery/<effort>/)", "wayfinding-flow D3 (name bee-wayfinding)", "wayfinding-flow D4 (status + preamble show open maps from v1)", "wayfinding-flow D5 (orient recommends bee-wayfinding deterministically when idle with frontier)", "wayfinding-flow D6 (four activation mechanisms; park-for-vagueness creates a stub; shaping entry check stays semi-hard)", "wayfinding-flow D7 (four ticket types, destination-first, one HITL ticket per session, convention-only claim/block lines)", "wayfinding-flow D8 (resolved tickets log decisions; map gists; exit feeds bee-shaping Lock)"]
-  sources: ["cells wayf-1..wayf-6 (capped, .bee/cells/, 2026-08-17)", docs/history/wayfinding-flow/CONTEXT.md, docs/history/wayfinding-flow/plan.md, "judge verdicts 6/6 PASS (trace.semantic_judge, model independence confirmed)"]
+  sources: ["cells wayf-1..wayf-6 (capped, .bee/cells/, 2026-08-17)", docs/history/wayfinding-flow/CONTEXT.md, docs/history/wayfinding-flow/plan.md, "judge verdicts 6/6 PASS (trace.semantic_judge, model independence confirmed)", "wayfinding-craft cell wayfc-1 (interview craft, fact-lookup dispatch, spike rules; trace .bee/cells/archive/wayfinding-craft/wayfc-1.json, 2026-08-17)"]
   authoritative_for: "discovery-wayfinding: pre-shaping discovery maps, their tickets, and their activation surfaces"
 ---
 
@@ -69,6 +69,19 @@ wayfinding skill with the map named; while work is active the map
 degrades to a report-only blocker line and the recommendation is left
 alone. A pending handoff always wins over the wayfinding override.
 
+## Resolution craft
+
+How a ticket is worked has its own rules (wayfinding-craft wayfc-1,
+2026-08-17): the interview craft mirrors shaping's — one question per
+turn, options carried with trade-offs, the user's words quoted back
+before a decision is drawn. A pure fact question never burns an
+interview turn: it dispatches as a fact lookup and the answer returns
+to the ticket, keeping the human conversation for judgment calls only.
+Spike-type tickets carry their own rules — time-boxed, one yes/no
+proof, thrown away after the answer is recorded — and the craft text
+cross-points to shaping's gray-area probes so the two interview layers
+stay one discipline.
+
 ## Hand-off to shaping
 
 Wayfinding decides; it never builds. Each resolved ticket's answer is
@@ -114,6 +127,10 @@ flowchart TD
   the three surfacing sites.
 - `packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs` —
   `pipeline_idle_for_wayfinding`, `first_frontier_effort`.
+- `skills/bee-wayfinding/SKILL.md` ("Interview craft"),
+  `skills/bee-wayfinding/references/wayfinding-reference.md`
+  ("Interview craft", "Spike rules") — the resolution-craft text;
+  cross-points to `skills/bee-shaping/references/gray-area-probes.md`.
 - `skills/bee-wayfinding/` — the flow's skill; templates in
   `references/wayfinding-reference.md`.
 - `skills/bee-shaping/SKILL.md` — entry check, park-to-stub, Lock
