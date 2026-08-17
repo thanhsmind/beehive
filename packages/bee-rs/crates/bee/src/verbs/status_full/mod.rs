@@ -40,7 +40,7 @@ type JMap = Map<String, Value>;
 // ─── constants (state.mjs / bee.mjs) ───────────────────────────────────────
 
 
-const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
+const GATE_NAMES: [&str; 5] = ["context", "shape", "execution", "review", "uat"];
 
 const PHASES: [&str; 8] = [
     "idle", "exploring", "planning", "swarming", "reviewing", "scribing", "compounding", "grooming",

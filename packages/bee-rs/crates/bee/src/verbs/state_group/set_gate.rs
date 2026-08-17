@@ -654,6 +654,14 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
             GATE_ACTOR_VALUES.join("/")
         )));
     }
+    // uat-gate-before-merge D1: the uat gate is never bypass-approved — an
+    // auto-actor call naming it is refused outright, before any lock or
+    // write, regardless of --bypass-level/--reason.
+    if actor == "auto" && name == "uat" {
+        return Ok(Out::Thrown(
+            "gate: --name uat cannot be approved by --actor auto \u{2014} the uat gate is never bypass-approved (uat-gate-before-merge D1). FIX: get the user's approval and record it with --actor user (the default).".to_string(),
+        ));
+    }
     let bypass_level = flag_value(flags, "bypass-level").filter(|s| !s.is_empty());
     if let Some(bl) = &bypass_level {
         if !GATE_BYPASS_LEVELS.contains(&bl.as_str()) {
@@ -1595,6 +1603,59 @@ mod tests {
         assert_eq!(wf["gates"]["context"]["reason"], Value::Null, "{wf:?}");
         assert_eq!(wf["gates"]["context"]["bypass_level"], Value::Null, "{wf:?}");
         assert_eq!(wf["gates"]["shape"]["state"], json!("pending"), "untouched gate: {wf:?}");
+    }
+
+    /// uat-gate-before-merge D1, must-have 1: `--name uat --approved true`
+    /// (default `--actor user`) records normally — the legacy
+    /// `approved_gates.uat` boolean AND the workflow record's rich entry.
+    #[test]
+    fn gate_accepts_uat_from_the_default_user_actor_and_persists_it() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-trace-uat", None);
+        let out = run_gate_body(
+            root,
+            &flags(&["--no-lane", "--name", "uat", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(..) = out else { panic!("expected the uat approval to succeed") };
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["approved_gates"]["uat"], json!(true), "{state:?}");
+        let wf = read_json_file(root, ".bee/runtime/workflows/wf-1/state.json");
+        assert_eq!(wf["gates"]["uat"]["state"], json!("approved"), "{wf:?}");
+        assert_eq!(wf["gates"]["uat"]["actor"], json!("user"), "{wf:?}");
+        assert!(wf["gates"]["uat"]["at"].is_string(), "{wf:?}");
+    }
+
+    /// uat-gate-before-merge D1, must-have 2: `--name uat --actor auto` is
+    /// refused before any lock or write — the uat gate is never
+    /// bypass-approved, even with a legal `--bypass-level`/`--reason` pair.
+    #[test]
+    fn gate_refuses_uat_from_actor_auto_and_writes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_gate_trace_fixture(root, "gate-trace-uat-auto", None);
+        let before_state = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        let before_wf =
+            std::fs::read_to_string(root.join(".bee/runtime/workflows/wf-1/state.json")).unwrap();
+        let out = run_gate_body(
+            root,
+            &flags(&[
+                "--no-lane", "--name", "uat", "--approved", "true",
+                "--actor", "auto", "--bypass-level", "total", "--reason", "ci",
+            ]),
+        )
+        .unwrap();
+        let Out::Thrown(msg) = out else {
+            panic!("expected --name uat --actor auto to be refused, got a write")
+        };
+        assert!(msg.contains("uat"), "{msg}");
+        assert!(msg.contains("never bypass-approved") || msg.contains("D1"), "{msg}");
+        let after_state = std::fs::read_to_string(root.join(".bee/state.json")).unwrap();
+        let after_wf =
+            std::fs::read_to_string(root.join(".bee/runtime/workflows/wf-1/state.json")).unwrap();
+        assert_eq!(after_state, before_state, "a refusal must write nothing to the legacy record");
+        assert_eq!(after_wf, before_wf, "a refusal must write nothing to the workflow record");
     }
 
     /// Truth 2: `--actor auto --bypass-level normal --reason X` records all

@@ -161,7 +161,7 @@ const KNOWN_PHASES: [&str; 9] = [
 
 const KNOWN_PHASES_JOINED: &str =
     "idle, exploring, planning, swarming, reviewing, scribing, compounding, grooming, compounding-complete";
-const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
+const GATE_NAMES: [&str; 5] = ["context", "shape", "execution", "review", "uat"];
 
 const MODEL_TIERS: [&str; 3] = ["extraction", "generation", "ceiling"];
 

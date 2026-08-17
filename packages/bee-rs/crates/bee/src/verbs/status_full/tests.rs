@@ -217,7 +217,7 @@ use crate::version::BEE_VERSION;
         let row_text = format_lane_row(&Value::Object(rows[0].clone()));
         assert_eq!(
             row_text,
-            "alpha [swarming] context=approved shape=pending execution=pending review=pending"
+            "alpha [swarming] context=approved shape=pending execution=pending review=pending uat=pending"
         );
         // Summary: no live session -> active null, counts + ids over all.
         let summary = build_lane_summary(&mut ctx).unwrap();
@@ -309,7 +309,7 @@ use crate::version::BEE_VERSION;
         let lines: Vec<&str> = text.split('\n').collect();
         assert_eq!(
             lines[0],
-            "where: phase=swarming feature=f1 mode=standard gates=true/true/true/false bypass=off"
+            "where: phase=swarming feature=f1 mode=standard gates=true/true/true/false/false bypass=off"
         );
         assert_eq!(lines[1], "decisions: 0 active | context: docs/history/f1/CONTEXT.md");
         assert_eq!(lines[2], "work: open=1 claimed=0 capped=0 | ready: c-1");
@@ -333,7 +333,7 @@ use crate::version::BEE_VERSION;
         assert_eq!(lines[2], "Phase: idle | Mode: none | Feature: none");
         assert_eq!(
             lines[3],
-            "Gates: context=pending shape=pending execution=pending review=pending"
+            "Gates: context=pending shape=pending execution=pending review=pending uat=pending"
         );
         assert_eq!(lines[4], bypass_banner("normal"));
         assert_eq!(lines[5], "Handoff: none");
@@ -3493,7 +3493,7 @@ use crate::version::BEE_VERSION;
         // gate, both refused gates reading bare `false`.
         assert_eq!(
             status.get("gates"),
-            Some(&json!({"context": true, "shape": false, "execution": false, "review": true})),
+            Some(&json!({"context": true, "shape": false, "execution": false, "review": true, "uat": false})),
             "pre-existing gates key keeps its name, type, and meaning"
         );
 

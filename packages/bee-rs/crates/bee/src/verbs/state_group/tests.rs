@@ -540,7 +540,7 @@ use std::time::Instant;
         assert_eq!(state.get("feature"), Some(&json!("f1")));
         assert_eq!(
             jsjson::stringify(state.get("approved_gates").unwrap()),
-            r#"{"context":false,"shape":true,"execution":false,"review":false}"#
+            r#"{"context":false,"shape":true,"execution":false,"review":false,"uat":false}"#
         );
         // File keys override in the default slot order; extras append.
         let keys: Vec<&String> = state.keys().collect();
@@ -1147,7 +1147,7 @@ use std::time::Instant;
         assert_eq!(lane.get("phase"), Some(&json!("swarming")));
         assert_eq!(
             jsjson::stringify(lane.get("approved_gates").unwrap()),
-            r#"{"context":false,"shape":false,"execution":true,"review":false}"#
+            r#"{"context":false,"shape":false,"execution":true,"review":false,"uat":false}"#
         );
         assert_eq!(lane.get("created_at"), Some(&json!("2026-01-01T00:00:00.000Z")));
         // A lane mutation never touches .bee/state.json.
@@ -1170,7 +1170,7 @@ use std::time::Instant;
         let lane = ok(rebuild_lane_projection(tmp.path(), "f1")).unwrap();
         assert_eq!(
             jsjson::stringify(lane.get("approved_gates").unwrap()),
-            r#"{"context":true,"shape":false,"execution":true,"review":false}"#
+            r#"{"context":true,"shape":false,"execution":true,"review":false,"uat":false}"#
         );
         let updated = ok(update_workflow_assuming_lock_with(tmp.path(), "wf-1", |current| {
             let base = current.get("plan_rev").and_then(Value::as_f64).unwrap_or(0.0);
@@ -1187,7 +1187,7 @@ use std::time::Instant;
         // rev-immune (never stamped) and survives.
         assert_eq!(
             jsjson::stringify(lane.get("approved_gates").unwrap()),
-            r#"{"context":true,"shape":false,"execution":false,"review":false}"#
+            r#"{"context":true,"shape":false,"execution":false,"review":false,"uat":false}"#
         );
     }
 
@@ -1392,7 +1392,7 @@ use std::time::Instant;
         assert_eq!(lane.get("phase"), Some(&json!("swarming")));
         assert_eq!(
             jsjson::stringify(lane.get("approved_gates").unwrap()),
-            r#"{"context":false,"shape":true,"execution":false,"review":false}"#
+            r#"{"context":false,"shape":true,"execution":false,"review":false,"uat":false}"#
         );
         assert_eq!(lane.get("created_at"), Some(&Value::Null));
     }

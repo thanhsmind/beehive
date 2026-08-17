@@ -437,7 +437,10 @@ pub(crate) fn resolve_cleanup_on_merge(
 }
 
 pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !crate::verbs::reservations::keys_known(&flags, &["id", "cleanup", "no-cleanup", "queue-wait-ms"]) {
+    if !crate::verbs::reservations::keys_known(
+        &flags,
+        &["id", "cleanup", "no-cleanup", "queue-wait-ms", "skip-uat"],
+    ) {
         return None;
     }
     // `--cleanup` (wkm-1, D1): re-armed. The default flipped to KEEP, so
@@ -452,6 +455,13 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     // "cleanup stays on", which is the destructive direction now that
     // cleanup is the default.
     if !bool_flag_ok(&flags, "no-cleanup") {
+        return None;
+    }
+    // `--skip-uat` (uat-gate-before-merge D1): the one-merge opt-out of the
+    // uat gate precondition. Validated the same fail-closed way as
+    // `no-cleanup` — a non-boolean value refuses outright rather than
+    // silently reading as either outcome.
+    if !bool_flag_ok(&flags, "skip-uat") {
         return None;
     }
     // `--queue-wait-ms`: a registry `type:"number"` flag. validate() runs
@@ -485,6 +495,7 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     };
     let cleanup_flag = bool_flag_true(&flags, "cleanup");
     let no_cleanup_flag = bool_flag_true(&flags, "no-cleanup");
+    let skip_uat_flag = bool_flag_true(&flags, "skip-uat");
 
     let ctx = match prelude("worktree merge", use_json, t0)? {
         Pre::Go(c) => c,
@@ -581,6 +592,7 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
                 cleanup,
                 verify_command.as_deref(),
                 companion_end_command.as_deref(),
+                skip_uat_flag,
                 Some(hooks),
             ) {
                 Ok(answer) => {

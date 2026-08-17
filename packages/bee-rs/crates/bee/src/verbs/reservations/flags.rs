@@ -33,7 +33,7 @@ pub(crate) const FLAG_ALONE_BOOLEANS: &[&str] = &[
     "waive-scribing-debt", "waive-compounding", "html", "string", "cleanup",
     "no-cleanup", "force-ownership", "local", "all", "untagged", "check",
     "with-companion", "lanes-full", "strict", "queue-submit", "show",
-    "isolate", "set", "brief", "all-but-active", "merge", "claim",
+    "isolate", "set", "brief", "all-but-active", "merge", "claim", "skip-uat",
 ];
 
 #[derive(Clone, PartialEq)]

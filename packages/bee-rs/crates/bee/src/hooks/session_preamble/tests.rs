@@ -1142,6 +1142,14 @@ use crate::version::BEE_VERSION;
         assert_eq!(first_open_gate(&rec("planning", json!({}))), Some("context"));
         assert_eq!(
             first_open_gate(&rec("planning", json!({"context": true, "shape": true, "execution": true}))),
+            Some("uat"),
+            "uat-gate-before-merge D1: uat becomes the next open gate once execution is approved"
+        );
+        assert_eq!(
+            first_open_gate(&rec(
+                "planning",
+                json!({"context": true, "shape": true, "execution": true, "uat": true})
+            )),
             None,
             "review is on-demand — never pending outside a review session"
         );
@@ -1154,6 +1162,11 @@ use crate::version::BEE_VERSION;
         assert_eq!(
             gates_line(&rec("planning", json!({"context": true}))),
             "context: approved | shape: pending | execution: pending"
+        );
+        // uat is noise before execution is approved (D1) — invisible here.
+        assert_eq!(
+            gates_line(&rec("planning", json!({"context": true, "shape": true, "execution": true}))),
+            "context: approved | shape: approved | execution: approved | uat: pending"
         );
     }
 

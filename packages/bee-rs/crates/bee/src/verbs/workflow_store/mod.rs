@@ -92,7 +92,12 @@
 
 
 
-pub(crate) const GATE_NAMES: [&str; 4] = ["context", "shape", "execution", "review"];
+// uat-gate-before-merge D1: uat sits AFTER execution-complete and BEFORE
+// `bee worktree merge` — a run whose uat gate is still pending genuinely
+// is not `done` yet (merge itself refuses without it), so `derive_run_state`
+// (record.rs) correctly reads `awaiting-approval` until uat clears too, the
+// same as it already does for context/shape/execution/review.
+pub(crate) const GATE_NAMES: [&str; 5] = ["context", "shape", "execution", "review", "uat"];
 
 const STATUS_VALUES: [&str; 3] = ["active", "paused", "closed"];
 

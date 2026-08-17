@@ -364,7 +364,13 @@ mod tests {
         // existing flag names "a decision's own relation to prior ones" or
         // "the trigger this decision's deferral registers against", so both
         // are genuinely new concepts. Net +1: 153 -> 154.
-        const PINNED_FLAG_COUNT: usize = 154;
+        // uat-gate-before-merge D1: `worktree.merge` gets a new
+        // `--skip-uat` (+1) — the one-merge opt-out of the new uat-gate
+        // precondition. `--no-cleanup` is the closest existing "one-merge
+        // opt-out" shape but names a DIFFERENT concept (skip teardown, not
+        // skip a gate check); no existing flag means "skip this one merge's
+        // gate precondition", so it is genuinely new. Net +1: 154 -> 155.
+        const PINNED_FLAG_COUNT: usize = 155;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

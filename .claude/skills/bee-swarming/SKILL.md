@@ -74,10 +74,16 @@ worker's diagnosis. If it invalidates the plan, return to bee-planning.
 
 **Completion:** slice done with more approved work remaining → return to
 bee-planning for the next batch (an approved plan stays frozen; planning
-shapes the next batch, never reopens it). Final slice green → tell the
-user execution is complete; capture is recorded as pending (bee-capturing
-runs later, at the owner's pace) and landing is `bee worktree merge` from
-main. Before declaring done: no active reservations, no in-flight
+shapes the next batch, never reopens it). Final slice green → stop in the
+worktree and present the work as ready for user testing: what changed,
+how to run or see it, and the fixed question "Ready to merge?" — never
+merge on your own read of green tests. Mark the wait:
+`bee state waiting-on set --kind gate --subject "uat: <feature>"`. Capture
+is recorded as pending (bee-capturing runs later, at the owner's pace);
+landing is `bee worktree merge` from main, and for `standard`/`high-risk`
+features that refuses `WORKTREE_MERGE_UAT_PENDING` until the user approves
+the `uat` gate (`bee gate --name uat --approved true`) — merge only after
+that approval. Before declaring done: no active reservations, no in-flight
 workers recorded.
 
 The 65%-context handoff (AGENTS.md) holds mid-wave — never push through
