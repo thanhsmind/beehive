@@ -860,12 +860,14 @@ struct UatPrecheck {
     gate_approved: bool,
 }
 
-/// uat-gate-before-merge D1: `lane_applies` prefers the live workflow
-/// record's own `mode` field (present regardless of whether the feature was
-/// ever bound to an explicit `--as-lane` file), falling back to
-/// `.bee/lanes/<feature>.json` (`read_lane_display` — the same fail-open
-/// display read `close`'s own scoping already reuses, drivers/close.rs:305)
-/// when no live workflow names the feature. `gate_approved` reads the live
+/// uat-gate-before-merge D1: `lane_applies` reads through `crate::uat::uat_lane_mode`
+/// (usp-6: the one lane-classification read, shared with `close`'s uat
+/// door), which prefers the live workflow record's own `mode` field
+/// (present regardless of whether the feature was ever bound to an
+/// explicit `--as-lane` file), falling back to `.bee/lanes/<feature>.json`
+/// (`read_lane_display` — the same fail-open display read `close`'s own
+/// scoping already reuses, drivers/close.rs:305) when no live workflow
+/// names the feature. `gate_approved` reads the live
 /// workflow record's own `gates.uat.approved` (GATE_NAMES-driven, written by
 /// `bee state gate --name uat`), falling back to the plain default
 /// `.bee/state.json` record's `approved_gates.uat` ONLY when that record is
@@ -884,16 +886,7 @@ fn uat_merge_precheck(main_root: &Path, feature: Option<&str>) -> UatPrecheck {
     let workflows = crate::verbs::workflow_store::list_workflows(main_root).unwrap_or_default();
     let live = crate::verbs::workflow_store::find_live_workflow(&workflows, feature);
 
-    let mode = live
-        .and_then(|wf| wf.get("mode"))
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .or_else(|| {
-            crate::verbs::workflow_store::read_lane_display(main_root, feature)
-                .ok()
-                .flatten()
-                .and_then(|rec| rec.get("mode").and_then(Value::as_str).map(str::to_string))
-        });
+    let mode = crate::uat::uat_lane_mode(main_root, feature);
     let lane_applies = uat_gate_applies_to_lane(mode.as_deref());
 
     let gate_approved = if let Some(wf) = live {
