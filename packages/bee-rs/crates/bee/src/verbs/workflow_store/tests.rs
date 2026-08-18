@@ -368,7 +368,24 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
     #[test]
     fn build_waiting_on_refuses_unknown_kind_empty_subject_and_empty_session() {
         match build_waiting_on("vibe", "why?", "sess-1") {
-            Err(Err2::Msg(m)) => assert!(m.contains("kind must be one of gate/question"), "{m}"),
+            // Pin the FULL rendered vocabulary (gate/question/turn-end), not
+            // just a leading substring — a regression that dropped turn-end
+            // from WAITING_ON_KIND_VALUES would still satisfy a two-value
+            // prefix check and this test would stay green while the third
+            // legal value silently vanished. The expected string must NOT be
+            // built from WAITING_ON_KIND_VALUES.join("/") — that reads the
+            // same array the code under test reads, so removing turn-end
+            // from the array changes both sides together and the assertion
+            // can never go red. "gate/question/" is hardcoded (that ordering
+            // is stable and not what this test guards); only the third
+            // value comes from the constant, so a rename still tracks it
+            // without writing "turn-end" a second time.
+            Err(Err2::Msg(m)) => assert!(
+                m.contains(&format!(
+                    "kind must be one of gate/question/{WAITING_ON_KIND_TURN_END}"
+                )),
+                "{m}"
+            ),
             other => panic!("expected a typed refusal, got {other:?}"),
         }
         match build_waiting_on("question", "   ", "sess-1") {
@@ -481,7 +498,15 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
         let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
         let id = record.get("id").unwrap().as_str().unwrap().to_string();
         match set_workflow_waiting_on(tmp.path(), &id, "vibe", "why?", "sess-1") {
-            Err(Err2::Msg(m)) => assert!(m.contains("kind must be one of gate/question"), "{m}"),
+            // Same full-vocabulary pin as build_waiting_on_refuses_unknown_
+            // kind_empty_subject_and_empty_session above — see its comment
+            // on why this must not read WAITING_ON_KIND_VALUES itself.
+            Err(Err2::Msg(m)) => assert!(
+                m.contains(&format!(
+                    "kind must be one of gate/question/{WAITING_ON_KIND_TURN_END}"
+                )),
+                "{m}"
+            ),
             other => panic!("expected a typed refusal, got {other:?}"),
         }
         match set_workflow_waiting_on(tmp.path(), &id, "question", "", "sess-1") {
