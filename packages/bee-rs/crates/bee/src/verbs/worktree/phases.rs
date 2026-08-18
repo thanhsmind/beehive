@@ -725,11 +725,25 @@ pub(crate) fn merge_finish(
         // no lane file to touch (`Ok` with an empty `next_action`) or fails
         // outright (`Err`) — the D4.3 cleanup suppression it feeds must fail
         // closed exactly like the precondition already does.
-        let uat_wait_set = *uat_stop == UatStop::Close
-            && feature.as_deref().is_some_and(|feature| {
-                let precheck = uat_merge_precheck(main_root, Some(feature));
-                precheck.lane_applies && !precheck.gate_approved
-            });
+        //
+        // usp-7: `uat_merge_precheck` is called with `feature.as_deref()`
+        // directly — the SAME `Option<&str>` the merge-time precondition
+        // (line ~893) passes it — rather than gated behind
+        // `feature.as_deref().is_some_and(...)`. `is_some_and` short-
+        // circuited to `false` the instant `Staged.feature` was `None` (an
+        // unresolvable feature), which skipped `uat_merge_precheck`
+        // entirely and left `uat_wait_set` `false` — UNsuppressed cleanup —
+        // even though `uat_merge_precheck(main_root, None)` itself already
+        // fails closed (`lane_applies: true, gate_approved: false`, mirror
+        // of `uat_gate_applies_to_lane(None) == true` at the precondition).
+        // Calling it directly, the way the precondition already does, means
+        // an unresolvable feature under `uat_stop: "close"` now suppresses
+        // cleanup exactly like a resolved-but-pending one — nobody could
+        // check whether a uat was owed, so the worktree is kept rather than
+        // torn down out from under whichever fix depends on it.
+        let precheck = uat_merge_precheck(main_root, feature.as_deref());
+        let uat_wait_set =
+            *uat_stop == UatStop::Close && precheck.lane_applies && !precheck.gate_approved;
         if let Some(feature) = feature.as_deref() {
             match close_the_lane_on_merge(main_root, feature, &merge_commit_sha, *uat_stop) {
                 Ok(outcome) if !outcome.next_action.is_empty() => {
