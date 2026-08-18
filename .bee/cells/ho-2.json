@@ -1,0 +1,89 @@
+{
+  "id": "ho-2",
+  "feature": "herding-orchestration",
+  "title": "Re-record the spawn proof from a live herdr 0.8.0 round trip",
+  "lane": "standard",
+  "behavior_change": false,
+  "deps": [
+    "ho-1"
+  ],
+  "action": "Re-record skills/bee-herding/references/spawn-proof.md from a real run against the installed herdr, per D12 and the plan's phase 1, then run the regen chain inside this cell (bee dev regen: render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order). The existing document proves the OLD single-command form and explicitly forbids splitting first, so it must be replaced, not amended. Run the full round trip, not just a spawn: create a throwaway worktree, split a runtime pane, start an agent into it with --kind and --pane, send it a prompt with herdr agent prompt --wait, read the reply back with herdr agent read --source recent-unwrapped, then tear the whole thing down. The round trip matters beyond this cell: it is the only evidence before the core crate exists about how herdr's real idle/done/blocked statuses behave, so record the observed status at each step verbatim, including whether a status was observed without focusing the pane. Capture two specific pieces of evidence that the old proof captured and that nobody has observed under the new --kind plus agent-argument split: the argv echoed back in the start response, and the pane status bar reading that the working agent is running with permissions bypassed. Without both, the claim that the permission-posture split (R4) survived the repair is unevidenced. Record the exact workspace, tab and pane ids used. Note in the document that the worktree-creation step must run from the MAIN checkout because bee worktree new refuses from inside a linked worktree. Never split or otherwise disturb the pane hosting the session that runs this cell — resolve your own pane id first (herdr pane current --current) and exclude it explicitly. Tear down everything created: close the pane, remove the worktree, delete the branch, unregister the grant. FINALLY, and only after the proof is re-recorded, make three small corrections in skills/bee-herding/references/role-dispatch.md and nothing else in that file. (1) Cell ho-1 left a deliberate present-tense caveat in step 2 reading that spawn-proof.md 'still describes the pre-0.8.0 form as of this writing'. That sentence becomes false the moment this cell lands; reword it so it points at the re-recorded proof as the live evidence for the split-then-start order. (2) An independent judge found a dangling sentence in step 2: 'Keep --ratio 0.5 unless the geometry rule computes otherwise'. The geometry rule described just above it computes a DIRECTION (right versus down), never a ratio, so no rule can compute otherwise. Reword it to say plainly that 0.5 is the ratio to pass, and drop the phantom condition — or, if the live run showed a different ratio is needed for a readable layout, record what you observed and say that instead. (3) The command forms write --timeout <ms> without ever naming a value, while D12 in CONTEXT.md specifies 60000. Name the value the live run actually used, in both the step 3 command and the quick-reference row.",
+  "verify": ".bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/herding-orchestration/plan.md",
+    "skills/bee-herding/references/spawn-proof.md",
+    "skills/bee-herding/references/role-dispatch.md"
+  ],
+  "files": [
+    "skills/bee-herding/references/spawn-proof.md",
+    "skills/bee-herding/references/role-dispatch.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".claude-plugin/skills/bee-herding/*",
+    ".codex-plugin/skills/bee-herding/*",
+    ".claude/skills/bee-herding/*",
+    ".agents/skills/bee-herding/*",
+    ".opencode/skills/bee-herding/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "The proof records a real run against herdr 0.8.0, with the commands and their responses as observed.",
+      "The recorded run covers start, prompt and read — not a spawn alone.",
+      "The argv echo and the bypassed-permissions indicator both appear in the recorded evidence.",
+      "The document no longer tells a reader that agent start opens its own pane or that splitting first leaks a pane.",
+      "No herdr agent start invocation anywhere in the bee-herding skill still carries --cwd, --workspace, --tab, --split or --no-focus.",
+      "role-dispatch.md no longer says spawn-proof.md describes the pre-0.8.0 form; it points at the re-recorded proof instead.",
+      "role-dispatch.md's --ratio sentence states the ratio to pass without referring to a geometry rule that cannot compute one.",
+      "The agent start timeout carries a concrete value, the one the live run used, in both the step 3 command and the quick-reference row.",
+      "Nothing created by the run is left behind: no pane, no worktree, no branch, no grant."
+    ],
+    "artifacts": [
+      "skills/bee-herding/references/spawn-proof.md — the live split-then-start round trip with observed statuses, ids, argv echo, permission indicator, and the teardown"
+    ],
+    "key_links": [
+      "The command form recorded here matches the form role-dispatch.md section 8 instructs, exactly — including the timeout value."
+    ],
+    "prohibitions": [
+      "Do not split, resize, rename or close the pane hosting the session that runs this cell.",
+      "Do not leave any worktree, branch, grant or pane behind after the recording.",
+      "Do not run herdr server stop.",
+      "Do not change section 8's command order, the geometry direction rule, the pane-close rule or the settle rule — cell ho-1 owns those; only the three corrections named in the action are yours.",
+      "Do not edit any file under .claude/, .claude-plugin/, .codex-plugin/, .agents/ or .opencode/ by hand."
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-2",
+    "outcome": "Re-recorded spawn-proof.md from a live herdr 0.8.0 start/prompt/read round trip and fixed role-dispatch.md's three stale spots (proof pointer, ratio sentence, timeout value); regen chain green",
+    "files_changed": [
+      "skills/bee-herding/references/spawn-proof.md",
+      "skills/bee-herding/references/role-dispatch.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T09:03:56.838Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T08:58:11.005Z",
+    "report": {
+      "outcome": "Re-recorded spawn-proof.md from a live herdr 0.8.0 start/prompt/read round trip and fixed role-dispatch.md three stale spots; regen chain green",
+      "commit": "492b91a6",
+      "files": [
+        "skills/bee-herding/references/spawn-proof.md",
+        "skills/bee-herding/references/role-dispatch.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check — green — declared verify command, both steps ran clean",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 2260 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

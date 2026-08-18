@@ -1,0 +1,78 @@
+{
+  "id": "ho-9",
+  "feature": "herding-orchestration",
+  "title": "Add the append-only wave ledger on the bee side",
+  "lane": "standard",
+  "behavior_change": true,
+  "action": "Implement the wave ledger D10 locks, in the bee crate, NOT in fleet — the core records nothing, and this is bee's own record. One append-only row per wave, in the shape .bee/ already uses for backlog.jsonl, decisions.jsonl and capture-queue.jsonl: one JSON object per line, appended, never rewritten in place. A row carries the wave id, when it started, and per worker: the worker's name, its pane id, its worktree, the task it was given, its outcome, and a pointer to the evidence. Choose the file path and the exact field names — CONTEXT.md fixes the content, not the schema — and follow the existing ledger conventions in this crate for atomic append and for where under .bee/ it lives. Study how the existing ledgers are written before inventing anything. THE POINT OF THE LEDGER IS NOT THE RECORD, IT IS OCCUPANCY. The cockpit's four-slot cap is enforced today by the control model counting panes, and an agent that fails to name itself leaves a slot looking free so the next iteration over-spawns — a recorded Open Gap that D10 exists to close. So the ledger needs a read side, not only a write side: a way to ask how many workers a wave believes are live. Decide and implement what makes a row stale — a wave whose workers have all reported an outcome is closed, and a row with no outcome after some bound is not the same thing as a live worker — and write down the rule you chose. An unswept append-only log would reproduce the very over-spawn failure D10 removes, which is why the plan's risk map rates this MEDIUM rather than LOW. Tests: one wave leaves exactly one row; a row's worker outcomes round-trip; the occupancy read counts what is actually live and not what is merely recorded; and a stale row is either swept or provably ignored, whichever rule you chose.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/*",
+    "packages/bee-rs/crates/bee/tests/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "A wave appends exactly one row, and the file is only ever appended to.",
+      "A row carries the wave id, its start time, and per worker the name, pane id, worktree, task, outcome and an evidence pointer.",
+      "There is a read side that answers how many workers are live, and it is the answer occupancy will use instead of counting panes.",
+      "The rule for what makes a row stale is implemented and written down, and a stale row cannot be mistaken for a live worker.",
+      "The ledger lives in the bee crate; the fleet crate gains no knowledge of it."
+    ],
+    "artifacts": [
+      "the append-only wave ledger with its write side, its read side, and its staleness rule",
+      "tests covering one row per wave, outcome round-trip, a live-count that excludes stale rows, and the staleness rule itself"
+    ],
+    "key_links": [
+      "The occupancy read and the ledger writer agree on what a live worker is."
+    ],
+    "prohibitions": [
+      "Do not put the ledger in the fleet crate — D10 says the core records nothing.",
+      "Do not rewrite rows in place; the log is append-only.",
+      "Do not change role-dispatch.md section 4 in this cell — that move is its own cell.",
+      "Do not invent a new file convention where .bee/ already has one."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-9",
+    "outcome": "Added .bee/wave-ledger.jsonl append-only wave ledger with occupancy read side and a documented staleness rule; full workspace cargo test green",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T10:37:36.974Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T10:27:23.252Z",
+    "report": {
+      "outcome": "Added .bee/wave-ledger.jsonl append-only wave ledger with occupancy read side and a documented staleness rule; full workspace cargo test green",
+      "commit": "9400633fb1fbb8591db72073eadb45e4eb2aefc7",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — 2056 passed, 11 ignored — full workspace suite, cell touched only herding.rs and the new herding/wave_ledger.rs module",
+      "deviations": [
+        "No CLI verb was added and role-dispatch.md section 4 was not touched, both are out of scope for this cell per CONTEXT.md D10 and plan.md phase 3 sequencing; live_worker_count_now is a library seam with no caller yet."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 416 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

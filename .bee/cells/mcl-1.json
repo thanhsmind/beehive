@@ -1,0 +1,64 @@
+{
+  "id": "mcl-1",
+  "feature": "merge-closes-the-lane",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "waiting-on clear: accept a closed workflow, clear the lane waiting_on+run_state pair",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/merge-closes-the-lane/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs"
+  ],
+  "action": "R3+R4. Today `resolve_waiting_on_target` (waiting_on.rs:80) resolves an explicit --lane ONLY through `find_live_workflow` (record.rs:776, which filters status !== 'closed'), so `state waiting-on clear --lane <f>` REFUSES on a closed workflow (waiting_on.rs:99-106) even though the command's own help promises 'a no-op, never a refusal'. Fix, CLEAR VERB ONLY (set must keep refusing — you cannot mark a closed lane as waiting): in `run_waiting_on_clear` (waiting_on.rs:210), when the explicit --lane (or the session-bound lane) names no LIVE workflow, fall back to the newest workflow record with that feature REGARDLESS of status; only a feature with NO workflow record at all still refuses, and its message must narrow accordingly (drop the 'status !== closed' clause from the clear-verb wording; leave the set-verb wording byte-identical). Then R4: the lane clear path must null the PAIR, matching decision f9fd9d46 which already fixed this for the default record — `clear_workflow_waiting_on` currently nulls only waiting_on; also null `run_state` when and only when it reads 'awaiting-approval' (a record-derived value like 'done' or 'shaping' is never clobbered), then `rebuild_lane_projection` + `rebuild_state_projection` as today (waiting_on.rs:234-236). Live repro before you start: a lane file under .bee/lanes/ with phase idle, waiting_on null and run_state 'awaiting-approval' is the stuck shape this closes.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml waiting_on",
+  "done_when": "`state waiting-on clear --lane <f>` succeeds on a feature whose workflow is status=closed and leaves waiting_on null AND run_state null; a clear on a feature with no workflow record at all still refuses with the narrowed message; `state waiting-on set --lane <ghost>` still refuses byte-identically (tests.rs:677 unchanged); an existing run_state of 'done'/'shaping' survives a clear untouched; the changed refusal test (tests.rs:697, bound-lane clear) is inverted deliberately with the reason in the commit body.",
+  "notes": "Phase 1 of the plan — mcl-2 and mcl-3 both lean on the pair-clearing helper this cell lands, so it goes first. Do not touch verbs/worktree/** or verbs/drivers/close.rs; those are mcl-2 and mcl-3.",
+  "must_haves": {
+    "truths": [
+      "`state waiting-on clear --lane <f>` exits 0 on a feature whose workflow record is status=closed, and the lane file's waiting_on reads null afterwards.",
+      "After that clear, the lane file's run_state is null when it read 'awaiting-approval' before, and is left untouched when it read any other value.",
+      "`state waiting-on clear --lane <f>` still refuses when NO workflow record names <f> at all, with the 'status !== closed' clause removed from the clear-verb wording.",
+      "`state waiting-on set --lane <ghost>` still refuses with byte-identical wording (tests.rs:677 passes unchanged)."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "mcl-1-worker",
+    "outcome": "Widened waiting-on clear to accept a closed workflow and null the lane waiting_on/run_state pair",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T10:15:48.232Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
+    "claimed_at": "2026-08-18T10:02:29.155Z",
+    "report": {
+      "outcome": "Widened state waiting-on clear to fall back to the newest workflow record for a feature (any status) instead of refusing on a closed one, and added clear_lane_waiting_on_pair so that widened path also nulls a stuck lane run_state:awaiting-approval; set stays byte-identical.",
+      "commit": "a4d5ca9024a36e51ac1121127a9834770a38dc65",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml waiting_on — 46 passed — the cell's declared verify scope, covering resolve_waiting_on_target's set/clear split and the new lane pair-clearing helper",
+      "deviations": [
+        "R4's pair-clearing is implemented as a new clear_lane_waiting_on_pair helper local to waiting_on.rs, not as an edit to workflow_store::clear_workflow_waiting_on (record.rs) the cell text names — that file is outside this cell's declared file scope. Investigation showed the workflow record's own run_state is already correctly re-derived on every update_workflow write (derive_run_state), so the stuck run_state:awaiting-approval lives on the LANE PROJECTION FILE, which rebuild_lane_projection only syncs while the workflow is still live — exactly the case R3's new closed-workflow fallback creates. The new helper reads/writes .bee/lanes/<feature>.json directly, called from run_waiting_on_clear only when rebuild_lane_projection_reporting answers non-authoritative, with the identical done/shaping-preserving guard f9fd9d46 established. Same behavior the cell asked for, correct file, in-scope location.",
+        "waiting_on_target_refuses_a_bound_lane_naming_no_live_workflow (tests.rs:697) was deliberately inverted per the cell's own instruction: its fixture named a feature with no workflow record at all, which does not distinguish the new clear-verb widening from the old refusal, so it now gives that bound lane a CLOSED workflow and asserts the resolver falls back to it instead of refusing (renamed to waiting_on_target_clear_on_a_bound_lane_falls_back_to_its_closed_workflow); the zero-record refusal case is pinned by a new sibling test."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

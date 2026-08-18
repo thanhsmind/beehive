@@ -1,22 +1,18 @@
 {
   "schema_version": "1.0",
   "feature": "uat-gate-before-merge",
-  "mode": "feature",
-  "phase": "swarming",
+  "mode": null,
+  "phase": "idle",
   "approved_gates": {
-    "context": true,
-    "shape": true,
-    "execution": true,
-    "review": false
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
   },
-  "summary": "Feature \"uat-gate-before-merge\" started at phase \"planning\".",
-  "next_action": "Invoke bee-swarming.",
+  "summary": "Feature \"uat-gate-before-merge\" started at phase \"exploring\" (lane).",
+  "next_action": "Merged to main and shipped in 2.11.0; lane closed. Capture debt remains: bee close --feature uat-gate-before-merge doors (ug-3 proof line, impact, doc-deferral).",
   "created_at": "2026-08-17T09:11:43.571Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: uat-gate-before-merge — user acceptance before merge to main",
-    "asked_at": "2026-08-17T10:12:17.852Z",
-    "session": "f5668bee-17cf-4109-aed8-0b530e26f636"
-  }
+  "waiting_on": null
 }

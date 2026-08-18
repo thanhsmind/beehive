@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "feature": "merge-closes-the-lane",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"merge-closes-the-lane\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-18T09:58:01.585Z",
+  "run_state": "done",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 4,
+    "rationale": null,
+    "updated_at": "2026-08-18T09:58:11.799Z",
+    "feature": "merge-closes-the-lane"
+  }
+}

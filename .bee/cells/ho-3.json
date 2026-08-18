@@ -1,0 +1,66 @@
+{
+  "id": "ho-3",
+  "feature": "herding-orchestration",
+  "title": "Correct the stale implementation pointers in the bee-herding knowledge area",
+  "lane": "small",
+  "behavior_change": false,
+  "action": "The Pointers section of docs/knowledge/areas/bee-herding/overview.md still cites the pre-Rust-port Node files as the implementation: scripts/dispatch-interlock.mjs, scripts/classify-lane.mjs, packages/bee/lib/herding.mjs and packages/bee/tests/test_herding_cli.mjs. None of those files exists in the repository any more. The live implementation is packages/bee-rs/crates/bee/src/herding.rs, dispatched from router.rs and listed in catalog.rs, and it carries exactly five verbs: classify-lane, interlock, command-template, herdr-result and herdr-pane-id. Verify each replacement path exists before writing it. Also correct the entry that presents bee herding enable, disable and status as available CLI verbs: they are not built into the current binary and refuse by name, so the manual marker gesture is the only live form — the area text already says this in its Data Dictionary, so make the Pointers section agree with it rather than contradicting it. Change nothing else in the area: its Open Gaps move in later phases, not this one.",
+  "verify": ".bee/bin/bee knowledge check",
+  "read_first": [
+    "docs/knowledge/areas/bee-herding/overview.md",
+    "docs/history/herding-orchestration/plan.md"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "must_haves": {
+    "truths": [
+      "Every implementation path named in the Pointers section resolves to a file that exists.",
+      "The Pointers section names packages/bee-rs/crates/bee/src/herding.rs as the CLI verb implementation.",
+      "The Pointers section no longer presents enable, disable or status as verbs the binary provides."
+    ],
+    "artifacts": [
+      "docs/knowledge/areas/bee-herding/overview.md — a Pointers section whose paths all resolve, naming the Rust implementation"
+    ],
+    "key_links": [
+      "The Pointers section and the Data Dictionary agree about which herding verbs exist."
+    ],
+    "prohibitions": [
+      "Do not edit the Open Gaps section — those move in later phases.",
+      "Do not change the business rules R1 through R8."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-3",
+    "outcome": "Corrected the bee-herding Pointers section to name the live Rust implementation (herding.rs/router.rs/catalog.rs) and the real skill script paths, replacing five dead Node-file citations",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/overview.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T08:43:17.409Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T08:39:35.927Z",
+    "report": {
+      "outcome": "Corrected the bee-herding Pointers section to name the live Rust implementation and real skill script paths, replacing five dead Node-file citations",
+      "commit": "499812c3",
+      "files": [
+        "docs/knowledge/areas/bee-herding/overview.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check — 0 errors, 14 pre-existing unrelated warnings — 0 bee-herding warnings — scope reason: cell only edits doc frontmatter/prose checked by knowledge check",
+      "deviations": [
+        "Also fixed scripts/control-loop.sh and scripts/bootstrap-cockpit.sh paths to skills/bee-herding/scripts/... — both were also stale (moved under skills/bee-herding/scripts/), and the must_haves truth requires every Pointers path to resolve, not just the four named in the action text."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

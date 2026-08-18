@@ -1,0 +1,249 @@
+{
+  "id": "ho-1",
+  "feature": "herding-orchestration",
+  "title": "Repair the dispatch spawn line for herdr 0.8.0 (split-then-start)",
+  "lane": "standard",
+  "behavior_change": true,
+  "action": "REWORK after a NEEDS_REVISION judge verdict on commit dbd081b3. The bulk of the cell is already correct and committed — do NOT redo it. Read the current skills/bee-herding/references/role-dispatch.md and fix exactly the two defects below, then re-run the regen chain (bee dev regen: render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) so all five mirrors carry the fix. DEFECT ONE (judge check X1): the document's own convention is that a section-sign reference means a numbered SECTION of the role — it is used that way at roughly fourteen sites, including one four lines away from the defect. The rewrite introduced two references that use the same notation to mean a numbered STEP inside section 8: at the hit 'On any `agent start` failure, close the pane §2 just created' and at the hit 'shows exactly **one** new pane — the one §2 split —'. A cold control agent following the document's convention resolves those to section 2, which is the gate-bypass refusal and has nothing to do with panes. Reword both so they unambiguously name the step, not a section — for example 'the pane step 2 of this section just created'. While there, tighten the nearby phrase 'apply this step's cleanup rule', which names no step at all and sits several paragraphs after step 3 opens. Do not change the notation anywhere it correctly means a section. DEFECT TWO (part of judge check T2): near the top of step 2 the text forward-claims 'this inverts the earlier proof; re-recorded live in `references/spawn-proof.md`'. That claim is false right now — spawn-proof.md still documents the OLD single-command form and still tells the reader not to split first. Reword to state the inversion as a fact about herdr 0.8.0 without asserting that the proof document has already been re-recorded. SCOPE LIMIT, read carefully: skills/bee-herding/references/spawn-proof.md is cell ho-2's file and is NOT yours. Do not open it for writing, do not edit it, and do not treat its stale content as your defect — the rest of judge check T2 belongs to ho-2 and the must_have below has been rescoped accordingly.",
+  "verify": ".bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "skills/bee-herding/references/role-dispatch.md",
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "files": [
+    "skills/bee-herding/references/role-dispatch.md",
+    "skills/bee-herding/references/operational-invariants.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".claude-plugin/skills/bee-herding/*",
+    ".codex-plugin/skills/bee-herding/*",
+    ".claude/skills/bee-herding/*",
+    ".agents/skills/bee-herding/*",
+    ".opencode/skills/bee-herding/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "The dispatch role's spawn is two commands: pane split to create the pane, then agent start --kind --pane into it.",
+      "No herdr agent start invocation in role-dispatch.md or operational-invariants.md carries --cwd, --workspace, --tab, --split or --no-focus. (spawn-proof.md is cell ho-2's scope, not this cell's.)",
+      "A failed agent start closes the pane step 2 just created, before reporting.",
+      "herding.agent_command keeps its documented array shape; token 0 supplies --kind and the remainder follows the -- separator.",
+      "An agent_command whose token 0 is not a herdr-supported kind produces a typed error naming the config key.",
+      "Every section-sign reference in role-dispatch.md means a numbered section of the role, never a numbered step inside a section.",
+      "role-dispatch.md makes no claim that spawn-proof.md has already been re-recorded."
+    ],
+    "artifacts": [
+      "skills/bee-herding/references/role-dispatch.md — section 8 and the quick-reference row both carrying the split-then-start order, the retargeted geometry tie-break, the stray-pane cleanup rule and the shell-readiness settle rule, with every cross-reference unambiguous to a cold reader",
+      "skills/bee-herding/references/operational-invariants.md — the agent_command entry mapping token 0 to --kind, the corrected step number, and the reworded no-config promise"
+    ],
+    "key_links": [
+      "The quick-reference table row and the section 8 body state the same command form, not two variants.",
+      "All five mirrored skill trees carry the new form, produced by the regen chain rather than by hand."
+    ],
+    "prohibitions": [
+      "Do not edit skills/bee-herding/references/spawn-proof.md — it belongs to cell ho-2.",
+      "Do not edit any file under .claude/, .claude-plugin/, .codex-plugin/, .agents/ or .opencode/ by hand — they are generated or synced renders carrying per-runtime marker arms.",
+      "Do not change section 4 of role-dispatch.md.",
+      "Do not change the control-pane allowlist, the dispatch interlock, or the merge role.",
+      "Do not redo the parts of the repair that commit dbd081b3 already landed correctly.",
+      "Do not run any herdr command that mutates the live workspace — this cell is documentation only."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-1r",
+    "outcome": "Repaired the dispatch spawn line for herdr 0.8.0: section 8 is split-then-start with --kind/--pane, carrying the stray-pane cleanup and shell-readiness settle rules, and operational-invariants maps agent_command token 0 to --kind per D14",
+    "files_changed": [
+      "skills/bee-herding/references/role-dispatch.md",
+      "skills/bee-herding/references/operational-invariants.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T08:57:41.427Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T08:50:31.380Z",
+    "report": {
+      "outcome": "Repaired the dispatch spawn line for herdr 0.8.0 across two commits: dbd081b3 landed the split-then-start rewrite, D14 config mapping and reworded no-config promise; 4b76d428 fixed the step-versus-section reference collision and the untrue spawn-proof re-recorded claim after a NEEDS_REVISION judge verdict",
+      "commit": "4b76d428",
+      "files": [
+        "skills/bee-herding/references/role-dispatch.md",
+        "skills/bee-herding/references/operational-invariants.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bee dev regen && bee dev release-manifest --check — green — docs-only change; parity proof is the regen chain plus an independent opus judge returning PASS on 14/14 checks against the must_haves",
+      "deviations": [
+        "First cap refused on a NEEDS_REVISION verdict; reworked and re-judged rather than overridden",
+        "Judge check T2 was mis-scoped by planning to spawn-proof.md, which is cell ho-2 s file; the must_have was corrected to name role-dispatch.md and operational-invariants.md only"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "role-dispatch.md:267-293 — step 2 is `herdr pane split <runtime-pane-id> --direction right|down --ratio <r> --cwd <worktree_path> --no-focus` with `Read the new pane's id from the response's .result.pane.pane_id`; step 3 is `herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout <ms> -- <agent args>`. Two commands, split then start, matching D12."
+          },
+          {
+            "id": "T2",
+            "status": "FAIL",
+            "evidence": "rg -n 'agent start' across the canonical tree and all five mirrors: role-dispatch.md and operational-invariants.md are clean of the removed flags, but spawn-proof.md still carries two old-form invocations at lines 47-50 and 78-81 with --cwd/--workspace/--tab, replicated byte-for-byte in all five mirrors, and spawn-proof.md:174-178 still instructs the opposite of the new step 2. role-dispatch.md:269-270 forward-claims the proof is already 're-recorded live in references/spawn-proof.md', which the tree contradicts. spawn-proof.md is cell ho-2's file and ho-2 is still open, so the must_have 'anywhere in the skill' was not satisfiable by ho-1's declared scope."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "role-dispatch.md:296-300 — 'On any `agent start` failure, close the pane §2 just created (`herdr pane close <new_pane_id>`) before reporting' with the section-4 anomaly rationale; the confirm paragraph repeats it. The rule exists and fires before reporting; its reference notation is judged under X1."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "operational-invariants.md:71-79 keeps the array shape and the unchanged default [\"claude\", \"--model\", \"sonnet\", \"--permission-mode\", \"bypassPermissions\"], with token 0 feeding --kind and the remaining tokens following the -- separator. role-dispatch.md:302-313 states the same split. Matches D14."
+          },
+          {
+            "id": "T5",
+            "status": "PASS",
+            "evidence": "operational-invariants.md:74-76 'An unrecognised token 0 — not one of herdr's supported kinds — surfaces as a typed error naming this config key, never as a generic agent start failure', repeated at role-dispatch.md:308-311 naming herding.agent_command. No code path consumes the key, so the prose obligation is the whole implementation and it is present in both documents."
+          },
+          {
+            "id": "K1",
+            "status": "PASS",
+            "evidence": "Quick-reference rows role-dispatch.md:377-378 versus the section 8 body at lines 272 and 293. Split row and body differ only in placeholder spelling; the start row is character-identical to the body's fenced command. One form, not two variants."
+          },
+          {
+            "id": "K2",
+            "status": "PASS",
+            "evidence": "rg -n 'agent start' finds the new form at the same line numbers (267, 284, 289, 293, 296, 310, 336, 378) in all six copies. git show dbd081b3 --stat shows each tree's .bee-render.json re-stamped alongside, plus onboarding.json and the release manifest — the regen chain's own outputs, not files a hand edit would touch."
+          },
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "diff of canonical versus each mirror for both changed files: all ten comparisons report identical. These two references carry no per-runtime bee:only arms, so identity is exactly what the renderer produces. git status shows no unrendered drift."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "git show dbd081b3 --unified=0 hunk headers are @@ -267,5 @@, @@ -273 @@, @@ -275,13 @@, @@ -308,4 @@, @@ -349 @@. Section 4 spans lines 69-144. No hunk touches that range."
+          },
+          {
+            "id": "P3",
+            "status": "PASS",
+            "evidence": "The commit touches only role-dispatch.md and operational-invariants.md plus render stamps and the manifest; role-merge.md is absent from --stat. In operational-invariants.md the hunks are confined to lines 61-80, while the allowlist text sits at lines 12, 17, 51 and the enable interlock at line 141 — all outside the hunks."
+          },
+          {
+            "id": "X1",
+            "status": "FAIL",
+            "evidence": "The document uses §N for a numbered SECTION everywhere else (lines 12, 42, 50, 60, 123, 158, 232, 258, 276, 298, 317, 321, 343, 354), but the rewrite introduces two §N references that mean a numbered STEP inside section 8: line 296 'close the pane §2 just created' and line 334 'the one §2 split'. A cold control agent applying the document's own convention resolves §2 to section 2, the gate_bypass refusal, which has nothing to do with panes. The collision is sharpened by line 276 in the same step using §4 correctly for section 4, four lines apart. Secondary: line 335-336 'apply this step's cleanup rule' names no step number and sits several paragraphs after step 3 opens."
+          }
+        ],
+        "failure_signature": "T2: spawn-proof.md (all six copies) still carries agent start --cwd/--workspace/--tab invocations and a takeaway forbidding split-first, while role-dispatch.md:269 already claims it is re-recorded — ho-2 is still open, and spawn-proof.md was never in ho-1's declared files, so this check was mis-scoped by planning. X1: the rewritten section 8 uses §2 at lines 296 and 334 to mean step 2 of section 8, colliding with the document's own §N-means-section convention used four lines away, so a cold agent can resolve the cleanup and confirm references to section 2.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T08:49:39.723Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "role-dispatch.md:266-294 — section 8 is numbered 1..3: step 2 splits with `herdr pane split <runtime-pane-id> --direction right|down --ratio <r> --cwd <worktree_path> --no-focus` and step 3 starts with `herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout <ms> -- <agent args>`. Two commands, split first, matching D12."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "rg 'agent start' across role-dispatch.md and operational-invariants.md: the only two full invocations (role-dispatch.md:294 and quick-reference row :380) carry no --cwd, --workspace, --tab, --split or --no-focus. The surviving --cwd/--no-focus at :274 and :379 belong to pane split, which legitimately takes them. Context, not judged: spawn-proof.md:47-50 and :78-81 still carry the pre-0.8.0 form and :174-178 still concludes the opposite — cell ho-2's open scope."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "role-dispatch.md:296-301 — 'On any agent start failure, close the pane step 2 of this section just created (herdr pane close <new_pane_id>) before reporting'. Reinforced at :337-339. Close precedes report in both places."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "operational-invariants.md:71-80 — token 0 feeds --kind and the remaining tokens, substituted per-token, follow the -- separator; the default array [\"claude\", \"--model\", \"sonnet\", \"--permission-mode\", \"bypassPermissions\"] is unchanged. Mirrored at role-dispatch.md:303-317. Matches D14."
+          },
+          {
+            "id": "T5",
+            "status": "PASS",
+            "evidence": "role-dispatch.md:310-313 — 'An unrecognised token 0 (not one of herdr's supported kinds) is a typed error naming the herding.agent_command key, never a generic agent start failure.' Same rule at operational-invariants.md:74-77. No code path consumes the key, so the prose obligation is the whole implementation."
+          },
+          {
+            "id": "T6",
+            "status": "PASS",
+            "evidence": "Enumerated all 24 section-sign occurrences in role-dispatch.md (§1 x3, §1-§7, §3 x3, §4 x9, §5 x2, §5/§6, §6-7, §7, §8 x3). Every one resolves to a numbered SECTION against the headings 0..8. The two former step-meaning hits are gone: commit 4b76d428 replaced '§2 just created' with 'step 2 of this section just created' and 'the one §2 split' with 'the one step 2 of this section split'."
+          },
+          {
+            "id": "T7",
+            "status": "PASS",
+            "evidence": "role-dispatch.md:267-271 now reads 'This inverts the split-order proof that references/spawn-proof.md documents (that file still describes the pre-0.8.0 form as of this writing).' The false claim 're-recorded live in references/spawn-proof.md' is gone, and no other mention of that file exists. The new wording is verifiably true against spawn-proof.md:47-50."
+          },
+          {
+            "id": "K1",
+            "status": "PASS",
+            "evidence": "Quick-reference rows :379-380 versus section 8 bodies :274 and :294. The start row is character-identical to the section 8 code block; the split row differs only in the placeholder name (<path> versus <worktree_path>), a table-width abbreviation with the same flags in the same order."
+          },
+          {
+            "id": "K2",
+            "status": "PASS",
+            "evidence": "sha256sum of role-dispatch.md across all six trees is identical (fc8e8ec6...). That hash is what commit 4b76d428 wrote into the release manifest for all three manifest roles, and each tree's .bee-render.json sha256 moved in the same commit — the regen chain's own outputs, not hand edits. git status is clean, so the working tree equals HEAD."
+          },
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "git diff --name-only dbd081b3~1 4b76d428 lists 20 paths; spawn-proof.md and all five of its mirrors are not among them. A path-scoped diff --stat on that file prints nothing."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "Section 4 spans role-dispatch.md:69-144. The full diff across both commits has exactly three hunks: @@ -264,27 +264,55 @@, @@ -305,10 +333,12 @@, @@ -346,4 +376,5 @@. None reaches line 144 or below it."
+          },
+          {
+            "id": "P3",
+            "status": "PASS",
+            "evidence": "git diff --name-only across both commits, scoped to skills/bee-herding/, returns only operational-invariants.md and role-dispatch.md — role-merge.md, control-loop.sh, bootstrap-cockpit.sh and the interlock surface are untouched. The control-pane allowlist text sits outside the single operational-invariants.md hunk, appearing in the diff only as unchanged context."
+          },
+          {
+            "id": "P4",
+            "status": "PASS",
+            "evidence": "Current section 8 still carries everything the first pass landed and matches D12: split with --direction/--cwd/--no-focus, read .result.pane.pane_id, then agent start --kind --pane --timeout -- <args>. The settle-before-start paragraph, the dropped 'no panes yet' branch, the --direction geometry tie-break, the no--p rule and the opening-instruction rule all survive untouched, as does D14's mapping and the 'same effective spawn' restatement. The rework removed only the two step/section conflations and the false claim, and added one cross-reference."
+          },
+          {
+            "id": "X2",
+            "status": "PASS",
+            "evidence": "Read section 8 whole. Every referent resolves one way only: 'step 2 of this section' and 'the pane-close rule above' (section 8 holds exactly one such rule) all point at the pane made by the split. Steps restart at 1 inside each section, so 'step 2 of this section' cannot collide with section 2. Three residual roughnesses reported and none changes what a cold agent would do: (a) both fixes use a zero-relativizer clause that reads as a stutter; (b) the rewrap left an orphan fragment line, source cosmetics only; (c) pre-existing from the first pass, not the rework — 'Keep --ratio 0.5 unless the geometry rule computes otherwise' dangles because the geometry rule computes a DIRECTION, never a ratio, and --timeout <ms> never names a value while D12 specifies 60000."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T08:57:30.655Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T08:49:39.723Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  },
+  "tier": "generation"
+}

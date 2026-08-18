@@ -1,0 +1,72 @@
+{
+  "id": "mcl-2",
+  "feature": "merge-closes-the-lane",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "worktree merge: clear the merged feature's wait and name the close road",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/merge-closes-the-lane/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs"
+  ],
+  "action": "R1. `bee worktree merge` performs ZERO lane-record writes today — its only lane touch is the read-only uat precheck. Result: after a green merge the feature lane still holds the live `uat` gate mark forever, so a shipped feature reads 'waiting on the human' on every dashboard (11 features were stuck this way on main). SCOPE CORRECTION (recorded deviation, first attempt found it): `merge_finish` lives in verbs/worktree/phases.rs:451, NOT merge.rs:451 — that citation was stale from before the file split, and merge.rs:451 is an unrelated helper (`release_all_for_holder`). phases.rs is now in scope. Wiring the write one layer up in `handlers::run_merge` was considered and rejected: every existing merge test calls `merge_feature_worktree` directly, never `run_merge`, so a write there would be untestable by the file's own convention. Fix: inside `merge_finish`'s body (phases.rs), right after the merge commit lands / `merge_commit_sha` is read, and ONLY when the merge was green AND actually merged something (the same `result[\"merged\"] == true` gate `attach_cleanup_outcome` / `enqueue_worktree_cleanup_deferral` already use — an already-up-to-date merge writes nothing), clear the merging feature's lane waiting_on+run_state pair and rewrite the lane's `next_action` to name the close road, e.g. 'Merged into main at <short-sha>; capture what settled, then bee close --feature <f>.'. Cell mcl-1 already landed the helper you call: `clear_lane_waiting_on_pair`, pub(crate) in verbs/state_group/waiting_on.rs (commit a4d5ca90) — it nulls the lane file's waiting_on and nulls run_state only when it reads 'awaiting-approval'. Read it; do NOT edit it. BOUNDARY, load-bearing: merge NEVER writes `phase`. A merge can land slice 1 of 3, so a phase write from here would lie about a feature still mid-flight — phase belongs to bee close (mcl-3). The write is BEST-EFFORT and post-commit: any failure warns on its own line and leaves the merge green, exactly like `commit_close_bookkeeping` already does (see `a_failing_bookkeeping_commit_only_warns_and_the_merge_still_completes_green`, tests.rs:1844 — copy that shape). Also add one line to `merge_text_lines` (handlers.rs:651) naming the next action, beside the existing cleanup/staging lines.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "done_when": "A green merge of a feature whose lane holds a live uat mark leaves that lane with waiting_on null, run_state no longer 'awaiting-approval', an unchanged `phase`, and a next_action naming `bee close --feature <f>`; an already-up-to-date merge (tests.rs:1444) writes no lane change at all; a failed lane write warns and the merge still returns green; MERGE_CONFLICT and WORKTREE_MERGE_PROOF_DEBT paths write nothing; every existing merge test named in the plan still passes.",
+  "notes": "Phase 2. Depends on mcl-1's pair-clearing helper. Files are disjoint from mcl-1 and mcl-3 — no reservation overlap.",
+  "must_haves": {
+    "truths": [
+      "A green merge that actually merged something leaves the merged feature's lane with waiting_on null and run_state no longer 'awaiting-approval'.",
+      "That same lane's `phase` field is byte-identical before and after the merge — merge never writes a phase.",
+      "That lane's next_action names `bee close --feature <f>`, and the merge text carries one line naming the same next action.",
+      "An already-up-to-date merge, a MERGE_CONFLICT, and a WORKTREE_MERGE_PROOF_DEBT each leave the lane record byte-identical.",
+      "A failing lane write emits a warning line and the merge still returns green."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "mcl-2-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T10:32:38.200Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
+    "claimed_at": "2026-08-18T10:22:50.551Z",
+    "verify_command": null,
+    "verified_at": null,
+    "report": {
+      "outcome": "bee worktree merge now clears the merged features lane waiting_on/run_state pair (via mcl-1s clear_lane_waiting_on_pair) and rewrites next_action to name bee close, best-effort and post-commit, never touching phase.",
+      "commit": "2892849053b386be7f7ee278395db9f311920f78",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — 184 passed — the cells own declared verify scope, covering merge_finish plus 3 new tests for the happy path, the already-up-to-date no-op, and the warn-never-block failure",
+      "deviations": [
+        "Scope correction (already recorded on the cell before dispatch): merge_finish lives in verbs/worktree/phases.rs, not merge.rs — phases.rs is the file actually edited, merge.rs untouched.",
+        "Wiring the lane write into handlers::run_merge was rejected, per the cells own recorded reason: every existing merge test calls merge_feature_worktree directly, never run_merge, so a write placed there would be untestable by this files own convention."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

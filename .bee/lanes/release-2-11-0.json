@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "release-2-11-0",
+  "mode": "release",
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"release-2-11-0\" started at phase \"idle\".",
+  "next_action": "Continue bee-idle for \"release-2-11-0\".",
+  "created_at": "2026-08-18T07:12:08.878Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "hexagon adapter model for foreign skills: chart to wayfinding map or keep discussing",
+    "asked_at": "2026-08-18T10:37:02.729Z",
+    "session": "a4800428-48bf-4de1-a4cb-356e4e116dce"
+  }
+}

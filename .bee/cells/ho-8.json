@@ -1,0 +1,64 @@
+{
+  "id": "ho-8",
+  "feature": "herding-orchestration",
+  "title": "Implement the herdr backend behind the worker-backend trait",
+  "lane": "standard",
+  "behavior_change": true,
+  "action": "Implement WorkerBackend against the real herdr CLI, as a module inside the fleet crate beside the fake one, per D16. Read skills/bee-herding/references/spawn-proof.md first — it is a recording of a real herdr 0.8.0 round trip and it is the authority on what the commands actually return, ahead of any documentation. `herdr --skill` prints the installed binary's own agent skill and is the second authority; the per-verb --help is the third. Shell out with std::process::Command, argv-based, never a shell string, and null stdin — copy the pattern at packages/bee-rs/crates/bee/src/verbs/worktree/git.rs:86-91. Parse JSON responses; read identifiers out of them rather than predicting them. THE STATUS MAPPING IS THE HARD PART AND IT IS WHERE THE BUGS LIVE. herdr reports idle, working, blocked, done, unknown. Map them onto the trait's ready, working, blocked, finished, unverifiable — and treat every failure of the lookup itself as unverifiable, never as a safe default: a non-zero exit, an unparseable body, a null pane field, a missing agent_status key, and a value outside herdr's enum are all unverifiable. herdr's own error contract is that server errors are JSON on stderr with exit 1 and syntax errors exit 2. Carry into the code, as comments a later reader will trip over, the two things the live run found that no documentation states: agent start has NO --no-focus flag and moves the workspace's global tab focus; and idle versus done tracks the individual pane's own focused field rather than merely whether the tab has been seen, so a done reading is NOT proof that work happened. Implement the D15 obligation while you are here: give the trait a canonical-identity step so a worker name and its backend-side pane id collapse to one target. Whether that is a new trait method or a backend-side pre-pass is yours to choose, but the generic choreography must key its dedupe on the canonical id and must not learn herdr's identity scheme. Add the invariant 8 test that D15 names: a name and its pane id pointing at one target produce exactly one send, one baseline and one succeeded entry. TESTS. The three hazards the distill recorded on this exact path each need one: a prompt sent to an agent that is already working must not report the previous turn's completion as this send's; a response longer than the read window must still be recovered, and herdr's own documented fallback is to have the agent write its reply to a file and return the path; and a status read must not depend on the pane having been focused. Drive them through a fake herdr process rather than a live server — the crate must stay testable with no herdr installed, which is what D7 made the trait for. A PATH-prepended stub binary is the established shape here; packages/bee-rs/crates/bee/src/shell.rs:74-89 already does a PATH-prepend for Git Bash and is the precedent.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "skills/bee-herding/references/spawn-proof.md",
+    "packages/bee-rs/crates/fleet/src/backend.rs",
+    "docs/history/research/herdr-orchestrator-distill.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/fleet/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "The herdr backend implements the same WorkerBackend trait the fake does, with no test-only method added to the trait.",
+      "Every herdr status lookup failure — non-zero exit, unparseable body, null pane, missing key, off-enum value — becomes unverifiable, never a safe default.",
+      "A worker name and its backend-side pane id collapse to one target, proven by a test asserting one send, one baseline and one succeeded entry.",
+      "The generic choreography keys its dedupe on a canonical identity and contains no herdr-specific knowledge.",
+      "A prompt sent to an already-working agent does not report the previous turn's completion as this send's.",
+      "A reply longer than the read window is still recovered.",
+      "A status read does not require the pane to have been focused first.",
+      "The whole crate's tests pass with no herdr binary installed."
+    ],
+    "artifacts": [
+      "the herdr backend module inside the fleet crate, argv-based and JSON-parsing, with the focus-dependence and tab-focus findings recorded as comments where a later reader meets them",
+      "the canonical-identity step satisfying D15, with the invariant 8 test it names",
+      "three hazard tests — already-working prompt, oversized reply, unfocused status read — driven through a stub herdr rather than a live server"
+    ],
+    "key_links": [
+      "The choreography's dedupe and the herdr backend's identity resolution meet at the canonical id and nowhere else."
+    ],
+    "prohibitions": [
+      "Do not put any bee concept — cell, lane, worktree, gate, proof — into the fleet crate.",
+      "Do not build a shell command string; use argv and null stdin.",
+      "Do not require a running herdr server for any test.",
+      "Do not treat a failed status lookup as safe.",
+      "Do not add an async runtime."
+    ]
+  },
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-8",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T10:27:23.209Z"
+  },
+  "tier": "generation"
+}

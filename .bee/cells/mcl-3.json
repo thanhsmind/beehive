@@ -1,0 +1,62 @@
+{
+  "id": "mcl-3",
+  "feature": "merge-closes-the-lane",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "close: a green non-dry-run close sets the lane terminal",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "docs/history/merge-closes-the-lane/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+  ],
+  "action": "R2. `close_handler` (close.rs:1485) already retires the feature's cells and auto-commits .bee bookkeeping on a green close, but writes NO phase — so a fully closed feature keeps reading `swarming`/`planning` forever. Fix: at the very tail of the GREEN path — after `commit_close_bookkeeping` (close.rs:1931-1947), before the final `lines.push(\"next: done …\")`/`Ok(Out::Emit(...))` at close.rs:1949-1953 — set the feature's lane phase to the terminal value `idle`, with a next_action naming that the feature closed. Reuse the existing internal setter `run_set_body` (set_gate.rs:318, root+flags-parameterized, already called directly by ~20 tests) rather than shelling out or hand-writing the record: it enforces the --owner precondition and the phase enum for free, and pass --owner equal to the record's own pre-mutation phase read at that moment. Write `idle`, NEVER `compounding-complete` — that value is gated on a fresh recorded compounding run (store.rs:235-281) and close has no standing to waive it. Guards: --dry-run writes nothing; any BLOCKING door writes nothing (the write sits past every refusal by construction); a lane already at a terminal phase is left alone; the write is best-effort like the bookkeeping commit beside it — a failure warns on its own line and the close stays green. Add one line to the emitted text naming the new phase.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml close",
+  "done_when": "A green non-dry-run `bee close --feature <f>` leaves .bee/lanes/<f>.json at phase 'idle' with a next_action naming the close; `--dry-run` leaves the phase untouched; a close blocked by any door leaves the phase untouched; a lane already terminal is not rewritten; a failing phase write warns and the close still exits 0; existing close tests still pass.",
+  "notes": "Phase 3. Independent of mcl-2 — single file, no overlap. Runs in parallel with mcl-2 once mcl-1 lands.",
+  "must_haves": {
+    "truths": [
+      "A green non-dry-run `bee close --feature <f>` leaves .bee/lanes/<f>.json at phase 'idle' with a next_action naming the close.",
+      "`bee close --feature <f> --dry-run` leaves the lane record byte-identical.",
+      "A close stopped by any BLOCKING door leaves the lane record byte-identical.",
+      "A lane already at a terminal phase ('idle' or 'compounding-complete') is not rewritten.",
+      "close never writes 'compounding-complete'.",
+      "A failing phase write emits a warning line and the close still exits 0."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "mcl-3-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T10:24:57.049Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
+    "claimed_at": "2026-08-18T10:15:55.342Z",
+    "report": {
+      "outcome": "Green non-dry-run close now sets the feature lane to phase idle with a next_action naming the close, reusing run_set_body for the owner/enum guard; dry-run, blocked closes, and already-terminal lanes are left untouched, and a failing write warns without failing the close.",
+      "commit": "939771ec",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml close — green (111 unit tests in the bee bin plus 4 cells_archive_sweep, 8 workflow_verbs, 1 session_release integration tests, 0 failed) — full declared verify command run as-is; scope is the close driver plus its own test module",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 181 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "the-wave-ledger-lands-and-role-dispatch-4__984a2cde",
+  "decision": "984a2cde",
+  "condition": "The wave ledger lands and role-dispatch §4 reads occupancy from it instead of counting panes — at which point the four-slot cap is mechanical and this Edge Case line must be rewritten, not merely re-deferred.",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-18T09:06:02.131Z",
+  "updated_at": "2026-08-18T09:06:02.131Z",
+  "outcome": null
+}

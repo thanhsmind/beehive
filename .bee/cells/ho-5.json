@@ -1,0 +1,87 @@
+{
+  "id": "ho-5",
+  "feature": "herding-orchestration",
+  "title": "Define the wave value, the status model and the worker-backend trait",
+  "lane": "standard",
+  "behavior_change": false,
+  "deps": [
+    "ho-4"
+  ],
+  "action": "Give the fleet crate its vocabulary, per D7 and D11, and a fault-injecting fake backend so the choreography can be tested without any real terminal. FIRST the value types. A wave is a VALUE, never a sequence of calls (D11): a Wave struct holding the worker specs, the timeouts, and a failure policy. A WorkerSpec names one worker and the task it is to be given. The failure policy is an enum present from day one with three variants — wait for all, first success and cancel the rest, best effort and report — even though only the first is implemented now; the other two exist so the shape is right, and each should be documented with what it will mean rather than silently unimplemented. SECOND the status model. The trait exposes exactly the states the choreography needs: ready, working, blocked, finished, unverifiable. Unverifiable is a FIRST-CLASS VALUE, never an error and never coerced to a safe default — a status lookup that fails, returns a null field, or returns a value outside the enum is unverifiable. Document that hard, because it is the invariant most likely to be softened by a later reader. Document one more thing on the finished variant, learned from the live run recorded in skills/bee-herding/references/spawn-proof.md: in the first backend that will implement this trait, the distinction between ready and finished tracks the individual pane's own focus field rather than work completion, so finished must never be read as proof that work happened. THIRD the trait itself: start a worker, read its status, send it a task, read its output. Keep it small and synchronous — D9 fixes std::thread plus channels, so no async signatures. Design it so a fake implementation is natural, because per D7 this trait IS the crate's test seam and the crate has no other way to test an external command. FOURTH the fake backend, in the crate's test support: it must let a test drive status transitions deterministically, with no sleeping and no real time, and it must be able to inject the specific faults the choreography has to survive — a lookup that fails, a null field, a value outside the enum, a status that flips between one call and the next, a send that fails, and a worker that finishes before anyone starts watching it. Model it on what the source corpus needed, which is recorded in docs/history/research/herdr-orchestrator-distill.md; note in a comment that the source's own test harness needed atomic write-then-rename because concurrent waiters read its state mid-write, and say how this implementation avoids that hazard. Write unit tests for the types and the fake itself — the choreography that uses them is the next cell.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "docs/history/research/herdr-orchestrator-distill.md",
+    "skills/bee-herding/references/spawn-proof.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/fleet/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "A wave is constructed as a value holding worker specs, timeouts and a failure policy — not assembled by a sequence of method calls.",
+      "The failure policy enum carries all three variants from the start, each documented, with only wait-for-all implemented.",
+      "The status model has exactly ready, working, blocked, finished and unverifiable, and unverifiable is a value the trait returns rather than an error it raises.",
+      "The finished variant's documentation warns that in the first real backend it tracks pane focus rather than work completion.",
+      "The trait is synchronous — no async signatures anywhere in the crate.",
+      "A fake backend can drive every status transition and inject a failed lookup, a null field, an off-enum value, a mid-sequence status flip, a failed send, and a worker that finishes before it is watched — all without sleeping or depending on real time.",
+      "The manifest boundary test also refuses a dependency that points at the bee crate's path under a different name, not only one literally named bee."
+    ],
+    "artifacts": [
+      "the Wave value with its worker specs, timeouts and failure-policy enum",
+      "the worker status model with unverifiable as a first-class variant and the focus caveat documented on finished",
+      "the worker-backend trait — start, status, send, read — small enough that a fake is natural",
+      "the fault-injecting fake backend with deterministic transitions and no sleeping"
+    ],
+    "key_links": [
+      "The fake backend implements the same trait the real backend will, with no test-only method on the trait itself."
+    ],
+    "prohibitions": [
+      "Do not add an async runtime or make any trait method async — D9.",
+      "Do not represent unverifiable as an error type, an Option, or a fallback to a safe status.",
+      "Do not name any type after herdr or after bee — the crate knows about neither.",
+      "Do not implement first-success-cancel-rest or best-effort behaviour yet; only their enum variants and their documentation.",
+      "Do not build the choreography in this cell — that is the next one.",
+      "Do not weaken or rewrite the existing manifest boundary test; only add the path-alias case to it."
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-5",
+    "outcome": "Defined fleet's Wave value, five-state WorkerStatus model, synchronous WorkerBackend trait, Baseline/CompletionSignal types, and a fault-injecting FakeBackend test seam; closed the manifest boundary test's path-alias gap.",
+    "files_changed": [
+      "packages/bee-rs/crates/fleet/src/lib.rs",
+      "packages/bee-rs/crates/fleet/src/wave.rs",
+      "packages/bee-rs/crates/fleet/src/backend.rs",
+      "packages/bee-rs/crates/fleet/src/backend/fake.rs",
+      "packages/bee-rs/crates/fleet/tests/manifest_boundary.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T09:30:13.671Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T09:18:28.914Z",
+    "report": {
+      "outcome": "Defined fleet's Wave value, five-state WorkerStatus model, synchronous WorkerBackend trait, Baseline/CompletionSignal types, and a fault-injecting FakeBackend test seam; closed the manifest boundary test's path-alias gap.",
+      "commit": "00c5aba8",
+      "files": [
+        "packages/bee-rs/crates/fleet/src/lib.rs",
+        "packages/bee-rs/crates/fleet/src/wave.rs",
+        "packages/bee-rs/crates/fleet/src/backend.rs",
+        "packages/bee-rs/crates/fleet/src/backend/fake.rs",
+        "packages/bee-rs/crates/fleet/tests/manifest_boundary.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green (2037 passed, 11 ignored, 21 suites) — full workspace suite per the cells declared verify command",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}
