@@ -588,5 +588,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-18T13:01:26.982Z"
+  },
+  "start-feature-reservation-scope": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-18T13:02:49.203Z"
   }
 }
