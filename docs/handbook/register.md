@@ -305,8 +305,8 @@ release / complete`.
 
 - **`pause`** — `{…, kind:'pause', written_at}`. Surfaced and **waited on**; never
   auto-resumed. A missing/unknown kind reads as `pause` (fail-safe).
-- **`planned-next`** — requires `writer_session`, `previous_cell` (capped, tests
-  green), `next_cell` (claimed by the same session). Adopted automatically **only**
+- **`planned-next`** — requires `writer_session`, `previous_cell` (capped),
+  `next_cell` (claimed by the same session). Adopted automatically **only**
   at a fresh-session boundary (`/clear` or fresh start) via `state handoff adopt`.
 
 Written via `state handoff write/adopt/show`.
