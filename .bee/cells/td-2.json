@@ -1,0 +1,176 @@
+{
+  "id": "td-2",
+  "feature": "test-doctrine",
+  "title": "Convert the close door from test run to proof check",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "td-1"
+  ],
+  "decisions": [
+    "D4",
+    "D7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/test-doctrine/CONTEXT.md",
+    "docs/history/test-doctrine/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Extract the proof check into a NEW shared helper verbs/cells/proof.rs (registered in cells/mod.rs) implementing the plan's door contract: given the feature's capped cells (including archive), a cap whose trace.report.tests is present but empty/malformed refuses, naming the cell and the remedy (re-cap with a real proof line); a cap with NO report record is legacy — passes with a named note. In close.rs, retire the test door: run_declared_tests, its deferral branch (defers to bee worktree merge when a worktree is granted) and the CLOSE_TESTS_* detail constants stop executing commands.test; call the proof helper instead (per D7). Close does NOT read trace.report today — it reads capped cells only for scribing debt (close.rs ~406-431, list_cells_including_archive(root, feature, \"capped\")); add the report read there. Do not touch CI, verbs/test_runner.rs, or .bee/logs/test-results.json (per D4); after this change bee test is that log's only writer — the D2 red-base claim door in handlers_write.rs (~716-767) keeps reading it unchanged; confirm its refusal remedy names `bee test` as the refresh path (edit the remedy text if it does not) and pin that with one test. Fix the stale auto-run comment at handlers_close.rs:191 (\"the boundary now: bee close runs commands.test…\"). Update the close help row in generated/registry_payload.json (it still says close runs the FULL declared commands.test). Repoint drivers/tests.rs assertions that pin the old run/deferral behavior; cover the triad: all-proofed feature closes; present-but-empty proof refuses naming the cell; legacy report-less cap passes with the note; refusal is red output, never silent.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee",
+  "must_haves": {
+    "truths": [
+      "bee close never spawns commands.test",
+      "close on a feature whose caps all carry proof strings proceeds",
+      "close with a present-but-empty proof refuses, naming the cell; a report-less legacy cap passes with a named note",
+      "cells claim onto a red test-results record still refuses, and the remedy names bee test"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+        "substantive": "shared proof-check helper: refusal/legacy-pass/accept paths, unit-tested"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "substantive": "proof helper call replaces run_declared_tests; refusal text carries the remedy"
+      }
+    ],
+    "key_links": [
+      "close's proof check reads trace.report written by finish_support.rs (td-1 contract)",
+      "registry_payload.json close help matches the new behavior"
+    ],
+    "prohibitions": [
+      "No CI workflow file touched",
+      "No change to verbs/test_runner.rs or .bee/logs/test-results.json writers"
+    ]
+  },
+  "trace": {
+    "worker": "w-td2",
+    "outcome": "Retired the close test door in favor of a D8 proof-line check reading trace.report",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T02:56:27.003Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e3772d39-2531-461e-bba8-88f8915ebe32",
+    "claimed_at": "2026-08-18T02:24:56.156Z",
+    "report": {
+      "outcome": "Retired the close test door in favor of a D8 proof-line check reading trace.report; refusal names the cell and remedy, legacy caps pass with a note, red-base remedy names bee test",
+      "commit": "892341bb",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs"
+      ],
+      "tests": "cargo test --release -p bee — green — full crate suite incl. new proof.rs unit tests, close.rs door tests, and cells_archive_sweep.rs integration test",
+      "deviations": [
+        "Touched packages/bee-rs/crates/bee/src/verbs/cells/tests.rs and packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs beyond the cells files list: both pinned the retired test-run/RED behavior close_handler used to have and went red under the new proof contract; reserved both before writing and fixed them in place rather than leave a red base."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1-close-never-spawns-commands-test",
+            "status": "PASS",
+            "evidence": "close.rs -371 lines: CommandResult/TestRun/shell_command/run_declared_tests/tests_result_value/render_test_command_lines deleted outright; drivers/tests.rs:1690-1712 still calls close_handler with declared=Some(2 commands) AND Some(shell) and asserts !root.join(\".bee/logs/test-results.json\").exists() — a real shell is threaded, so the no-spawn claim is proven, not vacuous"
+          },
+          {
+            "id": "truth-2-all-proofed-feature-closes",
+            "status": "PASS",
+            "evidence": "drivers/tests.rs:1993-2007 writes two capped cells with valid proof lines and asserts the text starts \"Tests GREEN for \\\"demo\\\" — 2 capped cell(s) all carry a proof line\""
+          },
+          {
+            "id": "truth-3-empty-proof-refuses-legacy-passes",
+            "status": "PASS",
+            "evidence": "close_refuses_at_the_tests_door_naming_the_bad_proof_cell: exit code 1, line[0] == \"Proof debt for \\\"demo\\\" — close stops at the tests door: 1 capped cell(s) carry a report with no valid proof line (demo-1).\", remedy line names re-cap + `bee cells finish`, promote door never reached; drivers/tests.rs:1807 pins the report-less legacy cap passing with its note (proof_door_detail's legacy branch)"
+          },
+          {
+            "id": "truth-4-red-base-claim-door-intact-remedy-names-bee-test",
+            "status": "PASS",
+            "evidence": "handlers_write.rs:772 refusal text now reads \"fix the red, run `bee test` to refresh the record, then retry\"; cells/tests.rs:1143-1147 asserts refusal.contains(\"bee test\") alongside the existing TEST_RESULTS_RELATIVE assert; the claim-door logic itself is unchanged"
+          },
+          {
+            "id": "artifact-proof-rs-helper",
+            "status": "PASS",
+            "evidence": "new packages/bee-rs/crates/bee/src/verbs/cells/proof.rs (270 lines): feature_proof_check classifies no-report=legacy, valid parse=proven, present-but-invalid=blocking with bad_ids; 7 unit tests cover valid, empty, two-segment, report-less, mixed good+bad, no-cells, and archive-only cells"
+          },
+          {
+            "id": "artifact-close-rs-door",
+            "status": "PASS",
+            "evidence": "close.rs close_handler now calls crate::verbs::cells::feature_proof_check(root, feature); proof_door_detail owns all four wordings so dry-run, refusal and GREEN headline cannot disagree; ran_tests is Bool(false) and tests is Null on every exit arm"
+          },
+          {
+            "id": "key-link-reads-td1-contract",
+            "status": "PASS",
+            "evidence": "proof.rs validates with parse_tests_proof (finish_support.rs, td-1) — one parser, not a second copy; the read side is trace.report.tests, exactly the key td-1's cap path writes"
+          },
+          {
+            "id": "key-link-registry-close-help",
+            "status": "PASS",
+            "evidence": "registry_payload.json close description rewritten: \"never spawns commands.test itself (D7 ...) — it reads whether every capped cell already carries a D8 proof line ... A capped cell with no report at all is legacy and passes ungated\". Non-blocking staleness left in that row: it still says merge \"still runs commands.verify, untouched\", an aside that predates this feature and is now doubly wrong after td-3"
+          },
+          {
+            "id": "prohibition-no-ci-file-touched",
+            "status": "PASS",
+            "evidence": "`git diff --name-only 9731af85^..13d658e2 | rg -i '.github|workflows'` -> no match"
+          },
+          {
+            "id": "prohibition-no-test-runner-or-results-writer-change",
+            "status": "PASS",
+            "evidence": "verbs/test_runner.rs is absent from the whole three-commit name-only diff; what was deleted is close.rs's OWN private copy of the runner, which is exactly the plan's \"after this change bee test is that log's only writer\""
+          },
+          {
+            "id": "frozen-judge-cells-archive-sweep-scope-honesty",
+            "status": "PASS",
+            "evidence": "the flagged file is scope-honest, not a masked behavior change: cells_archive_sweep.rs a_red_close_retires_nothing keeps all three assertions byte-for-byte in substance (exit 1, active_cell_ids unchanged, no .bee/cells/archive) and only swaps the now-unreachable trigger (close_fixture's `exit <code>` commands.test) for a capped cell with an empty proof line. No assertion was weakened or deleted; the worker recorded it in report.deviations"
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "ran `cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee` at 13d658e2: 2015 passed, 0 failed, exit 0"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T03:26:04.887Z"
+      }
+    ]
+  }
+}

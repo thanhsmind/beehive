@@ -1,0 +1,178 @@
+{
+  "id": "td-1",
+  "feature": "test-doctrine",
+  "title": "Replace cap tests enum with the proof string contract",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D8"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee/prompts/worker-cell.md",
+    ".bee/bin/prompts/worker-cell.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/test-doctrine/CONTEXT.md",
+    "docs/history/test-doctrine/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+    "packages/bee/prompts/worker-cell.md"
+  ],
+  "action": "In finish_support.rs, replace the --report tests value contract (validator parse_report_flag, the refusal that currently says tests must be \"boundary\" or \"undeclared\"): accept a proof string `<command> — <result> — <scope reason>` (per D8) — three non-empty segments, split on the FIRST TWO ' — ' separators only, so the reason may itself contain ' — '. Make --report REQUIRED at cells finish (per plan door contract; today it is optional and absent-report caps never touch trace.report — that absent shape remains legal only for pre-contract caps, which the doors grandfather). Refuse the legacy enum words with a remedy teaching the new form (per D1). A result segment reading `red` refuses the cap — per the plan test matrix, D6's spirit: a red is fix-first, never a done. In a no-test-sentinel repo the command segment is `none` with the reason naming the parity/docs proof used; migrate the existing sentinel-pinning tests in cells/tests.rs to this form (the legacy vocabulary appears 4 times there; drivers/tests.rs has zero hits — leave it alone). Note: packages/bee/prompts/worker-cell.md line ~40 currently documents tests: \"green|red\" — it is WRONG today, not merely outdated; rewrite the Result-form to the proof string with one example. Never hand-edit .bee/bin/prompts/worker-cell.md: after editing the canonical prompt, run the regen chain `.bee/bin/bee dev regen` (render-skill-trees → onboard --apply → release-manifest --write) — it writes the vendored copy and the manifest; both stay listed in files so the reservation covers them. The `cells cap` verb has NO report parameter today (registry commands[12] parameters: id, outcome, files, deviations-file, deviation, friction, override-judge, session-id, force-ownership, json) — add required --report there with the same proof-string contract, same validator, so no cap path can land report-less (a cap verb left without --report would grandfather every future cap as legacy, a permanent D7 hole); its handler shares the finish path (find it via rg 'cells cap' / commands[12] handler, likely handlers_close.rs). Update BOTH help rows in generated/registry_payload.json (hand-maintained per decision 3358743e): cells-finish AND cells-cap — the cap row still teaches 'Tests prove at the boundary — bee close runs commands.test…' verbatim.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee && .bee/bin/bee dev release-manifest --check && bee onboard --repo-root . --json && diff packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md",
+  "must_haves": {
+    "truths": [
+      "A cap with --report tests 'cargo test -p bee — green — touched close.rs' is accepted",
+      "cells finish without --report is refused (report now required)",
+      "A cap with tests 'boundary' or 'undeclared' is refused with remedy text naming the proof-string form",
+      "A cap whose result segment is red is refused"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "substantive": "proof-string validator replaces the enum; --report required; no legacy vocabulary accepted"
+      },
+      {
+        "path": "packages/bee/prompts/worker-cell.md",
+        "substantive": "Result-form documents the proof string with one example"
+      }
+    ],
+    "key_links": [
+      "regen chain ran: .bee/bin/prompts/worker-cell.md byte-matches the canonical prompt (diff in verify proves it)",
+      "registry_payload.json cells-finish help teaches the proof string"
+    ],
+    "prohibitions": [
+      "No change to the other four REPORT_KEYS (outcome, commit, files, deviations)",
+      "No change to bee test or .bee/logs/test-results.json"
+    ]
+  },
+  "trace": {
+    "worker": "w-td1",
+    "outcome": "Replaced the cap tests enum with the D8 proof-string contract; --report required on every cap path",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee/prompts/worker-cell.md",
+      ".bee/bin/prompts/worker-cell.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T02:23:50.839Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e3772d39-2531-461e-bba8-88f8915ebe32",
+    "claimed_at": "2026-08-18T02:01:44.022Z",
+    "inline_reason": "dispatch did not register this worker via bee state worker add before handing off the cell; the claim (trace.worker=w-td1) matches this session, and state worker add itself refuses from inside this granted worktree (control-plane, main-only)",
+    "report": {
+      "outcome": "Replaced the cap tests enum with the D8 proof-string contract; --report required on every cap path",
+      "commit": "9731af85",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee/prompts/worker-cell.md",
+        ".bee/bin/prompts/worker-cell.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/cli_shape.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs",
+        ".bee/onboarding.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee — green — 2005 passed, 0 failed, 11 ignored; regen chain + release-manifest --check + bee onboard --json + worker-cell.md diff all green",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1-proof-string-accepted",
+            "status": "PASS",
+            "evidence": "finish_support.rs:57-77 parse_tests_proof splits on the first two \" — \" only; cells/tests.rs valid_report_is_validated_and_stored_on_trace stores tests \"cargo test -p bee — green — touched close.rs\" verbatim on trace.report; reason-contains-separator case pinned by report_tests_key_reason_segment_may_contain_the_separator"
+          },
+          {
+            "id": "truth-2-report-required",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:180-196 cap_cell_from_flags returns Err when f.report is None (\"--report is required\"), naming REPORT_KEYS and the proof form; cells/tests.rs omitting_report_is_refused_report_now_required replaced the old byte-identical-omission test; registry cells.finish/cells.cap now list \"report\" in required[]"
+          },
+          {
+            "id": "truth-3-legacy-enum-refused-with-remedy",
+            "status": "PASS",
+            "evidence": "finish_support.rs boundary/undeclared arm now returns Err with \"no longer accepts \\\"{s}\\\"\" + \"<command> — <result> — <scope reason>\" example and the none-sentinel form; cells/tests.rs report_tests_key_legacy_boundary_or_undeclared_is_refused_with_the_proof_string_remedy loops both words and asserts both strings"
+          },
+          {
+            "id": "truth-4-red-result-refuses",
+            "status": "PASS",
+            "evidence": "finish_support.rs match arm Some((_, result, _)) if result == \"red\" returns \"a red is fix-first, never a cap\"; cells/tests.rs report_tests_key_red_result_segment_is_refused asserts the refusal contains \"red\" and \"fix-first\""
+          },
+          {
+            "id": "artifact-finish-support-validator",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs +63/-17: the enum match arms are gone, replaced by parse_tests_proof; no code path accepts boundary/undeclared any more"
+          },
+          {
+            "id": "artifact-worker-cell-prompt",
+            "status": "PASS",
+            "evidence": "packages/bee/prompts/worker-cell.md:35-40 Result-form line rewritten; the JSON template's tests field moved from \"green|red\" to \"<command> — <result> — <scope reason>\" with the cargo example, none-sentinel rule and red-refuses rule"
+          },
+          {
+            "id": "key-link-regen-parity",
+            "status": "PASS",
+            "evidence": "ran in the worktree: `diff packages/bee/prompts/worker-cell.md .bee/bin/prompts/worker-cell.md` -> no output (identical); `.bee/bin/bee dev release-manifest --check` -> \"267 file(s) match stored manifest\"; the commit carries the regen outputs (.bee/onboarding.json hash, codex-harness-hardening/release-manifest.json sha256)"
+          },
+          {
+            "id": "key-link-registry-help-rows",
+            "status": "PASS",
+            "evidence": "registry_payload.json diff (parsed, not raw): cells.finish and cells.cap descriptions both teach the proof string, both examples carry --report, both required[] gained \"report\"; cells.cap gained the report parameter it never had"
+          },
+          {
+            "id": "prohibition-other-report-keys-unchanged",
+            "status": "PASS",
+            "evidence": "finish_support.rs:54 REPORT_KEYS = [outcome, commit, files, tests, deviations] is untouched by the diff; the only changed match arm is the \"tests\" one"
+          },
+          {
+            "id": "prohibition-no-bee-test-or-results-log-change",
+            "status": "PASS",
+            "evidence": "`git diff --name-only 9731af85^..13d658e2` lists no verbs/test_runner.rs, no .github/, no .bee/logs path; test_runner.rs still owns TEST_RESULTS_RELATIVE at :64"
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "ran `cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee` at 13d658e2 in the worktree: \"2015 passed, 11 ignored (18 suites, 19.38s)\", exit 0"
+          },
+          {
+            "id": "observation-undeclared-file-scope",
+            "status": "PASS",
+            "evidence": "non-blocking: hooks/cli_shape.rs:855, hooks/write_guard/tests.rs:314 and verbs/knowledge/tests.rs:887 were edited but are not in the cell's files list and trace.deviations is empty. Each edit is the mechanical consequence of --report becoming required (a fixture/allowlist string gains --report); no assertion semantics change. td-2 recorded the same class of edit as a deviation; td-1 did not"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T03:26:02.814Z"
+      }
+    ]
+  }
+}
