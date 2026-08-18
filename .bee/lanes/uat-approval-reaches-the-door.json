@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "uat-approval-reaches-the-door",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"uat-approval-reaches-the-door\" started at phase \"exploring\" (lane).",
-  "next_action": "none",
+  "next_action": "Feature closed; proposals reviewed, one pattern promoted.",
   "created_at": "2026-08-18T13:09:50.347Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -32,7 +32,7 @@
   "last_scribing_run": {
     "feature": "uat-approval-reaches-the-door",
     "date": "2026-08-18",
-    "at": "2026-08-18T15:49:11.446Z",
+    "at": "2026-08-18T15:50:04.948Z",
     "areas_synced": [
       "worktree-parallelism",
       "workflow-state"
