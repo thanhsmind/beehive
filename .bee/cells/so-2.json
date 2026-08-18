@@ -1,0 +1,53 @@
+{
+  "id": "so-2",
+  "feature": "staging-optional",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Document staging_before_merge across the config register, reference, sample, and skills",
+  "behavior_change": false,
+  "files": [
+    "docs/handbook/register.md",
+    "docs/config-reference.md",
+    ".bee/config-sample.json",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/handbook/register.md",
+    ".bee/config-sample.json",
+    "skills/bee-swarming/SKILL.md"
+  ],
+  "action": "Document the new key and close one pre-existing documentation gap. (1) docs/handbook/register.md — in the config key table (around line 125, beside the `uat_before_merge` row), add a `staging_before_merge` row: boolean, absent means ON; explicit `false` makes `bee staging add`/`bee staging rebuild` refuse `STAGING_DISABLED` so the repo goes feature worktree -> `uat` gate -> main with no mixing ground; a non-boolean refuses `STAGING_CONFIG_INVALID`. (2) docs/config-reference.md — add the same key to its key table/prose in that file's own house style, stating plainly that the `uat` gate is UNAFFECTED by this key. (3) .bee/config-sample.json — add a `_doc` entry AND a concrete body entry for `staging_before_merge`, and while in the file add the MISSING `_doc` entry for the already-shipped `uat_before_merge` key (the sample currently documents neither; verify with `rg -n 'uat_before_merge|staging_before_merge' .bee/config-sample.json`). Keep the file valid JSON. (4) skills/bee-swarming/SKILL.md — at the Completion step (line 77, `bee staging add --feature <slug>`), add one clause: when the repo sets `\"staging_before_merge\": false`, `bee staging add` refuses `STAGING_DISABLED` and the agent presents the FEATURE WORKTREE itself instead — the `uat` gate and `bee worktree merge` are unchanged. (5) skills/bee-hive/references/routing-and-contracts.md — at the staging/uat sentence (around line 29-33), add the same one-clause escape hatch. Keep every edit tight and in the surrounding voice; do not restate the mechanism in more than one sentence per file. Then run the FULL regen chain inside this cell, in this order: `.bee/bin/bee dev render-skill-trees`, then `.bee/bin/bee dev onboard --repo-root . --apply` (equivalently `.bee/bin/bee dev regen`), then `.bee/bin/bee dev release-manifest --write` — and commit the regenerated output, including docs/history/codex-harness-hardening/release-manifest.json.",
+  "verify": "python3 -c \"import json;json.load(open('.bee/config-sample.json'))\" && rg -n 'staging_before_merge' docs/handbook/register.md docs/config-reference.md .bee/config-sample.json skills/bee-swarming/SKILL.md skills/bee-hive/references/routing-and-contracts.md && rg -n 'uat_before_merge' .bee/config-sample.json && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml pointer_integrity && .bee/bin/bee dev release-manifest --check",
+  "verify_owner": "worker",
+  "done_when": "All five documents name `staging_before_merge` with its default and its two refusal codes; `.bee/config-sample.json` is valid JSON and now documents BOTH `staging_before_merge` and the previously missing `uat_before_merge`; both skill files carry the one-clause escape hatch; `bee dev regen` has been run and its output committed; pointer-integrity tests are green.",
+  "notes": "Phase 1. Files are disjoint from so-1 — the two cells can run concurrently.",
+  "must_haves": {
+    "truths": [
+      "docs/handbook/register.md's config table has a `staging_before_merge` row stating the absent-means-ON default.",
+      "docs/config-reference.md documents the key and states the `uat` gate is unaffected by it.",
+      ".bee/config-sample.json is valid JSON and documents both `staging_before_merge` and `uat_before_merge`.",
+      "skills/bee-swarming/SKILL.md's completion step names the opted-out fallback in one clause.",
+      "skills/bee-hive/references/routing-and-contracts.md names the same escape hatch.",
+      "`bee dev regen` was run and its regenerated output is part of the commit."
+    ]
+  },
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "so-2-worker",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T10:59:59.107Z"
+  }
+}

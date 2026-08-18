@@ -43,22 +43,55 @@
       "Do not add an async runtime."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "w-ho-8",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Implemented HerdrBackend (WorkerBackend over the real herdr CLI) beside the fake, closed D15's canonical-identity gap with a new canonical_id trait method the choreography dedupes on, and added the three hazard tests plus fail-closed status coverage via a PATH-prepended stub herdr",
+    "files_changed": [
+      "packages/bee-rs/crates/fleet/Cargo.toml",
+      "packages/bee-rs/crates/fleet/src/backend.rs",
+      "packages/bee-rs/crates/fleet/src/backend/fake.rs",
+      "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+      "packages/bee-rs/crates/fleet/src/choreography.rs",
+      "packages/bee-rs/crates/fleet/src/wave.rs",
+      "packages/bee-rs/crates/fleet/tests/choreography.rs",
+      "packages/bee-rs/crates/fleet/tests/herdr_backend.rs",
+      "packages/bee-rs/Cargo.lock"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-18T10:51:34.609Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
-    "claimed_at": "2026-08-18T10:27:23.209Z"
+    "claimed_at": "2026-08-18T10:27:23.209Z",
+    "report": {
+      "outcome": "Implemented HerdrBackend beside the fake, closed D15's canonical-identity gap, added the three hazard tests plus fail-closed status coverage",
+      "commit": "76656a111dffd837365a5114a6450edb9ddbb36f",
+      "files": [
+        "packages/bee-rs/crates/fleet/Cargo.toml",
+        "packages/bee-rs/crates/fleet/src/backend.rs",
+        "packages/bee-rs/crates/fleet/src/backend/fake.rs",
+        "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+        "packages/bee-rs/crates/fleet/src/choreography.rs",
+        "packages/bee-rs/crates/fleet/src/wave.rs",
+        "packages/bee-rs/crates/fleet/tests/choreography.rs",
+        "packages/bee-rs/crates/fleet/tests/herdr_backend.rs",
+        "packages/bee-rs/Cargo.lock"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — full declared verify command run, whole workspace including fleet's 57 tests (23 unit + 11 choreography + 17 herdr_backend + 6 manifest_boundary) and bee's 1887 tests unaffected",
+      "deviations": [
+        "HerdrBackend's WorkerSpec::name contract for herdr is a herdr pane id (already split by the caller) or a friendly agent name already known to herdr; start() refuses rather than fabricate a pane-splitting spawn since WorkerSpec carries no cwd — that wiring is D17's deferred bee-side wave verb, not this cell",
+        "agent list's per-agent JSON shape is inferred beyond spawn-proof.md, which does not show it byte-for-byte; parsing fails closed to Unverifiable/Err on any mismatch rather than guessing further",
+        "the herdr_backend.rs stub-binary test suite is cfg(unix) only — no Windows-native stub equivalent yet, a named gap; the pure status-mapping unit tests inside herdr.rs itself are cross-platform"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   },
   "tier": "generation"
 }

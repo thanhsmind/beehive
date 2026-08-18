@@ -1,0 +1,47 @@
+{
+  "id": "so-1",
+  "feature": "staging-optional",
+  "lane": "small",
+  "tier": "generation",
+  "title": "staging_before_merge config: refuse staging add/rebuild when the repo opted out",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs"
+  ],
+  "action": "Add a new repo config key `staging_before_merge` in `.bee/config.json` and give it teeth in the staging verb. (1) Add `pub(crate) fn staging_before_merge_config(main_root: &Path) -> Option<bool>` to packages/bee-rs/crates/bee/src/verbs/staging/mod.rs, modelled EXACTLY on `uat_before_merge_config` at packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:673-679 — read `crate::state::read_config_raw(main_root).get(\"staging_before_merge\")`, `None => Some(true)` (absent means ON, today's behavior), `Some(Value::Bool(b)) => Some(*b)`, `Some(_) => None` (fail closed on a non-boolean, never guess a typo). (2) In `staging_add` (mod.rs:349), as a ZERO-MUTATION precondition placed AFTER the `feature_slug_ok` check and BEFORE the `is_ordinary_checkout` check, and in `staging_rebuild` (mod.rs:524) at the same relative position, refuse via the existing `refuse(code, message)` helper: `None` from the reader refuses with code `STAGING_CONFIG_INVALID` and a message naming the key and the two legal values; `Some(false)` refuses with code `STAGING_DISABLED` and a message that states the repo opted out of the staging mixing ground with `\"staging_before_merge\": false` in .bee/config.json, that the FIX is to test the feature worktree itself and then land it with `bee worktree merge` after the `uat` gate, and that setting the key back to true (or removing it) re-enables staging. (3) Leave `staging_status` untouched — it is read-only and must keep reporting an existing record even when the key is false. (4) Do NOT touch the `uat` gate, `uat_before_merge_config`, or the `staging_rebuild_suggested` nudge at phases.rs:646 — that nudge is already conditional on a staging record existing, so an opted-out repo never reaches it. (5) Add inline `#[test]` cases beside the existing 14 in mod.rs: absent key still allows add and rebuild; explicit `true` allows both; explicit `false` refuses both with `STAGING_DISABLED` before any git or lock work happens; a non-boolean value (e.g. a string) refuses both with `STAGING_CONFIG_INVALID`; and `staging_status` still returns an existing record with the key set to false.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml staging",
+  "verify_owner": "worker",
+  "done_when": "`bee staging add --feature <f>` and `bee staging rebuild` refuse with STAGING_DISABLED and zero mutations when `.bee/config.json` holds `\"staging_before_merge\": false`; refuse with STAGING_CONFIG_INVALID when the value is not a boolean; behave exactly as today when the key is absent or true; `bee staging status` is unaffected in every case; the staging test suite is green.",
+  "notes": "Phase 1. No dependency. Config default keeps every existing repo on today's behavior.",
+  "must_haves": {
+    "truths": [
+      "An absent `staging_before_merge` key leaves `bee staging add` and `bee staging rebuild` behaving exactly as they do today.",
+      "`\"staging_before_merge\": false` refuses both add and rebuild with code STAGING_DISABLED, before any lock is taken and before any git command runs.",
+      "A non-boolean `staging_before_merge` refuses with STAGING_CONFIG_INVALID rather than resolving to either outcome.",
+      "The refusal message names the config key and names `bee worktree merge` after the `uat` gate as the path to main.",
+      "`bee staging status` still reads an existing staging record when the key is false.",
+      "The `uat` gate and `uat_before_merge` are untouched."
+    ]
+  },
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "so-1-worker",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T10:59:59.089Z"
+  }
+}

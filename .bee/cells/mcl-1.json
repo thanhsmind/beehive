@@ -59,6 +59,41 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1-clear-accepts-a-closed-workflow-and-nulls-waiting-on",
+            "status": "PASS",
+            "evidence": "waiting_on.rs:111-131 falls back to newest_workflow_for_feature on the explicit --lane branch when find_live_workflow misses; run_waiting_on_clear returns exit 0 on every resolved target. update_workflow_assuming_lock_with (workflow_store/record.rs:851-899) carries no status!=closed guard. Tests waiting_on_clear_on_a_closed_workflow_repairs_the_stuck_lane_pair and waiting_on_target_clear_falls_back_to_an_explicit_lanes_closed_workflow pass; cargo test waiting_on -> 41+5 passed, 0 failed."
+          },
+          {
+            "id": "truth-2-run-state-nulled-only-on-awaiting-approval",
+            "status": "PASS",
+            "evidence": "clear_lane_waiting_on_pair (waiting_on.rs:199-213) nulls run_state only under equality with awaiting-approval; every other value is written back unchanged. Five helper tests cover the stuck pair, the record-derived value, the already-null waiting_on case, the no-op case and the missing-file case."
+          },
+          {
+            "id": "truth-3-zero-record-refusal-narrowed",
+            "status": "PASS",
+            "evidence": "waiting_on.rs:118-121 emits the clear-verb refusal without the status clause; the set-verb refusal at waiting_on.rs:124-126 keeps it. Test waiting_on_target_clear_still_refuses_an_explicit_lane_with_no_workflow_record_at_all asserts the clause is absent."
+          },
+          {
+            "id": "truth-4-set-verb-refusal-byte-identical",
+            "status": "PASS",
+            "evidence": "The widening is gated on the clear verb at waiting_on.rs:104,115,128; the set path reaches only find_live_workflow. Test waiting_on_target_refuses_an_explicit_lane_naming_no_live_workflow passes unchanged, plus waiting_on_target_set_never_widens_to_a_closed_workflow."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T10:53:04.848Z"
+      }
+    ]
   }
 }
