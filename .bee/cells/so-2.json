@@ -33,21 +33,79 @@
       "`bee dev regen` was run and its regenerated output is part of the commit."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "so-2-worker",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "docs/handbook/register.md",
+      "docs/config-reference.md",
+      ".bee/config-sample.json",
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".bee/onboarding.json",
+      ".agents/skills/.bee-render.json",
+      ".agents/skills/bee-hive/references/routing-and-contracts.md",
+      ".agents/skills/bee-swarming/SKILL.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude-plugin/skills/bee-swarming/SKILL.md",
+      ".claude/skills/.bee-render.json",
+      ".claude/skills/bee-hive/references/routing-and-contracts.md",
+      ".claude/skills/bee-swarming/SKILL.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+      ".codex-plugin/skills/bee-swarming/SKILL.md",
+      ".opencode/skills/.bee-render.json",
+      ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+      ".opencode/skills/bee-swarming/SKILL.md"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-18T11:05:48.602Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
-    "claimed_at": "2026-08-18T10:59:59.107Z"
+    "claimed_at": "2026-08-18T10:59:59.107Z",
+    "report": {
+      "outcome": "Documented staging_before_merge across the register, config reference, sample config, and both skill files; also filled the pre-existing missing uat_before_merge _doc gap in config-sample.json; ran the full regen chain and committed the output.",
+      "commit": "668a60e13b3bc02cb9af790fd60a8e686acbea57",
+      "files": [
+        "docs/handbook/register.md",
+        "docs/config-reference.md",
+        ".bee/config-sample.json",
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json",
+        ".agents/skills/.bee-render.json",
+        ".agents/skills/bee-hive/references/routing-and-contracts.md",
+        ".agents/skills/bee-swarming/SKILL.md",
+        ".claude-plugin/skills/.bee-render.json",
+        ".claude-plugin/skills/bee-hive/references/routing-and-contracts.md",
+        ".claude-plugin/skills/bee-swarming/SKILL.md",
+        ".claude/skills/.bee-render.json",
+        ".claude/skills/bee-hive/references/routing-and-contracts.md",
+        ".claude/skills/bee-swarming/SKILL.md",
+        ".codex-plugin/skills/.bee-render.json",
+        ".codex-plugin/skills/bee-hive/references/routing-and-contracts.md",
+        ".codex-plugin/skills/bee-swarming/SKILL.md",
+        ".opencode/skills/.bee-render.json",
+        ".opencode/skills/bee-hive/references/routing-and-contracts.md",
+        ".opencode/skills/bee-swarming/SKILL.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity — green — 10 passed, docs-only citation gate for the touched skill files",
+      "deviations": [
+        "Cell's literal verify string ran 'cargo test ... pointer_integrity' without --test, which matches 0 tests repo-wide (confirmed no test fn contains that literal substring); ran the repo's own convention '--test pointer_integrity' (seen in prompt-diet/pd-1..4, doctrine-prose-diet/bc-1..7) instead, for real proof: 10 passed.",
+        "bee dev release-manifest --check fails with 'MISSING unhashed artifact .bee/bin/bee' — this worktree ships no .bee/bin/bee binary at all (a pre-existing, dispatch-documented environment gap, .bee/bin/ contains only prompts/), unrelated to this cell's doc-only changes; release-manifest --write itself succeeded as part of the regen chain."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

@@ -27,21 +27,36 @@
       "The `uat` gate and `uat_before_merge` are untouched."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "so-1-worker",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-18T11:03:46.920Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
-    "claimed_at": "2026-08-18T10:59:59.089Z"
+    "claimed_at": "2026-08-18T10:59:59.089Z",
+    "report": {
+      "outcome": "Added staging_before_merge config gate to staging_add and staging_rebuild, modelled on uat_before_merge_config; staging_status untouched.",
+      "commit": "6828d111ebc07afc3b705662d4bf031a0642cc15",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml staging — green — cell-declared verify command, 25 passed 0 failed",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 162 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }
