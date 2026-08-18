@@ -41,6 +41,13 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
+// The append-only wave ledger (D10). No CLI verb reads or writes it yet —
+// the entry point that drives a real wave is later phase-3 work
+// (docs/history/herding-orchestration/plan.md) — so this module is a
+// library seam only for now, exercised by its own inline tests.
+#[allow(dead_code)]
+mod wave_ledger;
+
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
