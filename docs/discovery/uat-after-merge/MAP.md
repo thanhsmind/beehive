@@ -2,10 +2,15 @@
 
 ## Destination
 
-One config switch in `.bee/config.json` that moves the `uat` stop from
-merge-time to close-time, so a small project can merge to main, reload the
-app that runs from main, test it there, and only then accept the feature.
-Arrived = the switch is shipped, documented, and turned on works.
+One config switch in `.bee/config.json` that makes **merging to main a
+publish-for-testing step rather than the finish line**, so a small project
+can land the code, reload the app that serves from main, test it there, and
+only then accept the feature. The owner keeps standing in the feature
+worktree the whole time: while `uat` is unapproved the work is not done, the
+worktree stays, and a fix merges again. Arrived = the switch is shipped,
+documented, and turned on works.
+
+Said plainly: **main plays the role staging plays for bigger projects.**
 
 ## Notes
 
@@ -31,6 +36,21 @@ Facts gathered this session (all `packages/bee-rs/crates/bee/src`):
 - `judge-debt` (`close.rs:1195-1256`) is the structural precedent for a
   blocking close door that is lane-scoped and escapable by a deferral
   decision.
+- bee ALREADY treats a merge as non-terminal in every respect but one: it
+  never writes lane `phase` (`verbs/worktree/phases.rs:615-616` — "a merge
+  can land one slice of many, so phase stays close's word alone"), the
+  worktree is KEPT by default (`verbs/worktree/handlers.rs:415-421`, absent
+  means false), repeat merges of the same feature run normally (a second
+  merge with no new commits is `ALREADY_UP_TO_DATE`, a no-op — only a
+  cleanup that dropped the grant would refuse, `handlers.rs:103-108`), and
+  nothing refuses further commits or cells for a merged feature.
+- The ONE write that contradicts this topology: `close_the_lane_on_merge`
+  (`phases.rs:457,465-471`) clears the feature's `waiting_on`+`run_state`
+  pair via `clear_lane_waiting_on_pair` (`state_group/waiting_on.rs:199-213`)
+  and rewrites `next_action` to "capture what settled, then bee close".
+- `waiting_on` kinds are a closed pair: `WAITING_ON_KIND_VALUES = ["gate",
+  "question"]` (`verbs/workflow_store/record.rs:356`) — `gate` is the right
+  kind for the post-merge uat wait, no new kind needed.
 
 ## Decisions so far
 
@@ -50,6 +70,13 @@ Facts gathered this session (all `packages/bee-rs/crates/bee/src`):
   `standard` and `high-risk` only; `tiny`/`small`/`docs`/`spike` are exempt,
   exactly as `uat_gate_applies_to_lane` already decides at merge time. One
   rule, one place, whichever end of the road the stop sits at.
+- **D6 — merging is a publish-for-testing step, not the finish line.**
+  Under `uat_stop: "close"` exactly four things change: merge stops refusing
+  `WORKTREE_MERGE_UAT_PENDING`; the post-merge lane write INVERTS (it sets
+  the `uat` wait and points at reload-test-approve instead of clearing the
+  wait and pointing at `bee close`); cleanup is forced off while uat is
+  pending, because the worktree is the only place a fix can be written; and
+  `bee close` carries the blocking `uat` door. Nothing else moves.
 - **D5 — a failed uat after merge is fixed forward.** A new cell on a new
   worktree, merged again. bee grows no revert mechanism; main may be broken
   for a while and that is accepted for a project this size.
