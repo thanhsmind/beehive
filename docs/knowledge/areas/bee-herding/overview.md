@@ -167,11 +167,16 @@ the dispatch interlock, or the merge owner-gesture change.
 ## Pointers (implementation)
 
 - The skill and its three roles: `skills/bee-herding/SKILL.md`; the loop driver
-  `scripts/control-loop.sh`; the one-shot `scripts/bootstrap-cockpit.sh`; the owner interlock
-  `scripts/dispatch-interlock.mjs`; the work classifier `scripts/classify-lane.mjs`.
-- The CLI-verb equivalent of the manual marker gesture: `packages/bee/lib/herding.mjs`,
-  wired into `the bee binary` as the `herding` command group. Test coverage:
-  `packages/bee/tests/test_herding_cli.mjs`.
-- Regression coverage: `packages/bee/tests/test_herding.mjs`.
+  `skills/bee-herding/scripts/control-loop.sh`; the one-shot
+  `skills/bee-herding/scripts/bootstrap-cockpit.sh`.
+- The `herding` command group — `classify-lane`, `interlock`, `command-template`,
+  `herdr-result` and `herdr-pane-id`, the five verbs the current binary actually
+  serves — is implemented in `packages/bee-rs/crates/bee/src/herding.rs`, dispatched
+  from `packages/bee-rs/crates/bee/src/router.rs`, and listed (with `enable`,
+  `disable` and `status` marked `unavailable`) in the command catalog
+  `packages/bee-rs/crates/bee/src/catalog.rs`. `enable`, `disable` and `status` are
+  not among the five live verbs and refuse by name; the manual `touch`/`rm` marker
+  gesture is their only live form (see Data Dictionary). Test coverage is inline:
+  the `#[cfg(test)] mod tests` block in `herding.rs`.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.
