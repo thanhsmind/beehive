@@ -18,11 +18,7 @@
 /// described as data rather than a sequence of calls (D11). A wave is at
 /// most a handful of workers dispatched and waited on together, aggregating
 /// to a single verdict.
-pub mod wave {
-    // Intentionally empty for now — the `Wave` struct and its
-    // `FailurePolicy` enum (wait-all, first-success-cancel-rest,
-    // best-effort) land in a later cell.
-}
+pub mod wave;
 
 /// The worker-backend trait: start a worker, read its status, send it a
 /// task, read its output. The trait's status model is the choreography's
@@ -32,10 +28,7 @@ pub mod wave {
 /// The trait is also the test seam: the whole choreography becomes
 /// testable against a fake backend, with no running herdr server and no
 /// naming of herdr in this crate.
-pub mod backend {
-    // Intentionally empty for now — the backend trait and its status enum
-    // land in a later cell.
-}
+pub mod backend;
 
 /// The choreography: the state machine that drives a wave of workers from
 /// dispatch through waiting to a single aggregated verdict, using
