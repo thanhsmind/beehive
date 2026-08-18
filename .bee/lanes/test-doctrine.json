@@ -14,7 +14,12 @@
   "next_action": "Invoke bee-swarming.",
   "created_at": "2026-08-18T01:31:51.885Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: test-doctrine",
+    "asked_at": "2026-08-18T04:24:22.333Z",
+    "session": "e3772d39-2531-461e-bba8-88f8915ebe32"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",

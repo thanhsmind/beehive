@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "wayfinding-triggers",
   "mode": null,
-  "phase": "exploring",
+  "phase": "swarming",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -17,11 +17,11 @@
   "waiting_on": null,
   "route": {
     "class": "docs",
-    "lane": "docs",
+    "lane": "tiny",
     "flags": [],
     "product_files": 2,
-    "rationale": "Strengthen bee-wayfinding skill description triggers so 'brainstorm' phrasing activates it",
-    "updated_at": "2026-08-18T04:23:21.847Z",
+    "rationale": "Solo tiny skill-description fix in main; no other live session",
+    "updated_at": "2026-08-18T04:24:36.966Z",
     "feature": "wayfinding-triggers"
   }
 }
