@@ -1,0 +1,9 @@
+[package]
+name = "fleet"
+version.workspace = true
+edition.workspace = true
+description = "Generic worker coordination core — waves, tasks, waiting, result collection and failure aggregation. Knows nothing about cells, lanes, worktrees, gates or proof."
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
