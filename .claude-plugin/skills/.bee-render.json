@@ -28,7 +28,7 @@
     },
     {
       "name": "bee-researching",
-      "sha256": "2fe37fc84b219b95138c80e6a25f3fabf7f21e91f137ee3834584f3cdba31c4e"
+      "sha256": "dbac9d05916264784493209cbb71c04eb8ae3f7aad12fac2314c83bd954f8c90"
     },
     {
       "name": "bee-reviewing",
@@ -44,7 +44,7 @@
     },
     {
       "name": "bee-wayfinding",
-      "sha256": "8e504d863e9660b1308a31e5c1334bf37fa5449f3c6c6ec7cbfb233e96fab39b"
+      "sha256": "b743438a713c5a802b2678d21d88f93776afdb568c673130d13ea2fef8772f71"
     },
     {
       "name": "bee-writing-skills",

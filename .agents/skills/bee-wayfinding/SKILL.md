@@ -15,6 +15,10 @@ metadata:
 
 # Wayfinding — chart the fog before shaping
 
+Flow position: the spine of the Discovery flow — entered directly (see
+Entry, below); exits into `bee-shaping`'s Lock, which consumes the
+map's Decisions so far.
+
 ## Entry
 
 Signal: the request has no nameable outcome, or is too big for one
@@ -81,13 +85,21 @@ craft").
 | task | either | manual work that unblocks a decision (provision access, move data) |
 
 A with-user ticket only resolves through live exchange. `blocked-by:`
-and `claimed-by:` are convention-only frontmatter lines in v1 — no CLI
-guard. The frontier is open, unblocked, unclaimed tickets.
+stays a convention-only frontmatter line — no CLI guard. Claiming a
+ticket reserves its file (see "Later sessions", below); the
+`claimed-by:` line is display-only, backed by that reservation. The
+frontier is open, unblocked, **unreserved** tickets.
 
 ## Later sessions — one ticket at a time
 
 1. Load MAP.md only (low-res). Take the user-named ticket, else the
-   first frontier ticket. Claim it (a `claimed-by:` line).
+   first frontier ticket. Claim it: `bee reservations reserve --agent
+   <name> --cell <effort>-wayfinding --path
+   docs/discovery/<effort>/tickets/NNN-<slug>.md`, plus the
+   display-only `claimed-by:` line. A reservation deny means take
+   another ticket and report the conflict — never write through it. A
+   dead session's claim expires with its heartbeat instead of lying
+   forever.
 2. Resolve it. Zoom into related closed tickets on demand, never
    upfront.
 3. Record: the answer goes in the ticket's `## Answer`, the ticket

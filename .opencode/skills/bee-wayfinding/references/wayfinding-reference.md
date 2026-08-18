@@ -70,8 +70,8 @@ moves to Out of scope.
 ---
 type: grilling | research | prototype | task
 status: open | claimed | closed
-claimed-by: <agent-or-user, convention-only>
-blocked-by: <NNN-<slug> | none>
+claimed-by: <agent-or-user, reservation-backed — see below, display-only>
+blocked-by: <NNN-<slug> | none, convention-only>
 ---
 
 ## Question
@@ -85,9 +85,15 @@ answering it>
 under>
 ```
 
-Frontmatter is convention-only in v1 (no CLI guard): agents read and
-write these lines by hand, and the frontier is computed by reading
-them, not by a tool enforcing them.
+Claiming a ticket reserves its file: `bee reservations reserve --agent
+<name> --cell <effort>-wayfinding --path
+docs/discovery/<effort>/tickets/NNN-<slug>.md`, alongside the
+display-only `claimed-by:` line above. A reservation deny means take
+another ticket and report the conflict, never write through it; a dead
+session's claim expires with its heartbeat instead of lying forever.
+`blocked-by:` stays convention-only in v1 (no CLI guard): agents read
+and write it by hand. The frontier is open, unblocked, **unreserved**
+tickets.
 
 ## Interview craft
 
@@ -170,8 +176,15 @@ For prototype tickets — the cheap mock a with-user ticket resolves on.
   point is answering the question fast, not shipping code.
 - The full relevant state is shown after every action, so the user
   sees what changed without asking.
+- A logic or state question reads as one LOGIC page, top to bottom:
+  the title plus the question, a labelled state panel re-rendered
+  after every action (labelled fields, never raw JSON), one free-play
+  button per action, and guided-walkthrough steps that each reset to
+  a known initial state.
 - When the ticket's question is "which shape", build several variants
   side by side — one polished take answers nothing a menu wouldn't.
+  More than five variants stops being different and starts being
+  noise.
 - On close: the verdict and what it settled go into the ticket's
   `## Answer`. The spike itself stays under `.bee/spikes/` as history —
   never deleted, never promoted in place.
@@ -184,7 +197,8 @@ For prototype tickets — the cheap mock a with-user ticket resolves on.
    spike under `.bee/spikes/` the user reacts to; task is the manual
    work itself.
 2. Write the answer into the ticket's `## Answer` section. Set
-   `status: closed`.
+   `status: closed`, and release the claim's reservation (`bee
+   reservations release --agent <name> --cell <effort>-wayfinding`).
 3. Log the settled decision: `bee decisions log --relation
    touches:<id>` (or `supersedes:<id>`, or `none` if it settles
    nothing prior — the relation flag is required, AGENTS.md). This is
