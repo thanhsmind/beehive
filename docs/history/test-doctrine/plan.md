@@ -41,7 +41,7 @@ carries real proof and both doors check proof instead of running tests.
 Phase 2 cannot precede it (text would teach a contract the CLI refuses).
 Rejected: text-first waves (rejected by D9 — text and machine must not
 disagree mid-rollout); keeping one auto-run door (rejected by D7).
-Door proof-check contract (answers CONTEXT's first deferred question the
+Door proof-check contract (answers CONTEXT's first open question the
 lightest way, within CONTEXT's discretion): `--report` becomes REQUIRED
 at `cells finish`, so every new cap carries a proof string. At the
 doors, a cap with a present-but-empty or malformed proof string refuses,

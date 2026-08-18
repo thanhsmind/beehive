@@ -68,15 +68,15 @@ before planning; anchors are file:line.
 
 ## Outstanding Questions
 
-### Deferred To Planning
+### Resolved During Planning And Execution
 
-- [ ] What the door's "proof line exists" check reads exactly (last cap's report? all caps since last close?) — answered by reading close/merge record flow during planning discovery.
-- [ ] Whether `bee test` (standalone runner) and `.bee/logs/test-results.json` stay unchanged — likely yes; confirm no coupling breaks.
-- [ ] How D6's mandatory capture is enforced (chain-nudge text vs a CLI check) — planning picks the lightest honest mechanism.
+- [x] What the door's "proof line exists" check reads: every capped cell of the feature, via the shared helper `verbs/cells/proof.rs` — present-but-empty/malformed refuses naming the cell; a report-less pre-contract cap passes with a named note (plan door contract; td-2/td-3).
+- [x] `bee test` and `.bee/logs/test-results.json` stayed unchanged — `bee test` is now that log's only writer; the D2 red-base claim door reads it unchanged and its remedy names `bee test` (td-2, pinned by test).
+- [x] D6's mandatory capture is enforced as skill text only, no CLI check — the lightest honest mechanism (td-5).
 
 ## Handoff Note
 
 CONTEXT.md is the source of truth. Decision IDs are stable. Planning
-reads locked decisions, code context, canonical references, and
-deferred-to-planning questions. Planning's Gate 2 shape stage and
-reviewing use locked decisions for coverage and UAT.
+read locked decisions, code context, canonical references, and the
+open questions above (all resolved). Planning's Gate 2 shape stage and
+reviewing used locked decisions for coverage and UAT.
