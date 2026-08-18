@@ -1092,15 +1092,72 @@ fn line_trigger_ids(line: &str) -> Vec<String> {
     ids
 }
 
-/// D3: the doc-deferral door itself. A line matching `matches_deferral_
-/// prose` inside a ``` fenced block is exempt (`in_fence` toggles on every
-/// fence-marker line, code included); every other match needs a same-line
-/// trigger citation resolving via `trigger_registered` or it blocks, naming
-/// file:line and the create-the-trigger teach line.
-pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str) -> D<Door> {
-    let files = doc_deferral_scan_files(root, feature)?;
-    let mut blocking_items: Vec<String> = Vec::new();
-    for rel in &files {
+/// One deferral-shaped, unresolved-by-citation line the scan loop found:
+/// `rel`+`norm` are the baseline's identity key (never the line number —
+/// D1), `message` is the unchanged `file:line …` wording the door has
+/// always used.
+struct DeferralCandidate {
+    rel: String,
+    norm: String,
+    message: String,
+}
+
+/// D1's single normalization function — used identically when SEEDING the
+/// baseline and when MATCHING against it later, per the Agent's Discretion
+/// constraint in CONTEXT.md (one function, never two independently-drifting
+/// answers to "same line?"). Trims surrounding whitespace only.
+pub(crate) fn normalize_doc_deferral_line(line: &str) -> String {
+    line.trim().to_string()
+}
+
+/// Per-file sets of already-baselined normalized line content, sorted (a
+/// `BTreeMap`/`BTreeSet` pair, not a hash map) so writing it back out is
+/// deterministic regardless of scan order.
+type DocDeferralBaseline = std::collections::BTreeMap<String, std::collections::BTreeSet<String>>;
+
+/// D3: the tracked, git-visible baseline file (D3) — beside `.bee/backlog.
+/// jsonl`, not in the gitignored `.bee/state.json`/`.bee/runtime/` family.
+pub(crate) fn doc_deferral_baseline_path(root: &Path) -> PathBuf {
+    root.join(".bee").join("doc-deferral-baseline.json")
+}
+
+fn parse_doc_deferral_baseline(value: &Value) -> DocDeferralBaseline {
+    let mut baseline = DocDeferralBaseline::new();
+    if let Some(files) = value.get("files").and_then(Value::as_object) {
+        for (rel, lines) in files {
+            let Some(arr) = lines.as_array() else { continue };
+            let set: std::collections::BTreeSet<String> =
+                arr.iter().filter_map(Value::as_str).map(|s| s.to_string()).collect();
+            baseline.insert(rel.clone(), set);
+        }
+    }
+    baseline
+}
+
+/// Sorted keys, sorted per-file lines (BTree iteration order), inserted into
+/// the JSON `Map` in that already-sorted order — byte-identical across runs
+/// over an unchanged tree even though this crate's `serde_json` carries
+/// `preserve_order` (insertion order, not automatic sorting).
+fn doc_deferral_baseline_to_value(baseline: &DocDeferralBaseline) -> Value {
+    let mut files = Map::new();
+    for (rel, lines) in baseline {
+        files.insert(rel.clone(), Value::Array(lines.iter().map(|l| Value::String(l.clone())).collect()));
+    }
+    let mut root = Map::new();
+    root.insert("files".to_string(), Value::Object(files));
+    Value::Object(root)
+}
+
+/// The scan loop itself, unchanged in spirit from the pre-baseline door:
+/// `doc_deferral_scan_files` for the file set (D1, untouched), `matches_
+/// deferral_prose` for the word list (D1, untouched), the `in_fence` toggle
+/// for the fenced-code exemption (D1, untouched), `line_trigger_ids` +
+/// `trigger_registered` for the citation escape (D4, untouched) — this just
+/// collects what used to go straight into `blocking_items` so the baseline
+/// check can sit beside the loop instead of inside it.
+fn doc_deferral_candidates(root: &Path, files: &[String]) -> Vec<DeferralCandidate> {
+    let mut out = Vec::new();
+    for rel in files {
         let Ok(text) = std::fs::read_to_string(root.join(rel)) else { continue };
         let mut in_fence = false;
         for (idx, line) in text.lines().enumerate() {
@@ -1120,16 +1177,90 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str) -> D<Door> {
             if resolved {
                 continue;
             }
-            blocking_items.push(format!(
-                "{rel}:{} deferral-shaped prose with no registered trigger citation",
-                idx + 1
-            ));
+            out.push(DeferralCandidate {
+                rel: rel.clone(),
+                norm: normalize_doc_deferral_line(line),
+                message: format!(
+                    "{rel}:{} deferral-shaped prose with no registered trigger citation",
+                    idx + 1
+                ),
+            });
         }
     }
+    out
+}
 
-    if blocking_items.is_empty() {
+/// D3: the doc-deferral door itself. A line matching `matches_deferral_
+/// prose` inside a ``` fenced block is exempt; every other match needs a
+/// same-line trigger citation resolving via `trigger_registered`, OR its
+/// normalized content already present in the tracked baseline (D1), or it
+/// blocks, naming file:line and the create-the-trigger teach line.
+///
+/// D2: a repo with no baseline file seeds it — on a REAL run (`dry_run` is
+/// false) it records every line still flagged after the citation escape and
+/// writes the file, then passes; on `--dry-run` (D5) it writes nothing and
+/// reports non-blocking, naming the count a real close would freeze. Every
+/// run after that only reads the baseline — nothing is ever adopted back
+/// into it automatically (D2/D4).
+pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str, dry_run: bool) -> D<Door> {
+    let files = doc_deferral_scan_files(root, feature)?;
+    let candidates = doc_deferral_candidates(root, &files);
+    let baseline_path = doc_deferral_baseline_path(root);
+
+    let new_items: Vec<&DeferralCandidate> = match read_json(&baseline_path) {
+        ReadJson::Missing => {
+            if dry_run {
+                if candidates.is_empty() {
+                    return Ok(Door {
+                        door: "doc-deferral",
+                        blocking: false,
+                        detail: "clear".to_string(),
+                        command: None,
+                    });
+                }
+                let messages: Vec<String> = candidates.iter().map(|c| c.message.clone()).collect();
+                return Ok(Door {
+                    door: "doc-deferral",
+                    blocking: false,
+                    detail: format!(
+                        "SEED (dry-run) — no baseline file yet; a real `bee close` would baseline {} pre-existing deferral line(s) and pass: {}",
+                        candidates.len(),
+                        messages.join("; ")
+                    ),
+                    command: None,
+                });
+            }
+            // Nothing flagged this run: skip the write rather than freezing
+            // an empty file. Behaviorally identical either way for every
+            // future run (an absent baseline and an empty-`files` baseline
+            // both cover nothing), but a real close with nothing to record
+            // must leave `.bee` untouched — `clean_store_green_close_
+            // reports_reason_clean` pins exactly that for the store as a
+            // whole, and a stray tracked file here would break it.
+            if !candidates.is_empty() {
+                let mut baseline: DocDeferralBaseline = DocDeferralBaseline::new();
+                for c in &candidates {
+                    baseline.entry(c.rel.clone()).or_default().insert(c.norm.clone());
+                }
+                write_json_atomic(&baseline_path, &doc_deferral_baseline_to_value(&baseline)).map_err(|_| Delegate)?;
+            }
+            Vec::new()
+        }
+        ReadJson::Corrupt => candidates.iter().collect(),
+        ReadJson::Parsed(v) => {
+            let baseline = parse_doc_deferral_baseline(&v);
+            candidates
+                .iter()
+                .filter(|c| !baseline.get(&c.rel).map(|set| set.contains(&c.norm)).unwrap_or(false))
+                .collect()
+        }
+    };
+
+    if new_items.is_empty() {
         return Ok(Door { door: "doc-deferral", blocking: false, detail: "clear".to_string(), command: None });
     }
+
+    let messages: Vec<String> = new_items.iter().map(|c| c.message.clone()).collect();
 
     if let Some(reason) = has_doc_deferral_decision(root, feature)? {
         return Ok(Door {
@@ -1137,8 +1268,8 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str) -> D<Door> {
             blocking: false,
             detail: format!(
                 "deferred — {} deferral line(s) with no registered trigger ({}); a logged doc-deferral decision names \"{feature}\": {reason}",
-                blocking_items.len(),
-                blocking_items.join("; ")
+                new_items.len(),
+                messages.join("; ")
             ),
             command: None,
         });
@@ -1149,8 +1280,8 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str) -> D<Door> {
         blocking: true,
         detail: format!(
             "{} deferral line(s) with no registered trigger citation: {} — remedy: register the condition first with `bee triggers add --decision <id> --condition \"...\"`, then cite it inline (backtick `<id>` or [[trigger:<id>]])",
-            blocking_items.len(),
-            blocking_items.join("; ")
+            new_items.len(),
+            messages.join("; ")
         ),
         command: None,
     })
@@ -1622,7 +1753,7 @@ pub(crate) fn close_handler(
         doors.push(build_knowledge_freshness_door(root, feature)?);
         doors.push(build_impact_door(root, feature)?);
         doors.push(build_routing_door(root, feature)?);
-        doors.push(build_doc_deferral_door(root, feature)?);
+        doors.push(build_doc_deferral_door(root, feature, true)?);
         let next_line = if proof.blocking {
             format!(
                 "next: re-cap the cell(s) above with a real proof line (\"<command> — <result> — <scope reason>\"), then re-run bee close --feature {feature}"
@@ -1643,7 +1774,7 @@ pub(crate) fn close_handler(
     let knowledge_freshness_door = build_knowledge_freshness_door(root, feature)?;
     let impact_door = build_impact_door(root, feature)?;
     let routing_door = build_routing_door(root, feature)?;
-    let doc_deferral_door = build_doc_deferral_door(root, feature)?;
+    let doc_deferral_door = build_doc_deferral_door(root, feature, false)?;
 
     if proof.blocking {
         let mut doors = vec![Door {

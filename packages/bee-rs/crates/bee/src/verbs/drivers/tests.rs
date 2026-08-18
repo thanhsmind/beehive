@@ -3103,13 +3103,50 @@ use std::time::Instant;
         .unwrap();
     }
 
+    /// A pre-seeded baseline (`.bee/doc-deferral-baseline.json`) whose
+    /// entries cover none of the lines a test cares about — writing this
+    /// first flips `build_doc_deferral_door` from a first-run SEED (which
+    /// always passes, D2) into ENFORCE mode, so a still-fresh test can go on
+    /// proving the block/clear/deferred behavior the door had before the
+    /// baseline existed at all.
+    fn write_empty_doc_deferral_baseline(root: &Path) {
+        w(root, ".bee/doc-deferral-baseline.json", "{\"files\":{}}\n");
+    }
+
+    /// Deterministic baseline JSON text the same shape `build_doc_deferral_
+    /// door` itself writes (sorted files, sorted per-file lines) — used to
+    /// pre-seed ENFORCE-mode fixtures whose baseline DOES cover specific
+    /// content, and to build the byte-identical expectation independently
+    /// of the door's own serialization code.
+    fn doc_deferral_baseline_json(entries: &[(&str, &[&str])]) -> String {
+        let mut files = Map::new();
+        for (rel, lines) in entries {
+            let mut sorted: Vec<&str> = lines.to_vec();
+            sorted.sort_unstable();
+            sorted.dedup();
+            files.insert((*rel).to_string(), Value::Array(sorted.into_iter().map(|l| Value::String(l.to_string())).collect()));
+        }
+        let mut root = Map::new();
+        root.insert("files".to_string(), Value::Object(files));
+        format!("{}\n", serde_json::to_string_pretty(&Value::Object(root)).unwrap())
+    }
+
+    fn write_doc_deferral_baseline(root: &Path, entries: &[(&str, &[&str])]) {
+        w(root, ".bee/doc-deferral-baseline.json", &doc_deferral_baseline_json(entries));
+    }
+
+    fn read_doc_deferral_baseline_bytes(root: &Path) -> Vec<u8> {
+        std::fs::read(doc_deferral_baseline_path(root)).unwrap()
+    }
+
     #[test]
     fn doc_deferral_door_blocks_a_deferral_line_with_no_registered_trigger() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
         w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
         write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
-        let door = build_doc_deferral_door(root, "demo").unwrap();
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
         assert!(door.blocking, "{}", door.detail);
         assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:2"), "{}", door.detail);
         assert!(door.detail.contains("remedy:"), "{}", door.detail);
@@ -3126,7 +3163,7 @@ use std::time::Instant;
             "line one\nThis work is deferred for now, see `demo-trigger`.\n",
         );
         write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
-        let door = build_doc_deferral_door(root, "demo").unwrap();
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
         assert!(!door.blocking, "{}", door.detail);
         assert_eq!(door.detail, "clear");
     }
@@ -3141,7 +3178,7 @@ use std::time::Instant;
             "prose\n```\nThis work is deferred for now.\n```\nmore prose\n",
         );
         write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
-        let door = build_doc_deferral_door(root, "demo").unwrap();
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
         assert!(!door.blocking, "{}", door.detail);
         assert_eq!(door.detail, "clear");
     }
@@ -3154,8 +3191,9 @@ use std::time::Instant;
     fn doc_deferral_door_scan_set_includes_the_on_disk_context_md_with_no_capped_cells() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
         w(root, "docs/history/demo/CONTEXT.md", "# Demo\n\nThis is deferred for now.\n");
-        let door = build_doc_deferral_door(root, "demo").unwrap();
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
         assert!(door.blocking, "{}", door.detail);
         assert!(door.detail.contains("docs/history/demo/CONTEXT.md:3"), "{}", door.detail);
     }
@@ -3164,6 +3202,7 @@ use std::time::Instant;
     fn doc_deferral_door_deferral_decision_demotes_to_non_blocking_with_the_reason() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
         w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
         write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
         w(
@@ -3171,7 +3210,7 @@ use std::time::Instant;
             ".bee/decisions.jsonl",
             "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-16T00:00:00.000Z\",\"decision\":\"defer registering a trigger for demo until the audit lands\",\"rationale\":\"r\",\"tags\":[\"doc-deferral\"],\"scope\":\"repo\"}\n",
         );
-        let door = build_doc_deferral_door(root, "demo").unwrap();
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
         assert!(!door.blocking, "{}", door.detail);
         assert!(door.detail.starts_with("deferred —"), "{}", door.detail);
         assert!(
@@ -3186,6 +3225,7 @@ use std::time::Instant;
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        write_empty_doc_deferral_baseline(&root);
         w(&root, "docs/history/demo/CONTEXT.md", "# Demo\n\nThis is deferred for now.\n");
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
@@ -3202,4 +3242,121 @@ use std::time::Instant;
         let doors = result.get("doors").unwrap().as_array().unwrap();
         let doc_deferral = doors.iter().find(|d| d.get("door") == Some(&json!("doc-deferral"))).unwrap();
         assert_eq!(doc_deferral.get("blocking"), Some(&json!(true)));
+    }
+
+    // ─── doc-deferral-baseline: D1-D5 ────────────────────────────────────────
+
+    /// D2: a repo with no baseline file seeds it on a REAL close run — it
+    /// records what it flagged, passes, and writes the tracked file.
+    #[test]
+    fn doc_deferral_door_seeds_the_baseline_on_a_real_run_and_passes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert!(!doc_deferral_baseline_path(root).exists());
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        let bytes = std::fs::read(doc_deferral_baseline_path(root)).unwrap();
+        let expected = doc_deferral_baseline_json(&[(
+            "docs/knowledge/areas/demo/notes.md",
+            &["This work is deferred for now."],
+        )]);
+        assert_eq!(String::from_utf8(bytes).unwrap(), expected);
+    }
+
+    /// Two consecutive runs over an unchanged tree — the seed run, then a
+    /// second run that only ENFORCES — leave the tracked baseline file
+    /// byte-identical: observed on disk, never inferred from the door's own
+    /// verdict (a write-once law is invisible to an outcome-only assertion).
+    #[test]
+    fn doc_deferral_door_second_run_over_an_unchanged_tree_blocks_nothing_and_stays_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let seeded = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!seeded.blocking, "{}", seeded.detail);
+        let after_seed = read_doc_deferral_baseline_bytes(root);
+        let enforced = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!enforced.blocking, "{}", enforced.detail);
+        assert_eq!(enforced.detail, "clear");
+        let after_enforce = read_doc_deferral_baseline_bytes(root);
+        assert_eq!(after_seed, after_enforce);
+    }
+
+    /// D1: a line added AFTER the seed blocks, while every already-baselined
+    /// line in the same scan set stays silent.
+    #[test]
+    fn doc_deferral_door_blocks_a_line_added_after_the_seed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let seeded = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!seeded.blocking, "{}", seeded.detail);
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "line one\nThis work is deferred for now.\nAnother bit is deferred for now too.\n",
+        );
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:3"), "{}", door.detail);
+        assert!(!door.detail.contains(":2 "), "{}", door.detail);
+    }
+
+    /// D1's whole point: identity is the line's normalized CONTENT, never
+    /// its line number — a baselined line is still recognized after
+    /// unrelated lines are inserted above it in the same file.
+    #[test]
+    fn doc_deferral_door_recognizes_a_baselined_line_after_unrelated_lines_are_inserted_above_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let seeded = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!seeded.blocking, "{}", seeded.detail);
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "an unrelated new line\nanother unrelated line\nline one\nThis work is deferred for now.\n",
+        );
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    /// D5: `--dry-run` with no baseline file writes nothing and reports the
+    /// door non-blocking, naming the count it would baseline on a real run.
+    #[test]
+    fn doc_deferral_door_dry_run_with_no_baseline_writes_nothing_and_reports_the_would_baseline_count() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo", true).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("1 pre-existing deferral line(s)"), "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:2"), "{}", door.detail);
+        assert!(!doc_deferral_baseline_path(root).exists());
+    }
+
+    /// D4: the citation escape still clears a NEW line the baseline does not
+    /// cover — it resolves before the baseline is ever consulted.
+    #[test]
+    fn doc_deferral_door_trigger_citation_clears_a_new_line_the_baseline_does_not_cover() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_doc_deferral_baseline(root, &[("docs/knowledge/areas/demo/notes.md", &["unrelated baselined line"])]);
+        write_trigger(root, "demo-trigger");
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "unrelated baselined line\nThis NEW work is deferred for now, see `demo-trigger`.\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
     }
