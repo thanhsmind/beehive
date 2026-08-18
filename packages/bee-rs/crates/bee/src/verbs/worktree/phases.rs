@@ -582,6 +582,27 @@ pub(crate) fn merge_finish(
             result.insert("bookkeeping_commit".into(), bookkeeping_commit.clone());
         }
 
+        // Post-commit guard (D2-REVISED). Runs BEFORE the lane write below
+        // (mcl-2 R2): the guard measures the whole tree honestly, and the
+        // lane write is itself a tracked-file mutation that lands right
+        // after the merge commit — reading `git status` first keeps this
+        // warning about genuine post-commit drift (a hook, a concurrent
+        // process), not about the lane rewrite this function is about to
+        // make on its own behalf.
+        let post_commit_status = run_git(
+            main_root,
+            &["status", "--porcelain", "--untracked-files=no"],
+        )
+        .stdout
+        .unwrap_or_default();
+        if !js_trim(&post_commit_status).is_empty() {
+            result.insert("warning".into(), json!({
+                "code": "verify_mutated_tracked_files",
+                "message": "tracked files are modified after the merge commit landed (\"git status --porcelain --untracked-files=no\" is non-empty) — the merge commit itself is clean, but something (a git hook, a concurrent process) touched the working tree afterward; inspect and commit/discard those changes separately. D7/D8: this is no longer the post-merge verify command (bee worktree merge does not run one), so this warning is now defensive rather than expected.",
+                "status": post_commit_status,
+            }));
+        }
+
         // mcl-2 (R1): this is a real, green merge (the ALREADY_UP_TO_DATE
         // arm returns long before `Staged` is ever built, so every path
         // that reaches here actually merged something) — the event that
@@ -592,7 +613,11 @@ pub(crate) fn merge_finish(
         // (and `commit_close_bookkeeping` keeps for `bee close`): a failure
         // here warns on its own line and never turns this green merge red.
         // NEVER a phase write — a merge can land one slice of many, so
-        // `phase` stays close's word alone (mcl-3).
+        // `phase` stays close's word alone (mcl-3). Placed AFTER the
+        // post-commit dirty guard above (mcl-2 R2): the guard must take its
+        // reading before this write touches the tracked lane file, or every
+        // green merge would trip `verify_mutated_tracked_files` on its own
+        // work.
         if let Some(feature) = feature.as_deref() {
             match close_the_lane_on_merge(main_root, feature, &merge_commit_sha) {
                 Ok(next_action) if !next_action.is_empty() => {
@@ -606,21 +631,6 @@ pub(crate) fn merge_finish(
                     result.insert("lane_close_warning".into(), json!(reason));
                 }
             }
-        }
-
-        // Post-commit guard (D2-REVISED).
-        let post_commit_status = run_git(
-            main_root,
-            &["status", "--porcelain", "--untracked-files=no"],
-        )
-        .stdout
-        .unwrap_or_default();
-        if !js_trim(&post_commit_status).is_empty() {
-            result.insert("warning".into(), json!({
-                "code": "verify_mutated_tracked_files",
-                "message": "tracked files are modified after the merge commit landed (\"git status --porcelain --untracked-files=no\" is non-empty) — the merge commit itself is clean, but something (a git hook, a concurrent process) touched the working tree afterward; inspect and commit/discard those changes separately. D7/D8: this is no longer the post-merge verify command (bee worktree merge does not run one), so this warning is now defensive rather than expected.",
-                "status": post_commit_status,
-            }));
         }
 
         // D7/D8: "unproven" now means the proof check cleared with nothing
