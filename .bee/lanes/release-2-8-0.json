@@ -14,5 +14,10 @@
   "next_action": "release 2.8.0 shipped (tag v2.8.0, CI green, binaries live); lane idle",
   "created_at": "2026-08-17T11:57:04.924Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null
+  "waiting_on": {
+    "kind": "question",
+    "subject": "porting-protocol Q8: xia as trigger keyword (a) or separate bee-xia skill (b)",
+    "asked_at": "2026-08-18T05:34:26.796Z",
+    "session": "e50823f4-98da-4b09-8882-07d8c0a38242"
+  }
 }
