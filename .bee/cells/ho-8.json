@@ -4,7 +4,7 @@
   "title": "Implement the herdr backend behind the worker-backend trait",
   "lane": "standard",
   "behavior_change": true,
-  "action": "THIRD PASS on ho-8, and a narrow one. The second rework achieved its main goal: an independent judge re-ran all seven mutations against the Windows-compilable set and ALL SEVEN NOW DIE. Do not touch that work. The judge then went looking on its own and found three things the seven did not cover, plus a doc defect. Fix exactly these four. ITEM ONE, the one real behaviour still hidden behind the unix gate: canonical_id — D15's name-to-pane-id resolution — is the only interpretation step left inline in the trait method, with no pure function and no lib test. The judge collapsed it so a friendly name never resolves onto its pane id, which is the exact D15 defect an earlier judge found by execution, and the mutation SURVIVED the Windows set, dying only inside the gated file. Extract its interpretation into a pure function beside the others — given the agent-list bytes and a name, return the canonical id — and test it in the lib so the mutation dies on the Windows set. ITEM TWO: the Refuse arm of the start decision maps to an error at the trait boundary, and mutating that arm to succeed survives the Windows set, so start's refusal is unproven there end to end. Pin it with a pure test. ITEM THREE, the sharpest of the three: replacing the constructed agent_args with an empty slice at the call site SURVIVES ALL 71 FLEET TESTS. Nothing at any tier proves the constructed agent arguments actually reach the argv — the pure function is tested and the field is set, but the leg joining them is proven only by reading. Add the test that kills that mutation, and prefer a pure one so it runs on Windows. ITEM FOUR: the constructor's own doc never names herding.agent_command, never says token 0 becomes the kind, and never mentions D14's typed error. It defers to the agent_kind field's doc, but that field is PRIVATE, so rustdoc does not render it on the struct page — the judge built the docs and grepped the rendered HTML to confirm the pointer is silently dead. cargo doc emitted no warning because the reference is backticked prose rather than an intra-doc link. Put the obligation on the constructor doc itself, in words, where a caller meets it. VERIFY THE WAY THE JUDGE DID: re-run all three mutations from items one to three against cargo test -p fleet --lib --test choreography --test manifest_boundary and report each as dying. A mutation that still survives is the cell unfinished.",
+  "action": "FOURTH AND FINAL PASS on ho-8. The behaviour is right: an independent judge re-ran all ten mutations from the previous two passes and every one dies on the Windows-compilable set, with no regression. Do not touch any of that. This pass closes three production values that no test pins on any platform, plus one false sentence, and then the cell caps. ITEM ONE, the worst of them: HerdrBackend::new has ZERO callers anywhere in the workspace — only the test-seam constructor is ever used. So the production constructor, the one whose documentation was just verified as correctly rendering the D14 obligation, is exercised by nothing: rewrite it to discard both parameters and substitute a hardcoded kind, and both the Windows set and the full suite stay green. That is the first pass's defect still reachable one function over. Add a test that constructs through the PRODUCTION constructor and asserts the kind and arguments it was given reach the spawn argv. Keep it pure so it runs on Windows. ITEM TWO: the start timeout constant can be changed to zero and survives both sets, because the decide_start tests pass their own literal and the call-site tests assert only the kind and the trailing arguments. Pin the constant that is actually injected. ITEM THREE, the one that matters beyond tidiness: read_output's transcript argv — the source and line-count flags — can be changed to a different source and a single line and survives both sets. That argv IS this module's own documented mitigation for the alternate-screen read failure, one of the three hazards this cell exists to handle, so right now that mitigation can vanish silently. Pin it. ITEM FOUR: the module header claims the cfg(unix) tests assert no behaviour the pure tests do not already cover. That is false — the judge disabled the pane-id early return in canonical identity and it died ONLY in the gated file. Either pin that behaviour purely as well, which is the better fix and cheap given resolve_canonical_id already exists, or correct the sentence. Do not leave it claiming something untrue. VERIFY AS BEFORE: re-run the three mutations from items one to three against cargo test -p fleet --lib --test choreography --test manifest_boundary and report each as dying, and confirm the ten earlier mutations still die.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "read_first": [
     "docs/history/herding-orchestration/CONTEXT.md",
@@ -18,27 +18,27 @@
   ],
   "must_haves": {
     "truths": [
-      "canonical_id's interpretation is a pure function tested in the lib, and collapsing it so a name never resolves to its pane id dies on the Windows-compilable set.",
-      "The start refusal arm is pinned by a pure test, and mutating it to succeed dies on the Windows-compilable set.",
-      "Replacing the constructed agent_args with an empty slice at the call site now fails a test, and that test runs on the Windows-compilable set.",
-      "All three mutations were re-run and reported as dying — observed, not assumed.",
-      "The constructor's own documentation names herding.agent_command, says token 0 becomes the kind, and states that raising D14's typed error for an unrecognised value is the caller's obligation.",
-      "The seven mutations from the previous pass still die.",
+      "A test constructs through the production constructor and asserts its kind and arguments reach the spawn argv; discarding those parameters now fails on the Windows-compilable set.",
+      "The start timeout that is actually injected is pinned by a test that runs on the Windows-compilable set.",
+      "read_output's transcript source and line-count argv is pinned by a test that runs on the Windows-compilable set.",
+      "The module header no longer claims the gated tests cover nothing the pure tests do not, or that claim has been made true.",
+      "All three new mutations were re-run and reported as dying — observed, not assumed.",
+      "The ten mutations from the previous passes still die.",
       "No assertion anywhere was deleted or loosened."
     ],
     "prohibitions": [
-      "Do not undo the pure-versus-process split — it is what made the seven mutations die.",
+      "Do not undo the pure-versus-process split or any existing pure test.",
       "Do not read bee configuration from the fleet crate.",
-      "Do not delete or weaken any existing test; the gated duplicates may stay.",
       "Do not add a dependency or an async runtime.",
-      "Do not implement the bee-side wave verb — that is D17's own cell."
+      "Do not implement the bee-side wave verb — that is D17's own cell.",
+      "Do not use bee cells cap --override-judge; if finish refuses on the judge verdict, return BLOCKED with your commit hash."
     ]
   },
   "status": "claimed",
   "deps": [],
   "decisions": [],
   "trace": {
-    "worker": "w-ho-8t",
+    "worker": "w-ho-8f",
     "outcome": "Implemented HerdrBackend (WorkerBackend over the real herdr CLI) beside the fake, closed D15's canonical-identity gap with a new canonical_id trait method the choreography dedupes on, and added the three hazard tests plus fail-closed status coverage via a PATH-prepended stub herdr",
     "files_changed": [
       "packages/bee-rs/crates/fleet/Cargo.toml",
@@ -59,7 +59,7 @@
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
-    "claimed_at": "2026-08-18T11:44:43.374Z",
+    "claimed_at": "2026-08-18T11:59:46.904Z",
     "report": {
       "outcome": "Implemented HerdrBackend beside the fake, closed D15's canonical-identity gap, added the three hazard tests plus fail-closed status coverage",
       "commit": "76656a111dffd837365a5114a6450edb9ddbb36f",
@@ -169,6 +169,44 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-08-18T11:44:15.387Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "All three new mutations applied to a scratchpad copy, reverted between each, measured with the Windows-compilable command. Baseline green at 44 lib, 11 choreography, 6 manifest_boundary. Collapsing resolve_canonical_id so a friendly name is returned unchanged dies on resolve_canonical_id_resolves_a_friendly_name_to_its_pane_id. Changing the start decision's Refuse arm to succeed dies on apply_start_decision_maps_refuse_to_an_error. Replacing the constructed agent_args with an empty slice at the decide_start call site dies on decide_start_for_passes_the_backend_s_own_agent_args_through_to_the_spawn_argv. Each reported 43 passed, 1 failed."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "All seven earlier mutations re-applied independently on the copy with the same command, reverted between each, and all seven still die on their named tests: the lookup-error arm, the target-absent arm, the missing-or-null agent_status arm, the injected --wait, the disabled spill recovery, the focused gate, and the silently-succeeding start. Each reported 43 passed, 1 failed. A bonus re-check of the first pass's defect, hardcoding the kind inside decide_start, dies with two failures. No regression."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "The constructor doc was checked in rendered form rather than in source. cargo doc generated the struct page, and probing the stripped text yields every required token: the config key is named, token 0 becoming the kind is stated, and raising the typed error for an unrecognised value is called the caller's obligation, with the constructor saying plainly that it takes both on faith and validates neither. All three obligations render on the struct page, which is what the previous pass failed. Minor non-blocking nit: one detail is still deferred to a private field doc rustdoc does not render, but the paragraph says so and no required obligation depends on it."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "The diff against the previous rework touches one file, 172 insertions and 17 deletions. The test module region has zero removed lines. The test function set drops none and adds seven. Assertion count rises from 34 to 42. The seventeen deleted lines are all source doc and glue prose, not assertions. Nothing was weakened."
+          },
+          {
+            "id": "T5",
+            "status": "FAIL",
+            "evidence": "Five self-chosen mutations, all reverted after; all five survive the Windows-compilable set and three survive the FULL suite. Worst: the production constructor can be rewritten to discard both of its parameters and substitute the old hardcoded kind, and both the Windows set and the full suite stay green — because a search across the workspace returns ZERO callers of it; only the test-seam constructor is ever used. The constructor carrying the entire D14 obligation just verified as rendered is exercised by nothing, so the first pass's defect is still reachable one function over with a fully green suite. This is exactly the constructed-stored-used shape where each part has a test and the join does not. Second: the start timeout constant can be changed to zero and survives both the Windows set and the full suite, because the decide_start tests pass their own literal and the call-site tests assert only the kind and the trailing arguments. Third: read_output's transcript argv, which is the module's own documented mitigation for the alternate-screen read failure, can be changed to a different source and a single line and survives both sets — that hazard mitigation is pinned by no test on any platform. Fourth and fifth: breaking the send-to-read spill-path join, and disabling the pane-id early return in canonical identity, both survive the Windows set and die only in the cfg(unix) file. The fifth also falsifies a claim the module header makes, that the unix tests assert no behaviour the pure tests do not already cover — that test asserts behaviour no pure test covers, so the sentence is a doc defect."
+          }
+        ],
+        "failure_signature": "Windows-set survivors on the production path: the production constructor can discard its caller-resolved kind and arguments with both the lib set and the full suite staying green, because nothing calls it anywhere; the start timeout constant and read_output's transcript argv are pinned by no test on any platform, and the latter is the documented mitigation for the alternate-screen hazard; and the pane-id early return plus the spill-path join are proven only by the cfg(unix) file, which also falsifies the module header's claim that those tests cover nothing the pure tests do not.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T11:59:27.568Z"
       }
     ],
     "reopened_for_rework": {

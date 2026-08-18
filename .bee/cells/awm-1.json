@@ -1,0 +1,85 @@
+{
+  "id": "awm-1",
+  "feature": "auto-wait-mark",
+  "title": "Make turn-end a legal waiting_on kind and stop orient calling it a blocker",
+  "lane": "standard",
+  "status": "open",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "packages/bee/AGENTS.block.md",
+    "AGENTS.md",
+    ".claude/skills/bee-hive/references/*",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/auto-wait-mark/CONTEXT.md",
+    "docs/history/auto-wait-mark/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+  ],
+  "action": "Widen the waiting_on kind vocabulary to three values and teach bee orient the difference (per D3, D4). CONTEXT.md is the authority; cite decisions, never reinterpret them.\n\nPART A — the vocabulary. The one enforced encoding is `pub(crate) const WAITING_ON_KIND_VALUES: [&str; 2] = [\"gate\", \"question\"];` at record.rs:356. Add the third value, spelled `turn-end` (lowercase, hyphenated, per CONTEXT.md's Agent's Discretion), APPENDED LAST so the joined rendering reads `gate/question/turn-end`. Appending last is load-bearing — see PART B. The refusal message is built from the constant (record.rs:368-369 does `\"waiting_on: kind must be one of {} (got {}).\", WAITING_ON_KIND_VALUES.join(\"/\")`), so it re-renders itself; do NOT hand-write a second message. Two other sites read the same constant and need no change but must be re-read to confirm that: record.rs:402 `matches!(m.get(\"kind\"), Some(Value::String(s)) if WAITING_ON_KIND_VALUES.contains(&s.as_str()))` and record.rs:419 another `.join(\"/\")`. Search for the constant by name rather than by line number; the numbers here are anchors that will drift.\n\nPART B — the existing assertions, and a file you must NOT touch. Three tests assert the refusal message with `m.contains(\"kind must be one of gate/question\")`:\n  packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs:371\n  packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs:456\n  packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs:586\nBecause PART A appends the new value LAST, `\"gate/question/turn-end\"` still contains the substring `\"gate/question\"`, so all three keep passing unchanged. Confirm that by running them; do not weaken or delete them. state_group/tests.rs is RESERVED BY ANOTHER WORKTREE (feature start-feature-reservation-scope, cell sfrs-1) and is deliberately absent from this cell's files — do not edit it, and if your change somehow turns it red, stop and return [BLOCKED] rather than writing through the hold.\n\nAdd a positive case in workflow_store/tests.rs proving build_waiting_on ACCEPTS turn-end and round-trips it through the record.\n\nPART C — the orient narrowing (per D4). In packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs, find the block whose comment begins `// D1 (awaiting-human): a live wait is a BLOCKER here` (near line 395) and whose body is `if opt_truthy(status.get(\"waiting_on\")) { ... blockers.push(json!(format!(\"awaiting human — {}: {}\", ...))) }`. Narrow it so a mark whose kind is turn-end is NOT pushed into blockers. A turn-end is by definition not a blocker (D4). Do NOT touch the display path that echoes waiting_on into the orient packet's `where.waiting_on` field (near line 495) — display surfaces keep showing all three kinds (D4). Update the block's comment so the next reader sees why the exception exists, citing auto-wait-mark D4. Add a test in status_full/tests.rs proving a turn-end mark is absent from blockers, beside the existing `orient_reports_a_live_wait_as_a_blocker_naming_the_subject` (near line 3763) which must keep passing for a question mark.\n\nPART D — the prose. Source docs spell the vocabulary as two values; update each to three, and say in one line what turn-end means (control is back with the human, nothing is owed):\n  docs/knowledge/areas/workflow-state/workflow-records-and-projections.md:432-433  `build_waiting_on(kind, subject, session)` validates a closed two-value / `kind` (`gate`/`question`) ...\n  docs/knowledge/areas/workflow-state/workflow-records-and-projections.md:603      R125 — `waiting_on` is `null` (no live wait) or an object with `kind` in ...\n  skills/bee-hive/references/routing-and-contracts.md:318-319                       `bee state waiting-on set --kind <gate|question> --subject \"<the question>\"`\n  packages/bee/AGENTS.block.md:166-167                                             `bee state waiting-on set --kind <gate|question> --subject \"<what>\"`\nAGENTS.md carries the same two lines but is GENERATED from packages/bee/AGENTS.block.md — edit the block, never AGENTS.md by hand. Likewise every file under .claude/skills/ is a generated mirror of skills/. Search for any further `<gate|question>` spelling you find rather than trusting this list to be complete; report any extra hit in the trace.\n\nPART E — regen and manifest. After the edits run `.bee/bin/bee dev regen` so AGENTS.md, the .claude/skills mirrors, and generated/registry_payload.json (which carries the --kind CLI help text) all re-render, then `.bee/bin/bee dev release-manifest --check`.",
+  "must_haves": {
+    "truths": [
+      "build_waiting_on accepts kind \"turn-end\" and refuses an unknown kind with a message naming all three legal values",
+      "bee orient omits a turn-end mark from its blockers array while still reporting gate and question marks there",
+      "bee orient still echoes a turn-end mark under where.waiting_on — the display path is untouched",
+      "No file in .claude/skills/ or AGENTS.md is hand-edited; both re-render from their sources via bee dev regen"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+        "substantive": "WAITING_ON_KIND_VALUES carries three values; the refusal message still derives from the constant rather than a hand-written string"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "substantive": "the blockers push is guarded on kind, with a comment citing auto-wait-mark D4"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "substantive": "a case proving a turn-end mark is absent from blockers, beside the existing case proving a question mark is present"
+      },
+      {
+        "path": "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md",
+        "substantive": "R125 and the build_waiting_on paragraph both name three kinds and define turn-end"
+      }
+    ],
+    "key_links": [
+      "orient.rs's blocker guard reads the same kind spelling that record.rs's constant defines — one spelling, not two literals that can drift apart"
+    ],
+    "prohibitions": [
+      "No provenance or source field is added to the waiting_on record (per D2)",
+      "No change to how a gate or question mark behaves on any surface",
+      "No hand-edit of AGENTS.md or anything under .claude/skills/ — those regenerate",
+      "No second closed-list check added anywhere; build_waiting_on stays the only validator"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "verify_command": null,
+    "verified_at": null
+  },
+  "tier": "generation"
+}

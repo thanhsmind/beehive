@@ -1,0 +1,49 @@
+{
+  "id": "usp-3",
+  "feature": "uat-stop-placement",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "bee close: a blocking uat door under uat_stop close",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "docs/history/uat-stop-placement/CONTEXT.md",
+    "docs/history/uat-stop-placement/plan.md",
+    "packages/bee-rs/crates/bee/src/uat.rs"
+  ],
+  "action": "The close side of CONTEXT.md D4.4 and D2. Add a new blocking uat door to the bee close driver, built and ordered beside the existing judge-debt door — that door is the precedent to copy in every structural respect: lane-scoped, blocking, escapable by a deferral decision. The door is PRESENT ONLY under crate::uat::UatStop::Close; under Merge and Off it does not appear in the door list at all (under Merge the stop already happened at merge time; under Off there is no stop). A None from uat_stop_config makes the door block with an invalid-config detail naming both keys and their legal values, rather than guessing. It BLOCKS when crate::uat::uat_gate_applies_to_lane says this feature's lane cares (standard and high-risk; tiny, small, docs, spike exempt; missing or unknown fails closed as standard) AND the uat gate is not approved. Read the gate exactly the way the merge-side precheck does — the live workflow record's own gates.uat.approved first, falling back to the default state record's approved_gates.uat ONLY when that record is still tracking this same feature. It is escapable by a uat-deferral decision naming the feature, mirroring how judge-debt accepts its judge-deferral decision. The blocking detail line names the remedy in the user's own terms: the product is on main, reload and test it, then bee gate --name uat --approved true — or fix in the worktree and merge again. Do not mention bee internals the user does not need. Add tests beside the existing close-door tests covering: door absent under merge and under off; door present and blocking under close for a standard lane with uat unapproved; not blocking under close once uat is approved; not blocking under close for a tiny, small, docs, or spike lane; blocking with the invalid-config detail when uat_stop holds a bogus value; and cleared by a uat-deferral decision naming the feature. Do NOT touch any other door, and do NOT touch the doc-deferral door — it has a known unrelated defect already filed in the backlog.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml close",
+  "verify_owner": "worker",
+  "done_when": "bee close carries a uat door that exists only under uat_stop close; it blocks a standard or high-risk feature whose uat gate is unapproved, passes once approved, is exempt for tiny, small, docs, and spike, is cleared by a uat-deferral decision, and reports an invalid-config detail rather than guessing on a bogus value. Every other door is untouched and the close suite is green.",
+  "notes": "Phase 2. Depends on usp-1's crate::uat. Files are disjoint from usp-2 — the two run concurrently.",
+  "must_haves": {
+    "truths": [
+      "The uat door does not appear at all under uat_stop merge or off.",
+      "Under close it blocks a standard or high-risk feature whose uat gate is unapproved.",
+      "Under close it passes once the uat gate is approved.",
+      "Under close it is exempt for tiny, small, docs, and spike, the same lane rule the merge side uses.",
+      "A uat-deferral decision naming the feature clears it, mirroring judge-debt.",
+      "A bogus uat_stop value blocks with an invalid-config detail rather than resolving either way.",
+      "No other close door changes behavior."
+    ]
+  },
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "usp-3-worker",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T12:00:58.089Z"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "id": "tdt-2",
+  "feature": "test-doctrine-text-sweep",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Registry payload: three command descriptions still promise a boundary test run",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+  ],
+  "action": "Found by the tdt-1 judge as the same defect in a different file. Three command descriptions in the registry payload still state the retired boundary auto-run, and they are USER-VISIBLE twice over: they are the MCP tool descriptions clients read, and the text `bee <command> --help` prints. (1) `cells.cap` and (2) `cells.finish` both carry 'Tests prove at the boundary — `bee close` runs commands.test when the feature has no worktree, `bee worktree merge` runs it when it does; CI runs the same command on every push', plus a sentence saying a repo with commands.test declared records {tests: 'boundary'} on the trace. The first half is false: decisions 58ec9664/1f534837 retired the boundary run — each cap records its own proof line, both doors call feature_proof_check and run nothing, and CI is the only thing that runs the command. The trace sentence needs care rather than deletion: handlers_close.rs still WRITES the literal \"boundary\" as a legacy sentinel that no door reads, so describe it as the legacy value it is, do not claim it was removed. (3) `cells.reopen` says the reopened cell goes 'back through the full finish door — including the declared commands.test run'; there is no such run. Rewrite all three to state the live rule. Keep each description's surrounding sentences, its shape, and its length discipline — these are reference text, not prose. NOTE ON SCOPE: this file is a generated artifact and is hook-guarded; catalog.rs reads its rows (that is the pinned-count pair the active pattern docs/knowledge/patterns/20260818-a-generated-view-in-scope-puts-its-source-record-in-scope.md describes). No .rs file carries these strings, so the payload IS the record here. If the write guard denies the edit, follow the remedy it names and report which path it required. Run `bee dev regen` after the edit and include anything it rewrites.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "`bee cells cap --help`, `bee cells finish --help` and `bee cells reopen --help` no longer say any local door runs commands.test.",
+      "The same three descriptions in the registry payload state the live rule: each cap records its own proof line, the doors check that record, CI runs the command on every push.",
+      "The trace sentence describes `boundary` as the legacy value the cap still writes and no door reads — it does not claim the value was removed, because handlers_close.rs still writes it.",
+      "`bee dev regen` runs green afterwards and anything it rewrites is included in the same commit.",
+      "The full suite is green, including whatever pinned-count test guards this payload."
+    ]
+  },
+  "done_when": "The three descriptions state the live proof-line rule, regen is green, and the full suite passes.",
+  "notes": "Disjoint from tdt-3, which sweeps the docs. Do not touch docs/ in this cell.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "tdt-2-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T12:07:38.686Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
+    "claimed_at": "2026-08-18T12:02:55.880Z",
+    "report": {
+      "outcome": "Rewrote the three cells.cap/cells.finish/cells.reopen registry descriptions to state the live proof-line rule instead of the retired boundary auto-run, described the boundary trace sentinel as legacy/unread, and regenerated derived artifacts.",
+      "commit": "d77e5c67e5203ac72c60ace0cd79c6e226f4dbf0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "PATH=$HOME/.cargo/bin:$PATH cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green (2041 passed, 11 ignored) — full workspace suite covers catalog.rs pinned-count tests that read this generated payload",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

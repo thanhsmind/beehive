@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "test-doctrine-text-sweep",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"test-doctrine-text-sweep\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-18T11:53:37.785Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-08-18T11:53:37.805Z",
+    "feature": "test-doctrine-text-sweep"
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "id": "awm-2",
+  "feature": "auto-wait-mark",
+  "title": "Set a turn-end waiting mark from the Stop hook on every turn end",
+  "lane": "standard",
+  "status": "open",
+  "deps": [
+    "awm-1"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/reads.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/auto-wait-mark/CONTEXT.md",
+    "docs/history/auto-wait-mark/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs",
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+  ],
+  "action": "Make the Stop hook record that control has returned to the human, on EVERY turn end (per D1). No text heuristic, no phrase table, no language detection — Stop itself is the signal.\n\nWHERE IT HANGS. session_close/mod.rs's run_inner already discriminates the event: `event == \"SessionEnd\"` returns the native-only close path (near line 113) and `event == \"PreCompact\"` delegates (near line 119); everything else, Stop included, falls through to advisory() (near line 228). The existing Stop-only branch to copy the shape from is in nudges.rs, `maybe_bypass_block`, which opens `if ctx.event != \"Stop\" { return Ok(None); }` (near line 356). Search for these by their surrounding text; the line numbers are anchors and will drift.\n\nWHAT TO WRITE (per D1, D3). When the event is Stop, set a waiting_on mark with kind `turn-end`. Reuse the existing store setters and the existing D3 target resolution in verbs/state_group/waiting_on.rs — session-scoped first, feature-scoped only when a feature is live. Do NOT add a second resolution path, and do NOT write the record directly: R128 keeps one seam onto the mark. The session id comes from reads.rs's get_session_id (near line 107); build_waiting_on requires a non-empty session, so a stop with no resolvable session id writes nothing rather than failing.\n\nD5 — NEVER OVERWRITE. If a live mark already exists, leave it alone and write nothing. An agent that declared a gate or question wait this turn owns that mark; downgrading it to turn-end would erase exactly the distinction D3 exists to create. Check liveness with the existing waiting_on_is_live helper, not a fresh predicate.\n\nD6 — THE SUBJECT. Use the last non-empty line of the turn's final assistant text block from the session transcript, trimmed and truncated. The transcript is already resolved and read on every Stop for the perf rollup — see resolve_transcript_for in session_close/perf.rs (near line 71) and rollup_transcript (near line 377). Reuse that resolution; do not add a second transcript read per turn. Transcript entries are JSONL; an assistant entry's message.content is an array whose blocks carry a `type`, and the text lives in the blocks with type `text` — the final assistant entry of a turn is often a tool_use with no text, so scan backwards for the last entry that actually has a text block. Pick the truncation length yourself (CONTEXT.md leaves it to your discretion); the constraint is that the result renders on ONE line in the session preamble and the compact capsule. build_waiting_on refuses an empty subject, so a turn whose final text is empty or whitespace-only still needs a non-empty fallback — choose one and say what it is in the trace.\n\nBEST EFFORT, ALWAYS. A failed write is logged and the hook still emits its normal output; the Stop hook is never taken down by this. The shape to follow is already proven for the clearing path in hooks/prompt_context.rs — see clear_and_reap_waiting_on_best_effort (near line 338) and its failure-injection test.\n\nProbe before guarding: check whether a re-entrant Stop (the payload's stop_hook_active flag, set when the turn is itself the continuation of a Stop hook that blocked) can double the mark. If it reproduces, guard it; if it cannot, say so in the trace and add no guard.",
+  "must_haves": {
+    "truths": [
+      "A Stop event with no live mark writes a waiting_on mark whose kind is turn-end and whose subject is the transcript's last non-empty assistant text line",
+      "A live gate or question mark survives a Stop untouched (per D5)",
+      "SessionEnd, PreCompact, and any non-Stop event write no mark",
+      "A missing, unreadable, or malformed transcript leaves the Stop hook's normal output intact and writes no mark",
+      "A failing store write is logged and does not fail the Stop hook",
+      "A turn whose final text block is empty or whitespace-only still produces a non-empty subject"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+        "substantive": "a Stop-only branch that resolves the session, reads the transcript's last text line, and calls the existing waiting-on setter behind a live-mark check"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "substantive": "cases for the happy path, the D5 no-overwrite rule, the non-Stop events, the empty-final-text fallback, and a failure injection proving the hook survives a failing write"
+      }
+    ],
+    "key_links": [
+      "the setter calls the store functions in verbs/state_group/waiting_on.rs, reusing their D3 target resolution rather than resolving the target again",
+      "the transcript path comes from session_close/perf.rs's existing resolver, so the hook still reads the transcript exactly once per turn"
+    ],
+    "prohibitions": [
+      "No second waiting_on writer and no second target resolver (per R128)",
+      "No provenance or source field on the mark (per D2)",
+      "No second transcript read per Stop",
+      "No text heuristic deciding whether the turn was a question (per D1)",
+      "The hook never overwrites a live mark (per D5)"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

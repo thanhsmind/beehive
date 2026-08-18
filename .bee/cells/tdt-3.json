@@ -1,0 +1,75 @@
+{
+  "id": "tdt-3",
+  "feature": "test-doctrine-text-sweep",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Handbook and config sample still teach the retired boundary test run",
+  "behavior_change": false,
+  "files": [
+    "docs/handbook/register.md",
+    "docs/handbook/architecture-map.md",
+    "docs/handbook/stages/planning.md",
+    "docs/handbook/stages/executing.md",
+    "docs/codebase-overview.md",
+    ".bee/config-sample.json"
+  ],
+  "read_first": [
+    "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
+    "docs/handbook/register.md"
+  ],
+  "action": "The tdt-1 judge found the retired doctrine surviving across the handbook after the source was fixed. Every hit asserts, in bare present tense, that tests prove at the boundary and that `bee close` / `bee worktree merge` run the declared command. Decisions 58ec9664 and 1f534837 retired that: each cap records its own proof line `<command> — <result> — <scope reason>`, both doors check that recorded proof and run nothing themselves, and CI runs the declared command on every push — the one deterministic net. Known hits to start from, but re-grep rather than trusting this list: docs/handbook/register.md:131, docs/handbook/architecture-map.md:96 and :150, docs/handbook/stages/planning.md:73, docs/handbook/stages/executing.md:37 and :47, docs/codebase-overview.md:90, and .bee/config-sample.json:6 (its commands.test help text). Rewrite each to the live rule, matching the surrounding voice and length — these are teaching surfaces, so state the rule, do not append a changelog note. JUDGMENT, and this is the whole craft of the cell: a line that frames itself as a dated snapshot, a locked historical record, or an X-refines-Y banner is CORRECT as written and must be left alone; only bare present-tense assertions of the retired behavior get rewritten. That distinction already decided two separate citation audits this session. Do NOT touch docs/specs/test-simple.md (it carries a deliberate dated annotation and is a read-only compatibility surface per decision 40272d61), docs/history/**, or .bee/cells/archive/** — those are records of what was believed at the time.",
+  "verify": "rg -n 'tests prove at the boundary|runs commands.test|records \\{tests' docs/handbook docs/codebase-overview.md .bee/config-sample.json",
+  "must_haves": {
+    "truths": [
+      "No file under docs/handbook/, nor docs/codebase-overview.md, nor .bee/config-sample.json, asserts in present tense that any local door runs commands.test.",
+      "Each rewritten passage states the live rule: proof line per cap, doors check the record, CI runs the command on every push.",
+      "Dated snapshots, locked records, and X-refines-Y banners are left untouched — the cap names any line judged to be one of those and why.",
+      "docs/specs/test-simple.md, docs/history/** and .bee/cells/archive/** are unchanged.",
+      "The verify grep returns no present-tense boundary-run assertion in the swept set."
+    ]
+  },
+  "done_when": "Every teaching surface in the swept set states the live proof-line rule; records and dated snapshots are untouched; the verify grep is clean.",
+  "notes": "Docs only, no Rust. Disjoint from tdt-2, which fixes the generated registry payload. Runs in parallel with it.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "tdt-3-worker",
+    "outcome": "Rewrote retired boundary-test-run doctrine to the live proof-line rule across the handbook and config sample",
+    "files_changed": [
+      "docs/handbook/register.md",
+      "docs/handbook/architecture-map.md",
+      "docs/handbook/stages/planning.md",
+      "docs/handbook/stages/executing.md",
+      "docs/codebase-overview.md",
+      ".bee/config-sample.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T12:08:29.424Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
+    "claimed_at": "2026-08-18T12:02:55.890Z",
+    "report": {
+      "outcome": "Rewrote every bare present-tense boundary-run assertion in the swept files to the live proof-line rule; left the one line already framed as historical (register.md:206-208) untouched.",
+      "commit": "19d68a52949bc39ac79480d81c6645564dee0ce3",
+      "files": [
+        "docs/handbook/register.md",
+        "docs/handbook/architecture-map.md",
+        "docs/handbook/stages/planning.md",
+        "docs/handbook/stages/executing.md",
+        "docs/codebase-overview.md",
+        ".bee/config-sample.json"
+      ],
+      "tests": "rg -n 'tests prove at the boundary|runs commands.test|records .tests' docs/handbook docs/codebase-overview.md .bee/config-sample.json — green (no matches) — docs-only teaching-surface sweep, the grep is the proof this cell's scope needs",
+      "deviations": [
+        "Extended the sweep beyond the seven known-hit lines to additional bare present-tense assertions found by broader re-grep in the same in-scope files: register.md:368 and architecture-map.md:94/148 recorded the retired tests: boundary enum value, and register.md:372/482 and executing.md:22-24 asserted bee close performs a declared test run or that tests prove later at the boundary. Same doctrine violation the cell targets, in scope, so rewritten under truths criterion 1."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
