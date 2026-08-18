@@ -16,7 +16,14 @@ as "the close/merge-time chain" sitting above `commands.test`. That second
 repo-wide command is RETIRED. `commands.test` is now the one declared test
 command. Tests prove at the boundary: the green base check, `bee close`, `bee
 worktree merge`, and CI all run it; a cap is commit-only proof and records
-`tests: boundary` (test-cadence-boundary D1, decision `13ce1858`). Two commands
+`tests: boundary` (test-cadence-boundary D1, decision `13ce1858`).
+[HISTORICAL, 2026-08-18: the boundary auto-run described in the two sentences
+above is retired. Decisions `58ec9664`/`1f534837` refined `13ce1858` — each cap
+now records its own proof line, `bee close` and `bee worktree merge` check that
+record and run nothing themselves, and CI runs the declared command on every
+push. This file stays a read-only compatibility surface per decision
+`40272d61`, so the prose above is left as written rather than rewritten.]
+Two commands
 meant every surface had to say which door ran which, and they disagreed — the
 config reference called `verify` "never a local obligation" while the green
 base check told agents to run it locally before their first claim.

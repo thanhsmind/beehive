@@ -11,14 +11,18 @@ Spawned: test-doctrine — docs/history/test-doctrine/CONTEXT.md
 
 ## Notes
 
-- Current reality (verified in code): per-cell full-suite is already
-  gone (decision 13ce1858, test-cadence-boundary) — caps are
+- Reality at map time (2026-08-18, verified in code): per-cell full-suite
+  is already gone (decision 13ce1858, test-cadence-boundary) — caps are
   commit-only; `commands.test` auto-runs at `bee close` /
-  `bee worktree merge`, always full, blind to diff type.
+  `bee worktree merge`, always full, blind to diff type. SHIPPED SINCE:
+  the boundary auto-run is gone too — decisions 58ec9664/1f534837 made
+  each cap record its own proof line, and the doors check that record
+  and run nothing themselves.
 - The session preamble still orders a full-suite run before the first
   claim ("never build on red"), even for docs work.
-- AGENTS.md still carries the stale line "bee cells finish runs them" —
-  contradicts 13ce1858; the feature must sweep this drift.
+- AGENTS.md carried the stale line "bee cells finish runs them" at map
+  time — contradicted 13ce1858. SWEPT: the test-doctrine feature fixed it;
+  AGENTS.md now states the proof-line doctrine.
 - Seed for scoped proof exists: the per-cell `verify` field.
 - Standing pattern (docs/knowledge/patterns/20260721): local green is
   worthless without hermeticity — CI is the real gate. This is what
