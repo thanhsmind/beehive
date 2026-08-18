@@ -1,9 +1,9 @@
 ---
 name: bee-researching
 description: >-
-  Evidence-labeled research into unfamiliar, ambiguous, or version-sensitive territory. Use when the user asks to research a topic, library, or approach; when planning discovery lands on L2 or deeper; or before high-risk work in a repo with no precedent for it. Not for locking product decisions, proving feasibility, or writing code.
+  Evidence-labeled research into unfamiliar, ambiguous, or version-sensitive territory. Use when the user asks to research a topic, library, or approach; when planning discovery lands on L2 or deeper; before high-risk work in a repo with no precedent for it; or when the request names an external repo or source to distill or bring in (triggers: "xia", "distill from", "port from", "like how X does it", "mang feature về", "học từ repo X"). Not for locking product decisions, proving feasibility, or writing code.
 metadata:
-  version: '0.2'
+  version: '0.3'
   ecosystem: bee
   dependencies:
     web-docs-search:
@@ -61,6 +61,12 @@ Lightest credible path wins; each skipped rung needs a stated reason:
 3. **Adapt** a proven upstream pattern that fits this repo.
 4. **Build** from scratch — only with rungs 1–3 rejected for cause.
 
+Rung 3 is the port protocol's territory: a request that names an
+external repo or source to distill or bring in runs
+`references/port-protocol.md` — the dependency matrix, cross-cutting
+sweep, and challenge framework that turn Adapt into evidence, not
+inspiration.
+
 State why the chosen rung beats the next-best, and what evidence would
 change the answer. Finish before recommending; ask one targeted question
 only when paths differ materially in behavior, risk, or migration cost.
@@ -90,3 +96,4 @@ only when paths differ materially in behavior, risk, or migration cost.
 |---|---|
 | `references/research-protocol.md` | step rules in full, tool roles, ask-when-it-matters criteria |
 | `references/research-brief-template.md` | standalone brief structure |
+| `references/port-protocol.md` | the request names an external repo or source to distill (`xia`) or port — source manifest, dependency matrix, cross-cutting sweep, challenge framework |

@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "c5e2c8d51b6303efcd6b6a3101052e8f6e20a5202d3e0e3d1856b4543c6839ae",
+      "sha256": "31b1802dc6f15099c15fd284fcb9ccde5ea9822550575c38b4d0dbf8c59b32d2",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -401,6 +401,13 @@
       "packagePath": ".claude-plugin/skills/bee-researching/agents/openai.yaml"
     },
     {
+      "path": ".claude-plugin/skills/bee-researching/references/port-protocol.md",
+      "sha256": "9506e91a0d64b4a0d0d3fddc38ec50f7a50d179f6a93e1faa99730cc688e39c4",
+      "mode": "644",
+      "role": "plugin_skill_claude_render",
+      "packagePath": ".claude-plugin/skills/bee-researching/references/port-protocol.md"
+    },
+    {
       "path": ".claude-plugin/skills/bee-researching/references/research-brief-template.md",
       "sha256": "1b6d89fce6198dbe1b074d18f181f0aba93f5be7d0cc002b00649208bbd16adf",
       "mode": "644",
@@ -416,7 +423,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-researching/SKILL.md",
-      "sha256": "9333e6f12c13a5ff9a99542a80a0b37cfc5ab2a9d90bd63dc9bbf284d17caece",
+      "sha256": "5ba3871519a6c1ee3cf71981ef64f0238b7e1aa2cf673a9eed0741d27b6e30e9",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-researching/SKILL.md"
@@ -640,7 +647,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "f5210799ba242c16ac0fdf206fd1f6f91466e5b5d465ad472c17ac621fab8e74",
+      "sha256": "649418cfac151a079d9a63b45473ce232c36e3fa19617f14dff8e766bcad5521",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -905,6 +912,13 @@
       "packagePath": ".codex-plugin/skills/bee-researching/agents/openai.yaml"
     },
     {
+      "path": ".codex-plugin/skills/bee-researching/references/port-protocol.md",
+      "sha256": "9506e91a0d64b4a0d0d3fddc38ec50f7a50d179f6a93e1faa99730cc688e39c4",
+      "mode": "644",
+      "role": "plugin_skill_codex_render",
+      "packagePath": ".codex-plugin/skills/bee-researching/references/port-protocol.md"
+    },
+    {
       "path": ".codex-plugin/skills/bee-researching/references/research-brief-template.md",
       "sha256": "1b6d89fce6198dbe1b074d18f181f0aba93f5be7d0cc002b00649208bbd16adf",
       "mode": "644",
@@ -920,7 +934,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-researching/SKILL.md",
-      "sha256": "9333e6f12c13a5ff9a99542a80a0b37cfc5ab2a9d90bd63dc9bbf284d17caece",
+      "sha256": "5ba3871519a6c1ee3cf71981ef64f0238b7e1aa2cf673a9eed0741d27b6e30e9",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-researching/SKILL.md"
@@ -1613,6 +1627,13 @@
       "packagePath": "skills/bee-researching/agents/openai.yaml"
     },
     {
+      "path": "skills/bee-researching/references/port-protocol.md",
+      "sha256": "9506e91a0d64b4a0d0d3fddc38ec50f7a50d179f6a93e1faa99730cc688e39c4",
+      "mode": "644",
+      "role": "plugin_skill",
+      "packagePath": "skills/bee-researching/references/port-protocol.md"
+    },
+    {
       "path": "skills/bee-researching/references/research-brief-template.md",
       "sha256": "1b6d89fce6198dbe1b074d18f181f0aba93f5be7d0cc002b00649208bbd16adf",
       "mode": "644",
@@ -1628,7 +1649,7 @@
     },
     {
       "path": "skills/bee-researching/SKILL.md",
-      "sha256": "9333e6f12c13a5ff9a99542a80a0b37cfc5ab2a9d90bd63dc9bbf284d17caece",
+      "sha256": "5ba3871519a6c1ee3cf71981ef64f0238b7e1aa2cf673a9eed0741d27b6e30e9",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-researching/SKILL.md"
