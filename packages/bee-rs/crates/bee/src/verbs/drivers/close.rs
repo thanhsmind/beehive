@@ -434,32 +434,11 @@ pub(crate) fn has_uat_deferral_decision(root: &Path, feature: &str) -> D<bool> {
     Ok(!filtered.is_empty())
 }
 
-/// uat-stop-placement D4.4/D2: reads `gates.uat.approved` exactly the way
-/// the merge-side `uat_merge_precheck` does (verbs/worktree/phases.rs) — the
-/// live workflow record's own `gates.uat.approved` first, falling back to
-/// the plain default `.bee/state.json` record's `approved_gates.uat` ONLY
-/// when that record is presently tracking THIS feature, so a foreign
-/// feature's approval never leaks through as "approved" for a different
-/// one. Both reads are fail-open by construction (`list_workflows`,
-/// `read_state_peek` never throw for an ordinary missing/corrupt shape), so
-/// an unreadable store reads as "not approved" — the safe direction.
-fn uat_gate_approved(root: &Path, feature: &str) -> bool {
-    let workflows = crate::verbs::workflow_store::list_workflows(root).unwrap_or_default();
-    let live = crate::verbs::workflow_store::find_live_workflow(&workflows, feature);
-    if let Some(wf) = live {
-        matches!(
-            wf.get("gates").and_then(|g| g.get("uat")).and_then(|e| e.get("approved")),
-            Some(Value::Bool(true))
-        )
-    } else {
-        crate::verbs::state_group::read_state_peek(root)
-            .ok()
-            .filter(|state| matches!(state.get("feature"), Some(Value::String(f)) if f == feature))
-            .is_some_and(|state| {
-                matches!(state.get("approved_gates").and_then(|g| g.get("uat")), Some(Value::Bool(true)))
-            })
-    }
-}
+// uat-stop-placement D4.4/D2, docs/history/uat-approval-reaches-the-door/
+// plan.md R1-R3: `gates.uat.approved` now resolves through the single
+// shared resolver `crate::uat::uat_gate_approved` — the same one
+// `uat_merge_precheck` (verbs/worktree/phases.rs) calls — so this door and
+// the merge door never carry two copies of the resolution again.
 
 /// provenance: capture.mjs pendingCaptureStubs + captureQueue
 /// (verbs/status_full.rs:2382) — only the COUNT used to reach close's door
@@ -1331,7 +1310,7 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
             // "standard" (applies), only tiny/small/docs/spike are exempt.
             let lane = feature_route(root, feature)?;
             let lane_applies = crate::uat::uat_gate_applies_to_lane(lane.as_deref());
-            let gate_approved = lane_applies && uat_gate_approved(root, feature);
+            let gate_approved = lane_applies && crate::uat::uat_gate_approved(root, feature);
             let uat_deferred =
                 if lane_applies && !gate_approved { has_uat_deferral_decision(root, feature)? } else { false };
             let uat_blocking = lane_applies && !gate_approved && !uat_deferred;

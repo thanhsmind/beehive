@@ -9,7 +9,7 @@ use crate::roots::{resolve_roots_core, Resolution};
 use crate::verbs::reservations::{js_numberify, js_trim, now_iso, parse_flags, Err2, FlagV, Flags};
 use crate::verbs::workspace_store as ws;
 use crate::verbs::{emit_no_root_error, record_timing};
-use crate::uat::{uat_gate_applies_to_lane, uat_stop_config, UatStop};
+use crate::uat::{uat_gate_applies_to_lane, uat_gate_approved, uat_stop_config, UatStop};
 use crate::{jsjson, lock};
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -844,18 +844,13 @@ struct UatPrecheck {
 /// ever bound to an explicit `--as-lane` file), falling back to
 /// `.bee/lanes/<feature>.json` (`read_lane_display` — the same fail-open
 /// display read `close`'s own scoping already reuses, drivers/close.rs:305)
-/// when no live workflow names the feature. `gate_approved` reads the live
-/// workflow record's own `gates.uat.approved` (GATE_NAMES-driven, written by
-/// `bee state gate --name uat`), falling back to the plain default
-/// `.bee/state.json` record's `approved_gates.uat` ONLY when that record is
-/// presently tracking THIS feature — a foreign feature's approval must
-/// never leak through as "approved" for a different one. A feature that
-/// could not even be resolved (`feature` is `None`) fails closed on both: an
-/// unclassifiable lane (standard) and an unapprovable gate (false). Every
-/// read here is fail-open/fail-closed by construction (`list_workflows`,
-/// `read_lane_display`, `read_state_peek` never throw for an ordinary
-/// missing/corrupt shape), so an unreadable store never delegates — it
-/// reads as "not approved", the safe direction.
+/// when no live workflow names the feature. `gate_approved` is the single
+/// resolver `crate::uat::uat_gate_approved` (docs/history/
+/// uat-approval-reaches-the-door/plan.md R1-R3) — live workflow record,
+/// then the lane record, then the default `.bee/state.json`, in that fixed
+/// precedence. A feature that could not even be resolved (`feature` is
+/// `None`) fails closed on both: an unclassifiable lane (standard) and an
+/// unapprovable gate (false).
 fn uat_merge_precheck(main_root: &Path, feature: Option<&str>) -> UatPrecheck {
     let Some(feature) = feature else {
         return UatPrecheck { lane_applies: true, gate_approved: false };
@@ -875,22 +870,7 @@ fn uat_merge_precheck(main_root: &Path, feature: Option<&str>) -> UatPrecheck {
         });
     let lane_applies = uat_gate_applies_to_lane(mode.as_deref());
 
-    let gate_approved = if let Some(wf) = live {
-        matches!(
-            wf.get("gates").and_then(|g| g.get("uat")).and_then(|e| e.get("approved")),
-            Some(Value::Bool(true))
-        )
-    } else {
-        crate::verbs::state_group::read_state_peek(main_root)
-            .ok()
-            .filter(|state| matches!(state.get("feature"), Some(Value::String(f)) if f == feature))
-            .is_some_and(|state| {
-                matches!(
-                    state.get("approved_gates").and_then(|g| g.get("uat")),
-                    Some(Value::Bool(true))
-                )
-            })
-    };
+    let gate_approved = uat_gate_approved(main_root, feature);
 
     UatPrecheck { lane_applies, gate_approved }
 }

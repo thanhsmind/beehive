@@ -4195,6 +4195,184 @@ use std::time::Instant;
         assert_eq!(second.result["code"], json!("ALREADY_UP_TO_DATE"));
     }
 
+    // ── docs/history/uat-approval-reaches-the-door: the lane fallback ──────
+    //
+    // The defect: `bee gate --name uat --approved true --lane <f>` writes
+    // `approved_gates.uat = true` into `.bee/lanes/<f>.json` whenever the
+    // feature's workflow record is already `closed` — but neither
+    // `uat_merge_precheck` (above) nor the close-time door ever read that
+    // file, so the approval landed nowhere either door looked. These tests
+    // exercise the NEW second source `crate::uat::uat_gate_approved` adds:
+    // the lane record, consulted only once a live workflow record is absent
+    // (here, explicitly `status: "closed"`, the exact shape
+    // `bee state workflows close --all-but-active` produces).
+
+    /// A `.bee/runtime/workflows/<id>/state.json` record for `feature` whose
+    /// `status` is `"closed"` — `find_live_workflow` excludes it outright,
+    /// so it is invisible to source 1 regardless of what its own
+    /// `gates.uat.approved` says. Stamped `true` here on purpose: proves a
+    /// closed record's own approval is never consulted, only its ABSENCE
+    /// from the live set is what matters.
+    fn write_closed_workflow_uat(main: &Path, feature: &str, mode: &str) {
+        let id = format!("wf-{feature}-uat-test-closed");
+        let dir = main.join(".bee").join("runtime").join("workflows").join(&id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("state.json"),
+            jsjson::stringify(&json!({
+                "id": id,
+                "feature": feature,
+                "status": "closed",
+                "mode": mode,
+                "gates": { "uat": { "approved": true } },
+            })),
+        )
+        .unwrap();
+    }
+
+    /// A `.bee/lanes/<feature>.json` record naming a risk lane, with
+    /// `approved_gates` set to whatever shape the caller wants to probe —
+    /// `None` omits the `approved_gates` key entirely (the "lane file with
+    /// no approved_gates" negative case); `Some(gates)` writes `gates`
+    /// verbatim as `approved_gates` (e.g. `json!({})` for "no uat key",
+    /// `json!({"uat": false})`, or a non-boolean `uat`).
+    fn write_lane_approved_gates(main: &Path, feature: &str, mode: &str, gates: Option<Value>) {
+        let dir = main.join(".bee").join("lanes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut body = json!({ "feature": feature, "mode": mode });
+        if let Some(gates) = gates {
+            body.as_object_mut().unwrap().insert("approved_gates".into(), gates);
+        }
+        std::fs::write(dir.join(format!("{feature}.json")), jsjson::stringify(&body)).unwrap();
+    }
+
+    /// Happy path (merge side): a closed-record feature whose lane file
+    /// reads `approved_gates.uat: true` merges under the default
+    /// `uat_stop: "merge"` placement — the approval the owner recorded now
+    /// reaches the door that blocks on it.
+    #[test]
+    fn merge_proceeds_once_a_closed_records_lane_file_reads_uat_true() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_closed_workflow_uat(&main, "demo", "standard");
+        write_lane_approved_gates(&main, "demo", "standard", Some(json!({ "uat": true })));
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => {
+                    panic!("a lane-file uat approval on a closed-record feature must merge: {m}")
+                }
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+    }
+
+    /// Happy path (close side): the identical closed-record-plus-lane-file
+    /// shape clears the close-time uat door under `uat_stop: "close"`.
+    #[test]
+    fn close_door_does_not_block_once_a_closed_records_lane_file_reads_uat_true() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        write_uat_stop_config(&main, "close");
+        write_closed_workflow_uat(&main, "demo", "standard");
+        write_lane_approved_gates(&main, "demo", "standard", Some(json!({ "uat": true })));
+
+        let doors = crate::verbs::drivers::build_close_report_doors(&main, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat").expect("the door must exist for a standard lane");
+        assert!(!uat_door.blocking, "a lane-file uat approval on a closed-record feature must clear the door");
+        assert_eq!(uat_door.detail, "clear");
+    }
+
+    /// Precedence: a live (non-closed) workflow record saying `false` beats
+    /// a lane file saying `true` — the live record is consulted first and
+    /// its answer stands, never overridden by a later source.
+    #[test]
+    fn a_live_workflow_saying_false_beats_a_lane_file_saying_true() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_live_workflow_uat(&main, "demo", "standard", false);
+        write_lane_approved_gates(&main, "demo", "standard", Some(json!({ "uat": true })));
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, false, None);
+        let Err(err) = result else {
+            panic!("a live record's false must stand even though the lane file reads true")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_UAT_PENDING"), "{msg}");
+    }
+
+    /// The load-bearing negative set: with the record closed and no live
+    /// record, each of these lane-file shapes must still read UNAPPROVED
+    /// and refuse — a wrong read here would let an unapproved merge
+    /// through.
+    #[test]
+    fn closed_record_negative_lane_shapes_all_refuse() {
+        let cases: [(&str, Option<Value>); 5] = [
+            ("no lane file at all", None),
+            ("approved_gates absent", Some(json!({}))),
+            ("approved_gates present, uat absent", Some(json!({ "approved_gates": json!({}) }))),
+            ("uat: false", Some(json!({ "approved_gates": json!({ "uat": false }) }))),
+            (
+                "uat present but not a boolean",
+                Some(json!({ "approved_gates": json!({ "uat": "yes" }) })),
+            ),
+        ];
+
+        for (label, lane_body) in cases {
+            let tmp = tempfile::tempdir().unwrap();
+            let main = main_repo(tmp.path());
+            let created = worktree_with_a_real_commit(&main, "demo");
+            write_closed_workflow_uat(&main, "demo", "standard");
+            match lane_body {
+                None => {} // no lane file at all
+                Some(body) => {
+                    let dir = main.join(".bee").join("lanes");
+                    std::fs::create_dir_all(&dir).unwrap();
+                    let mut full = json!({ "feature": "demo", "mode": "standard" });
+                    for (k, v) in body.as_object().unwrap() {
+                        full.as_object_mut().unwrap().insert(k.clone(), v.clone());
+                    }
+                    std::fs::write(dir.join("demo.json"), jsjson::stringify(&full)).unwrap();
+                }
+            }
+
+            let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+            let result = merge_feature_worktree(&main, &created.id, cleanup, None, false, None);
+            let Err(err) = result else { panic!("{label}: must still refuse as unapproved") };
+            let MErr::Thrown(msg) = err else { panic!("{label}: expected a typed refusal, got MErr::Ex") };
+            assert!(msg.contains("WORKTREE_MERGE_UAT_PENDING"), "{label}: {msg}");
+        }
+    }
+
+    /// Exactly one resolver serves both doors: the merge-side and
+    /// close-side outcomes agree on the SAME closed-record-plus-lane-file
+    /// input, for both the approved and the unapproved shape.
+    #[test]
+    fn merge_and_close_doors_agree_on_the_same_closed_record_lane_shape() {
+        for (uat, expect_approved) in [(true, true), (false, false)] {
+            let tmp = tempfile::tempdir().unwrap();
+            let main = main_repo(tmp.path());
+            write_closed_workflow_uat(&main, "demo", "standard");
+            write_lane_approved_gates(&main, "demo", "standard", Some(json!({ "uat": uat })));
+
+            assert_eq!(
+                crate::uat::uat_gate_approved(&main, "demo"),
+                expect_approved,
+                "uat={uat}"
+            );
+
+            write_uat_stop_config(&main, "close");
+            let doors = crate::verbs::drivers::build_close_report_doors(&main, "demo").unwrap();
+            let uat_door = doors.iter().find(|d| d.door == "uat").expect("door must exist for a standard lane");
+            assert_eq!(!uat_door.blocking, expect_approved, "uat={uat} detail={}", uat_door.detail);
+        }
+    }
+
     // ── D5: no-write paths, preserved ────────────────────────────────────
 
     /// D5: a real textual conflict writes NOTHING to the merging feature's
