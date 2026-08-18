@@ -264,27 +264,53 @@ In order, from the MAIN checkout:
 
 1. `bee worktree new --feature <slug> --json` — creates and registers the
    worktree in one move; read the path from its output.
-2. Start the working agent. **`agent start` opens its own pane — do not split
-   one first.** Proven live (`references/spawn-proof.md`): `herdr agent start`
-   does not attach to a pane made by `herdr pane split`, it opens a second,
-   independent one, so splitting first leaks an empty pane on **every**
-   dispatch, and at one leak per dispatch the four slots fill with ghosts.
+2. Split a runtime pane for the working agent. On herdr 0.8.0, `agent start`
+   requires `--pane` and "never creates, splits, or moves layout" — splitting
+   first is now MANDATORY, not forbidden (this inverts the earlier proof;
+   re-recorded live in `references/spawn-proof.md`).
    ```
-   herdr agent start <slug> --cwd <worktree_path> --workspace <workspace_id> --tab <runtime_tab_id> --split right|down --no-focus -- claude --model sonnet --permission-mode bypassPermissions "<opening instruction>"
+   herdr pane split <runtime-pane-id> --direction right|down --ratio <r> --cwd <worktree_path> --no-focus
    ```
-   Choose the split direction from the runtime tab's geometry: run
-   `herdr pane layout --pane <any runtime pane_id from §4>` (there is no
-   `--tab` form, and `pane list` carries no `rect`), take the pane with the
-   largest `rect.width * rect.height`, and pass `--split right` if it is wider
-   than tall, else `--split down`. No panes yet → `--split right`.
+   Choose the runtime pane to split, and the direction, from the runtime
+   tab's geometry: run `herdr pane layout --pane <any runtime pane_id from
+   §4>` (there is no `--tab` form, and `pane list` carries no `rect`), take
+   the pane with the largest `rect.width * rect.height`, and pass
+   `--direction right` if it is wider than tall, else `--direction down`.
+   There is always a runtime root pane to split — `bootstrap-cockpit.sh`
+   creates it — so there is no "no panes yet" case. Keep `--ratio 0.5` unless
+   the geometry rule computes otherwise. Read the new pane's id from the
+   response's `.result.pane.pane_id`.
 
-   **The trailing `-- claude …` is config-driven, not hard-fixed prose.** Read
-   `.bee/config.json`'s `herding.agent_command` from MAIN: a non-empty array of
-   argv tokens is used verbatim after `--`, each token substituted per-token
-   (`{MODEL}` → `sonnet`) and passed as one discrete argv element, never
-   re-parsed or shell-interpreted. Absent, not an array, or empty — the common
-   case — use the line above exactly. Shape and examples:
-   `references/operational-invariants.md` ("Runtime adapter").
+   **Settle before starting the agent.** `agent start` requires its target
+   pane to already be at its interactive shell prompt; `pane split` returns
+   as soon as the pane exists, before its shell has necessarily finished
+   settling — the next command's `--timeout` covers agent *detection*, not
+   shell *readiness*. Confirm (poll, or wait briefly and retry) that the new
+   pane is at its shell prompt before issuing `agent start`. This is the
+   failure most likely to fire on Windows, where ConPTY starts slower.
+3. Start the working agent into that pane.
+   ```
+   herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout <ms> -- <agent args>
+   ```
+   `<kind>` and `<agent args>` come from `herding.agent_command`, per the next
+   paragraph. **On any `agent start` failure, close the pane §2 just created
+   (`herdr pane close <new_pane_id>`) before reporting** — an unlabelled pane
+   whose `foreground_cwd` is the worktree is exactly what §4 classifies as an
+   anomaly candidate, and this section created that pane, so this section is
+   the one that cleans it up.
+
+   **The trailing agent argv is config-driven, not hard-fixed prose.** Read
+   `.bee/config.json`'s `herding.agent_command` from MAIN: a non-empty array
+   of argv tokens has its first token supply `--kind` (the herdr-recognized
+   agent kind, e.g. `claude`) and its remaining tokens, substituted per-token
+   (`{MODEL}` → `sonnet`) and each passed as one discrete argv element, go
+   after `--` as the agent's own arguments — never re-parsed or
+   shell-interpreted, and never re-used as `--kind`. An unrecognised token 0
+   (not one of herdr's supported kinds) is a typed error naming the
+   `herding.agent_command` key, never a generic `agent start` failure. Absent,
+   not an array, or empty — the common case — use `--kind claude -- --model
+   sonnet --permission-mode bypassPermissions "<opening instruction>"`. Shape
+   and examples: `references/operational-invariants.md` ("Runtime adapter").
 
    **The argv must carry the working agent's opening instruction.** A bare
    `claude` starts with an empty buffer and sits there: it never self-names, so
@@ -305,10 +331,12 @@ In order, from the MAIN checkout:
    (`references/operational-invariants.md`), not a default to trim.
 
    Afterwards, confirm: `herdr pane list --workspace <workspace_id>` filtered
-   to the runtime tab shows exactly **one** new pane, live agent, right cwd —
-   not two, not zero. Anything wrong → report one plain line into the chat pane
-   and do **not** blindly repeat the spawn next iteration: a blind retry is how
-   a cold loop turns one mistake into 1440 a day.
+   to the runtime tab shows exactly **one** new pane — the one §2 split —
+   live agent, right cwd, not two, not zero. Anything wrong → apply this
+   step's cleanup rule if `agent start` itself failed, report one plain line
+   into the chat pane, and do **not** blindly repeat the spawn next
+   iteration: a blind retry is how a cold loop turns one mistake into 1440 a
+   day.
 
 The working agent is on its own from there — it runs the ordinary bee chain
 inside its worktree until its item is finished. This role does not watch it,
@@ -346,4 +374,5 @@ or in the herdr workspace changes as a result.
 | Lane safety (two-key: both required) | Key 1: `.bee/bin/bee herding classify-lane <PBI-ID>` → `lane_safe` (fail-open on unmatched keywords). Key 2: your own reading — refuse and announce if unsure. |
 | Announce / report | `herdr pane send-text <chat_pane_id> "..."` |
 | Create the worktree | `bee worktree new --feature <slug> --json` |
-| Open the runtime pane + agent | `herdr agent start <slug> --cwd <path> --workspace <ws> --tab <runtime_tab> --split right\|down --no-focus -- claude --model sonnet --permission-mode bypassPermissions "<opening instruction>"` — the `claude …` tail is `herding.agent_command`-driven; never split first, never `-p` (§8) |
+| Split the runtime pane | `herdr pane split <runtime-pane-id> --direction right\|down --ratio <r> --cwd <path> --no-focus` → read `.result.pane.pane_id` (§8) |
+| Start the working agent | `herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout <ms> -- <agent args>` — `<kind>` and `<agent args>` are `herding.agent_command`-driven; pane must exist first (split, then start), never `-p` (§8) |

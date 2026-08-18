@@ -58,18 +58,26 @@ Config-driven spawn commands. Both spawn points — the
 working agent's trailing argv (Dispatch role §8), and the control pane's real
 invocation inside `control-loop.sh` — read from an optional `.bee/config.json`
 command-template seam instead of a hardcoded string. **With no `herding`
-config keys at all, every spawned command is BYTE-EQUIVALENT to what this
-skill has always run — zero behavior change.** This is an adapter seam, not a
-new runtime: full codex-native herding (its own event loop, its own pane
-protocol) stays out of scope.
+config keys at all, every spawned command is THE SAME EFFECTIVE SPAWN this
+skill has always run — zero behavior change.** Not byte-equivalent: herdr
+0.8.0 changed the wire format (token 0 of `agent_command` now feeds
+`--kind` instead of leading the argv after `--`), so byte-equivalence is no
+longer available to promise — "same effective spawn" is the accurate claim.
+This is an adapter seam, not a new runtime: full codex-native herding (its
+own event loop, its own pane protocol) stays out of scope.
 
 Two independent keys, each a JSON array of argv-token strings:
 
-- **`herding.agent_command`** — the WORKING agent's spawn argv (the tail of
-  `herdr agent start ... --`, Dispatch role §8 step 2). Placeholder:
-  `{MODEL}` (the fixed model, `sonnet`). Default when absent:
+- **`herding.agent_command`** — the WORKING agent's spawn argv. bee splits it
+  at spawn: token 0 feeds `herdr agent start`'s `--kind`, and the remaining
+  tokens, substituted per-token, follow the `--` separator as the agent's own
+  arguments (Dispatch role §8 step 3). An unrecognised token 0 — not one of
+  herdr's supported kinds — surfaces as a typed error naming this config key,
+  never as a generic `agent start` failure. Placeholder: `{MODEL}` (the fixed
+  model, `sonnet`). Default when absent:
   `["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"]`
-  — exactly today's string.
+  — the documented default array is unchanged; token 0 (`claude`) now feeds
+  `--kind` and the rest follows `--`.
 - **`herding.control_command`** — the CONTROL pane's real invocation inside
   `control-loop.sh`'s `run_iteration`. Placeholders: `{PROMPT}`, `{MODEL}`,
   `{MAX_TURNS}`, `{ALLOWED_TOOLS}`. Default when absent:
