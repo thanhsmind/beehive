@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [worktree-parallelism]
   required_context: [areas/worktree-parallelism/returning-and-the-merge-gate.md]
-  decisions: ["staging-lane D0 (the main/staging/worktree topology becomes first-class bee mechanics, not convention, 2026-08-17)", "staging-lane D0a (lifecycle detail on D0: the invariant, the three update triggers, disposability, 2026-08-17)", "uat-gate-before-merge D1 (the uat gate is the 'awaiting UAT' signal staging reads, 2026-08-17)"]
+  decisions: ["staging-lane D0 (the main/staging/worktree topology becomes first-class bee mechanics, not convention, 2026-08-17)", "staging-lane D0a (lifecycle detail on D0: the invariant, the three update triggers, disposability, 2026-08-17)", "uat-gate-before-merge D1 (the uat gate is the 'awaiting UAT' signal staging reads, 2026-08-17)", "staging-optional D1 (staging_before_merge is the repo-wide staging opt-out; absent means ON, false refuses STAGING_DISABLED, the uat gate is untouched, 2026-08-18)"]
   sources: ["docs/history/staging-lane/plan.md", ".bee/decisions.jsonl (0f87be54 D0, d20ef88e D0a, 16c7ba64 uat-gate-before-merge D1)", "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs", "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs (WORKTREE_MERGE_STAGING_FORBIDDEN, staging_rebuild_suggested)", "packages/bee-rs/crates/bee/src/hooks/write_guard/checks.rs (staging_worktree_commit_denial)"]
   authoritative_for: "worktree-parallelism: bee staging add/rebuild/status, the staging.json record, and the disposable staging mixing ground"
 ---
@@ -74,6 +74,32 @@ Guidance teaches the why here; the CLI carries the actual enforcement:
    the merge result carries `staging_rebuild_suggested: "bee staging rebuild"` — a
    nudge toward trigger 3, never a forced rebuild.
 
+## Opting the whole mixing ground out (staging-optional D1)
+
+A repo can decide it does not want a mixing ground at all — finished features go
+feature worktree -> `uat` gate -> main, with nothing in between. `.bee/config.json`
+key `staging_before_merge` states that choice once:
+
+| Value | Behavior |
+|---|---|
+| absent (the default) | staging is ON — everything on this page applies unchanged |
+| `false` | `bee staging add` and `bee staging rebuild` refuse `STAGING_DISABLED` as a zero-mutation precondition, before any lock or git work |
+| any non-boolean | refuses `STAGING_CONFIG_INVALID` rather than guessing which way a typo resolves |
+
+Three things the key deliberately does NOT touch. `bee staging status` is read-only and
+still reports an existing record in every case. The `uat` gate is independent — it stays
+exactly as `uat_before_merge` configures it, so opting out of staging never opts out of
+user acceptance. And the `staging_rebuild_suggested` nudge needed no change at all: it
+was already conditional on a staging record existing, and an opted-out repo never
+creates one.
+
+The opt-out lives in the staging verb rather than in skill prose because staging was
+never code-enforced before this — nothing in `worktree merge` ever read a staging
+record, so a repo that wanted no mixing ground had no way to say so and every agent had
+to remember a workflow exception instead. `skills/bee-swarming/SKILL.md`'s completion
+step names the fallback in one clause: on `STAGING_DISABLED`, the feature worktree
+itself stands in for staging.
+
 ## Conflict policy
 
 A merge conflict while staging a feature (`add` or `rebuild`) aborts that one merge and
@@ -91,6 +117,10 @@ is never patched to route around a conflict.
   `packages/bee-rs/crates/bee/src/verbs/staging/mod.rs`.
 - Build hook: config `commands.staging_build` (optional; a skip is a visible note, never
   an error).
+- Opt-out: `staging_before_merge_config` and `staging_enabled_or_refuse` in
+  `packages/bee-rs/crates/bee/src/verbs/staging/mod.rs` (`STAGING_DISABLED`,
+  `STAGING_CONFIG_INVALID`); documented in `docs/handbook/register.md`,
+  `docs/config-reference.md`, and `.bee/config-sample.json`.
 - Merge-side teeth: `WORKTREE_MERGE_STAGING_FORBIDDEN` and `staging_rebuild_suggested` in
   `packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs`.
 - Commit guard: `staging_worktree_commit_denial` in
