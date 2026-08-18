@@ -1,0 +1,52 @@
+{
+  "id": "uad-1",
+  "feature": "uat-approval-reaches-the-door",
+  "lane": "high-risk",
+  "tier": "generation",
+  "title": "One uat resolver in uat.rs, with the lane record as its second source",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/uat.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/uat-approval-reaches-the-door/plan.md",
+    "packages/bee-rs/crates/bee/src/uat.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/waiting_on.rs"
+  ],
+  "action": "R1+R2+R3 of the plan. THE DEFECT: `bee gate --name uat --approved true --lane <f>` writes approved_gates.uat=true into .bee/lanes/<f>.json whenever the feature's workflow record is already status=closed (write_through_projection's direct-write branch in verbs/state_group/ledger.rs, taken when find_live_workflow returns None). Both doors that block on the gate read a DIFFERENT file: uat_merge_precheck (verbs/worktree/phases.rs:859-896, the gate_approved branch at :878-893) and uat_gate_approved (verbs/drivers/close.rs:446-462) each try the live workflow's gates.uat.approved, then fall back to read_state_peek — the DEFAULT .bee/state.json filtered on state.feature == feature. Neither ever reads the lane file. So an owner approval lands where no reader looks, and the merge refuses WORKTREE_MERGE_UAT_PENDING while the lane file plainly reads uat: true. Observed live three times on 2026-08-18, and independently by a second session; see docs/knowledge/patterns/20260818-*-strands-an-approval-written-to-the-projection.md. THE FIX: hoist ONE resolver into packages/bee-rs/crates/bee/src/uat.rs — the policy module uat-stop-placement created for exactly this question — with a fixed three-source precedence: (1) the live workflow record's gates.uat.approved, unchanged and still first; (2) NEW: the lane record .bee/lanes/<feature>.json's approved_gates.uat, read through the existing lane reader, never by hand-parsing; (3) the default .bee/state.json's approved_gates.uat, still filtered on state.feature == feature, unchanged. Then DELETE both copies: phases.rs's gate_approved branch and close.rs's uat_gate_approved body both become calls to the new resolver. The two copies are byte-identical today — the shape the active pattern docs/knowledge/patterns/20260728-one-membership-hand-copied-six-times-has-no-owner-and-no-alarm.md warns about, and the reason a one-door fix would silently miss the other. BOUNDARY, load-bearing, this is a human acceptance gate: this widens where an approval is FOUND, never what counts AS one. A missing lane file, a lane file with no approved_gates, an approved_gates with no uat, uat: false, and a uat that is present but not a boolean must EVERY ONE read unapproved — fail closed, exactly as a bogus uat_stop value already does. A live workflow record saying false still beats a lane file saying true; precedence order is not negotiable. Do not touch the refusal text, the lane-classification exemption rule (uat_gate_applies_to_lane), GATE_NAMES, or --actor auto's refusal on uat.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "With the feature's workflow record status=closed and no live record, a lane file reading approved_gates.uat=true lets `bee worktree merge` proceed instead of refusing WORKTREE_MERGE_UAT_PENDING.",
+      "The same closed-record-plus-lane-file shape passes the close-time uat door under uat_stop: \"close\".",
+      "With the record closed and no live record, EACH of these still reads unapproved and still refuses: no lane file at all; a lane file with no approved_gates key; approved_gates with no uat key; uat: false; uat present but not a boolean.",
+      "A live workflow record whose gates.uat.approved is false still refuses even when the lane file reads uat: true — the live record is consulted first and its answer stands.",
+      "Exactly one function resolves the uat approval; neither verbs/worktree/phases.rs nor verbs/drivers/close.rs keeps its own copy of the resolution.",
+      "Every existing merge-side and close-side uat test passes UNMODIFIED, including the lane-classification exemptions and the full uat_stop placement matrix.",
+      "The refusal text, uat_gate_applies_to_lane, GATE_NAMES, and --actor auto's refusal on uat are unchanged."
+    ]
+  },
+  "done_when": "One resolver in uat.rs serves both doors, a closed-record approval reaches whichever door is armed, every negative case still fails closed, and the whole existing uat suite passes unmodified.",
+  "notes": "Phase 1 of the plan. Disjoint from uad-2, which touches only verbs/state_group/. Do not edit verbs/state_group/** here.",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "uad-1-worker",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
+    "claimed_at": "2026-08-18T13:56:12.765Z"
+  }
+}

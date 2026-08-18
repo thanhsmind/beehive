@@ -59,6 +59,57 @@
       "deviations": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "truth": "Under uat_stop close with uat unapproved and NO lane record on disk, a merge passed --cleanup keeps the worktree, the branch, and the grant.",
+            "status": "PASS",
+            "evidence": "phases.rs:728-732 merge_finish computes uat_wait_set = (*uat_stop == UatStop::Close) && uat_merge_precheck(main_root, Some(feature)).lane_applies && !gate_approved — the SAME fn (phases.rs:882) the merge precondition at phases.rs:318 and close_the_lane_on_merge at phases.rs:502 call, not a copy; phases.rs:801-807 then sets effective_cleanup=false and skips attach_cleanup_outcome entirely (no unregister, no branch delete). Test tests.rs:4219 uat_stop_close_pending_uat_with_no_lane_record_still_suppresses_cleanup asserts worktree_root.exists() and `git branch --list` non-empty; grant survival is proven transitively by tests.rs:4272 (second merge clears the grants check at phases.rs:110). Ran: cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree -> 200 passed, 0 failed."
+          },
+          {
+            "id": "t2",
+            "truth": "The same merge reports the cleanup suppression with the same result key usp-2 introduced.",
+            "status": "PASS",
+            "evidence": "phases.rs:803-807 inserts result[\"cleanup\"] = {ok:false, code:\"WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING\", reason:...}; `git log -S WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING -- phases.rs` prints exactly one commit, e94f62fb (usp-2) — commit 65b0520a (usp-5) did not touch that block (diff of 65b0520a is confined to CloseLaneOutcome, its two constructors, and the uat_wait_set local). tests.rs:4244 asserts that exact code string."
+          },
+          {
+            "id": "t3",
+            "truth": "A second merge on that worktree afterwards still runs instead of hitting the no-granted-worktree refusal.",
+            "status": "PASS",
+            "evidence": "tests.rs:4272 uat_stop_close_pending_uat_with_no_lane_record_repeat_merge_still_works asserts second.result[\"code\"] == ALREADY_UP_TO_DATE (tests.rs:4297-4302), which is only reachable past the grants check at phases.rs:110-117 and resolve_worktree_by_id at phases.rs:119. Green in the suite run above."
+          },
+          {
+            "id": "t4",
+            "truth": "With uat APPROVED, that same case cleans up normally.",
+            "status": "PASS",
+            "evidence": "Condition at phases.rs:731 requires !precheck.gate_approved, so an approved gate leaves uat_wait_set false and phases.rs:809-817 runs attach_cleanup_outcome with effective_cleanup == cleanup. tests.rs:4310 uat_stop_close_approved_uat_with_no_lane_record_cleans_up_normally (same no-lane-record fixture, write_live_workflow_uat(..., true)) asserts cleanup.ok == true and !worktree_root.exists(). Green."
+          },
+          {
+            "id": "t5",
+            "truth": "A missing lane record still never reddens the merge and never causes a lane file to be fabricated.",
+            "status": "PASS",
+            "evidence": "set_lane_uat_wait_on_merge (phases.rs:541-545) still early-returns Ok(CloseLaneOutcome{next_action: \"\"}) when read_lane_strict yields None — no write_lane call on that path; merge_finish's Ok(_) arm (phases.rs:772) does nothing and the Err arm (phases.rs:773-778) only eprintln + result[\"lane_close_warning\"], never an Err return. tests.rs:4231-4249 assert answer.ok, merged==true, and !main/.bee/lanes/demo.json.exists() after the merge."
+          },
+          {
+            "id": "t6",
+            "truth": "The Merge and Off branches behave exactly as they did before this cell.",
+            "status": "PASS",
+            "evidence": "uat_wait_set is gated on *uat_stop == UatStop::Close (phases.rs:728), so under Merge/Off it is false and effective_cleanup collapses to cleanup (phases.rs:801) with attach_cleanup_outcome called exactly as before; close_the_lane_on_merge's Merge/Off path (phases.rs:501-521) is byte-identical apart from dropping the unused struct field. Pre-existing coverage still green in the 200-test run: tests.rs:1330 cleanup_flag_tears_down_and_queues_nothing (default config == Merge, --cleanup, worktree removed), tests.rs:3915/3932 uat_stop_merge_*, tests.rs:4018/4042 uat_stop_off_*. --no-cleanup unchanged: resolve_cleanup_on_merge untouched by 65b0520a, tests.rs:1228 no_cleanup_flag_wins_over_a_cleanup_flag_and_a_config_true_opt_in green."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T13:44:24.432Z"
+      }
+    ]
   }
 }

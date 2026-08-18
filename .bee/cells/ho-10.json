@@ -4,7 +4,7 @@
   "title": "Add the bee herding wave and occupancy verbs",
   "lane": "standard",
   "behavior_change": true,
-  "action": "REWORK after a NEEDS_REVISION verdict on commit 3fb2987d. Both verbs are otherwise right — the typed error, the one-row-per-wave rule, the live-versus-fallback distinction in the json output, the registry declaration and every locked decision all survived independent mutation. Do not redo any of that. Fix two things. ITEM ONE, the failure: bee herding wave's constructor wiring is untested. A judge mutated the verb's single HerdrBackend::new call site so it passes a hardcoded kind and an empty argument list, DISCARDING the pair that resolve_agent_command had just produced per D14 — and the ENTIRE workspace suite stayed green, exit 0, zero failures. Gutting the constructor itself is caught only by the fleet crate's own test, with the bee crate at 1901 passed. So the verb is a compile-time caller, not a proven one, and the exact defect this cell was written to close is still open one line further down. The test file's own comment concedes it, saying the configured kind and arguments are proven at the backend layer by its own tests — that is precisely the gap. Fix it so that discarding the resolved pair at that call site FAILS A TEST IN THE BEE CRATE. How you build the seam is yours: extract the construction into a small function the tests can call and assert on, have it hand back something observable such as the argv the backend would spawn, or thread the backend construction through the same generic parameter the run-and-record function already uses. What must be true afterwards is one sentence: replace the resolved kind and arguments with constants at the point of construction, and a bee-crate test goes red. ITEM TWO, reported by the judge as a gap rather than a failure but worth closing here: the DEFAULT human-readable render of bee herding occupancy is undefended. Dropping the source parenthetical from its plain println leaves the whole suite green, so a role that runs the verb WITHOUT the json flag sees the real crossing and the degraded fallback identically. The json path is pinned; the plain path is not, and the markdown role that will call this may well read plain output. Pin it. VERIFY AS THE JUDGE DID: after your change, re-run both mutations — the discarded-pair one at the construction site, and the dropped source parenthetical — and report each as failing a named test.",
+  "action": "SECOND REWORK on ho-10, and it is one structural change plus one comment. Everything else survived independent mutation and must not be touched: the typed error naming the config key, the one-row-per-wave rule, the json occupancy distinction, the plain-line distinction you just added, the registry declarations, and every locked decision. THE FAILURE, and read the reason rather than only the fix. Your last change threaded backend construction through a construct_backend closure so a test could observe the call site. A judge then mutated ONLY the closure the verb itself passes — changing it to ignore both arguments and construct with constants — and the ENTIRE workspace stayed green at 2126 passed, identical to baseline. The join did not close; it MOVED one level up. The structural reason is worth carrying: a closure LITERAL written at a call site is unreachable by any test, because the test supplies its own closure to the same function and the two never meet. Your seam made the inner hop testable while pushing the real production argument out of every test's reach. THE FIX IS TO GIVE THE PRODUCTION SIDE A NAME. Hoist the closure the verb passes into a free function — something of the shape fn real_backend_ctor(kind: String, args: Vec-of-String) returning HerdrBackend — so the verb passes that named function and a test can call it DIRECTLY and assert the constructed backend carries the kind and arguments it was handed. A named item is reachable from both ends; a closure literal is reachable from neither. If asserting on the constructed backend is awkward, the alternative the judge named also works: drive the verb end to end against a config whose agent command names a different kind, and assert the resulting herdr invocation names that kind rather than the default. ONE MORE THING, a doc that now says something untrue: the comment you added beside the seam asserts that line is the only place either a real or a fake backend is ever built from a resolved pair. The mutation proves otherwise — the verb's own closure body is a second construction site. Correct it to say what is true once the fix lands. VERIFY EXACTLY AS THE JUDGE DID: change the production side so it ignores its arguments and constructs with constants, run the full workspace suite, and confirm a named test now FAILS. Report that test name. If the suite stays green, the fix has moved the join again and the cell is unfinished — say so rather than reporting success.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "read_first": [
     "docs/history/herding-orchestration/CONTEXT.md",
@@ -23,15 +23,17 @@
   ],
   "must_haves": {
     "truths": [
-      "Replacing the D14-resolved kind and arguments with constants at the point of backend construction fails a test in the BEE crate — observed, not assumed.",
-      "Dropping the source distinction from the plain human-readable occupancy output fails a test.",
-      "The json occupancy output still distinguishes the real crossing from the degraded fallback.",
-      "The typed error naming the config key, the one-row-per-wave rule, and the registry declarations are unchanged and still pinned.",
+      "The production backend construction is a NAMED item the verb passes, not a closure literal written at the call site.",
+      "A test calls that named item directly and asserts the constructed backend carries the kind and arguments handed to it.",
+      "Making the production construction ignore its arguments and use constants FAILS a named test on the full workspace suite — observed, not assumed.",
+      "The comment beside the construction seam states something true about where backends are built.",
+      "The typed error, the one-row-per-wave rule, the json distinction and the plain-line distinction all still die under their own mutations.",
       "Every test still runs with no herdr binary on PATH.",
       "No assertion anywhere was deleted or loosened."
     ],
     "prohibitions": [
-      "Do not weaken or delete the existing tests for the typed error, the ledger row count, or the json distinction.",
+      "Do not add another closure-literal seam — that is what moved the join last time.",
+      "Do not weaken or delete any existing test.",
       "Do not move config reading into the fleet crate.",
       "Do not require a running herdr server for any test.",
       "Do not change role-dispatch.md section 4 — that is the next cell.",
@@ -42,7 +44,7 @@
   "deps": [],
   "decisions": [],
   "trace": {
-    "worker": "w-ho-10r",
+    "worker": "w-ho-10s",
     "outcome": "Added bee herding wave (D17 HerdrBackend caller) and bee herding occupancy (D10 ledger read bridge), both CLI-reachable and registry-declared",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/herding.rs",
@@ -59,7 +61,7 @@
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
-    "claimed_at": "2026-08-18T13:36:53.213Z",
+    "claimed_at": "2026-08-18T13:55:02.690Z",
     "report": {
       "outcome": "Added bee herding wave (D17 HerdrBackend caller) and bee herding occupancy (D10 ledger read bridge), both CLI-reachable and registry-declared",
       "commit": "3fb2987d",
