@@ -11,13 +11,15 @@ use std::time::Duration;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkerSpec {
     /// The name the backend resolves this worker by. The choreography
-    /// dedupes specs whose `name` is the exact same string before
-    /// dispatch (Ordering Invariant 8) — that string-level dedupe is the
-    /// choreography's job, not this type's. It does NOT collapse two
-    /// different name strings that resolve to the same underlying target
-    /// (for example a name and its backend-side pane id): canonical-
-    /// identity resolution is backend-layer work, because the generic
-    /// core cannot know a backend's identity scheme without violating D2
+    /// dedupes specs whose names collapse to the same canonical identity
+    /// before dispatch (Ordering Invariant 8), by calling
+    /// `WorkerBackend::canonical_id` on each `name` and hashing the
+    /// result — never by comparing `name` strings directly. This DOES
+    /// collapse two different name strings that resolve to the same
+    /// underlying target (for example a name and its backend-side pane
+    /// id), as long as the backend's own `canonical_id` recognizes both;
+    /// an identifier the backend has never seen canonicalizes to itself,
+    /// so two truly distinct workers are never wrongly merged
     /// (herding-orchestration D15 — `fb8a8628`).
     pub name: String,
     /// The task text this worker is sent once the choreography dispatches

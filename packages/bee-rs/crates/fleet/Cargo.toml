@@ -7,3 +7,10 @@ description = "Generic worker coordination core — waves, tasks, waiting, resul
 [dependencies]
 anyhow.workspace = true
 serde.workspace = true
+# Only the herdr backend module (src/backend/herdr.rs) parses JSON with
+# this — the generic core and the fake backend need nothing beyond
+# `anyhow`/`serde`. herdr's own CLI responses are JSON on stdout
+# (skills/bee-herding/references/spawn-proof.md) and on stderr for errors
+# (docs/history/research/herdr-orchestrator-distill.md, "Docs" — herdr's
+# error contract).
+serde_json.workspace = true

@@ -85,6 +85,18 @@ struct WorkerState {
     /// called. That is exactly the fault this fake has to model: a
     /// worker that finishes before anyone starts watching it.
     started: bool,
+    /// How many times `send` has been called for this worker. Exposed
+    /// through `send_call_count` so a choreography test can prove exactly
+    /// one send happened — the D15 canonical-identity invariant's own
+    /// proof shape, alongside `status_call_count` and
+    /// `read_output_call_count`.
+    send_calls: usize,
+    /// How many times `read_output` has been called for this worker.
+    /// Exposed through `read_output_call_count` so a choreography test can
+    /// prove exactly one baseline capture (plus one confirming wait-poll
+    /// read) happened for a canonically-deduped target, without measuring
+    /// wall-clock time.
+    read_output_calls: usize,
 }
 
 /// A fault-injecting, in-memory `WorkerBackend`. Every method is a plain
@@ -95,6 +107,14 @@ struct WorkerState {
 #[derive(Debug, Default)]
 pub struct FakeBackend {
     workers: Mutex<HashMap<String, WorkerState>>,
+    /// The fake's stand-in for a real backend's own identity scheme
+    /// (herding-orchestration D15 — `fb8a8628`): an alias string resolves
+    /// to a canonical string through `WorkerBackend::canonical_id`, as
+    /// configured by `alias`. Empty by default, so `canonical_id` returns
+    /// every identifier unchanged until a test explicitly wires up an
+    /// alias — matching the trait's own documented safe default (an
+    /// identifier never seen resolves to itself).
+    aliases: Mutex<HashMap<String, String>>,
 }
 
 impl FakeBackend {
@@ -104,6 +124,18 @@ impl FakeBackend {
     /// before ever calling `start`.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Registers `alias` as resolving to `canonical` through
+    /// `WorkerBackend::canonical_id` — the fake's stand-in for the mapping
+    /// a real backend derives on its own (for herdr:
+    /// `herdr::HerdrBackend` derives it by asking `herdr agent list`).
+    /// Call this before building a `Wave` that references one target by
+    /// both `alias` and `canonical`, to model herding-orchestration D15's
+    /// "a name and its pane id" case.
+    pub fn alias(&self, alias: &str, canonical: &str) {
+        let mut aliases = self.aliases.lock().unwrap();
+        aliases.insert(alias.to_string(), canonical.to_string());
     }
 
     /// Queues `raw` to be the outcome of the next call to `status` for
@@ -193,9 +225,43 @@ impl FakeBackend {
             .map(|w| w.status_calls)
             .unwrap_or(0)
     }
+
+    /// How many times `send` has been called for `worker` so far. A
+    /// choreography test uses this, alongside `status_call_count` and
+    /// `read_output_call_count`, to prove a canonically-deduped target was
+    /// sent to exactly once (herding-orchestration D15 — `fb8a8628`).
+    pub fn send_call_count(&self, worker: &str) -> usize {
+        self.workers
+            .lock()
+            .unwrap()
+            .get(worker)
+            .map(|w| w.send_calls)
+            .unwrap_or(0)
+    }
+
+    /// How many times `read_output` has been called for `worker` so far.
+    /// Counts both a baseline capture (phase 3) and any confirming
+    /// wait-poll read (phase 5) — a choreography test uses this to prove
+    /// a canonically-deduped target was baselined exactly once (D15).
+    pub fn read_output_call_count(&self, worker: &str) -> usize {
+        self.workers
+            .lock()
+            .unwrap()
+            .get(worker)
+            .map(|w| w.read_output_calls)
+            .unwrap_or(0)
+    }
 }
 
 impl WorkerBackend for FakeBackend {
+    fn canonical_id(&self, name: &str) -> String {
+        let aliases = self.aliases.lock().unwrap();
+        aliases
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| name.to_string())
+    }
+
     fn start(&self, worker: &WorkerSpec) -> anyhow::Result<()> {
         let mut workers = self.workers.lock().unwrap();
         let state = workers.entry(worker.name.clone()).or_default();
@@ -233,6 +299,7 @@ impl WorkerBackend for FakeBackend {
         // `set_output` in the arrangement it configures.
         let mut workers = self.workers.lock().unwrap();
         let state = workers.entry(worker.to_string()).or_default();
+        state.send_calls += 1;
         let result = match state.send_queue.pop_front() {
             Some(Err(message)) => Err(anyhow::anyhow!(message)),
             Some(Ok(())) | None => Ok(()),
@@ -246,11 +313,10 @@ impl WorkerBackend for FakeBackend {
     }
 
     fn read_output(&self, worker: &str) -> anyhow::Result<String> {
-        let workers = self.workers.lock().unwrap();
-        Ok(workers
-            .get(worker)
-            .map(|w| w.output.clone())
-            .unwrap_or_default())
+        let mut workers = self.workers.lock().unwrap();
+        let state = workers.entry(worker.to_string()).or_default();
+        state.read_output_calls += 1;
+        Ok(state.output.clone())
     }
 }
 
@@ -335,5 +401,35 @@ mod tests {
         assert_eq!(backend.read_output("ghost").unwrap(), "");
         backend.set_output("w1", "hello world");
         assert_eq!(backend.read_output("w1").unwrap(), "hello world");
+    }
+
+    #[test]
+    fn canonical_id_defaults_to_identity_for_an_unaliased_name() {
+        // herding-orchestration D15 (`fb8a8628`): an identifier never
+        // configured as an alias must resolve to itself — the safe
+        // no-collapse default — never to a guess.
+        let backend = FakeBackend::new();
+        assert_eq!(backend.canonical_id("never-aliased"), "never-aliased");
+    }
+
+    #[test]
+    fn canonical_id_resolves_a_registered_alias_to_its_canonical_form() {
+        let backend = FakeBackend::new();
+        backend.alias("w4:pB", "reviewer-1");
+        assert_eq!(backend.canonical_id("w4:pB"), "reviewer-1");
+        // The canonical form itself is still its own canonical form.
+        assert_eq!(backend.canonical_id("reviewer-1"), "reviewer-1");
+    }
+
+    #[test]
+    fn send_and_read_output_call_counts_start_at_zero_and_increment() {
+        let backend = FakeBackend::new();
+        assert_eq!(backend.send_call_count("w1"), 0);
+        assert_eq!(backend.read_output_call_count("w1"), 0);
+        backend.send("w1", "task").unwrap();
+        backend.read_output("w1").unwrap();
+        backend.read_output("w1").unwrap();
+        assert_eq!(backend.send_call_count("w1"), 1);
+        assert_eq!(backend.read_output_call_count("w1"), 2);
     }
 }

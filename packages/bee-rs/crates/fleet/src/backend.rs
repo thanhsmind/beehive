@@ -10,6 +10,12 @@
 use crate::wave::WorkerSpec;
 
 pub mod fake;
+/// The herdr implementation of `WorkerBackend` — the first, and so far
+/// only, backend that actually shells out to an external process (D16 —
+/// `64e8abe6`). Lives beside `fake` in this same crate rather than in the
+/// `bee` crate or a third crate: herdr is a terminal multiplexer, not a
+/// bee concept, so it is a peer of the fake backend, not a bee concern.
+pub mod herdr;
 
 /// One worker's current status, as read from a backend. Exactly the five
 /// states the choreography needs — no more, no fewer (D7).
@@ -106,6 +112,26 @@ impl CompletionSignal {
 /// fake (`fake::FakeBackend`), so the choreography that drives this trait
 /// is testable with no running external process.
 pub trait WorkerBackend {
+    /// Resolves `name` — which may be a worker's addressing name OR any
+    /// alias this backend recognizes for the exact same underlying target
+    /// (for example herdr's own pane id, addressing the same running
+    /// agent a friendly name also addresses) — to one canonical string.
+    /// Two identifiers naming the same target MUST resolve to the same
+    /// canonical string; an identifier this backend has never seen
+    /// resolves to itself, the safe no-collapse default, never to a guess
+    /// (herding-orchestration D15 — `fb8a8628`).
+    ///
+    /// This is the ONLY seam through which the generic choreography (D2)
+    /// learns that two identifiers might name one target: it dedupes by
+    /// calling this method and hashing the result (Ordering Invariant 8),
+    /// never by inspecting an identifier's shape itself — inspecting the
+    /// shape would mean the generic core had learned a backend's identity
+    /// scheme, which D2 forbids. `FakeBackend` implements this through an
+    /// explicit test-only alias map (`fake::FakeBackend::alias`); the
+    /// herdr backend implements it by asking herdr itself
+    /// (`herdr::HerdrBackend`).
+    fn canonical_id(&self, name: &str) -> String;
+
     /// Starts `worker`, making it addressable by name for the other three
     /// methods. Does not send it a task.
     fn start(&self, worker: &WorkerSpec) -> anyhow::Result<()>;

@@ -77,20 +77,29 @@ impl WaveResult {
 }
 
 /// Ordering Invariant 8 (dedupe before preflight): collapse `workers` to
-/// one entry per distinct `WorkerSpec::name`, keeping the first
-/// occurrence's task text and the original order. Within this generic
-/// core, `WorkerSpec::name` IS the canonical identity — the trait exposes
-/// no separate name-to-canonical-id resolution, so a name and an alias
-/// referring to the same backend-side target (for example a herdr pane
-/// id) collapse only in a later, backend-specific phase, not here (D2;
-/// herding-orchestration D15 — `fb8a8628`). This MUST run before any
-/// status is read (phase 2) or anything is sent (phase 4/5).
-fn resolve_and_dedupe(workers: &[WorkerSpec]) -> Vec<WorkerSpec> {
+/// one entry per canonical identity, keeping the first occurrence's task
+/// text and the original order. The canonical identity of each spec's
+/// `name` is resolved by calling `WorkerBackend::canonical_id` — never by
+/// comparing `name` strings directly, and never by this crate inspecting
+/// an identifier's shape — so a name and an alias referring to the same
+/// backend-side target (for example a herdr pane id) DO collapse here,
+/// exactly when the backend itself recognizes both as one target. The
+/// generic core never learns what makes two identifiers equivalent; it
+/// only ever hashes what the backend hands back (D2; herding-orchestration
+/// D15 — `fb8a8628`). Each surviving spec's `name` is REWRITTEN to its
+/// canonical form, so every later phase (start, status, send, read) always
+/// addresses the one consistent identity. This MUST run before any status
+/// is read (phase 2) or anything is sent (phase 4/5).
+fn resolve_and_dedupe<B: WorkerBackend + ?Sized>(backend: &B, workers: &[WorkerSpec]) -> Vec<WorkerSpec> {
     let mut seen = HashSet::new();
     let mut deduped = Vec::with_capacity(workers.len());
     for worker in workers {
-        if seen.insert(worker.name.clone()) {
-            deduped.push(worker.clone());
+        let canonical = backend.canonical_id(&worker.name);
+        if seen.insert(canonical.clone()) {
+            deduped.push(WorkerSpec {
+                name: canonical,
+                task: worker.task.clone(),
+            });
         }
     }
     deduped
@@ -182,7 +191,7 @@ pub fn run_wave<B: WorkerBackend + Sync + ?Sized>(backend: &B, wave: &Wave) -> W
     // Phase 1 — resolve and dedupe every target to a canonical identity,
     // aborting the WHOLE wave, before anything is sent, if any target
     // fails to resolve.
-    let targets = resolve_and_dedupe(&wave.workers);
+    let targets = resolve_and_dedupe(backend, &wave.workers);
     let mut resolution_failed = Vec::new();
     for target in &targets {
         if backend.start(target).is_err() {

@@ -353,14 +353,15 @@ fn invariant_7_settling_on_finished_early_does_not_wait_out_the_full_ceiling() {
 /// target that appears twice in the wave's worker list must be sent to
 /// exactly once, and must cost exactly one preflight read.
 ///
-/// Scope, per herding-orchestration D15 (`fb8a8628`): at this layer the
-/// invariant holds only for specs whose `name` is the exact same string,
-/// which is what this test exercises. Two different name strings resolving
-/// to one underlying target — a name and its backend-side pane id — are
-/// NOT collapsed here, because the generic core has no canonical-identity
-/// resolver and cannot gain one without knowing a backend's identity
-/// scheme (D2). Closing that half is the backend phase's obligation, and
-/// D15 records the four things it owes.
+/// This is the base case, with no alias configured: dedup by
+/// `WorkerBackend::canonical_id`, which for two identical strings and no
+/// alias returns the same string both times, matching plain string-level
+/// dedup exactly. The case D15 (`fb8a8628`) named as still open when this
+/// test was first written — a name and a DIFFERENTLY-SPELLED alias for the
+/// same underlying target, such as a herdr pane id — is now closed by
+/// `canonical_id` itself; see
+/// `invariant_8_a_name_and_its_backend_side_pane_id_collapse_to_one_target`
+/// directly below, which is the test D15 records as owed.
 #[test]
 fn invariant_8_a_duplicate_target_name_is_sent_to_exactly_once() {
     let backend = FakeBackend::new();
@@ -396,6 +397,73 @@ fn invariant_8_a_duplicate_target_name_is_sent_to_exactly_once() {
         "a name appearing twice must still cost exactly one preflight read, one re-check, and \
          one wait poll — not two of each; got {} calls",
         backend.status_call_count("w1")
+    );
+}
+
+/// Ordering Invariant 8, the case D15 (`fb8a8628`) records as owed: a name
+/// and its backend-side pane id — two DIFFERENT strings the backend
+/// recognizes as one underlying target — must collapse to exactly one
+/// send, one baseline, and one succeeded entry, proven quantitatively via
+/// `FakeBackend`'s per-worker call counters rather than by eye.
+///
+/// `FakeBackend::alias` stands in for the mapping a real backend derives
+/// on its own — for herdr, `HerdrBackend::canonical_id` derives it by
+/// asking `herdr agent list`. The generic choreography itself never learns
+/// that "w4:pB" and "reviewer-1" name the same thing; it only ever calls
+/// `WorkerBackend::canonical_id` and hashes what comes back
+/// (`crate::choreography`'s `resolve_and_dedupe`).
+#[test]
+fn invariant_8_a_name_and_its_backend_side_pane_id_collapse_to_one_target() {
+    let backend = FakeBackend::new();
+    backend.alias("w4:pB", "reviewer-1");
+
+    backend.set_output("reviewer-1", "prompt\n$ ");
+    backend.schedule_output_on_send("reviewer-1", "prompt\n$ T8PANEMARK done");
+    backend.schedule_status("reviewer-1", RawStatus::Value(WorkerStatus::Ready)); // phase 2
+    backend.schedule_status("reviewer-1", RawStatus::Value(WorkerStatus::Ready)); // phase 4
+    backend.schedule_status("reviewer-1", RawStatus::Value(WorkerStatus::Finished)); // wait poll
+
+    let wave = Wave::new(
+        vec![
+            WorkerSpec::new("reviewer-1", "T8PANEMARK"),
+            WorkerSpec::new("w4:pB", "T8PANEMARK"),
+        ],
+        small_timeouts(),
+        FailurePolicy::WaitForAll,
+    );
+    let result = run_wave(&backend, &wave);
+
+    assert!(
+        result.is_success(),
+        "a name and its pane id addressing one target must still succeed as one send; got \
+         {result:?}"
+    );
+    assert_eq!(
+        result.succeeded,
+        vec!["reviewer-1".to_string()],
+        "a name and its pane id addressing one target must produce exactly ONE succeeded entry \
+         — never two — under the canonical form the backend resolved both to; got {result:?}"
+    );
+    assert_eq!(
+        backend.send_call_count("reviewer-1"),
+        1,
+        "exactly one send — a name and its pane id must never each be dispatched to \
+         separately; got {} calls",
+        backend.send_call_count("reviewer-1")
+    );
+    assert_eq!(
+        backend.read_output_call_count("reviewer-1"),
+        2,
+        "exactly one baseline read (phase 3) plus one confirming wait-poll read (phase 5) — \
+         never two of each, which is what a failed collapse would produce; got {} calls",
+        backend.read_output_call_count("reviewer-1")
+    );
+    assert_eq!(
+        backend.status_call_count("reviewer-1"),
+        3,
+        "exactly one preflight read, one re-check, and one confirming wait poll — never two of \
+         each; got {} calls",
+        backend.status_call_count("reviewer-1")
     );
 }
 
