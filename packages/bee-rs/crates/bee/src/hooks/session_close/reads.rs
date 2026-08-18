@@ -174,19 +174,19 @@ pub(crate) fn js_number(v: &Value) -> f64 {
     }
 }
 
-/// readJsonl — skip corrupt lines, never fail.
-/// auto-wait-mark rework: per-thread log of every path `read_jsonl` was
-/// asked to read, test-only. `cargo test` runs each test on its own thread
-/// (reused across tests, never shared mid-test), so a thread-local needs no
-/// lock and no cross-test interference — it exists purely so a test can pin
-/// "exactly one `std::fs::read` of THIS file per Stop" instead of eyeballing
-/// the call graph. Never read in non-test builds; never a cache of content,
-/// only a call tally.
+// auto-wait-mark rework: per-thread log of every path `read_jsonl` was
+// asked to read, test-only. `cargo test` runs each test on its own thread
+// (reused across tests, never shared mid-test), so a thread-local needs no
+// lock and no cross-test interference — it exists purely so a test can pin
+// "exactly one `std::fs::read` of THIS file per Stop" instead of eyeballing
+// the call graph. Never read in non-test builds; never a cache of content,
+// only a call tally.
 #[cfg(test)]
 thread_local! {
     pub(crate) static READ_JSONL_LOG: std::cell::RefCell<Vec<PathBuf>> = std::cell::RefCell::new(Vec::new());
 }
 
+/// readJsonl — skip corrupt lines, never fail.
 pub(crate) fn read_jsonl(file: &Path) -> Vec<Value> {
     #[cfg(test)]
     READ_JSONL_LOG.with(|log| log.borrow_mut().push(file.to_path_buf()));

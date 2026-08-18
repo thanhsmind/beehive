@@ -694,6 +694,82 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(state["waiting_on"]["subject"], "hello there");
     }
 
+    /// auto-wait-mark second rework: the same one-read guarantee, but on the
+    /// path where the perf refresh FAILS *after* its read. `BEEHIVE_PERF_DIR`
+    /// points at a regular file here, so `upsert_session_records`'
+    /// `create_dir_all` errors — strictly after the transcript was read. The
+    /// previous shape folded the events into that `Err`, `run_inner` turned
+    /// it into `None`, and `turn_end_subject` then re-resolved and re-read
+    /// the same file: two reads per Stop, the one thing
+    /// `docs/history/auto-wait-mark/CONTEXT.md` forbids. The events now
+    /// survive the failure, so this lands at exactly one read — and the mark
+    /// is still written from it, with the perf error still logged.
+    #[test]
+    fn a_late_perf_refresh_failure_still_reads_the_transcript_exactly_once() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        // A regular FILE where the perf dir belongs: every write under it
+        // fails, and the first such failure comes after the transcript read.
+        let perf_file = perf.path().join("not-a-dir");
+        std::fs::write(&perf_file, "").unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", &perf_file) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello there"}]}}"#],
+        );
+        let transcript_path = config
+            .path()
+            .join("projects")
+            .join(encode_project_dir(&root.to_string_lossy()))
+            .join("s-1.jsonl");
+
+        // The failure is real, and it lands after the read: the same call
+        // the hook makes returns Err, and hands the events back anyway.
+        let refreshed = perf_refresh(root, Some("s-1"));
+        assert!(refreshed.result.is_err(), "the perf refresh must fail on a file-shaped perf dir");
+        assert!(
+            refreshed.events.as_ref().is_some_and(|e| !e.is_empty()),
+            "a failing perf refresh must still hand back the events it read"
+        );
+
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+
+        READ_JSONL_LOG.with(|log| log.borrow_mut().clear());
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+        let transcript_reads = READ_JSONL_LOG
+            .with(|log| log.borrow().iter().filter(|p| **p == transcript_path).count());
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        assert_eq!(
+            transcript_reads, 1,
+            "a Stop whose perf refresh fails after its read must still read the transcript once, got {transcript_reads}"
+        );
+        // The mark is still written, from that one read.
+        let state: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["waiting_on"]["kind"], "turn-end");
+        assert_eq!(state["waiting_on"]["subject"], "hello there");
+    }
+
     #[test]
     fn a_final_assistant_text_block_that_is_blank_still_yields_a_non_empty_subject() {
         let _perf_guard = lock_perf_env();

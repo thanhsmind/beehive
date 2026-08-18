@@ -151,14 +151,15 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
     // auto-wait-mark rework: `perf_refresh` hands back the transcript events
     // it already resolved and read (`Some`, possibly empty, when a
     // transcript resolved at all) so the turn-end mark below reuses them
-    // instead of a second `read_jsonl` of the same file.
-    let perf_events = match perf_refresh(&root, session_id.as_deref()) {
-        Ok(events) => events,
-        Err(msg) => {
-            log_crash(Some(&root), HOOK_NAME, &msg, Some("perf-refresh"));
-            None
-        }
-    };
+    // instead of a second `read_jsonl` of the same file. They come back on
+    // EVERY path, a late failure of the rollup's own bookkeeping included -
+    // that error is still logged exactly as before, but it no longer costs
+    // the mark the read this turn already paid for.
+    let perf = perf_refresh(&root, session_id.as_deref());
+    if let Err(msg) = perf.result {
+        log_crash(Some(&root), HOOK_NAME, &msg, Some("perf-refresh"));
+    }
+    let perf_events = perf.events;
 
     let mut stdout = String::new();
     let mut stderr = String::new();
@@ -292,7 +293,7 @@ fn try_set_turn_end_mark(
     // at all — distinct from a transcript that resolves fine but whose
     // FINAL assistant text happens to be blank, which still writes (with
     // the fallback subject, below `turn_end_subject`'s `Some` branch).
-    let Some(subject) = turn_end_subject(root, Some(session), cached_events) else {
+    let Some(subject) = turn_end_subject(cached_events) else {
         return Ok(());
     };
     // D3's own target resolution (session-scoped first, feature-scoped only
@@ -356,37 +357,28 @@ fn waiting_on_err_message(e: crate::verbs::reservations::Err2) -> String {
 }
 
 /// D6: the `subject` a `turn-end` mark carries — the last non-empty line of
-/// the turn's final assistant text block, trimmed and truncated. Reuses
-/// `perf.rs`'s own `resolve_transcript_for`, already resolved (and its file
-/// read) on every Stop for the perf rollup — no second resolution path, no
-/// second transcript read: `cached_events` carries the SAME events
-/// `perf_refresh` already parsed for this Stop (`Some`, possibly empty, once
-/// a transcript resolved at all), and this function reuses them instead of
-/// reading the file again. `None` is only passed by a caller outside the
-/// Stop dispatch (there is none today; kept so a direct/test call without a
-/// prior `perf_refresh` still resolves and reads for itself, exactly as
-/// before).
+/// the turn's final assistant text block, trimmed and truncated.
 ///
-/// `None` is the "nothing to report" case — a missing, unreadable, or
-/// malformed transcript (`resolve_transcript_for` finds nothing, or the file
-/// carries zero parseable JSONL events) — and the caller writes no mark at
-/// all for it. `Some` is returned once the transcript itself is usable, even
-/// when the specific last line it yields is empty or whitespace-only:
-/// `build_waiting_on` refuses an empty subject, so that case still resolves
-/// to `TURN_END_FALLBACK_SUBJECT` rather than `None` — the transcript did
-/// its job, there was just nothing to quote.
-fn turn_end_subject(
-    root: &Path,
-    session_id: Option<&str>,
-    cached_events: Option<Vec<Value>>,
-) -> Option<String> {
-    let events = match cached_events {
-        Some(events) => events,
-        None => {
-            let path = resolve_transcript_for(root, session_id)?;
-            read_jsonl(&path)
-        }
-    };
+/// This function resolves nothing and reads nothing. `perf_refresh` already
+/// resolved the transcript (through `perf.rs`'s `resolve_transcript_for`,
+/// the ONE resolution path) and read it once for the perf rollup, and it
+/// hands those very events here on every path — a late failure of its own
+/// bookkeeping included. So there is no fallback branch left that could
+/// re-read the file, and no caller anywhere that could reach one: a Stop
+/// reads its transcript exactly once, which is what
+/// `docs/history/auto-wait-mark/CONTEXT.md` requires.
+///
+/// `transcript_events` is `None` only when NO transcript resolved for this
+/// Stop, and `Some(empty)` when one resolved but carries zero parseable
+/// JSONL events. Both are the "nothing to report" case: this returns `None`
+/// and the caller writes no mark at all. `Some` comes back once the
+/// transcript itself is usable, even when the specific last line it yields
+/// is empty or whitespace-only — `build_waiting_on` refuses an empty
+/// subject, so that case still resolves to `TURN_END_FALLBACK_SUBJECT`
+/// rather than `None`: the transcript did its job, there was just nothing to
+/// quote.
+fn turn_end_subject(transcript_events: Option<Vec<Value>>) -> Option<String> {
+    let events = transcript_events?;
     if events.is_empty() {
         return None;
     }

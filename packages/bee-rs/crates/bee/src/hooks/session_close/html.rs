@@ -257,25 +257,53 @@ document.querySelectorAll('tr.row').forEach(function(r){{
     ))
 }
 
-/// maybePerfRefresh — best-effort; Err(msg) => logCrash(source 'perf-refresh').
+/// The outcome of one `maybePerfRefresh`: the transcript events it resolved
+/// and read, and the rollup/report bookkeeping's own best-effort result.
 ///
-/// auto-wait-mark rework: returns the parsed transcript events it resolved
-/// and read (`Some`, possibly empty) so the caller's own turn-end mark logic
-/// (`turn_end_subject`) can reuse them instead of resolving and reading the
-/// same file a second time — `None` only when no transcript resolved at all,
-/// exactly mirroring what a second `resolve_transcript_for` call would find.
-pub(crate) fn perf_refresh(root: &Path, session_id: Option<&str>) -> Result<Option<Vec<Value>>, String> {
-    let events = match resolve_transcript_for(root, session_id) {
-        Some(transcript) => {
-            let events = read_jsonl(&transcript);
-            if let Some(rollup) = rollup_from_events(&transcript, &events) {
-                let record = session_record(&rollup)?;
-                upsert_session_records(&[record])?;
-            }
-            Some(events)
+/// auto-wait-mark rework: the two are deliberately INDEPENDENT. The
+/// transcript read happens first and cannot fail (`read_jsonl` swallows
+/// every corrupt line and never errors); every fallible step comes after
+/// it. Folding the events into the `Result` would discard them whenever a
+/// LATE step failed, and the caller's turn-end mark would then read the
+/// same file a second time - exactly the constraint
+/// `docs/history/auto-wait-mark/CONTEXT.md` locks ("it must not add a
+/// second transcript read per turn"). So the events ride out on every path
+/// and the error rides beside them, logged exactly as before.
+pub(crate) struct PerfRefresh {
+    /// The parsed transcript events: `Some` (possibly empty) once a
+    /// transcript resolved at all, `None` when none did - precisely what a
+    /// second `resolve_transcript_for` + `read_jsonl` would have found.
+    pub(crate) events: Option<Vec<Value>>,
+    /// The rollup + report bookkeeping's outcome. `Err(msg)` =>
+    /// logCrash(source 'perf-refresh'), unchanged.
+    pub(crate) result: Result<(), String>,
+}
+
+/// maybePerfRefresh - best-effort; `result: Err(msg)` => logCrash(source
+/// 'perf-refresh'). See `PerfRefresh` for why the events sit beside the
+/// `Result` rather than inside it.
+pub(crate) fn perf_refresh(root: &Path, session_id: Option<&str>) -> PerfRefresh {
+    // Resolve and read FIRST, then do the fallible bookkeeping - so no
+    // failure below can cost the caller these events.
+    let resolved = resolve_transcript_for(root, session_id).map(|transcript| {
+        let events = read_jsonl(&transcript);
+        (transcript, events)
+    });
+    let result = perf_rollup(resolved.as_ref());
+    PerfRefresh { events: resolved.map(|(_, events)| events), result }
+}
+
+/// The fallible half of `perf_refresh`: roll the already-read events into the
+/// machine-global session log, then re-render the matrix report. Takes the
+/// resolved transcript and its events by reference, so a failure here leaves
+/// them whole for the caller.
+fn perf_rollup(resolved: Option<&(PathBuf, Vec<Value>)>) -> Result<(), String> {
+    if let Some((transcript, events)) = resolved {
+        if let Some(rollup) = rollup_from_events(transcript, events) {
+            let record = session_record(&rollup)?;
+            upsert_session_records(&[record])?;
         }
-        None => None,
-    };
+    }
     if !read_session_records().is_empty() {
         let projects = build_matrix_from_log();
         let html = render_matrix_html(&projects, &now_iso())?;
@@ -285,5 +313,5 @@ pub(crate) fn perf_refresh(root: &Path, session_id: Option<&str>) -> Result<Opti
         }
         std::fs::write(&out, html).map_err(|e| format!("Error: {e}"))?;
     }
-    Ok(events)
+    Ok(())
 }
