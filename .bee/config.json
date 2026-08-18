@@ -11,6 +11,7 @@
     "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"
   },
   "gate_bypass": "normal",
+  "worktree_first": "off",
   "models": {
     "claude": {
       "extraction": "haiku",
