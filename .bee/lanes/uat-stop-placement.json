@@ -8,7 +8,7 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"uat-stop-placement\" started at phase \"exploring\" (lane).",
   "next_action": "Continue bee-exploring for \"uat-stop-placement\" (lane).",

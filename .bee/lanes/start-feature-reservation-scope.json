@@ -8,7 +8,7 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"start-feature-reservation-scope\" started at phase \"planning\" (lane).",
   "next_action": "Continue bee-planning for \"start-feature-reservation-scope\" (lane).",
