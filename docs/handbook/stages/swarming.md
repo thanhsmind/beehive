@@ -64,10 +64,12 @@ unwound and nothing is left half-done),
   surface to the user with the worker's diagnosis. If it invalidates the plan,
   return to planning.
 - **Slice clean is a door set, not a feeling**: `bee close --feature <slug>
-  --dry-run` names every remaining door with the command that settles it; tests
-  prove at the boundary — the final slice runs `bee close --feature <slug>`,
-  which runs the declared tests when the feature has no worktree, or `bee
-  worktree merge`, which runs them when it does. Doors are never waived.
+  --dry-run` names every remaining door with the command that settles it;
+  proof is checked, never re-run — the final slice runs `bee close --feature
+  <slug>`, which checks every capped cell's recorded proof line
+  unconditionally, or `bee worktree merge`, which checks the same recorded
+  lines against the staged merge. Neither door spawns a test run itself.
+  Doors are never waived.
 - **Completion**: more approved work remaining → back to planning for the next
   batch (the approved plan stays frozen). Final slice green → tell the user
   execution is complete, capture is recorded as *pending*, and landing is

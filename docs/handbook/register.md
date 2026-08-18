@@ -128,7 +128,7 @@ Per-repo configuration.
 
 Read by hive (bypass level), planning (test scoping), swarming (model tiers),
 and `bee test` (`commands.test`, its own runner). `bee close` and `bee
-worktree merge` no longer read `commands.test` — each checks the cap's own
+worktree merge` no longer run `commands.test` — each checks the cap's own
 recorded proof line instead; `bee cells finish` is commit-only proof and
 writes that line.
 `.bee/config-sample.json` is the annotated
@@ -370,7 +370,7 @@ the next action in plain language.
 | `bee decisions log` · `decisions active` | Record an agreement · what is in force |
 | `bee capture add` · `bee backlog add` | Queue a learning stub · park future work |
 | `bee test` | Run `commands.test`, write `.bee/logs/test-results.json` |
-| `bee close` | Feature close driver: recorded-proof check (when no worktree; defers to merge when one exists) → what remains |
+| `bee close` | Feature close driver: recorded-proof check (unconditionally, whether or not the feature has a worktree) → what remains |
 | `bee doctor` | Install health: verdict ladder over the wiring, the vendored binary, and the runtime (`doctor attest` is the plumbing-surface attestation) |
 
 Four of them are **aliases**, not new behavior — argv is rewritten and the proven

@@ -147,7 +147,7 @@ sequenceDiagram
     W->>B: cells finish --id
     B->>S: cap — commit-only proof, records its own proof line
     W-->>O: [DONE] / [BLOCKED] / [HANDOFF] / [NOOP]
-    O->>B: bee close --feature (checks each cap's recorded proof line when no worktree, retires cells)
+    O->>B: bee close --feature (checks each cap's recorded proof line unconditionally, retires cells)
     O->>B: worktree merge --id (auto-commit .bee + this feature's docs/history,<br/>refuse and NAME anything dirty outside those, verify green, worktree removed)
     O-->>U: outcome + capture line
     Note over O: scribing + compounding later,<br/>at the owner's pace

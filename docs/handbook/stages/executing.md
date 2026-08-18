@@ -46,8 +46,11 @@ the cell's `trace`, one git commit.
 - **`bee finish` is the completion door, and it is commit-only proof.** It caps
   and releases, recording the cap's own proof line `<command> — <result> —
   <scope reason>`; `bee close` and `bee worktree merge` check that recorded
-  proof and run nothing themselves — and a red proof refuses that door,
-  carries the failing excerpt, and that red is now the next work. There is
+  proof and run nothing themselves. A red result segment refuses the cap
+  itself, right here at `bee finish` — never at close or merge — and that
+  red is now the next work; a capped cell with no valid proof line instead
+  refuses the close/merge door, naming the cell, with no failing excerpt to
+  carry (there was no test run at the door to produce one). There is
   no proof tier to satisfy, no red-first evidence flag, and no `cells verify`
   step: the cell's own `verify` field is plan text MAIN runs once at feature
   close (`verify_owner`), never the worker.
