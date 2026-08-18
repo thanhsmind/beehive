@@ -29,6 +29,7 @@ mod router;
 mod shell;
 mod state;
 mod textutil;
+mod uat;
 mod verbs;
 mod version;
 

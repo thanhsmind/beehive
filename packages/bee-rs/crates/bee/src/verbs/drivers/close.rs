@@ -60,6 +60,12 @@ pub(crate) const CLOSE_ROUTING_PREFIX: &str = "Routing debt for";
 /// CONTEXT.md D3, plan v2 kds-3.
 pub(crate) const CLOSE_DOC_DEFERRAL_PREFIX: &str = "Doc deferral debt for";
 
+/// uat-stop-placement D4.4/D2 (docs/history/uat-stop-placement/CONTEXT.md):
+/// pinned prefix of the close-time uat-door refusal headline
+/// (message-contract test lives beside the rest of this door's tests,
+/// below in this file's own `mod tests`).
+pub(crate) const CLOSE_UAT_PREFIX: &str = "Uat gate pending for";
+
 /// provenance: test-runner.mjs declaredTestCommands + state.mjs
 /// normalizeCommands (verbs/test_runner.rs:184 declared_test_commands).
 /// `None` == JS `null` (undeclared).
@@ -408,6 +414,51 @@ pub(crate) fn has_judge_deferral_decision(root: &Path, feature: &str) -> D<bool>
     )
     .map_err(|_| Delegate)?;
     Ok(!filtered.is_empty())
+}
+
+/// uat-stop-placement D2 (docs/history/uat-stop-placement/CONTEXT.md):
+/// mirrors `has_judge_deferral_decision` above — a logged decision tagged
+/// `uat-deferral` naming the feature lifts the close-time uat-door
+/// refusal, the same escape shape `judge-debt` already established.
+pub(crate) fn has_uat_deferral_decision(root: &Path, feature: &str) -> D<bool> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    let filtered = crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some("uat-deferral".to_string()),
+            feature: Some(feature.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| Delegate)?;
+    Ok(!filtered.is_empty())
+}
+
+/// uat-stop-placement D4.4/D2: reads `gates.uat.approved` exactly the way
+/// the merge-side `uat_merge_precheck` does (verbs/worktree/phases.rs) — the
+/// live workflow record's own `gates.uat.approved` first, falling back to
+/// the plain default `.bee/state.json` record's `approved_gates.uat` ONLY
+/// when that record is presently tracking THIS feature, so a foreign
+/// feature's approval never leaks through as "approved" for a different
+/// one. Both reads are fail-open by construction (`list_workflows`,
+/// `read_state_peek` never throw for an ordinary missing/corrupt shape), so
+/// an unreadable store reads as "not approved" — the safe direction.
+fn uat_gate_approved(root: &Path, feature: &str) -> bool {
+    let workflows = crate::verbs::workflow_store::list_workflows(root).unwrap_or_default();
+    let live = crate::verbs::workflow_store::find_live_workflow(&workflows, feature);
+    if let Some(wf) = live {
+        matches!(
+            wf.get("gates").and_then(|g| g.get("uat")).and_then(|e| e.get("approved")),
+            Some(Value::Bool(true))
+        )
+    } else {
+        crate::verbs::state_group::read_state_peek(root)
+            .ok()
+            .filter(|state| matches!(state.get("feature"), Some(Value::String(f)) if f == feature))
+            .is_some_and(|state| {
+                matches!(state.get("approved_gates").and_then(|g| g.get("uat")), Some(Value::Bool(true)))
+            })
+    }
 }
 
 /// provenance: capture.mjs pendingCaptureStubs + captureQueue
@@ -1253,6 +1304,56 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
             command: judge_command,
         });
     }
+
+    // uat-stop-placement D4.4/D2 (docs/history/uat-stop-placement/CONTEXT.md):
+    // built and ordered beside the judge-debt door just above — same
+    // lane-scoped, blocking, deferral-escapable shape. The door is PRESENT
+    // ONLY under `UatStop::Close`: under `Merge` the stop already lives at
+    // `bee worktree merge` (untouched here), and under `Off` there is no
+    // uat stop anywhere, so neither placement grows this door at all. A
+    // `None` from `uat_stop_config` (a bogus `uat_stop`/`uat_before_merge`
+    // value) still grows the door, but BLOCKING with an invalid-config
+    // detail naming both keys and their legal values — the two-key read
+    // order is ambiguous on a typo, and guessing either way is worse than
+    // refusing.
+    match crate::uat::uat_stop_config(root) {
+        None => {
+            doors.push(Door {
+                door: "uat",
+                blocking: true,
+                detail: "invalid config — \"uat_stop\" must be \"merge\", \"close\", or \"off\"; the legacy \"uat_before_merge\" must be a boolean (true reads as \"merge\", false reads as \"off\") — fix .bee/config.json".to_string(),
+                command: None,
+            });
+        }
+        Some(crate::uat::UatStop::Close) => {
+            // D2: the same lane rule the merge side uses, now read from the
+            // one shared policy module — missing or unknown fails closed as
+            // "standard" (applies), only tiny/small/docs/spike are exempt.
+            let lane = feature_route(root, feature)?;
+            let lane_applies = crate::uat::uat_gate_applies_to_lane(lane.as_deref());
+            let gate_approved = lane_applies && uat_gate_approved(root, feature);
+            let uat_deferred =
+                if lane_applies && !gate_approved { has_uat_deferral_decision(root, feature)? } else { false };
+            let uat_blocking = lane_applies && !gate_approved && !uat_deferred;
+            doors.push(Door {
+                door: "uat",
+                blocking: uat_blocking,
+                detail: if !lane_applies {
+                    "clear — this lane is exempt from the close-time uat door".to_string()
+                } else if gate_approved {
+                    "clear".to_string()
+                } else if uat_deferred {
+                    format!("deferred — the uat gate for \"{feature}\" is not yet approved; a logged uat-deferral decision names \"{feature}\"")
+                } else {
+                    format!(
+                        "pending — the uat gate for \"{feature}\" is not yet approved; the product is on main now — reload it, test it, then bee gate --name uat --approved true, or fix in the worktree and merge again"
+                    )
+                },
+                command: if uat_blocking { Some("bee gate --name uat --approved true") } else { None },
+            });
+        }
+        Some(crate::uat::UatStop::Merge) | Some(crate::uat::UatStop::Off) => {}
+    }
     Ok(doors)
 }
 
@@ -1679,6 +1780,30 @@ pub(crate) fn close_handler(
             ),
             remedy,
             format!("next: settle the judge debt above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
+    // ── uat-stop-placement D4.4/D2: refuse on a pending close-time uat door ─
+    //
+    // Runs only here — tests GREEN (or undeclared) and past the D1 capture-
+    // debt and judge-debt refusals above — same "reads the door's own
+    // verdict, never recomputes it" discipline those doors already
+    // established. The door only exists under `uat_stop: "close"` for a
+    // lane that cares (build_close_report_doors omits or clears it
+    // otherwise), so under `"merge"`/`"off"`, an exempt lane, an approved
+    // gate, or a logged `uat-deferral` decision, this refusal is
+    // unreachable.
+    if doors.iter().any(|d| d.door == "uat" && d.blocking) {
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let lines = vec![
+            format!("{CLOSE_UAT_PREFIX} \"{feature}\" — close stops at the uat door: the uat gate is not yet approved."),
+            "remedy: the product is on main now — reload it, test it, then bee gate --name uat --approved true, or fix in the worktree and merge again.".to_string(),
+            format!("next: settle the uat gate above, then re-run bee close --feature {feature}"),
         ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
@@ -3246,5 +3371,170 @@ mod tests {
         assert!(text.starts_with("Tests GREEN for \"demo\""), "text: {text}");
         let after = std::fs::read_to_string(root.join(".bee/lanes/demo.json")).unwrap();
         assert_eq!(after, r#"{"feature":"demo","phase":"frobnicating"}"#);
+    }
+
+    // ─── tests: uat-stop-placement D4.4/D2 close-time uat door ─────────────
+    //
+    // Precedent: judge-debt (above, `judge_debt_door_*`/`close_refuses_
+    // judge_debt_for_a_standard_lane_feature`, verbs/cells/tests.rs) —
+    // lane-scoped, blocking, escapable by a logged deferral decision. These
+    // tests live here rather than there because the door itself, and every
+    // helper it calls, is local to this file (this cell's scope is
+    // drivers/close.rs alone).
+
+    fn write_lane_mode(root: &Path, feature: &str, mode: &str) {
+        w(root, &format!(".bee/lanes/{feature}.json"), &format!(r#"{{"feature":"{feature}","mode":"{mode}"}}"#));
+    }
+
+    fn write_uat_gate_state(root: &Path, feature: &str, approved: bool) {
+        w(
+            root,
+            ".bee/state.json",
+            &format!(r#"{{"feature":"{feature}","approved_gates":{{"uat":{approved}}}}}"#),
+        );
+    }
+
+    /// D4.4: under `uat_stop: "merge"` (today's default — no key at all)
+    /// and under `"off"`, the door does not appear in the door list at
+    /// all, even for a standard lane whose uat gate is unapproved.
+    #[test]
+    fn uat_door_is_absent_under_merge_and_under_off() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_mode(root, "demo", "standard");
+
+        // Default: no `uat_stop` key at all reads as `Merge`.
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        assert!(doors.iter().find(|d| d.door == "uat").is_none(), "merge (default) must never grow the door");
+
+        w(root, ".bee/config.json", r#"{"uat_stop":"off"}"#);
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        assert!(doors.iter().find(|d| d.door == "uat").is_none(), "off must never grow the door");
+    }
+
+    /// D2, D4.4: under `close`, a standard lane whose uat gate is
+    /// unapproved grows a BLOCKING uat door naming the remedy command.
+    #[test]
+    fn uat_door_blocks_a_standard_lane_feature_under_close_with_uat_unapproved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode(root, "demo", "standard");
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat").expect("door must exist under close for a standard lane");
+        assert!(uat_door.blocking, "an unapproved uat gate must block under close");
+        assert_eq!(uat_door.command, Some("bee gate --name uat --approved true"));
+        assert!(uat_door.detail.contains("not yet approved"), "{}", uat_door.detail);
+    }
+
+    /// D2, D4.4: the same lane, once the uat gate is approved (via the
+    /// default-state fallback, same-feature-owned), clears the door — still
+    /// present, no longer blocking.
+    #[test]
+    fn uat_door_does_not_block_once_uat_is_approved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode(root, "demo", "standard");
+        write_uat_gate_state(root, "demo", true);
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat").expect("door must exist under close for a standard lane");
+        assert!(!uat_door.blocking, "an approved uat gate must not block");
+        assert_eq!(uat_door.detail, "clear");
+        assert_eq!(uat_door.command, None);
+    }
+
+    /// D2: the same lane rule the merge side uses — `tiny`/`small`/`docs`/
+    /// `spike` are exempt, so the door never blocks for them even with the
+    /// uat gate unapproved.
+    #[test]
+    fn uat_door_does_not_block_for_exempt_lanes_under_close() {
+        for lane in ["tiny", "small", "docs", "spike"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+            write_lane_mode(root, "demo", lane);
+
+            let doors = build_close_report_doors(root, "demo").unwrap();
+            let uat_door = doors.iter().find(|d| d.door == "uat");
+            if let Some(uat_door) = uat_door {
+                assert!(!uat_door.blocking, "lane {lane} must never block: {}", uat_door.detail);
+            }
+        }
+    }
+
+    /// D1 (`uat_stop_config`'s own fail-closed read): a bogus `uat_stop`
+    /// value blocks with an invalid-config detail naming both keys and
+    /// their legal values, rather than resolving either way.
+    #[test]
+    fn uat_door_blocks_with_invalid_config_detail_on_a_bogus_uat_stop_value() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"sometime"}"#);
+        write_lane_mode(root, "demo", "standard");
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat").expect("a bogus value must still grow the door");
+        assert!(uat_door.blocking, "an unresolvable uat_stop must block rather than guess");
+        assert!(uat_door.detail.contains("invalid config"), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("uat_stop"), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("uat_before_merge"), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("\"merge\""), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("\"close\""), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("\"off\""), "{}", uat_door.detail);
+    }
+
+    /// D2: mirrors the judge-debt door's own escape — a logged
+    /// `uat-deferral` decision naming the feature clears the door without
+    /// touching the underlying gate state.
+    #[test]
+    fn uat_door_is_cleared_by_a_logged_uat_deferral_decision() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode(root, "demo", "standard");
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-18T00:00:00.000Z\",\"decision\":\"defer uat for demo\",\"rationale\":\"r\",\"tags\":[\"uat-deferral\"],\"scope\":\"repo\"}\n",
+        );
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat").unwrap();
+        assert!(!uat_door.blocking, "a logged uat-deferral decision must clear the door");
+        assert!(uat_door.detail.contains("deferred"), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("demo"), "{}", uat_door.detail);
+        assert_eq!(uat_door.command, None);
+
+        // A uat-deferral decision naming a DIFFERENT feature never lifts
+        // THIS feature's block.
+        assert!(!has_uat_deferral_decision(root, "elsewhere").unwrap());
+    }
+
+    /// End to end: `bee close` on a standard-lane feature under
+    /// `uat_stop: "close"` with an unapproved uat gate refuses even with no
+    /// other debt in play, names the pinned prefix, and states the remedy
+    /// in the user's own terms.
+    #[test]
+    fn close_refuses_the_uat_door_for_a_standard_lane_feature_under_uat_stop_close() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode(root, "demo", "standard");
+
+        let Out::Emit(result, text, code) = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1, "an unapproved uat gate refuses even though nothing else is in debt");
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert!(lines[0].starts_with(CLOSE_UAT_PREFIX), "{}", lines[0]);
+        assert!(lines[1].contains("bee gate --name uat --approved true"), "{}", lines[1]);
+        assert!(lines[1].contains("worktree"), "remedy must name the worktree fix-forward path: {}", lines[1]);
+        assert!(lines[2].starts_with("next:"));
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(doors.iter().find(|d| d["door"] == "uat").unwrap()["blocking"], json!(true));
     }
 }

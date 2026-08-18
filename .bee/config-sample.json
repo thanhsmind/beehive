@@ -28,7 +28,8 @@
     "ship_visibility": "How finished work is surfaced: \"off\" (default) or \"draft-pr\". An unrecognized value normalizes to \"off\" and says so once, by name.",
     "worktree_first": "Code-touching feature work lives in its own worktree; the write guard refuses feature edits made in the main checkout. Set to the exact string \"off\" to disable that refusal for a repo that deliberately works in main.",
     "worktree_cleanup_on_merge": "true (default) lets `bee worktree merge` remove the worktree directory, delete its branch, and drop its grant automatically on a merge that merged something (opt one merge out with --no-cleanup). Set false to opt the whole repo out; a non-boolean value here is refused, never silently read as either outcome.",
-    "uat_before_merge": "true (default, i.e. absent) makes `bee worktree merge` enforce the `uat` gate for standard/high-risk features. Set false to turn the door off repo-wide; a non-boolean value here refuses WORKTREE_MERGE_UAT_CONFIG_INVALID rather than guessing.",
+    "uat_stop": "\"merge\" (default, i.e. absent) makes `bee worktree merge` enforce the `uat` gate for standard/high-risk features, exactly as `uat_before_merge: true` did. \"close\" moves that door to `bee close` instead — the merge lands so the product is testable on main, and the worktree is HELD (`--cleanup`/`worktree_cleanup_on_merge: true` ignored) while `uat` is pending. \"off\" removes the stop everywhere. Any other value refuses WORKTREE_MERGE_UAT_CONFIG_INVALID rather than guessing. `uat_before_merge` below is now read only as this key's back-compat alias.",
+    "uat_before_merge": "Back-compat alias for `uat_stop`, read only when `uat_stop` is absent: true reads as \"merge\", false reads as \"off\". A non-boolean value here refuses WORKTREE_MERGE_UAT_CONFIG_INVALID rather than guessing.",
     "staging_before_merge": "true (default, i.e. absent) keeps the staging mixing ground in use. Set false to make `bee staging add`/`bee staging rebuild` refuse STAGING_DISABLED, so the repo runs feature worktree -> uat gate -> main with no staging step; a non-boolean value here refuses STAGING_CONFIG_INVALID. Independent of uat_before_merge — the uat gate itself is unaffected.",
     "doc_viewer": "Opt-in URL prefix for a local doc viewer (e.g. mdview). base_url + project join as <base_url>/p/<project>/<repo-relative-path>, injected into the session preamble and the compaction capsule so agent prose links docs as URLs instead of bare paths. Unset = today's bare paths, silently. A half-set key (one field missing or empty, or a wrong-shaped value) produces no URL plus one stderr line naming the key. bee joins the URL, it does not encode it — a path containing a space needs percent-escaping by whoever writes the link."
   },
@@ -84,6 +85,7 @@
   "ship_visibility": "off",
   "worktree_first": "on",
   "worktree_cleanup_on_merge": true,
+  "uat_stop": "merge",
   "uat_before_merge": true,
   "staging_before_merge": true,
   "doc_viewer": {
