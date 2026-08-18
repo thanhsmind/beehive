@@ -14,10 +14,5 @@
   "next_action": "staging-optional is merged at a3f018a and captured; bee close stays blocked by the pre-existing doc-deferral false positive in docs/handbook/register.md (backlog row filed).",
   "created_at": "2026-08-18T10:57:23.697Z",
   "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "question",
-    "subject": "test-organization wayfinding: round 3 — stop rule (ticket 003)",
-    "asked_at": "2026-08-18T11:31:41.016Z",
-    "session": "3e310dac-0268-4099-bdff-3be59d7d9a36"
-  }
+  "waiting_on": null
 }
