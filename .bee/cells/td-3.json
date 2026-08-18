@@ -1,0 +1,129 @@
+{
+  "id": "td-3",
+  "feature": "test-doctrine",
+  "title": "Convert the worktree merge door from verify run to proof check",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "td-1",
+    "td-2"
+  ],
+  "decisions": [
+    "D4",
+    "D7"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/test-doctrine/CONTEXT.md",
+    "docs/history/test-doctrine/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "action": "In the worktree merge path, retire the verify child and check proof via td-2's shared helper (verbs/cells/proof.rs — reuse, never duplicate). The symbols live in merge.rs, not phases.rs: run_verify_child and VerifyOutcome are defined at merge.rs (~837, 860, 931) and the skip message \"verify skipped — no commands.test recorded; cleaned up unchecked.\" at merge.rs (~673); phases.rs only calls them (~734) and builds VerifyOutcome{ran:false} (~716); the verify_command derivation with its \"none\"-sentinel filter sits in handlers.rs (~530). Stop spawning the command; call the proof helper over the merging feature's capped cells — resolve the cells-store root the same way the merge path's existing store reads do (merge runs from MAIN against the feature's records; per plan, follow the scribing-debt sibling's root resolution). Refusal names the proof-less cell and the remedy; legacy report-less caps pass with the named note. Reshape or rename VerifyOutcome bookkeeping (ran:true/false) to record the proof-check outcome honestly. Do not touch --skip-uat or the UAT gate. Update the worktree-merge help row in generated/registry_payload.json (it still promises commands.test runs against the merged tree). Repoint the worktree suite assertions pinning the verify-child; cover the triad: fully-proofed merge proceeds; present-but-empty proof refuses naming the cell; legacy cap passes with note; refusal never silent.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee",
+  "must_haves": {
+    "truths": [
+      "bee worktree merge never spawns commands.test",
+      "merge of a fully-proofed feature proceeds to the normal merge finish",
+      "merge with a present-but-empty proof refuses, naming the cell; a report-less legacy cap passes with a named note"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+        "substantive": "verify child retired; proof-check outcome recorded in merge bookkeeping"
+      }
+    ],
+    "key_links": [
+      "merge calls the same verbs/cells/proof.rs helper as close (td-2)",
+      "registry_payload.json worktree-merge help matches the new behavior"
+    ],
+    "prohibitions": [
+      "No change to the UAT gate or --skip-uat",
+      "No CI workflow file touched"
+    ]
+  },
+  "trace": {
+    "worker": "w-td3",
+    "outcome": "Reordered worktree-merge help to proof-check-first and re-capped with a D8 proof line",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T03:30:32.740Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e3772d39-2531-461e-bba8-88f8915ebe32",
+    "claimed_at": "2026-08-18T03:26:57.113Z",
+    "report": {
+      "outcome": "Reordered worktree-merge help to proof-check-first and re-capped with a D8 proof line",
+      "commit": "c4c96d79",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee — green (2015 passed, 11 ignored) — touched merge/close help rows only, full workspace suite covers registry_contracts",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verify_command": null,
+    "verified_at": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-08-18T03:26:06.313Z",
+    "reopened_reason": "judge NEEDS_REVISION: merge help row self-contradicts on proof-check ordering; cap recorded retired enum tests:boundary — re-cap with a D8 proof line",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "revision-1-merge-help-ordering-fixed",
+            "status": "PASS",
+            "evidence": "registry_payload.json worktree.merge now opens \"Merge a granted worktree's branch back into the MAIN checkout — first a zero-mutation D7/D8 proof check: ...\" and the later sentence reads \"This check runs before `git merge --no-ff <branch>` is ever attempted (run from MAIN once the check is green)\". Both clauses now agree with phases.rs merge_stage, where feature_proof_check runs before the bookkeeping commit and before any git merge. The r1 FAIL is closed"
+          },
+          {
+            "id": "revision-2-close-help-merge-pointer-fixed",
+            "status": "PASS",
+            "evidence": "registry_payload.json close row's merge-back aside changed from \"bee worktree merge — which still runs commands.verify, untouched\" to \"bee worktree merge — which runs a zero-mutation D7/D8 proof check before `git merge --no-ff`, never commands.test\". The r1 secondary FAIL is closed"
+          },
+          {
+            "id": "revision-3-self-contract-compliance",
+            "status": "PASS",
+            "evidence": ".bee/cells/td-3.json trace.report.tests is now \"cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee — green (2015 passed, 11 ignored) — touched merge/close help rows only, full workspace suite covers registry_contracts\" (was \"boundary\"). parse_tests_proof splits on the first two \" — \" only, so the three segments resolve and the result segment is not the literal \"red\" — feature_proof_check classifies this cap as proven, not blocking. All three td caps now carry valid proof lines"
+          },
+          {
+            "id": "no-collateral-change",
+            "status": "PASS",
+            "evidence": "`git show --stat c4c96d79` -> 1 file changed, 1 insertion(+), 1 deletion(-), only packages/bee-rs/crates/bee/src/generated/registry_payload.json. Parsing both revisions of the payload shows exactly two commands differ (worktree.merge, close) and only their `description` strings — no parameter, required[], example, or other row moved"
+          },
+          {
+            "id": "behavior-unchanged",
+            "status": "PASS",
+            "evidence": "the revision touched no Rust source: phases.rs merge_stage, merge.rs proof_report_field and the WORKTREE_MERGE_PROOF_DEBT refusal are byte-identical to 13d658e2, so every r1 PASS check (merge never spawns, proofed merge proceeds, empty proof refuses zero-mutation, legacy passes, shared helper reused, UAT untouched) still holds on the same evidence"
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "ran `cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee` at HEAD 1f52df3e in the worktree: \"2015 passed, 11 ignored (18 suites, 18.89s)\", exit 0 — registry_contracts included"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T03:45:08.351Z"
+      }
+    ]
+  }
+}

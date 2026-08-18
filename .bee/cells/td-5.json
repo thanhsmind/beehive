@@ -1,0 +1,182 @@
+{
+  "id": "td-5",
+  "feature": "test-doctrine",
+  "title": "Teach the proof doctrine across skill text, frame, and AGENTS.md",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "td-1"
+  ],
+  "decisions": [
+    "D2",
+    "D5",
+    "D6",
+    "D9"
+  ],
+  "files": [
+    "AGENTS.md",
+    "packages/bee/AGENTS.block.md",
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-planning/SKILL.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "skills/bee-hive/SKILL.md",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-hive/references/routing-and-contracts.md",
+    "skills/bee-shaping/references/mini-brief-template.md",
+    "skills/bee-shaping/references/implement-plan-template.md",
+    "skills/bee-herding/README.md",
+    "expertise/tests.md",
+    ".bee/expertise",
+    ".agents/skills",
+    ".claude/skills",
+    ".claude-plugin/skills",
+    ".codex-plugin/skills",
+    ".opencode/skills",
+    ".bee/onboarding.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/test-doctrine/CONTEXT.md",
+    "docs/history/test-doctrine/plan.md",
+    "docs/discovery/test-doctrine/research/002-findings.md"
+  ],
+  "action": "Rewrite every passage teaching the retired test cadence to the proof doctrine. BUILD YOUR OWN INVENTORY FIRST — the anchor list in 002-findings.md undercounts (~16 named vs ~52 real hits in 11 files): rg across skills/, expertise/, AGENTS.md, packages/bee/AGENTS.block.md for at least these patterns: 'commands.test', 'tests: boundary', 'tests: undeclared', 'prove at the boundary', 'proved at the boundary', 'Never build on red', 'green base'. Sweep every hit that teaches the old cadence. The doctrine, stated once and repeated consistently (D5, D2, D6, and D7/D8 as landed in commits 9731af85/892341bb/13d658e2 on this branch): the agent owns test scope — it picks the proof its change type needs (code: related tests green; docs: parity/pointer checks; behavior: judge verdict), runs it itself, and records it in the cap proof line `<command> — <result> — <scope reason>`; `bee close` and `bee worktree merge` CHECK recorded proof, they run nothing; docs-only diffs skip the suite (D2); CI runs the full declared command on every push — the one deterministic net; a scoped-green-but-CI-red miss is a fix-first cell PLUS a mandatory captured learning on why the scope missed (D6); 'never build on a red base' survives as a principle (a red proof refuses a cap), never as a pre-claim full-suite order. Specific decisions the review already made for you: (1) AGENTS.md lines 86-89 sit INSIDE the managed block — packages/bee/AGENTS.block.md is the authority; edit the block, run the regen chain, and let it rewrite AGENTS.md (never hand-edit AGENTS.md's managed block alone). (2) expertise/tests.md:407-410 ('the door runs it… bee cells finish and bee close run it as the door') is retired cadence — rewrite it; the regen chain copies expertise/ into .bee/expertise/. (3) Stale HEADINGS: gates-and-delegation.md:175 '### Test scope (one declared command, proved at the boundary)' — RENAME to a doctrine-true name and update every citer in the same commit; gates-and-delegation.md:113 '### Green base check (before the first claim)' — KEEP the heading name, rewrite the body to base-awareness under the new doctrine (know the last recorded result; scoped proof for code lanes; no mandatory full-suite), its citer routing-and-contracts.md:296 stays valid; swarming-reference.md heading 'Tests at finish and close, in full' is cited from routing-and-contracts.md:169 and gates-and-delegation.md:179-180 — if you rename it, update both citers; planning-reference.md 'Test scoping' is cited from bee-planning/SKILL.md:103 — same rule. After every heading decision run the pointer sweep: rg the exact old heading text repo-wide; pointer_integrity in the verify suite is the final guard. (4) docs/specs/test-simple.md still states the retired contract and is prohibited (read-only surface) — record this as a deviation line ('knowingly stale, compat surface'), never edit it. After the text edits run `.bee/bin/bee dev regen` (render-skill-trees → onboard --repo-root . --apply → release-manifest --write); generated trees, .bee/expertise, onboarding ledger, and the manifest stay in files so reservations cover them.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee && .bee/bin/bee dev release-manifest --check && .bee/bin/bee onboard --repo-root . --json",
+  "must_haves": {
+    "truths": [
+      "No skill, expertise, AGENTS.md, or AGENTS.block.md passage still says a bee door runs commands.test",
+      "No text still teaches the tests: boundary / tests: undeclared cap vocabulary",
+      "The proof-per-change-type principle and the D6 capture-on-miss rule appear in the swarming and planning skill text",
+      "pointer_integrity and instruction_laws suites are green"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee/AGENTS.block.md",
+        "substantive": "Prove-then-say-so block teaches the proof doctrine; no cells-finish-runs-tests claim"
+      },
+      {
+        "path": "skills/bee-swarming/references/worker-details.md",
+        "substantive": "proof-line contract documented where the boundary refrain lived"
+      },
+      {
+        "path": "expertise/tests.md",
+        "substantive": "door paragraph rewritten to proof doctrine"
+      }
+    ],
+    "key_links": [
+      "AGENTS.md managed block regenerated from AGENTS.block.md (regen chain, never hand-sync)",
+      "every renamed heading's citers updated in the same commit"
+    ],
+    "prohibitions": [
+      "No edit to docs/specs/ (record the staleness as a deviation instead)",
+      "No CI workflow file touched",
+      "No heading renamed without every citer updated in the same commit"
+    ]
+  },
+  "trace": {
+    "worker": "w-td5",
+    "outcome": "Rewrote merge-prompt.md's red-verify clause to the landed MERGE_CONFLICT/WORKTREE_MERGE_PROOF_DEBT stops and repointed README.md's SKILL.md pointer from the nonexistent 'Permission posture' to 'Safety boundaries'; regenerated trees and manifest",
+    "files_changed": [
+      "skills/bee-herding/references/merge-prompt.md",
+      "skills/bee-herding/README.md",
+      ".agents/skills/bee-herding/references/merge-prompt.md",
+      ".agents/skills/bee-herding/README.md",
+      ".agents/skills/.bee-render.json",
+      ".claude-plugin/skills/bee-herding/references/merge-prompt.md",
+      ".claude-plugin/skills/bee-herding/README.md",
+      ".claude-plugin/skills/.bee-render.json",
+      ".claude/skills/bee-herding/references/merge-prompt.md",
+      ".claude/skills/bee-herding/README.md",
+      ".claude/skills/.bee-render.json",
+      ".codex-plugin/skills/bee-herding/references/merge-prompt.md",
+      ".codex-plugin/skills/bee-herding/README.md",
+      ".codex-plugin/skills/.bee-render.json",
+      ".opencode/skills/bee-herding/references/merge-prompt.md",
+      ".opencode/skills/bee-herding/README.md",
+      ".opencode/skills/.bee-render.json",
+      ".bee/onboarding.json",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T04:21:53.175Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e3772d39-2531-461e-bba8-88f8915ebe32",
+    "claimed_at": "2026-08-18T04:20:15.267Z",
+    "report": {
+      "outcome": "Rewrote merge-prompt.md red-verify clause to landed MERGE_CONFLICT/WORKTREE_MERGE_PROOF_DEBT stops; repointed README.md SKILL.md pointer from nonexistent Permission posture to Safety boundaries; regenerated trees and manifest",
+      "commit": "9e0c3dfc",
+      "files": [
+        "skills/bee-herding/references/merge-prompt.md",
+        "skills/bee-herding/README.md",
+        "generated trees (.agents,.claude-plugin,.claude,.codex-plugin,.opencode)/skills/bee-herding",
+        "release-manifest.json",
+        ".bee/onboarding.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee — green — 2015 passed, 11 ignored (18 suites, 19.26s); bee dev release-manifest --check — green — 267 file(s) match stored manifest",
+      "deviations": [
+        "standing: red verify trigger retired, rewritten to landed MERGE_CONFLICT/WORKTREE_MERGE_PROOF_DEBT refusals per cell instruction",
+        "standing: pre-existing SKILL.md pointer defect (Permission posture -> Safety boundaries) fixed as part of this cell per instruction",
+        "rider: README.md SKILL.md pointer was a pre-existing one-word heading-name defect (Permission posture never existed; posture bullets live under Safety boundaries) — fixed inline as directed, recorded as rider deviation, not a new architectural decision"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verify_command": null,
+    "verified_at": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-08-18T04:20:15.248Z",
+    "reopened_reason": "judge r3: one residual clause — merge-prompt.md:13 'On a red verify, stop' still names the retired trigger; the live merge pane prompt must stop on WORKTREE_MERGE_PROOF_DEBT",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "residual-merge-prompt-closed",
+            "status": "PASS",
+            "evidence": "skills/bee-herding/references/merge-prompt.md:12-14 now reads [find and do into the chat pane per the skill. On a MERGE_CONFLICT or WORKTREE_MERGE_PROOF_DEBT refusal, stop for that worktree - no retry - and move on; do not wait for or ask for confirmation.] The retired [On a red verify] trigger is gone, and the two codes named are exactly the two the landed merge can produce (phases.rs:353 MERGE_CONFLICT on the StageOut::Done path, WORKTREE_MERGE_PROOF_DEBT via refuse_merge). The r3 FAIL is closed."
+          },
+          {
+            "id": "truth-1-no-door-runs-commands-test",
+            "status": "PASS",
+            "evidence": "Truth 1 is met for good. Re-ran the same exhaustive case-insensitive sweep over skills/, expertise/, AGENTS.md and AGENTS.block.md for: red verify | verify red | verify is red | MERGE_VERIFY_RED | commands.verify | runs verify | verify runs | post-merge verify | semantic-conflict. The merge-prompt.md hit is gone; five hits remain and every one was already assessed legitimate in r3 - AGENTS.md:188 and AGENTS.block.md:181 (generic re-run discipline, not a door claim), planning-reference.md:236 ([commands.verify is retired], a true statement), and bee-herding README.md:145 plus scripts/bootstrap-cockpit.sh:241 (the herding harness own verify flock, the call recorded as a deviation). No instruction surface says a bee door runs the test or verify command."
+          },
+          {
+            "id": "rider-pointer-now-resolves",
+            "status": "PASS",
+            "evidence": "skills/bee-herding/README.md:144 now ends [See SKILL.md Safety boundaries] instead of the nonexistent Permission posture, and SKILL.md carries that exact heading at :62 (its headings are The three roles :23, Role boundary :53, Safety boundaries :62, Runtime adapter :88, References :98). The full chain now resolves end to end: README.md:144 -> SKILL.md Safety boundaries :62 -> :63 Full record for each: references/operational-invariants.md, whose blast-radius claim r3 already confirmed agrees with README rather than contradicting it."
+          },
+          {
+            "id": "regen-stayed-clean",
+            "status": "PASS",
+            "evidence": "diff -q is silent between skills/bee-herding/references/merge-prompt.md and README.md and their .claude/skills/ mirrors; the commit carries the same two edits into all five rendered trees with their .bee-render.json, the onboarding ledger and the manifest. bee onboard --repo-root . --json returns notices: []; bee dev release-manifest --check returns 267 file(s) match stored manifest."
+          },
+          {
+            "id": "no-regression",
+            "status": "PASS",
+            "evidence": "the commit touches only the two herding text files, their five mirrors and the render/onboarding/manifest bookkeeping - no Rust source, no docs/specs, no .github path. Every PASS check from judge-td-5-r2 and -r3 (role-merge and scout-and-ticks rerouted, wrapped phrase fixed, deviations recorded, knowledge doc archaeology framing, SKILL.md stop rule, operational-invariants blast-radius claim, dead render arm removed safely, AGENTS block parity, no boundary/undeclared vocabulary) stands on unchanged evidence."
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "ran the declared crate suite (cargo test --release, package bee) at HEAD 9e0c3dfc: 2015 passed, 11 ignored (18 suites, 19.43s), exit 0."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T04:23:51.757Z"
+      }
+    ]
+  }
+}

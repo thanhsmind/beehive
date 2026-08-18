@@ -1,0 +1,124 @@
+{
+  "id": "td-4",
+  "feature": "test-doctrine",
+  "title": "Drop the session-start red check from the preamble",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "D4",
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/test-doctrine/CONTEXT.md",
+    "docs/history/test-doctrine/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs"
+  ],
+  "action": "In session_preamble/budget.rs, the declared-test branch (~597-617) renders: '- Never build on red: run the test command above before your first `cells claim`, and treat a red as its own fix-first cell. CI runs the same command on every push and PR.' Per D3, drop the mandatory pre-claim full-suite instruction. Replace the WHOLE line including its '- Never build on red:' opening with the proof-per-change-type doctrine (D5): the agent picks the proof its change type needs — related tests for code, parity checks for docs — and records it in the cap proof line; CI runs the full declared command on every push (D4, keep that clause). Keep the no-test-sentinel branch's alternative line consistent with the same doctrine. The pins in session_preamble/tests.rs:145,157 are PREFIX asserts on '- Never build on red:' (not byte pins) — replace both with assertions that pin the NEW line's full text byte-for-byte, one positive (declared-test repo renders it) and one negative (the old opening never renders). Extend the comment block above the line (~606-614) with one line naming decision D3 (58ec9664). No mechanical dep on slice 1 — the serial D9 ordering is satisfied at feature close, so this cell may start immediately.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee",
+  "must_haves": {
+    "truths": [
+      "The rendered preamble no longer instructs a pre-claim run of the full test command",
+      "The rendered preamble still names CI as running the declared command on every push",
+      "The old '- Never build on red:' opening renders nowhere"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "substantive": "declared-test branch renders the proof-per-change-type line; no pre-claim full-suite order"
+      }
+    ],
+    "key_links": [
+      "session_preamble/tests.rs pins the NEW line byte-for-byte, positive and negative"
+    ],
+    "prohibitions": [
+      "No other preamble section changed",
+      "No CI workflow file touched"
+    ]
+  },
+  "trace": {
+    "worker": "w-td4",
+    "outcome": "Rewrote the no-test-sentinel preamble line to the D7/D8 proof doctrine: every cap still owes a proof line (command segment none, reason naming the parity/docs proof), and recording a real commands.test re-enables CI's full-run net; repointed the pinned test byte-for-byte.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T03:50:02.753Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e3772d39-2531-461e-bba8-88f8915ebe32",
+    "claimed_at": "2026-08-18T03:45:08.379Z",
+    "report": {
+      "outcome": "Rewrote the no-test-sentinel preamble line to the D7/D8 proof doctrine: every cap still owes a proof line (command segment none, reason naming the parity/docs proof), and recording a real commands.test re-enables CIs full-run net; repointed the pinned test byte-for-byte.",
+      "commit": "f83b7b66",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee session_preamble — green — scoped to touched session_preamble module (46 tests incl. the fixed sentinel-line pin); full crate run is red only from sibling td-5s in-flight uncommitted edit to skills/bee-herding/references/role-merge.md, outside td-4 scope and reserved under w-td5",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verify_command": null,
+    "verified_at": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-08-18T03:45:08.370Z",
+    "reopened_reason": "judge FAIL: no-test-sentinel branch line (budget.rs:598-601) still teaches diff-backed caps; bring it to the proof doctrine",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "revision-1-sentinel-line-doctrine-true",
+            "status": "PASS",
+            "evidence": "budget.rs:600-607 now renders: [- Test gates disabled by repo declaration (commands.test: none) - every cap still records a proof line (command segment `none`, reason naming the parity/docs proof used, e.g. `none - green - docs pointer check`); recording a real commands.test re-enables CI full-run net.] Both halves of the r1 FAIL are closed: the [cells cap on diff-backed outcomes] claim the CLI refuses is gone, and the replacement teaches exactly the sentinel form finish_support.rs own refusal teaches. The embedded example parses under parse_tests_proof - three non-empty segments (none / green / docs pointer check), result segment not the literal red - so a cold agent copying it caps successfully. NOTE: the real line uses the em-dash separator U+2014, rendered here as - to keep this record shell-safe."
+          },
+          {
+            "id": "revision-2-pin-repointed-byte-for-byte",
+            "status": "PASS",
+            "evidence": "session_preamble/tests.rs:158-165 replaced the old prefix-only contains([- Test gates disabled by repo declaration (commands.test: none)]) with an assert on the FULL new line text, matching the positive pin the declared-test branch already had; the negative assert that [- Never build on red:] never renders survives in the same sentinel branch."
+          },
+          {
+            "id": "scoped-proof-line-is-doctrine-honest",
+            "status": "PASS",
+            "evidence": "The cap proof line names the real scoped invocation actually run (the release crate suite filtered to session_preamble), result green, reason [scoped to touched session_preamble module (46 tests incl. the fixed sentinel-line pin); full crate run is red only from sibling td-5s in-flight uncommitted edit to skills/bee-herding/references/role-merge.md, outside td-4 scope and reserved under w-td5]. That is the shape D1/D5/D8 intend, not a dodge: scope AND reason are both recorded, and it does NOT claim a green the worker did not have. Corroborated by what I can still check: pointer_integrity.rs:14,31 scans source instruction documents under skills/, so an uncommitted sibling edit there reddens the full crate run for reasons disjoint from the two td-4 files (both under hooks/session_preamble/); and the same full suite is green at HEAD now that td-5 edits are committed with their regen. D6 respected - the red was attributed to its owner, never absorbed or papered over."
+          },
+          {
+            "id": "earlier-truths-still-hold",
+            "status": "PASS",
+            "evidence": "the revision touched only the sentinel arm and its pin: budget.rs:619 declared-test line ([- Proof-per-change-type: pick the proof your change needs ... CI runs the same command on every push and PR.]) and its two byte-pins are unchanged, so the r1 truth-1/2/3 PASS checks stand on the same evidence."
+          },
+          {
+            "id": "prohibitions-hold",
+            "status": "PASS",
+            "evidence": "commit f83b7b66 diffstat: 2 files, both under hooks/session_preamble/ (budget.rs +6/-2, tests.rs +9/-2). No other preamble section and no .github/ path touched."
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "ran the declared crate suite (cargo test --release, package bee) at HEAD 29cb084d: 2015 passed, 11 ignored (18 suites, 19.32s), exit 0 - the full run the scoped cap deferred is now green with both siblings landed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T04:11:05.139Z"
+      }
+    ]
+  }
+}
