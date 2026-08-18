@@ -103,10 +103,14 @@ so in the synthesis.
 
 ## Finding schema
 
-Every distinct issue becomes one finding:
+Every distinct issue becomes one finding, labeled with its axis —
+`standards` (is the code well made: quality, architecture, security,
+tests) or `spec` (does it do what the locked decisions promised). The
+synthesis report stays ONE report, grouped by axis, spec-axis group
+first; axes are never collapsed into one undifferentiated ranked list.
 
 ```markdown
-### [P<N>] <problem title>   (autofix_class: gated_auto | manual | advisory)
+### [P<N>] <problem title>   (axis: standards | spec, autofix_class: gated_auto | manual | advisory)
 
 ## Plain-Language Summary
 <1-3 sentences a non-specialist understands>

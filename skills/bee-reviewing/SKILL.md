@@ -55,10 +55,16 @@ verified before filing: `.bee/expertise/review.md`. Severity here:
 - **P2** — real performance, architecture, reliability, or test gap.
 - **P3** — cleanup, docs, future debt.
 
-Synthesize only after every reviewer returns: deduplicate, independent
-corroboration promotes one level, disagreement takes the conservative
-route, uncertain lands at P2. Record each finding as it settles:
-`bee reviews record --kind finding`.
+Every finding carries an axis label — `standards` (is the code well
+made: quality, architecture, security, tests) or `spec` (does it do
+what the locked decisions promised). Synthesize only after every
+reviewer returns: deduplicate, independent corroboration promotes one
+level, disagreement takes the conservative route, uncertain lands at
+P2 — these severity rules are unchanged and apply within and across
+axes; a P1 blocks regardless of axis. The synthesis report stays ONE
+report, grouped by axis, spec-axis group first — axes are never
+collapsed back into one undifferentiated ranked list. Record each
+finding as it settles: `bee reviews record --kind finding`.
 
 ## Verify the artifacts, not the story
 
