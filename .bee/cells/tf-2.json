@@ -32,7 +32,7 @@
       "Regen chain ran; manifest check clean; vendored .bee/expertise identical to sources"
     ]
   },
-  "status": "open",
+  "status": "dropped",
   "decisions": [],
   "trace": {
     "worker": null,
@@ -45,6 +45,7 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": null,
+    "dropped_reason": "Duplicate stale record resurrected by the two-flows worktree merge; the authoritative capped record is .bee/cells/archive/two-flows/tf-2.json"
   }
 }
