@@ -3592,6 +3592,49 @@ use std::time::Instant;
         assert_eq!(before, after, "a lane write that could not even be read must leave the file untouched");
     }
 
+    /// mcl-2 (R2): the regression the semantic judge caught. `main_repo`'s
+    /// `.gitignore` (`.bee/*`) means every fixture above leaves the lane
+    /// file UNTRACKED, so the post-commit dirty guard (which reads
+    /// `git status --porcelain --untracked-files=no`) never sees it move —
+    /// masking a real bug. Here the fixture force-adds and commits the lane
+    /// file BEFORE the merge, so it is genuinely tracked; the merge's own
+    /// rewrite of `next_action` is exactly the kind of tracked-file mutation
+    /// the guard watches for. A correctly-ordered merge (guard reads the
+    /// tree, THEN writes the lane) must still come back green with no
+    /// `verify_mutated_tracked_files` warning — the guard is watching the
+    /// merge commit's aftermath, not the lane write this function is about
+    /// to make on its own behalf.
+    #[test]
+    fn a_green_merge_of_a_tracked_lane_file_emits_no_mutated_tracked_files_warning() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_stranded_lane(&main, "demo", "scribing");
+        git_ok(&main, &["add", "-f", ".bee/lanes/demo.json"]);
+        git_ok(&main, &["commit", "-qm", "track the demo lane"]);
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert!(
+            !answer.result.contains_key("warning"),
+            "a tracked lane rewrite must not trip the post-commit dirty guard: {:?}",
+            answer.result
+        );
+
+        let lane = crate::verbs::workflow_store::read_lane_strict(&main, "demo")
+            .unwrap()
+            .expect("the lane record must still exist after a green merge");
+        assert_eq!(lane.get("waiting_on"), Some(&Value::Null), "{lane:?}");
+        let next_action = lane.get("next_action").and_then(Value::as_str).unwrap_or_default();
+        assert!(next_action.contains("bee close --feature demo"), "{next_action}");
+    }
+
     /// Truth 2a: the same standard-lane feature merges once its uat gate is
     /// approved on the live workflow record.
     #[test]
