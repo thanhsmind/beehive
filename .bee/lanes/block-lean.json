@@ -2,15 +2,16 @@
   "schema_version": "1.0",
   "feature": "block-lean",
   "mode": "small",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"block-lean\" started at phase \"planning\" (lane).",
-  "next_action": "CLOSED in substance - merged to main; parked pending the compounding-complete port (chip filed).",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-04T03:03:08.537Z",
   "route": {
     "class": "refactor",

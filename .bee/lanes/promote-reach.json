@@ -2,15 +2,16 @@
   "schema_version": "1.0",
   "feature": "promote-reach",
   "mode": "small",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"promote-reach\" started at phase \"exploring\" (lane).",
-  "next_action": "Merge wt/promote-reach, then close the feature.",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-05T06:32:21.769Z",
   "route": {
     "class": "bugfix",

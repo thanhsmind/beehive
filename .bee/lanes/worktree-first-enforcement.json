@@ -7,11 +7,12 @@
     "context": true,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"worktree-first-enforcement\" started at phase \"exploring\".",
   "next_action": "idle",
   "created_at": "2026-08-16T04:28:42.386Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null
 }

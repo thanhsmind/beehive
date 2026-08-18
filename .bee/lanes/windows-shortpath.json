@@ -2,14 +2,15 @@
   "schema_version": "1.0",
   "feature": "windows-shortpath",
   "mode": "tiny",
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"windows-shortpath\" started at phase \"exploring\" (lane).",
-  "next_action": "Fix the path-identity compare in the drivers test.",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-05T02:59:54.696Z"
 }

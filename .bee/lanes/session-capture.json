@@ -2,14 +2,15 @@
   "schema_version": "1.0",
   "feature": "session-capture",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"session-capture\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"session-capture\" (lane).",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-04T15:19:25.877Z"
 }

@@ -2,15 +2,16 @@
   "schema_version": "1.0",
   "feature": "hold-holder-attribution",
   "mode": "feature",
-  "phase": "scribing",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"hold-holder-attribution\" started at phase \"planning\" (lane).",
-  "next_action": "Wait for the traceable-runs session to land its merge, then run bee worktree merge --id beehive--wt--hold-holder-attribution; capture queue has one stub for the reservations area.",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-14T06:54:50.304Z",
   "route": {
     "class": "feature",

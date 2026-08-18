@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "merge-commits-the-lane",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"merge-commits-the-lane\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-18T11:28:33.814Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 2,
+    "rationale": null,
+    "updated_at": "2026-08-18T11:28:33.879Z",
+    "feature": "merge-commits-the-lane"
+  }
+}

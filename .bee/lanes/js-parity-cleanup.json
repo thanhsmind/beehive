@@ -2,14 +2,15 @@
   "schema_version": "1.0",
   "feature": "js-parity-cleanup",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "9/9 cells capped; merged to main via bee worktree merge, verify green on the merged tree",
-  "next_action": "Run bee-capturing to flush the 2 queued stubs and stamp scribing; then backlog: .mjs sweep remainder (~1717 refs), live-Ex family (route --set, bee close lane arm, approved_gates split)",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-04T03:56:52.095Z"
 }

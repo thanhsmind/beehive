@@ -2,14 +2,15 @@
   "schema_version": "1.0",
   "feature": "gate-door-refusal",
   "mode": "small",
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"gate-door-refusal\" started at phase \"exploring\" (lane).",
-  "next_action": "Gate the one-cell refusal fix, then dispatch.",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-04T23:30:35.789Z"
 }

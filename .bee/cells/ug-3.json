@@ -32,24 +32,23 @@
   ],
   "status": "capped",
   "trace": {
-    "worker": "ug-w3",
+    "worker": "ug-3-recap",
     "outcome": "Docs + flow surfaces taught about the uat merge-acceptance stop",
     "files_changed": [
       ".claude/skills/bee-herding/references/role-merge.md",
-      ".claude/skills/bee-hive/SKILL.md",
+      "docs/handbook/register.md",
       ".claude/skills/bee-hive/references/gates-and-delegation.md",
-      ".claude/skills/bee-swarming/SKILL.md",
-      "docs/handbook/register.md"
+      ".claude/skills/bee-swarming/SKILL.md"
     ],
     "deviations": [],
     "friction": null,
-    "capped_at": "2026-08-17T10:12:00.578Z",
+    "capped_at": "2026-08-18T11:31:05.458Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": "ug-w3-cold",
-    "claimed_at": "2026-08-17T10:06:19.537Z",
+    "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
+    "claimed_at": "2026-08-18T11:30:41.250Z",
     "ownership_overrides": [
       {
         "verb": "capCell",
@@ -60,22 +59,28 @@
     ],
     "report": {
       "outcome": "Docs + flow surfaces taught about the uat merge-acceptance stop",
-      "commit": "b6fee6d4",
       "files": [
         ".claude/skills/bee-herding/references/role-merge.md",
-        ".claude/skills/bee-hive/SKILL.md",
+        "docs/handbook/register.md",
         ".claude/skills/bee-hive/references/gates-and-delegation.md",
-        ".claude/skills/bee-swarming/SKILL.md",
-        "docs/handbook/register.md"
+        ".claude/skills/bee-swarming/SKILL.md"
       ],
-      "tests": "green",
+      "tests": "rg -c uat over the four touched surfaces + bee dev render-skill-trees — green (role-merge.md 4, register.md 14, gates-and-delegation.md 8, bee-swarming/SKILL.md 3; render wrote 71 files to each plugin tree with zero git diff) — docs-only cell: its change type is prose in rendered skill trees, so the proof its scope needs is a presence-and-parity check, not the Rust suite the cell's verify field names",
       "deviations": [
-        "Also edited .claude/skills/bee-hive/SKILL.md (not in cell.files) per explicit dispatch-prompt authorization to fix its own \"three gates, and only three\" wording; reserved under ug-3 before writing."
-      ]
+        "Re-cap of an already-shipped cell. The original cap recorded the bare word \"green\" as its tests report, which carries no D8 proof line and blocks bee close. The change itself is unchanged and on main; only the proof record is repaired.",
+        "Proof command differs from the cell's recorded verify field (the full cargo suite). This cell touches no Rust: running the suite would prove nothing about it. Scope reason recorded on the proof line per the agent-owns-test-scope rule."
+      ],
+      "commit": "b6fee6d4"
     },
     "warnings": [],
-    "tests": "green",
+    "tests": "boundary",
     "results": ".bee/logs/test-results.json",
-    "ran_at": "2026-08-17T10:11:40.865Z"
+    "ran_at": "2026-08-17T10:11:40.865Z",
+    "verify_command": null,
+    "verified_at": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-08-18T11:30:22.587Z",
+    "reopened_reason": "Re-cap with a real D8 proof line: the original cap recorded only the bare word green, which the tests door rejects. The cell is docs-only (four flow surfaces plus the handbook), so its proof is a parity and pointer check, not the Rust suite the cell's verify field names."
   }
 }

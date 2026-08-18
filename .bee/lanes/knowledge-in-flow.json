@@ -2,15 +2,16 @@
   "schema_version": "1.0",
   "feature": "knowledge-in-flow",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"knowledge-in-flow\" started at phase \"exploring\" (lane).",
-  "next_action": "Merge wt/knowledge-in-flow, release, push.",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-05T07:54:10.355Z",
   "last_scribing_run": {
     "feature": "knowledge-in-flow",

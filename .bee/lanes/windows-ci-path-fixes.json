@@ -2,17 +2,18 @@
   "schema_version": "1.0",
   "feature": "windows-ci-path-fixes",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"windows-ci-path-fixes\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"windows-ci-path-fixes\" (lane).",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-16T11:44:38.957Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",

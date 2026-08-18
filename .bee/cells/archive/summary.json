@@ -568,5 +568,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-18T11:10:37.093Z"
+  },
+  "staging-lane": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-18T11:32:29.686Z"
   }
 }

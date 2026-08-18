@@ -13,7 +13,7 @@
   "summary": "Feature \"test-cadence-boundary\" started at phase \"planning\" (lane).",
   "next_action": "Idle.",
   "created_at": "2026-08-17T10:49:39.853Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",

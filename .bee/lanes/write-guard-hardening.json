@@ -7,12 +7,13 @@
     "context": true,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"write-guard-hardening\" started at phase \"exploring\" (lane).",
   "next_action": "none",
   "created_at": "2026-08-16T02:36:39.638Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",

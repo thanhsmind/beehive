@@ -2,15 +2,16 @@
   "schema_version": "1.0",
   "feature": "release-2-1-7",
   "mode": "small",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"release-2-1-7\" started at phase \"planning\" (lane).",
-  "next_action": "None - release record only, no behavior settled beyond the shipped features already captured.",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-04T02:31:23.573Z",
   "route": {
     "class": "release",

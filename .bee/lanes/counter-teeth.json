@@ -2,14 +2,15 @@
   "schema_version": "1.0",
   "feature": "counter-teeth",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"counter-teeth\" started at phase \"exploring\" (lane).",
-  "next_action": "All 6 cells capped and merged (verify green). Owed: bee-capturing flush of 5 queued stubs, then state scribing-run + compounding-run; then binary reinstall from main to activate the new refusals",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-04T05:14:24.746Z"
 }

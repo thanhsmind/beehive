@@ -5,8 +5,8 @@
   "phase": "idle",
   "approved_gates": {
     "context": false,
-    "shape": false,
-    "execution": false,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },

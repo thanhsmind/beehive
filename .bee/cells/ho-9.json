@@ -35,19 +35,18 @@
       "Do not change role-dispatch.md section 4 in this cell — that move is its own cell."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "w-ho-9r",
-    "outcome": "Added .bee/wave-ledger.jsonl append-only wave ledger with occupancy read side and a documented staleness rule; full workspace cargo test green",
+    "outcome": "Folded the wave ledger by wave_id at read time and made occupancy cross unresolved pane ids against an injectable live pane list, with the one-hour timer as a tagged fallback only",
     "files_changed": [
-      "packages/bee-rs/crates/bee/src/herding.rs",
       "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
     ],
     "deviations": [],
     "friction": null,
-    "capped_at": "2026-08-18T10:37:36.974Z",
+    "capped_at": "2026-08-18T11:31:18.549Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
@@ -55,19 +54,19 @@
     "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
     "claimed_at": "2026-08-18T11:22:30.077Z",
     "report": {
-      "outcome": "Added .bee/wave-ledger.jsonl append-only wave ledger with occupancy read side and a documented staleness rule; full workspace cargo test green",
-      "commit": "9400633fb1fbb8591db72073eadb45e4eb2aefc7",
+      "outcome": "Folded the wave ledger by wave_id at read time and made occupancy cross unresolved pane ids against an injectable live pane list, with the one-hour timer as a tagged fallback only",
+      "commit": "8524c10d2cfe928bde06aebca10b8dda19e4c335",
       "files": [
-        "packages/bee-rs/crates/bee/src/herding.rs",
         "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
       ],
-      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — 2056 passed, 11 ignored — full workspace suite, cell touched only herding.rs and the new herding/wave_ledger.rs module",
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::wave_ledger — 13 passed, 0 failed — full workspace also re-run green (cargo test --release --manifest-path packages/bee-rs/Cargo.toml — 2085 passed, 11 ignored)",
       "deviations": [
-        "No CLI verb was added and role-dispatch.md section 4 was not touched, both are out of scope for this cell per CONTEXT.md D10 and plan.md phase 3 sequencing; live_worker_count_now is a library seam with no caller yet."
+        "Judge probe 1 (90-min-old unresolved worker whose pane is live) now returns Occupancy::Live(1) via a_90_minute_old_unresolved_worker_whose_pane_is_still_live_counts_as_live — was 0 before",
+        "Judge probe 2 (finished worker still reporting live) now returns Occupancy::Live(0) via a_worker_whose_outcome_arrived_in_a_later_row_never_counts_at_any_age — was 1 before"
       ]
     },
     "warnings": [
-      "advisory: this cap's commit changes 416 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+      "advisory: this cap's commit changes 307 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
     "tests": "boundary",
     "semantic_judge": [
@@ -110,7 +109,14 @@
       "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
     },
     "verify_command": null,
-    "verified_at": null
+    "verified_at": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-08-18T11:31:18.549Z",
+        "reason": "Rework of the NEEDS_REVISION on 9400633f: both flagged probes re-verified as real tests and now pass — a_90_minute_old_unresolved_worker_whose_pane_is_still_live_counts_as_live (was 0, now Live(1)) and a_worker_whose_outcome_arrived_in_a_later_row_never_counts_at_any_age (was 1, now Live(0)); added the absent-pane and fallback-degradation cases the rework brief called for. Full workspace cargo test still green (2085 passed, 11 ignored).",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
   },
   "tier": "generation"
 }

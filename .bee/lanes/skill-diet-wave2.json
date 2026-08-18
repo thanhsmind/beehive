@@ -2,14 +2,15 @@
   "schema_version": "1.0",
   "feature": "skill-diet-wave2",
   "mode": "standard",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Wave 1: 9 cells disjoint after ledger moved to barrier; dispatching 4 at a time.",
-  "next_action": "4+4+1 workers, then MAIN updates ledger + verifies.",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-07-28T08:49:38.999Z"
 }

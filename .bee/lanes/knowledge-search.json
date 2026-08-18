@@ -2,15 +2,16 @@
   "schema_version": "1.0",
   "feature": "knowledge-search",
   "mode": "small",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"knowledge-search\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming: dispatch ks-1 then ks-2.",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-10T09:13:59.738Z",
   "route": {
     "class": "feature",
