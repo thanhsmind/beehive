@@ -16,15 +16,15 @@
     },
     {
       "name": "bee-herding",
-      "sha256": "4fa8a926faceafa8ae657076dffe2c36e03ba7ce061b9e9f32e669adc42606f0"
+      "sha256": "45ba5acc19a9d6bbee4f8c7bfd25a1598b6d57dcf5a97bc18cc0c84a78495a32"
     },
     {
       "name": "bee-hive",
-      "sha256": "e41b84d1341bde0a94b67437651a55a4618f22f5475e4172fd8bb75c79862fc7"
+      "sha256": "36027decae745a164a6f5fcf223206c984c280df730a7b2502e879ab7bbc6bbe"
     },
     {
       "name": "bee-planning",
-      "sha256": "bd6e84f245381cfc2521c7a3f78b1be7f0f352e6d04dedbec82556546d8a041e"
+      "sha256": "ad61a5c8d54ca855ccddc3bff3c0add8208f2dc34fd1012693288b731c1439bf"
     },
     {
       "name": "bee-researching",

@@ -352,5 +352,6 @@ cheap outcome; duplicated rows are the waste. Shape at `standard` and
 below is the triad — happy path, edge cases, error paths — at its
 smallest demonstrating size; `edge-dimensions.md`'s twelve dimensions
 apply only at `high-risk`/hard-gate. Case selection, duplication
-judgment, and red-before-green: `.bee/expertise/tests.md`. Tests prove
-at the boundary — the full rule under "Test scoping" above.
+judgment, and red-before-green: `.bee/expertise/tests.md`. The writer
+picks and runs the proof its cell needs and records it as the cap's
+proof line — the full rule under "Test scoping" above.

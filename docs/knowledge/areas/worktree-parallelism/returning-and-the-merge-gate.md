@@ -77,16 +77,22 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   window — main or the stage can no longer be vouched for, so bee refuses to build a commit on
   top of it: `git merge --abort` runs, main-untouched is proven the same way as every other
   abort path, and the typed drift result is returned rather than a commit.
-- **A red verify after a textually clean merge and a clean fence is the semantic-conflict
-  alarm** the command exists to raise: `git merge --abort` runs, main-untouched is proven the
-  same way, and the result is typed `MERGE_VERIFY_RED` with the output tail — fix-first before
-  release. Because the merge was never committed until verify passed, **no merge commit ever
-  existed to roll back**; this supersedes the old "merge commit is never rolled back" contract.
-  Only once verify is green AND the fence is clean does bee run `git commit` (message names the
-  id). A post-commit guard checks `git status --porcelain --untracked-files=no` is clean; if the
-  verify command itself left tracked files modified, the result carries a typed `warning.code:
+- **Superseded (D7/D8, td-3): the verify-child arm described in this bullet no longer runs.**
+  `bee worktree merge` spawns no verify command at all now; the D8 proof check (every capped
+  cell for the feature already carries a recorded proof line) runs as a zero-mutation
+  precondition BEFORE `git merge` is even attempted (`merge_stage`, P1) — a proof-less merge
+  refuses, typed `WORKTREE_MERGE_PROOF_DEBT`, before main is touched. What follows records the
+  now-historical verify-child design for archaeology only. A red verify after a textually clean
+  merge and a clean fence was the semantic-conflict alarm the command existed to raise:
+  `git merge --abort` ran, main-untouched was proven the same way, and the result was typed
+  `MERGE_VERIFY_RED` with the output tail — fix-first before release. Because the merge was
+  never committed until verify passed, **no merge commit ever existed to roll back**; this
+  superseded the old "merge commit is never rolled back" contract. Only once verify was green
+  AND the fence was clean did bee run `git commit` (message names the id). A post-commit guard
+  checked `git status --porcelain --untracked-files=no` was clean; if the verify command itself
+  left tracked files modified, the result carried a typed `warning.code:
   'verify_mutated_tracked_files'` instead of silently treating the tree as equivalent to the
-  commit. Recovery for a merge commit that only fails a LATER independent verify: `git revert
+  commit. Recovery for a merge commit that only failed a LATER independent verify: `git revert
   -m 1 <merge-commit>` (documented, not automated).
 - **Keeping the worktree is the default outcome now; teardown is the opt-in
   (worktree-keep-on-merge D1, supersedes worktree-reclaim D1).** On a merge that stages and
@@ -193,7 +199,7 @@ gap:
   `{ok: false, code: 'INTEGRATION_QUEUE_TIMEOUT', merged: false}` result whose text
   unambiguously says the merge did NOT run** (advisor condition B) — never a shape a
   caller could mistake for success, the same truth-telling discipline
-  `MERGE_CONFLICT`/`MERGE_VERIFY_RED` already use.
+  `MERGE_CONFLICT`/`WORKTREE_MERGE_PROOF_DEBT` already use.
 - **The processor lease** is a `path` resource in lease-store.mjs
   (`"path:integration-processor"`, under `controlRoot`), acquired with a **strictly
   positive TTL** — a non-positive one is refused before ever calling lease-store,
