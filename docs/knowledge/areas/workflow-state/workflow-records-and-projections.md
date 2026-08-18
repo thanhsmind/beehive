@@ -427,11 +427,14 @@ the read surface are delivered; no dashboard is built on top of it.
 
 **A `waiting_on` mark rides beside `run_state`, on the workflow record and on
 the default `.bee/state.json` record alike (awaiting-human D1/D3, ah-1,
-2026-08-14).** Trigger: the agent asks the human something — a gate or a
-free-form question — and has not yet received an answer. What happens:
-`build_waiting_on(kind, subject, session)` validates a closed two-value
-`kind` (`gate`/`question`), a non-empty `subject` (the gate name or the
-question text), and a non-empty `session` (the owning session id, which is
+2026-08-14; kind widened to three values by auto-wait-mark D3, 2026-08-18).**
+Trigger: the agent asks the human something — a gate or a free-form
+question — and has not yet received an answer, or (the third kind) an
+ordinary turn ends and control returns to the human with nothing owed. What
+happens: `build_waiting_on(kind, subject, session)` validates a closed
+three-value `kind` (`gate`/`question`/`turn-end`), a non-empty `subject`
+(the gate name, the question text, or — for `turn-end` — the turn's last
+line), and a non-empty `session` (the owning session id, which is
 what D4's stale-expiry heartbeat check reclaims against), stamps `asked_at`,
 and refuses with a typed error — writing nothing — on an unknown kind or an
 empty subject/session, the same `WORKFLOW_MISSING`/`WORKFLOW_CORRUPT`
@@ -601,12 +604,16 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   an unknown value refuses with a typed error; no new cell `status` value
   was introduced alongside it (traceable-runs D4, trun-7).
 - R125 — `waiting_on` is `null` (no live wait) or an object with `kind` in
-  the closed vocabulary `gate`/`question`, a non-empty `subject`, a
-  non-empty owning `session`, and an `asked_at` timestamp; an unknown kind
+  the closed vocabulary `gate`/`question`/`turn-end`, a non-empty `subject`,
+  a non-empty owning `session`, and an `asked_at` timestamp; an unknown kind
   or an empty subject/session refuses with a typed error and writes
   nothing; the mark lives beside `run_state` on both the workflow record
   and the default `.bee/state.json` record, so a wait recorded with no
-  active feature is still readable (awaiting-human D1/D3, ah-1).
+  active feature is still readable (awaiting-human D1/D3, ah-1). `turn-end`
+  is the Stop hook's every-turn mark (auto-wait-mark D1/D3, 2026-08-18):
+  control is back with the human, but nothing is owed, so `bee orient`
+  excludes it from `blockers` while every display surface keeps showing it
+  (D4).
 - R126 — A live `waiting_on` mark ends only three ways, never a fourth: the
   `UserPromptSubmit` hook's best-effort clear (never able to fail the hook
   or the turn), an explicit agent-issued clear (a no-op when nothing is

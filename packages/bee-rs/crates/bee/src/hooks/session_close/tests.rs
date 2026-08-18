@@ -546,3 +546,510 @@ so the next session can resume cleanly, or record a capture stub for what settle
         .unwrap();
         assert_eq!(after, record, "Stop must never touch status/closed_at");
     }
+
+    // ─── auto-wait-mark D1/D5/D6: the Stop-only turn-end mark ──────────────
+    //
+    // These drive `run_inner` (the real dispatch entry every Stop payload
+    // reaches), not `run_stop` above — `run_stop` calls `advisory()`
+    // directly and never touches `run_inner`'s match arms, which is exactly
+    // where the turn-end setter hangs (mirrors `SessionEnd`/`PreCompact`'s
+    // own placement, both handled in `run_inner` before `advisory()` is ever
+    // reached).
+
+    /// `Err2`'s `Exotic` payload has no `Debug` impl, so a plain
+    /// `.unwrap()` on a `Result<_, Err2>` does not compile — same helper
+    /// `prompt_context.rs`'s own tests already carry for the same reason.
+    fn ok<T, E>(r: Result<T, E>) -> T {
+        match r {
+            Ok(v) => v,
+            Err(_) => panic!("unexpected error result"),
+        }
+    }
+
+    /// Serializes every test that mutates the process-global
+    /// `CLAUDE_CONFIG_DIR` var (`resolve_transcript_for`'s own root) — same
+    /// hazard `lock_perf_env` guards for `BEEHIVE_PERF_DIR`.
+    fn lock_transcript_env() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Writes a real transcript `.jsonl`, at exactly the path
+    /// `resolve_transcript_for` looks for under an isolated
+    /// `CLAUDE_CONFIG_DIR`: `<config>/projects/<encode_project_dir(root)>/
+    /// <session>.jsonl`. `lines` are raw JSONL text, one per transcript
+    /// event, oldest first.
+    fn write_transcript(config_dir: &Path, root: &Path, session: &str, lines: &[&str]) {
+        let dir = config_dir.join("projects").join(encode_project_dir(&root.to_string_lossy()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{session}.jsonl")), format!("{}\n", lines.join("\n"))).unwrap();
+    }
+
+    #[test]
+    fn stop_with_no_live_mark_sets_a_turn_end_mark_from_the_transcripts_last_line() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        // The turn's FINAL assistant entry is a bare tool_use (no text) —
+        // the setter must scan backward past it to the entry that actually
+        // carries a text block.
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[
+                r#"{"type":"assistant","message":{"content":[{"type":"text","text":"line one\n\nSay go and I will do it.  \n"}]}}"#,
+                r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{}}]}}"#,
+            ],
+        );
+
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        let state: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["waiting_on"]["kind"], "turn-end");
+        assert_eq!(state["waiting_on"]["subject"], "Say go and I will do it.");
+        assert_eq!(state["waiting_on"]["session"], "s-1");
+        assert_eq!(state["run_state"], "awaiting-approval");
+    }
+
+    /// auto-wait-mark rework: the perf-refresh rollup and the turn-end mark
+    /// setter both need this Stop's transcript — `perf_refresh` resolves and
+    /// reads it for the rollup, and `turn_end_subject` needs its final
+    /// assistant line. Pins the fix by COUNTING `read_jsonl` calls against
+    /// the transcript's own path rather than eyeballing the call graph: the
+    /// old code called `read_jsonl` on this exact path twice per Stop (once
+    /// inside `perf_refresh`'s rollup, once again inside `turn_end_subject`);
+    /// the fix threads the one parsed event vector through both, so it must
+    /// land at exactly one.
+    #[test]
+    fn stop_reads_the_transcript_exactly_once_per_turn() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello there"}]}}"#],
+        );
+        let transcript_path = config
+            .path()
+            .join("projects")
+            .join(encode_project_dir(&root.to_string_lossy()))
+            .join("s-1.jsonl");
+
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+
+        READ_JSONL_LOG.with(|log| log.borrow_mut().clear());
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+        let transcript_reads = READ_JSONL_LOG
+            .with(|log| log.borrow().iter().filter(|p| **p == transcript_path).count());
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        assert_eq!(
+            transcript_reads, 1,
+            "expected exactly one std::fs::read of the transcript per Stop, got {transcript_reads}"
+        );
+        // The mark itself must still have been written from that one read.
+        let state: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["waiting_on"]["kind"], "turn-end");
+        assert_eq!(state["waiting_on"]["subject"], "hello there");
+    }
+
+    /// auto-wait-mark second rework: the same one-read guarantee, but on the
+    /// path where the perf refresh FAILS *after* its read. `BEEHIVE_PERF_DIR`
+    /// points at a regular file here, so `upsert_session_records`'
+    /// `create_dir_all` errors — strictly after the transcript was read. The
+    /// previous shape folded the events into that `Err`, `run_inner` turned
+    /// it into `None`, and `turn_end_subject` then re-resolved and re-read
+    /// the same file: two reads per Stop, the one thing
+    /// `docs/history/auto-wait-mark/CONTEXT.md` forbids. The events now
+    /// survive the failure, so this lands at exactly one read — and the mark
+    /// is still written from it, with the perf error still logged.
+    #[test]
+    fn a_late_perf_refresh_failure_still_reads_the_transcript_exactly_once() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        // A regular FILE where the perf dir belongs: every write under it
+        // fails, and the first such failure comes after the transcript read.
+        let perf_file = perf.path().join("not-a-dir");
+        std::fs::write(&perf_file, "").unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", &perf_file) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello there"}]}}"#],
+        );
+        let transcript_path = config
+            .path()
+            .join("projects")
+            .join(encode_project_dir(&root.to_string_lossy()))
+            .join("s-1.jsonl");
+
+        // The failure is real, and it lands after the read: the same call
+        // the hook makes returns Err, and hands the events back anyway.
+        let refreshed = perf_refresh(root, Some("s-1"));
+        assert!(refreshed.result.is_err(), "the perf refresh must fail on a file-shaped perf dir");
+        assert!(
+            refreshed.events.as_ref().is_some_and(|e| !e.is_empty()),
+            "a failing perf refresh must still hand back the events it read"
+        );
+
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+
+        READ_JSONL_LOG.with(|log| log.borrow_mut().clear());
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+        let transcript_reads = READ_JSONL_LOG
+            .with(|log| log.borrow().iter().filter(|p| **p == transcript_path).count());
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        assert_eq!(
+            transcript_reads, 1,
+            "a Stop whose perf refresh fails after its read must still read the transcript once, got {transcript_reads}"
+        );
+        // The mark is still written, from that one read.
+        let state: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["waiting_on"]["kind"], "turn-end");
+        assert_eq!(state["waiting_on"]["subject"], "hello there");
+    }
+
+    #[test]
+    fn a_final_assistant_text_block_that_is_blank_still_yields_a_non_empty_subject() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        // A transcript that resolves and parses fine, but the only text
+        // block it carries is whitespace-only.
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"   \n  \n"}]}}"#],
+        );
+
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        let state: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["waiting_on"]["kind"], "turn-end");
+        let subject = state["waiting_on"]["subject"].as_str().unwrap();
+        assert!(!subject.trim().is_empty(), "subject must be non-empty: {state}");
+    }
+
+    #[test]
+    fn a_missing_or_malformed_transcript_writes_no_mark_but_leaves_the_hook_native() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        // Case one: no transcript file at all (nothing written under
+        // config/projects/...).
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        let body = json!({"hook_event_name": "Stop", "cwd": root.to_string_lossy(), "session_id": "s-1"});
+        let stdin = serde_json::to_string(&body).unwrap();
+        assert_eq!(run_inner(&[], &stdin), Ok(()), "a missing transcript must never take the hook down");
+        let state: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert!(state.get("waiting_on").is_none() || state["waiting_on"].is_null(), "{state}");
+
+        // Case two: a transcript file exists but carries zero parseable
+        // JSONL lines.
+        let fx2 = fixture();
+        let root2 = fx2.path();
+        write_json_file(&root2.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root2.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_transcript(config.path(), root2, "s-2", &["not json at all"]);
+        let body2 = json!({"hook_event_name": "Stop", "cwd": root2.to_string_lossy(), "session_id": "s-2"});
+        let stdin2 = serde_json::to_string(&body2).unwrap();
+        assert_eq!(run_inner(&[], &stdin2), Ok(()), "a malformed transcript must never take the hook down");
+        let state2: Value = serde_json::from_str(
+            &std::fs::read_to_string(root2.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert!(state2.get("waiting_on").is_none() || state2["waiting_on"].is_null(), "{state2}");
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+    }
+
+    #[test]
+    fn session_end_pre_compact_and_a_non_stop_event_write_no_mark() {
+        for event in ["SessionEnd", "PreCompact", "SubagentStop"] {
+            let _perf_guard = lock_perf_env();
+            let perf = tempfile::tempdir().unwrap();
+            unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+
+            let fx = fixture();
+            let root = fx.path();
+            write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+            write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+            let body = json!({
+                "hook_event_name": event,
+                "cwd": root.to_string_lossy(),
+                "session_id": "s-1",
+            });
+            let stdin = serde_json::to_string(&body).unwrap();
+            let _ = run_inner(&[], &stdin); // PreCompact returns Err(()) (delegate) — expected
+
+            unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+
+            let state: Value = serde_json::from_str(
+                &std::fs::read_to_string(root.join(".bee").join("state.json")).unwrap(),
+            )
+            .unwrap();
+            assert!(
+                state.get("waiting_on").is_none() || state["waiting_on"].is_null(),
+                "{event}: {state}"
+            );
+        }
+    }
+
+    #[test]
+    fn stop_never_overwrites_a_live_declared_wait() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"a different, later line"}]}}"#],
+        );
+        // A declared wait, set through the real setter — the same shape
+        // `state waiting-on set` produces (D2: no provenance to tell them
+        // apart, so the ONLY thing protecting it is D5's kind-blind live
+        // check).
+        ok(crate::verbs::state_group::set_default_state_waiting_on(
+            root,
+            "question",
+            "should we ship the v3 index?",
+            "sess-asker",
+        ));
+
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        let state: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["waiting_on"]["kind"], "question");
+        assert_eq!(state["waiting_on"]["subject"], "should we ship the v3 index?");
+        assert_eq!(state["waiting_on"]["session"], "sess-asker");
+    }
+
+    /// Probe (auto-wait-mark plan, "Deferred To Planning" Q2): does a
+    /// re-entrant Stop (Claude Code's own `stop_hook_active` continuation)
+    /// double the mark? It cannot — D5's live-check already guards every
+    /// write, so a second Stop before the next `UserPromptSubmit` clear
+    /// finds the mark the FIRST Stop just wrote and leaves it untouched. No
+    /// `stop_hook_active` guard is added; this is the proof.
+    #[test]
+    fn a_second_stop_before_any_clear_never_doubles_or_changes_the_mark() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"first stop's line"}]}}"#],
+        );
+
+        let body = json!({"hook_event_name": "Stop", "cwd": root.to_string_lossy(), "session_id": "s-1"});
+        let stdin = serde_json::to_string(&body).unwrap();
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+
+        // As if the agent kept talking through a re-entrant continuation —
+        // a DIFFERENT last line, so a second write would be visible.
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[
+                r#"{"type":"assistant","message":{"content":[{"type":"text","text":"first stop's line"}]}}"#,
+                r#"{"type":"assistant","message":{"content":[{"type":"text","text":"second stop's line"}]}}"#,
+            ],
+        );
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        let state: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            state["waiting_on"]["subject"], "first stop's line",
+            "D5 must keep the FIRST Stop's mark, never the second's"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_failing_store_write_is_logged_and_never_fails_the_stop_hook() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"still waiting on you"}]}}"#],
+        );
+
+        let bee_dir = root.join(".bee");
+        // Pre-create every subdirectory the rest of the hook writes into so
+        // ONLY the mark's own `write_json_atomic(state.json, ..)` tmp-file
+        // creation fails — same shape `prompt_context.rs`'s own failure-
+        // injection test uses for the clear path.
+        std::fs::create_dir_all(bee_dir.join("locks")).unwrap();
+        std::fs::create_dir_all(bee_dir.join("cache")).unwrap();
+        std::fs::create_dir_all(bee_dir.join("logs")).unwrap();
+        let writable = std::fs::metadata(&bee_dir).unwrap().permissions();
+        let mut readonly = writable.clone();
+        readonly.set_mode(0o555); // r-x, no write: no new file inside .bee/
+        std::fs::set_permissions(&bee_dir, readonly).unwrap();
+
+        let body = json!({"hook_event_name": "Stop", "cwd": root.to_string_lossy(), "session_id": "s-1"});
+        let stdin = serde_json::to_string(&body).unwrap();
+        let outcome = run_inner(&[], &stdin);
+
+        // Restore write access before any assertion can panic and before
+        // the tempdir's own Drop tries to remove a directory it can no
+        // longer write into.
+        std::fs::set_permissions(&bee_dir, writable).unwrap();
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        assert_eq!(
+            outcome,
+            Ok(()),
+            "a write that fails on disk must still resolve natively, never crash the hook"
+        );
+        let crash_log =
+            std::fs::read_to_string(bee_dir.join("logs").join("hooks.jsonl")).unwrap_or_default();
+        assert!(
+            crash_log.contains(HOOK_NAME) && crash_log.contains("waiting_on"),
+            "the failed write must be logged: {crash_log}"
+        );
+    }
