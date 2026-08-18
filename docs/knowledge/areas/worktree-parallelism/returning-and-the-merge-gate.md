@@ -148,6 +148,14 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   is never narrowed and no path is exempted from it. Its own regression test keeps the
   lane record tracked, because an untracked one is invisible to the check and hid this
   exact fault once.
+- **The lane rewrite is committed, not left as dirt (merge-commits-the-lane D1).**
+  Once the rewrite succeeds, the return path commits that one lane record on its own,
+  scoped to it alone, so a green merge leaves the main checkout clean. The merge commit
+  itself is never rewritten to absorb it: that commit is already published as landed, and
+  a bookkeeping row is no reason to rewrite history. A second, plainly named commit
+  removes the real harm — a pending change that an operator cannot tell apart from
+  genuine drift. Like every bookkeeping write on this path it is best-effort: a commit
+  that fails warns on its own line and the merge stays green.
 
 ## Main's own `.bee` and closing-feature `docs/history/` dirt auto-commits before the dirty-MAIN refusal fires (trun-4, 2026-08-14)
 
