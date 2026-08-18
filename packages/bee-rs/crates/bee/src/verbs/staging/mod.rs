@@ -355,6 +355,23 @@ pub(crate) fn staging_before_merge_config(main_root: &Path) -> Option<bool> {
     }
 }
 
+/// staging-optional so-1: the one zero-mutation precondition both
+/// `staging_add` and `staging_rebuild` take before any lock or git work —
+/// the config read plus its two refusals, stated once.
+fn staging_enabled_or_refuse(main_root: &Path) -> Result<(), String> {
+    match staging_before_merge_config(main_root) {
+        None => Err(refuse(
+            "STAGING_CONFIG_INVALID",
+            "\"staging_before_merge\" in .bee/config.json must be a boolean — true (staging is on) or false (staging is off), never any other value.".to_string(),
+        )),
+        Some(false) => Err(refuse(
+            "STAGING_DISABLED",
+            "this repo opted out of the staging mixing ground with \"staging_before_merge\": false in .bee/config.json. Test the feature worktree itself, then land it with \"bee worktree merge\" after the \"uat\" gate. Set \"staging_before_merge\" back to true (or remove the key) to re-enable staging.".to_string(),
+        )),
+        Some(true) => Ok(()),
+    }
+}
+
 /// The whole `staging add`, given an already-resolved `main_root` — never
 /// touches `std::env::current_dir()`, so tests call it directly with an
 /// explicit path (including a NON-main one, to prove the D0a refusal, the
@@ -371,21 +388,7 @@ pub(crate) fn staging_add(main_root: &Path, feature: &str) -> Result<AddOutcome,
             ),
         ));
     }
-    match staging_before_merge_config(main_root) {
-        None => {
-            return Err(refuse(
-                "STAGING_CONFIG_INVALID",
-                "\"staging_before_merge\" in .bee/config.json must be a boolean — true (staging is on) or false (staging is off), never any other value.".to_string(),
-            ))
-        }
-        Some(false) => {
-            return Err(refuse(
-                "STAGING_DISABLED",
-                "this repo opted out of the staging mixing ground with \"staging_before_merge\": false in .bee/config.json. Test the feature worktree itself, then land it with \"bee worktree merge\" after the \"uat\" gate. Set \"staging_before_merge\" back to true (or remove the key) to re-enable staging.".to_string(),
-            ))
-        }
-        Some(true) => {}
-    }
+    staging_enabled_or_refuse(main_root)?;
     if !worktree::is_ordinary_checkout(main_root) {
         return Err(refuse(
             "STAGING_NOT_MAIN_CHECKOUT",
@@ -552,21 +555,7 @@ pub(crate) struct RebuildOutcome {
 /// the reset+recompute+merges+record write; the build hook runs unlocked
 /// afterward, same reasoning as `staging_add`'s).
 pub(crate) fn staging_rebuild(main_root: &Path, without: &[String]) -> Result<RebuildOutcome, String> {
-    match staging_before_merge_config(main_root) {
-        None => {
-            return Err(refuse(
-                "STAGING_CONFIG_INVALID",
-                "\"staging_before_merge\" in .bee/config.json must be a boolean — true (staging is on) or false (staging is off), never any other value.".to_string(),
-            ))
-        }
-        Some(false) => {
-            return Err(refuse(
-                "STAGING_DISABLED",
-                "this repo opted out of the staging mixing ground with \"staging_before_merge\": false in .bee/config.json. Test the feature worktree itself, then land it with \"bee worktree merge\" after the \"uat\" gate. Set \"staging_before_merge\" back to true (or remove the key) to re-enable staging.".to_string(),
-            ))
-        }
-        Some(true) => {}
-    }
+    staging_enabled_or_refuse(main_root)?;
     if !worktree::is_ordinary_checkout(main_root) {
         return Err(refuse(
             "STAGING_NOT_MAIN_CHECKOUT",
