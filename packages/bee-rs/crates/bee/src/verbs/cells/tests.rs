@@ -56,6 +56,17 @@ use std::time::Instant;
         })
     }
 
+    /// D8 (docs/history/test-doctrine/CONTEXT.md): a minimal, always-valid
+    /// `--report` JSON blob for fixtures that exercise something OTHER than
+    /// the --report contract itself (D6 trailer, wp registered-worker,
+    /// boundary-sentinel, frd deviation tests) — now that --report is
+    /// required on every cap path, these fixtures need SOME valid report
+    /// even though they are not testing its shape.
+    fn default_test_report_json() -> String {
+        r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":[]}"#
+            .to_string()
+    }
+
     // ── natural sort: every pair below is pinned to a live V8
     //    `a.localeCompare(b, 'en', {numeric: true})` probe result. ──────────
     #[test]
@@ -1739,7 +1750,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
-            report: None,
+            report: Some(default_test_report_json()),
         }
     }
 
@@ -3455,7 +3466,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
-            report: None,
+            report: Some(default_test_report_json()),
         };
         let cell_body = |id: &str| {
             json!({
@@ -3523,7 +3534,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
-            report: None,
+            report: Some(default_test_report_json()),
         }
     }
 
@@ -3586,14 +3597,16 @@ use std::time::Instant;
         assert_eq!(capped["trace"]["deviations"], json!([]));
     }
 
-    // ══ wfl-1 — `--report <json>` on cells cap/finish ══════════════════════
+    // ══ wfl-1/D8 — `--report <json>` on cells cap/finish ═══════════════════
     //
     // The structured counterpart to the worker Result form
     // (packages/bee/prompts/worker-cell.md): --report validated against
     // exactly REPORT_KEYS before any write, then stored verbatim as
-    // trace.report. Absent --report never touches trace.report — the same
-    // "add a flag, prove the old path unchanged" posture frd-1's own
-    // omitting_deviation test takes above.
+    // trace.report. D8 (docs/history/test-doctrine/CONTEXT.md): --report is
+    // now REQUIRED on every cap path — the same "add a flag, prove the old
+    // path unchanged" posture frd-1's own omitting_deviation test took above
+    // no longer applies to --report itself (see
+    // `omitting_report_is_refused_report_now_required` below).
 
     fn cap_flags_report(id: &str, report: Option<&str>) -> CapFlags {
         CapFlags {
@@ -3612,11 +3625,11 @@ use std::time::Instant;
         }
     }
 
-    // decision 13ce1858 (test-cadence-boundary D1a): the worker's own
-    // `tests` claim can only ever be "boundary" (a declared-test repo,
-    // proven at `bee close`/`bee worktree merge`) or "undeclared" (a
-    // no-test repo) — never a verdict this door cannot check itself.
-    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"boundary","deviations":[]}"#;
+    // D8: the worker's own `tests` claim is a proof string
+    // `<command> — <result> — <scope reason>`, written by the agent that
+    // ran it — never the retired `boundary`/`undeclared` enum (decision
+    // 13ce1858, test-cadence-boundary D1a).
+    const VALID_REPORT: &str = r#"{"outcome":"did the thing","commit":"abc123","files":["a.rs"],"tests":"cargo test -p bee — green — touched close.rs","deviations":[]}"#;
 
     #[test]
     fn valid_report_is_validated_and_stored_on_trace() {
@@ -3633,24 +3646,50 @@ use std::time::Instant;
                 "outcome": "did the thing",
                 "commit": "abc123",
                 "files": ["a.rs"],
-                "tests": "boundary",
+                "tests": "cargo test -p bee — green — touched close.rs",
                 "deviations": [],
             })
         );
     }
 
+    /// D8: a no-test-sentinel repo's proof string names its command segment
+    /// `none`, with the reason segment naming the parity/docs proof used
+    /// instead — migrated from the old `undeclared` sentinel this test used
+    /// to pin.
     #[test]
-    fn report_tests_key_accepts_undeclared_too() {
+    fn report_tests_key_accepts_none_command_for_a_no_test_sentinel_repo() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
         write_cell_fixture(root, "wfl-r1u", &cell("wfl-r1u", "claimed", "f", json!([])));
 
         let report =
-            r#"{"outcome":"did the thing","commit":"abc123","files":[],"tests":"undeclared","deviations":[]}"#;
+            r#"{"outcome":"did the thing","commit":"abc123","files":[],"tests":"none — green — regen parity check only","deviations":[]}"#;
         let flags = cap_flags_report("wfl-r1u", Some(report));
         let capped = cap_cell_from_flags(root, &flags, false).unwrap();
-        assert_eq!(capped["trace"]["report"]["tests"], json!("undeclared"));
+        assert_eq!(
+            capped["trace"]["report"]["tests"],
+            json!("none — green — regen parity check only")
+        );
+    }
+
+    /// D8: split on the FIRST TWO ` — ` separators only, so the reason
+    /// segment may itself carry the same separator without breaking the
+    /// parse.
+    #[test]
+    fn report_tests_key_reason_segment_may_contain_the_separator() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r1s", &cell("wfl-r1s", "claimed", "f", json!([])));
+
+        let report = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched close.rs — and finish_support.rs","deviations":[]}"#;
+        let flags = cap_flags_report("wfl-r1s", Some(report));
+        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        assert_eq!(
+            capped["trace"]["report"]["tests"],
+            json!("cargo test -p bee — green — touched close.rs — and finish_support.rs")
+        );
     }
 
     #[test]
@@ -3705,60 +3744,86 @@ use std::time::Instant;
         );
     }
 
+    /// D8: the retired `boundary`/`undeclared` enum is refused by name with
+    /// a remedy naming the proof-string form — a cold worker learns the new
+    /// contract instead of guessing why the old value stopped working.
     #[test]
-    fn report_tests_key_must_be_boundary_or_undeclared() {
+    fn report_tests_key_legacy_boundary_or_undeclared_is_refused_with_the_proof_string_remedy() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
         write_cell_fixture(root, "wfl-r5", &cell("wfl-r5", "claimed", "f", json!([])));
 
+        for legacy in ["boundary", "undeclared"] {
+            let bad = format!(
+                r#"{{"outcome":"o","commit":"c","files":[],"tests":"{legacy}","deviations":[]}}"#
+            );
+            let flags = cap_flags_report("wfl-r5", Some(&bad));
+            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+            assert!(
+                refusal.contains(&format!("no longer accepts \"{legacy}\"")),
+                "{legacy}: {refusal}"
+            );
+            assert!(
+                refusal.contains("<command> — <result> — <scope reason>"),
+                "{legacy}: {refusal}"
+            );
+        }
+    }
+
+    #[test]
+    fn report_tests_key_malformed_proof_string_is_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_bee_config(root, &json!({"commands": {"test": "none"}}));
+        write_cell_fixture(root, "wfl-r5c", &cell("wfl-r5c", "claimed", "f", json!([])));
+
         let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"maybe","deviations":[]}"#;
-        let flags = cap_flags_report("wfl-r5", Some(bad));
+        let flags = cap_flags_report("wfl-r5c", Some(bad));
         let refusal = thrown(cap_cell_from_flags(root, &flags, false));
         assert!(
-            refusal.contains("\"tests\" must be the string \"boundary\" or \"undeclared\""),
+            refusal.contains("must be a proof string \"<command> — <result> — <scope reason>\""),
             "{refusal}"
         );
     }
 
-    /// decision 13ce1858 (test-cadence-boundary D1a): the retired
-    /// "green"/"red" values are refused with a NAMED teach line quoting the
-    /// canonical boundary wording — a cold worker learns the new cadence
-    /// instead of guessing why the old value stopped working.
+    /// D8/D6's spirit: a result segment reading `red` refuses the cap
+    /// outright — a red is fix-first, never a done.
     #[test]
-    fn report_tests_key_green_or_red_is_refused_with_the_boundary_teach_line() {
+    fn report_tests_key_red_result_segment_is_refused() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
         write_cell_fixture(root, "wfl-r5b", &cell("wfl-r5b", "claimed", "f", json!([])));
 
-        for verdict in ["green", "red"] {
-            let bad = format!(
-                r#"{{"outcome":"o","commit":"c","files":[],"tests":"{verdict}","deviations":[]}}"#
-            );
-            let flags = cap_flags_report("wfl-r5b", Some(&bad));
-            let refusal = thrown(cap_cell_from_flags(root, &flags, false));
-            assert!(refusal.contains("no longer apply"), "{verdict}: {refusal}");
-            assert!(
-                refusal.contains("Tests prove at the boundary"),
-                "{verdict}: {refusal}"
-            );
-            assert!(refusal.contains("bee worktree merge"), "{verdict}: {refusal}");
-        }
+        let bad = r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — red — touched close.rs","deviations":[]}"#;
+        let flags = cap_flags_report("wfl-r5b", Some(bad));
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
+        assert!(refusal.contains("\"red\""), "{refusal}");
+        assert!(refusal.contains("fix-first"), "{refusal}");
     }
 
+    /// D8: --report is now required on every cap path — an absent flag
+    /// refuses instead of the old "leave trace.report untouched" byte-
+    /// identical behavior.
     #[test]
-    fn omitting_report_is_byte_identical_to_before_the_flag_existed() {
+    fn omitting_report_is_refused_report_now_required() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_bee_config(root, &json!({"commands": {"test": "none"}}));
         write_cell_fixture(root, "wfl-r6", &cell("wfl-r6", "claimed", "f", json!([])));
 
         let flags = cap_flags_report("wfl-r6", None);
-        let capped = cap_cell_from_flags(root, &flags, false).unwrap();
+        let refusal = thrown(cap_cell_from_flags(root, &flags, false));
         assert!(
-            capped["trace"].get("report").is_none(),
-            "absent --report must never add a trace.report key"
+            refusal.contains("--report is required"),
+            "{refusal}"
+        );
+        let after_norm = read_cell_norm(root, "wfl-r6").ok().unwrap().unwrap();
+        assert_eq!(
+            after_norm.get("status"),
+            Some(&json!("claimed")),
+            "a refused --report caps nothing"
         );
     }
 
@@ -3838,7 +3903,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: commit_pending.map(str::to_string),
             inline_reason: None,
-            report: None,
+            report: Some(default_test_report_json()),
         }
     }
 
@@ -3952,7 +4017,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: inline_reason.map(str::to_string),
-            report: None,
+            report: Some(default_test_report_json()),
         }
     }
 
@@ -4798,7 +4863,7 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
-            report: None,
+            report: Some(default_test_report_json()),
         }
     }
 

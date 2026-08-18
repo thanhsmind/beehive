@@ -53,12 +53,42 @@ pub(crate) fn test_results_path(root: &Path) -> PathBuf {
 /// The Result form's five keys, in the order worker-cell.md documents them.
 pub(crate) const REPORT_KEYS: [&str; 5] = ["outcome", "commit", "files", "tests", "deviations"];
 
+/// D8 (docs/history/test-doctrine/CONTEXT.md) proof-string separator —
+/// three segments joined by `" — "` (space, em dash U+2014, space).
+pub(crate) const PROOF_SEPARATOR: &str = " — ";
+
+/// parseTestsProof — splits a D8 proof string `<command> — <result> —
+/// <scope reason>` into its three segments, splitting on the FIRST TWO
+/// occurrences of [`PROOF_SEPARATOR`] only, so the reason segment may
+/// itself contain the same separator. `None` when fewer than two
+/// separators are found, or any segment trims to empty.
+pub(crate) fn parse_tests_proof(s: &str) -> Option<(String, String, String)> {
+    let first = s.find(PROOF_SEPARATOR)?;
+    let (command, rest) = s.split_at(first);
+    let rest = &rest[PROOF_SEPARATOR.len()..];
+    let second = rest.find(PROOF_SEPARATOR)?;
+    let (result, reason) = rest.split_at(second);
+    let reason = &reason[PROOF_SEPARATOR.len()..];
+    let command = js_trim(command);
+    let result = js_trim(result);
+    let reason = js_trim(reason);
+    if command.is_empty() || result.is_empty() || reason.is_empty() {
+        return None;
+    }
+    Some((command.to_string(), result.to_string(), reason.to_string()))
+}
+
 /// parseReportFlag — `--report`'s raw JSON string validated against the
 /// worker Result-form shape. `outcome`/`commit` are non-empty strings;
 /// `files`/`deviations` are arrays (their own element shape is the
-/// worker's business, not this gate's); `tests` is the literal string
-/// `"green"` or `"red"`. Every refusal names the offending key so a cold
-/// reader fixes it without re-deriving the shape from this function.
+/// worker's business, not this gate's); `tests` is a D8 proof string
+/// `<command> — <result> — <scope reason>` (three non-empty segments,
+/// split on the FIRST TWO ` — ` separators only, so the reason may itself
+/// carry the same separator) — never the retired `boundary`/`undeclared`
+/// enum. A result segment reading `red` refuses the cap outright (D6's
+/// spirit: a red is fix-first, never a done). Every refusal names the
+/// offending key so a cold reader fixes it without re-deriving the shape
+/// from this function.
 pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
     let parsed: Value = serde_json::from_str(raw)
         .map_err(|e| Fail::Thrown(format!("cells finish: --report is not valid JSON: {e}")))?;
@@ -115,24 +145,40 @@ pub(crate) fn parse_report_flag(raw: &str) -> MR<Value> {
             ))
         }
     }
-    // decision 13ce1858 (test-cadence-boundary D1a): a cap never claims
-    // green/red — the boundary (`bee close`/`bee worktree merge`) is the
-    // only place a test process runs, so a worker's own report can only
-    // name where its proof lives, never assert a verdict this door cannot
-    // check. "green"/"red" are refused by name, with the canonical
-    // wording, so a cold worker learns the new cadence instead of guessing
-    // why the old value stopped working.
+    // D8 (docs/history/test-doctrine/CONTEXT.md): a cap's own proof lives
+    // WITH the cell, not in a fixed enum — `tests` is a proof string
+    // `<command> — <result> — <scope reason>`, written by the agent that
+    // ran it. The retired `boundary`/`undeclared` enum (decision 13ce1858,
+    // test-cadence-boundary D1a — "a cap never claims green/red, the
+    // boundary is the only place a test process runs") is refused by name
+    // with a remedy teaching the new form, so a cold worker learns the
+    // proof-string contract instead of guessing why the old value stopped
+    // working. A well-formed proof string whose result segment reads
+    // literally `red` still refuses — D6's spirit: a red is fix-first,
+    // never a done.
     match map.get("tests") {
-        Some(Value::String(s)) if s == "boundary" || s == "undeclared" => {}
-        Some(Value::String(s)) if s == "green" || s == "red" => {
-            return Err(Fail::Thrown(
-                "cells finish: --report key \"tests\" must be \"boundary\" or \"undeclared\" — \"green\"/\"red\" no longer apply. Tests prove at the boundary: bee close runs commands.test when the feature has no worktree; bee worktree merge runs it when it does. A cap is commit-only proof and records tests: boundary."
-                    .to_string(),
-            ))
+        Some(Value::String(s)) if s == "boundary" || s == "undeclared" => {
+            return Err(Fail::Thrown(format!(
+                "cells finish: --report key \"tests\" no longer accepts \"{s}\" — the boundary/undeclared enum is retired. Record a proof string instead: \"<command> — <result> — <scope reason>\" (e.g. \"cargo test -p bee — green — touched close.rs\"). In a no-test-sentinel repo, name the command segment \"none\" and put the parity/docs proof used in the reason segment (e.g. \"none — green — regen parity check only\")."
+            )))
         }
+        Some(Value::String(s)) => match parse_tests_proof(s) {
+            Some((_, result, _)) if result == "red" => {
+                return Err(Fail::Thrown(
+                    "cells finish: --report key \"tests\" result segment is \"red\" — a red is fix-first, never a cap. Fix the failure, re-run the proof, and cap with a passing result.".to_string(),
+                ))
+            }
+            Some(_) => {}
+            None => {
+                return Err(Fail::Thrown(
+                    "cells finish: --report key \"tests\" must be a proof string \"<command> — <result> — <scope reason>\" — three non-empty segments separated by \" — \" (e.g. \"cargo test -p bee — green — touched close.rs\")."
+                        .to_string(),
+                ))
+            }
+        },
         _ => {
             return Err(Fail::Thrown(
-                "cells finish: --report key \"tests\" must be the string \"boundary\" or \"undeclared\"."
+                "cells finish: --report key \"tests\" must be a proof string \"<command> — <result> — <scope reason>\"."
                     .to_string(),
             ))
         }
