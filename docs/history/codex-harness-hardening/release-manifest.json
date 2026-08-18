@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "0be725f41cccbe4a63933f027ace0769110d7fa3277b6bea01c8603b7d4e3ca2",
+      "sha256": "4dd61b7b224c2b691495cf79b161d143e137aaa68ebbef3a450daf57387b8105",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -262,7 +262,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/operational-invariants.md",
-      "sha256": "870dd242242f80970b784ee4011dbfacffdc25a54682ae7abe853b71e405e811",
+      "sha256": "44febdb18855c7972c44eb9053b87177c401344edbfa03641e677d6ee52f2921",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/operational-invariants.md"
@@ -311,7 +311,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/SKILL.md",
-      "sha256": "ffc34258b639afe99bfe22f5fb984fa7754b5e8d27603754d968f2b6f240a719",
+      "sha256": "a20e91281dc1cc7432ced109fc283d32e7ae9cce6325696dbd6b78c8cdd6c7d4",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/SKILL.md"
@@ -640,7 +640,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "74ceebc6b55bd837ab331c4983b5b2124e44c5e163b9e9d277239f451a4bcbcb",
+      "sha256": "2b359fc789aec2ec73d8b76f4c43bdbab8e64a19f7e8c1f23e76c20236b609b5",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -766,7 +766,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/operational-invariants.md",
-      "sha256": "870dd242242f80970b784ee4011dbfacffdc25a54682ae7abe853b71e405e811",
+      "sha256": "44febdb18855c7972c44eb9053b87177c401344edbfa03641e677d6ee52f2921",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/operational-invariants.md"
@@ -815,7 +815,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/SKILL.md",
-      "sha256": "ffc34258b639afe99bfe22f5fb984fa7754b5e8d27603754d968f2b6f240a719",
+      "sha256": "a20e91281dc1cc7432ced109fc283d32e7ae9cce6325696dbd6b78c8cdd6c7d4",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/SKILL.md"
@@ -1474,7 +1474,7 @@
     },
     {
       "path": "skills/bee-herding/references/operational-invariants.md",
-      "sha256": "870dd242242f80970b784ee4011dbfacffdc25a54682ae7abe853b71e405e811",
+      "sha256": "44febdb18855c7972c44eb9053b87177c401344edbfa03641e677d6ee52f2921",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/operational-invariants.md"
@@ -1523,7 +1523,7 @@
     },
     {
       "path": "skills/bee-herding/SKILL.md",
-      "sha256": "ffc34258b639afe99bfe22f5fb984fa7754b5e8d27603754d968f2b6f240a719",
+      "sha256": "a20e91281dc1cc7432ced109fc283d32e7ae9cce6325696dbd6b78c8cdd6c7d4",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/SKILL.md"

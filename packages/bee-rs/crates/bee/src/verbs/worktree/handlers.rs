@@ -718,18 +718,13 @@ pub(crate) fn merge_text_lines(id: &str, main_root: &Path, answer: &MergeAnswer)
                 jsjson::js_to_string(cmd)
             ));
         }
-    } else if code == "MERGE_VERIFY_RED" {
-        lines.push(format!(
-            "Merge of worktree {id} (branch {}) was TEXTUALLY CLEAN, but verify is RED (semantic-conflict alarm).",
-            s("branch")
-        ));
-        lines.push(format!(
-            "The merge was aborted — {} was left byte-untouched; no merge commit exists. Fix-first before release, then retry the merge.",
-            p(main_root)
-        ));
-        lines.push("--- verify output tail ---".to_string());
-        lines.push(s("output_tail"));
     } else {
+        // The only non-ok arm `phases.rs` produces via `StageOut::Done` is
+        // `MERGE_CONFLICT` (a real textual conflict from `git merge`);
+        // `WORKTREE_MERGE_PROOF_DEBT` and every other refusal go through
+        // `refuse_merge` -> `MErr::Thrown`, caught before this function ever
+        // runs (see the `thrown` branch above merge_text_lines's call site),
+        // so a `code`-keyed match here would never see them.
         lines.push(format!(
             "Merge of worktree {id} hit a textual conflict — the merge was aborted and {} was left byte-untouched; bee does not auto-resolve a textual conflict. Resolve it in the worktree and retry.",
             p(main_root)
