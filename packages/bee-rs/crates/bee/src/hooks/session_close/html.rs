@@ -258,13 +258,24 @@ document.querySelectorAll('tr.row').forEach(function(r){{
 }
 
 /// maybePerfRefresh — best-effort; Err(msg) => logCrash(source 'perf-refresh').
-pub(crate) fn perf_refresh(root: &Path, session_id: Option<&str>) -> Result<(), String> {
-    if let Some(transcript) = resolve_transcript_for(root, session_id) {
-        if let Some(rollup) = rollup_transcript(&transcript) {
-            let record = session_record(&rollup)?;
-            upsert_session_records(&[record])?;
+///
+/// auto-wait-mark rework: returns the parsed transcript events it resolved
+/// and read (`Some`, possibly empty) so the caller's own turn-end mark logic
+/// (`turn_end_subject`) can reuse them instead of resolving and reading the
+/// same file a second time — `None` only when no transcript resolved at all,
+/// exactly mirroring what a second `resolve_transcript_for` call would find.
+pub(crate) fn perf_refresh(root: &Path, session_id: Option<&str>) -> Result<Option<Vec<Value>>, String> {
+    let events = match resolve_transcript_for(root, session_id) {
+        Some(transcript) => {
+            let events = read_jsonl(&transcript);
+            if let Some(rollup) = rollup_from_events(&transcript, &events) {
+                let record = session_record(&rollup)?;
+                upsert_session_records(&[record])?;
+            }
+            Some(events)
         }
-    }
+        None => None,
+    };
     if !read_session_records().is_empty() {
         let projects = build_matrix_from_log();
         let html = render_matrix_html(&projects, &now_iso())?;
@@ -274,5 +285,5 @@ pub(crate) fn perf_refresh(root: &Path, session_id: Option<&str>) -> Result<(), 
         }
         std::fs::write(&out, html).map_err(|e| format!("Error: {e}"))?;
     }
-    Ok(())
+    Ok(events)
 }

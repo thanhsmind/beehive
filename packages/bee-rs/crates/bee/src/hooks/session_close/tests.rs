@@ -632,6 +632,68 @@ so the next session can resume cleanly, or record a capture stub for what settle
         assert_eq!(state["run_state"], "awaiting-approval");
     }
 
+    /// auto-wait-mark rework: the perf-refresh rollup and the turn-end mark
+    /// setter both need this Stop's transcript — `perf_refresh` resolves and
+    /// reads it for the rollup, and `turn_end_subject` needs its final
+    /// assistant line. Pins the fix by COUNTING `read_jsonl` calls against
+    /// the transcript's own path rather than eyeballing the call graph: the
+    /// old code called `read_jsonl` on this exact path twice per Stop (once
+    /// inside `perf_refresh`'s rollup, once again inside `turn_end_subject`);
+    /// the fix threads the one parsed event vector through both, so it must
+    /// land at exactly one.
+    #[test]
+    fn stop_reads_the_transcript_exactly_once_per_turn() {
+        let _perf_guard = lock_perf_env();
+        let _transcript_guard = lock_transcript_env();
+        let perf = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        unsafe { std::env::set_var("BEEHIVE_PERF_DIR", perf.path()) };
+        unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
+
+        let fx = fixture();
+        let root = fx.path();
+        write_json_file(&root.join(".bee").join("config.json"), &json!({}));
+        write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
+        write_transcript(
+            config.path(),
+            root,
+            "s-1",
+            &[r#"{"type":"assistant","message":{"content":[{"type":"text","text":"hello there"}]}}"#],
+        );
+        let transcript_path = config
+            .path()
+            .join("projects")
+            .join(encode_project_dir(&root.to_string_lossy()))
+            .join("s-1.jsonl");
+
+        let body = json!({
+            "hook_event_name": "Stop",
+            "cwd": root.to_string_lossy(),
+            "session_id": "s-1",
+        });
+        let stdin = serde_json::to_string(&body).unwrap();
+
+        READ_JSONL_LOG.with(|log| log.borrow_mut().clear());
+        assert_eq!(run_inner(&[], &stdin), Ok(()));
+        let transcript_reads = READ_JSONL_LOG
+            .with(|log| log.borrow().iter().filter(|p| **p == transcript_path).count());
+
+        unsafe { std::env::remove_var("BEEHIVE_PERF_DIR") };
+        unsafe { std::env::remove_var("CLAUDE_CONFIG_DIR") };
+
+        assert_eq!(
+            transcript_reads, 1,
+            "expected exactly one std::fs::read of the transcript per Stop, got {transcript_reads}"
+        );
+        // The mark itself must still have been written from that one read.
+        let state: Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join(".bee").join("state.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["waiting_on"]["kind"], "turn-end");
+        assert_eq!(state["waiting_on"]["subject"], "hello there");
+    }
+
     #[test]
     fn a_final_assistant_text_block_that_is_blank_still_yields_a_non_empty_subject() {
         let _perf_guard = lock_perf_env();

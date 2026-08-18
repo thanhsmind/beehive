@@ -148,9 +148,17 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
 
     // ── perf refresh (best-effort, before the hookEnabled check — as in the
     // .mjs, and never allowed to touch the exit code or the advisory path) ──
-    if let Err(msg) = perf_refresh(&root, session_id.as_deref()) {
-        log_crash(Some(&root), HOOK_NAME, &msg, Some("perf-refresh"));
-    }
+    // auto-wait-mark rework: `perf_refresh` hands back the transcript events
+    // it already resolved and read (`Some`, possibly empty, when a
+    // transcript resolved at all) so the turn-end mark below reuses them
+    // instead of a second `read_jsonl` of the same file.
+    let perf_events = match perf_refresh(&root, session_id.as_deref()) {
+        Ok(events) => events,
+        Err(msg) => {
+            log_crash(Some(&root), HOOK_NAME, &msg, Some("perf-refresh"));
+            None
+        }
+    };
 
     let mut stdout = String::new();
     let mut stderr = String::new();
@@ -175,7 +183,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
             // never a forced continuation. `Disabled` and `Block` both
             // `return` their own branch above and never reach here.
             if ctx.event == "Stop" {
-                set_turn_end_mark_best_effort(&root, &ctx, session_id.as_deref());
+                set_turn_end_mark_best_effort(&root, &ctx, session_id.as_deref(), perf_events);
             }
         }
         Err(Flow::Delegate) => return Err(()),
@@ -186,7 +194,7 @@ fn run_inner(argv: &[String], stdin: &str) -> Result<(), ()> {
             // unrelated pipeline crash (e.g. a corrupt lane record) inside
             // advisory()'s own nudges, so the mark still gets its chance.
             if ctx.event == "Stop" {
-                set_turn_end_mark_best_effort(&root, &ctx, session_id.as_deref());
+                set_turn_end_mark_best_effort(&root, &ctx, session_id.as_deref(), perf_events);
             }
         }
     }
@@ -259,23 +267,32 @@ fn flush(stdout: &str, stderr: &str) {
 // `waiting_on_is_live`, never a second predicate. Best-effort throughout,
 // mirroring `prompt_context.rs`'s `clear_and_reap_waiting_on_best_effort`
 // shape: a failed write is logged and never fails the hook or its output.
-fn set_turn_end_mark_best_effort(root: &Path, ctx: &HookContext, session_id: Option<&str>) {
+fn set_turn_end_mark_best_effort(
+    root: &Path,
+    ctx: &HookContext,
+    session_id: Option<&str>,
+    cached_events: Option<Vec<Value>>,
+) {
     // `build_waiting_on` refuses an empty session, and D4's stale-expiry
     // reap has nothing to reclaim against without one — a Stop whose session
     // id cannot be resolved writes nothing rather than failing.
     let Some(session) = session_id else { return };
-    if let Err(msg) = try_set_turn_end_mark(root, session) {
+    if let Err(msg) = try_set_turn_end_mark(root, session, cached_events) {
         log_crash(Some(root), HOOK_NAME, &msg, ctx.source);
     }
 }
 
-fn try_set_turn_end_mark(root: &Path, session: &str) -> Result<(), String> {
+fn try_set_turn_end_mark(
+    root: &Path,
+    session: &str,
+    cached_events: Option<Vec<Value>>,
+) -> Result<(), String> {
     // A missing, unreadable, or malformed transcript (no session-scoped
     // .jsonl resolves, or it carries zero parseable events) writes no mark
     // at all — distinct from a transcript that resolves fine but whose
     // FINAL assistant text happens to be blank, which still writes (with
     // the fallback subject, below `turn_end_subject`'s `Some` branch).
-    let Some(subject) = turn_end_subject(root, Some(session)) else {
+    let Some(subject) = turn_end_subject(root, Some(session), cached_events) else {
         return Ok(());
     };
     // D3's own target resolution (session-scoped first, feature-scoped only
@@ -342,7 +359,13 @@ fn waiting_on_err_message(e: crate::verbs::reservations::Err2) -> String {
 /// the turn's final assistant text block, trimmed and truncated. Reuses
 /// `perf.rs`'s own `resolve_transcript_for`, already resolved (and its file
 /// read) on every Stop for the perf rollup — no second resolution path, no
-/// second transcript read.
+/// second transcript read: `cached_events` carries the SAME events
+/// `perf_refresh` already parsed for this Stop (`Some`, possibly empty, once
+/// a transcript resolved at all), and this function reuses them instead of
+/// reading the file again. `None` is only passed by a caller outside the
+/// Stop dispatch (there is none today; kept so a direct/test call without a
+/// prior `perf_refresh` still resolves and reads for itself, exactly as
+/// before).
 ///
 /// `None` is the "nothing to report" case — a missing, unreadable, or
 /// malformed transcript (`resolve_transcript_for` finds nothing, or the file
@@ -352,9 +375,18 @@ fn waiting_on_err_message(e: crate::verbs::reservations::Err2) -> String {
 /// `build_waiting_on` refuses an empty subject, so that case still resolves
 /// to `TURN_END_FALLBACK_SUBJECT` rather than `None` — the transcript did
 /// its job, there was just nothing to quote.
-fn turn_end_subject(root: &Path, session_id: Option<&str>) -> Option<String> {
-    let path = resolve_transcript_for(root, session_id)?;
-    let events = read_jsonl(&path);
+fn turn_end_subject(
+    root: &Path,
+    session_id: Option<&str>,
+    cached_events: Option<Vec<Value>>,
+) -> Option<String> {
+    let events = match cached_events {
+        Some(events) => events,
+        None => {
+            let path = resolve_transcript_for(root, session_id)?;
+            read_jsonl(&path)
+        }
+    };
     if events.is_empty() {
         return None;
     }
