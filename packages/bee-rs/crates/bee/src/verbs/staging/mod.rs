@@ -340,6 +340,38 @@ pub(crate) struct AddOutcome {
     pub(crate) build_note: String,
 }
 
+/// staging-optional so-1: `staging_before_merge` in `.bee/config.json` — ON
+/// by default (absent \u{2192} true, so every existing repo keeps today's
+/// behavior until someone opts it off), an explicit `false` disables the
+/// mixing ground repo-wide, and any other shape refuses (`None`) rather
+/// than guessing which way to resolve a typo. Models
+/// `uat_before_merge_config` (phases.rs:673-679) exactly, one config key
+/// over.
+pub(crate) fn staging_before_merge_config(main_root: &Path) -> Option<bool> {
+    match crate::state::read_config_raw(main_root).get("staging_before_merge") {
+        None => Some(true),
+        Some(Value::Bool(b)) => Some(*b),
+        Some(_) => None,
+    }
+}
+
+/// staging-optional so-1: the one zero-mutation precondition both
+/// `staging_add` and `staging_rebuild` take before any lock or git work —
+/// the config read plus its two refusals, stated once.
+fn staging_enabled_or_refuse(main_root: &Path) -> Result<(), String> {
+    match staging_before_merge_config(main_root) {
+        None => Err(refuse(
+            "STAGING_CONFIG_INVALID",
+            "\"staging_before_merge\" in .bee/config.json must be a boolean — true (staging is on) or false (staging is off), never any other value.".to_string(),
+        )),
+        Some(false) => Err(refuse(
+            "STAGING_DISABLED",
+            "this repo opted out of the staging mixing ground with \"staging_before_merge\": false in .bee/config.json. Test the feature worktree itself, then land it with \"bee worktree merge\" after the \"uat\" gate. Set \"staging_before_merge\" back to true (or remove the key) to re-enable staging.".to_string(),
+        )),
+        Some(true) => Ok(()),
+    }
+}
+
 /// The whole `staging add`, given an already-resolved `main_root` — never
 /// touches `std::env::current_dir()`, so tests call it directly with an
 /// explicit path (including a NON-main one, to prove the D0a refusal, the
@@ -356,6 +388,7 @@ pub(crate) fn staging_add(main_root: &Path, feature: &str) -> Result<AddOutcome,
             ),
         ));
     }
+    staging_enabled_or_refuse(main_root)?;
     if !worktree::is_ordinary_checkout(main_root) {
         return Err(refuse(
             "STAGING_NOT_MAIN_CHECKOUT",
@@ -522,6 +555,7 @@ pub(crate) struct RebuildOutcome {
 /// the reset+recompute+merges+record write; the build hook runs unlocked
 /// afterward, same reasoning as `staging_add`'s).
 pub(crate) fn staging_rebuild(main_root: &Path, without: &[String]) -> Result<RebuildOutcome, String> {
+    staging_enabled_or_refuse(main_root)?;
     if !worktree::is_ordinary_checkout(main_root) {
         return Err(refuse(
             "STAGING_NOT_MAIN_CHECKOUT",
@@ -1315,5 +1349,122 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
         assert!(staging_status(&main).unwrap().is_none());
+    }
+
+    // ─── staging_before_merge (staging-optional so-1) ──────────────────────
+
+    #[test]
+    fn staging_before_merge_absent_key_allows_add_and_rebuild() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let feat = feature_worktree(&main, "demo");
+        commit_in(&feat, "demo.txt", "hi\n", "demo work");
+
+        let outcome = staging_add(&main, "demo").expect("an absent staging_before_merge key must allow add (default ON)");
+        assert_eq!(outcome.staged.len(), 1);
+
+        commit_in(&main, "main2.txt", "later\n", "main moves on");
+        staging_rebuild(&main, &[]).expect("an absent staging_before_merge key must allow rebuild (default ON)");
+    }
+
+    #[test]
+    fn staging_before_merge_true_allows_add_and_rebuild() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            jsjson::stringify(&json!({"staging_before_merge": true})),
+        )
+        .unwrap();
+        let feat = feature_worktree(&main, "demo");
+        commit_in(&feat, "demo.txt", "hi\n", "demo work");
+
+        staging_add(&main, "demo").expect("staging_before_merge: true must allow add");
+        commit_in(&main, "main2.txt", "later\n", "main moves on");
+        staging_rebuild(&main, &[]).expect("staging_before_merge: true must allow rebuild");
+    }
+
+    #[test]
+    fn staging_before_merge_false_refuses_add_with_zero_mutation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            jsjson::stringify(&json!({"staging_before_merge": false})),
+        )
+        .unwrap();
+        let feat = feature_worktree(&main, "demo");
+        commit_in(&feat, "demo.txt", "hi\n", "demo work");
+
+        let err = staging_add(&main, "demo").unwrap_err();
+        assert!(err.contains("STAGING_DISABLED"), "{err}");
+        assert!(err.contains("staging_before_merge"), "{err}");
+        assert!(err.contains("bee worktree merge"), "{err}");
+        assert!(!worktree::branch_exists(&main, "staging"), "an opted-out repo must never create staging");
+        assert!(!staging_file(&main).exists(), "an opted-out repo must never write a staging record");
+    }
+
+    #[test]
+    fn staging_before_merge_false_refuses_rebuild_with_zero_mutation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let feat = feature_worktree(&main, "demo");
+        commit_in(&feat, "demo.txt", "hi\n", "demo work");
+        staging_add(&main, "demo").expect("initial add must merge cleanly while staging is still on");
+        let record_before = read_staging_record(&main).unwrap().unwrap();
+
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            jsjson::stringify(&json!({"staging_before_merge": false})),
+        )
+        .unwrap();
+
+        let err = staging_rebuild(&main, &[]).unwrap_err();
+        assert!(err.contains("STAGING_DISABLED"), "{err}");
+        assert!(err.contains("staging_before_merge"), "{err}");
+        assert!(err.contains("bee worktree merge"), "{err}");
+
+        let record_after = read_staging_record(&main).unwrap().unwrap();
+        assert_eq!(record_before.base_sha, record_after.base_sha, "rebuild must refuse before any reset/mutation");
+        assert_eq!(record_before.staged.len(), record_after.staged.len(), "rebuild must refuse before any re-merge");
+    }
+
+    #[test]
+    fn staging_before_merge_non_boolean_refuses_add_and_rebuild() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            jsjson::stringify(&json!({"staging_before_merge": "sometimes"})),
+        )
+        .unwrap();
+        let feat = feature_worktree(&main, "demo");
+        commit_in(&feat, "demo.txt", "hi\n", "demo work");
+
+        let err = staging_add(&main, "demo").unwrap_err();
+        assert!(err.contains("STAGING_CONFIG_INVALID"), "{err}");
+        assert!(!worktree::branch_exists(&main, "staging"), "a bad config value must never create staging");
+
+        let err = staging_rebuild(&main, &[]).unwrap_err();
+        assert!(err.contains("STAGING_CONFIG_INVALID"), "{err}");
+    }
+
+    #[test]
+    fn status_still_reads_record_when_staging_before_merge_is_false() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let feat = feature_worktree(&main, "demo");
+        commit_in(&feat, "demo.txt", "hi\n", "demo work");
+        staging_add(&main, "demo").expect("initial add must merge cleanly while staging is still on");
+
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            jsjson::stringify(&json!({"staging_before_merge": false})),
+        )
+        .unwrap();
+
+        let status = staging_status(&main).unwrap().unwrap();
+        assert_eq!(status.staged.len(), 1, "status must still read the existing record when staging is disabled");
+        assert_eq!(status.staged[0].feature, "demo");
     }
 }
