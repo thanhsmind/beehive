@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "feature": "auto-wait-mark",
+  "mode": "feature",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"staging-optional\" started at phase \"exploring\".",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-18T11:57:09.859Z",
+  "run_state": "done",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 3,
+    "rationale": "3 flags, no hard-gate flag. public-contracts: --kind is a documented closed vocabulary (R125) named in the refusal message and in skill prose. covered-contract-change: existing tests assert the current refusal text and that any live mark is an orient blocker, which D4 narrows. multi-domain: crosses the hooks layer (session_close) and the workflow-state store (record.rs, orient.rs). Not cross-platform - the vocabulary lives at record.rs:356 only. Not data-model - no migration, no stored value invalidated. 3 product files: record.rs, session_close/mod.rs, orient.rs.",
+    "updated_at": "2026-08-18T12:10:47.722Z",
+    "feature": "auto-wait-mark"
+  }
+}

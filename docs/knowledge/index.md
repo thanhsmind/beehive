@@ -14,8 +14,8 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 105 concept(s)
-- [patterns/](patterns/index.md) — 113 concept(s)
-- [work/](work/index.md) — 11 concept(s)
+- [patterns/](patterns/index.md) — 115 concept(s)
+- [work/](work/index.md) — 12 concept(s)
 
 ## Critical patterns
 
@@ -54,4 +54,5 @@ never a generation timestamp or any other wall-clock value.
 - [A refusal from one verb of a family does not speak for the verb the contract rests on](patterns/20260813-a-refusal-from-one-verb-of-a-family-does-not-speak-for-the-verb-the-contract-rests-on.md) — Four sibling verbs refused from a granted worktree, so the fifth was assumed to refuse too — and on that assumption a user-authored decision was superseded, a grant was dropped, and a defect was filed for a problem the dropped grant created. The one verb the worker contract actually depends on had been widened nine days earlier, and testing it would have cost one command.
 - [A drifted phase record is caught by the guard that counts things, never by the guard that reads state](patterns/20260814-a-phase-record-that-drifts-is-caught-by-the-guard-that-counts-things-not-the-one-that-reads-state.md) — A feature executed three cells, capped and merged them all while its phase record still said planning. Nothing that reads the phase objected — not the write guard, not dispatch, not the cells themselves. The close door caught it, because that door counts uncaptured behavior-change cells instead of asking the record what happened.
 - [Probing a mutating verb against the default record is still a write](patterns/20260814-probing-a-mutating-verb-against-the-default-record-is-still-a-write.md) — A capture-pass agent ran bee state gate with no --lane to see whether a new flag was accepted; the default record it silently targeted was the real, active feature's own workflow record, and the probe overwrote genuine actor/reason/bypass_level audit fields that no CLI flag combination can restore to null.
+- [A rule checked at two points needs one shared read — a fixture that cannot diverge proves nothing](patterns/20260818-a-rule-checked-at-two-points-needs-one-shared.md) — A rule checked at two points needs one shared read — a fixture that cannot diverge proves nothing
 - [A write placed before a self-check makes the check accuse itself](patterns/20260818-a-write-placed-before-a-self-check-makes-the.md) — A write placed before a self-check makes the check accuse itself

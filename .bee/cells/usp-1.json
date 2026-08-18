@@ -29,21 +29,40 @@
       "The pre-existing test suite still passes."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "usp-1-worker",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/uat.rs",
+      "packages/bee-rs/crates/bee/src/main.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-18T11:58:23.542Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
-    "claimed_at": "2026-08-18T11:52:53.332Z"
+    "claimed_at": "2026-08-18T11:52:53.332Z",
+    "report": {
+      "outcome": "Added uat.rs with UatStop enum, uat_stop_config (D1 read order), and uat_gate_applies_to_lane (D2) moved from phases.rs; phases.rs now delegates to it, no second copy.",
+      "commit": "6b2340af1919c6c01f7648b916cd5a01a58fad5f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/uat.rs",
+        "packages/bee-rs/crates/bee/src/main.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml uat — green — 28 uat tests pass; full suite (2053 passed, 11 ignored) also verified green",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 172 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }

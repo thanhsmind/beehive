@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "doc-deferral-scope",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"doc-deferral-scope\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"doc-deferral-scope\" (lane).",
+  "created_at": "2026-08-18T14:36:35.377Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-08-18T14:36:47.675Z",
+    "feature": "doc-deferral-scope"
+  }
+}

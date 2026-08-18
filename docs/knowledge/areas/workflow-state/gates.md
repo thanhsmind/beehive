@@ -27,7 +27,8 @@ owned by the phase it started from.
 
 **B1 — Guarded feature start.** Starting a feature fails closed — with zero
 changes to the record — unless ALL of: the prior phase is terminal; no handoff
-record exists; no worker is registered; no file reservation is active; and the
+record exists; no worker is registered; no file hold stands in this start's own
+way (scoped — see R86, never "any hold anywhere"); and the
 prior feature has no nonterminal cell. An intentionally abandoned cell must
 first be dropped through the explicit drop verb, which records the reason —
 the start operation never clears work as a side effect. When the preconditions
@@ -514,11 +515,29 @@ a malformed record has earned none.
   writes nothing; an already-terminal lane (`idle` or `compounding-complete`)
   is left untouched; a failed write warns without failing the close
   (merge-closes-the-lane D2, f220f461).
+- R86 — The feature-start hold precondition is SCOPED, and its remedy is
+  always one the caller may take alone. A start refuses on an active file
+  hold in exactly two situations: the hold belongs to the starting session
+  itself — its own leftover state, whose remedy names that caller's own
+  holder — or the hold belongs to a different session AND covers a path this
+  start explicitly declares as its own working scope, whose remedy is to wait
+  for release or expiry, or to start over non-overlapping paths. A different
+  session's hold over a path this start does not declare refuses nothing, no
+  matter which working copy it was taken in. Both the lane road and the
+  default road now state the rule the same way, and the default road accepts
+  a declared working scope for exactly this reason. No refusal on this path
+  may name a remedy that would strip another session's holds — a refusal
+  whose only cure touches someone else's resources is a mis-scoped refusal
+  (start-feature-reservation-scope D1, e62d1311).
 
 ## Edge Cases Settled
 
 - A capped prior-feature cell never blocks a new start; an expired-by-TTL
-  reservation never blocks a new start (only active ones do).
+  reservation never blocks a new start (only active ones do), and an active
+  one blocks only within R86's scope.
+- A start that declares no working scope of its own can still be refused by
+  its own session's leftover holds, but never by another session's — with
+  nothing declared there is no overlap to find.
 - Refused starts are proven side-effect-free: the record is byte-identical
   after a refusal.
 

@@ -1,0 +1,115 @@
+{
+  "id": "usp-7",
+  "feature": "uat-stop-placement",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Fail cleanup suppression closed when the merge cannot resolve which feature it is landing",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/uat-stop-placement/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/uat.rs"
+  ],
+  "action": "Third and last instance of one asymmetry, named by the usp-5 semantic judge (verdict PASS, so this is a residual, not a repair of a failed truth). In merge_finish around packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:728-732, uat_wait_set is computed from uat_merge_precheck(main_root, Some(feature)) — which needs a resolved feature. When the staged merge cannot resolve one (Staged.feature is None), uat_wait_set is false, so under uat_stop close cleanup is NOT suppressed and the worktree is torn down even though nobody could check whether a uat was owed. The merge-time precondition already fails CLOSED in exactly this case: uat_gate_applies_to_lane(None) returns true (phases.rs:883-885). The same asymmetry, precondition closed and cleanup open, has now been fixed twice in this feature — usp-5 for a missing lane record, usp-3 for a divergent lane read — and this is the last place it survives. FIX: under uat_stop close, an UNRESOLVABLE feature suppresses cleanup, exactly as an unrecognized lane classification already does. Do not guess a feature, do not skip the precheck, and do not make the merge itself refuse — only the cleanup decision changes, and it changes toward keeping the worktree. Keeping a worktree that could have been removed costs the user one bee worktree prune; removing one that should have been kept costs them the only place their fix can be written, plus the grant that makes the second merge possible. When the two errors are that unequal, the safe one is the default. Keep everything else exactly as it stands: the Merge and Off branches untouched, --no-cleanup still meaning keep, the lane write still best-effort warn-never-fail, and the approved-uat path still cleaning up normally. Tests in worktree/tests.rs: under uat_stop close with an unresolvable feature, a merge passed --cleanup keeps the worktree, the branch, and the grant, and reports the same cleanup-suppression key the resolvable case uses; the same case under Merge and under Off still cleans up. If the existing fixtures cannot express an unresolvable feature, build one that can rather than asserting around it — a fixture that cannot express the condition proves nothing about it, which is the exact test gap that hid usp-3's defect.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "verify_owner": "worker",
+  "done_when": "Under uat_stop close, a merge that cannot resolve its feature keeps the worktree, the branch, and the grant even when --cleanup or worktree_cleanup_on_merge true is in play, and reports the cleanup suppression. Merge and Off are unchanged, --no-cleanup still means keep, the approved-uat path still cleans up, and the new test fixture genuinely produces an unresolvable feature rather than asserting around one. The worktree suite is green.",
+  "notes": "Phase 6, final residual. The precondition/cleanup asymmetry closed for good.",
+  "must_haves": {
+    "truths": [
+      "Under uat_stop close with an unresolvable feature, --cleanup keeps the worktree, the branch, and the grant.",
+      "That case reports the same cleanup-suppression key the resolvable pending-uat case reports.",
+      "Under Merge and under Off, an unresolvable feature still cleans up exactly as before.",
+      "--no-cleanup still means keep, and the approved-uat path still cleans up normally.",
+      "The lane write stays best-effort: no red merge, no fabricated lane file.",
+      "The new test fixture genuinely produces an unresolvable feature rather than asserting around one."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "usp-7-worker",
+    "outcome": "Fail cleanup suppression closed for a merge whose feature cannot be resolved, matching the merge-time precondition's existing fail-closed read",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T13:50:37.610Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T13:44:58.945Z",
+    "report": {
+      "outcome": "Fail cleanup suppression closed for a merge whose feature cannot be resolved, matching the merge-time precondition existing fail-closed read",
+      "commit": "da336b41612b4a48f173f8263a4ff831a9e4bf94",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — green — full worktree suite, 206 passed 0 failed, including 7 new unresolvable-feature tests",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "truth": "Under uat_stop close with an unresolvable feature, --cleanup keeps the worktree, the branch, and the grant.",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:744-746 now calls uat_merge_precheck(main_root, feature.as_deref()) unconditionally; uat_merge_precheck at phases.rs:896-899 opens with `let Some(feature) = feature else { return UatPrecheck { lane_applies: true, gate_approved: false }; }` so None fails closed, the same Option<&str> the merge-time precondition passes at phases.rs:318. Test uat_stop_close_unresolvable_feature_still_suppresses_cleanup (tests.rs:4368) asserts cleanup.ok=false, worktree_root.exists(), and `git branch --list <branch>` non-empty. Grant survival: the grant check lives inside merge_stage (phases.rs:109-116, WORKTREE_MERGE_UNKNOWN_ID), and uat_stop_close_unresolvable_feature_repeat_merge_still_works (tests.rs:4420) runs a SECOND merge_feature_worktree on the same id and gets ALREADY_UP_TO_DATE, which is only reachable past that grant check. FALSIFICATION: scratch copy with only phases.rs reverted to da336b41^ -> both tests RED (`cleanup: {ok: true, removed: true, branch_deleted: true}`), 4 passed 2 failed."
+          },
+          {
+            "id": "t2",
+            "truth": "That case reports the same cleanup-suppression key the resolvable pending-uat case reports.",
+            "status": "PASS",
+            "evidence": "tests.rs:4396 asserts cleanup.code == \"WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING\"; the pre-existing resolvable case uat_stop_close_pending_uat_forces_the_cleanup_flag_off (tests.rs:4093, assert at 4113) asserts the identical key. Both come from the one branch at phases.rs:816-821, so the key and reason text are literally the same string. Minor, non-blocking: the new test does not also assert the human-visible merge_text_lines suppression line that tests.rs:4120 asserts for the resolvable case; same shared branch emits it."
+          },
+          {
+            "id": "t3",
+            "truth": "Under Merge and under Off, an unresolvable feature still cleans up exactly as before.",
+            "status": "PASS",
+            "evidence": "uat_wait_set at phases.rs:745-746 still requires `*uat_stop == UatStop::Close`, so Merge/Off can never suppress. uat_stop_merge_unresolvable_feature_precondition_unchanged (tests.rs:4459) still gets WORKTREE_MERGE_UAT_PENDING; uat_stop_merge_unresolvable_feature_skip_uat_cleans_up_normally (tests.rs:4485) asserts cleanup.ok=true and !worktree_root.exists() with skip_uat=true; uat_stop_off_unresolvable_feature_cleans_up_normally (tests.rs:4508) asserts the same for \"off\". All three passed in BOTH the pre-fix and post-fix runs, confirming they are insensitive to the change (Merge/Off untouched)."
+          },
+          {
+            "id": "t4",
+            "truth": "--no-cleanup still means keep, and the approved-uat path still cleans up normally.",
+            "status": "PASS",
+            "evidence": "effective_cleanup = cleanup && !uat_wait_set (phases.rs:812) — cleanup=false stays keep regardless; uat_stop_close_unresolvable_feature_no_cleanup_flag_still_means_keep (tests.rs:4533) asserts resolve_cleanup_on_merge(...,false,false)==false and worktree_root.exists(). Approved-uat arm is unchanged for a resolved feature because uat_wait_set still ANDs !precheck.gate_approved; the pre-existing uat_stop_close_approved_standard_lane_merges_and_clears_lane (tests.rs:3993) and uat_stop_close_approved_uat_with_no_lane_record_cleans_up_normally (tests.rs:4310, asserts cleanup.ok=true and !worktree_root.exists()) are green in the full run. An approved-uat + unresolvable combination is unreachable by construction (None => gate_approved false), so its absence is not an untested arm."
+          },
+          {
+            "id": "t5",
+            "truth": "The lane write stays best-effort: no red merge, no fabricated lane file.",
+            "status": "PASS",
+            "evidence": "phases.rs:747 keeps the lane write inside `if let Some(feature) = feature.as_deref()`, so an unresolvable feature reaches close_the_lane_on_merge / set_lane_uat_wait_on_merge / commit_main_bookkeeping ZERO times — nothing can fabricate .bee/lanes/<none>.json. The Err arm at phases.rs:788-794 still only eprintln!s and inserts lane_close_warning, never returning Err. All four new close/merge/off success tests assert answer.ok is true and panic explicitly on MErr::Thrown, i.e. no red merge."
+          },
+          {
+            "id": "t6",
+            "truth": "The new test fixture genuinely produces an unresolvable feature rather than asserting around one.",
+            "status": "PASS",
+            "evidence": "resolve_worktree_feature (verbs/worktree/merge.rs:420-432) reads exactly two sources: .bee/runtime/worktree-identity.json and .bee/state.json, and sets feature = created.or(state_feature). make_feature_unresolvable (tests.rs:4356-4363) remove_file()s the first (unwrap, so a missing file would fail loudly) and overwrites the second with \"{}\", killing both reads; tests.rs:4370-4374 asserts resolve_worktree_feature(...).feature == None outright. Decisive proof it EXPRESSES the condition rather than a merely-different feature: reverting only phases.rs to da336b41^ in a scratch copy turned exactly the two Close-suppression tests red with `removed: true, branch_deleted: true` — the old None short-circuit — while the Merge/Off/no-cleanup guards stayed green."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T14:05:31.245Z"
+      }
+    ]
+  }
+}

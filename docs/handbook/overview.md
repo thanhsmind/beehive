@@ -123,19 +123,24 @@ are *derived* (live-heartbeat sessions joined with cell claims), never stored.
 **Worktree-first.** Code-touching feature work lives in its own feature worktree
 from the moment the lane is routed (`bee worktree new --feature <slug>`); the main
 checkout takes only integration, docs-lane, and release work. Landing is
-`bee worktree merge`, which re-runs `commands.test` against the staged merge — the last
-net before a semantic conflict reaches main.
+`bee worktree merge`, which checks each capped cell's recorded proof line as a
+zero-mutation precondition, before any bookkeeping commit — a proof-less merge
+is refused and never staged at all.
 
 **Proof is one declared test path (test-simple).** A project declares how it is
 tested exactly once, in `.bee/config.json` `commands.test`. `bee test` runs it and
-writes one normalized record, `.bee/logs/test-results.json`. Tests prove at the
-boundary: `bee close` runs `commands.test` when the feature has no worktree;
-`bee worktree merge` runs it when it does. A cap is commit-only proof and
-records `tests: boundary`. CI runs the same command on every push. A red at the
-boundary refuses it and carries the failing excerpt — and that red becomes the
-next work. There are no per-cell proof tiers, no `change_class × lane` matrix,
-no red-first evidence flags; coverage judgment survives as craft in
-`.bee/expertise/tests.md`, enforced by review, not by a cap door.
+writes one normalized record, `.bee/logs/test-results.json`. Proof is recorded
+at the cap, never re-run at a door: `bee cells finish` is commit-only proof and
+writes the cap's own proof line, `<command> — <result> — <scope reason>`; `bee
+close` and `bee worktree merge` check that recorded proof line
+unconditionally — whether or not the feature has a worktree — and run nothing
+themselves. A red result segment refuses the cap itself, and that red becomes
+the next work; a capped cell with no `trace.report` at all passes as legacy,
+ungated, but a capped cell whose report carries no valid proof line refuses
+the close/merge door by name, naming the cell. There are no per-cell proof tiers, no
+`change_class × lane` matrix, no red-first evidence flags; coverage judgment
+survives as craft in `.bee/expertise/tests.md`, enforced by review, not by a
+cap door.
 `commands.verify` is retired.
 
 **Capture is deferred, never dropped.** A green `bee close` records capture as
@@ -194,7 +199,8 @@ packages/bee/               vendored payload ASSETS only (no runtime code)
   cells/<feature>-<n>.json  one unit of executable work                    → register.md
   decisions.jsonl           append-only decision log                       → register.md
   intent/ · lanes/ · claims/ · sessions/ · locks/ · reviews/               → register.md
-  logs/test-results.json    the one test record `cells finish` reads       → register.md
+  logs/test-results.json    the one test record `cells claim`'s red-base
+                             check reads                                    → register.md
 
 docs/
   knowledge/               the state layer (read FIRST) — areas/ patterns/ work/
