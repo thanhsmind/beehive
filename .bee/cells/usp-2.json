@@ -31,21 +31,38 @@
       "A merge never writes lane phase; the lane write stays warn-never-fail; up-to-date, conflict, and proof-debt paths write no lane change."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "usp-2-worker",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-18T12:17:33.877Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
-    "claimed_at": "2026-08-18T12:00:58.082Z"
+    "claimed_at": "2026-08-18T12:00:58.082Z",
+    "report": {
+      "outcome": "worktree merge honors uat_stop close/merge/off: merge-time precondition only refuses under Merge; under Close an unapproved standard/high-risk feature merges and SETS the lane waiting_on gate mark (reload/test/approve-or-fix) instead of clearing it; cleanup is forced off while that wait is live and the merge result names why; D5 no-write paths (phase, warn-never-fail, up-to-date, conflict, proof-debt) proven unchanged.",
+      "commit": "e94f62fb",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=$HOME/.cargo/bin:$PATH cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — green — full declared worktree suite, the cells verify scope",
+      "deviations": [
+        "handlers.rs listed in cell files but needed no edit: the D4.3 cleanup-suppression override lives in merge_finish (phases.rs), the point where the resolved uat-wait status is actually known; resolve_cleanup_on_merge itself needed no change since its bool output is what merge_finish overrides."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

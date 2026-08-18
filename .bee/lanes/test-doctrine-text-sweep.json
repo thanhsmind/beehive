@@ -8,7 +8,7 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"test-doctrine-text-sweep\" started at phase \"exploring\" (lane).",
   "next_action": "Invoke bee-swarming.",

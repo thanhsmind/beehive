@@ -3,29 +3,29 @@
   "feature": "test-doctrine-text-sweep",
   "lane": "small",
   "tier": "generation",
-  "title": "Handbook and config sample still teach the retired boundary test run",
+  "title": "Handbook sweep: the logs section and two overcorrected claims",
   "behavior_change": false,
   "files": [
     "docs/handbook/register.md",
-    "docs/handbook/architecture-map.md",
-    "docs/handbook/stages/planning.md",
-    "docs/handbook/stages/executing.md",
-    "docs/codebase-overview.md",
-    ".bee/config-sample.json"
+    "docs/handbook/overview.md",
+    "docs/handbook/stages/swarming.md"
   ],
   "read_first": [
-    "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md",
-    "docs/handbook/register.md"
+    "packages/bee-rs/crates/bee/src/verbs/cells/proof.rs",
+    "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_write.rs"
   ],
-  "action": "The tdt-1 judge found the retired doctrine surviving across the handbook after the source was fixed. Every hit asserts, in bare present tense, that tests prove at the boundary and that `bee close` / `bee worktree merge` run the declared command. Decisions 58ec9664 and 1f534837 retired that: each cap records its own proof line `<command> — <result> — <scope reason>`, both doors check that recorded proof and run nothing themselves, and CI runs the declared command on every push — the one deterministic net. Known hits to start from, but re-grep rather than trusting this list: docs/handbook/register.md:131, docs/handbook/architecture-map.md:96 and :150, docs/handbook/stages/planning.md:73, docs/handbook/stages/executing.md:37 and :47, docs/codebase-overview.md:90, and .bee/config-sample.json:6 (its commands.test help text). Rewrite each to the live rule, matching the surrounding voice and length — these are teaching surfaces, so state the rule, do not append a changelog note. JUDGMENT, and this is the whole craft of the cell: a line that frames itself as a dated snapshot, a locked historical record, or an X-refines-Y banner is CORRECT as written and must be left alone; only bare present-tense assertions of the retired behavior get rewritten. That distinction already decided two separate citation audits this session. Do NOT touch docs/specs/test-simple.md (it carries a deliberate dated annotation and is a read-only compatibility surface per decision 40272d61), docs/history/**, or .bee/cells/archive/** — those are records of what was believed at the time.",
-  "verify": "rg -n 'tests prove at the boundary|runs commands.test|records \\{tests' docs/handbook docs/codebase-overview.md .bee/config-sample.json",
+  "action": "SECOND REVISION. The previous round closed four of six truths; two FAILs remain and both were found by READING, not by grepping — which is the lesson of this cell. (1) THE FOURTH BLIND SPOT, and the one that matters: docs/handbook/register.md:329 still says .bee/logs/test-results.json is 'Written by `bee test`, read by `cells finish` and `bee close`', and :333-335 still says .bee/logs/test-failure-<runner>-<index>.log holds 'the complete output of a failing declared command, one file per (runner, index) where runner is `test`, `finish` or `close`'. Both name finish and close as runners of the declared command. The code says otherwise: verbs/test_runner.rs emits only the `test` runner name, and the only runtime reader of test-results.json is the red-base check in verbs/cells/handlers_write.rs (`cells claim`); verbs/cells/finish_support.rs comments that `bee test` is now the only writer, and verbs/drivers/close.rs mentions the path only in a comment. Neither the old single-line grep nor the new multiline pattern covers this phrasing — that is exactly why the cell now demands reading the section, not matching it. (2) TWO OVERCORRECTIONS from the last round: docs/handbook/overview.md:124-125 and docs/handbook/stages/swarming.md:70-71 both say merge checks the proof line 'against the staged merge' — a leftover from the boundary-run sentence. verbs/worktree/phases.rs makes it a ZERO-MUTATION precondition run BEFORE any bookkeeping commit, so a proof-less merge is refused and never staged at all. And docs/handbook/overview.md:136-138 says 'a capped cell with no valid proof line refuses the close/merge door' — verbs/cells/proof.rs passes a cap with NO trace.report at all as legacy, ungated; only a cap that HAS a report with a bad tests value refuses. METHOD, and this is the whole point of the round: read every passage in the three files that mentions tests, proof, the doors, or the logs, and check each claim against the source. Do not pattern-hunt — two rounds of grepping already missed these. UNCHANGED: docs/handbook/register.md:203-209 (correct historical labelling, citing decision 13ce1858), docs/handbook/architecture-map.md and docs/handbook/stages/executing.md (both verified correct by the judge this round), docs/specs/test-simple.md, docs/history/**, .bee/cells/archive/**, docs/codebase-overview.md, .bee/config-sample.json, and everything under packages/.",
+  "verify": "rg -U -n 'prove\\s+at\\s+the\\s+boundary|runs?\\s+(the\\s+declared\\s+tests|commands\\.test)|records\\s+\\{?tests:?\\s*.?boundary|runner\\s+is\\s+.test.,\\s*.finish.|read\\s+by\\s+.cells\\s+finish.|against\\s+the\\s+staged\\s+merge' docs/handbook docs/codebase-overview.md .bee/config-sample.json",
   "must_haves": {
     "truths": [
-      "No file under docs/handbook/, nor docs/codebase-overview.md, nor .bee/config-sample.json, asserts in present tense that any local door runs commands.test.",
-      "Each rewritten passage states the live rule: proof line per cap, doors check the record, CI runs the command on every push.",
-      "Dated snapshots, locked records, and X-refines-Y banners are left untouched — the cap names any line judged to be one of those and why.",
-      "docs/specs/test-simple.md, docs/history/** and .bee/cells/archive/** are unchanged.",
-      "The verify grep returns no present-tense boundary-run assertion in the swept set."
+      "The register.md logs section names `bee test` as the only writer of the declared-command run artifacts, and names the actual reader of test-results.json — the red-base check at cell claim — rather than finish and close.",
+      "No passage says merge checks the proof line against the staged merge; the check is stated as the zero-mutation precondition it is, refusing before anything is staged.",
+      "No passage says a cap with no proof line refuses a door; a cap with no report at all passes as legacy, and only a report carrying a bad tests value refuses.",
+      "Every claim about tests, proof, the doors, or the logs in the three touched files was checked against the source, and the cap says which passages were read rather than matched.",
+      "The multiline verify sweep over docs/handbook, docs/codebase-overview.md and .bee/config-sample.json is clean, and the cap's proof line names that pattern plus how it was shown to catch the pre-fix wording.",
+      "register.md:203-209, architecture-map.md, stages/executing.md, docs/specs/test-simple.md, docs/history/**, .bee/cells/archive/** and everything under packages/ are unchanged by this revision."
     ]
   },
   "done_when": "Every teaching surface in the swept set states the live proof-line rule; records and dated snapshots are untouched; the verify grep is clean.",
@@ -34,42 +34,190 @@
   "deps": [],
   "decisions": [],
   "trace": {
-    "worker": "tdt-3-worker",
-    "outcome": "Rewrote retired boundary-test-run doctrine to the live proof-line rule across the handbook and config sample",
+    "worker": "tdt-3-fix2",
+    "outcome": "Swept the retired boundary-run doctrine out of the handbook, then out of the three claims the sweep itself got wrong",
     "files_changed": [
       "docs/handbook/register.md",
+      "docs/handbook/overview.md",
+      "docs/handbook/stages/swarming.md",
       "docs/handbook/architecture-map.md",
-      "docs/handbook/stages/planning.md",
       "docs/handbook/stages/executing.md",
+      "docs/handbook/stages/planning.md",
       "docs/codebase-overview.md",
       ".bee/config-sample.json"
     ],
     "deviations": [],
     "friction": null,
-    "capped_at": "2026-08-18T12:08:29.424Z",
+    "capped_at": "2026-08-18T12:44:00.939Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
-    "claimed_at": "2026-08-18T12:02:55.890Z",
+    "claimed_at": "2026-08-18T12:25:46.476Z",
     "report": {
-      "outcome": "Rewrote every bare present-tense boundary-run assertion in the swept files to the live proof-line rule; left the one line already framed as historical (register.md:206-208) untouched.",
-      "commit": "19d68a52949bc39ac79480d81c6645564dee0ce3",
+      "outcome": "Swept the retired boundary-run doctrine out of the handbook, then out of the three claims the sweep itself got wrong",
+      "commit": "3a647d3f9a614196fd2a6b7b67e515d133671687",
       "files": [
         "docs/handbook/register.md",
+        "docs/handbook/overview.md",
+        "docs/handbook/stages/swarming.md",
         "docs/handbook/architecture-map.md",
-        "docs/handbook/stages/planning.md",
         "docs/handbook/stages/executing.md",
+        "docs/handbook/stages/planning.md",
         "docs/codebase-overview.md",
         ".bee/config-sample.json"
       ],
-      "tests": "rg -n 'tests prove at the boundary|runs commands.test|records .tests' docs/handbook docs/codebase-overview.md .bee/config-sample.json — green (no matches) — docs-only teaching-surface sweep, the grep is the proof this cell's scope needs",
+      "tests": "rg -U -n 'prove\\s+at\\s+the\\s+boundary|runs?\\s+(the\\s+declared\\s+tests|commands\\.test)|records\\s+\\{?tests:?\\s*.?boundary|runner\\s+is\\s+.test.,\\s*.finish.|read\\s+by\\s+.cells\\s+finish.|against\\s+the\\s+staged\\s+merge' docs/handbook docs/codebase-overview.md .bee/config-sample.json — green, no matches over the full swept set — docs-only teaching-surface sweep, so a proven sweep is the proof this scope needs; coverage stated honestly in both directions: the pattern IS demonstrably non-blind (it returns five hits against the first-pass content at 19d68a52), and it does NOT cover the planned-next parenthetical fixed in this final commit (the same pattern returns nothing against the pre-fix register.md at 9104a046, where the false clause wrapped a newline) — that one was found only by reading register.md against store.rs:637-650 and handoff.rs:212-233, which is this cell's whole lesson",
       "deviations": [
-        "Extended the sweep beyond the seven known-hit lines to additional bare present-tense assertions found by broader re-grep in the same in-scope files: register.md:368 and architecture-map.md:94/148 recorded the retired tests: boundary enum value, and register.md:372/482 and executing.md:22-24 asserted bee close performs a declared test run or that tests prove later at the boundary. Same doctrine violation the cell targets, in scope, so rewritten under truths criterion 1."
+        "Four rounds, three of them revisions after a NEEDS_REVISION verdict. Round 1 under-reached (two handbook files untouched) and its proof grep was false-clean because the surviving phrase wrapped a newline. Round 2 fixed those but its rewrites carried boundary-era tails that were false in a new way — a red proof refusing a door, a failing excerpt, a check conditioned on worktree absence — because they followed the old sentence shape instead of the code. Round 3 fixed those and found a third instance by reading. Round 4 fixed a pre-existing relic at register.md:308 that no pattern covered.",
+        "Two flagged lines deliberately left alone with reasons, both agreed by the judge: stages/swarming.md:17 ('Capped cells with their test records') is loose but not false and outside the declared scope; register.md:329-331 and :461 name `cells claim` as the reader, which is accurate as the canonical door the sibling entrances share, matching how every other door-table row names one verb per check.",
+        "register.md:203-209 left untouched throughout: it correctly labels the retired values as historical, citing decision 13ce1858. Distinguishing that from a bare present-tense assertion was the judgment the cell turned on."
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "truth-1-no-handbook-file-asserts-a-local-door-run",
+            "status": "FAIL",
+            "evidence": "Two handbook files were never touched by the commit and still carry the retired doctrine in bare present tense: docs/handbook/overview.md:126 says worktree merge re-runs the declared command against the staged merge, and :131-137 states the boundary-run rule plus the retired tests-boundary cap value; docs/handbook/stages/swarming.md:68-70 says the final slice runs close, which runs the declared tests when there is no worktree, or merge, which runs them when there is. Neither file appears in the commit's file list.",
+            "failure_signature": "handbook-sweep-under-reach-overview-and-swarming-keep-the-retired-boundary-run-doctrine"
+          },
+          {
+            "id": "verify-grep-is-false-clean",
+            "status": "FAIL",
+            "evidence": "The recorded proof grep returns nothing, but only because the surviving phrase wraps across a line break in both missed files — the single-line pattern cannot match it. The proof passes because nothing exercises the case it claims to cover, the same shape as the fixture blindness recorded in the critical pattern this session promoted.",
+            "failure_signature": "single-line-grep-cannot-see-a-phrase-wrapped-across-a-newline"
+          },
+          {
+            "id": "rewritten-passages-true-of-shipped-code",
+            "status": "FAIL",
+            "evidence": "Three rewritten passages kept boundary-era tails that are now false in a new way. executing.md:49-50 says a red proof refuses the door and carries the failing excerpt: the reader accepts any parseable proof line and never reads its result segment, the red refusal lives at cap, and the door refusals carry proof-debt text with no excerpt. architecture-map.md:150 and register.md:373 both condition the recorded-proof check on there being no worktree; the close driver states and the code shows that check runs unconditionally.",
+            "failure_signature": "rewrite-kept-boundary-era-tails-red-refuses-the-door-failing-excerpt-and-when-no-worktree"
+          },
+          {
+            "id": "no-over-reach-on-dated-or-historical-lines",
+            "status": "PASS",
+            "evidence": "The one line the worker named as a deliberate exception is correct as written: it states the live rule and then labels the old values as historical, citing the decision they came from. Every hunk in the commit was scanned; no rewritten line carried a date stamp, a locked-record frame, or an X-refines-Y banner."
+          },
+          {
+            "id": "config-sample-valid-json",
+            "status": "PASS",
+            "evidence": "The config sample parses as valid JSON with its expected top-level keys intact."
+          },
+          {
+            "id": "protected-paths-untouched",
+            "status": "PASS",
+            "evidence": "The commit's file list holds exactly the six declared paths. Nothing under the read-only compatibility spec, the history tree, the cell archive, or the source tree was touched."
+          }
+        ],
+        "failure_signature": "handbook-sweep-under-reach: overview.md and stages/swarming.md keep the retired boundary-run doctrine, the verify grep cannot see them because the phrase wraps a newline, and three rewritten passages carry boundary-era tails",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T12:16:07.796Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "truth-1-overview-and-swarming-no-local-door-run",
+            "status": "PASS",
+            "evidence": "The revision rewrote both previously untouched files. The overview now states that proof is recorded at the cap and that both doors check the recorded line and run nothing; the swarming stage says plainly that neither door spawns a test run itself. Neither file keeps a declared-test-run assertion."
+          },
+          {
+            "id": "truth-2-verify-pattern-multiline-and-cap-records-how-proven",
+            "status": "FAIL",
+            "evidence": "The pattern half holds: the multiline sweep exits clean over the whole swept set at the revision commit, and the same pattern matches the pre-fix content of the overview, so it is demonstrably not blind. The cap half fails: the cell record still carries the previous cap, whose recorded proof line is the retired single-line grep and whose commit is the first pass. No cap records the multiline pattern or how it was proven.",
+            "failure_signature": "revision-commit-landed-but-cap-still-carries-the-old-false-clean-single-line-grep-proof-line"
+          },
+          {
+            "id": "truth-3-no-red-refuses-a-door-or-failing-excerpt",
+            "status": "PASS",
+            "evidence": "The executing stage now states that the red result segment refuses the cap at finish, never at either door, and that the door refusal names the cell with no failing excerpt. Verified against the source: the cap refuses on a red result segment, the door reader only checks that a proof line parses and never inspects the result, and the merge refusal text carries no excerpt. The overview carries the same corrected claim."
+          },
+          {
+            "id": "truth-4-no-worktree-conditioned-proof-check",
+            "status": "PASS",
+            "evidence": "The architecture map and the register both now state the recorded-proof check runs unconditionally, whether or not the feature has a worktree. The close driver says the same in its own comment and calls the check with no worktree branch; the only worktree-shaped condition on the merge side is an unresolvable feature, not the presence of a worktree."
+          },
+          {
+            "id": "truth-5-register-says-run-not-read",
+            "status": "PASS",
+            "evidence": "The register now says the doors no longer RUN the declared command. That is the correct verb: the close driver still resolves the declared commands and discards the value, so the previous wording would have been false."
+          },
+          {
+            "id": "truth-6-protected-paths-unchanged",
+            "status": "PASS",
+            "evidence": "The revision's file list holds exactly the five handbook paths. Nothing under the read-only compatibility spec, the history tree, the cell archive, or the source tree was touched, and the register's historical-values passage is outside every hunk in the diff."
+          },
+          {
+            "id": "fourth-blind-spot-surviving-door-run-assertions-in-the-swept-set",
+            "status": "FAIL",
+            "evidence": "The register's logs section still names the wrong runners. One entry says the test-results record is written by the test verb and read by cells finish and close; another says the failure logs hold one file per runner where the runner is test, finish or close. The source contradicts both: the test verb emits only its own runner name, and the only runtime reader of the results record is the red-base check at cell claim. Neither the old single-line grep nor the new multiline pattern covers this phrasing — it was found by reading.",
+            "failure_signature": "register-md-logs-section-still-names-finish-and-close-as-declared-command-runners"
+          }
+        ],
+        "failure_signature": "revision-still-incomplete: the register's logs section keeps finish and close as declared-command runners, and the cap still records the retired false-clean single-line grep instead of the proven multiline sweep",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T12:25:46.447Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "one-line-fix-matches-the-two-writers",
+            "status": "PASS",
+            "evidence": "Both writers apply the same two preconditions and no more: the previous cell must be capped, and the next cell's claim must be owned by the writing session. Neither reads the report, the trace tests field, the test-results log, or any proof helper — a search for the proof helper and the results path finds no call from either file. The register line now states exactly those two checks and nothing else."
+          },
+          {
+            "id": "revision-scope-is-register-md-only-and-203-209-untouched",
+            "status": "PASS",
+            "evidence": "The revision changes one file, two insertions against two deletions, in a single hunk. The register's historical-values passage lies outside that hunk and is byte-identical to the previous commit. No architecture map, executing stage, compatibility spec, history tree, cell archive, or source path appears in the commit."
+          },
+          {
+            "id": "whole-file-read-of-the-three-files-against-source",
+            "status": "PASS",
+            "evidence": "Read all of the register, the overview, and the swarming stage end to end and checked every tests, proof, door, and logs claim against the source. Verified true: the results record has exactly one non-test reader, the red-base check; the failure-log writer passes only the test runner name, with the other two spellings surviving only in unrelated doc prose; the excerpt cap matches its constant; the close driver discards the resolved command and runs the proof check with no worktree branch; the merge proof check precedes the bookkeeping commit with zero mutation; a cap with no report is legacy and passes while only a present bad report refuses; the report flag is required on every cap path; the red-base and route-record warnings, the worker read, the commit-trailer window, the ceiling share, and the handoff adoption rules all match their constants. No surviving false claim was found in any of the three files."
+          },
+          {
+            "id": "proof-line-is-adequate-and-honest",
+            "status": "PASS",
+            "evidence": "Re-ran the cell's verify pattern at HEAD: clean, so the recorded green is real. Reproduced both halves of the worker's coverage statement independently — against the first-pass content the pattern returns five hits, so it is demonstrably not blind; against the pre-fix register content, whose false clause wrapped a newline, it returns nothing, so the worker's admission that this grep does not cover the phrasing it just fixed is exactly true rather than an excuse. The line also satisfies the machine contract: three non-empty segments, result not red. An honest negative-coverage statement beside a re-runnable sweep is stronger evidence for a docs-only cell than a bare green. Two literal shortfalls, both non-substantive: the value writes a placeholder rather than the regex itself, and it records the negative demonstration without the positive one."
+          },
+          {
+            "id": "two-declined-items-agreed",
+            "status": "PASS",
+            "evidence": "The swarming stage's test-records phrasing is loose but not false — every cap now carries a recorded proof line, which is a test record — and the line is a stage output bullet outside the cell's declared scope. Naming the claim verb as the reader is accurate as the canonical door: the source comment spells it the same way, and the two sibling entrances reach the identical check through the shared helper. The door table names one verb per row throughout. Agree with the worker on both."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T12:43:34.741Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T12:16:07.796Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   }
 }

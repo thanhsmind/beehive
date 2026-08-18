@@ -56,6 +56,46 @@
       "deviations": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "three-descriptions-state-live-rule",
+            "status": "PASS",
+            "evidence": "All three descriptions now state that each cap records its own proof line on report, that both doors check that record through feature_proof_check and run nothing themselves, and that CI runs the declared command on every push. The reopen description says the cell records its own proof line again. Confirmed rendered, not just stored: the built binary prints the same text through the command's own help."
+          },
+          {
+            "id": "no-surviving-local-door-run-claim-in-the-three",
+            "status": "PASS",
+            "evidence": "A windowed search around every commands.test mention in the payload leaves only the legacy-sentinel sentence in the two cap descriptions; the retired boundary-run phrasing is absent from the file entirely."
+          },
+          {
+            "id": "boundary-sentinel-described-as-still-written",
+            "status": "PASS",
+            "evidence": "The writer still stamps the legacy value on the trace, and the new text says exactly that — the sentinel is still written and unread by any door — rather than claiming removal. Unread confirmed at the reader, which takes the report's proof field, and at both door call sites, which reach only feature_proof_check."
+          },
+          {
+            "id": "regen-green-and-fully-committed",
+            "status": "PASS",
+            "evidence": "The commit carries the payload plus the onboarding timestamp the regen's apply step bumped, and the worktree is clean afterwards, so nothing regen rewrote was left out. The distinctive new phrase appears in exactly one file, so no derived copy went unrewritten. Regen itself was not re-run: it mutates the tree and sits outside the read-only review contract."
+          },
+          {
+            "id": "pinned-count-and-full-suite-green",
+            "status": "PASS",
+            "evidence": "The registry contract suite passes on its own, and the full declared suite reports 2041 passed, 11 ignored, 0 failed — matching the cap's recorded proof line. Noted for honesty: the contract suite asserts only that each description is a non-empty string, so it is no evidence for the CONTENT of the three rewrites; that rests on reading the writer and the reader."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T12:16:07.792Z"
+      }
+    ]
   }
 }

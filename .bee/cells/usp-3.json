@@ -29,21 +29,36 @@
       "No other close door changes behavior."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "usp-3-worker",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-18T12:13:42.443Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
-    "claimed_at": "2026-08-18T12:00:58.089Z"
+    "claimed_at": "2026-08-18T12:00:58.089Z",
+    "report": {
+      "outcome": "Added a blocking uat door to bee close, present only under uat_stop close, lane-scoped via crate::uat, escapable by a uat-deferral decision, and fails closed with an invalid-config detail on a bogus uat_stop/uat_before_merge value.",
+      "commit": "ec1717ff2a0a1774987a4d25bbe3b14a3a7930ce",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml close — green (136 passed, 0 failed, incl. 7 new uat-door tests) — full scope for a close.rs-only cell",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 290 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }
