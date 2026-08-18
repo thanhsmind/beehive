@@ -157,6 +157,12 @@ tests fail together and get rewritten together.
 
 ## Pick the cheapest level that can fail
 
+Before TDD on a new surface, confirm one question first: what is the
+public interface, and which seams do we test? Agree the seams up front,
+then test only at those seams — a test written before the interface is
+settled ends up pinned to whatever shape the first draft happened to
+take.
+
 Match the level to the failure you are trying to catch, and prefer the
 cheapest level that can actually catch it:
 
