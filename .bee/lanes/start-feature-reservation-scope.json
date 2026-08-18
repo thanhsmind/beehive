@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "start-feature-reservation-scope",
   "mode": "feature",
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
