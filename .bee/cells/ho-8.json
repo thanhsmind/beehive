@@ -4,7 +4,7 @@
   "title": "Implement the herdr backend behind the worker-backend trait",
   "lane": "standard",
   "behavior_change": true,
-  "action": "REWORK after a NEEDS_REVISION verdict on commit 76656a11. The backend logic itself is sound — the status mapping, the fail-closed folding, canonical identity and the three hazard tests all survived mutation. Do NOT redo or revert that. Fix the two failures. ITEM ONE, the Windows gap (judge check H5): tests/herdr_backend.rs carries a file-level cfg(unix), so 17 of 57 fleet tests never run on Windows, and the judge measured that ALL SEVEN backend mutations survive a run restricted to what Windows compiles — on Windows the backend could fail open on every lookup failure, pass --wait, drop spill recovery and stop refusing anything, with CI green. D4 makes Windows a required outcome, and .github/workflows/windows.yml states in words that the Rust suite runs unexcluded and that a Windows-only failure is a real failure rather than a suite to skip. THE FIX IS STRUCTURAL, not a second stub: split the backend into a pure half and a thin process half. The pure half builds argv and interprets a response — given bytes and an exit status, it returns a WorkerStatus, a canonical id, a recovered output, or a typed error. It touches no process, so its tests run on every platform. The thin half only spawns and hands the bytes over. Move every behaviour the seven mutations covered into the pure half and test it there: the fail-closed folding of non-zero exit, unparseable body, absent target and missing-or-null field; canonical identity; the no---wait rule; spill recovery; and start's refusal. What may remain unix-only is a small set of tests proving the process plumbing itself works, and those must carry no behaviour a mutation could hide in. Verify the fix the way the judge did: run the mutations again against ONLY the test set Windows compiles, and report which now die. Any mutation still surviving that run is the cell unfinished. ITEM TWO, the hardcoded kind (judge check H6): HerdrBackend::start does not merely refuse — for a pane-id-shaped name it spawns and passes --kind claude as a hardcoded literal, and a new test pins that constant green. D14 requires the kind to come from herding.agent_command token 0, with an unrecognised token 0 surfacing as a typed error naming that config key. But fleet must not read bee's config (D2), so the fix is layering, not a config read: HerdrBackend takes the agent kind and the agent arguments as CONSTRUCTION PARAMETERS, and the bee side — D17's bee herding wave verb, a later cell — is what reads herding.agent_command, splits token 0 into the kind and the remainder into the arguments, and raises D14's typed error when token 0 is not a kind herdr knows. Remove the hardcoded literal, take the kind at construction, and change the test that currently asserts the constant so it asserts the CONSTRUCTED kind reaches the argv instead. Document at the constructor that D14's mapping is the caller's obligation and name the key, so the next implementer meets it.",
+  "action": "THIRD PASS on ho-8, and a narrow one. The second rework achieved its main goal: an independent judge re-ran all seven mutations against the Windows-compilable set and ALL SEVEN NOW DIE. Do not touch that work. The judge then went looking on its own and found three things the seven did not cover, plus a doc defect. Fix exactly these four. ITEM ONE, the one real behaviour still hidden behind the unix gate: canonical_id — D15's name-to-pane-id resolution — is the only interpretation step left inline in the trait method, with no pure function and no lib test. The judge collapsed it so a friendly name never resolves onto its pane id, which is the exact D15 defect an earlier judge found by execution, and the mutation SURVIVED the Windows set, dying only inside the gated file. Extract its interpretation into a pure function beside the others — given the agent-list bytes and a name, return the canonical id — and test it in the lib so the mutation dies on the Windows set. ITEM TWO: the Refuse arm of the start decision maps to an error at the trait boundary, and mutating that arm to succeed survives the Windows set, so start's refusal is unproven there end to end. Pin it with a pure test. ITEM THREE, the sharpest of the three: replacing the constructed agent_args with an empty slice at the call site SURVIVES ALL 71 FLEET TESTS. Nothing at any tier proves the constructed agent arguments actually reach the argv — the pure function is tested and the field is set, but the leg joining them is proven only by reading. Add the test that kills that mutation, and prefer a pure one so it runs on Windows. ITEM FOUR: the constructor's own doc never names herding.agent_command, never says token 0 becomes the kind, and never mentions D14's typed error. It defers to the agent_kind field's doc, but that field is PRIVATE, so rustdoc does not render it on the struct page — the judge built the docs and grepped the rendered HTML to confirm the pointer is silently dead. cargo doc emitted no warning because the reference is backticked prose rather than an intra-doc link. Put the obligation on the constructor doc itself, in words, where a caller meets it. VERIFY THE WAY THE JUDGE DID: re-run all three mutations from items one to three against cargo test -p fleet --lib --test choreography --test manifest_boundary and report each as dying. A mutation that still survives is the cell unfinished.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "read_first": [
     "docs/history/herding-orchestration/CONTEXT.md",
@@ -18,28 +18,27 @@
   ],
   "must_haves": {
     "truths": [
-      "The backend is split so that argv construction and response interpretation are pure functions with no process dependency.",
-      "Every behaviour the seven judge mutations covered is tested by a test that runs on Windows.",
-      "Re-running those seven mutations against only the test set Windows compiles kills all seven — reported, not assumed.",
-      "Any test still gated to unix proves process plumbing only, and no behaviour hides behind that gate.",
-      "HerdrBackend takes the agent kind and agent arguments at construction; no --kind literal appears in the backend.",
-      "The test that pinned --kind claude now asserts the constructed kind reaches the argv instead.",
-      "The constructor documents that deriving the kind from herding.agent_command token 0, and raising D14's typed error naming that key, is the caller's obligation.",
-      "The status mapping, fail-closed folding, canonical identity and three hazard behaviours are unchanged in substance."
+      "canonical_id's interpretation is a pure function tested in the lib, and collapsing it so a name never resolves to its pane id dies on the Windows-compilable set.",
+      "The start refusal arm is pinned by a pure test, and mutating it to succeed dies on the Windows-compilable set.",
+      "Replacing the constructed agent_args with an empty slice at the call site now fails a test, and that test runs on the Windows-compilable set.",
+      "All three mutations were re-run and reported as dying — observed, not assumed.",
+      "The constructor's own documentation names herding.agent_command, says token 0 becomes the kind, and states that raising D14's typed error for an unrecognised value is the caller's obligation.",
+      "The seven mutations from the previous pass still die.",
+      "No assertion anywhere was deleted or loosened."
     ],
     "prohibitions": [
-      "Do not read bee configuration from the fleet crate — D2.",
-      "Do not weaken or delete any existing hazard or invariant test; move it if you must, keep its assertion.",
-      "Do not leave a behaviour testable only on unix.",
-      "Do not add an async runtime or a dependency.",
-      "Do not implement the bee-side wave verb here — that is D17's own cell."
+      "Do not undo the pure-versus-process split — it is what made the seven mutations die.",
+      "Do not read bee configuration from the fleet crate.",
+      "Do not delete or weaken any existing test; the gated duplicates may stay.",
+      "Do not add a dependency or an async runtime.",
+      "Do not implement the bee-side wave verb — that is D17's own cell."
     ]
   },
   "status": "claimed",
   "deps": [],
   "decisions": [],
   "trace": {
-    "worker": "w-ho-8r",
+    "worker": "w-ho-8t",
     "outcome": "Implemented HerdrBackend (WorkerBackend over the real herdr CLI) beside the fake, closed D15's canonical-identity gap with a new canonical_id trait method the choreography dedupes on, and added the three hazard tests plus fail-closed status coverage via a PATH-prepended stub herdr",
     "files_changed": [
       "packages/bee-rs/crates/fleet/Cargo.toml",
@@ -60,7 +59,7 @@
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
-    "claimed_at": "2026-08-18T11:22:30.038Z",
+    "claimed_at": "2026-08-18T11:44:43.374Z",
     "report": {
       "outcome": "Implemented HerdrBackend beside the fake, closed D15's canonical-identity gap, added the three hazard tests plus fail-closed status coverage",
       "commit": "76656a111dffd837365a5114a6450edb9ddbb36f",
@@ -127,6 +126,49 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-08-18T11:08:43.671Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "V1",
+            "status": "PASS",
+            "evidence": "Run on a scratchpad copy, one mutation at a time, the file restored from a pristine copy between runs, using exactly cargo test -p fleet --lib --test choreography --test manifest_boundary. Baseline green at 37 lib plus 11 choreography plus 6 manifest_boundary, 54 total. All seven die: the lookup-error arm returning Ready dies on interpret_status_lookup_is_unverifiable_on_a_failed_lookup; the target-absent arm dies on interpret_status_lookup_is_unverifiable_when_the_target_is_absent; the missing-or-null agent_status arm dies on interpret_status_lookup_is_unverifiable_when_agent_status_is_missing_or_null; inserting --wait into the prompt argv dies on build_prompt_argv_never_includes_wait; disabling spill recovery dies on recover_transcript_reads_the_spill_file_when_the_last_line_hands_back_its_path; gating status on focused being true dies on interpret_status_lookup_does_not_depend_on_the_pane_having_been_focused; and start silently returning Ok dies on decide_start_refuses_a_never_seen_non_pane_shaped_name_rather_than_fabricate_a_spawn. Seven of seven die on the Windows-compilable set; none survives."
+          },
+          {
+            "id": "V2",
+            "status": "FAIL",
+            "evidence": "Seventeen tests remain behind the file-level cfg(unix) gate. Thirteen of them duplicate the pure tests, which V1 proves. The other four do not: canonical_id's D15 name-to-pane-id resolution is the one interpretation step the rework left inline in the trait method, with no pure function and no lib test. Collapsing it so a friendly name never resolves onto its pane id — the exact D15 defect an earlier judge found by execution — SURVIVES the Windows set at 37, 11 and 6 all ok, and dies only inside the gated file. Two further glue arms are likewise Windows-invisible: the Refuse arm mapping to Ok means start's refusal is unproven on Windows end to end and survives the Windows set; and replacing the constructed agent_args with an empty slice at the call site SURVIVES THE ENTIRE FLEET SUITE of 71 tests, so no test at any tier proves the constructed agent arguments reach the argv. The gate therefore still hides one real behaviour plus two unproven wiring arms."
+          },
+          {
+            "id": "V3",
+            "status": "PASS",
+            "evidence": "No kind literal remains in production code: the only argv site pushes the --kind flag followed by the constructed value, and every other occurrence of the string is doc prose or a test argument. Mutating both constructors to discard the parameter and substitute the old literal is not caught by the Windows set but IS caught by the full suite, on start_spawns_a_fresh_agent_using_the_constructed_kind_never_a_hardcoded_literal, whose failure quotes the argv it got. The kind is genuinely constructed rather than defaulted. The agent arguments are appended after a literal double dash, asserted by decide_start_appends_agent_args_after_a_literal_double_dash and by the omission case, both pure and both green on the Windows set. Caveat carried into V2: only the pure leg is proven — the constructor-to-argv leg survives its mutation across all 71 tests."
+          },
+          {
+            "id": "V4",
+            "status": "FAIL",
+            "evidence": "The constructor's own documentation says the backend resolves herdr off the host PATH, that long replies spill to the OS temp directory, and that every spawned agent is started with the agent kind and arguments already resolved by the caller, deferring to the agent_kind field's own docs. It never names herding.agent_command, never says token 0 becomes the kind, and never mentions the typed error for an unrecognised value. The field it defers to is PRIVATE, so rustdoc does not render it on the struct page — verified by building the docs and grepping the rendered HTML, where the struct page carries no match and only the module page does. cargo doc emitted no warning because the reference is backticked prose rather than an intra-doc link, so the pointer is silently dead in rendered form. The obligation exists in the module docs; it is absent from the constructor doc where the caller meets it."
+          },
+          {
+            "id": "V5",
+            "status": "PASS",
+            "evidence": "The rework commit touches exactly two files. The test diff is sixteen insertions and five deletions across three hunks: a new constructor helper, one test renamed from the pane-id spawn case to the constructed-kind case with the helper swapped in, and the assertion tightened from the old literal to a different constructed kind, keeping the same predicate with a stronger message. The test inventory is seventeen names before and seventeen after, one renamed, none deleted. The four pre-existing pure tests survive byte-identical and eleven were added, taking the lib count from twenty-six to thirty-seven. In substance the status map is unchanged, the fail-closed fold is character-for-character the body now living in the pure interpretation function, canonical_id is byte-identical to its previous form, and the spill recovery is the previous body relocated. No assertion was deleted or loosened."
+          },
+          {
+            "id": "V6",
+            "status": "PASS",
+            "evidence": "The manifest diff across the rework is empty, so no dependency was added. The fleet manifest lists only anyhow, serde and serde_json, carries no bee path dependency, and the manifest boundary test passes in every run. A search for an async runtime, await points, or any read of bee state finds none; the only environment access builds the child process PATH rather than reading bee configuration. The module's imports are std process and path types, serde_json, and the crate's own trait and wave types — nothing from bee."
+          }
+        ],
+        "failure_signature": "The unix gate still hides one real behaviour and two unproven wiring arms: canonical_id's D15 name-to-pane-id resolution has no pure function and no lib test, so collapsing it survives the Windows-compilable set and dies only in the gated file; the Refuse-to-error arm likewise survives that set; and replacing the constructed agent_args with an empty slice survives all 71 fleet tests, so nothing proves the constructed arguments reach the argv. Separately, the constructor's doc omits the D14 obligation entirely, deferring to a private field doc that rustdoc never renders on the struct page.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T11:44:15.387Z"
       }
     ],
     "reopened_for_rework": {

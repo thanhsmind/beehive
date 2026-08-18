@@ -102,6 +102,54 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-08-18T11:08:43.690Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "W1",
+            "status": "PASS",
+            "evidence": "The test a_90_minute_old_unresolved_worker_whose_pane_is_still_live_counts_as_live appends a wave started 90 minutes ago with one outcome-less worker, passes that worker's pane in the live list, and asserts Occupancy::Live(1). Baseline on a scratchpad copy: 13 passed. Mutation replacing the live-list arm with the timer path, still tagged Live, produced 'a 90-minute-old worker whose pane is still live must count as live — left Live(0), right Live(1)' and 11 passed, 2 failed. The mutant reproduces the previous judge's measured 0 exactly."
+          },
+          {
+            "id": "W2",
+            "status": "PASS",
+            "evidence": "The test a_worker_whose_outcome_arrived_in_a_later_row_never_counts_at_any_age appends two rows for one wave_id — the first unresolved, the second carrying an outcome — asserts both lines survive on disk, and asserts Occupancy::Live(0) with the pane still in the live list. Mutation gutting fold_waves_by_wave_id to return the rows unfolded produced 'the later, resolved row must supersede the earlier unresolved one — left Live(1), right Live(0)' and 12 passed, 1 failed. The mutant reproduces the previous judge's measured 1 exactly."
+          },
+          {
+            "id": "W3",
+            "status": "PASS",
+            "evidence": "The test a_worker_whose_pane_is_absent_from_the_live_list_never_counts_whatever_its_age uses a fresh wave whose live list holds only an unrelated pane and asserts Occupancy::Live(0). Mutation dropping the pane-membership check from the crossing filter, so any unresolved worker counts, produced 'a fresh worker whose pane is absent from the live list must not count — left Live(1), right Live(0)' and 12 passed, 1 failed. The same test also caught the W1 mutant, so the absent-pane case is pinned against drift in both directions."
+          },
+          {
+            "id": "W4",
+            "status": "PASS",
+            "evidence": "The return type is an enum with Live and Fallback variants deriving PartialEq, so Live(1) is not equal to Fallback(1) — a caller cannot receive an untagged number and can only discard the tag by deliberately calling the count accessor. The Fallback variant is returned only on the arm where no live pane list was supplied, and the always-degraded convenience wrapper is documented as such until a CLI verb wires a real pane source. Mutation changing the fallback arm to return Live produced TWO independent failures: 'the timer-based fallback must still count a fresh unresolved worker — left Live(1), right Fallback(1)' and 'no live_panes was passed, so this must be the fallback path'."
+          },
+          {
+            "id": "W5",
+            "status": "PASS",
+            "evidence": "A search for every write-shaped symbol across the module returns exactly one non-test write site, the append helper call inside append_wave; the other path uses are a read and five test-only sites. The append helper itself opens with create and append and writes, with no truncate, seek or rewrite, and the module contains no file removal, length set, or rename. The fold builds an in-memory map from a read and is read-time only, which the W2 test independently confirms by asserting both disk lines survive. No other module in the crate writes the ledger."
+          },
+          {
+            "id": "W6",
+            "status": "PASS",
+            "evidence": "The old append_wave doc said never to call it twice for the same wave_id because the ledger has no update path. The new doc says calling it again for the same wave_id is allowed, that a caller may append at dispatch time with no outcomes and again at completion, that the ledger stays append-only either way, and that the later row supersedes the earlier one at READ time and never on disk. The prohibition the fold depends on is gone. The old staleness doc framed one hour as erring toward false live with no fallback framing; the new doc states the bound applies only on the FALLBACK path used when no live pane list could be obtained, that the one-hour bias applies to that degraded path only, and that it is not the primary answer. The module header repeats that the timer is fallback only."
+          },
+          {
+            "id": "W7",
+            "status": "PASS",
+            "evidence": "The module's imports are the crate's own append and read helpers, serde_json, and two std modules — nothing from fleet. The three occurrences of the word fleet in the file are prose in doc comments stating the non-dependency. The rework commit touches exactly one path, the ledger module itself, and a path-scoped diff against role-dispatch.md produces empty output, so section 4 is untouched."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T11:38:40.806Z"
       }
     ],
     "reopened_for_rework": {

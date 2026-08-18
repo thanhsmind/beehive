@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"merge-commits-the-lane\" started at phase \"exploring\" (lane).",
   "next_action": "Invoke bee-swarming.",
   "created_at": "2026-08-18T11:28:33.814Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
