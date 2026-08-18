@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"start-feature-reservation-scope\" started at phase \"swarming\" (lane).",
-  "next_action": "Continue bee-swarming for \"start-feature-reservation-scope\" (lane).",
+  "next_action": "Merged into main at 0de1b51; capture what settled, then bee close --feature start-feature-reservation-scope.",
   "created_at": "2026-08-18T11:53:51.549Z",
   "run_state": "done",
   "waiting_on": null
