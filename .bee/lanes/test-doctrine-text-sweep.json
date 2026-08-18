@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"test-doctrine-text-sweep\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 4198030; capture what settled, then bee close --feature test-doctrine-text-sweep.",
   "created_at": "2026-08-18T11:53:37.785Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",
