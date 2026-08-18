@@ -1113,23 +1113,57 @@ fn line_trigger_ids(line: &str) -> Vec<String> {
     ids
 }
 
+/// The opening `<!-- bee:not-a-deferral: <reason> -->` marker's prefix and
+/// the exact closing marker line. A line's trimmed content must match one
+/// of these exactly to toggle the not-a-deferral exemption.
+const NOT_A_DEFERRAL_OPEN_PREFIX: &str = "<!-- bee:not-a-deferral:";
+const NOT_A_DEFERRAL_OPEN_SUFFIX: &str = "-->";
+const NOT_A_DEFERRAL_CLOSE: &str = "<!-- /bee:not-a-deferral -->";
+
+/// If `trimmed` is a `<!-- bee:not-a-deferral: <reason> -->` opening marker
+/// carrying a non-empty reason, returns that reason. An empty or missing
+/// reason returns `None` — skipping a guard is a named act, never an
+/// oversight (the same posture `regen_obligation_ack` takes on a cell), so
+/// an unreasoned marker opens nothing and the lines below it still block.
+fn not_a_deferral_open_reason(trimmed: &str) -> Option<&str> {
+    let rest = trimmed.strip_prefix(NOT_A_DEFERRAL_OPEN_PREFIX)?;
+    let rest = rest.strip_suffix(NOT_A_DEFERRAL_OPEN_SUFFIX)?;
+    let reason = rest.trim();
+    if reason.is_empty() { None } else { Some(reason) }
+}
+
 /// D3: the doc-deferral door itself. A line matching `matches_deferral_
 /// prose` inside a ``` fenced block is exempt (`in_fence` toggles on every
-/// fence-marker line, code included); every other match needs a same-line
-/// trigger citation resolving via `trigger_registered` or it blocks, naming
-/// file:line and the create-the-trigger teach line.
+/// fence-marker line, code included); a line inside a reasoned
+/// `<!-- bee:not-a-deferral: <reason> --> ... <!-- /bee:not-a-deferral -->`
+/// block is exempt the same way (`in_marker` toggles independently of
+/// `in_fence` — a fence and a marker nest without interacting; an
+/// unreasoned opening marker toggles nothing; an unclosed marker exempts to
+/// end of file). Every other match needs a same-line trigger citation
+/// resolving via `trigger_registered` or it blocks, naming file:line and the
+/// create-the-trigger teach line.
 pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str) -> D<Door> {
     let files = doc_deferral_scan_files(root, feature)?;
     let mut blocking_items: Vec<String> = Vec::new();
     for rel in &files {
         let Ok(text) = std::fs::read_to_string(root.join(rel)) else { continue };
         let mut in_fence = false;
+        let mut in_marker = false;
         for (idx, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed == NOT_A_DEFERRAL_CLOSE {
+                in_marker = false;
+                continue;
+            }
+            if not_a_deferral_open_reason(trimmed).is_some() {
+                in_marker = true;
+                continue;
+            }
             if line.trim_start().starts_with("```") {
                 in_fence = !in_fence;
                 continue;
             }
-            if in_fence {
+            if in_fence || in_marker {
                 continue;
             }
             if !crate::verbs::decisions::matches_deferral_prose(line) {
@@ -1169,7 +1203,7 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str) -> D<Door> {
         door: "doc-deferral",
         blocking: true,
         detail: format!(
-            "{} deferral line(s) with no registered trigger citation: {} — remedy: register the condition first with `bee triggers add --decision <id> --condition \"...\"`, then cite it inline (backtick `<id>` or [[trigger:<id>]])",
+            "{} deferral line(s) with no registered trigger citation: {} — remedy: register the condition first with `bee triggers add --decision <id> --condition \"...\"`, then cite it inline (backtick `<id>` or [[trigger:<id>]]), or if the prose documents deferral machinery rather than promising to act later, wrap it in a reasoned <!-- bee:not-a-deferral: <reason> --> ... <!-- /bee:not-a-deferral --> block",
             blocking_items.len(),
             blocking_items.join("; ")
         ),
