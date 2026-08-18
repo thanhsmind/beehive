@@ -548,5 +548,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-18T05:48:01.293Z"
+  },
+  "pocock-nuggets": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-18T06:20:31.805Z"
   }
 }

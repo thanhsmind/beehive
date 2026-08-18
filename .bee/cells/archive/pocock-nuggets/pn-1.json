@@ -1,0 +1,73 @@
+{
+  "id": "pn-1",
+  "feature": "pocock-nuggets",
+  "lane": "small",
+  "title": "Merge six pocock craft nuggets into expertise and reference prose",
+  "behavior_change": false,
+  "files": [
+    "expertise/planning.md",
+    "expertise/debugging.md",
+    "expertise/tests.md",
+    "skills/bee-shaping/references/shaping-reference.md",
+    "skills/bee-capturing/references/area-spec.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/pocock-nuggets/CONTEXT.md",
+    "docs/history/research/pocock-skills-distill.md",
+    "skills/bee-writing-skills/references/prompt-style.md"
+  ],
+  "action": "Implement CONTEXT.md D1-D4 (docs/history/pocock-nuggets/CONTEXT.md) exactly; match each file's existing voice, section structure, and heading style; keep every insertion to one short paragraph or a few lines. (1) expertise/planning.md — in the build-order territory ('Build order versus discovery order' or a better-fitting adjacent spot): add expand-contract sequencing for wide mechanical refactors (expand: add the new form beside the old so nothing breaks; migrate: move call sites over in batches sized by blast radius; contract: delete the old form once no caller remains — full green is promised only at contract; each step small, reversible, never a repo-wide red moment), plus the prefactor line 'make the change easy, then make the easy change'. (2) expertise/debugging.md — beside 'State the hypothesis before the fix': add that hard bugs get 3-5 ranked falsifiable hypotheses generated BEFORE testing any (single-hypothesis generation anchors on the first plausible idea), and that candidate fixes are compared only after diagnosis — never a fix menu proposed from the symptom. (3) expertise/tests.md — beside 'Pick the cheapest level that can fail': add the pre-agreed-seams ritual — before TDD on a new surface, confirm 'what is the public interface, and which seams do we test?', then test only at those seams. (4) skills/bee-shaping/references/shaping-reference.md 'Pinned terms' section: one line — a pinned term also lists the losing synonyms under _Avoid_ so the rejected words stay rejected. (5) skills/bee-capturing/references/area-spec.md Data Dictionary rules: one line — a dictionary term may carry an _Avoid_ list of rejected synonyms, seeded from shaping's pinned terms. (6) The .bee/expertise/ tree is the vendored copy of expertise/ — after editing the expertise/ sources, run the regen chain (bee dev regen; then bee dev release-manifest --write) and confirm the vendored copies and manifest are in sync; if regen does not sync .bee/expertise, sync those copies to match the sources in the same commit. One commit, imperative subject, cell id trailer.",
+  "verify": ".bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "All six nuggets landed (expand-contract, prefactor, multi-hypothesis, cause-aligned fixes, seam ritual, _Avoid_ in both files)",
+      "Every insertion matches its file's voice and is a paragraph or less",
+      "expertise/ sources and .bee/expertise/ vendored copies are identical after the change",
+      "The regen chain ran in this cell and the manifest check is clean"
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "forager-2",
+    "outcome": "Merged six pocock craft nuggets into expertise and reference prose, regen chain synced and manifest check clean",
+    "files_changed": [
+      "expertise/planning.md",
+      "expertise/debugging.md",
+      "expertise/tests.md",
+      "skills/bee-shaping/references/shaping-reference.md",
+      "skills/bee-capturing/references/area-spec.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T06:19:19.539Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e50823f4-98da-4b09-8882-07d8c0a38242",
+    "claimed_at": "2026-08-18T06:16:22.696Z",
+    "report": {
+      "outcome": "Merged six pocock craft nuggets into expertise and reference prose; regen chain synced and manifest check clean",
+      "commit": "a4241eb692b060f4869cbdc6ac0637e9fbeee560",
+      "files": [
+        "expertise/planning.md",
+        "expertise/debugging.md",
+        "expertise/tests.md",
+        "skills/bee-shaping/references/shaping-reference.md",
+        "skills/bee-capturing/references/area-spec.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check — green — docs-only change, cell verify command, confirms vendored expertise and manifest stay in sync",
+      "deviations": [
+        "Copied .bee/bin/bee from the main checkout (same commit 32bcd201) into this fresh worktree before running the regen chain — gitignored build artifact absent in a new worktree"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

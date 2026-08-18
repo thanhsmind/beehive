@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "pocock-nuggets",
+  "mode": "feature",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"pocock-nuggets\" started at phase \"exploring\" (lane).",
+  "next_action": "Dispatch pn-1 worker.",
+  "created_at": "2026-08-18T06:15:19.583Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 6,
+    "rationale": "Named deviation on the small-lane file cap: six files, but zero risk flags and purely additive one-paragraph prose insertions across sibling docs — splitting into two features doubles ceremony without reducing risk",
+    "updated_at": "2026-08-18T06:15:45.880Z",
+    "feature": "pocock-nuggets"
+  }
+}
