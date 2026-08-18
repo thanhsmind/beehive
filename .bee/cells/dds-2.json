@@ -27,21 +27,34 @@
       "The marker's syntax and the reason-required rule are documented where a reader meets close doors."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "dds-2-worker",
     "outcome": null,
-    "files_changed": [],
+    "files_changed": [
+      "docs/handbook/register.md"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-18T14:48:27.772Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
-    "claimed_at": "2026-08-18T14:44:01.521Z"
+    "claimed_at": "2026-08-18T14:44:01.521Z",
+    "report": {
+      "outcome": "Wrapped both register.md deferral-queue sections in reasoned not-a-deferral markers and documented the door row; config-reference.md untouched (does not cover close doors)",
+      "tests": "cargo build --release --manifest-path packages/bee-rs/Cargo.toml && ./packages/bee-rs/target/release/bee close --feature doc-deferral-scope --dry-run --json && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity — green — doc-deferral door reports clear (no docs/handbook/register.md line named) with the newly built binary; pointer_integrity suite 10 passed",
+      "deviations": [],
+      "commit": "a4909c5da9be4f4ad3efd67b93842b76affcbea1",
+      "files": [
+        "docs/handbook/register.md"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
