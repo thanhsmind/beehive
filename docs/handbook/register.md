@@ -111,7 +111,7 @@ Per-repo configuration.
 
 | Key | Holds |
 |-----|-------|
-| `commands` | `{setup, start, test}` shell commands. **`test` is the single declaration of how the project is tested** (a string or an array run in order) — the one command the green base check, close, merge, and CI all run. Tests prove at the boundary: `bee close` runs `test` when the feature has no worktree, `bee worktree merge` runs it when it does; a cap is commit-only proof. A `"none"` sentinel means the gate is deliberately disabled |
+| `commands` | `{setup, start, test}` shell commands. **`test` is the single declaration of how the project is tested** (a string or an array run in order) — the one command CI runs on every push, and `bee test` runs on demand. Each cap records its own proof line `<command> — <result> — <scope reason>`; `bee close` and `bee worktree merge` check that recorded proof and run nothing themselves. A `"none"` sentinel means the gate is deliberately disabled |
 | `hooks` | toggle map over the nine handlers: `session-init`, `prompt-context`, `state-sync`, `chain-nudge`, `session-close`, `write-guard`, `model-guard`, `tools-logger`, `codex-subagent-audit` — each default-on |
 | `guards` | write-guard tuning: `idle_gate`, `max_read_lines` |
 | `gate_bypass` | `off` · `normal` · `full` · `total` — the opt-in gate autopilot level |
@@ -127,9 +127,10 @@ Per-repo configuration.
 | `doc_viewer` | `{base_url, project}` — an opt-in URL prefix. When set, the session preamble and the compaction capsule give doc links as this URL plus the repo-relative path, instead of the bare path |
 
 Read by hive (bypass level), planning (test scoping), swarming (model tiers),
-`bee test` / `bee close` (`commands.test`), and
-`bee worktree merge` (`commands.test`) — tests prove at the boundary; `bee
-cells finish` is commit-only proof and does not read `commands.test`.
+and `bee test` (`commands.test`, its own runner). `bee close` and `bee
+worktree merge` no longer run `commands.test` — each checks the cap's own
+recorded proof line instead; `bee cells finish` is commit-only proof and
+writes that line.
 `.bee/config-sample.json` is the annotated
 copy of the whole schema — its `_doc` block is the per-key contract.
 
@@ -304,8 +305,8 @@ release / complete`.
 
 - **`pause`** — `{…, kind:'pause', written_at}`. Surfaced and **waited on**; never
   auto-resumed. A missing/unknown kind reads as `pause` (fail-safe).
-- **`planned-next`** — requires `writer_session`, `previous_cell` (capped, tests
-  green), `next_cell` (claimed by the same session). Adopted automatically **only**
+- **`planned-next`** — requires `writer_session`, `previous_cell` (capped),
+  `next_cell` (claimed by the same session). Adopted automatically **only**
   at a fresh-session boundary (`/clear` or fresh start) via `state handoff adopt`.
 
 Written via `state handoff write/adopt/show`.
@@ -324,16 +325,21 @@ source tree, not the vendored render.
 
 ### Logs & caches (read-mostly)
 - `.bee/logs/test-results.json` — **the one test record**: `{ran_at, green,
-  commands:[{command, exit, duration_ms, failure_excerpt, failure_log}]}`. Written
-  by `bee test`, read by `cells finish` and `bee close`. The runner is a program;
-  an agent's word is never the record. `failure_log` names the path of that
-  command's complete, untrimmed output (below), or `null` when the command
-  passed or the log write failed.
+  commands:[{command, exit, duration_ms, failure_excerpt, failure_log}]}`.
+  `bee test` is the only writer. The only runtime reader is the D2 red-base
+  check `cells claim` runs before granting a claim (`classify_red_base`,
+  `verbs/cells/handlers_write.rs`) — `cells finish` and `bee close` no longer
+  run or read it; they check the cap's own recorded proof line instead. The
+  runner is a program; an agent's word is never the record. `failure_log`
+  names the path of that command's complete, untrimmed output (below), or
+  `null` when the command passed or the log write failed.
 - `.bee/logs/test-failure-<runner>-<index>.log` — the complete output of a
-  failing declared command, one file per `(runner, index)` where `runner` is
-  `test`, `finish` or `close`. Written on a red, removed on the next green at
-  the same index (no accumulation); the excerpt in `test-results.json` stays
-  bounded at `FAILURE_EXCERPT_MAX_CHARS` while this file carries the rest.
+  failing declared command, one file per `(runner, index)`; `runner` is
+  always `test` — `bee test` is the only process that writes this file, and
+  `cells finish`/`bee close` no longer run the declared command themselves.
+  Written on a red, removed on the next green at the same index (no
+  accumulation); the excerpt in `test-results.json` stays bounded at
+  `FAILURE_EXCERPT_MAX_CHARS` while this file carries the rest.
 - `.bee/logs/hooks.jsonl` — hook audit/crash log `{ts, hook, event, tool_name, tool_input_keys[]}`
 - `.bee/logs/timings.jsonl` — per-invocation `{ts, cmd, ms, ok}`
 - `.bee/logs/dispatch.jsonl`, `tools.jsonl`, `contention.jsonl` — stage traces
@@ -364,12 +370,12 @@ the next action in plain language.
 | `bee cells add` · `cells ready` · `cells show` | Persist shaped work · what is claimable · one cell in full |
 | `bee dispatch prepare` | Build a worker dispatch payload (`--claim` claims + reserves in the same verb) |
 | `bee dispatch wave` | Claim, reserve, and build payloads for a whole ready wave in one call — the normal batch verb; `dispatch prepare` is the single-cell fallback |
-| `bee finish` | Worker completion: commit-only proof, cap and release reservations (`tests: boundary`) |
+| `bee finish` | Worker completion: commit-only proof, cap and release reservations (records the cap's own proof line) |
 | `bee reservations reserve` | Claim write scope before editing |
 | `bee decisions log` · `decisions active` | Record an agreement · what is in force |
 | `bee capture add` · `bee backlog add` | Queue a learning stub · park future work |
 | `bee test` | Run `commands.test`, write `.bee/logs/test-results.json` |
-| `bee close` | Feature close driver: declared test run (when no worktree; defers to merge when one exists) → what remains |
+| `bee close` | Feature close driver: recorded-proof check (unconditionally, whether or not the feature has a worktree) → what remains |
 | `bee doctor` | Install health: verdict ladder over the wiring, the vendored binary, and the runtime (`doctor attest` is the plumbing-surface attestation) |
 
 Four of them are **aliases**, not new behavior — argv is rewritten and the proven
@@ -477,8 +483,9 @@ Three notes on doors that are not refusals:
 - **`cells finish` is the one worktree exemption.** Every other mutating cells verb
   refuses to run from a granted linked worktree and names the main checkout. `finish`
   resolves its cell and claim at the main store, commit-only proof recorded from
-  the calling worktree's own directory, so a worker caps where it worked; the
-  declared tests prove later, at the boundary (`bee close`/`bee worktree merge`).
+  the calling worktree's own directory, so a worker caps where it worked and
+  records its own proof line there; `bee close`/`bee worktree merge` check
+  that recorded proof and run nothing themselves.
 - **A `NEEDS_REVISION` verdict reopens its cell.** `cells judge-record` recording
   `NEEDS_REVISION` after a cap does not just log a finding — it moves the cell
   capped → open, clears its claim and verify evidence, and sends it back for rework.

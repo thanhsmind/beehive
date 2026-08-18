@@ -69,11 +69,11 @@ source edits happen until `approved_gates.execution` is true.
   behavior, no stubs.
 - **Tests are the writer's, TDD-style, inside each cell** — coverage judgment
   first: cite existing tests by file and case, author only the gap
-  (`.bee/expertise/tests.md`). There is no trailing test cell per slice, and no
-  per-cell proof tier: tests prove at the boundary — `bee close` runs the
-  declared `commands.test` when the feature has no worktree, `bee worktree
-  merge` runs it when it does; a cap is commit-only proof and records `tests:
-  boundary`. CI runs the same command on every push.
+  (`.bee/expertise/tests.md`). There is no trailing test cell per slice: each
+  cap records its own proof line `<command> — <result> — <scope reason>`;
+  `bee close` and `bee worktree merge` check that recorded proof and run
+  nothing themselves. CI runs the declared command on every push — the one
+  deterministic net.
 - **Scope integrity**: when the shape will not fit the budget, never quietly shrink
   a locked decision or drop a must-have. Answer SPLIT RECOMMENDED and let the user
   choose what waits; a cheaper swap needs a supersede.
