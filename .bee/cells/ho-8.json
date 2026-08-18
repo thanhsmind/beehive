@@ -43,11 +43,11 @@
       "Do not add an async runtime."
     ]
   },
-  "status": "capped",
+  "status": "open",
   "deps": [],
   "decisions": [],
   "trace": {
-    "worker": "w-ho-8",
+    "worker": null,
     "outcome": "Implemented HerdrBackend (WorkerBackend over the real herdr CLI) beside the fake, closed D15's canonical-identity gap with a new canonical_id trait method the choreography dedupes on, and added the three hazard tests plus fail-closed status coverage via a PATH-prepended stub herdr",
     "files_changed": [
       "packages/bee-rs/crates/fleet/Cargo.toml",
@@ -67,8 +67,8 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
-    "claimed_at": "2026-08-18T10:27:23.209Z",
+    "claim_session": null,
+    "claimed_at": null,
     "report": {
       "outcome": "Implemented HerdrBackend beside the fake, closed D15's canonical-identity gap, added the three hazard tests plus fail-closed status coverage",
       "commit": "76656a111dffd837365a5114a6450edb9ddbb36f",
@@ -91,7 +91,58 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "H1",
+            "status": "PASS",
+            "evidence": "No fail-open path found. map_status has no safe-default arm; status folds spawn failure, non-zero exit, unparseable body, target-absent and missing-or-null agent_status all into Unverifiable. Mutation-tested on a scratchpad copy with cargo test -p fleet after each single-line mutation: off-enum arm to Ready, lookup-error arm to Ready, target-absent to Ready, missing field to Ready, and the unknown mapping to Finished — 5 of 5 caught by named tests. Two cases correct by construction but untested: an explicit JSON null agent_status (only the missing-key case has a test; both take the same and_then arm) and a null pane_id in canonical_id. Caveat carried into H5: three of the five catching tests live in the cfg(unix)-gated suite."
+          },
+          {
+            "id": "H2",
+            "status": "PASS",
+            "evidence": "WorkerBackend::canonical_id exists and resolve_and_dedupe keys on its result rather than the raw name. The choreography holds no herdr knowledge: a case-insensitive search for herdr, pane, worktree, cell, lane, gate and proof across choreography.rs, wave.rs and lib.rs returned exactly one hit, a doc-comment example. Mutation-tested: deduping on the raw name is caught by invariant_8_a_name_and_its_backend_side_pane_id_collapse_to_one_target, and so is a variant where the choreography short-circuits on a colon in the identifier — that is, where it learns herdr's pane-id shape. The invariant 8 test asserts quantitatively through fake-backend counters rather than by eye."
+          },
+          {
+            "id": "H3",
+            "status": "PASS",
+            "evidence": "All three hazard tests exist in tests/herdr_backend.rs and each pins what it names. The already-working-agent test asserts the recorded argv carries no --wait, and adding --wait to the prompt argv is caught. The oversized-reply test uses a 50,000-character spill file, and disabling the spill-recovery branch is caught. The unfocused-status test drives a done status with focused false and asserts agent list is the only herdr call; making status return Unverifiable unless focused is true is caught by it and by one other. 3 of 3 caught. Caveat: all three live in the cfg(unix)-gated file — see H5."
+          },
+          {
+            "id": "H4",
+            "status": "PASS",
+            "evidence": "The diff of tests/choreography.rs between c945e4ae and 76656a11 is 87 insertions and zero deletions. The only edits to pre-existing tests are added doc comments; every assertion is byte-identical. The new invariant 8 test is additive. The fake backend gains alias, canonical_id and two call counters; its one behavioural change is read_output switching to an entry-or-default so it can count calls, which returns the same value for a known worker and an empty string for an unknown one, identical to the prior behaviour."
+          },
+          {
+            "id": "H5",
+            "status": "FAIL",
+            "evidence": "tests/herdr_backend.rs is gated by a file-level cfg(unix). Test counts: lib 23, choreography 11, herdr_backend 17, manifest_boundary 6 — so 17 of 57 fleet tests, 30 percent, do not run on Windows, and they are every test that drives the backend against a process. What survives on Windows is four pure-function unit tests. Concretely: the five-string status map has Windows coverage, but the fail-closed folding of lookup failures has NONE; the generic half of canonical identity is covered, the herdr resolution half is NOT; and the three hazards have zero Windows coverage. Measured rather than argued — re-running each mutation with only the test set Windows would compile gives SURVIVED for all seven: lookup-error fails open, target-absent fails open, missing or null field fails open, send passes --wait, spill recovery deleted, status requires focus, and start silently returning Ok instead of refusing. On Windows the backend could do all of that and CI would stay green. This contradicts D4, which makes Windows a required outcome rather than a follow-up, and contradicts the Windows workflow's own stated policy that the Rust suite has no split, runs unexcluded, and that a Windows-only failure is a real failure rather than a suite to add to a skip list. This cell added exactly such a skip list. The file header names the gap, but its mitigation claim covers only four of the seventeen and none of the three hazards."
+          },
+          {
+            "id": "H6",
+            "status": "FAIL",
+            "evidence": "The deferral boundary is only half real, and the half that is not real is pinned green. WorkerSpec does carry only name and task, so that premise is honest. But HerdrBackend::start does not simply refuse: it refuses only a never-seen, non-pane-id-shaped name. For a pane-id-shaped name it spawns for real and invents the agent kind, passing --kind claude as a hardcoded literal, and a test now PINS that hardcode by asserting the invocation starts with agent start w4-pB --kind claude --pane w4:pB. D14 requires --kind to be derived from herding.agent_command token 0, with an unrecognised token 0 surfacing as a typed error naming the key. The one path the cell claims it deferred to D17 is the exact path it silently implemented with a wrong constant, and a green test now defends it — the silent-drift class D13 and D14 exist to prevent. What D17's cell now owes: replace the hardcoded kind with the config-derived one plus D14's typed error, and un-pin the test asserting the constant; supply a cwd and kind carrying spec so start no longer guesses a slug from the pane id; and restore the caller's tab focus after agent start, which the code explicitly declines to do. ORCHESTRATOR CORRECTION, recorded because a verdict must not carry a claim known to be false: the judge also reported that D15, D16 and D17 have no decision record behind their cited hashes, having searched the worktree's own git-tracked copy of the decision log. That copy is frozen at the branch point by construction. The control root's store holds all three hashes; the decisions exist. The real and related gap, which was genuine, is that CONTEXT.md's locked table stopped at D14 — fixed in commit 6e2db85b."
+          }
+        ],
+        "failure_signature": "The herdr backend's behaviour is entirely unproven on Windows: 17 of 57 fleet tests sit behind a file-level cfg(unix), and 7 of 7 backend mutations SURVIVE a run restricted to the tests Windows compiles, against D4's required-outcome and the Windows workflow's explicit no-skip-list policy. Separately, HerdrBackend::start hardcodes --kind claude and a new test pins that constant green, contradicting D14 and the very D17 boundary the cell claims to defer.",
+        "fixability": "authority",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T11:08:43.671Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T11:08:43.672Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   },
   "tier": "generation"
 }

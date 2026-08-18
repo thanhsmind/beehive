@@ -38,11 +38,11 @@
       "Do not invent a new file convention where .bee/ already has one."
     ]
   },
-  "status": "capped",
+  "status": "open",
   "deps": [],
   "decisions": [],
   "trace": {
-    "worker": "w-ho-9",
+    "worker": null,
     "outcome": "Added .bee/wave-ledger.jsonl append-only wave ledger with occupancy read side and a documented staleness rule; full workspace cargo test green",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/herding.rs",
@@ -55,8 +55,8 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
-    "claimed_at": "2026-08-18T10:27:23.252Z",
+    "claim_session": null,
+    "claimed_at": null,
     "report": {
       "outcome": "Added .bee/wave-ledger.jsonl append-only wave ledger with occupancy read side and a documented staleness rule; full workspace cargo test green",
       "commit": "9400633fb1fbb8591db72073eadb45e4eb2aefc7",
@@ -72,7 +72,48 @@
     "warnings": [
       "advisory: this cap's commit changes 416 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "L1",
+            "status": "PASS",
+            "evidence": "Nine wave_ledger tests pass. one_wave_leaves_exactly_one_row asserts a single line after one append_wave. a_second_wave_appends_without_disturbing_the_first_rows_bytes asserts the post-second-append bytes start with the post-first-append bytes — a genuine byte-level append-only check rather than a count. a_rows_worker_outcomes_round_trip includes a worker with a null outcome and null evidence and asserts full struct equality after re-read. append_wave is the only writer and delegates to the crate's existing append helper; there is no rewrite or truncate path in the file."
+          },
+          {
+            "id": "L2",
+            "status": "FAIL",
+            "evidence": "The timer alone produces over-spawn for an ordinary long-running worker, measured rather than argued. Probe on a scratchpad copy: a wave dispatched 90 minutes ago with one still-unresolved worker gives 'a worker that is still genuinely running must still occupy its slot; got 0 — left 0, right 1'. is_live has exactly two inputs, whether the row is closed and whether now minus started_at is within the bound; nothing distinguishes an orphan from a live worker, and the bound is one hour. The situation is worse than suspected: THE LEDGER HAS NO CLOSE PATH AT ALL. append_wave is the only writer and its own doc says never to call it twice for the same wave_id because the ledger has no update path. Second probe: append an open row, then append a second row for the same wave_id with the outcome filled in — 'a finished worker must stop occupying its slot; got 1 — left 1, right 0', because live_worker_count iterates every row with no dedupe by wave_id, so the stale open row keeps counting. The consequence is that only one operating mode ever yields non-zero occupancy, and in that mode a row can never be closed, so the count degenerates to workers dispatched in the last hour — over-counting everyone who already finished and under-counting everyone still running past the bound. The module's own rationale asserts the reverse, that one hour errs toward false live over false stale; that holds only if every worker finishes inside an hour, and sessions on this very feature have not. RECOMMENDATION, which matches the orchestrator's own reading: make occupancy a liveness question rather than a timer question. The ledger already records a pane id per worker, so the correct read crosses the ledger's unresolved pane ids against the backend's actual live pane list and counts the intersection, keeping the timer strictly as the fallback for when the backend is unreachable and saying so in the doc. That preserves append-only, since the crossing is derived at read time and never written back, and removes both failure directions."
+          },
+          {
+            "id": "L3",
+            "status": "PASS",
+            "evidence": "A search for wave_ledger, append_wave, live_worker_count and WaveRow across the workspace confines every hit to the bee crate's herding.rs and herding/wave_ledger.rs, with no hit anywhere in the fleet crate. Conversely the fleet manifest declares only anyhow, serde and serde_json, and wave_ledger.rs contains no use of fleet — the single occurrence of the word is prose. The manifest boundary test still passes and remains the mechanism enforcing the split rather than review by eye."
+          },
+          {
+            "id": "L4",
+            "status": "FAIL",
+            "evidence": "Two blockers. First, semantics: per L2 the read side cannot produce a correct answer in either operating mode — appending at completion leaves occupancy at zero for the whole duration of a running wave because no row exists yet, and appending at dispatch produces a row that can never be closed and decays to zero at the one-hour mark regardless of reality. Section 4's cap decision would be strictly worse off than today's pane count, which at least tracks live processes. Second, reachability: live_worker_count and live_worker_count_now are crate-private and marked dead code, the module itself is marked dead code, and the herding verb dispatcher exposes no occupancy verb — the file says outright that no CLI verb reads or writes the ledger yet. Section 4 is a markdown role that can only run shell commands, so it cannot reach a private Rust function, and it still enumerates and classifies panes unchanged. The reachability half is arguably sequencing the plan defers within phase 3; the semantics half is not."
+          }
+        ],
+        "failure_signature": "The wave ledger's one-hour timer combined with its total absence of a close path makes live_worker_count wrong in both directions — measured: a 90-minute live worker reads 0, a finished worker reads 1 — so the occupancy answer D10 exists for is not usable by role-dispatch section 4, and would be worse than the pane count it was meant to replace.",
+        "fixability": "authority",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T11:08:43.690Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T11:08:43.690Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   },
   "tier": "generation"
 }
