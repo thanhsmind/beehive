@@ -66,19 +66,54 @@ cockpit layout is fixed: chat left, dispatch top-right, merge bottom-right. Its
 `pane_id` is the target of every `herdr pane send-text` below. Resolve it once
 per iteration; panes can be closed and recreated by the human.
 
-### 4. Count occupied runtime slots, and report anomalies once
+### 4. Read occupied runtime slots from the ledger, and report anomalies once
 
-Resolve the **runtime** tab: `herdr tab list --workspace <workspace_id>`, the
-tab labelled `runtime`. If nothing carries that label, fall back to "the one
-tab in this workspace that is not your own `tab_id`" — the cockpit fixes
-exactly two tabs, so exclusion is unambiguous.
+**The count comes from the ledger, never from counting panes.** Ask it first,
+every iteration, from the MAIN checkout:
+
+```
+.bee/bin/bee herding occupancy --json
+```
+
+Root resolution matches `interlock` and `classify-lane`: `--main-root`
+overrides, otherwise `git rev-parse --git-common-dir` — running from MAIN
+(§0) needs no flag. The answer is `{"count": N, "source": "live"|"fallback"}`.
+**`source` is the field that carries the distinction that matters most here,
+and the two values must never be treated alike:**
+
+- `source: "live"` — a real crossing of the wave ledger's unresolved worker
+  rows against herdr's own live pane list. Read `count` as `occupied_count`
+  and hold it against the cap exactly as before: the cap is 4; at `>= 4` no
+  slot is free — still run the anomaly scan below, but do not build or
+  announce a dispatch decision (§6-7).
+- `source: "fallback"` — the degraded one-hour timer answer, returned when the
+  live pane list could not be obtained. This is the SAME condition that would
+  have broken pane-counting too, so there is no better answer sitting anywhere
+  else this iteration. Occupancy is undetermined: send exactly one plain line
+  into the chat pane —
+  `herdr pane send-text <chat_pane_id> "dispatch: occupancy undetermined this iteration — herdr's live pane list could not be reached, so the ledger's fallback answer cannot be trusted as a real count"`
+  — and end the iteration without building a dispatchable set (§5-8). This is
+  a refusal, not a guess: dispatching on an unknown count is exactly the
+  over-spawn D10 exists to prevent.
+
+(The plain, non-`--json` form prints `occupancy: {count} worker(s) live
+({source})` — the parenthetical word carries the identical live/fallback
+distinction for a caller reading text rather than JSON. This role reads the
+`--json` form's `source` field: matching one field beats matching a word
+inside a sentence.)
+
+**The anomaly scan is unchanged — the ledger does not know about panes it was
+never told about.** Resolve the **runtime** tab: `herdr tab list --workspace
+<workspace_id>`, the tab labelled `runtime`. If nothing carries that label,
+fall back to "the one tab in this workspace that is not your own `tab_id`" —
+the cockpit fixes exactly two tabs, so exclusion is unambiguous.
 
 List its panes (`herdr pane list --workspace <workspace_id>`, filtered to that
 `tab_id`). For each:
 
 - **Unlabelled, `foreground_cwd` = the MAIN checkout** → the runtime tab's own
-  root pane, created empty by bootstrap. Expected; not an anomaly, not a slot.
-- **Unlabelled otherwise** → anomaly candidate. It cannot occupy a slot for a
+  root pane, created empty by bootstrap. Expected; not an anomaly.
+- **Unlabelled otherwise** → anomaly candidate. It cannot be tied to a
   specific PBI because nothing says which one it is.
 - **Labelled with slug `S`** → apply the finished test below.
 
@@ -87,7 +122,8 @@ Derive the worktree path from the **label**, never the pane's fields:
 from `bee worktree list --json`. (Do not read the pane's `cwd`: it stays at the
 shell's starting directory while `foreground_cwd` follows the process, and live
 panes routinely disagree. Testing MAIN against the finished conditions never
-passes, so the pane would count as occupied forever.)
+passes, so the worktree would never read as finished, and its anomaly/
+tail-stuck classification would misfire forever.)
 
 Then read **that worktree's own bee store** — each worktree has its own `.bee/`:
 
@@ -107,9 +143,10 @@ cells, so orient's packet answers the first two conditions in one verb: its
 3. a clean tree (`git status --porcelain` empty);
 4. `HEAD` is exactly `wt/<S>`.
 
-All four → **finished**: it does not occupy a slot even though its pane still
-exists, and this role never closes it (merge owns that). Any one fails → the
-pane **counts as occupied**.
+All four → **finished**: this role never closes it (merge owns that); it feeds
+only the tail-stuck naming below, never the count — the ledger already
+answered that above. Any one fails → **not finished**, which is the state the
+dead-session anomaly test below needs.
 
 **`agent_status`/`agent_session` are read for exactly one purpose in this
 role — spotting an anomaly**: a labelled pane whose worktree is not finished,
@@ -117,10 +154,6 @@ yet whose agent session has died (idle/unknown with no live session, or a
 `foreground_cwd` that no longer matches the worktree). They are never evidence
 that a working agent or its item has finished. A merely-idle agent mid-item is
 expected; only a dead session on unfinished work is an anomaly.
-
-`occupied_count` = labelled, not-yet-finished runtime panes. The cap is 4. At
-`>= 4` no slot is free: still run the anomaly check, but do not build or
-announce a dispatch decision (§6-7).
 
 **Anomalies are reported exactly once, never once per poll** — a line repeated
 every 60 seconds for the rest of the day is a line nobody reads. There is no
@@ -369,7 +402,8 @@ or in the herdr workspace changes as a result.
 | Self-identify / self-name | `herdr pane current --current`, `herdr pane rename <pane_id> dispatch` |
 | Bypass level | `bee status --json` → `gate_bypass_level` |
 | Find the chat pane | `herdr pane layout --pane <own pane_id>` → leftmost `rect.x`, excluding self (NEVER `--current`) |
-| Runtime tab, its panes | `herdr tab list --workspace <id>`, `herdr pane list --workspace <id>` |
+| Occupied slot count (ledger, never pane-counting) | `.bee/bin/bee herding occupancy --json` → `count`/`source` (`live` = real crossing, use against the cap; `fallback` = undetermined, refuse to dispatch this iteration) |
+| Runtime tab, its panes (anomaly scan only) | `herdr tab list --workspace <id>`, `herdr pane list --workspace <id>` |
 | A worktree's own state (phase + cells, one verb) | `(cd <worktree_path> && bee orient --json)` |
 | Read chat scrollback (anomaly dedup) | `herdr pane read <chat_pane_id> --source recent --lines 200` |
 | Enable interlock | `.bee/bin/bee herding interlock` → `enabled` |
