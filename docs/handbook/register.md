@@ -325,16 +325,21 @@ source tree, not the vendored render.
 
 ### Logs & caches (read-mostly)
 - `.bee/logs/test-results.json` — **the one test record**: `{ran_at, green,
-  commands:[{command, exit, duration_ms, failure_excerpt, failure_log}]}`. Written
-  by `bee test`, read by `cells finish` and `bee close`. The runner is a program;
-  an agent's word is never the record. `failure_log` names the path of that
-  command's complete, untrimmed output (below), or `null` when the command
-  passed or the log write failed.
+  commands:[{command, exit, duration_ms, failure_excerpt, failure_log}]}`.
+  `bee test` is the only writer. The only runtime reader is the D2 red-base
+  check `cells claim` runs before granting a claim (`classify_red_base`,
+  `verbs/cells/handlers_write.rs`) — `cells finish` and `bee close` no longer
+  run or read it; they check the cap's own recorded proof line instead. The
+  runner is a program; an agent's word is never the record. `failure_log`
+  names the path of that command's complete, untrimmed output (below), or
+  `null` when the command passed or the log write failed.
 - `.bee/logs/test-failure-<runner>-<index>.log` — the complete output of a
-  failing declared command, one file per `(runner, index)` where `runner` is
-  `test`, `finish` or `close`. Written on a red, removed on the next green at
-  the same index (no accumulation); the excerpt in `test-results.json` stays
-  bounded at `FAILURE_EXCERPT_MAX_CHARS` while this file carries the rest.
+  failing declared command, one file per `(runner, index)`; `runner` is
+  always `test` — `bee test` is the only process that writes this file, and
+  `cells finish`/`bee close` no longer run the declared command themselves.
+  Written on a red, removed on the next green at the same index (no
+  accumulation); the excerpt in `test-results.json` stays bounded at
+  `FAILURE_EXCERPT_MAX_CHARS` while this file carries the rest.
 - `.bee/logs/hooks.jsonl` — hook audit/crash log `{ts, hook, event, tool_name, tool_input_keys[]}`
 - `.bee/logs/timings.jsonl` — per-invocation `{ts, cmd, ms, ok}`
 - `.bee/logs/dispatch.jsonl`, `tools.jsonl`, `contention.jsonl` — stage traces

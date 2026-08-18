@@ -68,8 +68,8 @@ unwound and nothing is left half-done),
   proof is checked, never re-run — the final slice runs `bee close --feature
   <slug>`, which checks every capped cell's recorded proof line
   unconditionally, or `bee worktree merge`, which checks the same recorded
-  lines against the staged merge. Neither door spawns a test run itself.
-  Doors are never waived.
+  lines as a zero-mutation precondition before anything is staged. Neither
+  door spawns a test run itself. Doors are never waived.
 - **Completion**: more approved work remaining → back to planning for the next
   batch (the approved plan stays frozen). Final slice green → tell the user
   execution is complete, capture is recorded as *pending*, and landing is
