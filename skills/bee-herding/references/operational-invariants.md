@@ -37,15 +37,20 @@ a grant); **merge** runs `git merge --abort` on main, writes `.bee/tmp/`
 markers, and runs `bee worktree merge --cleanup` (deletes a branch, removes a
 worktree). Taken literally, "read-only" would give a dispatch pane that
 cannot dispatch and a merge pane that cannot merge — a silent stall every
-interval. The two halves of
-the posture are **coupled, not separable**: the merge pane runs the project's
-verify against the just-merged tree, so it **executes code the unsandboxed
-working agents wrote**. Narrowing the control panes buys one thing honestly —
-it stops a cold control model at thousands of iterations a day from
-"helpfully" improvising a command outside its job (e.g. cleaning a dirty
-main); it does **not** sandbox the agent-authored code that verify runs. The
-exact allowlist per role, and the note that it must grow if a role gains a
-command, live in `control-loop.sh`.
+interval. The merge pane does **not** run the project's verify and
+**executes no code the working agents wrote**: its proof check runs
+before `git merge`, reads each capped cell's recorded proof line, and
+writes nothing — the merge itself is `git merge` plus bee bookkeeping.
+This is a real safety improvement over running verify against the
+just-merged tree, and it is worth saying plainly: a cold control model
+merging worktrees thousands of times a day never executes
+agent-authored code to do it. CI runs the full declared command on
+every push instead — the one place that suite actually executes.
+Narrowing the control panes buys a second thing honestly — it stops
+that same cold model from "helpfully" improvising a command outside
+its job (e.g. cleaning a dirty main). The exact allowlist per role, and
+the note that it must grow if a role gains a command, live in
+`control-loop.sh`.
 
 ## Runtime adapter
 

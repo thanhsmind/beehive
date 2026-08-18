@@ -96,10 +96,11 @@ end-to-end, real behavior, no stubs.
 
 The writer owns tests TDD-style as part of each cell — coverage judgment
 first: cite existing tests by file and case, author only the gap
-(`.bee/expertise/tests.md`). Tests prove at the boundary: `bee close`
-runs `commands.test` when the feature has no worktree; `bee worktree
-merge` runs it when it does. A cap is commit-only proof and records
-`tests: boundary`; CI runs the same command on every push
+(`.bee/expertise/tests.md`). The agent owns test scope: pick the proof
+each cap's change type needs (code → related tests green; docs →
+parity/pointer checks; behavior → judge verdict), run it, and record it
+as the cap's proof line. `bee close` and `bee worktree merge` check that
+recorded proof; CI runs the full declared command on every push
 (`references/planning-reference.md` ("Test scoping")). Then
 `bee state set --owner planning --phase swarming --next-action "Invoke bee-swarming."`
 

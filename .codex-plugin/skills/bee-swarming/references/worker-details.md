@@ -8,21 +8,25 @@ The orchestrator supplies: agent nickname (reservation identity), assigned cell 
 
 The assigned cell arrives **already claimed** under the worker's nickname — the orchestrator claims before spawning, never the worker. No literal session id is ever handed down in the prompt: reservation and claim verbs resolve the session from `CLAUDE_CODE_SESSION_ID` in the worker's own environment when one is needed, never from prompt text.
 
-## Tests at the boundary (the one proof path)
+## Tests at finish (the one proof path)
 
-The project declares how it is tested once — `.bee/config.json`
-`commands.test` (string or array). Tests prove at the boundary: `bee
-close` runs `commands.test` when the feature has no worktree; `bee
-worktree merge` runs it when it does. A cap is commit-only proof and
-records `tests: boundary`; a repo with no declared `commands.test` caps
-with `tests: undeclared`. CI runs the same command on every push. The
-boundary run goes through the deterministic runner (`bee test`) and
-writes ONE normalized record: `.bee/logs/test-results.json` — green
-clears the door; red refuses it and the refusal quotes the failing
-command's `failure_excerpt`, fixing that red becomes the next work. The
-runner is a program; your word is never the record. There are no
-per-cell evidence flags, proof tiers, or deferred-proof paths — the
-record is the evidence once the boundary has run.
+You own test scope: pick the proof your change type needs (code →
+related tests green; docs → parity/pointer checks; behavior → judge
+verdict), run it yourself, and record it on `cells finish --report` as
+the required `tests` proof line — `<command> — <result> — <scope
+reason>` (three non-empty segments, e.g. `cargo test -p bee — green —
+touched close.rs`). `bee close` and `bee worktree merge` CHECK that
+recorded proof at the boundary; neither runs `commands.test` itself. CI
+runs the project's declared `.bee/config.json` `commands.test` on every
+push — the one deterministic net. A `red` result segment refuses the
+cap outright — a red is fix-first, never a done. When you reach for the
+declared suite as your proof, run it through the deterministic runner
+(`bee test`), which writes ONE normalized record:
+`.bee/logs/test-results.json` — the runner is a program; your word is
+never the record, quote it instead. A repo declared no-test
+(`commands.test` set to the sentinel `"none"`) proves with the command
+segment `none` and the reason naming the parity/docs check actually
+used.
 
 Tests are yours to write, TDD-style, as part of the cell's own work:
 judge existing coverage first (`.bee/expertise/tests.md`), author only
@@ -36,11 +40,11 @@ Startup runs ZERO of these: the dispatch prompt inlines the cell JSON and the st
 
 ```text
 .bee/bin/bee reservations reserve --agent "<name>" --cell "<id>" --path "<path>" --ttl 3600
-.bee/bin/bee finish --id <id> [--outcome TEXT] [--files a,b] [--deviation "ONE LINE"] [--deviations-file F] [--friction TEXT]
+.bee/bin/bee finish --id <id> --report '<json with the tests proof line>' [--outcome TEXT] [--files a,b] [--deviation "ONE LINE"] [--deviations-file F] [--friction TEXT]
 .bee/bin/bee decisions active --recent 3
 ```
 
-`cells finish` caps the cell and releases its reservations in one verb — commit-only proof, per the boundary rule above. `bee test` alone runs the suite when you want the record in front of you.
+`cells finish` caps the cell and releases its reservations in one verb — `--report` is REQUIRED and carries your proof line, checked (never re-run) by the boundary doors, per "Tests at finish" above. `bee test` alone runs the suite when you want the record in front of you.
 
 Shell guard for write-heavy commands (`git add/mv/rm`, `mv`, `cp`, `rm`, `mkdir`, `touch`, `sed -i`, `tee`, redirection writes):
 
@@ -96,10 +100,13 @@ nothing here is a required output artifact, and none of it is written up anywher
 
 ## Finish refusals that hold
 
-No `gate_bypass` level lifts any refusal below. Tests prove at the
-boundary, not at finish: `bee close`/`bee worktree merge` refuse while
-`commands.test` is red, quoting the failing excerpt — that red is the
-next work item, never a base to build on.
+No `gate_bypass` level lifts any refusal below. `cells finish` itself
+refuses a malformed, empty, legacy-vocabulary, or `red`-result proof line
+in `--report tests` — fix the proof (or the failure it names) and finish
+again. At the boundary, `bee close`/`bee worktree merge` refuse while any
+capped cell in scope carries a missing or malformed proof — that is the
+next work item, a re-cap with a real proof line, never a base to build
+on.
 
 - **Claim ownership** — a finish from a session that does not own the claim
   is refused. The cell is not yours to cap.
@@ -160,7 +167,7 @@ prove base ancestry and the reserved-path diff subset before the result counts.
 Do not describe a branch name, worktree id, base, or commit as integration
 authority, and do not ask the orchestrator to trust a worker-supplied value.
 
-- `[DONE]` — cell finished (`tests: boundary` — or `tests: undeclared` in a repo with none — recorded on the cap; commit-only proof, tests prove at close/merge), one commit made, reservations released.
+- `[DONE]` — cell finished (a proof line `<command> — <result> — <scope reason>` recorded on the cap, checked — not re-run — at close/merge), one commit made, reservations released.
 - `[BLOCKED]` — cannot continue safely; include the blocker, diagnosis, and current reservation state.
 - `[HANDOFF]` — `.bee/HANDOFF.json` written; include progress, active reservations, and the resume point.
 - `[NOOP]` — the assigned cell is unavailable or unsafe; include why and a suggested parent action.

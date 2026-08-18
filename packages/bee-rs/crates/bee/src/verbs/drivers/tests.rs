@@ -1630,6 +1630,11 @@ use std::time::Instant;
         assert_eq!(declared_test_commands(&root).unwrap(), None);
     }
 
+    /// D7 (docs/history/test-doctrine/CONTEXT.md): close never spawns
+    /// `commands.test` — the tests door reads recorded proof from capped
+    /// cells instead (verbs/cells/proof.rs `feature_proof_check`). A
+    /// feature with no capped cells at all reads as "nothing to prove yet",
+    /// never blocking.
     #[test]
     fn close_dry_run_reports_the_doors_and_runs_nothing() {
         let tmp = tempfile::tempdir().unwrap();
@@ -1644,7 +1649,7 @@ use std::time::Instant;
         assert_eq!(
             text,
             concat!(
-                "door tests: open — commands.test declared (2 command(s)) — close runs the full declared suite fresh; a stale test-results record is never trusted | settle: bee test\n",
+                "door tests: open — no capped cells yet — nothing to prove\n",
                 "door scribing-debt: clear\n",
                 "door capture-queue: clear\n",
                 "door pattern-check: clear\n",
@@ -1652,21 +1657,31 @@ use std::time::Instant;
                 "door impact: clear\n",
                 "door routing: open — NOTICE — no docs/history/demo/CONTEXT.md found to route (legacy-form gap); the routing door never blocks on it — route it manually or fold it into the D4 historical-routing-sweep campaign backlog row\n",
                 "door doc-deferral: clear\n",
-                "next: bee close --feature demo — runs the declared tests and reports"
+                "next: bee close --feature demo — checks every capped cell's proof line and reports"
             )
         );
         assert_eq!(result.get("feature"), Some(&json!("demo")));
-        // Nothing ran: no record file.
+        // Nothing ran: no test process spawns, so no record file appears.
         assert!(!root.join(".bee/logs/test-results.json").exists());
 
-        // Undeclared repo: the teaching detail + a different next line.
-        w(&root, ".bee/config.json", "{}");
+        // A capped cell whose report carries an empty proof string blocks
+        // the dry-run listing too, naming the cell and the remedy.
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"","deviations":[]}}}"#,
+        );
         let Out::Emit(_, text, _) = close_handler(&root, "demo", true, None, None, &HashMap::new()).unwrap() else {
             panic!()
         };
-        assert!(text.starts_with(&format!("door tests: open — {CLOSE_TESTS_UNDECLARED_DETAIL}\n")));
+        assert!(
+            text.starts_with(
+                "door tests: BLOCKING — 1 capped cell(s) carry a report with no valid proof line (demo-1) — re-cap with a real proof line: \"<command> — <result> — <scope reason>\". | settle: bee cells finish\n"
+            ),
+            "{text}"
+        );
         assert!(text.ends_with(
-            "next: feature \"demo\" has no test door — close proceeds; capture stays pending for bee-capturing"
+            "next: re-cap the cell(s) above with a real proof line (\"<command> — <result> — <scope reason>\"), then re-run bee close --feature demo"
         ));
     }
 
@@ -1683,13 +1698,12 @@ use std::time::Instant;
         };
         assert_eq!(code, 0);
         let lines: Vec<&str> = text.split('\n').collect();
+        // D7: no capped cells here, so the tests door reads "nothing to
+        // prove" — no test process spawns, so there is no per-command line
+        // between the headline and the capture checklist.
+        assert_eq!(lines[0], "Tests GREEN for \"demo\" — no capped cells yet — nothing to prove");
         assert_eq!(
-            lines[0],
-            "Tests GREEN for \"demo\" — 1 command(s) passed (record: .bee/logs/test-results.json)."
-        );
-        assert!(lines[1].starts_with("✓ echo suite-green ("));
-        assert_eq!(
-            lines[2],
+            lines[1],
             "Capture (deferred, decision c8e25271): scribing clear; capture queue clear."
         );
         // D2 soft promote door: "demo" carries neither a bee.work-item
@@ -1697,24 +1711,17 @@ use std::time::Instant;
         // throws unknown_work — which degrades to ONE warning line, not a
         // refusal, and close still proceeds to its own next: line.
         assert_eq!(
-            lines[3],
+            lines[2],
             "Promote skipped for \"demo\": knowledge promote: unknown_work — no bee.work-item concept in docs/knowledge/ carries bee.id \"demo\" (D38)."
         );
         assert_eq!(
-            lines[4],
+            lines[3],
             "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
         );
-        assert_eq!(result.get("ran_tests"), Some(&json!(true)));
-        assert_eq!(
-            result.get("tests").unwrap().get("results"),
-            Some(&json!(".bee/logs/test-results.json"))
-        );
-        // The run is FRESH: the record exists and is green.
-        let record: Value = serde_json::from_str(
-            &std::fs::read_to_string(root.join(".bee/logs/test-results.json")).unwrap(),
-        )
-        .unwrap();
-        assert_eq!(record.get("green"), Some(&json!(true)));
+        assert_eq!(result.get("ran_tests"), Some(&json!(false)));
+        assert_eq!(result.get("tests"), Some(&Value::Null));
+        // No test process ever spawns any more — no record file appears.
+        assert!(!root.join(".bee/logs/test-results.json").exists());
         // A promote Thrown never writes the proposals file (D38 stays intact).
         assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
     }
@@ -1740,12 +1747,14 @@ use std::time::Instant;
         };
         assert_eq!(code, 0);
         let lines: Vec<&str> = text.split('\n').collect();
+        // D7: no per-command line between the headline and the capture
+        // checklist any more (no test process ever spawns).
         assert_eq!(
-            lines[3],
+            lines[2],
             "Promote skipped for \"demo\": no docs/knowledge/ bundle to mine here"
         );
         assert_eq!(
-            lines[4],
+            lines[3],
             "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
         );
         assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
@@ -1795,19 +1804,22 @@ use std::time::Instant;
         };
         assert_eq!(code, 0);
         let lines: Vec<&str> = text.split('\n').collect();
-        // Default archiving retires demo-1 in the same close, so its line
-        // lands ahead of the promote line — build_promotion already ran
-        // (and saw the cell) before this retirement happened.
+        // D7: demo-1 carries no trace.report at all — a legacy cap, so the
+        // tests door passes it ungated with a note; no per-command line
+        // exists any more either way (no test process spawns). Default
+        // archiving retires demo-1 in the same close, so its line lands
+        // ahead of the promote line — build_promotion already ran (and saw
+        // the cell) before this retirement happened.
         assert_eq!(
-            lines[3],
+            lines[2],
             "Retired \"demo\": 1 cell(s) moved out of the active scan (bee cells unarchive --feature demo to reverse)."
         );
         assert_eq!(
-            lines[4],
+            lines[3],
             "Promote proposed for \"demo\": 1 capped cell(s) mined, 0 area bullet(s), 0 pattern candidate(s) — see docs/history/demo/promote-proposals.md."
         );
         assert_eq!(
-            lines[5],
+            lines[4],
             "next: done — capture is recorded as pending (run bee-capturing whenever; orient keeps the reminder)."
         );
         let proposals = std::fs::read_to_string(root.join("docs/history/demo/promote-proposals.md")).unwrap();
@@ -1890,67 +1902,58 @@ use std::time::Instant;
         assert!(!root.join(".bee/capture-queue.jsonl").exists());
     }
 
+    /// D7 (docs/history/test-doctrine/CONTEXT.md): a capped cell whose
+    /// `trace.report` is present but carries no valid D8 proof string stops
+    /// close at the tests door, naming the cell — the refusal is red output
+    /// (exit 1), never silent, and close never reaches the promote door.
     #[test]
-    fn close_red_stops_at_the_tests_door_and_exits_one() {
-        let Some(shell) = posix_shell() else { return };
+    fn close_refuses_at_the_tests_door_naming_the_bad_proof_cell() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(
-            &tmp,
-            r#"{"commands":{"test":["echo boom-line; echo more 1>&2; exit 3","echo second-ok"]}}"#,
+        let root = repo(&tmp, "{}");
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"not a proof string","deviations":[]}}}"#,
         );
-        let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
-            close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+            close_handler(&root, "demo", false, None, None, &HashMap::new()).unwrap()
         else {
             panic!()
         };
         assert_eq!(code, 1);
         let lines: Vec<&str> = text.split('\n').collect();
+        assert!(
+            lines[0].starts_with(CLOSE_PROOF_DEBT_PREFIX),
+            "refusal headline must start with the pinned prefix: {}",
+            lines[0]
+        );
         assert_eq!(
             lines[0],
-            "Tests RED for \"demo\" — close stops at the tests door (record: .bee/logs/test-results.json):"
+            "Proof debt for \"demo\" — close stops at the tests door: 1 capped cell(s) carry a report with no valid proof line (demo-1)."
         );
-        assert!(lines[1].starts_with("✗ echo boom-line; echo more 1>&2; exit 3 ("));
-        assert!(lines[1].ends_with(", exit 3)"));
-        assert!(lines[2].starts_with("✓ echo second-ok ("));
-        assert_eq!(lines[3], "--- echo boom-line; echo more 1>&2; exit 3 (exit 3) ---");
-        assert_eq!(lines[4], "boom-line");
-        assert_eq!(lines[5], "more");
-        // full-failure-evidence: the refusal names the complete-output log
-        // path right after the excerpt block, shifting `next:` by one line.
-        assert_eq!(lines[6], "log: .bee/logs/test-failure-close-0.log");
-        assert_eq!(
-            lines[7],
-            "next: the red is the work — fix it (boom-line), then re-run bee close --feature demo"
-        );
-        assert!(root.join(".bee/logs/test-failure-close-0.log").exists());
-        // The record is STILL written on a red (a red is a normal result).
-        assert!(root.join(".bee/logs/test-results.json").exists());
+        assert!(lines[1].contains("re-cap"), "{}", lines[1]);
+        assert!(lines[1].contains("bee cells finish"), "{}", lines[1]);
+        assert!(lines[2].starts_with("next:"));
+        // No test process ever spawns — close never wrote a results record.
+        assert!(!root.join(".bee/logs/test-results.json").exists());
         let doors = result.get("doors").unwrap().as_array().unwrap();
         assert_eq!(doors[0].get("blocking"), Some(&json!(true)));
-        assert_eq!(
-            doors[0].get("detail"),
-            Some(&json!("the declared test run is RED (1 of 2 command(s) failed; record: .bee/logs/test-results.json)"))
-        );
-        // The report-only doors are never blocking, even beside a red.
+        // The report-only doors are never blocking, even beside a proof refusal.
         assert_eq!(doors[1].get("blocking"), Some(&json!(false)));
         assert_eq!(doors[2].get("blocking"), Some(&json!(false)));
-        // D2: the promote door sits past the tests door — a RED close never
-        // reaches it, so nothing is proposed and nothing is written.
+        // D2: the promote door sits past the tests door — a refused close
+        // never reaches it, so nothing is proposed and nothing is written.
         assert!(!lines.iter().any(|l| l.starts_with("Promote")));
         assert!(!root.join("docs/history/demo/promote-proposals.md").exists());
     }
 
-    /// test-cadence-boundary D1/D1b (decision 13ce1858): a granted worktree
-    /// for the feature — the SAME grant shape `find_granted_worktree_for_feature`
-    /// resolves for a live worktree AND one merged but kept pending-cleanup,
-    /// since `read_grants` never distinguishes them (worktree/registry.rs's
-    /// "pending cleanup" label is a display-only overlay computed from a
-    /// SEPARATE pending-cleanup queue, not a second grant flag) — means
-    /// close defers instead of re-running the declared suite a second time.
+    /// truths #1: `bee close` never spawns `commands.test` — not even when
+    /// the feature has a granted worktree and the config declares a
+    /// command. The `dp1_worktree_fixture` config below names a command
+    /// that would leave a tell-tale side effect (a results record) if it
+    /// ever ran; it never does, GREEN or not, no matter the worktree grant.
     #[test]
-    fn close_defers_the_tests_door_to_worktree_merge_when_a_granted_worktree_exists() {
-        let Some(shell) = posix_shell() else { return };
+    fn close_never_spawns_commands_test_even_with_a_granted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, _granted) = dp1_worktree_fixture(tmp.path());
         std::fs::write(
@@ -1961,30 +1964,52 @@ use std::time::Instant;
         let declared = declared_test_commands(&main).unwrap();
         assert!(declared.is_some(), "fixture must declare commands.test");
         let Out::Emit(result, text, code) =
-            close_handler(&main, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
+            close_handler(&main, "demo", false, declared, None, &HashMap::new()).unwrap()
         else {
             panic!()
         };
         assert_eq!(code, 0);
-        // No test process ran at all: the results record close.rs's own
-        // run_declared_tests writes is never created.
+        // No test process ever ran: the results record a spawn would leave
+        // behind is never created.
         assert!(!main.join(".bee/logs/test-results.json").exists());
         let doors = result.get("doors").unwrap().as_array().unwrap();
         assert_eq!(doors[0].get("door"), Some(&json!("tests")));
         assert_eq!(doors[0].get("blocking"), Some(&json!(false)));
-        let detail = doors[0].get("detail").unwrap().as_str().unwrap();
-        assert!(
-            detail.contains("tests prove at bee worktree merge"),
-            "detail: {detail}"
-        );
-        assert_eq!(doors[0].get("command"), Some(&json!("bee worktree merge")));
         assert_eq!(result.get("ran_tests"), Some(&json!(false)));
         assert_eq!(result.get("tests"), Some(&Value::Null));
+        assert!(text.starts_with("Tests GREEN for \"demo\""), "text: {text}");
+    }
+
+    /// must-have: "close on a feature whose caps all carry proof strings
+    /// proceeds" — every capped cell here carries a well-formed D8 proof
+    /// line, so the tests door reports it and never blocks.
+    #[test]
+    fn close_proceeds_when_every_capped_cell_carries_a_valid_proof_line() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, "{}");
+        w(
+            &root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched a.rs","deviations":[]}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/demo-2.json",
+            r#"{"id":"demo-2","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — touched b.rs","deviations":[]}}}"#,
+        );
+        let Out::Emit(result, text, code) =
+            close_handler(&root, "demo", false, None, None, &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 0);
         assert!(
-            text.contains("prove at bee worktree merge"),
+            text.starts_with("Tests GREEN for \"demo\" — 2 capped cell(s) all carry a proof line"),
             "text: {text}"
         );
-        assert!(text.contains("Tests for \"demo\""), "text: {text}");
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(doors[0].get("door"), Some(&json!("tests")));
+        assert_eq!(doors[0].get("blocking"), Some(&json!(false)));
     }
 
     #[test]

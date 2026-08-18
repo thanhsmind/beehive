@@ -142,18 +142,29 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(text.contains("### Standard commands (host project)"), "{text}");
         assert!(text.contains("- test: `npm test`"), "{text}");
-        assert!(text.contains("- Never build on red:"), "{text}");
-        // The line points at the LOCAL command, not at a nightly CI run —
-        // the instruction it replaced told agents to trust evidence that
-        // could predate their change by a day.
-        assert!(!text.contains("check CI instead of running anything locally"), "{text}");
+        assert!(
+            text.contains(
+                "- Proof-per-change-type: pick the proof your change needs — related tests for code, parity/pointer checks for docs — and record it in the cap proof line. CI runs the same command on every push and PR."
+            ),
+            "{text}"
+        );
+        // The mandatory pre-claim full-suite red check (dropped by D3,
+        // 58ec9664) never renders again.
+        assert!(!text.contains("- Never build on red:"), "{text}");
         // `commands.verify` is retired: recording one buys no block at all.
         write(tmp.path(), ".bee/config.json", r#"{"commands":{"verify":"npm test"}}"#);
         assert!(!render(tmp.path()).contains("### Standard commands"));
-        // The sentinel REPLACES the red paragraph with one loud line.
+        // The sentinel REPLACES the red paragraph with one loud line — and
+        // (test-doctrine D7/D8, td-1) that line still points to a required
+        // proof line, never a bare diff-backed cap.
         write(tmp.path(), ".bee/config.json", r#"{"commands":{"test":"none"}}"#);
         let text = render(tmp.path());
-        assert!(text.contains("- Test gates disabled by repo declaration (commands.test: none)"));
+        assert!(
+            text.contains(
+                "- Test gates disabled by repo declaration (commands.test: none) — every cap still records a proof line (command segment `none`, reason naming the parity/docs proof used, e.g. `none — green — docs pointer check`); recording a real commands.test re-enables CI's full-run net."
+            ),
+            "{text}"
+        );
         assert!(!text.contains("- Never build on red:"));
     }
 

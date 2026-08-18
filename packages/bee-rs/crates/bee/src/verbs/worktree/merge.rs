@@ -1,6 +1,12 @@
-// mergeFeatureWorktree and the verify child
+// mergeFeatureWorktree
 //
-// Split out of the single 4.2k-line verbs/worktree.rs. Code unchanged; only module placement and item visibility moved.
+// Split out of the single 4.2k-line verbs/worktree.rs. D7/D8
+// (docs/history/test-doctrine/CONTEXT.md, td-3): the "verify child" this
+// file used to spawn (`commands.test`, unlocked, against the
+// merged-but-uncommitted tree) is retired — `bee worktree merge` no longer
+// spawns a test command at all; `merge_stage` (phases.rs) reads the D8
+// proof lines instead, as a zero-mutation precondition BEFORE `git merge`
+// ever runs.
 #![allow(unused_imports)]
 
 use super::*;
@@ -18,15 +24,16 @@ use std::time::Instant;
 
 // ─── worktree-store.mjs mergeFeatureWorktree ──────────────────────────────
 //
-// The three-phase staged transaction, whole (see the module header for the
-// two delegation gates that keep every V8-worded arm out of reach):
-//   P1  mergeFeatureWorktreeStage   — LOCKED ('worktree-admin' on mainRoot)
-//   P2  runVerifyChild              — UNLOCKED, only when a verify command
-//                                     is configured (hardening-4c)
+// The staged transaction, whole (see the module header for the two
+// delegation gates that keep every V8-worded arm out of reach):
+//   P1  mergeFeatureWorktreeStage   — LOCKED ('worktree-admin' on mainRoot);
+//                                     also where the D7/D8 proof-check
+//                                     precondition now runs (td-3)
 //   P3  mergeFeatureWorktreeFinish  — RE-LOCKED
-// Node acquires 'worktree-admin' TWICE on every non-terminal merge (P1 then
-// P3) even when no verify runs, so this port does too — a single hold would
-// drop one `result: "acquired"` row from .bee/logs/contention.jsonl.
+// Node acquired 'worktree-admin' TWICE on every non-terminal merge (P1 then
+// P3) even when its old "P2" verify child never ran, so this port still
+// does — a single hold would drop one `result: "acquired"` row from
+// .bee/logs/contention.jsonl.
 
 /// `WorktreeMergeError` — `[CODE] message`, the only observable byte.
 pub(crate) fn refuse_merge(code: &str, message: String) -> MErr {
@@ -598,7 +605,7 @@ pub(crate) fn perform_cleanup(
     worktree_root: &Path,
     branch: &str,
     id: &str,
-    verify_skipped: bool,
+    proof_unproven: bool,
 ) -> Map<String, Value> {
     let mut out = Map::new();
     let status = match git_status_porcelain(worktree_root) {
@@ -667,10 +674,10 @@ pub(crate) fn perform_cleanup(
     out.insert("ok".into(), Value::Bool(true));
     out.insert("removed".into(), Value::Bool(true));
     out.insert("branch_deleted".into(), Value::Bool(true));
-    if verify_skipped {
+    if proof_unproven {
         out.insert(
             "warning".into(),
-            json!("verify skipped — no commands.test recorded; cleaned up unchecked."),
+            json!("proof unchecked — no capped cell for this feature recorded a valid D8 proof line; cleaned up unchecked."),
         );
     }
     out
@@ -690,7 +697,7 @@ pub(crate) fn attach_cleanup_outcome(
     branch: &str,
     id: &str,
     cleanup: bool,
-    verify_skipped: bool,
+    proof_unproven: bool,
 ) {
     if !cleanup {
         result.insert(
@@ -706,9 +713,34 @@ pub(crate) fn attach_cleanup_outcome(
             worktree_root,
             branch,
             id,
-            verify_skipped,
+            proof_unproven,
         )),
     );
+}
+
+/// D7/D8: the merge result's own `verify` field, reshaped from the retired
+/// `VerifyOutcome` (ran/status/combined, a spawned command's exit) to
+/// honestly report the D8 proof-check verdict instead — the field name
+/// stays (existing key-order tests pin it), but nothing here ever claims a
+/// test ran. `None` only when the merging feature could not even be
+/// resolved (`identity.feature` was `None`, `merge_stage`'s own
+/// zero-mutation posture for that case: nothing to check, so it never
+/// blocks either). A `blocking` verdict never reaches this — `merge_stage`
+/// already refused before `git merge` ever ran.
+pub(crate) fn proof_report_field(proof: Option<&crate::verbs::cells::ProofCheck>) -> String {
+    let Some(proof) = proof else {
+        return "unchecked (feature unresolved)".to_string();
+    };
+    if proof.proven_count == 0 && proof.legacy_count == 0 {
+        return "unchecked (no capped cells)".to_string();
+    }
+    if proof.proven_count == 0 {
+        return format!("unchecked ({} legacy cap(s), no proof line)", proof.legacy_count);
+    }
+    if proof.legacy_count > 0 {
+        return format!("proven ({} cell(s); {} legacy)", proof.proven_count, proof.legacy_count);
+    }
+    format!("proven ({} cell(s))", proof.proven_count)
 }
 
 /// wkm-1 (D1): the keep path's cross-check record. A green (or
@@ -792,13 +824,24 @@ pub(crate) fn check_merge_fence(
     None
 }
 
-// ─── the verify child (P2) ────────────────────────────────────────────────
+// ─── the companion-command shell (retired verify child, D7/D8) ────────────
+//
+// td-3 (docs/history/test-doctrine/CONTEXT.md, D7/D8): the P2 "verify
+// child" that used to spawn `commands.test` unlocked against the
+// merged-but-uncommitted tree, plus its `shell_launchable()` pre-check and
+// `VerifyOutcome`/`run_verify_child`, are RETIRED — `bee worktree merge`
+// never spawns `commands.test` itself anymore. `merge_stage` (phases.rs)
+// now reads the merging feature's D8 proof lines instead
+// (`crate::verbs::cells::feature_proof_check`), as a zero-mutation
+// precondition BEFORE `git merge` ever runs, so there is no post-merge
+// red to abort and no shell-launch race to pre-check. `shell_child` itself
+// stays: `companion.rs`'s `commands.worktree_companion_end` spawn still
+// needs it.
 
 /// Node's `spawn(command, { shell: true })` file/args, faithfully: on win32
 /// `process.env.comspec || 'cmd.exe'` with `/d /s /c "<command>"` passed
 /// VERBATIM; elsewhere `/bin/sh -c <command>`. Deliberately NOT
-/// verbs/cells.rs's `spawn_declared`, which prefers Git Bash on win32 — that
-/// is `runDeclaredTests`' shape, not `runVerifyChild`'s.
+/// verbs/cells.rs's `spawn_declared`, which prefers Git Bash on win32.
 pub(crate) fn shell_child(command: &str) -> std::process::Command {
     #[cfg(windows)]
     {
@@ -813,124 +856,5 @@ pub(crate) fn shell_child(command: &str) -> std::process::Command {
         let mut c = std::process::Command::new("/bin/sh");
         c.args(["-c", command]);
         c
-    }
-}
-
-/// The pre-check that retires blocker (b). `runVerifyChild`'s ONLY V8/libuv
-/// byte is the `error` event's message (`spawn cmd.exe ENOENT`,
-/// `spawn /bin/sh ENOENT`), concatenated into `verifyOutcome.combined` and
-/// surfaced verbatim in MERGE_VERIFY_RED's `output_tail` — a byte reached
-/// AFTER the merge is staged, where nothing can fall back. That event fires
-/// only when the SHELL ITSELF cannot be started, so probing the shell BEFORE
-/// P1 ever stages anything makes the arm unreachable: a failed probe returns
-/// None with zero mutations and zero locks taken, and a passing probe proves
-/// the real spawn will launch.
-pub(crate) fn shell_launchable() -> bool {
-    shell_child("exit 0")
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok()
-}
-
-pub(crate) struct VerifyOutcome {
-    pub(crate) ran: bool,
-    pub(crate) status: Option<i32>,
-    pub(crate) combined: String,
-}
-
-/// runVerifyChild — the async-`spawn` verify, run UNLOCKED against the
-/// merged-but-UNCOMMITTED tree, with `on_tick` firing on `tick_interval_ms`
-/// for as long as the child is still running (integration-queue's processor-
-/// lease renewal in production). A throwing tick is swallowed.
-///
-/// ONE DOCUMENTED DIVERGENCE, in the same class as verbs/state_group.rs's
-/// prune approximation: Node resolves on the child's `exit` event, so output
-/// still sitting in a pipe when the process exits can be LOST; this port joins
-/// its reader threads, so it always captures the full stream. The difference
-/// is observable only in a race Node does not reproduce run-to-run, and it can
-/// only ever ADD trailing bytes to `output_tail` — never change `status`, the
-/// red/green verdict, or any `.bee/` record.
-pub(crate) fn run_verify_child(
-    command: &str,
-    cwd: &Path,
-    on_tick: &dyn Fn(),
-    tick_interval_ms: f64,
-) -> VerifyOutcome {
-    use std::io::Read;
-    use std::sync::mpsc;
-
-    let mut child = match shell_child(command)
-        .current_dir(cwd)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-    {
-        Ok(c) => c,
-        // Unreachable after `shell_launchable` (see its doc comment); if a
-        // race gets here anyway, Node's `status: null` verdict is reproduced
-        // and the error text is Rust's — the same narrow approximation
-        // node_fs_error_message already makes elsewhere in this file.
-        Err(e) => {
-            return VerifyOutcome {
-                ran: true,
-                status: None,
-                combined: format!("{e}"),
-            }
-        }
-    };
-
-    let drain = |mut pipe: Option<std::process::ChildStdout>| {
-        let (tx, rx) = mpsc::channel::<String>();
-        let handle = std::thread::spawn(move || {
-            let mut buf = Vec::new();
-            if let Some(pipe) = pipe.as_mut() {
-                let _ = pipe.read_to_end(&mut buf);
-            }
-            let _ = tx.send(String::from_utf8_lossy(&buf).into_owned());
-        });
-        (handle, rx)
-    };
-    let (out_handle, out_rx) = drain(child.stdout.take());
-    let (err_handle, err_rx) = {
-        let mut pipe = child.stderr.take();
-        let (tx, rx) = mpsc::channel::<String>();
-        let handle = std::thread::spawn(move || {
-            let mut buf = Vec::new();
-            if let Some(pipe) = pipe.as_mut() {
-                let _ = pipe.read_to_end(&mut buf);
-            }
-            let _ = tx.send(String::from_utf8_lossy(&buf).into_owned());
-        });
-        (handle, rx)
-    };
-
-    // `setInterval(tickIntervalMs)` for as long as the child is running. The
-    // .mjs unref()s the timer so it can never keep the process alive; here the
-    // poll is inline, so there is nothing to unref.
-    let interval = std::time::Duration::from_millis(tick_interval_ms.max(1.0) as u64);
-    let mut last_tick = Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(s)) => break s.code(),
-            Ok(None) => {}
-            Err(_) => break None,
-        }
-        if last_tick.elapsed() >= interval {
-            last_tick = Instant::now();
-            on_tick();
-        }
-        std::thread::sleep(std::time::Duration::from_millis(25));
-    };
-    let stdout = out_rx.recv().unwrap_or_default();
-    let stderr = err_rx.recv().unwrap_or_default();
-    let _ = out_handle.join();
-    let _ = err_handle.join();
-    VerifyOutcome {
-        ran: true,
-        status,
-        combined: format!("{stdout}{stderr}"),
     }
 }
