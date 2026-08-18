@@ -393,7 +393,15 @@ mod tests {
         // seeded into a fresh document's body" — `--effort` and `--from`
         // are the two new spellings. `discovery list`'s `--json` reuses the
         // existing name unchanged, no count cost. Net +2: 156 -> 158.
-        const PINNED_FLAG_COUNT: usize = 158;
+        // herding-orchestration D17 (ho-10): `herding wave`/`herding
+        // occupancy` land. Checked first: `--main-root` (interlock/
+        // command-template) and `--json` (nearly every verb) are reused
+        // unchanged, no count cost. `--wave-id`, `--worker-settle-ms` and
+        // `--poll-interval-ms` name concepts no existing flag carries — a
+        // wave's own ledger-row id, and the choreography's two D9 timeouts
+        // (worker_settle/poll_interval on `WaveTimeouts`) — so all three
+        // are genuinely new. Net +3: 158 -> 161.
+        const PINNED_FLAG_COUNT: usize = 161;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

@@ -1,5 +1,5 @@
-// herding — the bee-herding cockpit's two EXECUTABLE helpers, ported off Node
-// (R6a of plans/rust-port.md).
+// herding — the bee-herding cockpit's EXECUTABLE helpers, ported off Node
+// (R6a of plans/rust-port.md), plus the D17 wave/occupancy verbs below.
 //
 //   bee herding classify-lane <PBI-ID>   <- skills/bee-herding/scripts/classify-lane.mjs
 //   bee herding interlock [--main-root P] <- skills/bee-herding/scripts/dispatch-interlock.mjs
@@ -7,7 +7,16 @@
 //   bee herding herdr-result <path>      <- bootstrap-cockpit.sh's json_result
 //   bee herding herdr-pane-id --label L  <- bootstrap-cockpit.sh's find_dispatch_pane
 //
-// The last three are the cockpit shell scripts' inline `node -e` snippets. They
+// Two more verbs (herding-orchestration D17) live beside these, in wave.rs:
+//
+//   bee herding wave      <- the bee-side entry point: turns herding.agent_command
+//                             (D14 split) into a running fleet::Wave through a real
+//                             HerdrBackend, then appends one row to the wave ledger.
+//   bee herding occupancy <- the CLI bridge to the wave ledger's read side (D10),
+//                             reachable from a markdown role for the first time.
+//
+// The next three (herdr-result, herdr-pane-id, command-template) are the cockpit
+// shell scripts' inline `node -e` snippets. They
 // are not bee state at all — they parse a config file and herdr's own JSON
 // envelopes — but they were the only remaining reason `control-loop.sh` and
 // `bootstrap-cockpit.sh` needed a Node runtime on PATH, so they move with the
@@ -41,12 +50,15 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-// The append-only wave ledger (D10). No CLI verb reads or writes it yet —
-// the entry point that drives a real wave is later phase-3 work
-// (docs/history/herding-orchestration/plan.md) — so this module is a
-// library seam only for now, exercised by its own inline tests.
-#[allow(dead_code)]
+// The append-only wave ledger (D10): one row per wave, read side (occupancy)
+// and write side (append_wave). `wave` below is the CLI verb that drives a
+// real wave and appends to it; `occupancy` is the CLI verb that reads it.
 mod wave_ledger;
+
+// `bee herding wave` (D17) and `bee herding occupancy` — the caller that
+// turns `herding.agent_command` into a running wave, and the CLI bridge to
+// the ledger's read side. See `wave.rs` for both.
+mod wave;
 
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
@@ -62,6 +74,8 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "command-template" => Some(command_template(rest)),
         "herdr-result" => Some(herdr_result(rest)),
         "herdr-pane-id" => Some(herdr_pane_id(rest)),
+        "wave" => Some(wave::wave(rest)),
+        "occupancy" => Some(wave::occupancy(rest)),
         _ => None,
     }
 }
@@ -435,7 +449,7 @@ fn interlock_object(
 /// Resolve the MAIN checkout root the same way bootstrap's §1 does: the shared
 /// .git common dir, correct whether invoked from main or a linked worktree.
 /// An explicit --main-root always wins.
-fn resolve_main_root(explicit: Option<&str>) -> Option<PathBuf> {
+pub(crate) fn resolve_main_root(explicit: Option<&str>) -> Option<PathBuf> {
     if let Some(p) = explicit {
         return Some(PathBuf::from(p));
     }
@@ -558,7 +572,7 @@ fn command_template(flags: &[&str]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn read_stdin() -> String {
+pub(crate) fn read_stdin() -> String {
     use std::io::Read;
     let mut s = String::new();
     let _ = std::io::stdin().read_to_string(&mut s);

@@ -295,12 +295,13 @@ pub(crate) fn live_worker_count(
     }
 }
 
-/// `live_worker_count` at the current wall-clock time, under
-/// `DEFAULT_STALE_AFTER_MS` on the fallback — the call role-dispatch.md's §4
-/// anomaly check makes once it reads this ledger instead of counting panes.
-/// Wiring a real `live_panes` source (herdr's own pane list) into this
-/// wrapper is the CLI verb's job (D17), not this module's; until that lands
-/// this always takes the degraded `Occupancy::Fallback` path.
+/// `live_worker_count` at the current wall-clock time, always on the
+/// degraded `Occupancy::Fallback` path (no `live_panes` argument). The D17
+/// CLI verb (`bee herding occupancy`, `super::wave::occupancy`) wires a real
+/// `live_panes` source (herdr's own pane list) itself and calls
+/// `live_worker_count` directly instead of this convenience wrapper — kept
+/// here as the fallback-only shape for a future caller with no pane-list
+/// source of its own.
 #[allow(dead_code)]
 pub(crate) fn live_worker_count_now(root: &Path) -> Occupancy {
     live_worker_count(root, None, chrono::Utc::now().timestamp_millis(), DEFAULT_STALE_AFTER_MS)
