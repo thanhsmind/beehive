@@ -27,21 +27,81 @@
   },
   "done_when": "A gate approval that cannot reach the durable record says so, in both the text and the JSON, while the success line and the write itself are untouched.",
   "notes": "Phase 2 of the plan. Disjoint from uad-1, which touches uat.rs, verbs/worktree/ and verbs/drivers/close.rs. Do not edit those here. Runs in parallel with uad-1.",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "uad-2-worker",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "bee gate says so when a lane approval cannot reach the durable workflow stamp",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-18T14:06:33.757Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
-    "claimed_at": "2026-08-18T13:56:12.774Z"
+    "claimed_at": "2026-08-18T13:56:12.774Z",
+    "report": {
+      "outcome": "bee gate now names a stranded lane approval on its own added line (byte-identical success line kept) and carries gate_durable_stamp_skipped as a typed JSON field when the target features workflow record is closed or absent.",
+      "commit": "fd6529ecd0c89b2a6fbd434e65b36dcbdff759b6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green (1945 passed; the 1 failure, verbs::drivers::close::tests::uat_door_does_not_block_once_uat_is_approved, reproduces identically with my set_gate.rs commit stashed out — pre-existing red from uad-1s in-flight, uncommitted close.rs edit, a file this cell was barred from touching) — full suite is the declared proof scope because this gate is shared by two verbs doors",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 186 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "success-line-byte-identical",
+            "status": "PASS",
+            "evidence": "The success text is built exactly as before and the new code only appends a note after it; the revision is additive with zero deletions. A test asserts the first emitted line matches the old wording verbatim and that exactly one line follows."
+          },
+          {
+            "id": "field-only-on-skipped-stamp-path",
+            "status": "PASS",
+            "evidence": "The flag is initialised false and set true only in the branch reached when no live workflow names the routed feature and the target is a lane; the JSON key is inserted only inside that branch, so it is absent rather than false otherwise. Tests cover the stranded path, a non-uat gate on the same shape, and the live-record path."
+          },
+          {
+            "id": "exit-code-zero",
+            "status": "PASS",
+            "evidence": "The success path has a single terminal emit with a literal zero exit code, unchanged, and the added block contains no return. No new thrown branch was introduced."
+          },
+          {
+            "id": "write-unchanged-no-reopen",
+            "status": "PASS",
+            "evidence": "The persist happens before the new code; the added insert mutates an already-detached clone used only for the emitted JSON. The stamping block itself is unmodified, and a test asserts the workflow record is still closed afterwards."
+          },
+          {
+            "id": "actor-and-gate-semantics-untouched",
+            "status": "PASS",
+            "evidence": "The refusal of actor auto on uat sits above the first changed hunk and is unmodified; its test passes. The revision touches one file, additively."
+          },
+          {
+            "id": "full-suite-green",
+            "status": "PASS",
+            "evidence": "The full declared suite reports 2084 passed, 11 ignored, 0 failed at HEAD. The cap's own reported single failure was an artifact of a sibling cell's in-flight edit and no longer reproduces."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T14:24:13.126Z"
+      }
+    ]
   }
 }

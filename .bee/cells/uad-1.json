@@ -23,30 +23,110 @@
     "truths": [
       "With the feature's workflow record status=closed and no live record, a lane file reading approved_gates.uat=true lets `bee worktree merge` proceed instead of refusing WORKTREE_MERGE_UAT_PENDING.",
       "The same closed-record-plus-lane-file shape passes the close-time uat door under uat_stop: \"close\".",
-      "With the record closed and no live record, EACH of these still reads unapproved and still refuses: no lane file at all; a lane file with no approved_gates key; approved_gates with no uat key; uat: false; uat present but not a boolean.",
-      "A live workflow record whose gates.uat.approved is false still refuses even when the lane file reads uat: true — the live record is consulted first and its answer stands.",
-      "Exactly one function resolves the uat approval; neither verbs/worktree/phases.rs nor verbs/drivers/close.rs keeps its own copy of the resolution.",
+      "With the record closed, no live record, and the default .bee/state.json NOT approving this feature, each of these still reads unapproved and still refuses: no lane file at all; a lane file with no approved_gates key; approved_gates with no uat key; uat: false; uat present but not a boolean. (Amended from the frozen plan per decision uat-approval-reaches-the-door D1: spread_gates stamps uat:false onto every merged record, so a lane record silent on uat is indistinguishable from one saying false, and the two fallback sources are read as an OR rather than a strict cascade. The default-state clause is what that OR makes explicit.)",
+      "A live workflow record whose gates.uat.approved is false still refuses even when the lane file reads uat: true — the live record short-circuits and its answer stands.",
+      "The set of inputs the resolver approves is exactly the pre-change set plus a literal true at the lane record's approved_gates.uat — no input returns approved without an owner approval naming that same feature.",
+      "Exactly one function resolves the uat approval for the merge door and the close door; neither verbs/worktree/phases.rs nor verbs/drivers/close.rs keeps its own copy of the resolution.",
       "Every existing merge-side and close-side uat test passes UNMODIFIED, including the lane-classification exemptions and the full uat_stop placement matrix.",
       "The refusal text, uat_gate_applies_to_lane, GATE_NAMES, and --actor auto's refusal on uat are unchanged."
     ]
   },
   "done_when": "One resolver in uat.rs serves both doors, a closed-record approval reaches whichever door is armed, every negative case still fails closed, and the whole existing uat suite passes unmodified.",
   "notes": "Phase 1 of the plan. Disjoint from uad-2, which touches only verbs/state_group/. Do not edit verbs/state_group/** here.",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "uad-1-worker",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "One uat resolver in uat.rs serves both doors, with the lane record as a second source",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/uat.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "SHIPPED SHAPE DIFFERS FROM THE FROZEN PLAN, ratified by decision uat-approval-reaches-the-door D1 (8ca2378f). The plan's Approach step 3 named a strict cascade — live record, else lane record, else default state. The shipped resolver in uat.rs is live record, else (lane OR default). The cascade is unimplementable as written: spread_gates stamps uat:false onto every merged record and read_lane_display returns that merged shape, so a lane record silent on uat is byte-identical at the decision point to one saying false; a presence-based cascade would read every silent lane record as a veto and would have broken the pre-existing passing test uat_door_does_not_block_once_uat_is_approved.",
+      "WHAT THE OR GIVES UP, stated so it is not discovered later: an explicit lane-side false cannot veto a stale default-state true for the same feature, so a revocation after an earlier --no-lane approval leaves the door open. Equally true before this change, so not a regression — filed as its own backlog row rather than folded in here.",
+      "Cell truth 3 amended to name the default-state clause the OR makes explicit, and a truth added stating the approved-input set is exactly the pre-change set plus a literal true at the lane record. The original cap recorded trace.deviations as empty; this re-cap is a record repair with no code change, and the commit is unchanged.",
+      "An independent judge verified the security property separately: the set of inputs the resolver approves is the pre-change set plus a literal true at the lane record's approved_gates.uat, written only by bee gate, which still refuses --actor auto for uat. No input approves without an owner approval naming that same feature."
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-18T14:23:30.041Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
-    "claimed_at": "2026-08-18T13:56:12.765Z"
+    "claimed_at": "2026-08-18T14:23:30.018Z",
+    "report": {
+      "outcome": "One uat resolver in uat.rs serves both doors, with the lane record as a second source",
+      "commit": "71ef5359db1de0850d19ae50a9f9f6c44537aa28",
+      "files": [
+        "packages/bee-rs/crates/bee/src/uat.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green, 2084 passed, 11 ignored, 0 failed — full suite, because this changes the resolution of a human acceptance gate that two verbs block on; the 48 uat tests include every pre-existing one unmodified plus the new negative matrix and the precedence case",
+      "deviations": [
+        "SHIPPED SHAPE DIFFERS FROM THE FROZEN PLAN, ratified by decision uat-approval-reaches-the-door D1. The plan's Approach step 3 named a strict cascade — live record, else lane record, else default state. The shipped resolver is live record, else (lane OR default). The cascade is unimplementable as written: spread_gates stamps uat:false onto every merged record and read_lane_display returns that merged shape, so a lane record silent on uat is byte-identical at the decision point to one saying false; a presence-based cascade would read every silent lane record as a veto and would have broken the pre-existing passing test uat_door_does_not_block_once_uat_is_approved.",
+        "WHAT THE OR GIVES UP, stated so it is not discovered later: an explicit lane-side false cannot veto a stale default-state true for the same feature, so a revocation after an earlier --no-lane approval leaves the door open. Equally true before this change, so not a regression — filed as its own backlog row rather than folded in here.",
+        "Cell truth 3 amended to name the default-state clause the OR makes explicit. The original cap recorded trace.deviations as empty; this re-cap is a record repair with no code change, and the commit is unchanged."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "verify_command": null,
+    "verified_at": null,
+    "blocked_reason": null,
+    "dropped_reason": null,
+    "reopened_at": "2026-08-18T14:23:30.012Z",
+    "reopened_reason": "Re-cap to land the deviation text in trace.deviations, the field knowledge promote and drivers prepare actually read; the previous re-cap put it in trace.report.deviations, which nothing downstream consumes. No code change, commit unchanged.",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "security-property-no-approval-without-an-owner",
+            "status": "PASS",
+            "evidence": "Independently verified by a prior judge pass that constructed the negative inputs and traced them: the set of inputs the resolver approves is the pre-change set plus a literal true at the lane record's approved_gates.uat, written only by the gate command, which still refuses actor auto for uat. Foreign-feature lane files are rejected by the reader's own feature re-check, traversal shapes return none, and every non-boolean or missing shape resolves false. No input approves without an owner approval naming that same feature."
+          },
+          {
+            "id": "live-record-short-circuit",
+            "status": "PASS",
+            "evidence": "The live branch returns early, so neither fallback is consulted when a live record exists. A test asserts a live record saying false refuses while the lane file says true."
+          },
+          {
+            "id": "existing-tests-unmodified",
+            "status": "PASS",
+            "evidence": "The revision's test file change is purely additive with zero deletions; the deletions elsewhere are the two duplicated resolver bodies. The full uat set passes, including every pre-existing case and the whole placement matrix."
+          },
+          {
+            "id": "one-resolver-serves-both-doors",
+            "status": "PASS",
+            "evidence": "Both the merge-side precheck and the close-side door call the shared resolver; neither module keeps a copy. A third reader in the staging verb answers a different question and is filed as its own backlog row."
+          },
+          {
+            "id": "deviation-recorded-in-the-field-that-is-read",
+            "status": "PASS",
+            "evidence": "Repaired exactly as the prior judge's own remedy named: the four deviation lines were re-capped through the deviations file flag and now sit at trace.deviations, the field the promote miner and the timeline builder read, rather than at trace.report.deviations, which nothing downstream consumes. Verified by reading the cell record after the re-cap: four entries present. The commit is unchanged; this was a record repair with no code change."
+          },
+          {
+            "id": "decision-and-amended-truths-are-honest",
+            "status": "PASS",
+            "evidence": "The decision states the shipped shape, the reason the cascade is unimplementable, and the cost it accepts, and the prior judge confirmed the reason is factually true against the gate-defaulting code. Amended truth 3 was re-derived against the resolver and matches shipped behavior with no remaining input where the code approves while a truth demands refusal. The frozen plan was left unmodified: the decision, not an edit, carries the amendment."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T14:24:13.129Z"
+      }
+    ]
   }
 }

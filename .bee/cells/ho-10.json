@@ -40,12 +40,12 @@
       "Do not use bee cells cap --override-judge; if finish refuses on a judge verdict, return BLOCKED with your commit hash."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "w-ho-10s",
-    "outcome": "Added bee herding wave (D17 HerdrBackend caller) and bee herding occupancy (D10 ledger read bridge), both CLI-reachable and registry-declared",
+    "outcome": "Added bee herding wave and bee herding occupancy: the config-driven entry point that resolves herding.agent_command per D14 and appends one ledger row, and the CLI bridge that exposes occupancy with its live-versus-fallback distinction intact",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/herding.rs",
       "packages/bee-rs/crates/bee/src/herding/wave.rs",
@@ -55,7 +55,7 @@
     ],
     "deviations": [],
     "friction": null,
-    "capped_at": "2026-08-18T13:15:44.113Z",
+    "capped_at": "2026-08-18T14:12:41.924Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
@@ -63,8 +63,8 @@
     "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
     "claimed_at": "2026-08-18T13:55:02.690Z",
     "report": {
-      "outcome": "Added bee herding wave (D17 HerdrBackend caller) and bee herding occupancy (D10 ledger read bridge), both CLI-reachable and registry-declared",
-      "commit": "3fb2987d",
+      "outcome": "bee herding wave (D17: the config-driven entry point resolving herding.agent_command per D14, constructing the herdr backend, running the choreography and appending one ledger row) and bee herding occupancy (the CLI bridge exposing the ledger read side with its live-versus-fallback distinction preserved in both json and plain output)",
+      "commit": "ece03cde",
       "files": [
         "packages/bee-rs/crates/bee/src/herding.rs",
         "packages/bee-rs/crates/bee/src/herding/wave.rs",
@@ -72,14 +72,15 @@
         "packages/bee-rs/crates/bee/src/catalog.rs",
         "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
       ],
-      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — 2124 passed, 11 ignored, 0 failed — full workspace suite including the new herding::wave unit tests and the registry_dispatch governance tests",
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — 2127 passed, 11 ignored; plus three independent judge passes running mutation matrices, the last confirming every data-carrying hop from config resolution to the spawn argv is pinned",
       "deviations": [
-        "Also edited packages/bee-rs/crates/bee/src/generated/registry_payload.json (outside the cell's declared files list) and bumped catalog.rs's PINNED_FLAG_COUNT 158->161: required to register the two new verbs in the command registry so the pre-existing registry_dispatch.rs governance test (every_namespace_the_dispatcher_serves_is_declared_in_the_registry) stays green — reserved the path before writing, no conflict."
+        "Three passes. Pass 1 shipped both verbs correctly but left the backend construction untested: mutating the call site to discard the D14-resolved pair left the whole workspace green.",
+        "Pass 2 threaded construction through a closure seam; a judge showed the join had MOVED rather than closed, since a closure literal at a call site is unreachable by a test that supplies its own closure.",
+        "Pass 3 hoisted it to a named function reachable from both the verb and a test. A judge then assessed the one residual hop and ruled the recursion terminated: that hop carries no data, only a name, so the accidental-defect shape is structurally impossible and closing it would recreate the same problem one level higher.",
+        "The registry payload and the pinned flag count were edited outside the declared file list to register the two verbs; a judge verified by independent count that the constant was re-pinned to a true value moved by three genuinely new flags, not bumped to silence a governance test."
       ]
     },
-    "warnings": [
-      "advisory: this cap's commit changes 762 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
-    ],
+    "warnings": [],
     "tests": "boundary",
     "semantic_judge": [
       {
@@ -134,6 +135,44 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-08-18T13:36:32.238Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "J1",
+            "status": "PASS",
+            "evidence": "On a scratchpad copy with a baseline of 2127 passed and 11 ignored, mutating the named production constructor so it ignores both arguments and constructs with constants fails exactly one test, the new one: real_backend_ctor_hands_kind_and_args_straight_through_to_construction, panicking that the constructed backend must carry the kind it was handed and printing the constructed value showing the substituted constant. The suite reports 1903 passed and 1 failed. The body is pinned."
+          },
+          {
+            "id": "J2",
+            "status": "PASS",
+            "evidence": "DEMONSTRATION: authoring a decoy function of identical signature that discards both arguments, and swapping the verb to pass it instead, leaves the full suite at 2127 passed with nothing failing — so the hop is untested, as expected. JUDGEMENT, made rather than deferred: this is a DELIBERATE SUBSTITUTION, not a plausible accidental defect, for reasons taken from the code. First, the verb passes NO DATA at this hop — it hands over a bare identifier, while the resolved pair is produced and forwarded inside the helper, which the join test pins with an assertion closure against the expected kind and arguments. The canonical accident named in the check, a parameter silently dropped, is structurally impossible here because there is no parameter at this hop to drop. Second, breaking it requires replacing one named function with a DIFFERENT named function of identical signature that also discards both arguments, and no such second function exists in the module — the decoy had to be authored to open the hole at all. Third, the compiler gives a partial net: with the substitution in place the build warns that the real constructor is never used. Fourth, every data-carrying hop below is already pinned end to end — config resolution has its own tests, the callback receives the resolved pair, the named constructor forwards it, and the constructor's fields reach the spawn argv. Only the function IDENTITY is unpinned. COST OF CLOSING: an end-to-end drive of the verb means a CLI entry point that reads flags, working directory and config from disk and then spawns real processes; observing the kind from there needs either a PATH-shimmed fake binary with argv capture, which the file's own stated rule forbids as a live dependency, or a new injection parameter on the verb — which merely creates the SAME residual hop one level higher, and that is precisely how the previous instance was created. Disproportionate. RECURSION TERMINATED: the loop stops here because the remaining hop carries no data, only a name, and every data-carrying hop below it is pinned."
+          },
+          {
+            "id": "J3",
+            "status": "PASS",
+            "evidence": "Three corrected comments were quoted and each checked against the code. The first now says the verb is the only caller that passes a real backend into a wave run and that construction itself is the named function which a test also calls directly — true, since a search finds one production caller and one production construction site in the crate, with the other run-and-record callers all inside the test module using the fake backend. The second describes the same call site the verb uses, passing the named function rather than a closure literal, and names both the assertion-closure test and the direct-call test — both exist as described, and the earlier only-claim is gone. The third states that passing the name rather than a closure literal written at the call site is what lets a test call the same construction directly — true against the code and the J1 result. NIT, not a failure and not among the three corrected: one line inside the join test still describes the verb as passing the raw constructor rather than the named wrapper; approximate, not a false only-claim."
+          },
+          {
+            "id": "J4",
+            "status": "PASS",
+            "evidence": "Three earlier mutations re-applied together and all still die. Dropping the config-key name from the typed error's rendering fails an_unrecognised_kind_is_a_typed_error_naming_the_config_key. Appending the ledger row a second time fails both a_wave_run_appends_exactly_one_ledger_row_through_a_fake_backend and a_wave_that_never_resolves_still_appends_one_row_with_no_succeeded_outcome, each on a count of two against one. Rendering the json fallback as live fails the json distinction test, the plain-line test and the crossing test. The combined run reports 1898 passed and 6 failed. All mutations were reverted, the file compares identical to the worktree, and the final suite returns to 2127 passed with 11 ignored."
+          },
+          {
+            "id": "J5",
+            "status": "PASS",
+            "evidence": "The diff touches one file with 64 insertions and 13 deletions. The removed lines are exactly thirteen: twelve comment lines carrying the three superseded only-claims, plus the single production line holding the old closure literal. Zero assertions, zero test attributes and zero test functions were removed, and no ignore attribute was added — the ignored count stays at eleven. The test count rises by exactly the one added test. Nothing deleted, nothing loosened."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T14:12:41.892Z"
       }
     ],
     "reopened_for_rework": {

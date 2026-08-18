@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"uat-approval-reaches-the-door\" started at phase \"exploring\" (lane).",
   "next_action": "Invoke bee-swarming.",
   "created_at": "2026-08-18T13:09:50.347Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
