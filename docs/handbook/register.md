@@ -123,6 +123,7 @@ Per-repo configuration.
 | `dogfood_repos` | the foreign repos `bee feedback` collects a digest from |
 | `worktree_cleanup_on_merge` | boolean, absent means KEEP (worktree-keep-on-merge D1) — `worktree merge` leaves the merged worktree in place unless this is explicitly `true` or the one-merge `--cleanup` flag is passed; `--no-cleanup` wins over both and always keeps |
 | `uat_before_merge` | boolean, absent means ON — whether `worktree merge` enforces the `uat` gate for standard/high-risk features; explicit `false` turns the door off repo-wide, a non-boolean value refuses `WORKTREE_MERGE_UAT_CONFIG_INVALID` rather than guessing (uat-gate-before-merge D1) |
+| `staging_before_merge` | boolean, absent means ON — whether the repo uses the staging mixing ground at all; explicit `false` makes `bee staging add`/`bee staging rebuild` refuse `STAGING_DISABLED`, so the repo runs feature worktree -> `uat` gate -> main with no staging step; a non-boolean value refuses `STAGING_CONFIG_INVALID` rather than guessing. Independent of `uat_before_merge` — the `uat` gate itself is unaffected |
 | `doc_viewer` | `{base_url, project}` — an opt-in URL prefix. When set, the session preamble and the compaction capsule give doc links as this URL plus the repo-relative path, instead of the bare path |
 
 Read by hive (bypass level), planning (test scoping), swarming (model tiers),

@@ -31,7 +31,9 @@ features sit together for the user to test at one place, rebuilt from main plus 
 feature still awaiting approval. The `uat` gate is the door between staging and main —
 a feature only lands on main once its uat gate is approved. See
 `docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md` (staging-lane
-D0/D0a) for the mechanics.
+D0/D0a) for the mechanics. A repo that sets `"staging_before_merge": false` skips
+staging entirely — `bee staging add`/`rebuild` refuse `STAGING_DISABLED`, and the
+feature worktree itself stands in for the mixing ground; the `uat` gate is unaffected.
 
 ## First-Skill Routing
 
