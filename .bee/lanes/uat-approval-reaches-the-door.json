@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"uat-approval-reaches-the-door\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at fd735e9; capture what settled, then bee close --feature uat-approval-reaches-the-door.",
   "created_at": "2026-08-18T13:09:50.347Z",
   "run_state": "done",
   "waiting_on": null,
