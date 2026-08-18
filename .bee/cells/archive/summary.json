@@ -573,5 +573,10 @@
     "capped": 4,
     "dropped": 0,
     "archived_at": "2026-08-18T11:32:29.686Z"
+  },
+  "uat-gate-before-merge": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-18T11:34:37.429Z"
   }
 }
