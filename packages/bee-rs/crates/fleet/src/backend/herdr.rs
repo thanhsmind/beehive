@@ -137,9 +137,21 @@ pub struct HerdrBackend {
 impl HerdrBackend {
     /// The production backend: `herdr` resolves off the host's own
     /// `PATH`, long replies spill to the OS temp directory, and every
-    /// spawned agent is started with `agent_kind`/`agent_args` — already
-    /// resolved by the caller (see `HerdrBackend::agent_kind`'s own
-    /// docs).
+    /// spawned agent is started with `agent_kind`/`agent_args`.
+    ///
+    /// Both parameters are CALLER-RESOLVED, never derived here: `fleet`
+    /// must never read bee's own configuration (D2), so this constructor
+    /// never parses `herding.agent_command` itself (`agent_kind`'s field
+    /// doc has the private-field detail this paragraph does not repeat).
+    /// The caller owns that split — herding-orchestration D14's mapping,
+    /// today the bee-side `bee herding wave` verb (D17, not yet built):
+    /// `herding.agent_command` token 0 becomes `agent_kind`, fed to
+    /// herdr's `agent start --kind`; its remaining tokens become
+    /// `agent_args`, appended after a literal `--`. When token 0 names no
+    /// kind herdr recognises, raising D14's typed error naming the
+    /// `herding.agent_command` key is that caller's obligation, not this
+    /// constructor's — `new` takes `agent_kind`/`agent_args` on faith and
+    /// validates neither.
     pub fn new(agent_kind: impl Into<String>, agent_args: Vec<String>) -> Self {
         Self {
             path_prepend: Vec::new(),
@@ -234,6 +246,17 @@ impl HerdrBackend {
             .collect();
         self.spill_dir.join(format!("bee-fleet-herdr-{safe}.reply"))
     }
+
+    /// The one place `self.agent_kind`/`self.agent_args` reach
+    /// `decide_start`, isolated from `run_herdr` so this exact call-site
+    /// wiring — in particular, that `self.agent_args` (not an empty
+    /// slice) is what's passed through to the spawn argv — is provable
+    /// without a process, on every platform including Windows. `start`
+    /// supplies `body` (the `agent list` read it already fetched) and
+    /// hands the decision to `apply_start_decision`.
+    fn decide_start_for(&self, body: &Value, worker_name: &str) -> StartDecision {
+        decide_start(body, worker_name, &self.agent_kind, &self.agent_args, START_TIMEOUT_MS)
+    }
 }
 
 /// What can go wrong calling `herdr` itself — distinct from what `herdr`
@@ -296,6 +319,25 @@ fn find_agent_entry<'a>(body: &'a Value, id: &str) -> Option<&'a Value> {
             entry.get("name").and_then(Value::as_str) == Some(id)
                 || entry.get("pane_id").and_then(Value::as_str) == Some(id)
         })
+}
+
+/// The interpretation step behind `canonical_id` (herding-orchestration
+/// D15 — `fb8a8628`): given an already-fetched `agent list` body and a
+/// friendly `name`, returns the pane id that addresses the same target —
+/// so a wave referencing one worker by both its name and its pane id
+/// collapses onto one canonical id, per Ordering Invariant 8. Any failure
+/// to resolve — `name` absent from `body`, no `pane_id` field on the
+/// matched entry, or a non-string `pane_id` — resolves `name` to itself:
+/// the safe no-collapse default `canonical_id`'s own docs promise, never
+/// a guess. Pure: takes an already-decoded `Value`, spawns nothing, so
+/// this exact resolution (the judge-found gap: a name silently returned
+/// unchanged instead of resolving to its pane id) is provable on every
+/// platform including Windows.
+fn resolve_canonical_id(body: &Value, name: &str) -> String {
+    find_agent_entry(body, name)
+        .and_then(|entry| entry.get("pane_id").and_then(Value::as_str))
+        .map(str::to_string)
+        .unwrap_or_else(|| name.to_string())
 }
 
 /// The one place herdr's five status strings become `WorkerStatus`.
@@ -532,6 +574,21 @@ fn decide_start(
     StartDecision::Spawn(argv)
 }
 
+/// Maps a `StartDecision` onto `start`'s own `Result` shape — isolated
+/// from `run_herdr` so this mapping is provable without a process, on
+/// every platform including Windows. In particular, this is where the
+/// `Refuse` arm becomes an ERROR: `start` must propagate it as a failure,
+/// never treat it as a silent success. `Ok(None)` means "nothing to
+/// spawn" (`AlreadyRunning`); `Ok(Some(argv))` carries the argv `start`
+/// still owns actually running.
+fn apply_start_decision(decision: StartDecision) -> Result<Option<Vec<String>>, String> {
+    match decision {
+        StartDecision::AlreadyRunning => Ok(None),
+        StartDecision::Refuse(message) => Err(message),
+        StartDecision::Spawn(argv) => Ok(Some(argv)),
+    }
+}
+
 impl WorkerBackend for HerdrBackend {
     fn canonical_id(&self, name: &str) -> String {
         // Already herdr's own canonical addressing form — no lookup
@@ -541,17 +598,15 @@ impl WorkerBackend for HerdrBackend {
             return name.to_string();
         }
         // `name` is a friendly agent name; resolve it to the pane id that
-        // addresses the exact same target, so a wave referencing one
-        // worker by both its name and its pane id collapses to one
-        // (herding-orchestration D15 — `fb8a8628`). Any failure of this
-        // lookup — herdr unreachable, an unparseable body, the name
-        // simply absent from the list — resolves `name` to itself: the
-        // safe no-collapse default the trait documents, never a guess.
+        // addresses the exact same target (herding-orchestration D15 —
+        // `fb8a8628`). The interpretation itself is `resolve_canonical_id`
+        // (pure, tested in this module's `mod tests`); this glue only
+        // supplies the `agent list` body and folds a lookup failure —
+        // herdr unreachable, an unparseable body — into the same
+        // no-collapse default that function already applies when `name`
+        // is simply absent from the list.
         match self.run_herdr(&["agent", "list"]) {
-            Ok(body) => find_agent_entry(&body, name)
-                .and_then(|entry| entry.get("pane_id").and_then(Value::as_str))
-                .map(str::to_string)
-                .unwrap_or_else(|| name.to_string()),
+            Ok(body) => resolve_canonical_id(&body, name),
             Err(_) => name.to_string(),
         }
     }
@@ -570,10 +625,10 @@ impl WorkerBackend for HerdrBackend {
         // focus <own-tab>`) — this module does not do that on the
         // caller's behalf, because it has no way to know which tab was
         // the caller's own.
-        match decide_start(&body, &worker.name, &self.agent_kind, &self.agent_args, START_TIMEOUT_MS) {
-            StartDecision::AlreadyRunning => Ok(()),
-            StartDecision::Refuse(message) => Err(anyhow::anyhow!(message)),
-            StartDecision::Spawn(argv) => {
+        match apply_start_decision(self.decide_start_for(&body, &worker.name)) {
+            Ok(None) => Ok(()),
+            Err(message) => Err(anyhow::anyhow!(message)),
+            Ok(Some(argv)) => {
                 let slug = argv[2].clone();
                 let args: Vec<&str> = argv.iter().map(String::as_str).collect();
                 self.run_herdr(&args).map(|_| ()).map_err(|e| {
@@ -678,6 +733,38 @@ mod tests {
 
         let malformed: Value = serde_json::json!({"type": "ok"});
         assert!(find_agent_entry(&malformed, "reviewer-1").is_none());
+    }
+
+    // ── resolve_canonical_id: herding-orchestration D15 (`fb8a8628`) ────
+
+    #[test]
+    fn resolve_canonical_id_resolves_a_friendly_name_to_its_pane_id() {
+        let body: Value = serde_json::json!({
+            "type": "ok",
+            "result": {
+                "agents": [
+                    {"name": "reviewer-1", "pane_id": "w4:pB", "agent_status": "idle"}
+                ]
+            }
+        });
+        assert_eq!(
+            resolve_canonical_id(&body, "reviewer-1"),
+            "w4:pB",
+            "a friendly name must resolve onto its pane id, not be returned unchanged \
+             (herding-orchestration D15's own defect)"
+        );
+    }
+
+    #[test]
+    fn resolve_canonical_id_returns_the_name_unchanged_when_it_is_not_found() {
+        let body: Value = serde_json::json!({"type": "ok", "result": {"agents": []}});
+        assert_eq!(resolve_canonical_id(&body, "ghost"), "ghost");
+    }
+
+    #[test]
+    fn resolve_canonical_id_returns_the_name_unchanged_on_a_malformed_body() {
+        let malformed: Value = serde_json::json!({"type": "ok"});
+        assert_eq!(resolve_canonical_id(&malformed, "reviewer-1"), "reviewer-1");
     }
 
     // ── interpret_status_lookup: judge mutations H1, H2, H3, H6 ─────────
@@ -856,6 +943,74 @@ mod tests {
                     !argv.iter().any(|a| a == "--"),
                     "an empty agent_args must not add a trailing --; got {argv:?}"
                 );
+            }
+            other => panic!("a pane id with no agent yet must spawn; got {other:?}"),
+        }
+    }
+
+    // ── apply_start_decision: the Refuse arm must be an error ───────────
+
+    #[test]
+    fn apply_start_decision_maps_refuse_to_an_error() {
+        let decision = StartDecision::Refuse("cannot start it".to_string());
+        assert_eq!(
+            apply_start_decision(decision),
+            Err("cannot start it".to_string()),
+            "start's Refuse arm must propagate as an error, never a silent success"
+        );
+    }
+
+    #[test]
+    fn apply_start_decision_maps_already_running_and_spawn_to_ok() {
+        assert_eq!(apply_start_decision(StartDecision::AlreadyRunning), Ok(None));
+        let argv = vec!["agent".to_string(), "start".to_string()];
+        assert_eq!(apply_start_decision(StartDecision::Spawn(argv.clone())), Ok(Some(argv)));
+    }
+
+    // ── decide_start_for: proves self.agent_kind/self.agent_args, not an
+    //    empty substitute, reach the call site ───────────────────────────
+
+    #[test]
+    fn decide_start_for_passes_the_backend_s_own_agent_args_through_to_the_spawn_argv() {
+        let backend = HerdrBackend::with_test_seams(
+            Vec::new(),
+            std::env::temp_dir(),
+            "claude",
+            vec!["--model".to_string(), "opus".to_string()],
+        );
+        let body: Value = serde_json::json!({"type":"ok","result":{"agents":[]}});
+        match backend.decide_start_for(&body, "w4:pB") {
+            StartDecision::Spawn(argv) => {
+                let idx = argv
+                    .iter()
+                    .position(|a| a == "--")
+                    .expect("the backend's own agent_args must be appended after a literal --");
+                assert_eq!(
+                    &argv[idx + 1..],
+                    &["--model", "opus"],
+                    "self.agent_args (not an empty slice) must reach the spawn argv; got {argv:?}"
+                );
+            }
+            other => panic!("a pane id with no agent yet must spawn; got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decide_start_for_passes_the_backend_s_own_agent_kind_through() {
+        let backend = HerdrBackend::with_test_seams(
+            Vec::new(),
+            std::env::temp_dir(),
+            "codex",
+            Vec::new(),
+        );
+        let body: Value = serde_json::json!({"type":"ok","result":{"agents":[]}});
+        match backend.decide_start_for(&body, "w4:pB") {
+            StartDecision::Spawn(argv) => {
+                let idx = argv
+                    .iter()
+                    .position(|a| a == "--kind")
+                    .expect("--kind must be present in the spawn argv");
+                assert_eq!(argv[idx + 1], "codex");
             }
             other => panic!("a pane id with no agent yet must spawn; got {other:?}"),
         }
