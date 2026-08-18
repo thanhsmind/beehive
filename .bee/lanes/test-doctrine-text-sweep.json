@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "test-doctrine-text-sweep",
   "mode": null,
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"test-doctrine-text-sweep\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 4198030; capture what settled, then bee close --feature test-doctrine-text-sweep.",
+  "next_action": "none",
   "created_at": "2026-08-18T11:53:37.785Z",
   "run_state": null,
   "waiting_on": null,
@@ -25,5 +25,14 @@
     "rationale": null,
     "updated_at": "2026-08-18T11:53:37.805Z",
     "feature": "test-doctrine-text-sweep"
+  },
+  "last_scribing_run": {
+    "feature": "test-doctrine-text-sweep",
+    "date": "2026-08-18",
+    "at": "2026-08-18T13:01:03.665Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "none"
   }
 }

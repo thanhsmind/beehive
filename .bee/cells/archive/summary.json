@@ -583,5 +583,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-18T11:47:15.064Z"
+  },
+  "test-doctrine-text-sweep": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-18T13:01:26.982Z"
   }
 }
