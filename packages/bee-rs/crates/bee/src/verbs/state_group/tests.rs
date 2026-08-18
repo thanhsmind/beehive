@@ -694,13 +694,46 @@ use std::time::Instant;
         }
     }
 
+    // R3 (mcl-1) DELIBERATE INVERSION: this test used to pin that a bound
+    // lane naming no LIVE workflow always refuses, closed or altogether
+    // absent alike. `state waiting-on clear`'s own help text already
+    // promises "a no-op, never a refusal" once the workflow is closed — a
+    // closed workflow still HAS a record, it is simply not live — so the
+    // fixture below now gives "ghost-lane" a CLOSED workflow (not an absent
+    // one) and the CLEAR-verb resolver must fall back to it rather than
+    // refuse. The zero-record case (still refused, narrowed wording) is
+    // its own test right below.
     #[test]
-    fn waiting_on_target_refuses_a_bound_lane_naming_no_live_workflow() {
+    fn waiting_on_target_clear_on_a_bound_lane_falls_back_to_its_closed_workflow() {
         let tmp = tmp_root();
         let sid = fixture_session_id(tmp.path());
         write_session(tmp.path(), &sid, Some("ghost-lane"));
-        // A different feature's live workflow exists, but not "ghost-lane" —
-        // the resolver never falls back to it.
+        let created = ok(create_workflow(
+            tmp.path(),
+            NewWorkflow {
+                status: Some("closed"),
+                ..NewWorkflow::for_feature("ghost-lane")
+            },
+        ));
+        let (id, feature) = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on clear",
+            None,
+            false,
+            None,
+        ))
+        .expect("clear falls back to the closed workflow rather than refusing");
+        assert_eq!(feature, "ghost-lane");
+        assert_eq!(id, wf_id(&created));
+    }
+
+    #[test]
+    fn waiting_on_target_clear_still_refuses_a_bound_lane_with_no_workflow_record_at_all() {
+        let tmp = tmp_root();
+        let sid = fixture_session_id(tmp.path());
+        write_session(tmp.path(), &sid, Some("ghost-lane"));
+        // A different feature's live workflow exists, but not "ghost-lane"
+        // at all (live or closed) — the resolver never falls back to it.
         ok(create_workflow(tmp.path(), NewWorkflow::for_feature("some-other-f")));
         match resolve_waiting_on_target(
             tmp.path(),
@@ -712,6 +745,81 @@ use std::time::Instant;
             Err(Err2::Msg(m)) => {
                 assert!(m.starts_with("state waiting-on clear: refused"), "{m}");
                 assert!(m.contains("bound to lane \"ghost-lane\""), "{m}");
+            }
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn waiting_on_target_clear_still_refuses_an_explicit_lane_with_no_workflow_record_at_all() {
+        // R3's narrowed clear-verb wording: the "and status !== closed"
+        // clause is dropped because this refusal now fires only when NO
+        // record at all (live or closed) names the feature.
+        let tmp = tmp_root();
+        ok(create_workflow(tmp.path(), NewWorkflow::for_feature("some-other-f")));
+        match resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on clear",
+            Some("ghost-feature"),
+            false,
+            None,
+        ) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.starts_with("state waiting-on clear: refused"), "{m}");
+                assert!(m.contains("--lane \"ghost-feature\" names no live workflow"), "{m}");
+                assert!(!m.contains("status !== closed"), "{m}");
+                assert!(m.contains(".bee/runtime/workflows"), "{m}");
+            }
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn waiting_on_target_clear_falls_back_to_an_explicit_lanes_closed_workflow() {
+        let tmp = tmp_root();
+        let created = ok(create_workflow(
+            tmp.path(),
+            NewWorkflow {
+                status: Some("closed"),
+                ..NewWorkflow::for_feature("closed-f")
+            },
+        ));
+        let (id, feature) = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on clear",
+            Some("closed-f"),
+            false,
+            None,
+        ))
+        .expect("clear falls back to the closed workflow rather than refusing");
+        assert_eq!(feature, "closed-f");
+        assert_eq!(id, wf_id(&created));
+    }
+
+    #[test]
+    fn waiting_on_target_set_never_widens_to_a_closed_workflow() {
+        // The SET verb's own refusal on the identical fixture the clear-verb
+        // fallback test above resolves successfully against — byte-identical
+        // wording, still refuses, you cannot mark a closed lane as waiting.
+        let tmp = tmp_root();
+        ok(create_workflow(
+            tmp.path(),
+            NewWorkflow {
+                status: Some("closed"),
+                ..NewWorkflow::for_feature("closed-f")
+            },
+        ));
+        match resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on set",
+            Some("closed-f"),
+            false,
+            None,
+        ) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.starts_with("state waiting-on set: refused"), "{m}");
+                assert!(m.contains("--lane \"closed-f\" names no live workflow"), "{m}");
+                assert!(m.contains("status !== closed"), "{m}");
             }
             other => panic!("expected a typed refusal, got {other:?}"),
         }
@@ -772,6 +880,130 @@ use std::time::Instant;
 
         let projected = ok(read_state_strict(tmp.path()));
         assert_eq!(projected.get("waiting_on"), Some(&Value::Null));
+    }
+
+    // ── awaiting-human: R4 (mcl-1), the lane pair-clear ─────────────────────
+    //
+    // `clear_lane_waiting_on_pair` is the lane-file counterpart of decision
+    // f9fd9d46's default-record fix — called only when
+    // `rebuild_lane_projection_reporting` just answered non-authoritative
+    // (R3's own closed-workflow fallback), where the live-only projection
+    // sync is correctly a no-op and would otherwise leave the lane file's
+    // `waiting_on`+`run_state` pair exactly as stuck as before this feature.
+
+    #[test]
+    fn clear_lane_waiting_on_pair_nulls_the_stuck_pair() {
+        let tmp = tmp_root();
+        write_lane_file(
+            tmp.path(),
+            "closed-f",
+            r#"{"feature":"closed-f","phase":"idle","waiting_on":{"kind":"gate","subject":"uat","asked_at":"2026-01-01T00:00:00.000Z","session":"sess-1"},"run_state":"awaiting-approval"}"#,
+        );
+        ok(clear_lane_waiting_on_pair(tmp.path(), "closed-f"));
+        let lane = ok(read_lane_strict(tmp.path(), "closed-f")).unwrap();
+        assert_eq!(lane.get("waiting_on"), Some(&Value::Null));
+        assert_eq!(lane.get("run_state"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn clear_lane_waiting_on_pair_nulls_run_state_even_when_waiting_on_already_reads_null() {
+        // The live-repro shape this feature closes: a mark that already
+        // cleared by some other path, but the frozen projection left
+        // `run_state: awaiting-approval` behind (plan.md's "Live repro").
+        let tmp = tmp_root();
+        write_lane_file(
+            tmp.path(),
+            "closed-f",
+            r#"{"feature":"closed-f","phase":"idle","waiting_on":null,"run_state":"awaiting-approval"}"#,
+        );
+        ok(clear_lane_waiting_on_pair(tmp.path(), "closed-f"));
+        let lane = ok(read_lane_strict(tmp.path(), "closed-f")).unwrap();
+        assert_eq!(lane.get("run_state"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn clear_lane_waiting_on_pair_never_clobbers_a_record_derived_run_state() {
+        let tmp = tmp_root();
+        for value in ["done", "shaping", "running", "blocked"] {
+            write_lane_file(
+                tmp.path(),
+                "f1",
+                &format!(
+                    r#"{{"feature":"f1","phase":"idle","waiting_on":{{"kind":"gate","subject":"uat","asked_at":"2026-01-01T00:00:00.000Z","session":"sess-1"}},"run_state":"{value}"}}"#
+                ),
+            );
+            ok(clear_lane_waiting_on_pair(tmp.path(), "f1"));
+            let lane = ok(read_lane_strict(tmp.path(), "f1")).unwrap();
+            assert_eq!(lane.get("waiting_on"), Some(&Value::Null), "waiting_on for run_state {value}");
+            assert_eq!(
+                lane.get("run_state"),
+                Some(&json!(value)),
+                "run_state {value} must survive the clear untouched"
+            );
+        }
+    }
+
+    #[test]
+    fn clear_lane_waiting_on_pair_is_a_no_op_with_no_lane_file() {
+        let tmp = tmp_root();
+        ok(clear_lane_waiting_on_pair(tmp.path(), "no-such-lane"));
+        assert!(!lanes_dir(tmp.path()).join("no-such-lane.json").exists());
+    }
+
+    #[test]
+    fn clear_lane_waiting_on_pair_is_a_no_op_when_already_clear() {
+        let tmp = tmp_root();
+        write_lane_file(
+            tmp.path(),
+            "f1",
+            r#"{"feature":"f1","phase":"idle","waiting_on":null,"run_state":"done"}"#,
+        );
+        ok(clear_lane_waiting_on_pair(tmp.path(), "f1"));
+        let lane = ok(read_lane_strict(tmp.path(), "f1")).unwrap();
+        assert_eq!(lane.get("run_state"), Some(&json!("done")));
+    }
+
+    /// The full R3+R4 flow `run_waiting_on_clear` drives: a closed workflow
+    /// resolves (R3), `clear_workflow_waiting_on` touches only the workflow
+    /// record, `rebuild_lane_projection_reporting` is correctly non-
+    /// authoritative (not live), and the pair-clear directly repairs the
+    /// stuck lane copy (R4) — the exact stuck shape plan.md's "Live repro"
+    /// names: phase idle, waiting_on already null, run_state stuck at
+    /// "awaiting-approval".
+    #[test]
+    fn waiting_on_clear_on_a_closed_workflow_repairs_the_stuck_lane_pair() {
+        let tmp = tmp_root();
+        let created = ok(create_workflow(
+            tmp.path(),
+            NewWorkflow {
+                status: Some("closed"),
+                ..NewWorkflow::for_feature("closed-f")
+            },
+        ));
+        write_lane_file(
+            tmp.path(),
+            "closed-f",
+            r#"{"feature":"closed-f","phase":"idle","waiting_on":null,"run_state":"awaiting-approval"}"#,
+        );
+
+        let (id, feature) = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on clear",
+            Some("closed-f"),
+            false,
+            None,
+        ))
+        .expect("clear falls back to the closed workflow rather than refusing");
+        assert_eq!(id, wf_id(&created));
+
+        ok(clear_workflow_waiting_on(tmp.path(), &id));
+        let proj = ok(rebuild_lane_projection_reporting(tmp.path(), &feature));
+        assert!(!proj.authoritative, "a closed workflow never re-syncs the lane projection");
+        ok(clear_lane_waiting_on_pair(tmp.path(), &feature));
+
+        let lane = ok(read_lane_strict(tmp.path(), &feature)).unwrap();
+        assert_eq!(lane.get("waiting_on"), Some(&Value::Null));
+        assert_eq!(lane.get("run_state"), Some(&Value::Null));
     }
 
     // ── worker add / prune ────────────────────────────────────────────────

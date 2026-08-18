@@ -6,7 +6,7 @@
 use super::*;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_roots_core, Resolution};
-use crate::verbs::reservations::{js_numberify, js_trim, now_iso, parse_flags, FlagV, Flags};
+use crate::verbs::reservations::{js_numberify, js_trim, now_iso, parse_flags, Err2, FlagV, Flags};
 use crate::verbs::workspace_store as ws;
 use crate::verbs::{emit_no_root_error, record_timing};
 use crate::{jsjson, lock};
@@ -41,6 +41,11 @@ pub(crate) struct Staged {
     /// `VerifyOutcome` from a test run that no longer happens. `None` only
     /// when the worktree's feature could not be resolved.
     pub(crate) proof: Option<crate::verbs::cells::ProofCheck>,
+    /// mcl-2: `identity.feature`, carried the same way `proof` is, so P3 can
+    /// close the merged feature's lane without re-resolving the identity a
+    /// second time. `None` only when the worktree's feature could not be
+    /// resolved — matches `proof`'s own `None` condition exactly.
+    pub(crate) feature: Option<String>,
 }
 
 pub(crate) enum StageOut {
@@ -436,7 +441,42 @@ pub(crate) fn merge_stage(
         companion,
         bookkeeping_commit,
         proof,
+        feature: identity.feature.clone(),
     })))
+}
+
+/// mcl-2 (R1): the merge-time half of "a shipped feature stops reading
+/// waiting on you". Clears the merging feature's stranded `waiting_on` +
+/// `run_state` pair through mcl-1's shared helper (`clear_lane_waiting_on_pair`,
+/// `state_group/waiting_on.rs` — read, never re-implemented here) and
+/// rewrites the lane's `next_action` to name the close road. Returns the
+/// written `next_action` text, or an empty string when the feature has no
+/// lane file at all (nothing to rewrite — not an error). Every failure
+/// surfaces as `Err` so the one caller can warn and keep the merge green;
+/// this function itself never decides warn-vs-fail.
+fn close_the_lane_on_merge(main_root: &Path, feature: &str, merge_commit_sha: &str) -> Result<String, String> {
+    crate::verbs::state_group::clear_lane_waiting_on_pair(main_root, feature)
+        .map_err(lane_write_err_text)?;
+    let Some(mut lane) =
+        crate::verbs::workflow_store::read_lane_strict(main_root, feature).map_err(lane_write_err_text)?
+    else {
+        return Ok(String::new());
+    };
+    let short_sha = &merge_commit_sha[..merge_commit_sha.len().min(7)];
+    let next_action = format!(
+        "Merged into main at {short_sha}; capture what settled, then bee close --feature {feature}."
+    );
+    lane.insert("next_action".into(), json!(next_action.clone()));
+    crate::verbs::workflow_store::write_lane(main_root, &lane).map_err(lane_write_err_text)?;
+    Ok(next_action)
+}
+
+/// `Err2`'s two shapes, rendered as one warn-line message — `close_the_lane_on_merge`'s only consumer.
+fn lane_write_err_text(e: Err2) -> String {
+    match e {
+        Err2::Msg(m) => m,
+        Err2::Ex => "an unrecognized lane-record shape".to_string(),
+    }
 }
 
 /// P3: the two-line fence, then commit + post-commit guard + cleanup.
@@ -465,6 +505,7 @@ pub(crate) fn merge_finish(
         companion,
         bookkeeping_commit,
         proof,
+        feature,
     } = state;
 
     let mut committed = false;
@@ -539,6 +580,32 @@ pub(crate) fn merge_finish(
         // too.
         if let Some(bookkeeping_commit) = bookkeeping_commit {
             result.insert("bookkeeping_commit".into(), bookkeeping_commit.clone());
+        }
+
+        // mcl-2 (R1): this is a real, green merge (the ALREADY_UP_TO_DATE
+        // arm returns long before `Staged` is ever built, so every path
+        // that reaches here actually merged something) — the event that
+        // answers the merged feature's stranded uat mark. Clear the pair
+        // mcl-1's shared helper owns and rewrite the lane's `next_action` to
+        // name the close road. BEST-EFFORT and post-commit, same
+        // warn-never-block contract the bookkeeping auto-commit above keeps
+        // (and `commit_close_bookkeeping` keeps for `bee close`): a failure
+        // here warns on its own line and never turns this green merge red.
+        // NEVER a phase write — a merge can land one slice of many, so
+        // `phase` stays close's word alone (mcl-3).
+        if let Some(feature) = feature.as_deref() {
+            match close_the_lane_on_merge(main_root, feature, &merge_commit_sha) {
+                Ok(next_action) if !next_action.is_empty() => {
+                    result.insert("next_action".into(), json!(next_action));
+                }
+                Ok(_) => {} // no lane file for this feature: nothing to rewrite
+                Err(reason) => {
+                    eprintln!(
+                        "bee worktree merge: could not close {feature}'s lane after this green merge ({reason}) — run \"bee close --feature {feature}\" when ready; its waiting_on/next_action may be stale until then."
+                    );
+                    result.insert("lane_close_warning".into(), json!(reason));
+                }
+            }
         }
 
         // Post-commit guard (D2-REVISED).

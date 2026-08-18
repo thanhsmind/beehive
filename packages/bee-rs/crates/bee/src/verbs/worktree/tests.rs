@@ -3470,6 +3470,128 @@ use std::time::Instant;
         );
     }
 
+    // ── mcl-2 (R1): the merge-time lane close ───────────────────────────────
+    // A green, real merge answers the merged feature's stranded uat mark —
+    // clears its lane `waiting_on`/`run_state` pair and rewrites
+    // `next_action` to name the close road, never touching `phase`.
+
+    /// A lane record with a live `waiting_on` gate mark and a stuck
+    /// `run_state: awaiting-approval`, exactly the shape `bee state gate`
+    /// leaves behind — the same raw-JSON shape
+    /// `clear_lane_waiting_on_pair_nulls_the_stuck_pair` (state_group/tests.rs)
+    /// already pins for the shared helper this cell calls.
+    fn write_stranded_lane(main: &Path, feature: &str, phase: &str) {
+        let dir = main.join(".bee").join("lanes");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(format!("{feature}.json")),
+            format!(
+                r#"{{"feature":"{feature}","phase":"{phase}","waiting_on":{{"kind":"gate","subject":"uat","asked_at":"2026-01-01T00:00:00.000Z","session":"sess-1"}},"run_state":"awaiting-approval"}}"#
+            ),
+        )
+        .unwrap();
+    }
+
+    /// Happy path: a green real merge of a feature whose lane holds a live
+    /// uat mark leaves that lane with `waiting_on` null, `run_state` no
+    /// longer "awaiting-approval", `phase` byte-identical, and a
+    /// `next_action` naming `bee close --feature <f>` — the same line the
+    /// merge's own text output carries.
+    #[test]
+    fn a_green_merge_clears_the_merged_features_stranded_lane_mark_and_names_close() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_stranded_lane(&main, "demo", "scribing");
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+
+        let lane = crate::verbs::workflow_store::read_lane_strict(&main, "demo")
+            .unwrap()
+            .expect("the lane record must still exist after a green merge");
+        assert_eq!(lane.get("waiting_on"), Some(&Value::Null), "{lane:?}");
+        assert_eq!(lane.get("run_state"), Some(&Value::Null), "{lane:?}");
+        assert_eq!(
+            lane.get("phase"),
+            Some(&json!("scribing")),
+            "merge must never write phase — a slice-1-of-3 merge would lie about a finished feature: {lane:?}"
+        );
+        let next_action = lane.get("next_action").and_then(Value::as_str).unwrap_or_default();
+        assert!(next_action.contains("bee close --feature demo"), "{next_action}");
+        assert!(next_action.starts_with("Merged into main at"), "{next_action}");
+
+        assert_eq!(answer.result["next_action"], json!(next_action));
+        let lines = merge_text_lines(&created.id, &main, &answer);
+        assert!(
+            lines.iter().any(|l| l.contains("bee close --feature demo")),
+            "merge text must name the same close road: {lines:?}"
+        );
+    }
+
+    /// Edge: an already-up-to-date merge writes no lane change at all — the
+    /// `ALREADY_UP_TO_DATE` arm returns before `merge_finish`'s commit
+    /// sequence (and this cell's lane write inside it) is ever reached.
+    #[test]
+    fn already_up_to_date_merge_leaves_the_lane_record_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        write_stranded_lane(&main, "demo", "scribing");
+        let lane_path = main.join(".bee").join("lanes").join("demo.json");
+        let before = std::fs::read(&lane_path).unwrap();
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["code"], json!("ALREADY_UP_TO_DATE"));
+
+        let after = std::fs::read(&lane_path).unwrap();
+        assert_eq!(before, after, "an up-to-date merge must not touch the lane record at all");
+    }
+
+    /// Error: a lane write that cannot complete (here, a lane record too
+    /// corrupt for `read_lane_strict` to parse) warns and the merge still
+    /// returns green — same warn-never-block contract the bookkeeping
+    /// auto-commit above keeps.
+    #[test]
+    fn a_failing_lane_write_only_warns_and_the_merge_still_completes_green() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        let dir = main.join(".bee").join("lanes");
+        std::fs::create_dir_all(&dir).unwrap();
+        let lane_path = dir.join("demo.json");
+        std::fs::write(&lane_path, "not json at all").unwrap();
+        let before = std::fs::read(&lane_path).unwrap();
+
+        let answer = merge_feature_worktree(&main, &created.id, false, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a corrupt lane must warn, not refuse the merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        let warning = answer.result["lane_close_warning"].as_str().unwrap_or_default();
+        assert!(warning.contains("corrupt"), "{warning}");
+        assert!(!answer.result.contains_key("next_action"), "{:?}", answer.result);
+
+        let after = std::fs::read(&lane_path).unwrap();
+        assert_eq!(before, after, "a lane write that could not even be read must leave the file untouched");
+    }
+
     /// Truth 2a: the same standard-lane feature merges once its uat gate is
     /// approved on the live workflow record.
     #[test]
