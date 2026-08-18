@@ -387,6 +387,34 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
         assert!(waiting_on_is_live(Some(&mark)));
     }
 
+    /// auto-wait-mark D3: `turn-end` is the third legal `kind` — the Stop
+    /// hook's ordinary-turn-close value, not just gate/question. Proves
+    /// `build_waiting_on` accepts it AND that it round-trips through a real
+    /// workflow record (`set_workflow_waiting_on` write, `read_workflow_
+    /// record` read), the same shape already proven for `question` above.
+    #[test]
+    fn build_waiting_on_accepts_turn_end_and_it_round_trips_through_the_record() {
+        let mark = ok(build_waiting_on("turn-end", "say go and I will do it", "sess-1"));
+        assert_eq!(mark["kind"], json!("turn-end"));
+        assert_eq!(mark["subject"], json!("say go and I will do it"));
+        assert!(waiting_on_is_live(Some(&mark)));
+
+        let tmp = tmp_root();
+        let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
+        let id = record.get("id").unwrap().as_str().unwrap().to_string();
+        let marked = ok(set_workflow_waiting_on(tmp.path(), &id, "turn-end", "say go and I will do it", "sess-1"));
+        assert_eq!(
+            marked.get("waiting_on").and_then(|v| v.get("kind")),
+            Some(&json!("turn-end"))
+        );
+        let on_disk = ok(read_workflow_record(tmp.path(), &id));
+        assert_eq!(
+            on_disk.get("waiting_on").and_then(|v| v.get("kind")),
+            Some(&json!("turn-end"))
+        );
+        assert!(waiting_on_is_live(on_disk.get("waiting_on")));
+    }
+
     #[test]
     fn waiting_on_is_live_only_for_a_well_shaped_mark() {
         assert!(!waiting_on_is_live(None));

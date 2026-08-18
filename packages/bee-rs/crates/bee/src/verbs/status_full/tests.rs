@@ -3783,6 +3783,34 @@ use crate::version::BEE_VERSION;
         assert_eq!(vget(where_, "waiting_on").and_then(|w| vget(w, "subject")), Some(&json!("D1 or D2?")));
     }
 
+    /// auto-wait-mark D4: a `turn-end` mark is NOT a blocker — it is the
+    /// Stop hook's every-turn mark, not a real block. It still rides
+    /// `where.waiting_on` (display, unchanged), the same additive shape the
+    /// `question` case above proves for `blockers`.
+    #[test]
+    fn orient_omits_a_turn_end_wait_from_blockers_but_still_displays_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write(root, ".bee/onboarding.json", &format!(r#"{{"bee_version":"{BEE_VERSION}"}}"#));
+        write(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"shaping","waiting_on":{"kind":"turn-end","subject":"say go and I will do it","asked_at":"2026-08-18T00:00:00.000Z","session":"s-1"}}"#,
+        );
+        let packet = build_orient(&mut ctx_for(root)).unwrap();
+        let work = packet.get("work").unwrap();
+        let blockers = vget(work, "blockers").and_then(Value::as_array).unwrap();
+        assert!(
+            !blockers.iter().any(|b| b.as_str().unwrap_or("").contains("say go and I will do it")),
+            "{blockers:?}"
+        );
+        let where_ = packet.get("where").unwrap();
+        assert_eq!(
+            vget(where_, "waiting_on").and_then(|w| vget(w, "subject")),
+            Some(&json!("say go and I will do it"))
+        );
+    }
+
     /// No live wait: `bee orient`'s blocker list stays exactly what it was
     /// before this feature — no phantom line, no phantom `where.waiting_on`
     /// object (null, matching the JSON contract's own null-not-absent

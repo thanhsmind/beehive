@@ -397,13 +397,20 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     // stopped on a person rather than running. Named after the handoff
     // blocker just above (a handoff is also a wait on the human, just a
     // different shape of one) and before the report-only lines below.
+    // auto-wait-mark D4: a `turn-end` mark is excluded — it is the Stop
+    // hook's every-turn mark (D1), not a real block, so it must not read as
+    // one here. `gate` and `question` still push a blocker line unchanged;
+    // display surfaces (`where.waiting_on` below) keep showing all three
+    // kinds regardless.
     if opt_truthy(status.get("waiting_on")) {
         let w = status.get("waiting_on").unwrap();
-        blockers.push(json!(format!(
-            "awaiting human — {}: {}",
-            tpl(vget(w, "kind")),
-            tpl(vget(w, "subject")),
-        )));
+        if vget(w, "kind").and_then(Value::as_str) != Some("turn-end") {
+            blockers.push(json!(format!(
+                "awaiting human — {}: {}",
+                tpl(vget(w, "kind")),
+                tpl(vget(w, "subject")),
+            )));
+        }
     }
     let sd = status.get("scribing_debt");
     if opt_truthy(sd) && vget(sd.unwrap(), "count").and_then(|v| v.as_f64()).unwrap_or(0.0) > 0.0 {
