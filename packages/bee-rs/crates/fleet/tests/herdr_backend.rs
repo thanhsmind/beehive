@@ -130,7 +130,15 @@ impl Stub {
     }
 
     fn backend(&self) -> HerdrBackend {
-        HerdrBackend::with_test_seams(vec![self.dir.clone()], self.spill.clone())
+        self.backend_with_kind("claude")
+    }
+
+    /// Same as `backend`, but with an explicit agent kind — used by the
+    /// test proving the kind reaching `agent start --kind` is
+    /// `HerdrBackend`'s own construction parameter (D14), never a
+    /// hardcoded literal.
+    fn backend_with_kind(&self, kind: &str) -> HerdrBackend {
+        HerdrBackend::with_test_seams(vec![self.dir.clone()], self.spill.clone(), kind, Vec::new())
     }
 
     /// Every invocation, reconstructed as its args space-joined (matching
@@ -458,7 +466,7 @@ fn start_refuses_a_never_seen_non_pane_shaped_name_rather_than_fabricate_a_spawn
 }
 
 #[test]
-fn start_spawns_a_fresh_agent_into_an_existing_pane_id_with_no_agent_yet() {
+fn start_spawns_a_fresh_agent_using_the_constructed_kind_never_a_hardcoded_literal() {
     let stub = Stub::new();
     stub.queue_response("agent list", 0, OK_AGENT_LIST_EMPTY, None); // not yet running
     stub.queue_response(
@@ -467,7 +475,10 @@ fn start_spawns_a_fresh_agent_into_an_existing_pane_id_with_no_agent_yet() {
         r#"{"type":"ok","result":{"agent":{"pane_id":"w4:pB","name":"w4-pB","agent_status":"idle"}}}"#,
         None,
     );
-    let backend = stub.backend();
+    // A kind other than the module's old hardcoded "claude" literal —
+    // proves the value reaching `--kind` is HerdrBackend's own
+    // construction parameter (D14), not a compiled-in constant.
+    let backend = stub.backend_with_kind("codex");
 
     backend.start(&WorkerSpec::new("w4:pB", "task")).unwrap();
 
@@ -475,8 +486,8 @@ fn start_spawns_a_fresh_agent_into_an_existing_pane_id_with_no_agent_yet() {
     assert_eq!(invocations.len(), 2, "got {invocations:?}");
     assert!(invocations[0].starts_with("agent list"), "got {:?}", invocations[0]);
     assert!(
-        invocations[1].starts_with("agent start w4-pB --kind claude --pane w4:pB"),
-        "got {:?}",
+        invocations[1].starts_with("agent start w4-pB --kind codex --pane w4:pB"),
+        "the constructed kind must reach agent start's argv, never a hardcoded literal; got {:?}",
         invocations[1]
     );
 }
