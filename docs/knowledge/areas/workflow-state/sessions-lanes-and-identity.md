@@ -430,18 +430,20 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   many slices and cells; one executing pass is a small part. Mid-feature,
   settlements are captured as same-turn one-line stubs (unchanged duty); the
   spec merge, knowledge sync, and learnings run exactly once, when the
-  feature's work fully completes — after the close-time test run (since
-  2026-07-31 / 412e9b3a that run is `bee test` over the declared
-  `commands.test`, not the retired feature-verify record). One boundary,
+  feature's work fully completes — after the close-time proof check (since
+  2026-08-18 / 1f534837 the close checks each cap's recorded proof line
+  and runs no suite itself). One boundary,
   three events: tests, sync, compound (feature-close-events fc-1, user
   philosophy decision 2026-07-28).
 - R82 — *(Superseded 2026-07-31 — decision 412e9b3a,
   docs/specs/test-simple.md: the pending-cap path, the feature-verify
-  record, and both debt markers are deleted. Live rule since 2026-08-17
-  (decision 13ce1858): tests prove at the boundary — `bee close` runs
-  `commands.test` when the feature has no worktree, `bee worktree merge`
-  runs it when it does; a cap is commit-only proof and records
-  `tests: boundary`. Kept below as the historical record.)*
+  record, and both debt markers are deleted. Live rule since 2026-08-18
+  (decisions 58ec9664/1f534837, refining 13ce1858): the agent owns test
+  scope — every cap records a proof line
+  `<command> — <result> — <scope reason>`, `bee close` and `bee worktree
+  merge` check that record and run nothing themselves, and CI runs the
+  full declared command on every push. Kept below as the historical
+  record.)*
   **The delegator verifies, at the shippable unit.** Workers implement,
   commit, and report — they run no suites; a cell caps through the sanctioned
   pending path with no per-cell proof. MAIN produces all evidence: red proof

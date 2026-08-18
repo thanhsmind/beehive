@@ -198,18 +198,21 @@ One unit of executable work — the atom the swarm dispatches. One file per cell
 | `status` | `open` · `claimed` · `capped` · `blocked` · `dropped` |
 | `trace` | populated on finish: `{worker, outcome, files_changed[], deviations[], friction, behavior_change, capped_at, warnings[], tests, results, ran_at, attempts[], budget_resets[], claim_session, claimed_at, verify_passed, verify_output, verification_evidence, report}` — `report` is the worker's structured Result, written by `cells finish --report` |
 
-`trace.tests` is `"boundary"` on a cap in a declared-test repo — commit-only
-proof; the test suite itself proves later, at `bee close`/`bee worktree
-merge` — or `"undeclared"` in a repo with no `commands.test`. `"green"` is a
-historical value from before test-cadence-boundary D1 (decision `13ce1858`):
+`trace.tests` is a proof string `<command> — <result> — <scope reason>` on a
+cap (decision `1f534837`): the writer picks the proof its change type needs,
+runs it, and a red result refuses the cap; `bee close`/`bee worktree merge`
+check the recorded proof and run nothing themselves. `"boundary"` and
+`"undeclared"` are historical values from the boundary-run era
+(test-cadence-boundary D1, decision `13ce1858`), and `"green"` is a
+historical value from before that:
 older cells capped while `bee finish` still ran the suite and recorded
 `trace.results`/`trace.ran_at`; those fields are read for historical cells but
 no longer written at cap. There is no proof-tier field, no
 `red_failure_evidence`, and no evidence-tier ladder: those were deleted with
 the proof-economy machinery. A historical `tests-red` entry in `trace.attempts`
-marks a cell capped under the old per-cap run; the per-cap red-refuses-cap
-path is gone — a red now refuses at the `bee close`/`bee worktree merge`
-boundary instead.
+marks a cell capped under the old per-cap run; since decision `1f534837` a
+red proof refuses the cap itself, and `bee close`/`bee worktree merge` only
+check the recorded proof.
 
 Created by planning (`bee cells add --stdin`, whole slice in one call), mutated by
 swarming/executing (`cells claim` / `bee finish` / `cells block` / `cells reopen` / …).

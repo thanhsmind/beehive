@@ -66,6 +66,11 @@ A port is only as good as the instrument that says it is faithful. This is the h
   cells wcpf-1..4, issue #94, 2026-08-16; decision logged same day). The same sweep settled two
   siblings: errno-class checks widened to cover Windows' error codes, and path fixtures
   canonicalized so a symlinked temp dir compares equal to its resolved form.
+- **Windows test hermeticity is pinned in fixtures, never assumed.** Test fixtures pin
+  `core.autocrlf` off — Windows runners default it on, silently breaking exact-LF
+  assertions — and path assertions compare canonical identity, never string spelling,
+  so an 8.3 short temp path and its long form compare equal
+  (windows-ci-test-fix, 2026-08-17).
 
 ## Edge Cases Settled
 

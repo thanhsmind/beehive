@@ -231,9 +231,11 @@ silent.
 - R94 — *(Superseded 2026-07-31 — decision 412e9b3a,
   docs/specs/test-simple.md: the trailing-test-unit-per-slice mandate is
   deleted. Live rule: each unit's writer owns its tests TDD-style as part
-  of the unit's own work; since 2026-08-17 (decision 13ce1858) the declared
-  suite proves at the boundary (`bee close` without a worktree, `bee
-  worktree merge` with one), never at the cap.
+  of the unit's own work; since 2026-08-18 (decisions 58ec9664/1f534837,
+  refining 13ce1858) the writer also owns the proof scope: each cap
+  records a proof line `<command> — <result> — <scope reason>` chosen per
+  change type, `bee close`/`bee worktree merge` check that record and run
+  nothing themselves, and CI runs the full declared command on every push.
   The coverage-judgement-first discipline itself survives as craft in
   `.bee/expertise/tests.md`. Kept below as the historical record.)*
   **Coverage judgement before coverage authoring.** The trailing test

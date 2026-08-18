@@ -298,6 +298,15 @@ half is fresh. Evidence: trace `.bee/cells/multisession-native-23.json`, commit
 06cd209; advisor digest
 `docs/history/multisession-native/reports/advisor-digest-slice5.md`.
 
+**A main-cwd-pinned subagent cannot execute worktree writes (2026-08-17,
+bee-hive-prompt-polish).** The write guard denies cross-worktree targets by
+session containment, and EnterWorktree refuses from the repo root — so a
+subagent dispatched while the session's OS cwd is main can never land edits
+in a feature worktree. The fallback that worked: produce a validated patch
+plus a brief under `docs/history/<feature>/`, pre-create the worktree, and
+defer apply-and-land to a session opened at the worktree path. Dispatch
+execution workers only after the session itself has entered the worktree.
+
 ## Where it lives (reading map)
 
 - Resolver: `resolveContext`/`resolveRootsCore`/`resolveRoots` (compat
