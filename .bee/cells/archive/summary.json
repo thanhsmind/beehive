@@ -533,5 +533,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-18T00:05:49.883Z"
+  },
+  "test-doctrine": {
+    "capped": 5,
+    "dropped": 0,
+    "archived_at": "2026-08-18T04:36:45.880Z"
   }
 }

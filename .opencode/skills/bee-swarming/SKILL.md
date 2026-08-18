@@ -60,10 +60,11 @@ From two cells up, state the one-line concurrency plan before dispatching.
    `bee cells judge-record` verdict or `bee close` refuses (`judge-debt`) —
    run the slice judge before you reach for close.
 6. Slice clean: `bee close --feature <slug> --dry-run` names every
-   remaining door with the command that settles it; tests prove at the
-   boundary: the final slice runs `bee close --feature <slug>`, which
-   runs `commands.test` when the feature has no worktree; `bee worktree
-   merge` runs it when it does. Doors are never waived.
+   remaining door with the command that settles it; the final slice runs
+   `bee close --feature <slug>`, which checks every capped cell's recorded
+   proof line — same check `bee worktree merge` runs when the feature has
+   a worktree. Doors check proof, they never run tests themselves; a cell
+   with no valid proof is the remaining door. Doors are never waived.
 
 **`[BLOCKED]` rescue ladder:** (1) re-dispatch the same cell with the
 missing context; (2) next model tier up — the ceiling is this session, so
@@ -117,13 +118,16 @@ outputs — when a verb refuses, its message names the fix.
 4. Commit once: subject describes the change in imperative mood; the cell
    id rides the last line of the body.
 5. `bee finish --id <cell> --outcome "<one line>" --files <a,b>
-   --report '<json>'` — cap and release in one verb, `--report` carrying
-   the same Result form you return (`{outcome, commit, files, tests,
-   deviations}`), which finish validates key-for-key onto the trace.
-   Tests prove at the boundary: `bee close` runs `commands.test` when the
-   feature has no worktree; `bee worktree merge` runs it when it does. A
-   cap is commit-only proof and records `tests: boundary`. CI runs the
-   same command on every push.
+   --report '<json>'` — cap and release in one verb, `--report` REQUIRED
+   and carrying the same Result form you return (`{outcome, commit,
+   files, tests, deviations}`), which finish validates key-for-key onto
+   the trace. `tests` is a proof line `<command> — <result> — <scope
+   reason>`: pick the proof your change type needs (code → related tests
+   green; docs → parity/pointer checks; behavior → judge verdict), run it
+   yourself, and record it — a `red` result refuses the cap. `bee close`
+   and `bee worktree merge` check that recorded proof at the boundary;
+   they run nothing themselves. CI runs the full declared command on
+   every push — the one deterministic net.
 6. Return exactly one token, first thing in your final message, and the
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your

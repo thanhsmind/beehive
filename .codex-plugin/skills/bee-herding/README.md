@@ -14,7 +14,7 @@ cockpit ─┬─ chat      (yours)
 runtime ─── up to 4 working agents, one per backlog item, each in its own worktree
 ```
 
-Every interval, **dispatch** looks for a free runtime slot and a ready backlog item, and starts an agent on it — but only if you have turned dispatch on (see step 3 below), and only in an isolated worktree that never touches main. **Merge is not a loop.** It is a gesture you run by hand when you want finished worktrees retired: it merges them into main, runs verify, and closes their panes. That asymmetry is deliberate — merge is the one action that lands work in main, so a human is present whenever it happens.
+Every interval, **dispatch** looks for a free runtime slot and a ready backlog item, and starts an agent on it — but only if you have turned dispatch on (see step 3 below), and only in an isolated worktree that never touches main. **Merge is not a loop.** It is a gesture you run by hand when you want finished worktrees retired: it checks that every capped cell already carries a recorded proof line, merges them into main, and closes their panes. That asymmetry is deliberate — merge is the one action that lands work in main, so a human is present whenever it happens.
 
 ## Before you turn it on
 
@@ -75,7 +75,7 @@ bash .claude/skills/bee-herding/scripts/control-loop.sh \
     --role merge --main-root <main-root> --timeout 5400 --once
 ```
 
-It makes one pass: merges each finished worktree, runs verify, closes the merged pane, and stops cold — no retry — on a red verify. Then it exits; nothing merges again until you run it again. The highest-authority action in the system never happens while you are away.
+It makes one pass: checks each finished worktree's capped cells for a recorded proof line, merges it, closes the merged pane, and stops cold — no retry — on a conflict or missing proof. Then it exits; nothing merges again until you run it again. The highest-authority action in the system never happens while you are away.
 
 **Or invoke the skill directly.** Invoke `bee-herding` with no `--role` given — the agent resolves `<main-root>` and the workspace id itself, runs the same two pre-flight checks above (main clean, `gate_bypass_level` full/total), checks for an already-running cockpit, and then runs `bootstrap-cockpit.sh` for you, passing through `--dry-run`/`--no-start` if you ask for either. The manual invocation above remains useful for scripting or testing.
 
@@ -104,13 +104,15 @@ Removing the stop file does not restart the loop: it only lets it be started aga
 
 ## When something happens
 
-**`merge: <slug> came back MERGE_VERIFY_RED` — needs you.** The merge was abandoned before any commit existed; main is untouched. It is either a real semantic conflict or a flaky test. Investigate, then clear the marker so a later merge gesture will consider that worktree again:
+**`merge: <slug> came back MERGE_CONFLICT` — needs you.** The merge was abandoned before any commit existed; main is untouched. It is a real semantic conflict. Investigate, then clear the marker so a later merge gesture will consider that worktree again:
 
 ```
 rm <main-root>/.bee/tmp/bee-herding.red.<slug>
 ```
 
-Until you remove it, that worktree is skipped by the merge gesture. **This is on purpose.** Merge stops cold on red and never re-runs verify on its own — a genuine conflict that happened to pass on a second run would slip through the only gate the merge has. (Merge is hand-run, so "retry" only happens when you run it again — and the marker makes even that a deliberate, marker-clearing act.)
+**`merge: <slug> came back WORKTREE_MERGE_PROOF_DEBT` — needs you.** One or more capped cells for that feature carry a report with no valid proof line; the merge refused before touching main. Re-cap the named cell(s) with a real proof line (`bee cells finish --id <id> --report '{...}'`), then clear the same marker.
+
+Until you remove it, that worktree is skipped by the merge gesture. **This is on purpose.** Merge stops cold on red and never retries on its own — both refusals are zero-mutation checks, so a blind retry over the same state would only repeat the same answer; only a human fixing the underlying cause (resolving the conflict, or re-capping the cell) changes the outcome. (Merge is hand-run, so "retry" only happens when you run it again — and the marker makes even that a deliberate, marker-clearing act.)
 
 **An anomaly is reported once, not once per cycle.** An unlabelled runtime pane, or one whose agent died mid-item, is reported and then left alone — never silently reclaimed. Its slot stays held until you deal with it. Four of those deadlock the runtime.
 
@@ -128,7 +130,7 @@ Stopping the loop alone does not clear the label.
 ## What it will not do
 
 - **It will not start at all until you enable it**, and it will not merge into main without you present. Those two — the enable marker and merge-as-a-gesture — are the real containment, not the lane filter.
-- **It will not merge past a red verify**, ever, on its own.
+- **It will not merge past a real conflict or a capped cell with no recorded proof**, ever, on its own — CI runs the full declared suite against the merged main on every push, the deterministic net.
 - **It will not exceed four concurrent working agents.**
 - **It will not decide an item is finished because its agent went quiet.** Only bee's own record — cells capped with recorded evidence — counts as finished. An agent reports idle the moment it stops typing, whether it is thinking, waiting, or dead.
 
@@ -139,6 +141,6 @@ Stopping the loop alone does not clear the label.
 ## Things worth knowing
 
 - **The working agents run with permission checks bypassed and no allowlist — this is a knowingly accepted risk (owner decision).** That, not the lane filter, is the real limit on what damage is possible: the filter decides *which item* is picked up, not *what commands* the agent may run. **Blast radius:** each agent is confined to its own git worktree and branch until a merge — a git boundary, not a security sandbox: it shares the machine, network, credentials and every ambient tool. What bounds it: the enable marker, merge-as-a-gesture, the stop file, the four-slot cap, and worktree isolation. See SKILL.md "Accepted risk".
-- **The two control panes are NOT bypassed — they run an enumerated command surface.** Dispatch and merge each carry an `--allowedTools` allowlist sized to exactly what they do (dispatch creates worktrees; merge aborts/merges/cleans on main), never "read-only" (which would stall them) and never `bypassPermissions`. Note the coupling: the merge pane runs verify over the just-merged tree, so it executes code the working agents wrote. See SKILL.md "Permission posture".
+- **The two control panes are NOT bypassed — they run an enumerated command surface.** Dispatch and merge each carry an `--allowedTools` allowlist sized to exactly what they do (dispatch creates worktrees; merge aborts/merges/cleans on main), never "read-only" (which would stall them) and never `bypassPermissions`. Merge writes to main (merges, deletes branches, drops grants) — it does not run verify or execute any code the working agents wrote; its own zero-mutation proof check only reads cell records. See SKILL.md "Safety boundaries".
 - **Verify runs one at a time**, behind a lock shared by main and every worktree. Four concurrent verifies on a normal laptop produce red results caused by memory pressure, which look exactly like real failures. If you adopt this skill elsewhere, set your own lock path in `commands.test`.
 - **The impact ranking is judgement, not a stored field.** Two cycles over the same backlog can choose differently. The reason announced in chat is the only audit trail.

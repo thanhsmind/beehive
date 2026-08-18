@@ -132,6 +132,51 @@
     "blocked_reason": null,
     "dropped_reason": null,
     "reopened_at": "2026-08-18T04:20:15.248Z",
-    "reopened_reason": "judge r3: one residual clause — merge-prompt.md:13 'On a red verify, stop' still names the retired trigger; the live merge pane prompt must stop on WORKTREE_MERGE_PROOF_DEBT"
+    "reopened_reason": "judge r3: one residual clause — merge-prompt.md:13 'On a red verify, stop' still names the retired trigger; the live merge pane prompt must stop on WORKTREE_MERGE_PROOF_DEBT",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "residual-merge-prompt-closed",
+            "status": "PASS",
+            "evidence": "skills/bee-herding/references/merge-prompt.md:12-14 now reads [find and do into the chat pane per the skill. On a MERGE_CONFLICT or WORKTREE_MERGE_PROOF_DEBT refusal, stop for that worktree - no retry - and move on; do not wait for or ask for confirmation.] The retired [On a red verify] trigger is gone, and the two codes named are exactly the two the landed merge can produce (phases.rs:353 MERGE_CONFLICT on the StageOut::Done path, WORKTREE_MERGE_PROOF_DEBT via refuse_merge). The r3 FAIL is closed."
+          },
+          {
+            "id": "truth-1-no-door-runs-commands-test",
+            "status": "PASS",
+            "evidence": "Truth 1 is met for good. Re-ran the same exhaustive case-insensitive sweep over skills/, expertise/, AGENTS.md and AGENTS.block.md for: red verify | verify red | verify is red | MERGE_VERIFY_RED | commands.verify | runs verify | verify runs | post-merge verify | semantic-conflict. The merge-prompt.md hit is gone; five hits remain and every one was already assessed legitimate in r3 - AGENTS.md:188 and AGENTS.block.md:181 (generic re-run discipline, not a door claim), planning-reference.md:236 ([commands.verify is retired], a true statement), and bee-herding README.md:145 plus scripts/bootstrap-cockpit.sh:241 (the herding harness own verify flock, the call recorded as a deviation). No instruction surface says a bee door runs the test or verify command."
+          },
+          {
+            "id": "rider-pointer-now-resolves",
+            "status": "PASS",
+            "evidence": "skills/bee-herding/README.md:144 now ends [See SKILL.md Safety boundaries] instead of the nonexistent Permission posture, and SKILL.md carries that exact heading at :62 (its headings are The three roles :23, Role boundary :53, Safety boundaries :62, Runtime adapter :88, References :98). The full chain now resolves end to end: README.md:144 -> SKILL.md Safety boundaries :62 -> :63 Full record for each: references/operational-invariants.md, whose blast-radius claim r3 already confirmed agrees with README rather than contradicting it."
+          },
+          {
+            "id": "regen-stayed-clean",
+            "status": "PASS",
+            "evidence": "diff -q is silent between skills/bee-herding/references/merge-prompt.md and README.md and their .claude/skills/ mirrors; the commit carries the same two edits into all five rendered trees with their .bee-render.json, the onboarding ledger and the manifest. bee onboard --repo-root . --json returns notices: []; bee dev release-manifest --check returns 267 file(s) match stored manifest."
+          },
+          {
+            "id": "no-regression",
+            "status": "PASS",
+            "evidence": "the commit touches only the two herding text files, their five mirrors and the render/onboarding/manifest bookkeeping - no Rust source, no docs/specs, no .github path. Every PASS check from judge-td-5-r2 and -r3 (role-merge and scout-and-ticks rerouted, wrapped phrase fixed, deviations recorded, knowledge doc archaeology framing, SKILL.md stop rule, operational-invariants blast-radius claim, dead render arm removed safely, AGENTS block parity, no boundary/undeclared vocabulary) stands on unchanged evidence."
+          },
+          {
+            "id": "suite-green",
+            "status": "PASS",
+            "evidence": "ran the declared crate suite (cargo test --release, package bee) at HEAD 9e0c3dfc: 2015 passed, 11 ignored (18 suites, 19.43s), exit 0."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T04:23:51.757Z"
+      }
+    ]
   }
 }

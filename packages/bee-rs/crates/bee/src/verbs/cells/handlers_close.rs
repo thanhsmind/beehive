@@ -99,11 +99,12 @@ pub(crate) struct CapFlags {
     /// worker check below for a small+ cell and is recorded on the capped
     /// cell's own `trace.inline_reason`.
     pub(crate) inline_reason: Option<String>,
-    /// wfl-1: `--report <json-string>`, RAW — `None` = not passed. Validated
-    /// against the worker Result-form shape (finish_support.rs's
-    /// `parse_report_flag`) before any write, then stored verbatim as
-    /// `trace.report`. Absent leaves `trace.report` untouched — byte-
-    /// identical to before this flag existed.
+    /// wfl-1/D8: `--report <json-string>`, RAW — validated against the
+    /// worker Result-form shape (finish_support.rs's `parse_report_flag`)
+    /// before any write, then stored verbatim as `trace.report`. `None`
+    /// means the flag was not passed on the command line; `cap_cell_from_flags`
+    /// now REFUSES that case (D8: --report is required on every cap path)
+    /// rather than silently leaving `trace.report` untouched.
     pub(crate) report: Option<String>,
 }
 
@@ -176,24 +177,35 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         }
     }
 
-    // wfl-1: `--report` shape check, BEFORE the (possibly long) test run and
-    // before any write — same "refuse before doing real work" posture as
-    // `--deviation` above. `None` when the flag was not passed at all.
-    let report_value: Option<Value> = match &f.report {
-        Some(raw) => Some(parse_report_flag(raw)?),
-        None => None,
+    // D8 (docs/history/test-doctrine/CONTEXT.md): `--report` is now
+    // REQUIRED on every cap path — `cells cap` and `cells finish` share
+    // this one door, so a cap left without a proof string would
+    // grandfather itself as a permanent legacy record, the exact hole the
+    // doors' proof-check exists to close. Shape check runs BEFORE the
+    // (possibly long) test run and before any write — same "refuse before
+    // doing real work" posture as `--deviation` above.
+    let report_value: Value = match &f.report {
+        Some(raw) => parse_report_flag(raw)?,
+        None => {
+            return Err(Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — --report is required: a JSON object with keys {} (tests as a D8 proof string \"<command> — <result> — <scope reason>\", e.g. \"cargo test -p bee — green — touched close.rs\").",
+                REPORT_KEYS.join(", ")
+            )))
+        }
     };
 
     // decision 13ce1858 (test-cadence-boundary D1): the one test door used
     // to run the declared command HERE and refuse a red cap — that run and
     // its red-refusal path are gone, for both `cells finish` and
-    // `cells cap` (no `!finish` guard ever separated them). Tests prove at
-    // the boundary now: `bee close` runs `commands.test` when the feature
-    // has no worktree; `bee worktree merge` runs it when it does. A cap is
-    // commit-only proof — `declared` below only decides which sentinel
-    // (`boundary` vs `undeclared`) the cap's own trace records, at
-    // `:capped_at` time near the end of this function; nothing here spawns
-    // a process.
+    // `cells cap` (no `!finish` guard ever separated them). D7 (docs/
+    // history/test-doctrine/CONTEXT.md) retired the run at the boundary too:
+    // `bee close` and `bee worktree merge` no longer spawn `commands.test`
+    // either — they read the D8 proof string recorded on `trace.report`
+    // instead (verbs/cells/proof.rs `feature_proof_check`). A cap is
+    // commit-only proof — `declared` below only decides which legacy
+    // sentinel (`boundary` vs `undeclared`) `trace.tests` itself still
+    // records, at `:capped_at` time near the end of this function; nothing
+    // here spawns a process, and the doors no longer read that field.
     let declared = commands
         .test
         .as_ref()
@@ -372,12 +384,10 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         if let Some(reason) = &f.inline_reason {
             trace.insert("inline_reason".into(), Value::String(reason.clone()));
         }
-        // wfl-1: the validated --report object, when passed — stored
-        // verbatim (`parse_report_flag` already proved the exact five keys).
-        // Absent --report never touches this key at all.
-        if let Some(report) = &report_value {
-            trace.insert("report".into(), report.clone());
-        }
+        // D8: the validated --report object — stored verbatim
+        // (`parse_report_flag` already proved the exact five keys). Always
+        // present now that --report is required on every cap path.
+        trace.insert("report".into(), report_value.clone());
         let outcome_value = match &f.outcome {
             Some(o) if !js_trim(o).is_empty() => Value::String(o.clone()),
             _ => trace.get("outcome").cloned().unwrap_or(Value::Null),

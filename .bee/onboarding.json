@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "bee_version": "2.9.1",
   "managed": {
-    "agents_block": "3e461da10dfb40df6d02390ef04ddc16fd93b41835e1505dc75b3092bb86e260",
+    "agents_block": "c3a0a9bb36f4ac540108bcd323bf16bc246a81afd000498603fea06e8990fc34",
     "gitignore_block": "d5a82410e3d53acf08f6b97ce3fe9bfe0b2cc58731af40e095d1178be2b149a2",
     "helpers": {},
     "lib": {},
@@ -25,7 +25,7 @@
       "planning.md": "a4a68351d5680aacb6078f622d39bd1500adb73c286720aeb7a07e7111b133ad",
       "review.md": "4e5c70544d99d0f3cf7414fb0903f253530e348a0e4504fcba6a69465c29d47b",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
-      "tests.md": "0af0c1fb29dff993c0328dc04c8d850967d3fe2b911c63b6ded568d62c74da49",
+      "tests.md": "176018edd890a74bf78ed623acf9aee23bf6c8253e488e2fe1e1876f0d168c63",
       "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
       "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
       "tests/patterns/differential-testing.md": "2c089b719275b401ae62c5f6f6af4cdcdfc7e5a2528fc64ce16eff8a1d0b6add",
@@ -38,7 +38,7 @@
       "advisor.md": "cc970fc08c6aa0bdccb77351926b481baa7b6176a281efdbeb5c4f1a3383a05e",
       "gather.md": "593521c49a0983b1a50ad437f89905ded6cc1ee588730e6402920ae585eeb622",
       "reviewer.md": "0c830dcb1ee67b8b27ea823984e487c1e16c31d5554d1e49f51a4562526e197c",
-      "worker-cell.md": "14d246b7699451f8b6ee90a354fc1f5b9a39f2565d7a2d9485be874d43c319b5"
+      "worker-cell.md": "ee6bfa6edcc9917d36cb77ba4f52315ed6d813e754663c4c3e58229c00333956"
     },
     "repo_hooks": {
       ".codex/hooks.json": "c23084ec82ea0418547addc8e3fdf74ffc0fb2d65b7692f54ba5b95a94f8e4ae"
@@ -76,5 +76,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-18T04:25:10.585Z"
+  "updated_at": "2026-08-18T04:49:24.514Z"
 }

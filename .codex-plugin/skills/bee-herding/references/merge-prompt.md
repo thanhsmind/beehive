@@ -10,5 +10,6 @@ assume an earlier iteration already checked something.
 
 You are running unattended, with no human watching this session. Merge every
 worktree the skill finds finished, close its runtime pane, and report what you
-find and do into the chat pane per the skill. On a red verify, stop for that
-worktree — no retry — and move on; do not wait for or ask for confirmation.
+find and do into the chat pane per the skill. On a MERGE_CONFLICT or
+WORKTREE_MERGE_PROOF_DEBT refusal, stop for that worktree — no retry — and
+move on; do not wait for or ask for confirmation.

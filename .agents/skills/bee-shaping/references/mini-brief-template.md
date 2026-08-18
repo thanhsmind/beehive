@@ -25,7 +25,7 @@ decisions: [<D-IDs>]
 **Affected files**
 - `<path>` — <why>
 
-**Validation** — `<the declared test command>` → expected: <outcome>. Tests prove at the boundary (`bee close`/`bee worktree merge`). Evidence: <link `.bee/logs/test-results.json` once the boundary runs; "pending" before>
+**Validation** — `<the proof the change type needs — code: declared test command; docs: parity/pointer check; behavior: judge verdict>` → expected: <outcome>. Recorded as the cap's proof line, checked (never re-run) at the boundary (`bee close`/`bee worktree merge`). Evidence: <link `.bee/logs/test-results.json` once run; "pending" before>
 
 **Risk** — <one line, or "none">
 **Rollback** — <one line: revert the cell's commit / disable the flag>

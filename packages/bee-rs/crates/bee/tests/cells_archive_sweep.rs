@@ -277,15 +277,25 @@ fn a_feature_that_closes_green_holding_live_work_keeps_its_cells() {
     assert!(repo.join(".bee/cells/o-1.json").is_file());
 }
 
+/// D7 (docs/history/test-doctrine/CONTEXT.md): `bee close` no longer spawns
+/// `commands.test` at all, so `close_fixture`'s `exit <code>` declaration
+/// can no longer make close refuse. The tests door now refuses on recorded
+/// proof instead (verbs/cells/proof.rs) — a capped cell whose report
+/// carries no valid proof line stands in for the old red run.
 #[test]
 fn a_red_close_retires_nothing() {
     let tmp = tempfile::tempdir().unwrap();
     let repo = close_fixture(tmp.path(), 1, false);
+    std::fs::write(
+        repo.join(".bee/cells/s-1.json"),
+        r#"{"id":"s-1","feature":"shipping","status":"capped","title":"t","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"","deviations":[]}}}"#,
+    )
+    .unwrap();
     let before = active_cell_ids(&repo);
 
     let (code, out) = run(&repo, &["close", "--feature", "shipping"]);
     assert_eq!(code, 1, "{out}");
-    assert_eq!(active_cell_ids(&repo), before, "a red close must touch no cell");
+    assert_eq!(active_cell_ids(&repo), before, "a refused close must touch no cell");
     assert!(!repo.join(".bee/cells/archive").exists(), "{out}");
 }
 

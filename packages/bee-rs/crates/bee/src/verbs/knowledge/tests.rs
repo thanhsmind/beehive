@@ -887,7 +887,14 @@ use std::time::Instant;
             force_ownership: false,
             commit_pending: None,
             inline_reason: None,
-            report: None,
+            // D8 (docs/history/test-doctrine/CONTEXT.md): --report is now
+            // required on every cap path — this fixture is not exercising
+            // the --report contract itself, so it just needs SOME valid
+            // proof string.
+            report: Some(
+                r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":[]}"#
+                    .to_string(),
+            ),
         };
         // decision 13ce1858 (test-cadence-boundary D1): `cap_cell_from_flags`
         // dropped its `test_root` parameter with the per-cap test run.

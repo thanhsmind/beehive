@@ -359,6 +359,7 @@
     "uat",
     "test-cadence-boundary",
     "regen",
-    "wave-barrier"
+    "wave-barrier",
+    "impact-deferral"
   ]
 }

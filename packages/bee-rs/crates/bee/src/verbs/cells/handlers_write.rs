@@ -764,7 +764,12 @@ pub(crate) fn red_base_refusal(control: &Path, cell_id: &str, fix_first: Option<
                 return None;
             }
             Some(format!(
-                "cell \"{cell_id}\" refused — the last recorded test run is red (\"{failing_command}\" failed; record: {TEST_RESULTS_RELATIVE}). D2: never claim onto a red base. FIX: fix the red, then retry — or pass --fix-first \"<reason>\" to claim anyway (the reason is stored on the claim's own trace.fix_first)."
+                // D7 (docs/history/test-doctrine/CONTEXT.md): `bee test` is
+                // now the ONLY writer of `{TEST_RESULTS_RELATIVE}` — `bee
+                // close`/`bee worktree merge` stopped running
+                // `commands.test` — so the refresh path this refusal names
+                // must be `bee test`, never a bare "fix the red".
+                "cell \"{cell_id}\" refused — the last recorded test run is red (\"{failing_command}\" failed; record: {TEST_RESULTS_RELATIVE}). D2: never claim onto a red base. FIX: fix the red, run `bee test` to refresh the record, then retry — or pass --fix-first \"<reason>\" to claim anyway (the reason is stored on the claim's own trace.fix_first)."
             ))
         }
     }

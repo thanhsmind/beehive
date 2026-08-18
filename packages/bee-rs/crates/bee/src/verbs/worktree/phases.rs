@@ -34,6 +34,13 @@ pub(crate) struct Staged {
     /// auto-commit's outcome, if it ran — carried across the released lock
     /// the same way `companion` is, so P3's results can attach it too.
     pub(crate) bookkeeping_commit: Option<Value>,
+    /// D7/D8 (td-3): the D8 proof-check verdict `merge_stage` already read
+    /// as a zero-mutation precondition (never blocking here — a blocking
+    /// verdict refused before `Staged` was ever built), carried across the
+    /// released lock so `merge_finish` can report it honestly instead of a
+    /// `VerifyOutcome` from a test run that no longer happens. `None` only
+    /// when the worktree's feature could not be resolved.
+    pub(crate) proof: Option<crate::verbs::cells::ProofCheck>,
 }
 
 pub(crate) enum StageOut {
@@ -121,6 +128,38 @@ pub(crate) fn merge_stage(
     // the MERGING feature's slug to scope its docs/history/<feature>
     // pathspec.
     let identity = resolve_worktree_feature(&worktree_root);
+
+    // D7/D8 (docs/history/test-doctrine/CONTEXT.md, td-3): `bee worktree
+    // merge` no longer spawns `commands.test` itself — this is the tests
+    // door's own zero-mutation precondition, reading whether every capped
+    // cell for the merging feature already carries a recorded D8 proof
+    // line (verbs/cells/proof.rs `feature_proof_check`, the SAME helper
+    // `bee close`'s tests door reads, td-2). Checked here, before the
+    // main-dirty bookkeeping auto-commit below, so a proof-less merge
+    // never touches main at all — the merge is refused, never staged. A
+    // worktree whose feature cannot be resolved has no cell record to
+    // check (the same posture `uat_merge_precheck` takes for a `None`
+    // feature further down) and proceeds ungated.
+    let proof = match identity.feature.as_deref() {
+        Some(feature) => Some(
+            crate::verbs::cells::feature_proof_check(main_root, feature)
+                .map_err(|_: crate::verbs::drivers::Delegate| MErr::Ex)?,
+        ),
+        None => None,
+    };
+    if let Some(proof) = &proof {
+        if proof.blocking {
+            let feature_disp = identity.feature.as_deref().unwrap_or("(unresolved)");
+            return Err(refuse_merge(
+                "WORKTREE_MERGE_PROOF_DEBT",
+                format!(
+                    "worktree {id}'s feature \"{feature_disp}\" has {} capped cell(s) that carry a report with no valid proof line ({}) — \"bee worktree merge\" refuses until each is re-capped with a real proof line: \"<command> — <result> — <scope reason>\" (bee cells finish --id <id> --report '{{...}}').",
+                    proof.bad_ids.len(),
+                    proof.bad_ids.join(", "),
+                ),
+            ));
+        }
+    }
 
     // trun-4: `bee worktree merge` used to refuse on ANY dirty path in main,
     // but the dirt is routinely bee's OWN bookkeeping (cell traces,
@@ -396,19 +435,23 @@ pub(crate) fn merge_stage(
         staged_tree_hash,
         companion,
         bookkeeping_commit,
+        proof,
     })))
 }
 
-/// P3: verify-red first, then the two-line fence, then commit + post-commit
-/// guard + cleanup. `lease_drift` is the caller-supplied FIRST fence line
-/// (integration-queue's `checkProcessorLeaseEpoch`), evaluated here so it runs
-/// inside the re-acquired hold exactly as the .mjs's `await
-/// checkProcessorLease()` does.
+/// P3: the two-line fence, then commit + post-commit guard + cleanup.
+/// `lease_drift` is the caller-supplied FIRST fence line (integration-
+/// queue's `checkProcessorLeaseEpoch`), evaluated here so it runs inside the
+/// re-acquired hold exactly as the .mjs's `await checkProcessorLease()`
+/// does. D7/D8 (td-3): there is no more "verify-red first" arm — the D8
+/// proof check already ran as a zero-mutation precondition in `merge_stage`
+/// (P1), before `git merge` was ever attempted, so a blocking verdict never
+/// reaches here; `state.proof` carries only the CLEARED verdict, for
+/// reporting.
 pub(crate) fn merge_finish(
     main_root: &Path,
     state: &Staged,
     cleanup: bool,
-    verify: &VerifyOutcome,
     lease_fence: &dyn Fn() -> Option<String>,
 ) -> MR<MergeAnswer> {
     let Staged {
@@ -421,49 +464,11 @@ pub(crate) fn merge_finish(
         staged_tree_hash,
         companion,
         bookkeeping_commit,
+        proof,
     } = state;
 
     let mut committed = false;
     let outcome = (|| -> MR<MergeAnswer> {
-        if verify.ran && verify.status != Some(0) {
-            let lines: Vec<&str> = verify.combined.split('\n').collect();
-            let tail = lines[lines.len().saturating_sub(30)..].join("\n");
-            run_git(main_root, &["merge", "--abort"]);
-            if let Err(reason) = main_untouched_proof(main_root, pre_merge_head, merge_head_file) {
-                return Err(refuse_merge(
-                    "WORKTREE_MERGE_ABORT_FAILED",
-                    format!(
-                        "verify failed and \"git merge --abort\" did NOT fully restore {} to its pre-merge state ({reason}) — main may be left mid-merge; inspect it by hand before retrying.",
-                        p(main_root)
-                    ),
-                ));
-            }
-            let mut result = Map::new();
-            result.insert("ok".into(), Value::Bool(false));
-            result.insert("code".into(), json!("MERGE_VERIFY_RED"));
-            result.insert("id".into(), json!(id));
-            result.insert("branch".into(), json!(branch));
-            result.insert("worktreeRoot".into(), json!(p(worktree_root)));
-            result.insert("merged".into(), Value::Bool(false));
-            result.insert("verify".into(), json!("red"));
-            result.insert("message".into(), json!(format!(
-                "the merge was textually clean but the post-merge verify failed against the merged-but-uncommitted tree — this is the semantic-conflict alarm: behavior broke even though git found no textual conflict. The merge was aborted and {} was left byte-untouched (HEAD unchanged, no MERGE_HEAD, clean tracked status); no merge commit exists. Fix-first before release.",
-                p(main_root)
-            )));
-            result.insert("output_tail".into(), Value::String(tail));
-            // `...(companion ? { companion } : {})` — last, after output_tail.
-            if let Some(companion) = companion {
-                result.insert("companion".into(), companion.clone());
-            }
-            // trun-4: the bookkeeping auto-commit, if it ran, already landed
-            // before P1 ever staged this merge — report it regardless of
-            // this arm's own verify-red outcome.
-            if let Some(bookkeeping_commit) = bookkeeping_commit {
-                result.insert("bookkeeping_commit".into(), bookkeeping_commit.clone());
-            }
-            return Ok(MergeAnswer { result, ok: false });
-        }
-
         // The P3 fence: the processor-lease epoch is the FIRST line, and
         // `||` short-circuits, so checkMergeFence's git reads never run when
         // the lease already drifted.
@@ -484,7 +489,7 @@ pub(crate) fn merge_finish(
             return Err(refuse_merge(
                 "WORKTREE_MERGE_FENCE_DRIFT",
                 format!(
-                    "the staged merge was aborted before commit because the P3 re-check (advisor condition C2) detected drift while the 'worktree-admin' lock was released around the verify child: {fence_drift}. {} was left byte-untouched (HEAD unchanged, no MERGE_HEAD, clean tracked status); no merge commit exists.",
+                    "the staged merge was aborted before commit because the P3 re-check (advisor condition C2) detected drift while the 'worktree-admin' lock was released between staging and finishing: {fence_drift}. {} was left byte-untouched (HEAD unchanged, no MERGE_HEAD, clean tracked status); no merge commit exists.",
                     p(main_root)
                 ),
             ));
@@ -522,7 +527,7 @@ pub(crate) fn merge_finish(
         result.insert("id".into(), json!(id));
         result.insert("branch".into(), json!(branch));
         result.insert("worktreeRoot".into(), json!(p(worktree_root)));
-        let verify_field = if verify.ran { "green" } else { "skipped" };
+        let verify_field = proof_report_field(proof.as_ref());
         result.insert("verify".into(), json!(verify_field));
         // `...(companion ? { companion } : {})` — after `verify`, BEFORE the
         // post-commit `warning` and the cleanup keys.
@@ -546,11 +551,16 @@ pub(crate) fn merge_finish(
         if !js_trim(&post_commit_status).is_empty() {
             result.insert("warning".into(), json!({
                 "code": "verify_mutated_tracked_files",
-                "message": "the post-merge verify command left tracked files modified after the merge commit landed (\"git status --porcelain --untracked-files=no\" is non-empty) — the merge commit itself is clean, but verify mutated the working tree afterward; inspect and commit/discard those changes separately. Recovery if a LATER independent verify goes red on this merge: \"git revert -m 1 <merge-commit>\".",
+                "message": "tracked files are modified after the merge commit landed (\"git status --porcelain --untracked-files=no\" is non-empty) — the merge commit itself is clean, but something (a git hook, a concurrent process) touched the working tree afterward; inspect and commit/discard those changes separately. D7/D8: this is no longer the post-merge verify command (bee worktree merge does not run one), so this warning is now defensive rather than expected.",
                 "status": post_commit_status,
             }));
         }
 
+        // D7/D8: "unproven" now means the proof check cleared with nothing
+        // actually PROVEN — no capped cells, an unresolved feature, or only
+        // legacy caps with no D8 proof line — rather than "no commands.test
+        // configured".
+        let proof_unproven = proof.as_ref().map(|p| p.proven_count == 0).unwrap_or(true);
         attach_cleanup_outcome(
             &mut result,
             main_root,
@@ -558,7 +568,7 @@ pub(crate) fn merge_finish(
             branch,
             id,
             cleanup,
-            verify_field == "skipped",
+            proof_unproven,
         );
         // staging-lane D0a (trigger 3): a successful merge just moved main,
         // which is exactly what makes any existing staging record stale —
@@ -674,16 +684,18 @@ fn uat_merge_precheck(main_root: &Path, feature: Option<&str>) -> UatPrecheck {
     UatPrecheck { lane_applies, gate_approved }
 }
 
-/// mergeFeatureWorktree — P1 / (P2) / P3 with the lock released across the
-/// verify child. `Err(MErr::Ex)` is only ever produced by P1, before any
-/// mutation; the caller has already taken the queue lock by then, so it is the
-/// documented late-delegation residual, never an ordinary shape.
+/// mergeFeatureWorktree — P1 / P3. D7/D8 (td-3): the former "(P2) — the lock
+/// released across the verify child" is RETIRED — `merge_stage` (P1) already
+/// checked the merging feature's D8 proof lines as a zero-mutation
+/// precondition, so there is nothing left to run unlocked between staging
+/// and finishing. `Err(MErr::Ex)` is only ever produced by P1, before any
+/// mutation; the caller has already taken the queue lock by then, so it is
+/// the documented late-delegation residual, never an ordinary shape.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn merge_feature_worktree(
     main_root: &Path,
     id: &str,
     cleanup: bool,
-    verify_command: Option<&str>,
     companion_end_command: Option<&str>,
     skip_uat: bool,
     hooks: Option<&crate::integration_queue::Hooks<'_>>,
@@ -703,38 +715,15 @@ pub(crate) fn merge_feature_worktree(
         None => &no_lease_drift,
     };
 
-    let Some(command) = verify_command else {
-        // Nothing to release the lock around — stage and finish inside the
-        // SAME shape as the pre-hardening-4c single-lock behavior, which is
-        // still TWO acquires (the .mjs re-enters withStoreLock here).
-        let mut guard = lock::acquire_store_lock(main_root, WORKTREE_ADMIN_LOCK, lock::MAX_ATTEMPTS)
-            .map_err(|b| MErr::Thrown(b.message()))?;
-        let out = merge_finish(
-            main_root,
-            &staged,
-            cleanup,
-            &VerifyOutcome { ran: false, status: None, combined: String::new() },
-            lease_fence,
-        );
-        guard.release();
-        return out;
-    };
-
-    // P2 — UNLOCKED.
-    let tick_ms = hooks
-        .map(|h| h.verify_tick_interval_ms)
-        .unwrap_or(crate::integration_queue::DEFAULT_RENEW_INTERVAL_MS);
-    let no_tick = || {};
-    let tick: &dyn Fn() = match hooks {
-        Some(h) => &move || h.on_verify_tick(),
-        None => &no_tick,
-    };
-    let verify = run_verify_child(command, main_root, tick, tick_ms);
-
-    // P3 — re-acquire and re-check the fence before ever committing.
+    // Nothing to release the lock around anymore (D7/D8 retired the P2
+    // verify-child window) — stage and finish inside the SAME shape as the
+    // pre-hardening-4c single-lock behavior, which is still TWO acquires
+    // (the .mjs re-enters withStoreLock here, and this port keeps that shape
+    // so a delegation never drops one `result: "acquired"` row from
+    // .bee/logs/contention.jsonl).
     let mut guard = lock::acquire_store_lock(main_root, WORKTREE_ADMIN_LOCK, lock::MAX_ATTEMPTS)
         .map_err(|b| MErr::Thrown(b.message()))?;
-    let out = merge_finish(main_root, &staged, cleanup, &verify, lease_fence);
+    let out = merge_finish(main_root, &staged, cleanup, lease_fence);
     guard.release();
     out
 }

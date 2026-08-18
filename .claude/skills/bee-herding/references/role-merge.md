@@ -72,9 +72,12 @@ worktree is **finished** iff all four hold:
 3. a clean tree (`git status --porcelain` empty);
 4. `HEAD` is exactly `wt/<slug>`.
 
-**This role runs no verify of its own** — `bee worktree merge` stages the merge
-and runs the project's configured verify as its own semantic-conflict gate; a
-second verify here would duplicate that work and double the flake exposure.
+**This role runs no verify of its own, and neither does `bee worktree merge`
+anymore** — before it stages the merge, it runs a zero-mutation proof check
+over the feature's capped cells (D7/D8): every capped cell must carry a
+recorded proof line, or the merge refuses (`WORKTREE_MERGE_PROOF_DEBT`) before
+touching main at all. No `commands.test` spawn happens here. CI runs the full
+declared suite against every push — the one deterministic net.
 
 **herdr's `agent_status`/`agent_session` are never read as evidence a worktree
 is finished** — this role does not consult them at all. An agent goes idle the
@@ -107,8 +110,8 @@ ls .bee/tmp/bee-herding.red.<slug>
 ```
 
 Exists → this worktree already came back `MERGE_CONFLICT` or
-`MERGE_VERIFY_RED` and no human has cleared it. **Skip it entirely, say
-nothing, move on.** Do not merge it, re-report it, or touch the marker.
+`WORKTREE_MERGE_PROOF_DEBT` and no human has cleared it. **Skip it entirely,
+say nothing, move on.** Do not merge it, re-report it, or touch the marker.
 Removing it is the human's acknowledgement that they looked; nothing else
 clears it, and this role never removes its own markers.
 
@@ -116,9 +119,12 @@ clears it, and this role never removes its own markers.
 it types into an interactive composer, not scrollback that reads back reliably;
 a busy pane scrolls a report away within minutes; the human may close and
 recreate the pane; and nothing proves a `send-text` → `pane read` round trip
-survives. Every one of those returns the loop to retrying a red merge, which
-the measured ~1-in-12 verify flake turns into a real risk of a genuine semantic
-conflict landing in main within about twelve minutes.
+survives. Every one of those returns the loop to retrying a red merge on its
+own instead of waiting on the human — for a real `MERGE_CONFLICT` that risks
+the needed resolution never happening because the loop never asked; for
+`WORKTREE_MERGE_PROOF_DEBT` a blind retry is deterministic noise, not a
+landing risk, but the marker is still the only durable way to make either
+refusal wait on a human rather than silently retry.
 
 **This marker is not the occupancy registry this system forbids.** A file that
 tracks whether a pane or worktree is occupied or finished is banned — that job
@@ -137,9 +143,12 @@ MAIN checkout:
 bee worktree merge --id <grant-key> --cleanup
 ```
 
-This runs `git merge --no-ff <branch>`, then the project's configured verify
-against the merged tree, and — only on a green (or loudly-warned skipped)
-verify — removes the worktree, deletes its branch, and drops its grant. Read
+This first runs a zero-mutation proof check over the feature's capped cells
+(D7/D8) — every capped cell must already carry a recorded proof line, or the
+merge refuses before touching main. Past that check, it runs
+`git merge --no-ff <branch>`, then — on success — removes the worktree,
+deletes its branch, and drops its grant. No verify command runs at any point;
+CI runs the full declared suite against the merged main on every push. Read
 the result:
 
 - **Merged and cleaned up.** Find the worktree's runtime pane by **label**,
@@ -152,13 +161,18 @@ the result:
   `staging_rebuild_suggested` means a staging record already exists and main
   just moved (staging-lane D0a trigger 3) — run `bee staging rebuild` (or
   report the nudge in the chat pane) so staging stops testing a stale base.
-- **`MERGE_CONFLICT` or `MERGE_VERIFY_RED`.** **STOP for this worktree: no
-  retry of the verify, no merge, no cleanup, no pane closed.** The merge verb
+- **`MERGE_CONFLICT` or `WORKTREE_MERGE_PROOF_DEBT`.** **STOP for this
+  worktree: no retry, no merge, no cleanup, no pane closed.** The merge verb
   already refused cleanup, so there is nothing to undo — main is byte-untouched.
-  Write the durable marker first, then report:
+  `MERGE_CONFLICT` is a real textual/semantic conflict, needing a human look.
+  `WORKTREE_MERGE_PROOF_DEBT` means one or more capped cells for this feature
+  carry a report with no valid proof line — the remedy is deterministic:
+  re-cap each named cell with a real proof line
+  (`bee cells finish --id <id> --report '{...}'`), never a re-run of the merge
+  alone. Write the durable marker first, then report:
   ```
   mkdir -p .bee/tmp && touch .bee/tmp/bee-herding.red.<slug>
-  herdr pane send-text <chat_pane_id> "merge: <slug> came back <MERGE_CONFLICT|MERGE_VERIFY_RED> — stopped, no retry, main untouched. Needs a human look (flake vs. real semantic conflict). Marker: .bee/tmp/bee-herding.red.<slug> (remove it once resolved)."
+  herdr pane send-text <chat_pane_id> "merge: <slug> came back <MERGE_CONFLICT|WORKTREE_MERGE_PROOF_DEBT> — stopped, no retry, main untouched. Needs a human look (real semantic conflict) or a re-cap of the named cell(s) with a valid proof line. Marker: .bee/tmp/bee-herding.red.<slug> (remove it once resolved)."
   ```
   Then continue to the next finished worktree — one red result says nothing
   about another's (worktrees, panes, and agents map 1:1:1). The marker, not the
@@ -186,10 +200,13 @@ the result:
   is clean. Never clean MAIN yourself: this role runs `bee worktree merge` and
   nothing else — no commit, stash, discard, or arbitrary git surgery.
 
-**Retrying is worse than the interruption it dodges.** The verify is the only
-semantic gate a merge has; a genuine conflict that happens to pass on a second
-run slips straight through. A red costs one interruption and zero damage,
-because the merge that would have caused damage never happened.
+**Retrying is worse than the interruption it dodges.** A stopped merge is the
+one chance for a human to look at a genuine conflict before anything can land;
+an unattended retry either merges past a decision the human never made, or
+repeats the same deterministic refusal for nothing (`MERGE_CONFLICT` and
+`WORKTREE_MERGE_PROOF_DEBT` are both zero-mutation checks — a retry over the
+same state gets the same answer). A red costs one interruption and zero
+damage, because the merge that would have caused damage never happened.
 
 ### One pass, then exit
 

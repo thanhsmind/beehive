@@ -46,8 +46,9 @@ reading), rank, announce before acting, spawn the working agent.
 action that lands work in main, so a human is present: find finished
 worktrees from bee's own record only, honor
 red-stop markers, merge and clean up each finished worktree, close its
-pane — and STOP COLD on a red verify, never retry. Protocol:
-`references/role-merge.md`.
+pane — and STOP COLD on `MERGE_CONFLICT` or `WORKTREE_MERGE_PROOF_DEBT`,
+never retry (the proof check runs before `git merge`; this role runs no
+verify command). Protocol: `references/role-merge.md`.
 
 ## Role boundary
 

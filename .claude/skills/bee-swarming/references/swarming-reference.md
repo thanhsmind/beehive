@@ -22,10 +22,10 @@ registry (`state worker add`), validates the claim it was handed (against
 the inlined cell JSON in its prompt — never `cells claim`)
 and takes reservations under its own nickname,
 reads its `read_first`, implements within its `files`, commits, and
-finishes it (`cells finish` — commit-only proof, caps and releases the
-reservations in the same verb; tests prove at the boundary: `bee close`
-runs `commands.test` when the feature has no worktree, `bee worktree
-merge` runs it when it does). Then it returns exactly one status token.
+finishes it (`cells finish` — required `--report` carrying the proof
+line, caps and releases the reservations in the same verb; `bee close`
+and `bee worktree merge` check that recorded proof at the boundary, they
+run nothing themselves). Then it returns exactly one status token.
 
 **Default — parallel:** a `small` lane's cells (1-3) fan out to
 concurrent execution workers whenever every cell's *product* file set is
@@ -54,13 +54,13 @@ After `[DONE]`, emit the cap tick, and when `ship_visibility` is active push
 the cap (first cap of a feature opens the draft PR) —
 `bee-hive/references/scout-and-ticks.md`, "Progress ticks" / "Ship
 visibility". Then — never the worker — author the done-report from the
-worker's verbatim diff plus the commit (the finish is commit-only proof;
-tests prove at the boundary, step 7 below), including the slice's demo
+worker's verbatim diff plus the commit (the finish carries the proof line
+in its `--report`, step 7 below), including the slice's demo
 artifact when one is owed. `tiny`/`small`'s one slice is also the feature's
-FINAL slice: tests prove at the boundary — close it with `bee close`,
-which runs `commands.test` when the feature has no worktree, or
-`bee worktree merge`, which runs it when the feature has one ("Tests at
-finish and close, in full", below). Then hand
+FINAL slice: close it with `bee close`, or `bee worktree merge` when the
+feature has one — both check every capped cell's recorded proof instead
+of running tests themselves ("Proof at finish and close, in full",
+below). Then hand
 off: both `tiny` and `small` present that done-report (diff + commit +
 test result + capture line) and invoke bee-capturing — no auto
 reviewer; the 1-correctness-reviewer contract lives inside a user-invoked
@@ -167,17 +167,16 @@ single worker — never wave analysis or multi-cell assignment.
 7. **Goal-check every `[DONE]` yourself — miss reruns, hit ships.** A
    worker's word is never the evidence; the orchestrator
    measures before the cell counts:
-   - **Read the record; re-run only on smell.** Tests prove at the
-     boundary: `bee close` runs `commands.test` when the feature has no
-     worktree; `bee worktree merge` runs it when it does. A cap is
-     commit-only proof and records `tests: boundary`; once the boundary has
-     run, `.bee/logs/test-results.json` is the evidence, and quoting it
-     satisfies the fresh-output rule. Re-run `bee test` yourself
-     on a smell — a missing/garbled report, a `[DONE]` with no diff, a
-     `high-risk`/hard-gate cell. Orchestrator judgment, not a routine step. Failure on a spot-check → the cell is NOT done: re-dispatch to
-     the same tier with the failing excerpt (a task miss is a rerun, never a
-     silent tier escalation — provider errors, not task errors, are what the
-     rescue ladder's tier rung is for).
+   - **Read the recorded proof; re-run only on smell.** The worker's cap
+     carries the proof line it chose and ran (`<command> — <result> —
+     <scope reason>`); reading it satisfies the fresh-output rule. Re-run
+     `bee test` yourself on a smell — a missing/garbled report, a
+     `[DONE]` with no diff, a `high-risk`/hard-gate cell, or a proof scope
+     that looks too narrow for the diff. Orchestrator judgment, not a
+     routine step. Failure on a spot-check → the cell is NOT done:
+     re-dispatch to the same tier with the failing excerpt (a task miss is
+     a rerun, never a silent tier escalation — provider errors, not task
+     errors, are what the rescue ladder's tier rung is for).
    - **Frozen judge:** `.bee/bin/bee cells judge --id <id>`. Hits
      (undeclared test/CI/lockfile/verify-config changes) → the cell never
      auto-counts toward a clean wave: record the hits in the cell trace and
@@ -207,48 +206,61 @@ single worker — never wave analysis or multi-cell assignment.
    cell is capped, goal-checked, and judge-intact (or
    explicitly flagged and carried to review). Smell-triggered spot checks
    (step 7) stay the orchestrator's judgment call. All waves clean →
-   completion; tests prove at the boundary: the feature's final slice
-   closes through `bee close`, which runs `commands.test` when the feature
-   has no worktree, or `bee worktree merge`, which runs it when the
-   feature has one ("Tests at finish and close, in full", below).
+   completion; the feature's final slice closes through `bee close`, or
+   `bee worktree merge` when the feature has one — both check every
+   capped cell's recorded proof line instead of running tests themselves
+   ("Proof at finish and close, in full", below).
 
-## Tests at finish and close, in full
+## Proof at finish and close, in full
 
-One declared test path, one result record — tests prove at the boundary
-only (decision `13ce1858`, test-cadence-boundary D1; supersedes the
-proof-economy tier system, decision 412e9b3a,
+The agent owns test scope end to end — it picks the proof each cap needs,
+runs it, and records one proof line, CHECKED (never re-run) at the
+boundary doors (decisions `58ec9664` D1/D2/D5/D6, `1f534837` D7/D8/D9;
+supersedes the boundary-auto-run half of test-cadence-boundary, decision
+`13ce1858`, and the proof-economy tier system, decision `412e9b3a`,
 `docs/knowledge/areas/verify-pipeline/`, 2026-07-31).
 
-> Tests prove at the boundary: `bee close` runs `commands.test` when the
-> feature has no worktree; `bee worktree merge` runs it when it does. A
-> cap is commit-only proof and records `tests: boundary`. CI runs the
-> same command on every push.
+> Proof-per-change-type, not a fixed table: code → related tests green;
+> docs → parity/pointer checks; behavior → judge verdict. Run the chosen
+> proof yourself and record it on the cap as `<command> — <result> —
+> <scope reason>`. `bee close` and `bee worktree merge` CHECK that
+> recorded proof; neither runs `commands.test` itself. CI runs the full
+> declared command on every push — the one deterministic net.
 
-- **Declaration:** `.bee/config.json` `commands.test` is the single place
-  a project declares how it is tested (string or array of commands) — the
-  ONE command every boundary door runs. Nothing else
-  declares test obligations.
+- **Declaration:** `.bee/config.json` `commands.test` still names the
+  project's one declared suite — what CI runs on every push, and the
+  default a code-change proof reaches for. It no longer obliges any
+  boundary door to run anything.
 - **Runner:** `bee test` runs the declared commands in order and writes
   ONE normalized record, `.bee/logs/test-results.json` — `{ran_at, green,
-  commands: [{command, exit, duration_ms, failure_excerpt, failure_log}]}`. The runner
-  is a program; an agent's word is never the record.
-- **At finish:** `bee finish` is commit-only proof — it does not run
-  `commands.test`. A cap in a declared-test repo records `tests: boundary`;
-  a repo with no declared `commands.test` caps with `tests: undeclared`.
-- **At close:** when the feature has no worktree, `bee close` runs the
-  full declared suite fresh — green caps the close doors' test side; red
-  is surfaced with the failing excerpt and becomes fix cells in the SAME
-  feature (never un-cap a capped cell — the fix is new work). Per-cell
-  commits + `git bisect` localize a regression across the feature's cells.
-  When the feature has a worktree (including one kept pending-cleanup
-  after a merge), close defers — tests prove at `bee worktree merge`
-  instead.
-- **Merge:** `bee worktree merge` runs `commands.test` against the
-  staged merge — the last local net. The estate beyond that is CI-owned,
-  running the same command on every push.
-- **Never build on red:** a red result at close or merge is the next work
-  item, never a base. Re-dispatch prompts (Prior rounds) cite the
-  `failure_excerpt` directly.
+  commands: [{command, exit, duration_ms, failure_excerpt, failure_log}]}`.
+  The runner is a program; an agent's word is never the record, but the
+  agent chooses when to reach for it.
+- **The proof line:** required on every `cells finish --report`,
+  `<command> — <result> — <scope reason>` — three non-empty segments
+  (split on the first two ` — ` separators, so the reason may itself
+  contain one). A malformed or empty proof refuses the cap; a `red`
+  result refuses the cap outright — a red is fix-first, never a done. A
+  repo declared no-test (`commands.test` set to the sentinel `"none"`)
+  proves with the command segment `none` and the reason naming the
+  parity/docs check actually used.
+- **At close:** `bee close` reads every capped cell's recorded proof and
+  checks it parses — it runs nothing itself. A cell with no report at all
+  (a pre-contract legacy cap) is grandfathered through with a named note,
+  never a silent pass dressed as proof. A cell whose proof is missing or
+  malformed is the remaining door, named by id; the fix is a re-cap
+  carrying a real proof line — never un-cap, the fix is new work. When
+  the feature has a worktree (including one kept pending-cleanup after a
+  merge), close defers — the same proof check runs at `bee worktree
+  merge` instead.
+- **Merge:** `bee worktree merge` runs the same proof check against the
+  staged merge's capped cells — the last local net before CI, which runs
+  the full declared command on every push.
+- **Never build on red:** survives as a principle, not a pre-claim
+  full-suite order — a red proof result refuses its own cap, and a
+  scoped-green cap whose CI later goes red is a fix-first cell in the
+  SAME feature, PLUS a mandatory captured learning on why the chosen
+  scope missed (D6).
 
 ## Native worktree integration
 
@@ -272,7 +284,7 @@ that acceptance, not on an ordinary wave.
 | Isolation guarantee | Fresh context per Agent call; include only the contract fields |
 | Subagent type | `subagent_type: "bee-build"` (generation, executes a cell) or `"bee-gather"` (generation, reads only) · `"bee-extract"` (extraction) · `"bee-review"` (review), when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling`, and any tier whose slot is cli-shaped or otherwise unrendered, use the runtime default (`general-purpose`). The guard repairs a generic type for extraction and review; at generation it refuses, because the tier alone does not say whether the work writes |
 
-On both runtimes the integrity rails are identical because they live in the helpers: tests prove at the boundary — `bee close`/`bee worktree merge` refuse while the declared tests are red — and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
+On both runtimes the integrity rails are identical because they live in the helpers: `bee close`/`bee worktree merge` refuse while a capped cell's recorded proof is missing, malformed, or red — and `bee reservations reserve` reports conflicts the worker must turn into `[BLOCKED]`.
 
 ## Model Tiers — Config-Driven, Runtime-Keyed
 
@@ -363,7 +375,7 @@ Contract:
 Startup (two reads, zero CLI round-trips):
 1. Read AGENTS.md.
 2. Read docs/history/<FEATURE>/CONTEXT.md. Validate ownership against the INLINED cell JSON above (status claimed, worker <NICKNAME>) — never re-run `status --brief` or `cells show` at startup; the dispatch state line and inlined cell are authoritative, and ownership is re-enforced at cap by the claim guard. A prompt missing the inlined cell JSON is malformed → [BLOCKED].
-3. Reserve, implement, commit, finish (commit-only proof; tests prove at the boundary — close or merge), report.
+3. Reserve, implement, commit, finish (`--report` carrying your proof line; `bee close`/`bee worktree merge` check it, never re-run it), report.
 ```
 
 The `Advisor` line is omitted entirely — a session whose config has no advisor slot dispatches byte-identical prompts to today — whenever no advisor resolves, or the advisor's model name literally matches the worker's own resolved model (the one honest no-op). Ceiling-tier workers are not a skip condition — config is the authority and the orchestrator does not second-guess it with a strength ladder. The same-model no-op is the orchestrator's, run at dispatch, never left to the worker. When present, `<TRANSPORT>` states the proven transport verbatim, matching what the worker contract's Advisor Consult section (references/worker-details.md) tells the worker to run:
@@ -381,7 +393,7 @@ Native subagents return these token-markdown reports as their final message. Cli
 Nickname: <name>
 Files modified: <paths>
 Reservations: reserved <paths>; released yes|no
-Tests: green (finish run — .bee/logs/test-results.json) | undeclared
+Tests: <command> — <result> — <scope reason>
 Commit: <hash>
 Next action: <suggestion for the orchestrator>
 ```
