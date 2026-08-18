@@ -9,6 +9,7 @@ use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root_worktree, LinkedRoots, RootsWt};
 use crate::state::{bypass_level, read_config_raw};
 use crate::textutil::{char_len, truncate_chars_head};
+use crate::verbs::workflow_store::WAITING_ON_KIND_TURN_END;
 // Aliased (not `use crate::verbs::cells::*`): `use super::*` above already
 // binds the name `cells` to THIS module's own sibling `status_full::cells`
 // (verbs/status_full/cells.rs) — a different module entirely. sweep-at-
@@ -404,7 +405,7 @@ pub(crate) fn build_orient(ctx: &mut Ctx) -> R<JMap> {
     // kinds regardless.
     if opt_truthy(status.get("waiting_on")) {
         let w = status.get("waiting_on").unwrap();
-        if vget(w, "kind").and_then(Value::as_str) != Some("turn-end") {
+        if vget(w, "kind").and_then(Value::as_str) != Some(WAITING_ON_KIND_TURN_END) {
             blockers.push(json!(format!(
                 "awaiting human — {}: {}",
                 tpl(vget(w, "kind")),
