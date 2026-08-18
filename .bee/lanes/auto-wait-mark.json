@@ -13,8 +13,13 @@
   "summary": "Feature \"staging-optional\" started at phase \"exploring\".",
   "next_action": "bee close --feature auto-wait-mark, then a user-invoked review of the merged head",
   "created_at": "2026-08-18T11:57:09.859Z",
-  "run_state": "done",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Nhắc lại: handoff cũ **traceable-runs** vẫn treo, tôi không đụng — nó chờ bạn quyết.",
+    "asked_at": "2026-08-18T15:40:17.315Z",
+    "session": "57dd6bbf-d280-4c42-9da6-61ed72419a29"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",

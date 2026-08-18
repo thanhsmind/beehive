@@ -14,7 +14,12 @@
   "next_action": "Continue bee-exploring for \"doc-deferral-scope\" (lane).",
   "created_at": "2026-08-18T14:36:35.377Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Chưa gây nguy hiểm — nó chặn thừa, không bỏ sót. Nhưng phải sửa.",
+    "asked_at": "2026-08-18T14:50:31.906Z",
+    "session": "837fbcd4-540d-49a6-a882-7366f6bc3f97"
+  },
   "route": {
     "class": "bugfix",
     "lane": "small",
