@@ -1299,9 +1299,8 @@ fn anchor_missing(
     }
     message.push_str(". ");
     message.push_str(
-        "The objective currently lives only in this conversation — the least durable place in the session, and the \
-first thing a compaction compresses, while every workflow detail on disk comes back at full strength. \
-Write it down VERBATIM now: ",
+        "The objective lives only in this conversation — the first thing a compaction compresses, \
+while on-disk workflow records survive at full strength. Write it down VERBATIM now: ",
     );
     message.push_str(ANCHOR_NUDGE_COMMAND);
     Ok(Some((message, hash)))

@@ -569,7 +569,7 @@ use crate::version::BEE_VERSION;
             .unwrap_or_default();
         assert_eq!(
             line,
-            "### Unapplied promote proposal(s): 2 — newest: docs/history/f2/promote-proposals.md — never applied to docs/knowledge/ (D3): review the proposal, then apply what belongs or record why not."
+            "### Unapplied promote proposal(s): 2 — newest: docs/history/f2/promote-proposals.md — review the proposal, then apply what belongs to docs/knowledge/ or record why not."
         );
         // ONE line total — no per-feature enumeration trails it.
         assert!(!text.contains("f1 (1 capped"), "{text}");

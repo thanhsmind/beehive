@@ -130,10 +130,10 @@ fn run_gated(ctx: &HookContext, root: &Path) -> Result<(), Delegate> {
     let mut msg: Option<String> = None;
     if phase == json!("reviewing") {
         msg = Some(
-            "bee chain-nudge: a review agent finished. Collect its findings report, \
-score severities independently (P1/P2/P3), and when all reviewers are done \
+            "bee chain-nudge: a review agent finished. Collect its findings report \
+and score severities independently (P1/P2/P3). When all reviewers are done, \
 synthesize findings (corroboration promotes one level; disagreements go \
-conservative), then present Gate 3."
+conservative) and present Gate 3."
                 .to_string(),
         );
     } else if is_registered_worker || phase == json!("swarming") {
@@ -157,7 +157,7 @@ When the wave is clean, move to the next wave or the next chain step."
             if count > 0 {
                 m.push_str(&format!(
                     "\n\u{26a0} Capture pending: {count} behavior_change cell(s) uncaptured \
-({}) \u{2014} recorded; run bee-capturing when you choose (batching features is fine).",
+({}) \u{2014} run bee-capturing when you choose (batching features is fine).",
                     cells.join(", ")
                 ));
             }

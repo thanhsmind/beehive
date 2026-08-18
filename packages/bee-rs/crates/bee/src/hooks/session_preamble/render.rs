@@ -271,7 +271,7 @@ pub(crate) fn knowledge_context_lines(root: &Path, record: &JMap) -> Vec<String>
             "- `.bee/bin/bee knowledge context --work {feature} --budget {budget}` (anchor: {})",
             anchor.kind()
         ),
-        "- Run it and read the manifest's files before touching code — that manifest is this feature's curated context, and it replaces scanning docs/history.".to_string(),
+        "- Run it and read the manifest's files before touching code — the feature's curated context; it replaces scanning docs/history.".to_string(),
     ]
 }
 
@@ -355,7 +355,7 @@ pub(crate) fn promote_proposal_lines(root: &Path) -> Vec<String> {
         .map(|p| p.path.clone())
         .unwrap_or_default();
     vec![format!(
-        "### Unapplied promote proposal(s): {} — newest: {newest_path} — never applied to docs/knowledge/ (D3): review the proposal, then apply what belongs or record why not.",
+        "### Unapplied promote proposal(s): {} — newest: {newest_path} — review the proposal, then apply what belongs to docs/knowledge/ or record why not.",
         proposals.len()
     )]
 }
@@ -376,7 +376,7 @@ pub(crate) fn reclaimable_worktree_lines(root: &Path) -> Vec<String> {
     }
     vec![
         format!("### Reclaimable worktree(s): {}", ids.len()),
-        "- Merged, clean, and idle past the age threshold, never reached by `bee worktree merge` and never `bee worktree prune`d — run `bee worktree prune --dry-run` to see what it would remove.".to_string(),
+        "- Merged, clean, and idle past the age threshold — run `bee worktree prune --dry-run` to see what it would remove.".to_string(),
     ]
 }
 
