@@ -19,7 +19,7 @@ git rev-parse --path-format=absolute --git-common-dir
 This returns the absolute path to the shared `.git` directory, correct whether
 you were invoked from main or from inside a linked worktree. Strip the trailing
 `/.git` for `<main-root>`. Every command below runs against that path, never
-against whatever directory you happened to start in.
+against your starting cwd.
 
 ### 2. Pre-flight — main must be clean
 
@@ -43,9 +43,9 @@ bee status --json
 ```
 
 Not `full` or `total` → stop and tell the human to raise it — never change it
-yourself; this is a user-owned safety posture bootstrap does not decide on
-their behalf. Below `full`, the dispatch loop would refuse on every cycle
-anyway (Dispatch role §2), so there is nothing to gain by bootstrapping.
+yourself; the bypass level is a user-owned safety posture. Below `full`, the
+dispatch loop refuses every cycle anyway (Dispatch role §2), so there is
+nothing to gain by bootstrapping.
 
 ### 4. Resolve the workspace id
 

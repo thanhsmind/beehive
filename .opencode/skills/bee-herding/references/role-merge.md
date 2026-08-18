@@ -83,15 +83,13 @@ outside. Bee's four conditions are the only signal that can be late but never
 wrong. A granted worktree failing the test is ordinary work in progress, not an
 anomaly — skip it silently and let a later invocation find it once it settles.
 That includes the tail-stuck case (phase alone failing), which dispatch's §4
-names and repairs; this role simply treats it as not finished.
+names and repairs; this role treats it as not finished.
 
 Nothing meets all four → nothing to merge; end quietly.
 
 ### 4. Check for a red-stop marker before merging anything
 
-**Do this before §5's merge command runs for any worktree** — a cold reader
-works top-down, and this must-check-first has to sit ahead of the thing it
-gates.
+**Do this before §5's merge command runs for any worktree.**
 
 **First, clear any wreckage from a killed merge.** If
 `git -C <main-root> rev-parse -q --verify MERGE_HEAD` succeeds, a previous
@@ -175,12 +173,11 @@ the result:
   herdr pane send-text <chat_pane_id> "merge: <slug> is awaiting user acceptance (uat gate not approved) — stopped, no retry, main untouched. Approve with \"bee gate --name uat --approved true\", or skip this one merge with \"bee worktree merge --id <grant-key> --skip-uat\", once the human is ready."
   ```
   No marker file: unlike §4's red-stop, this is not a failed safety check
-  waiting on cleanup — it is ordinary work still in flight from the merge
-  door's own point of view. Bee's own gate state is already the durable
-  record (§3's four conditions read it fresh every pass), so re-checking it
-  next pass costs nothing and needs no local bookkeeping; skip the worktree
-  for the rest of this pass and let a later invocation find it again once
-  the gate flips. Continue to the next finished worktree.
+  waiting on cleanup — it is ordinary work still in flight. Bee's own gate
+  state is already the durable record (§3's four conditions read it fresh
+  every pass); skip the worktree for the rest of this pass and let a later
+  invocation find it again once the gate flips. Continue to the next
+  finished worktree.
 - **`WORKTREE_MERGE_MAIN_DIRTY`.** **An anomaly, not a silent skip.** The MAIN
   checkout has uncommitted changes — something wrote to it outside this loop's
   own read-only checks — and every merge will keep refusing until a human

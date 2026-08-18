@@ -37,7 +37,7 @@ a grant); **merge** runs `git merge --abort` on main, writes `.bee/tmp/`
 markers, and runs `bee worktree merge --cleanup` (deletes a branch, removes a
 worktree). Taken literally, "read-only" would give a dispatch pane that
 cannot dispatch and a merge pane that cannot merge — a silent stall every
-interval, the exact failure this feature exists to kill. The two halves of
+interval. The two halves of
 the posture are **coupled, not separable**: the merge pane runs the project's
 verify against the just-merged tree, so it **executes code the unsandboxed
 working agents wrote**. Narrowing the control panes buys one thing honestly —

@@ -2,7 +2,7 @@
 
 Loaded from `SKILL.md` when charting a map, filing a ticket, or closing
 one. Exact section wording, frontmatter shape, and the resolution
-protocol live here so `SKILL.md` can stay short.
+protocol live here.
 
 ## MAP.md template
 

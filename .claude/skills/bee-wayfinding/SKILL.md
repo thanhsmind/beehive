@@ -26,8 +26,8 @@ an open map that has frontier tickets; a `bee route` Qualify verdict
 that parked an item for vagueness — a map stub already exists there,
 resume it, never re-chart from scratch.
 
-If the sweep below turns up no fog — the way is already clear — write
-no map: route straight to bee-shaping.
+If the sweep below turns up no fog, write no map: route straight to
+bee-shaping.
 
 ## Session 1 — chart the map
 
@@ -58,9 +58,8 @@ no map: route straight to bee-shaping.
 Interviews run in **rounds** over a **question frontier** — every
 question askable now without guessing an answer not yet heard. Ask the
 whole frontier in one round, numbered, each carrying the agent's
-recommended answer — recommending is not answering for the user; the
-user still picks. A question that depends on an answer still open this
-round waits for the next round.
+recommended answer — the user still picks. A question that depends on
+an answer still open this round waits for the next round.
 
 Facts are the agent's job, never the user's. A frontier question that
 needs a repo or environment fact gets a dispatched read — a

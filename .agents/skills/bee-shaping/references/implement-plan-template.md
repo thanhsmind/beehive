@@ -1,6 +1,6 @@
 # Implement-Plan Reference
 
-Load when shaping's Brief move renders an implement plan. The template, the section→source map, and the writing guide live here. The template is present tense, projection-ruled, D-ID-cited, drop-empty, with no fabricated validation.
+Load when shaping's Brief move renders an implement plan. The template is present tense, projection-ruled, D-ID-cited, drop-empty, with no fabricated validation.
 
 Path: `docs/history/<feature>/implement-plan.md`. One file per feature, chosen at first render, updated in place forever. Never `-v2`/`-new`/dated.
 

@@ -130,4 +130,4 @@ bee backlog add --type kill-outcome --title "<what died>" \
   --detail "<predicted vs actual, incl. surprises>" --feature <feature>
 ```
 
-A prediction that missed is the most valuable thing the pass produced — hand it to bee-capturing as a learning candidate.
+Hand a missed prediction to bee-capturing as a learning candidate.

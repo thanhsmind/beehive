@@ -194,7 +194,7 @@ Every skill ends with an explicit handoff: `[Outcome]. Invoke bee-<next-skill> s
 
 The repo artifacts are the single source of truth for what work exists and its state: **cells** (`.bee/cells/`) for in-flight execution and the **PBI rows** in `docs/backlog.md` for product intent. A session's todo list — `TaskCreate`, `TodoWrite`, and any equivalent scratch checklist — is an **ephemeral projection** of those durable records, never the reverse.
 
-The mapping is one-way: cells and PBI rows generate the session todo list, and no edit to that list ever writes back to a cell or a backlog row. When the two disagree, the repo artifact wins and the session list is regenerated from it. A todo item with no cell or PBI behind it is a projection bug, not a new unit of work — file the cell or the backlog row first, then let the list re-derive. This keeps the durable layer authoritative and the chat/session state disposable.
+The mapping is one-way: cells and PBI rows generate the session todo list, and no edit to that list ever writes back to a cell or a backlog row. When the two disagree, the repo artifact wins and the session list is regenerated from it. A todo item with no cell or PBI behind it is a projection bug, not a new unit of work — file the cell or the backlog row first, then let the list re-derive.
 
 ## Communication contract
 
@@ -248,7 +248,7 @@ leading and never as achievement statistics. Protocol and record surfaces —
 worker status tokens, cap traces, decision logs, CONTEXT.md — keep their ids,
 because that is where ids live.
 
-One example teaches this better than the list does:
+Example:
 
 ```text
 ✗  Great question! I've now completed the analysis of the authentication

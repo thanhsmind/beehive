@@ -29,7 +29,7 @@ the touched area.
 
 ### Route record
 
-`bee route --set` persists one validated record on the ACTIVE feature's workflow record: `{class, lane, flags[], product_files, rationale}`. Enum-checked, typed refusals — free prose is refused, that is the point:
+`bee route --set` persists one validated record on the ACTIVE feature's workflow record: `{class, lane, flags[], product_files, rationale}`. Enum-checked, typed refusals — free prose is refused:
 
 - `class` ∈ `feature`, `bugfix`, `docs`, `refactor`, `research`, `release`, `spike`
 - `lane` ∈ `docs`, `tiny`, `small`, `spike`, `standard`, `high-risk`
@@ -48,7 +48,7 @@ Mode-gate records in `plan.md` and cells cite this line rather than re-deriving 
 
 ### Re-lane checkpoint (evidence-based demotion)
 
-Triage lanes the work from the request text alone, before any repo evidence, and uncertainty resolves upward. That is correct as a *guessing* rule — but nothing re-examines the guess once evidence exists, so an ambiguous request for a two-file change pays the full standard pipeline. This checkpoint converts **measured evidence** into a smaller lane. Never optimism, never a re-argued count.
+Triage lanes the work from the request text alone, before any repo evidence, and uncertainty resolves upward. This checkpoint re-examines that guess once evidence exists: it converts **measured evidence** into a smaller lane. Never optimism, never a re-argued count.
 
 **Exactly one checkpoint per feature, immediately after the first evidence pass:**
 
@@ -94,10 +94,9 @@ When `bee_status --json` reports recovery candidates (a stale-heartbeat session 
 
 ### Ship visibility
 
-bee works invisibly in `docs/history/` and `.bee/` state, so under bypass the first
-thing a human sees is often the last thing produced. Two mechanisms surface results
-where humans already look. No gate, proof, or evidence rule moves; never auto-merge;
-never work on `main`/default branches directly.
+Two mechanisms surface results where humans already look — bee otherwise works
+invisibly in `docs/history/` and `.bee/` state. No gate, proof, or evidence rule
+moves; never auto-merge; never work on `main`/default branches directly.
 
 **Draft PR, push per cap.** Config key `ship_visibility` in `.bee/config.json`:
 `"draft-pr" | "push-only" | "off"`. Default by lane: `tiny` defaults to

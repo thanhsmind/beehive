@@ -31,7 +31,7 @@ git -C <main-root> rm --cached .bee/logs/*.jsonl
 git -C <main-root> commit -m "chore: untrack bee session logs"
 ```
 
-**2. `gate_bypass` must be `full` or `total`.** Dispatch refuses to operate below that and will tell you so, every cycle. Check with `bee status --json`. This is deliberate: an agent working unattended must not inherit `normal`'s latitude for hard-gate work.
+**2. `gate_bypass` must be `full` or `total`.** Dispatch refuses to operate below that and says so every cycle. Check with `bee status --json`. This is deliberate: an agent working unattended must not inherit `normal`'s latitude for hard-gate work.
 
 **3. You must explicitly enable dispatch — it will not run on its own.** Dispatch refuses to build *any* dispatchable set until you create an owner enable marker:
 
@@ -39,9 +39,9 @@ git -C <main-root> commit -m "chore: untrack bee session logs"
 touch <main-root>/.bee/tmp/bee-herding.enable
 ```
 
-The CLI verbs that used to spell this — `bee herding enable`, `bee herding disable`, `bee herding status` — are **not built into the current binary** (they were never ported off Node and now refuse by name). The `touch`/`rm` above IS the gesture, byte for byte; it was always owner-typed and never called by bee automation, so nothing is lost.
+The CLI verbs that used to spell this — `bee herding enable`, `bee herding disable`, `bee herding status` — are **not built into the current binary** (they were never ported off Node and now refuse by name). The `touch`/`rm` above IS the gesture, byte for byte; it was always owner-typed and never called by bee automation.
 
-Remove the file to disable dispatch again (it takes effect at the next interval). This interlock is deliberate and load-bearing: this repo's **ordinary post-exploring state is already the dispatchable state** — the moment a feature finishes exploring, its row is `in-flight` with a slug, a CONTEXT.md, no worktree and no cells, which is every condition below. Without the marker, dispatch would start picking up whatever exploring last produced, unattended. The marker is your explicit "yes, run this now." Nothing else creates it; no agent creates it; only you.
+Remove the file to disable dispatch again (it takes effect at the next interval). This interlock is load-bearing: this repo's **ordinary post-exploring state is already the dispatchable state** — the moment a feature finishes exploring, its row is `in-flight` with a slug, a CONTEXT.md, no worktree and no cells, which is every condition below. Without the marker, dispatch would start picking up whatever exploring last produced, unattended. The marker is your explicit "yes, run this now." Only you create it — never an agent.
 
 **4. There must be something ready.** The loop does not invent work — it picks up items *you* have already taken through exploring. Once dispatch is enabled, an item is dispatchable only when **all four** hold:
 
@@ -75,9 +75,9 @@ bash .claude/skills/bee-herding/scripts/control-loop.sh \
     --role merge --main-root <main-root> --timeout 5400 --once
 ```
 
-It makes one pass: merges each finished worktree, runs verify, closes the merged pane, and stops cold — no retry — on a red verify. Then it exits. Nothing merges again until you run it again. This is the point: the highest-authority action in the system never happens while you are away.
+It makes one pass: merges each finished worktree, runs verify, closes the merged pane, and stops cold — no retry — on a red verify. Then it exits; nothing merges again until you run it again. The highest-authority action in the system never happens while you are away.
 
-**Or invoke the skill directly.** Instead of running the script yourself, you can just invoke `bee-herding` with no `--role` given — the agent resolves `<main-root>` and the workspace id itself, runs the same two pre-flight checks above (main clean, `gate_bypass_level` full/total), checks for an already-running cockpit, and then runs `bootstrap-cockpit.sh` for you, passing through `--dry-run`/`--no-start` if you ask for either. The manual invocation above is still there and still useful for scripting or testing — this is just an alternative path for the common case.
+**Or invoke the skill directly.** Invoke `bee-herding` with no `--role` given — the agent resolves `<main-root>` and the workspace id itself, runs the same two pre-flight checks above (main clean, `gate_bypass_level` full/total), checks for an already-running cockpit, and then runs `bootstrap-cockpit.sh` for you, passing through `--dry-run`/`--no-start` if you ask for either. The manual invocation above remains useful for scripting or testing.
 
 ## Is it working?
 
@@ -87,7 +87,7 @@ Watch your chat pane. Working looks like:
 - `dispatch: refusing <PBI-ID> — <what it saw>` when it declines something
 - `merge: <slug> merged and cleaned up`
 
-**Silence is ambiguous** and worth understanding: it means either nothing is ready, or all four slots are busy. Both are normal. `herdr pane list --workspace <id>` shows you which — a runtime pane per live item, labelled with its worktree.
+**Silence is ambiguous**: either nothing is ready, or all four slots are busy. Both are normal. `herdr pane list --workspace <id>` shows which — a runtime pane per live item, labelled with its worktree.
 
 ## Stop and resume
 
@@ -110,7 +110,7 @@ Removing the stop file does not restart the loop: it only lets it be started aga
 rm <main-root>/.bee/tmp/bee-herding.red.<slug>
 ```
 
-Until you remove it, that worktree is skipped by the merge gesture. **This is on purpose.** Merge stops cold on red and never re-runs verify on its own — a genuine conflict that happened to pass on a second run would slip through the only gate the merge has. (Since merge is a hand-run gesture anyway, "retry" only happens if you run it again — and the marker makes even that a deliberate, marker-clearing act.)
+Until you remove it, that worktree is skipped by the merge gesture. **This is on purpose.** Merge stops cold on red and never re-runs verify on its own — a genuine conflict that happened to pass on a second run would slip through the only gate the merge has. (Merge is hand-run, so "retry" only happens when you run it again — and the marker makes even that a deliberate, marker-clearing act.)
 
 **An anomaly is reported once, not once per cycle.** An unlabelled runtime pane, or one whose agent died mid-item, is reported and then left alone — never silently reclaimed. Its slot stays held until you deal with it. Four of those deadlock the runtime.
 

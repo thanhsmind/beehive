@@ -4,43 +4,51 @@
   "skills": [
     {
       "name": "bee-capturing",
-      "sha256": "4f882023e9798dc6b3a025abd3000facd8ffc3395531426deb5f37d24084ed0a"
+      "sha256": "a9ddd63773d24712d02a3f024cccef4052a85cef53e563ae27d19aab17e5ef56"
+    },
+    {
+      "name": "bee-evolving",
+      "sha256": "f00217a8a58897c5907b5656eeb325d1ae1d9de38c2521637e93d470af1aea11"
     },
     {
       "name": "bee-grooming",
-      "sha256": "89904a5d6ced1ab5ad19d595e42b1957a001993bb72957c9d85f876e3901b0e5"
+      "sha256": "e8111ae422b04d57079a710b983f04632921b0bf2252b05bcb24ce41bc441442"
     },
     {
       "name": "bee-herding",
-      "sha256": "783af4a03ddb1069452cf56c8456e563eee054a8bfda1993534730807b5c99f5"
+      "sha256": "4fa8a926faceafa8ae657076dffe2c36e03ba7ce061b9e9f32e669adc42606f0"
     },
     {
       "name": "bee-hive",
-      "sha256": "b57e66c38f57cc5c28c797d61e07d8d147b337d188cab1398e0e7c23b15cb00e"
+      "sha256": "287ba72e84ad6be09a7b3dca55633ccc3fdf4a8f03fcf13ca277a4c617f3676c"
     },
     {
       "name": "bee-planning",
-      "sha256": "cea6c9571709a29ffa64e248b77bc39f165584dd2e9d6508bb9c246d96d58fb0"
+      "sha256": "e749790b50cbdd901c40e20de57a95272c6a40a3f280e6b8f6ad0266acc6833e"
     },
     {
       "name": "bee-researching",
-      "sha256": "b77592777a6219259ca17c914a2a540939cdf873381cc460afe09ef091275db5"
+      "sha256": "e0508c307b409074959c9683a38e062b1a04f7dd903b282a258b01949280e6e2"
     },
     {
       "name": "bee-reviewing",
-      "sha256": "3a0f37fe90cedb028a871cf41d4fa6713ade2841bc0968e267f4b4cfbf5f49a5"
+      "sha256": "831bf75bdaa6d9cd20e325f3c4769e7d2a422cc86c5a88d1911ce2930e93281b"
     },
     {
       "name": "bee-shaping",
-      "sha256": "2e5504874daeb0ef473663197f91312c6faa3a0df456defa39cb8ccf2a24e069"
+      "sha256": "0655677f18ba0f02814e1b6e3804cb300b4ff57faec889e7aee3638061a256de"
     },
     {
       "name": "bee-swarming",
-      "sha256": "4fbbd3cc01c31aba308b0b1be2b9c0dbeb17d07ef4368d8286a3891471009af8"
+      "sha256": "7afdf6345d62cc40f07cf9ea33d52725137968c0016d435734bdcfb1334f97be"
     },
     {
       "name": "bee-wayfinding",
-      "sha256": "bf589cb886d40744782262fd34f8ef47843c232ba9849a253f48ff75be7c3ccb"
+      "sha256": "d900095eda9e615603fbe9f2a2c63fb0d7038b0afe7f62fb108e142603116c64"
+    },
+    {
+      "name": "bee-writing-skills",
+      "sha256": "59b46e2db23d09b357b6a2896322a18b51d4fc2aedd1d781dee50916535fe8e5"
     }
   ]
 }

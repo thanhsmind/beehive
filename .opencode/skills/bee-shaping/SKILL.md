@@ -61,8 +61,8 @@ Make each reasoning move in plain words — "let me check what we're
 assuming", not "applying First Principles"; the method names in
 `.bee/expertise/thinking.md` are your routing table, not conversation
 vocabulary. `bee decisions log` the moment each answer settles — never
-batched at the end. Scope creep is deferred with `bee backlog add`, then
-back to the current question. Never answer your own question.
+batched at the end. Defer scope creep with `bee backlog add`, then
+return to the current question. Never answer your own question.
 
 Stop when every locked decision can be written without inventing intent
 and each remaining unknown is a named Open Question; past that,
@@ -79,9 +79,9 @@ on this path; everything unresolved is written down, never guessed.
    (`docs/knowledge/areas/<area>/`; no bundle: `docs/specs/<area>.md`).
    Never judge from the row alone. A bug-shaped item gets its claim
    verified by reproducing it, or by recording the failed reproduction
-   attempt as evidence, before any verdict. Check for redundancy or
-   duplication by searching decisions and the backlog for the same
-   domain concept, never by matching the request's wording.
+   attempt as evidence, before any verdict. Check for duplication by
+   searching decisions and the backlog for the same domain concept,
+   never by matching the request's wording.
 2. Risk territory (auth, data loss, security, external providers,
    validation removal) parks at any confidence — risk is a property of
    the change, not of the assessor's certainty.

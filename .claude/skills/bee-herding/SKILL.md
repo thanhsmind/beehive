@@ -81,9 +81,8 @@ Full record for each: `references/operational-invariants.md`.
   control loop at the next iteration boundary; agents already running
   never read it — close their panes to stop them. Removing the file
   allows a restart (re-run bootstrap; it never self-restarts).
-- **Carry nothing over.** Assumptions from "an earlier iteration" are
-  the defect this design kills — only bee state, git, and the herdr
-  workspace persist.
+- **Carry nothing over.** Never act on an assumption from an earlier
+  iteration — only bee state, git, and the herdr workspace persist.
 
 ## Runtime adapter
 

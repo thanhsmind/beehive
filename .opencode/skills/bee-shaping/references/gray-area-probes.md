@@ -8,7 +8,7 @@ constrain the answer.
 
 Stop generating when 2–4 probes pass the materiality test
 (`shaping-reference.md`, "Materiality test"). The domain lists below are
-menus, never checklists — don't walk one top to bottom, and don't ask a
+menus, never checklists — never walk one top to bottom, never ask a
 probe whose answer the scout can already cite.
 
 ## Domain Probes

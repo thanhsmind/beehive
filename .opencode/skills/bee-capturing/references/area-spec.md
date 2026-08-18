@@ -63,7 +63,7 @@ reads as a statement, not an oversight.
 
 Path (no bundle): `docs/specs/<area>.md`. Area name: kebab-case,
 chosen at first write, stable forever. Overwrite/merge freely — this
-file always describes *now*; history lives in git and `docs/history/`.
+file always describes *now*.
 With a bundle, these nine sections are the body contract of the area
 concept; the per-section rules below are unchanged.
 

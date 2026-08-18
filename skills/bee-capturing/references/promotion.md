@@ -11,9 +11,9 @@ template applies.
 **Read the layer before you read the feature.** Two reads, in this
 order: the existing patterns and area concepts for every area this
 feature touched, then the feature's own artifacts. Reversed, the
-harvest produces entries the layer already holds — and a duplicate is
-not free, because it clears the promotion bar on its own merits and
-then taxes every future session twice.
+harvest duplicates entries the layer already holds — each clears the
+promotion bar on its own merits, then taxes every future session
+twice.
 
 **Rank the sources by what they observed.** Review findings and
 verification output rank first: an independent reader or a command
@@ -47,9 +47,9 @@ the learning itself.
 **Every attributed claim carries its quote.** A learning that rests on
 a review finding, a user answer, or a command's output quotes the
 words it rests on, verbatim, and names where they came from. A
-paraphrase cannot be checked later, and an attribution nobody can
-check is how an invented finding enters the layer wearing the
-authority of an observed one. Decisions additionally carry their
+paraphrase cannot be checked later, and an uncheckable attribution
+lets an invented finding wear the authority of an observed one.
+Decisions additionally carry their
 short8 id (`references/citations.md`) so a supersede sweep can reach
 the passage.
 

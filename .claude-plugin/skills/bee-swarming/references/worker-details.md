@@ -40,7 +40,7 @@ Startup runs ZERO of these: the dispatch prompt inlines the cell JSON and the st
 .bee/bin/bee decisions active --recent 3
 ```
 
-`cells finish` caps the cell and releases its reservations in one verb — commit-only proof; tests prove at the boundary (`bee close`/`bee worktree merge`). `bee test` alone runs the suite when you want the record in front of you.
+`cells finish` caps the cell and releases its reservations in one verb — commit-only proof, per the boundary rule above. `bee test` alone runs the suite when you want the record in front of you.
 
 Shell guard for write-heavy commands (`git add/mv/rm`, `mv`, `cp`, `rm`, `mkdir`, `touch`, `sed -i`, `tee`, redirection writes):
 
@@ -50,7 +50,7 @@ BEE_AGENT_NAME="<name>" git add src/foo.ts
 
 ## Assigned Cell Check
 
-For the one assigned cell, confirm before starting (the orchestrator claims before spawning; the worker only validates, never claims):
+For the one assigned cell, confirm before starting:
 
 - the INLINED cell JSON in your dispatch prompt shows `status: "claimed"` with `trace.worker` matching your nickname — a different worker, no claim, or any other status is not yours to touch; a prompt with no inlined cell JSON is malformed → `[BLOCKED]`
 - all `deps` are capped

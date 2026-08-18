@@ -8,8 +8,8 @@ steps a running session executes.
 
 ## Onboarding Protocol
 
-`SKILL.md`'s Onboarding section carries the three steps a session actually runs; this is the full
-status contract behind them (the router keeps the steps, this file keeps the detail). Run the bee
+This file is the full status contract behind the three steps in `SKILL.md`'s
+Onboarding section (the router keeps the steps, this file keeps the detail). Run the bee
 binary from the bee source root (the checkout or installed plugin package) — `onboard` is a
 subcommand of the same binary every other verb uses:
 

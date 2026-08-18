@@ -35,10 +35,9 @@ on.
 Before the hunt, compute bee's own entropy score and its trend vs. the
 last run (formula, counting rules, trend record:
 `references/grooming-reference.md` ("Entropy Computation")). Report
-both in a few lines — never as the headline; the project hunt below is
-the main event. The one term about the user's own docs (stale specs)
-carries into the hunt; broken tools and bee-lib bugs are harness
-health, routed upstream.
+both in a few lines — never as the headline. Stale specs — the one
+term about the user's own docs — carries into the hunt; broken tools
+and bee-lib bugs are harness health, routed upstream.
 
 ## Hunt
 
@@ -93,8 +92,7 @@ cheap subagents under the Delegation contract
 After each kill, record the actual outcome against the prediction with
 `bee backlog add` (fields: `references/grooming-reference.md`
 ("Outcome Template")). A wrong prediction is signal, not
-embarrassment — feed durable lessons to bee-capturing; grooming that
-never learns mows the same grass forever.
+embarrassment — feed durable lessons to bee-capturing.
 
 ## Headless
 

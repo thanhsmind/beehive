@@ -26,7 +26,7 @@ piling.
 
 ## Capture the moment it settles
 
-Detection is your own duty, unprompted. Most settlements are silent —
+Detect settlements yourself, unprompted. Most settlements are silent —
 the user confirms a behavior, accepts an explanation, picks a value,
 moves on — and a spoken settlement ("final", "ok ship it") is captured
 that same turn, never deferred. Do not ask "should I document this?";
@@ -41,8 +41,8 @@ announce what settled, then record it:
   yet implemented — see backlog", never stated as current.
 
 Close every task with a capture line or an explicit "nothing settled"
-(AGENTS.md) — cell, docs write, quick fix alike; by default smallness is not
-the answer. What deserves a record at all, and at what grain:
+(AGENTS.md) — cell, docs write, quick fix alike; smallness is not an
+exemption by default. What deserves a record at all, and at what grain:
 `.bee/expertise/decisions.md`.
 
 ## Scribe — keep area specs current

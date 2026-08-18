@@ -27,16 +27,16 @@ reservations in the same verb; tests prove at the boundary: `bee close`
 runs `commands.test` when the feature has no worktree, `bee worktree
 merge` runs it when it does). Then it returns exactly one status token.
 
-**Default — parallel:** a `small` lane's cells (1-3) fan
-out to concurrent execution workers whenever every cell's *product* file set
-is disjoint — reservations are the proof and the police (the guard denies an
-overlap; the worker count is a default, ~3-4 live). Serial is the exception and
-carries a named conflict in the dispatch note. `tiny` stays
-single-cell by shape, so the concurrency question does not arise; `small`'s
-extra cells scale the WORK and, when disjoint, the concurrency too — never
-concurrency wearing an unrecorded conflict. Two or more live small-lane
-workers with an undeclared overlap is a wave shape wearing a `small` lane —
-the ceremony mismatch lane scaling exists to catch.
+**Default — parallel:** a `small` lane's cells (1-3) fan out to
+concurrent execution workers whenever every cell's *product* file set is
+disjoint — reservations are the proof and the police (the guard denies an
+overlap; the worker count is a default, ~3-4 live). Serial is the
+exception and carries a named conflict in the dispatch note. `tiny` stays
+single-cell by shape, so the concurrency question does not arise;
+`small`'s extra cells scale the WORK and, when disjoint, the concurrency
+too — never concurrency with an unrecorded conflict. Two or more live
+small-lane workers with an undeclared overlap is a lane mismatch: a wave
+shape run under a `small` lane.
 
 **Disjointness and the wave-barrier regen protocol:** a cell's *effective*
 file set for the disjointness check excludes shared generated artifacts
@@ -272,7 +272,7 @@ Only the **cheaper** slots are configured, in `.bee/config.json` `models`, keyed
 
 A slot value may also be `{ "model": "opus", "effort": "xhigh" }` (per-agent reasoning effort, applied where the runtime supports it, silently recorded where it does not; levels: low/medium/high/xhigh/max) or `{ "kind": "cli", "command": "..." }` (external executor, section below — effort rides inside the command). The `review` slot is consumed by bee-reviewing's specialists, exploring's fresh-eyes, and bee-planning's merged reviewer (the review wave — Structure + cold-pickup cell review); `null` review falls back to generation. **Copy-paste presets** (all-claude, tuned, GPT adversarial review, codex-implements, antigravity/`agy`, opencode, budget): `docs/model-presets.md` in the bee repo — including the `bash -lc '… "$(cat)"'` wrapper every CLI that cannot read the prompt from stdin (`agy`, `opencode`) needs to satisfy the stdin transport in step 3 below.
 
-- **ceiling** = the strongest model in play = **the session model itself** (no config entry). A ceiling cell inherits the session model — omit the `model` param **and** carry the `[bee-tier: ceiling]` marker, anchored to the first non-whitespace token of the prompt or the start of the description (a marker anywhere else never counts). Keep it scarce: planning, integration, architecture, final review only. Touch it on every dispatch and the saving evaporates.
+- **ceiling** = the strongest model in play = **the session model itself** (no config entry). A ceiling cell inherits the session model — omit the `model` param **and** carry the `[bee-tier: ceiling]` marker, anchored to the first non-whitespace token of the prompt or the start of the description (a marker anywhere else never counts). Keep it scarce: planning, integration, architecture, final review only.
 - **generation** = the mid worker that runs the loops (implementation, test writing). Where the bulk of dispatches go.
 - **extraction** = cheapest capable (retrieval, mechanical edits).
 - A **null** tier means the runtime cannot switch per-agent models (Codex today) → state the tier in the worker prompt and enforce it as a read budget + output cap. Set real ids (e.g. `"generation": "gpt-5"`) only if your runtime supports per-agent selection.
@@ -283,7 +283,7 @@ Resolve a tier for the active runtime before spawning:
 .bee/bin/bee status --json    # .models shows both runtime maps
 ```
 
-Or in code: `resolveTier(root, tier, runtime, purpose?)` returns a typed dispatch — `{type:'inherit'}` (ceiling → omit the model param and carry the anchored `[bee-tier: ceiling]` marker), `{type:'model', model}`, `{type:'budget'}` (prompt-enforced tier, anchored `[bee-tier: <tier>]` marker), `{type:'cli', command}` (external executor, below — only when `purpose` is the explicit `{for:'gather'}`), or `{type:'refused', reason:'cli_tier_gather_only', slot, fix}` (a cli-shaped tier resolving without `{for:'gather'}`). The optional 4th param `purpose` is shaped `{for:'gather'|'cell'}` and **defaults to `'cell'`** — the fail-safe side: every bare 3-arg call, and any missing/malformed `purpose`, resolves cli-shaped values as a refusal; only an explicit `{for:'gather'}` unlocks `{type:'cli'}`. Non-cli values ignore `purpose` entirely. `modelForTier` returns a model name or `null` (it calls `resolveTier` with no purpose, so cli degrades to `null`). Two shapes, one map: keep the strongest model as `ceiling` and it stays scarce as the orchestrator (fan-out).
+Or in code: `resolveTier(root, tier, runtime, purpose?)` returns a typed dispatch — `{type:'inherit'}` (ceiling → omit the model param and carry the anchored `[bee-tier: ceiling]` marker), `{type:'model', model}`, `{type:'budget'}` (prompt-enforced tier, anchored `[bee-tier: <tier>]` marker), `{type:'cli', command}` (external executor, below — only when `purpose` is the explicit `{for:'gather'}`), or `{type:'refused', reason:'cli_tier_gather_only', slot, fix}` (a cli-shaped tier resolving without `{for:'gather'}`). The optional 4th param `purpose` is shaped `{for:'gather'|'cell'}` and **defaults to `'cell'`** — the fail-safe side: every bare 3-arg call, and any missing/malformed `purpose`, resolves cli-shaped values as a refusal; only an explicit `{for:'gather'}` unlocks `{type:'cli'}`. Non-cli values ignore `purpose` entirely. `modelForTier` returns a model name or `null` (it calls `resolveTier` with no purpose, so cli degrades to `null`).
 
 Every dispatch carries an explicit tier marker: `inherit` needs the [bee-tier: ceiling] marker anchored to the first non-whitespace token of the prompt, or the description must start with it; `budget` needs the matching [bee-tier: <tier>] marker anchored the same way, stated alongside the budget in the prompt. A marker anywhere else — embedded mid-prompt or mid-description — never satisfies the transport, and a bare dispatch with neither the model param nor an anchored marker is denied by the model-guard hook.
 

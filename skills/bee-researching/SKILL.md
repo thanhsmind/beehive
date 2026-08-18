@@ -74,7 +74,7 @@ only when paths differ materially in behavior, risk, or migration cost.
   `references/research-brief-template.md`, lead with the Bottom Line,
   and suggest the next step — bee-shaping if the topic is becoming a
   feature, bee-planning if scope is already clear.
-- A genuinely new first-principles finding is worth keeping — flag it for bee-capturing.
+- Flag a genuinely new first-principles finding for bee-capturing.
 
 ## Hard rules
 

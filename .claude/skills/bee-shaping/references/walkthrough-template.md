@@ -1,8 +1,8 @@
 # Walkthrough Reference
 
-Load when shaping's Brief move writes the post-ship walkthrough (post-Gate-3, `standard`/`high-risk` only). The walkthrough is the post-implementation summary that closes the loop: reconstructed from execution records, evidence-honest, findings-transparent.
+Load when shaping's Brief move writes the post-ship walkthrough (post-Gate-3, `standard`/`high-risk` only). The walkthrough is the post-implementation summary: reconstructed from execution records, evidence-honest, findings-transparent.
 
-Path: `docs/history/<feature>/walkthrough.md`. One file per feature, written once at Gate 3, updated in place if the feature is reopened. Never forked.
+Path: `docs/history/<feature>/walkthrough.md`. One file per feature, written once at Gate 3, updated in place if the feature is reopened.
 
 ## The one rule that shapes everything
 
@@ -16,7 +16,7 @@ Path: `docs/history/<feature>/walkthrough.md`. One file per feature, written onc
 | Deviations from plan | cells' `deviations` field | (this section only exists because the plan and reality differ) |
 | Known limitations / follow-ups | review P2/P3 findings + their backlog links + open gaps | omission to look clean |
 
-Where the plan and the records disagree, the records win and the difference is named — silent divergence misleads the next reader.
+Where the plan and the records disagree, the records win and the difference is named.
 
 ## Template
 

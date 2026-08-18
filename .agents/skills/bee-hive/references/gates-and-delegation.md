@@ -51,13 +51,13 @@ A gate message has two layers, and **only the human layer goes into chat**:
 
 2. **Machine layer (the linked report)** — the full mechanical material (reality-gate tables, feasibility matrices, plan-checker findings, cell lists) is written to `docs/history/<feature>/reports/` and **linked** from the gate message. It is never pasted into the gate message. It exists for the agent, the audit trail, and grooming — not for the human's eyes at decision time.
 
-Litmus test: **the user must be able to restate what they are approving in their own words.** A gate the user cannot restate is a dead gate — worse than no gate, because it manufactures false confidence. A technical term (BLOCKER count, spike id) may appear in the human layer only with an immediate plain-language gloss.
+Litmus test: **the user must be able to restate what they are approving in their own words.** A gate the user cannot restate is a dead gate. A technical term (BLOCKER count, spike id) may appear in the human layer only with an immediate plain-language gloss.
 
 This contract applies to all three gates, in every mode, including go mode.
 
 ### AskUserQuestion — honor the tool's schema (a valid call, every time)
 
-Gates, decisions, and confirm-before-doing prompts are presented with the `AskUserQuestion` tool. If the call violates the tool's schema the harness rejects the **whole** call with **"Invalid tool parameters"** — a recurring, silent waste (the model then retries a valid one). Build the call inside these limits:
+Gates, decisions, and confirm-before-doing prompts are presented with the `AskUserQuestion` tool. If the call violates the tool's schema the harness rejects the **whole** call with **"Invalid tool parameters"**. Build the call inside these limits:
 
 - **`header` ≤ 12 characters** — it is a short chip label, NOT the question. Vietnamese/English descriptive headers ("Xử lý external", "Cách hiển thị") overflow instantly — use "Approach", "Scope", "External". **This is the #1 cause of the error.**
 - **2–4 options per question** — never 1, never 5+. An "Other" free-text choice is added automatically, so fold overflow there or into a follow-up question.
@@ -72,7 +72,7 @@ Off by default. Set from `bee-hive`'s Gates section — on the user's instructio
 
 **Scope of the switch (D2, traceable-runs).** `gate_bypass` decides only whether the run STOPS for the human at a gate; it never decides whether that gate's brief or approval record EXISTS. Every code-touching lane's brief (Lane ceremony table, `routing-and-contracts.md`) is written before the gate is reached regardless of bypass, and the approval record is always written at the gate — bypassed or not. What differs is the `actor` on that record: `"user"` when a human answered, `"auto"` plus the bypass level and reason when the agent auto-approved (below).
 
-**`gate_bypass` is a level.** The config value normalizes to a level, and the level decides how far bypass reaches. The whole point of the levels above `normal` is that the human said, in advance and explicitly, "when you have a recommended option I will always approve it — do not stop me; the result is what I care about." Honor that literally: at the chosen level, the recommended option IS the approval.
+**`gate_bypass` is a level.** The config value normalizes to a level, and the level decides how far bypass reaches. Above `normal`, the human has said, in advance and explicitly, "when you have a recommended option I will always approve it — do not stop me; the result is what I care about." Honor that literally: at the chosen level, the recommended option IS the approval.
 
 | Level | Config value | Auto-approves | Still stops for the human |
 |---|---|---|---|
@@ -138,8 +138,7 @@ Rules bind differently by rule kind and by role.
    that does not explicitly lift them: gate-before-source, declared tests
    green at the boundary (`bee close`/`bee worktree merge`), CLI-only state
    mutation, reservations/holds, secret handling. These constrain
-   OUTCOMES; they bind rarely and at the right moments. They are never
-   "form".
+   OUTCOMES. They are never "form".
 2. **Form rules** constrain the PATH between boundaries: step order, line
    shapes, templates, tick phrasing, report structure. For a cold dispatched
    worker they are rails — followed as written, deviation only through the

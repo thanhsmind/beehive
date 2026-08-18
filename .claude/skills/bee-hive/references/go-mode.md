@@ -1,6 +1,6 @@
 # Go Mode — Step-by-Step Reference
 
-Load this when executing go mode. Go mode is the full bee pipeline from raw feature request to compounded learnings, closing verified but `unreviewed`. It chains every skill in sequence with up to **2 human gates** (fewer when the opt-in gate-bypass switch is on — see the end of this file). Each gate protects the next irreversible commitment. **Go mode never auto-enters independent review** — `bee-reviewing` and its Gate 3 are a separate, user-invoked flow layered over a completed scope; see the boxed note after the diagram.
+Load this when executing go mode — the full bee pipeline from raw feature request to compounded learnings, closing verified but `unreviewed`. It chains every skill in sequence with up to **2 human gates** (fewer when the opt-in gate-bypass switch is on — see the end of this file). **Go mode never auto-enters independent review** — `bee-reviewing` and its Gate 3 are a separate, user-invoked flow layered over a completed scope; see the boxed note after the diagram.
 
 Trigger: `/go [feature]`, "run the full pipeline", or "go mode".
 

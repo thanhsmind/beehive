@@ -26,14 +26,12 @@ main is control-plane and fine; a Task-tool worker inherits the session's
 OS cwd, so dispatching an execution worker while cwd is main cannot write
 into the worktree and dies on the write guard — enter the worktree first
 (EnterWorktree on Claude Code, or a session/pane opened at the worktree
-path) and dispatch from there. A `tiny` cell
-may run inline in this session;
-`small` and up always dispatches — one worker per cell
+path) and dispatch from there. A `tiny` cell may run inline in this
+session; `small` and up always dispatches — one worker per cell
 (`references/swarming-reference.md` ("Single execution worker in full")),
-parallel by default: disjoint cells fan out concurrently
-(reservations prove it, 3-4 live workers cap it), serial needs a named
-file conflict. From two
-cells up, state the one-line concurrency plan before dispatching.
+parallel by default: disjoint cells fan out concurrently (reservations
+prove it, 3-4 live workers cap it), serial needs a named file conflict.
+From two cells up, state the one-line concurrency plan before dispatching.
 
 1. `bee cells schedule --json` sets dispatch order — override only with a
    stated reason. Overlapping-file cells are fixed by scope or
@@ -58,10 +56,9 @@ cells up, state the one-line concurrency plan before dispatching.
    `bee cells list` and `bee reservations list` before assuming stuck.
 5. On `[DONE]`: the worker's word is never the evidence. Goal-check on
    smell; `bee cells judge` for undeclared-file hits. At
-   `standard`/`high-risk` the semantic judge is not judgment but a door:
-   every `behavior_change` cell owes a `bee cells judge-record` verdict or
-   `bee close` refuses (`judge-debt`), so run the slice judge before you
-   reach for close.
+   `standard`/`high-risk`, every `behavior_change` cell owes a
+   `bee cells judge-record` verdict or `bee close` refuses (`judge-debt`) —
+   run the slice judge before you reach for close.
 6. Slice clean: `bee close --feature <slug> --dry-run` names every
    remaining door with the command that settles it; tests prove at the
    boundary: the final slice runs `bee close --feature <slug>`, which

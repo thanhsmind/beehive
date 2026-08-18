@@ -17,9 +17,9 @@ metadata:
 
 ## Start
 
-Run `bee orient` — it names the phase, the blockers, and the next skill; follow it.
-A pending handoff is presented to the user and never auto-resumed. Orient is for routing,
-starting, or resuming work; plain questions are already answered by the session preamble.
+Run `bee orient` only when routing, starting, or resuming work — it names the phase,
+the blockers, and the next skill; follow it. Present a pending handoff to the user;
+never auto-resume it. A plain question is already answered by the session preamble.
 
 ## Route
 
@@ -73,8 +73,7 @@ A freshly onboarded project has craft (`.bee/expertise/`) but an empty
 knowledge layer of its own. Its first debt is the orientation entry —
 written by reading the tree, never by asking the user to describe it:
 `.bee/expertise/knowledge.md` ("The orientation file") sets the bar,
-`bee-capturing` owns the write. Until it exists, every session pays to
-rediscover where things are.
+`bee-capturing` owns the write.
 
 ## Go mode
 
@@ -87,7 +86,7 @@ questions become `Outstanding Questions` entries in the run's report, each carry
 the evidence a later human pass would start from — deferred, never guessed, never
 self-answered. A headless run never self-approves a gate: every gate still stops and
 reports awaiting approval (bypass is the separate, recorded exception — "Gate bypass mode").
-Recommendations are still made where the evidence supports one, labeled with confidence.
+Still make recommendations where the evidence supports one, labeled with confidence.
 Full contract: `references/gates-and-delegation.md` ("Headless mode").
 
 ## Hard rules

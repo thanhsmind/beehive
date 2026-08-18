@@ -17,8 +17,8 @@ real complexity makes a standalone file worth reading on its own.
 | `discovery.md` | a real multi-candidate comparison worth preserving alone | a `## Discovery` note inside `plan.md`, findings cited |
 | `approach.md` | high-risk, or rejected alternatives + a risk map substantial enough to stand alone | an `## Approach` section inside `plan.md` |
 
-Rule of thumb: if the separate file would just repeat what `plan.md` already
-says, it should have been a section. Fold, don't fan out.
+A separate file that would repeat what `plan.md` already says is a section.
+Fold, don't fan out.
 
 ## Artifact: plan.md
 
@@ -126,11 +126,9 @@ history.
    that names a span inside a large file — `tests.rs:2045-2549`, or a bare
    list of line numbers — is a read instruction, and the worker follows it
    literally. Paste the `rg -n` output into the cell instead: the matching
-   lines verbatim, each with its number. The author already ran that search;
-   handing over the answer costs the cell a few lines and saves the worker
-   the read. Line numbers ride ALONGSIDE their anchor text, never alone —
-   they drift the moment an earlier edit lands, and a worker that can only
-   count lines cannot recover. Never instruct a worker to work by line
+   lines verbatim, each with its number. Line numbers ride ALONGSIDE their
+   anchor text, never alone — they drift the moment an earlier edit lands,
+   and a worker that can only count lines cannot recover. Never instruct a worker to work by line
    number *instead of* searching: when several sites look identical, that
    is a reason to carry more anchor — the enclosing function, the
    occurrence index, the neighbouring line — not a reason to abandon the
@@ -147,7 +145,7 @@ history.
    change). Required for `standard`/`high-risk`; `tiny` may omit.
 5. **behavior_change honesty.** Any cell changing observable behavior is
    `behavior_change: true`. The flag decides the capture debt and review
-   scrutiny — mislabeling is a production bug waiting to happen.
+   scrutiny — never mislabel it.
 6. **Deps are real.** `deps` lists cell ids whose output this cell needs.
    Ready = all deps capped.
 7. **Current slice only.** If the cell belongs to a later slice, it does
@@ -344,6 +342,4 @@ below is the triad — happy path, edge cases, error paths — at its
 smallest demonstrating size; `edge-dimensions.md`'s twelve dimensions
 apply only at `high-risk`/hard-gate. Case selection, duplication
 judgment, and red-before-green: `.bee/expertise/tests.md`. Tests prove
-at the boundary: `bee close` runs the declared suite (`commands.test`)
-when the feature has no worktree; `bee worktree merge` runs it when it
-does. A cap is commit-only proof and records `tests: boundary`.
+at the boundary — the full rule under "Test scoping" above.

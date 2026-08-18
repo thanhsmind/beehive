@@ -1,0 +1,154 @@
+diff -ruN orig/skills/bee-hive/SKILL.md patched/skills/bee-hive/SKILL.md
+--- orig/skills/bee-hive/SKILL.md	2026-08-18 07:14:56.446721531 +0700
++++ patched/skills/bee-hive/SKILL.md	2026-08-18 07:13:48.759652912 +0700
+@@ -17,9 +17,9 @@
+ 
+ ## Start
+ 
+-Run `bee orient` — it names the phase, the blockers, and the next skill; follow it.
+-A pending handoff is presented to the user and never auto-resumed. Orient is for routing,
+-starting, or resuming work; plain questions are already answered by the session preamble.
++Run `bee orient` only when routing, starting, or resuming work — it names the phase,
++the blockers, and the next skill; follow it. Present a pending handoff to the user;
++never auto-resume it. A plain question is already answered by the session preamble.
+ 
+ ## Route
+ 
+@@ -73,8 +73,7 @@
+ knowledge layer of its own. Its first debt is the orientation entry —
+ written by reading the tree, never by asking the user to describe it:
+ `.bee/expertise/knowledge.md` ("The orientation file") sets the bar,
+-`bee-capturing` owns the write. Until it exists, every session pays to
+-rediscover where things are.
++`bee-capturing` owns the write.
+ 
+ ## Go mode
+ 
+@@ -87,7 +86,7 @@
+ the evidence a later human pass would start from — deferred, never guessed, never
+ self-answered. A headless run never self-approves a gate: every gate still stops and
+ reports awaiting approval (bypass is the separate, recorded exception — "Gate bypass mode").
+-Recommendations are still made where the evidence supports one, labeled with confidence.
++Still make recommendations where the evidence supports one, labeled with confidence.
+ Full contract: `references/gates-and-delegation.md` ("Headless mode").
+ 
+ ## Hard rules
+diff -ruN orig/skills/bee-hive/references/gates-and-delegation.md patched/skills/bee-hive/references/gates-and-delegation.md
+--- orig/skills/bee-hive/references/gates-and-delegation.md	2026-08-18 07:14:56.446721531 +0700
++++ patched/skills/bee-hive/references/gates-and-delegation.md	2026-08-18 07:14:14.749488134 +0700
+@@ -51,13 +51,13 @@
+ 
+ 2. **Machine layer (the linked report)** — the full mechanical material (reality-gate tables, feasibility matrices, plan-checker findings, cell lists) is written to `docs/history/<feature>/reports/` and **linked** from the gate message. It is never pasted into the gate message. It exists for the agent, the audit trail, and grooming — not for the human's eyes at decision time.
+ 
+-Litmus test: **the user must be able to restate what they are approving in their own words.** A gate the user cannot restate is a dead gate — worse than no gate, because it manufactures false confidence. A technical term (BLOCKER count, spike id) may appear in the human layer only with an immediate plain-language gloss.
++Litmus test: **the user must be able to restate what they are approving in their own words.** A gate the user cannot restate is a dead gate. A technical term (BLOCKER count, spike id) may appear in the human layer only with an immediate plain-language gloss.
+ 
+ This contract applies to all three gates, in every mode, including go mode.
+ 
+ ### AskUserQuestion — honor the tool's schema (a valid call, every time)
+ 
+-Gates, decisions, and confirm-before-doing prompts are presented with the `AskUserQuestion` tool. If the call violates the tool's schema the harness rejects the **whole** call with **"Invalid tool parameters"** — a recurring, silent waste (the model then retries a valid one). Build the call inside these limits:
++Gates, decisions, and confirm-before-doing prompts are presented with the `AskUserQuestion` tool. If the call violates the tool's schema the harness rejects the **whole** call with **"Invalid tool parameters"**. Build the call inside these limits:
+ 
+ - **`header` ≤ 12 characters** — it is a short chip label, NOT the question. Vietnamese/English descriptive headers ("Xử lý external", "Cách hiển thị") overflow instantly — use "Approach", "Scope", "External". **This is the #1 cause of the error.**
+ - **2–4 options per question** — never 1, never 5+. An "Other" free-text choice is added automatically, so fold overflow there or into a follow-up question.
+@@ -72,7 +72,7 @@
+ 
+ **Scope of the switch (D2, traceable-runs).** `gate_bypass` decides only whether the run STOPS for the human at a gate; it never decides whether that gate's brief or approval record EXISTS. Every code-touching lane's brief (Lane ceremony table, `routing-and-contracts.md`) is written before the gate is reached regardless of bypass, and the approval record is always written at the gate — bypassed or not. What differs is the `actor` on that record: `"user"` when a human answered, `"auto"` plus the bypass level and reason when the agent auto-approved (below).
+ 
+-**`gate_bypass` is a level.** The config value normalizes to a level, and the level decides how far bypass reaches. The whole point of the levels above `normal` is that the human said, in advance and explicitly, "when you have a recommended option I will always approve it — do not stop me; the result is what I care about." Honor that literally: at the chosen level, the recommended option IS the approval.
++**`gate_bypass` is a level.** The config value normalizes to a level, and the level decides how far bypass reaches. Above `normal`, the human has said, in advance and explicitly, "when you have a recommended option I will always approve it — do not stop me; the result is what I care about." Honor that literally: at the chosen level, the recommended option IS the approval.
+ 
+ | Level | Config value | Auto-approves | Still stops for the human |
+ |---|---|---|---|
+@@ -138,8 +138,7 @@
+    that does not explicitly lift them: gate-before-source, declared tests
+    green at the boundary (`bee close`/`bee worktree merge`), CLI-only state
+    mutation, reservations/holds, secret handling. These constrain
+-   OUTCOMES; they bind rarely and at the right moments. They are never
+-   "form".
++   OUTCOMES. They are never "form".
+ 2. **Form rules** constrain the PATH between boundaries: step order, line
+    shapes, templates, tick phrasing, report structure. For a cold dispatched
+    worker they are rails — followed as written, deviation only through the
+diff -ruN orig/skills/bee-hive/references/go-mode.md patched/skills/bee-hive/references/go-mode.md
+--- orig/skills/bee-hive/references/go-mode.md	2026-08-18 07:14:56.446721531 +0700
++++ patched/skills/bee-hive/references/go-mode.md	2026-08-18 07:14:03.938210819 +0700
+@@ -1,6 +1,6 @@
+ # Go Mode — Step-by-Step Reference
+ 
+-Load this when executing go mode. Go mode is the full bee pipeline from raw feature request to compounded learnings, closing verified but `unreviewed`. It chains every skill in sequence with up to **2 human gates** (fewer when the opt-in gate-bypass switch is on — see the end of this file). Each gate protects the next irreversible commitment. **Go mode never auto-enters independent review** — `bee-reviewing` and its Gate 3 are a separate, user-invoked flow layered over a completed scope; see the boxed note after the diagram.
++Load this when executing go mode — the full bee pipeline from raw feature request to compounded learnings, closing verified but `unreviewed`. It chains every skill in sequence with up to **2 human gates** (fewer when the opt-in gate-bypass switch is on — see the end of this file). **Go mode never auto-enters independent review** — `bee-reviewing` and its Gate 3 are a separate, user-invoked flow layered over a completed scope; see the boxed note after the diagram.
+ 
+ Trigger: `/go [feature]`, "run the full pipeline", or "go mode".
+ 
+diff -ruN orig/skills/bee-hive/references/onboarding.md patched/skills/bee-hive/references/onboarding.md
+--- orig/skills/bee-hive/references/onboarding.md	2026-08-18 07:14:56.446721531 +0700
++++ patched/skills/bee-hive/references/onboarding.md	2026-08-18 07:14:00.416165683 +0700
+@@ -8,8 +8,8 @@
+ 
+ ## Onboarding Protocol
+ 
+-`SKILL.md`'s Onboarding section carries the three steps a session actually runs; this is the full
+-status contract behind them (the router keeps the steps, this file keeps the detail). Run the bee
++This file is the full status contract behind the three steps in `SKILL.md`'s
++Onboarding section (the router keeps the steps, this file keeps the detail). Run the bee
+ binary from the bee source root (the checkout or installed plugin package) — `onboard` is a
+ subcommand of the same binary every other verb uses:
+ 
+diff -ruN orig/skills/bee-hive/references/routing-and-contracts.md patched/skills/bee-hive/references/routing-and-contracts.md
+--- orig/skills/bee-hive/references/routing-and-contracts.md	2026-08-18 07:14:56.450721527 +0700
++++ patched/skills/bee-hive/references/routing-and-contracts.md	2026-08-18 07:14:27.112020801 +0700
+@@ -194,7 +194,7 @@
+ 
+ The repo artifacts are the single source of truth for what work exists and its state: **cells** (`.bee/cells/`) for in-flight execution and the **PBI rows** in `docs/backlog.md` for product intent. A session's todo list — `TaskCreate`, `TodoWrite`, and any equivalent scratch checklist — is an **ephemeral projection** of those durable records, never the reverse.
+ 
+-The mapping is one-way: cells and PBI rows generate the session todo list, and no edit to that list ever writes back to a cell or a backlog row. When the two disagree, the repo artifact wins and the session list is regenerated from it. A todo item with no cell or PBI behind it is a projection bug, not a new unit of work — file the cell or the backlog row first, then let the list re-derive. This keeps the durable layer authoritative and the chat/session state disposable.
++The mapping is one-way: cells and PBI rows generate the session todo list, and no edit to that list ever writes back to a cell or a backlog row. When the two disagree, the repo artifact wins and the session list is regenerated from it. A todo item with no cell or PBI behind it is a projection bug, not a new unit of work — file the cell or the backlog row first, then let the list re-derive.
+ 
+ ## Communication contract
+ 
+@@ -248,7 +248,7 @@
+ worker status tokens, cap traces, decision logs, CONTEXT.md — keep their ids,
+ because that is where ids live.
+ 
+-One example teaches this better than the list does:
++Example:
+ 
+ ```text
+ ✗  Great question! I've now completed the analysis of the authentication
+diff -ruN orig/skills/bee-hive/references/scout-and-ticks.md patched/skills/bee-hive/references/scout-and-ticks.md
+--- orig/skills/bee-hive/references/scout-and-ticks.md	2026-08-18 07:14:56.446721531 +0700
++++ patched/skills/bee-hive/references/scout-and-ticks.md	2026-08-18 07:14:23.213619410 +0700
+@@ -29,7 +29,7 @@
+ 
+ ### Route record
+ 
+-`bee route --set` persists one validated record on the ACTIVE feature's workflow record: `{class, lane, flags[], product_files, rationale}`. Enum-checked, typed refusals — free prose is refused, that is the point:
++`bee route --set` persists one validated record on the ACTIVE feature's workflow record: `{class, lane, flags[], product_files, rationale}`. Enum-checked, typed refusals — free prose is refused:
+ 
+ - `class` ∈ `feature`, `bugfix`, `docs`, `refactor`, `research`, `release`, `spike`
+ - `lane` ∈ `docs`, `tiny`, `small`, `spike`, `standard`, `high-risk`
+@@ -48,7 +48,7 @@
+ 
+ ### Re-lane checkpoint (evidence-based demotion)
+ 
+-Triage lanes the work from the request text alone, before any repo evidence, and uncertainty resolves upward. That is correct as a *guessing* rule — but nothing re-examines the guess once evidence exists, so an ambiguous request for a two-file change pays the full standard pipeline. This checkpoint converts **measured evidence** into a smaller lane. Never optimism, never a re-argued count.
++Triage lanes the work from the request text alone, before any repo evidence, and uncertainty resolves upward. This checkpoint re-examines that guess once evidence exists: it converts **measured evidence** into a smaller lane. Never optimism, never a re-argued count.
+ 
+ **Exactly one checkpoint per feature, immediately after the first evidence pass:**
+ 
+@@ -94,10 +94,9 @@
+ 
+ ### Ship visibility
+ 
+-bee works invisibly in `docs/history/` and `.bee/` state, so under bypass the first
+-thing a human sees is often the last thing produced. Two mechanisms surface results
+-where humans already look. No gate, proof, or evidence rule moves; never auto-merge;
+-never work on `main`/default branches directly.
++Two mechanisms surface results where humans already look — bee otherwise works
++invisibly in `docs/history/` and `.bee/` state. No gate, proof, or evidence rule
++moves; never auto-merge; never work on `main`/default branches directly.
+ 
+ **Draft PR, push per cap.** Config key `ship_visibility` in `.bee/config.json`:
+ `"draft-pr" | "push-only" | "off"`. Default by lane: `tiny` defaults to

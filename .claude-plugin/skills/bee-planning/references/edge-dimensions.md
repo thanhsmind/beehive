@@ -1,11 +1,10 @@
 # The 12 Edge-Case Dimensions
 
-**Scope: `high-risk` and hard-gate work only.** At lane `standard` and below the
-test shape is the triad — happy path, edge cases, error paths — at its smallest
-demonstrating size; this file is not the checklist there and should not be
-reached from a standard lane. Read as a checklist to fill, twelve dimensions
-generate volume, which is the opposite of what a standard slice needs. See
-`planning-reference.md` ("Tests ride the cell").
+**Scope: `high-risk` and hard-gate work only.** Never reach this file from a
+standard lane: at `standard` and below the test shape is the triad — happy
+path, edge cases, error paths — at its smallest demonstrating size. Read as a
+checklist to fill, twelve dimensions generate volume — the opposite of what a
+standard slice needs. See `planning-reference.md` ("Tests ride the cell").
 
 At `high-risk`/hard-gate, use this during the planning test matrix (and again in
 reviewing coverage checks): written probes per applicable dimension, each mapped

@@ -1,6 +1,6 @@
 # Shaping Reference — interview mechanics
 
-Deep mechanics for the Explore move. The body triages the request and
+Deep mechanics for the Explore move. SKILL.md triages the request and
 shows the moves; this file carries the craft and judgment detail.
 
 ## Interview craft
