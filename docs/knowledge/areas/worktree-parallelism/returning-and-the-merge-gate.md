@@ -139,6 +139,15 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   merged something" condition the default-outcome cleanup above already uses — an
   already-up-to-date merge, a `MERGE_CONFLICT`, and a `WORKTREE_MERGE_PROOF_DEBT` each
   leave the lane untouched.
+- **The lane rewrite happens after the post-commit tracked-files reading, never before
+  (merge-closes-the-lane D4).** The return path checks, once the merge commit has landed,
+  whether anything else modified tracked files afterwards, and warns when something did.
+  Because the lane record is itself a tracked file in a repo that keeps its workflow
+  records under version control, rewriting it before that reading made every clean merge
+  accuse itself. The reading therefore comes first and the lane rewrite second; the check
+  is never narrowed and no path is exempted from it. Its own regression test keeps the
+  lane record tracked, because an untracked one is invisible to the check and hid this
+  exact fault once.
 
 ## Main's own `.bee` and closing-feature `docs/history/` dirt auto-commits before the dirty-MAIN refusal fires (trun-4, 2026-08-14)
 

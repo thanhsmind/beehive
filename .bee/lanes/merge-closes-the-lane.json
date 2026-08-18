@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "merge-closes-the-lane",
   "mode": null,
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"merge-closes-the-lane\" started at phase \"exploring\" (lane).",
-  "next_action": "none",
+  "next_action": "bee close finished \"merge-closes-the-lane\" — feature is closed.",
   "created_at": "2026-08-18T09:58:01.585Z",
   "run_state": "done",
   "waiting_on": null,
