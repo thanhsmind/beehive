@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "start-feature-reservation-scope",
   "mode": "feature",
-  "phase": "idle",
+  "phase": "swarming",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -10,9 +10,9 @@
     "review": false,
     "uat": true
   },
-  "summary": "Feature \"start-feature-reservation-scope\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"start-feature-reservation-scope\" (lane).",
+  "summary": "Feature \"start-feature-reservation-scope\" started at phase \"swarming\" (lane).",
+  "next_action": "Continue bee-swarming for \"start-feature-reservation-scope\" (lane).",
   "created_at": "2026-08-18T11:53:51.549Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null
 }

@@ -1,0 +1,66 @@
+{
+  "id": "ho-10",
+  "feature": "herding-orchestration",
+  "title": "Add the bee herding wave and occupancy verbs",
+  "lane": "standard",
+  "behavior_change": true,
+  "action": "Build the bee-side entry point D17 locks, plus the occupancy read D10 needs, as two verbs in the existing herding command group. FIRST, bee herding wave. This is the caller the whole feature has been building toward: it is what turns herding.agent_command into a running wave. It reads .bee/config.json's herding.agent_command from the main checkout, splits token 0 into the agent kind and the remaining tokens into the agent arguments per D14, substitutes the per-token placeholders the existing runtime adapter already defines, and constructs the fleet crate's HerdrBackend with them. An unrecognised token 0 — not one of herdr's supported kinds — must surface as a TYPED error naming the herding.agent_command key, never as a generic start failure; that obligation is written on the constructor's own documentation and this verb is the caller it names. Note that until now HerdrBackend::new had ZERO callers anywhere; a judge found it could discard both parameters with the whole suite green. This verb is that caller, so wire it through properly. It then builds a fleet Wave from the workers it is given, runs the choreography, and appends exactly one row to the wave ledger. Decide the flag surface yourself, but keep it in the shape the rest of bee uses and give it a json flag like nearly every other verb. SECOND, bee herding occupancy. The ledger's read side is currently crate-private and marked dead code, and role-dispatch section 4 is a markdown role that can only run shell commands — so today it cannot reach the answer at all, which a judge named as the reason the occupancy work is not yet usable. Expose it: the verb reports how many workers are live, crossing the ledger's unresolved pane ids against the live pane list, and it must report WHICH answer it gave — the real crossing or the degraded timer fallback — because the Occupancy type distinguishes them and a caller that cannot see the difference is back where it started. Obtain the live pane list the way the cockpit already does. Both verbs go through the same router and catalog path the five existing herding verbs use; study how those are registered before adding anything. Tests: the config split, including the typed error for an unrecognised kind; a wave run that appends one row, driven through a fake backend rather than a live herdr; and the occupancy verb reporting both the live and the fallback shapes distinguishably.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+    "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/*",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/router.rs",
+    "packages/bee-rs/crates/bee/tests/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "bee herding wave reads herding.agent_command, uses token 0 as the agent kind and the rest as the agent arguments, and constructs the herdr backend with them.",
+      "An unrecognised token 0 produces a typed error naming the herding.agent_command key, not a generic start failure.",
+      "A wave run appends exactly one row to the wave ledger.",
+      "bee herding occupancy reports the live worker count AND which answer it gave — the real pane-list crossing or the degraded timer fallback.",
+      "Both verbs are reachable from the command line, so a markdown role can call them.",
+      "Every test runs without a herdr binary installed."
+    ],
+    "artifacts": [
+      "the bee herding wave verb, config-driven per D14 and D17, appending one ledger row per run",
+      "the bee herding occupancy verb exposing the ledger read side with its live-versus-fallback distinction intact"
+    ],
+    "key_links": [
+      "bee herding wave is the caller the herdr backend constructor's documentation names as owning the D14 split.",
+      "bee herding occupancy returns the same distinction the Occupancy type makes, not a bare number."
+    ],
+    "prohibitions": [
+      "Do not put bee configuration reading into the fleet crate — the split is the point.",
+      "Do not collapse the live-versus-fallback distinction into a plain count.",
+      "Do not change role-dispatch.md section 4 in this cell — that is the next cell.",
+      "Do not require a running herdr server for any test."
+    ]
+  },
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-10",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T12:57:49.478Z"
+  },
+  "tier": "generation"
+}
