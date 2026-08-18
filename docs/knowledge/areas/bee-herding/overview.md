@@ -146,7 +146,9 @@ the dispatch interlock, or the merge owner-gesture change.
 - **A working agent that fails to name its own pane** leaves a slot looking free, so the loop could
   spawn again next interval. The four-slot cap is currently enforced by the control model counting
   panes, not by code — a known limit, recorded so it is chosen rather than assumed. Making it
-  mechanical is deferred.
+  mechanical is deferred under trigger `the-wave-ledger-lands-and-role-dispatch-4__984a2cde`:
+  herding-orchestration D10 replaces the pane count with an append-only wave ledger, and when that
+  ledger lands this line is rewritten rather than deferred again.
 - **A control pane narrowed too far** stalls silently every interval — the exact failure the whole
   cockpit exists to end. This is why the control surface is enumerated against measured actions, and
   why it is documented to grow when a role gains a command, rather than being set to "read-only".
