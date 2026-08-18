@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"staging-optional\" started at phase \"exploring\".",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 0c99734; capture what settled, then bee close --feature auto-wait-mark.",
   "created_at": "2026-08-18T11:57:09.859Z",
   "run_state": "done",
   "waiting_on": null,
