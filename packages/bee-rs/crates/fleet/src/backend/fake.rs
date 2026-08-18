@@ -53,12 +53,31 @@ struct WorkerState {
     /// Returned once `status_queue` is empty, so a test doesn't have to
     /// keep re-queueing a settled value.
     steady_status: Option<RawStatus>,
+    /// How many times `status` has been called for this worker. Exposed
+    /// through `status_call_count` so a choreography test can prove
+    /// bounded polling (Ordering Invariant 7) by counting calls instead
+    /// of measuring wall-clock time.
+    status_calls: usize,
+    /// `start` outcomes queued to be returned, oldest first. An empty
+    /// queue means `start` succeeds — the choreography-level "a target
+    /// that fails to resolve aborts the whole wave" case needs this to
+    /// inject a resolution failure.
+    start_queue: VecDeque<Result<(), String>>,
     /// `send` outcomes queued to be returned, oldest first. An empty
     /// queue means `send` succeeds.
     send_queue: VecDeque<Result<(), String>>,
     /// The worker's current output/transcript, as `read_output` returns
     /// it.
     output: String,
+    /// Text to swap into `output` the moment `send` next succeeds for
+    /// this worker — set by `schedule_output_on_send`. Models a worker
+    /// that completes essentially instantly: the output only changes
+    /// because `send` was actually called, so a choreography that reads
+    /// a baseline AFTER dispatch (instead of before) observes the
+    /// post-completion text as its "baseline" and can never confirm the
+    /// completion — which is exactly how the fast-completion and
+    /// baseline-before-dispatch invariants get pinned against a reorder.
+    output_on_send: Option<String>,
     /// Whether `start` has been called for this worker. Recorded for
     /// tests to assert on; the fake never uses this to gate the other
     /// methods, because a test must be able to configure a worker's
@@ -128,6 +147,28 @@ impl FakeBackend {
         workers.entry(worker.to_string()).or_default().output = output.into();
     }
 
+    /// Queues `result` to be the outcome of the next call to `start` for
+    /// `worker`, after any results already queued. Lets a test model a
+    /// target that fails to resolve.
+    pub fn schedule_start_result(&self, worker: &str, result: Result<(), String>) {
+        let mut workers = self.workers.lock().unwrap();
+        workers
+            .entry(worker.to_string())
+            .or_default()
+            .start_queue
+            .push_back(result);
+    }
+
+    /// Sets `output` to be swapped in as `worker`'s output the moment a
+    /// future call to `send` for `worker` next succeeds — modelling a
+    /// worker whose transcript only changes because a real dispatch
+    /// happened, so a baseline read before that `send` cannot see it and
+    /// a baseline read after it wrongly would.
+    pub fn schedule_output_on_send(&self, worker: &str, output: impl Into<String>) {
+        let mut workers = self.workers.lock().unwrap();
+        workers.entry(worker.to_string()).or_default().output_on_send = Some(output.into());
+    }
+
     /// True once `start` has been called for `worker`; false for a
     /// worker never referenced, or referenced only through a
     /// `schedule_*`/`set_*` call.
@@ -139,18 +180,36 @@ impl FakeBackend {
             .map(|w| w.started)
             .unwrap_or(false)
     }
+
+    /// How many times `status` has been called for `worker` so far. A
+    /// choreography test uses this to prove bounded polling deterministically
+    /// — by counting backend calls — rather than by measuring wall-clock
+    /// time (Ordering Invariant 7).
+    pub fn status_call_count(&self, worker: &str) -> usize {
+        self.workers
+            .lock()
+            .unwrap()
+            .get(worker)
+            .map(|w| w.status_calls)
+            .unwrap_or(0)
+    }
 }
 
 impl WorkerBackend for FakeBackend {
     fn start(&self, worker: &WorkerSpec) -> anyhow::Result<()> {
         let mut workers = self.workers.lock().unwrap();
-        workers.entry(worker.name.clone()).or_default().started = true;
-        Ok(())
+        let state = workers.entry(worker.name.clone()).or_default();
+        state.started = true;
+        match state.start_queue.pop_front() {
+            Some(Err(message)) => Err(anyhow::anyhow!(message)),
+            Some(Ok(())) | None => Ok(()),
+        }
     }
 
     fn status(&self, worker: &str) -> WorkerStatus {
         let mut workers = self.workers.lock().unwrap();
         let state = workers.entry(worker.to_string()).or_default();
+        state.status_calls += 1;
         // A worker with nothing queued and no steady value set has never
         // been configured at all — that defaults to `Unverifiable`, not
         // to a safe-looking status, the same fail-closed discipline the
@@ -174,10 +233,16 @@ impl WorkerBackend for FakeBackend {
         // `set_output` in the arrangement it configures.
         let mut workers = self.workers.lock().unwrap();
         let state = workers.entry(worker.to_string()).or_default();
-        match state.send_queue.pop_front() {
+        let result = match state.send_queue.pop_front() {
             Some(Err(message)) => Err(anyhow::anyhow!(message)),
             Some(Ok(())) | None => Ok(()),
+        };
+        if result.is_ok() {
+            if let Some(pending) = state.output_on_send.take() {
+                state.output = pending;
+            }
         }
+        result
     }
 
     fn read_output(&self, worker: &str) -> anyhow::Result<String> {

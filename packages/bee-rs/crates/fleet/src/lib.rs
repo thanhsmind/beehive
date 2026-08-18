@@ -33,10 +33,7 @@ pub mod backend;
 /// The choreography: the state machine that drives a wave of workers from
 /// dispatch through waiting to a single aggregated verdict, using
 /// `std::thread` fan-out and `std::sync::mpsc` for result collection (D9).
-pub mod choreography {
-    // Intentionally empty for now — the state machine lands in a later
-    // cell, built and proven against a fake backend first.
-}
+pub mod choreography;
 
 #[cfg(test)]
 mod tests {
