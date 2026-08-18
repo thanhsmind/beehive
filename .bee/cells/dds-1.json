@@ -28,21 +28,36 @@
       "The refusal's remedy line names the marker as an option alongside registering and citing a trigger."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "dds-1-worker",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Added a reasoned <!-- bee:not-a-deferral: <reason> --> marker to the doc-deferral door, nesting independently of the existing code-fence exemption; widened the refusal remedy to name it.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-18T14:43:39.789Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
-    "claimed_at": "2026-08-18T14:37:44.420Z"
+    "claimed_at": "2026-08-18T14:37:44.420Z",
+    "report": {
+      "outcome": "Added a reasoned <!-- bee:not-a-deferral: <reason> --> marker to the doc-deferral door, nesting independently of the existing code-fence exemption; widened the refusal remedy to name it.",
+      "commit": "b2555652",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml close — green — full declared close-suite filter, plus a doc_deferral-substring run (14 passed) confirming every new not-a-deferral test",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
