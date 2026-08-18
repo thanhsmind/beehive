@@ -35,11 +35,11 @@
       "Do not implement the bee-side wave verb here — that is D17's own cell."
     ]
   },
-  "status": "open",
+  "status": "claimed",
   "deps": [],
   "decisions": [],
   "trace": {
-    "worker": null,
+    "worker": "w-ho-8r",
     "outcome": "Implemented HerdrBackend (WorkerBackend over the real herdr CLI) beside the fake, closed D15's canonical-identity gap with a new canonical_id trait method the choreography dedupes on, and added the three hazard tests plus fail-closed status coverage via a PATH-prepended stub herdr",
     "files_changed": [
       "packages/bee-rs/crates/fleet/Cargo.toml",
@@ -59,8 +59,8 @@
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null,
-    "claimed_at": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T11:22:30.038Z",
     "report": {
       "outcome": "Implemented HerdrBackend beside the fake, closed D15's canonical-identity gap, added the three hazard tests plus fail-closed status coverage",
       "commit": "76656a111dffd837365a5114a6450edb9ddbb36f",
