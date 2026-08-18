@@ -1,0 +1,73 @@
+{
+  "id": "tf-1",
+  "feature": "two-flows",
+  "lane": "small",
+  "title": "Name the Main and Discovery flows across the router, the contract, and the README",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-hive/SKILL.md",
+    "AGENTS.md",
+    "README.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/two-flows/CONTEXT.md",
+    "skills/bee-hive/SKILL.md",
+    "AGENTS.md",
+    "skills/bee-writing-skills/references/prompt-style.md"
+  ],
+  "action": "Implement CONTEXT.md D1-D4 (docs/history/two-flows/CONTEXT.md) exactly; match each file's voice; add no new sections beyond what is named here. (1) skills/bee-hive/SKILL.md 'Route': lead the section with a two-door table naming the two flows — Main flow (idea to ship: bee-shaping, bee-planning, bee-swarming, bee-capturing, with bee-reviewing and the uat door at merge) and Discovery flow (an open question to a locked decision: bee-wayfinding is the spine; research, spike, and grilling are how its tickets resolve; exit is bee-shaping's Lock consuming the map's D-IDs). State the routing rule per D3: the agent picks the door and the user never has to name a flow — a nameable outcome goes to Main, fog or an effort too big to name in one sitting goes to Discovery. State the D4 override on its own line: an explicit user word — wayfinding, brainstorm, discuss, discovery, in any language — routes straight into the Discovery flow and skips the classification. Keep the existing per-skill 'Out-of-band requests' table below the new table, and make each row read as belonging to its flow rather than as a flat list. (2) AGENTS.md 'Bee workflow': one added line naming both flows and what each is for, wired to the existing sentence about the bee lifecycle; do not restate the routing rules there. (3) README.md: add a bee-wayfinding row to the role table in 'The metaphor' (hive role: Pathfinder bees) and give that table a column or inline marker naming each skill's flow (Main flow / Discovery flow / both for bee-hive and bee-researching); in the 'The workflow, explained simply' section add two or three lines saying bee has two flows and which one a request lands in. Do not redraw the existing ASCII chain. (4) Run the regen chain in this cell: bee dev regen (this also regenerates the AGENTS block hash), then bee dev release-manifest --write. One commit, imperative subject, cell id trailer.",
+  "verify": ".bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "bee-hive's Route section opens with the two named flows and their membership",
+      "The D3 agent-routes rule and the D4 explicit-word override are both stated, the override on its own line",
+      "README's role table lists bee-wayfinding and names each skill's flow",
+      "AGENTS.md names both flows in one added line",
+      "Regen chain ran; manifest check clean"
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "forager-4",
+    "outcome": "Named Main/Discovery flows in bee-hive's Route table, AGENTS.md (via its block source), and README's role table + workflow prose; regen chain green",
+    "files_changed": [
+      "skills/bee-hive/SKILL.md",
+      "AGENTS.md",
+      "README.md",
+      "packages/bee/AGENTS.block.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T07:01:04.091Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "e50823f4-98da-4b09-8882-07d8c0a38242",
+    "claimed_at": "2026-08-18T06:56:29.970Z",
+    "report": {
+      "outcome": "Named Main/Discovery flows in bee-hive's Route table, AGENTS.md (via its block source), and README's role table + workflow prose; regen chain green",
+      "commit": "d193ff37",
+      "files": [
+        "skills/bee-hive/SKILL.md",
+        "AGENTS.md",
+        "README.md",
+        "packages/bee/AGENTS.block.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": ".bee/bin/bee dev release-manifest --check — 270 file(s) match stored manifest, 1 unhashed artifact(s) present — docs-only change, cell-declared verify",
+      "deviations": [
+        "AGENTS.md's BEE:START/END block is generated from packages/bee/AGENTS.block.md by bee onboard --apply (part of the required regen chain); editing AGENTS.md directly was overwritten by regen, so I additionally reserved and edited packages/bee/AGENTS.block.md as the true source, then re-ran the regen chain so AGENTS.md carries the added flow line"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 409 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

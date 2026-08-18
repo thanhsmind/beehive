@@ -13,8 +13,13 @@
   "summary": "Feature \"review-axes\" started at phase \"exploring\" (lane).",
   "next_action": "Dispatch ra-1 worker.",
   "created_at": "2026-08-18T06:23:47.282Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "question",
+    "subject": "two-flows shaping round 1: Q1 names, Q2 surfaces, Q3 discovery-flow contents, Q4 routing",
+    "asked_at": "2026-08-18T06:47:18.341Z",
+    "session": "e50823f4-98da-4b09-8882-07d8c0a38242"
+  },
   "route": {
     "class": "feature",
     "lane": "small",
