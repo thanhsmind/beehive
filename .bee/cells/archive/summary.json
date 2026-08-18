@@ -538,5 +538,10 @@
     "capped": 5,
     "dropped": 0,
     "archived_at": "2026-08-18T04:36:45.880Z"
+  },
+  "wayfinding-triggers": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-18T04:50:54.001Z"
   }
 }

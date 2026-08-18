@@ -15,7 +15,7 @@
   ],
   "action": "Rewrite the description frontmatter in SKILL.md and the matching short_description in agents/openai.yaml: keep the purpose clause and 'Not for' exclusions, replace the buried 'explicit invocation asks to explore or brainstorm' clause with explicit user-phrase triggers ('brainstorm', 'let's brainstorm', 'explore this idea', 'think through this', 'wayfinding', any language). Both files must carry the same description verbatim. Then run the regen chain inside this cell: bee dev regen (render-skill-trees, onboard --repo-root . --apply, release-manifest --write).",
   "verify": "rg -c \"let's brainstorm\" skills/bee-wayfinding/SKILL.md skills/bee-wayfinding/agents/openai.yaml && .bee/bin/bee dev release-manifest --check",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
@@ -24,12 +24,25 @@
     "files_changed": [],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-18T04:50:53.911Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "99f421d1-5089-498e-b10f-a0940e6ab421",
-    "claimed_at": "2026-08-18T04:24:17.021Z"
+    "claimed_at": "2026-08-18T04:24:17.021Z",
+    "report": {
+      "outcome": "done",
+      "commit": "f4de93de",
+      "files": [
+        "skills/bee-wayfinding/SKILL.md",
+        "skills/bee-wayfinding/agents/openai.yaml",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release (full suite) — green, 2015 passed / 11 ignored — prose-only skill description change, full suite covers render and manifest hashing",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
