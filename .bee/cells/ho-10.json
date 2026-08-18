@@ -4,7 +4,7 @@
   "title": "Add the bee herding wave and occupancy verbs",
   "lane": "standard",
   "behavior_change": true,
-  "action": "Build the bee-side entry point D17 locks, plus the occupancy read D10 needs, as two verbs in the existing herding command group. FIRST, bee herding wave. This is the caller the whole feature has been building toward: it is what turns herding.agent_command into a running wave. It reads .bee/config.json's herding.agent_command from the main checkout, splits token 0 into the agent kind and the remaining tokens into the agent arguments per D14, substitutes the per-token placeholders the existing runtime adapter already defines, and constructs the fleet crate's HerdrBackend with them. An unrecognised token 0 — not one of herdr's supported kinds — must surface as a TYPED error naming the herding.agent_command key, never as a generic start failure; that obligation is written on the constructor's own documentation and this verb is the caller it names. Note that until now HerdrBackend::new had ZERO callers anywhere; a judge found it could discard both parameters with the whole suite green. This verb is that caller, so wire it through properly. It then builds a fleet Wave from the workers it is given, runs the choreography, and appends exactly one row to the wave ledger. Decide the flag surface yourself, but keep it in the shape the rest of bee uses and give it a json flag like nearly every other verb. SECOND, bee herding occupancy. The ledger's read side is currently crate-private and marked dead code, and role-dispatch section 4 is a markdown role that can only run shell commands — so today it cannot reach the answer at all, which a judge named as the reason the occupancy work is not yet usable. Expose it: the verb reports how many workers are live, crossing the ledger's unresolved pane ids against the live pane list, and it must report WHICH answer it gave — the real crossing or the degraded timer fallback — because the Occupancy type distinguishes them and a caller that cannot see the difference is back where it started. Obtain the live pane list the way the cockpit already does. Both verbs go through the same router and catalog path the five existing herding verbs use; study how those are registered before adding anything. Tests: the config split, including the typed error for an unrecognised kind; a wave run that appends one row, driven through a fake backend rather than a live herdr; and the occupancy verb reporting both the live and the fallback shapes distinguishably.",
+  "action": "SECOND REWORK on ho-10, and it is one structural change plus one comment. Everything else survived independent mutation and must not be touched: the typed error naming the config key, the one-row-per-wave rule, the json occupancy distinction, the plain-line distinction you just added, the registry declarations, and every locked decision. THE FAILURE, and read the reason rather than only the fix. Your last change threaded backend construction through a construct_backend closure so a test could observe the call site. A judge then mutated ONLY the closure the verb itself passes — changing it to ignore both arguments and construct with constants — and the ENTIRE workspace stayed green at 2126 passed, identical to baseline. The join did not close; it MOVED one level up. The structural reason is worth carrying: a closure LITERAL written at a call site is unreachable by any test, because the test supplies its own closure to the same function and the two never meet. Your seam made the inner hop testable while pushing the real production argument out of every test's reach. THE FIX IS TO GIVE THE PRODUCTION SIDE A NAME. Hoist the closure the verb passes into a free function — something of the shape fn real_backend_ctor(kind: String, args: Vec-of-String) returning HerdrBackend — so the verb passes that named function and a test can call it DIRECTLY and assert the constructed backend carries the kind and arguments it was handed. A named item is reachable from both ends; a closure literal is reachable from neither. If asserting on the constructed backend is awkward, the alternative the judge named also works: drive the verb end to end against a config whose agent command names a different kind, and assert the resulting herdr invocation names that kind rather than the default. ONE MORE THING, a doc that now says something untrue: the comment you added beside the seam asserts that line is the only place either a real or a fake backend is ever built from a resolved pair. The mutation proves otherwise — the verb's own closure body is a second construction site. Correct it to say what is true once the fix lands. VERIFY EXACTLY AS THE JUDGE DID: change the production side so it ignores its arguments and constructs with constants, run the full workspace suite, and confirm a named test now FAILS. Report that test name. If the suite stays green, the fix has moved the join again and the cell is unfinished — say so rather than reporting success.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "read_first": [
     "docs/history/herding-orchestration/CONTEXT.md",
@@ -23,44 +23,164 @@
   ],
   "must_haves": {
     "truths": [
-      "bee herding wave reads herding.agent_command, uses token 0 as the agent kind and the rest as the agent arguments, and constructs the herdr backend with them.",
-      "An unrecognised token 0 produces a typed error naming the herding.agent_command key, not a generic start failure.",
-      "A wave run appends exactly one row to the wave ledger.",
-      "bee herding occupancy reports the live worker count AND which answer it gave — the real pane-list crossing or the degraded timer fallback.",
-      "Both verbs are reachable from the command line, so a markdown role can call them.",
-      "Every test runs without a herdr binary installed."
-    ],
-    "artifacts": [
-      "the bee herding wave verb, config-driven per D14 and D17, appending one ledger row per run",
-      "the bee herding occupancy verb exposing the ledger read side with its live-versus-fallback distinction intact"
-    ],
-    "key_links": [
-      "bee herding wave is the caller the herdr backend constructor's documentation names as owning the D14 split.",
-      "bee herding occupancy returns the same distinction the Occupancy type makes, not a bare number."
+      "The production backend construction is a NAMED item the verb passes, not a closure literal written at the call site.",
+      "A test calls that named item directly and asserts the constructed backend carries the kind and arguments handed to it.",
+      "Making the production construction ignore its arguments and use constants FAILS a named test on the full workspace suite — observed, not assumed.",
+      "The comment beside the construction seam states something true about where backends are built.",
+      "The typed error, the one-row-per-wave rule, the json distinction and the plain-line distinction all still die under their own mutations.",
+      "Every test still runs with no herdr binary on PATH.",
+      "No assertion anywhere was deleted or loosened."
     ],
     "prohibitions": [
-      "Do not put bee configuration reading into the fleet crate — the split is the point.",
-      "Do not collapse the live-versus-fallback distinction into a plain count.",
-      "Do not change role-dispatch.md section 4 in this cell — that is the next cell.",
-      "Do not require a running herdr server for any test."
+      "Do not add another closure-literal seam — that is what moved the join last time.",
+      "Do not weaken or delete any existing test.",
+      "Do not move config reading into the fleet crate.",
+      "Do not require a running herdr server for any test.",
+      "Do not change role-dispatch.md section 4 — that is the next cell.",
+      "Do not use bee cells cap --override-judge; if finish refuses on a judge verdict, return BLOCKED with your commit hash."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
-    "worker": "w-ho-10",
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-ho-10s",
+    "outcome": "Added bee herding wave and bee herding occupancy: the config-driven entry point that resolves herding.agent_command per D14 and appends one ledger row, and the CLI bridge that exposes occupancy with its live-versus-fallback distinction intact",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-18T14:12:41.924Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
-    "claimed_at": "2026-08-18T12:57:49.478Z"
+    "claimed_at": "2026-08-18T13:55:02.690Z",
+    "report": {
+      "outcome": "bee herding wave (D17: the config-driven entry point resolving herding.agent_command per D14, constructing the herdr backend, running the choreography and appending one ledger row) and bee herding occupancy (the CLI bridge exposing the ledger read side with its live-versus-fallback distinction preserved in both json and plain output)",
+      "commit": "ece03cde",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — 2127 passed, 11 ignored; plus three independent judge passes running mutation matrices, the last confirming every data-carrying hop from config resolution to the spawn argv is pinned",
+      "deviations": [
+        "Three passes. Pass 1 shipped both verbs correctly but left the backend construction untested: mutating the call site to discard the D14-resolved pair left the whole workspace green.",
+        "Pass 2 threaded construction through a closure seam; a judge showed the join had MOVED rather than closed, since a closure literal at a call site is unreachable by a test that supplies its own closure.",
+        "Pass 3 hoisted it to a named function reachable from both the verb and a test. A judge then assessed the one residual hop and ruled the recursion terminated: that hop carries no data, only a name, so the accidental-defect shape is structurally impossible and closing it would recreate the same problem one level higher.",
+        "The registry payload and the pinned flag count were edited outside the declared file list to register the two verbs; a judge verified by independent count that the constant was re-pinned to a true value moved by three genuinely new flags, not bumped to silence a governance test."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "M1",
+            "status": "FAIL",
+            "evidence": "Baseline on a scratchpad copy exits 0 with the bee binary at 1901 passed. Rewriting HerdrBackend::new to discard both parameters and substitute a hardcoded kind with empty arguments fails ONLY in the fleet crate, on new_wires_its_agent_kind_and_agent_args_through_to_the_spawn_argv; the bee crate stays fully green at 1901 passed, 0 failed. A sharper variant mutated the verb itself rather than the constructor: changing the single call site so it passes a hardcoded kind and an empty argument list, while leaving the D14 resolution intact above it, leaves the ENTIRE workspace suite green at exit 0 with zero failures anywhere. That call site is the only construction of the backend in the bee crate and no test ever executes it — the bee-side wave tests drive the run through a fake backend, and the test's own comment concedes the point, saying the configured kind and arguments are proven at the backend layer by its own tests. The verb links the constructor at compile time but nothing proves the resolved pair reaches it."
+          },
+          {
+            "id": "M2",
+            "status": "PASS",
+            "evidence": "Making the fallback variant render as the live one, so both emit identically, fails two tests: occupancy_json_distinguishes_live_from_fallback_at_the_same_count, panicking on live versus fallback, and occupancy_crosses_the_ledger_against_a_provided_live_list. End-to-end confirmation on the built binary: the occupancy verb with the json flag prints a source field carrying fallback. GAP reported rather than failed: the DEFAULT human-readable render is undefended — dropping the source parenthetical from the plain println leaves the whole suite green, so a role invoking the verb without the json flag would see live and fallback identically, with no test to notice."
+          },
+          {
+            "id": "M3",
+            "status": "PASS",
+            "evidence": "Making the unrecognised-kind path return a generic error instead of the typed one, with an empty key and a generic message, fails an_unrecognised_kind_is_a_typed_error_naming_the_config_key, which panics comparing the generic key against herding.agent_command. The D14 typed error naming the config key is genuinely pinned."
+          },
+          {
+            "id": "M4",
+            "status": "PASS",
+            "evidence": "Both directions are caught in the bee crate. Appending twice fails a_wave_run_appends_exactly_one_ledger_row_through_a_fake_backend on its exactly-one-row assertion and a_wave_that_never_resolves_still_appends_one_row_with_no_succeeded_outcome on a count of two against one. Skipping the append entirely fails the same two tests, the first on a missing ledger file and the second on the row count."
+          },
+          {
+            "id": "C1",
+            "status": "PASS",
+            "evidence": "The herdr binary IS installed on this host, so the tests were re-run with it removed from PATH: the herding test set passes at 29 passed, 0 failed. The wave path is driven through a generic run-and-record function parameterised over the backend trait, using the fake backend, never a real herdr backend; the occupancy tests pass a hand-built pane set or none at all. The only process spawn in the file is the live pane list lookup, reached only from the CLI verb and returning none on any failure. No herdr server and no binary are needed."
+          },
+          {
+            "id": "C2",
+            "status": "PASS",
+            "evidence": "Legitimate registration, not a silenced constant. The generated registry payload is included into the binary and the contract tests call it the bytes the binary actually ships; no in-repo generator writes it, since the engine that produced it was deleted, so the file IS the source record. The five existing herding verbs are declared in exactly that file and nowhere else, and the two new entries carry the same shape as the existing ones — name, invoke, description, parameters, examples, deprecated — with no other entry changed and none removed. The count was verified independently by counting distinct flag names across the payload: 158 before and 161 after, with exactly three genuinely new flag names added and none dropped, so the pinned constant was re-pinned to a true count that moved for a real reason. Both verbs appear in the built binary's full help, and the registry dispatch governance test runs each entry's own example against the binary in both directions and passes."
+          },
+          {
+            "id": "C3",
+            "status": "PASS",
+            "evidence": "The fleet manifest still declares only anyhow, serde and serde_json with no bee edge, and the commit touches no file under the fleet crate. Config reading is on the bee side: the verb reads the config from the main root and hands an already-resolved pair to the constructor. The core still records nothing — the single ledger append lives in the bee-crate wrapper, after the choreography returns, and the wave result becomes no cell, decision or proof line. The D14 split uses a first-and-rest split with per-token substitution, never a join and re-split, and raises the typed error naming the config key on an unsupported token 0, with the documented default array unchanged. The herdr backend stays in the fleet crate, and the entry point is a CLI verb in the existing herding group."
+          },
+          {
+            "id": "C4",
+            "status": "PASS",
+            "evidence": "The unified diff over the three modified files shows every removed line: the pinned flag count constant, four module doc lines, one dead-code attribute removed because the module is now live, two function signatures widened in visibility with unchanged bodies, and six doc lines. No test attribute, no assertion and no test body was deleted or loosened; the new verb file is additive with nine new tests. The baseline suite on the copy exits 0 at 1901 passed."
+          }
+        ],
+        "failure_signature": "The wave verb's constructor wiring is untested in the bee crate: mutating its single call site to discard the D14-resolved kind and arguments leaves the ENTIRE workspace suite green, and gutting the constructor itself is caught only by the fleet crate's own test while the bee crate stays at 1901 passed. The entry point is a compile-time caller, not a proven one — the fourth instance in this feature of a join between two separately-tested things being itself untested.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T13:36:32.238Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "J1",
+            "status": "PASS",
+            "evidence": "On a scratchpad copy with a baseline of 2127 passed and 11 ignored, mutating the named production constructor so it ignores both arguments and constructs with constants fails exactly one test, the new one: real_backend_ctor_hands_kind_and_args_straight_through_to_construction, panicking that the constructed backend must carry the kind it was handed and printing the constructed value showing the substituted constant. The suite reports 1903 passed and 1 failed. The body is pinned."
+          },
+          {
+            "id": "J2",
+            "status": "PASS",
+            "evidence": "DEMONSTRATION: authoring a decoy function of identical signature that discards both arguments, and swapping the verb to pass it instead, leaves the full suite at 2127 passed with nothing failing — so the hop is untested, as expected. JUDGEMENT, made rather than deferred: this is a DELIBERATE SUBSTITUTION, not a plausible accidental defect, for reasons taken from the code. First, the verb passes NO DATA at this hop — it hands over a bare identifier, while the resolved pair is produced and forwarded inside the helper, which the join test pins with an assertion closure against the expected kind and arguments. The canonical accident named in the check, a parameter silently dropped, is structurally impossible here because there is no parameter at this hop to drop. Second, breaking it requires replacing one named function with a DIFFERENT named function of identical signature that also discards both arguments, and no such second function exists in the module — the decoy had to be authored to open the hole at all. Third, the compiler gives a partial net: with the substitution in place the build warns that the real constructor is never used. Fourth, every data-carrying hop below is already pinned end to end — config resolution has its own tests, the callback receives the resolved pair, the named constructor forwards it, and the constructor's fields reach the spawn argv. Only the function IDENTITY is unpinned. COST OF CLOSING: an end-to-end drive of the verb means a CLI entry point that reads flags, working directory and config from disk and then spawns real processes; observing the kind from there needs either a PATH-shimmed fake binary with argv capture, which the file's own stated rule forbids as a live dependency, or a new injection parameter on the verb — which merely creates the SAME residual hop one level higher, and that is precisely how the previous instance was created. Disproportionate. RECURSION TERMINATED: the loop stops here because the remaining hop carries no data, only a name, and every data-carrying hop below it is pinned."
+          },
+          {
+            "id": "J3",
+            "status": "PASS",
+            "evidence": "Three corrected comments were quoted and each checked against the code. The first now says the verb is the only caller that passes a real backend into a wave run and that construction itself is the named function which a test also calls directly — true, since a search finds one production caller and one production construction site in the crate, with the other run-and-record callers all inside the test module using the fake backend. The second describes the same call site the verb uses, passing the named function rather than a closure literal, and names both the assertion-closure test and the direct-call test — both exist as described, and the earlier only-claim is gone. The third states that passing the name rather than a closure literal written at the call site is what lets a test call the same construction directly — true against the code and the J1 result. NIT, not a failure and not among the three corrected: one line inside the join test still describes the verb as passing the raw constructor rather than the named wrapper; approximate, not a false only-claim."
+          },
+          {
+            "id": "J4",
+            "status": "PASS",
+            "evidence": "Three earlier mutations re-applied together and all still die. Dropping the config-key name from the typed error's rendering fails an_unrecognised_kind_is_a_typed_error_naming_the_config_key. Appending the ledger row a second time fails both a_wave_run_appends_exactly_one_ledger_row_through_a_fake_backend and a_wave_that_never_resolves_still_appends_one_row_with_no_succeeded_outcome, each on a count of two against one. Rendering the json fallback as live fails the json distinction test, the plain-line test and the crossing test. The combined run reports 1898 passed and 6 failed. All mutations were reverted, the file compares identical to the worktree, and the final suite returns to 2127 passed with 11 ignored."
+          },
+          {
+            "id": "J5",
+            "status": "PASS",
+            "evidence": "The diff touches one file with 64 insertions and 13 deletions. The removed lines are exactly thirteen: twelve comment lines carrying the three superseded only-claims, plus the single production line holding the old closure literal. Zero assertions, zero test attributes and zero test functions were removed, and no ignore attribute was added — the ignored count stays at eleven. The test count rises by exactly the one added test. Nothing deleted, nothing loosened."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T14:12:41.892Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T13:36:32.238Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
   },
   "tier": "generation"
 }

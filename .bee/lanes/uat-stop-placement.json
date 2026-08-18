@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "uat-stop-placement",
   "mode": "feature",
-  "phase": "exploring",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"uat-stop-placement\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 6b6b71c; capture what settled, then bee close --feature uat-stop-placement.",
+  "next_action": "Merged into main at c6320d1; capture what settled, then bee close --feature uat-stop-placement.",
   "created_at": "2026-08-18T11:50:42.443Z",
   "run_state": null,
   "waiting_on": null,
@@ -27,5 +27,14 @@
     "rationale": null,
     "updated_at": "2026-08-18T11:51:19.628Z",
     "feature": "uat-stop-placement"
+  },
+  "last_scribing_run": {
+    "feature": "uat-stop-placement",
+    "date": "2026-08-18",
+    "at": "2026-08-18T13:52:20.032Z",
+    "areas_synced": [
+      "worktree-parallelism"
+    ],
+    "next_action": "bee close --feature uat-stop-placement"
   }
 }

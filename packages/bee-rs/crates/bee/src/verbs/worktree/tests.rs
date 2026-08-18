@@ -4195,6 +4195,438 @@ use std::time::Instant;
         assert_eq!(second.result["code"], json!("ALREADY_UP_TO_DATE"));
     }
 
+    // ── usp-5: a missing lane record must not let cleanup fire ─────────────
+    // A judge observation against usp-2: `set_lane_uat_wait_on_merge` used
+    // to return `uat_wait_set: false` whenever the feature had no
+    // `.bee/lanes/<feature>.json` on disk, which let `merge_finish`'s
+    // `effective_cleanup = cleanup && !uat_wait_set` tear the worktree down
+    // out from under a user who still owed a "uat" test — asymmetric with
+    // the merge-time precondition, which already fails CLOSED
+    // (`uat_gate_applies_to_lane(None)` is `true`) in the exact same
+    // no-lane-record case. These three cells never call `write_lane_mode`
+    // or `write_stranded_lane`, so `.bee/lanes/demo.json` never exists on
+    // disk before the merge — only the live workflow record
+    // (`write_live_workflow_uat`) names the feature's "standard" mode and
+    // its "uat" approval.
+
+    /// The hole itself, fixed: an unapproved uat, `uat_stop: "close"`, and
+    /// NO lane record on disk still suppresses `--cleanup` — the worktree,
+    /// its branch, and the grant all survive, and the merge still reports
+    /// the SAME suppression code the lane-record case does. The missing
+    /// lane record is proven a non-event: no red merge, and no lane file
+    /// fabricated by the mere act of merging.
+    #[test]
+    fn uat_stop_close_pending_uat_with_no_lane_record_still_suppresses_cleanup() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_live_workflow_uat(&main, "demo", "standard", false);
+        write_uat_stop_config(&main, "close");
+        assert!(
+            !main.join(".bee").join("lanes").join("demo.json").exists(),
+            "fixture must start with no lane record at all"
+        );
+
+        let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
+        assert!(cleanup, "the flag alone must resolve cleanup to true before the merge overrides it");
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("uat_stop: close must never refuse the merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "a missing lane record must never redden the merge: {:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+
+        let cleanup_field = &answer.result["cleanup"];
+        assert_eq!(cleanup_field["ok"], json!(false), "{cleanup_field:?}");
+        assert_eq!(
+            cleanup_field["code"],
+            json!("WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING"),
+            "a missing lane record must fail closed the SAME way a present one does: {cleanup_field:?}"
+        );
+        assert!(
+            created.worktree_root.exists(),
+            "the worktree must survive a suppressed cleanup even with no lane record on disk"
+        );
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", &created.branch])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "the branch must survive a suppressed cleanup"
+        );
+        assert!(
+            !main.join(".bee").join("lanes").join("demo.json").exists(),
+            "the lane write stays best-effort — a missing lane record must never be fabricated by a merge"
+        );
+    }
+
+    /// The reason the suppression matters, proven with no lane record: a
+    /// SECOND merge on that same worktree afterwards still runs (this repo
+    /// has no new commits by then, so it lands as `ALREADY_UP_TO_DATE`)
+    /// rather than hitting the no-granted-worktree refusal — which is
+    /// exactly what a wrongly-torn-down worktree would have caused.
+    #[test]
+    fn uat_stop_close_pending_uat_with_no_lane_record_repeat_merge_still_works() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_live_workflow_uat(&main, "demo", "standard", false);
+        write_uat_stop_config(&main, "close");
+
+        let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
+        let first = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the first merge must land and suppress cleanup: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(first.ok, "{:?}", first.result);
+        assert_eq!(
+            first.result["cleanup"]["code"],
+            json!("WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING"),
+            "{:?}",
+            first.result
+        );
+        assert!(
+            created.worktree_root.exists(),
+            "the worktree must survive the first merge's suppressed cleanup"
+        );
+
+        let second = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a repeat merge with the grant still present must not refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(second.ok, "{:?}", second.result);
+        assert_eq!(second.result["code"], json!("ALREADY_UP_TO_DATE"));
+    }
+
+    /// The other half, unchanged: with the SAME no-lane-record fixture but
+    /// uat APPROVED, cleanup runs normally — the fix touches only the
+    /// unapproved/no-lane-record hole, never the approved path.
+    #[test]
+    fn uat_stop_close_approved_uat_with_no_lane_record_cleans_up_normally() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_live_workflow_uat(&main, "demo", "standard", true);
+        write_uat_stop_config(&main, "close");
+        assert!(
+            !main.join(".bee").join("lanes").join("demo.json").exists(),
+            "fixture must start with no lane record at all"
+        );
+
+        let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an approved gate under uat_stop close must merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["cleanup"]["ok"], Value::Bool(true), "{:?}", answer.result);
+        assert!(
+            !created.worktree_root.exists(),
+            "an approved uat must clean up normally even with no lane record on disk"
+        );
+    }
+
+    // ── usp-7: an UNRESOLVABLE feature must fail closed too ────────────────
+    // The last instance of the same asymmetry usp-3 and usp-5 already fixed
+    // elsewhere: `merge_finish`'s own `uat_wait_set` used to gate the
+    // `uat_merge_precheck` call behind `feature.as_deref().is_some_and(...)`,
+    // which short-circuited to `false` — UNsuppressed cleanup — the instant
+    // `Staged.feature` was `None`, even though `uat_merge_precheck(main_root,
+    // None)` itself already answers `lane_applies: true, gate_approved:
+    // false` (the SAME fail-closed shape the merge-time precondition already
+    // reads via `uat_gate_applies_to_lane(None) == true`). These fixtures
+    // strip BOTH of `resolve_worktree_feature`'s reads after creation so
+    // `Staged.feature` genuinely resolves to `None`, the one shape that
+    // exercises the hole rather than asserting around it (the branch check
+    // falls back to `wt_branch_shaped` when `identity.feature` is `None`, so
+    // the branch itself is left untouched and still matches).
+
+    /// Strips the immutable creation slug and the mutable `.bee/state.json`
+    /// `feature` field from an already-created worktree, so
+    /// `resolve_worktree_feature` genuinely returns `feature: None` — the
+    /// exact shape `worktree_feature_prefers_the_immutable_creation_slug`'s
+    /// "neither file" case above proves resolves to `None`.
+    fn make_feature_unresolvable(worktree_root: &Path) {
+        std::fs::remove_file(
+            worktree_root.join(".bee").join("runtime").join("worktree-identity.json"),
+        )
+        .unwrap();
+        std::fs::write(worktree_root.join(".bee").join("state.json"), "{}\n").unwrap();
+    }
+
+    /// The hole itself, fixed: `uat_stop: "close"`, a feature that cannot be
+    /// resolved at merge time, and `--cleanup` still suppresses — the
+    /// worktree, its branch, and the grant all survive, and the merge
+    /// reports the SAME suppression code the resolvable-pending case does.
+    #[test]
+    fn uat_stop_close_unresolvable_feature_still_suppresses_cleanup() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_uat_stop_config(&main, "close");
+        make_feature_unresolvable(&created.worktree_root);
+        assert_eq!(
+            resolve_worktree_feature(&created.worktree_root).feature,
+            None,
+            "fixture must genuinely leave the feature unresolvable"
+        );
+
+        let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
+        assert!(cleanup, "the flag alone must resolve cleanup to true before the merge overrides it");
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!(
+                    "an unresolvable feature must never redden the merge under uat_stop close: {m}"
+                ),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+
+        let cleanup_field = &answer.result["cleanup"];
+        assert_eq!(cleanup_field["ok"], json!(false), "{cleanup_field:?}");
+        assert_eq!(
+            cleanup_field["code"],
+            json!("WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING"),
+            "an unresolvable feature must fail closed the SAME way a resolvable-pending one does: {cleanup_field:?}"
+        );
+        assert!(
+            created.worktree_root.exists(),
+            "the worktree must survive a suppressed cleanup even with an unresolvable feature"
+        );
+        let branches = std::process::Command::new("git")
+            .args(["branch", "--list", &created.branch])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        assert!(
+            !String::from_utf8_lossy(&branches.stdout).trim().is_empty(),
+            "the branch must survive a suppressed cleanup"
+        );
+    }
+
+    /// The reason the suppression matters, proven with an unresolvable
+    /// feature: a SECOND merge on that same worktree afterwards still runs
+    /// (no new commits by then, so it lands as `ALREADY_UP_TO_DATE`) rather
+    /// than hitting the no-granted-worktree refusal — exactly what a
+    /// wrongly-torn-down worktree would have caused.
+    #[test]
+    fn uat_stop_close_unresolvable_feature_repeat_merge_still_works() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_uat_stop_config(&main, "close");
+        make_feature_unresolvable(&created.worktree_root);
+
+        let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
+        let first = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("the first merge must land and suppress cleanup: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(first.ok, "{:?}", first.result);
+        assert_eq!(
+            first.result["cleanup"]["code"],
+            json!("WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING"),
+            "{:?}",
+            first.result
+        );
+        assert!(
+            created.worktree_root.exists(),
+            "the worktree must survive the first merge's suppressed cleanup"
+        );
+
+        let second = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a repeat merge with the grant still present must not refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(second.ok, "{:?}", second.result);
+        assert_eq!(second.result["code"], json!("ALREADY_UP_TO_DATE"));
+    }
+
+    /// Merge is unchanged: an unresolvable feature under `uat_stop: "merge"`
+    /// still hits the pre-existing zero-mutation precondition
+    /// (`WORKTREE_MERGE_UAT_PENDING`) exactly as before this cell — the fix
+    /// touches only `merge_finish`'s cleanup decision, never the merge-time
+    /// refusal.
+    #[test]
+    fn uat_stop_merge_unresolvable_feature_precondition_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_uat_stop_config(&main, "merge");
+        make_feature_unresolvable(&created.worktree_root);
+
+        let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, false, None);
+        let Err(err) = result else {
+            panic!("uat_stop: merge must still refuse an unresolvable feature's pending gate")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_UAT_PENDING"), "{msg}");
+    }
+
+    /// Merge, skipped: with `--skip-uat`, the same unresolvable-feature
+    /// worktree merges and cleans up normally — `uat_stop: "merge"` never
+    /// reaches `merge_finish`'s `uat_wait_set` at all (it stays gated behind
+    /// `*uat_stop == UatStop::Close`), so this cell's fix cannot suppress a
+    /// cleanup outside `"close"`.
+    #[test]
+    fn uat_stop_merge_unresolvable_feature_skip_uat_cleans_up_normally() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_uat_stop_config(&main, "merge");
+        make_feature_unresolvable(&created.worktree_root);
+
+        let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("--skip-uat must still merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["cleanup"]["ok"], Value::Bool(true), "{:?}", answer.result);
+        assert!(
+            !created.worktree_root.exists(),
+            "an unresolvable feature under uat_stop merge (skipped) must clean up normally"
+        );
+    }
+
+    /// Off, unchanged: an unresolvable feature under `uat_stop: "off"` still
+    /// cleans up normally — `merge_finish`'s `uat_wait_set` stays gated
+    /// behind `*uat_stop == UatStop::Close`, so `"off"` never reaches it.
+    #[test]
+    fn uat_stop_off_unresolvable_feature_cleans_up_normally() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_uat_stop_config(&main, "off");
+        make_feature_unresolvable(&created.worktree_root);
+
+        let cleanup = resolve_cleanup_on_merge(&main, true, false).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("uat_stop off must never refuse: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["cleanup"]["ok"], Value::Bool(true), "{:?}", answer.result);
+        assert!(
+            !created.worktree_root.exists(),
+            "an unresolvable feature under uat_stop off must clean up normally"
+        );
+    }
+
+    /// `--no-cleanup` still means keep: an unresolvable feature that was
+    /// never asked to clean up in the first place keeps the worktree for an
+    /// entirely separate reason (`cleanup == false`), unrelated to this
+    /// cell's `uat_wait_set` fix.
+    #[test]
+    fn uat_stop_close_unresolvable_feature_no_cleanup_flag_still_means_keep() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_uat_stop_config(&main, "close");
+        make_feature_unresolvable(&created.worktree_root);
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, false).unwrap();
+        assert!(!cleanup, "no --cleanup flag and no config default must resolve to false");
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("an unrequested cleanup must never refuse the merge: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert!(
+            created.worktree_root.exists(),
+            "--no-cleanup (no request at all) must keep the worktree regardless of uat_wait_set"
+        );
+    }
+
+    // ── D5: no-write paths, preserved ────────────────────────────────────
+
+    /// D5: a real textual conflict writes NOTHING to the merging feature's
+    /// lane — `merge_stage`'s `MERGE_CONFLICT` arm returns long before
+    /// `merge_finish` (and this cell's lane write inside it) is ever
+    /// reached.
+    #[test]
+    fn a_merge_conflict_leaves_the_lane_record_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_stranded_lane(&main, "demo", "scribing");
+        let lane_path = main.join(".bee").join("lanes").join("demo.json");
+        let before = std::fs::read(&lane_path).unwrap();
+
+        // Diverge main on the SAME file the worktree already committed, so
+        // the merge hits a real textual conflict instead of a clean one.
+        std::fs::write(main.join("f.txt"), "conflict").unwrap();
+        git_ok(&main, &["add", "-A", "--", "f.txt"]);
+        git_ok(&main, &["commit", "-qm", "diverge on main"]);
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("a textual conflict must return Ok(ok:false), not throw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(!answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["code"], json!("MERGE_CONFLICT"));
+
+        let after = std::fs::read(&lane_path).unwrap();
+        assert_eq!(before, after, "a textual-conflict merge must not touch the lane record at all");
+    }
+
+    /// D5: a `WORKTREE_MERGE_PROOF_DEBT` refusal is a zero-mutation
+    /// precondition too — it writes nothing to the merging feature's lane
+    /// either.
+    #[test]
+    fn a_proof_debt_refusal_leaves_the_lane_record_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let mut lock_busy = None;
+        let created =
+            create_feature_worktree(&main, "unproofed", None, CompanionSpec::default(), &mut lock_busy)
+                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
+        let wt = created.worktree_root.clone();
+        std::fs::write(wt.join("f.txt"), "y").unwrap();
+        git_ok(&wt, &["config", "user.email", "a@b.c"]);
+        git_ok(&wt, &["config", "user.name", "t"]);
+        git_ok(&wt, &["commit", "-qam", "work"]);
+        write_capped_cell(
+            &main,
+            "unproofed-1",
+            "unproofed",
+            Some(json!({
+                "outcome": "did the thing",
+                "commit": "abc123",
+                "files": [],
+                "tests": "",
+                "deviations": [],
+            })),
+        );
+        write_stranded_lane(&main, "unproofed", "scribing");
+        let lane_path = main.join(".bee").join("lanes").join("unproofed.json");
+        let before = std::fs::read(&lane_path).unwrap();
+
+        let result = merge_feature_worktree(&main, &created.id, false, None, true, None);
+        let Err(err) = result else { panic!("an unproven cap must still refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_PROOF_DEBT"), "{msg}");
+
+        let after = std::fs::read(&lane_path).unwrap();
+        assert_eq!(before, after, "a proof-debt refusal must not touch the lane record at all");
+
+    }
+
     // ── docs/history/uat-approval-reaches-the-door: the lane fallback ──────
     //
     // The defect: `bee gate --name uat --approved true --lane <f>` writes
@@ -4371,79 +4803,4 @@ use std::time::Instant;
             let uat_door = doors.iter().find(|d| d.door == "uat").expect("door must exist for a standard lane");
             assert_eq!(!uat_door.blocking, expect_approved, "uat={uat} detail={}", uat_door.detail);
         }
-    }
-
-    // ── D5: no-write paths, preserved ────────────────────────────────────
-
-    /// D5: a real textual conflict writes NOTHING to the merging feature's
-    /// lane — `merge_stage`'s `MERGE_CONFLICT` arm returns long before
-    /// `merge_finish` (and this cell's lane write inside it) is ever
-    /// reached.
-    #[test]
-    fn a_merge_conflict_leaves_the_lane_record_byte_identical() {
-        let tmp = tempfile::tempdir().unwrap();
-        let main = main_repo(tmp.path());
-        let created = worktree_with_a_real_commit(&main, "demo");
-        write_stranded_lane(&main, "demo", "scribing");
-        let lane_path = main.join(".bee").join("lanes").join("demo.json");
-        let before = std::fs::read(&lane_path).unwrap();
-
-        // Diverge main on the SAME file the worktree already committed, so
-        // the merge hits a real textual conflict instead of a clean one.
-        std::fs::write(main.join("f.txt"), "conflict").unwrap();
-        git_ok(&main, &["add", "-A", "--", "f.txt"]);
-        git_ok(&main, &["commit", "-qm", "diverge on main"]);
-
-        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
-        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
-            .unwrap_or_else(|e| match e {
-                MErr::Thrown(m) => panic!("a textual conflict must return Ok(ok:false), not throw: {m}"),
-                MErr::Ex => panic!("merge delegated"),
-            });
-        assert!(!answer.ok, "{:?}", answer.result);
-        assert_eq!(answer.result["code"], json!("MERGE_CONFLICT"));
-
-        let after = std::fs::read(&lane_path).unwrap();
-        assert_eq!(before, after, "a textual-conflict merge must not touch the lane record at all");
-    }
-
-    /// D5: a `WORKTREE_MERGE_PROOF_DEBT` refusal is a zero-mutation
-    /// precondition too — it writes nothing to the merging feature's lane
-    /// either.
-    #[test]
-    fn a_proof_debt_refusal_leaves_the_lane_record_byte_identical() {
-        let tmp = tempfile::tempdir().unwrap();
-        let main = main_repo(tmp.path());
-        let mut lock_busy = None;
-        let created =
-            create_feature_worktree(&main, "unproofed", None, CompanionSpec::default(), &mut lock_busy)
-                .unwrap_or_else(|_| panic!("plain worktree creation must succeed"));
-        let wt = created.worktree_root.clone();
-        std::fs::write(wt.join("f.txt"), "y").unwrap();
-        git_ok(&wt, &["config", "user.email", "a@b.c"]);
-        git_ok(&wt, &["config", "user.name", "t"]);
-        git_ok(&wt, &["commit", "-qam", "work"]);
-        write_capped_cell(
-            &main,
-            "unproofed-1",
-            "unproofed",
-            Some(json!({
-                "outcome": "did the thing",
-                "commit": "abc123",
-                "files": [],
-                "tests": "",
-                "deviations": [],
-            })),
-        );
-        write_stranded_lane(&main, "unproofed", "scribing");
-        let lane_path = main.join(".bee").join("lanes").join("unproofed.json");
-        let before = std::fs::read(&lane_path).unwrap();
-
-        let result = merge_feature_worktree(&main, &created.id, false, None, true, None);
-        let Err(err) = result else { panic!("an unproven cap must still refuse") };
-        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
-        assert!(msg.contains("WORKTREE_MERGE_PROOF_DEBT"), "{msg}");
-
-        let after = std::fs::read(&lane_path).unwrap();
-        assert_eq!(before, after, "a proof-debt refusal must not touch the lane record at all");
     }

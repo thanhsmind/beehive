@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "feature": "uat-approval-reaches-the-door",
+  "mode": null,
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"uat-approval-reaches-the-door\" started at phase \"exploring\" (lane).",
+  "next_action": "Invoke bee-swarming.",
+  "created_at": "2026-08-18T13:09:50.347Z",
+  "run_state": "done",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "high-risk",
+    "flags": [
+      "public-contracts",
+      "covered-contract-change",
+      "multi-domain",
+      "audit-security"
+    ],
+    "product_files": 5,
+    "rationale": "The uat gate is the human acceptance door no bypass level may auto-approve; widening its read path is a validation-boundary change and must not let an unapproved gate read as approved.",
+    "updated_at": "2026-08-18T13:11:54.099Z",
+    "feature": "uat-approval-reaches-the-door"
+  }
+}
