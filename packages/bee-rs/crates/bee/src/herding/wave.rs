@@ -22,8 +22,9 @@
 //   - `run_wave_and_record` is generic over `WorkerBackend`, so a test
 //     drives it with `fleet::backend::fake::FakeBackend` instead of
 //     `HerdrBackend` — the same seam `fleet`'s own choreography tests use
-//     (D7). `wave()` (the CLI verb) is the only caller that ever
-//     constructs a real `HerdrBackend`.
+//     (D7). `wave()` (the CLI verb) is the only caller that ever PASSES a
+//     real `HerdrBackend` into a wave run; the construction itself is the
+//     named `real_backend_ctor`, which a test below also calls directly.
 //   - `occupancy_json` is pure: an `Occupancy` value in, its JSON shape out
 //     — `Live` and `Fallback` never collapse to the same shape. `occupancy()`
 //     (the CLI verb) is the only caller that ever shells out to a real
@@ -254,13 +255,17 @@ pub(crate) fn run_wave_and_record<B: WorkerBackend + Sync + ?Sized>(
 
 /// Resolves `herding.agent_command` (D14), constructs the backend through
 /// `construct_backend`, then runs and records the wave — the SAME call
-/// site `wave()` below uses to build the real `HerdrBackend`, and the seam
-/// a bee-crate test below drives with an assertion closure over a
-/// `FakeBackend`. The one line inside this function that calls
-/// `construct_backend(kind, args)` is therefore the only place either the
-/// real or a fake backend is ever built from a resolved pair; a mutation
-/// that discards `kind`/`args` there for constants is caught by that test,
-/// not just by the backend's own (already-passing) construction tests.
+/// site `wave()` below uses, passing `real_backend_ctor` (a NAMED
+/// function, never a closure literal) as `construct_backend`. That
+/// naming is what makes the real construction reachable from two
+/// independent tests: one below drives THIS function with an assertion
+/// closure over a `FakeBackend`, proving `construct_backend(kind, args)`
+/// receives the D14-resolved pair; a second calls `real_backend_ctor`
+/// itself directly, proving the real `HerdrBackend` construction this
+/// function only forwards to carries that pair through. A closure
+/// literal written at the `wave()` call site could satisfy neither test —
+/// it is reachable by no test, only by `wave()` — which is why the
+/// production side must be a name, not an inline closure.
 fn build_wave_backend_and_run<B: WorkerBackend + Sync>(
     cfg: &Value,
     root: &Path,
@@ -273,6 +278,21 @@ fn build_wave_backend_and_run<B: WorkerBackend + Sync>(
     let (kind, args) = resolve_agent_command(cfg)?;
     let backend = construct_backend(kind, args);
     Ok(run_wave_and_record(&backend, root, wave_id, started_at, inputs, wave))
+}
+
+/// The production `construct_backend`: builds a real `HerdrBackend` from
+/// the D14-resolved `(kind, args)` pair, with no transformation of either.
+/// `wave()` below passes THIS NAMED FUNCTION as `construct_backend` rather
+/// than writing `HerdrBackend::new` inline as a closure literal — a
+/// closure literal at that call site would be reachable by no test (the
+/// generic seam's own test below supplies its OWN closure to the same
+/// function, so the two never meet). Naming this construction lets a test
+/// call it directly and assert on what it built, closing the gap a prior
+/// judge found: mutating this function to ignore `kind`/`args` for
+/// constants is caught by `real_backend_ctor_hands_kind_and_args_straight_through_to_construction`
+/// below, independent of every other seam in this file.
+fn real_backend_ctor(kind: String, args: Vec<String>) -> HerdrBackend {
+    HerdrBackend::new(kind, args)
 }
 
 fn emit_wave_result(wave_id: &str, result: &WaveResult, json: bool) {
@@ -400,9 +420,12 @@ pub(super) fn wave(flags: &[&str]) -> ExitCode {
         FailurePolicy::WaitForAll,
     );
 
-    // The caller HerdrBackend::new's own documentation names — wiring D14's
-    // resolved kind/args through to the real backend, via the same
-    // construct_backend seam a bee-crate test drives with a FakeBackend.
+    // `real_backend_ctor` is the named production `construct_backend` —
+    // wiring D14's resolved kind/args through to a real `HerdrBackend`
+    // (the caller obligation `HerdrBackend::new`'s own docs name). Passing
+    // the name, not a closure literal written here, is what lets a test
+    // call the exact same construction directly (see `real_backend_ctor`'s
+    // own doc comment).
     let result = match build_wave_backend_and_run(
         &cfg,
         &main_root,
@@ -410,7 +433,7 @@ pub(super) fn wave(flags: &[&str]) -> ExitCode {
         started_at,
         &inputs,
         &wave_value,
-        |kind, args| HerdrBackend::new(kind, args),
+        real_backend_ctor,
     ) {
         Ok(result) => result,
         Err(e) => {
@@ -743,6 +766,34 @@ mod tests {
 
         assert!(construct_backend_was_called, "construct_backend must actually be invoked");
         assert!(result.is_success(), "{result:?}");
+    }
+
+    #[test]
+    fn real_backend_ctor_hands_kind_and_args_straight_through_to_construction() {
+        // `wave()` passes `real_backend_ctor` — a NAMED function — as
+        // `construct_backend`, not a closure literal written at its own
+        // call site. That naming is the entire point of this test: a
+        // closure literal there would be reachable by no test (the join
+        // test above supplies its OWN closure to `build_wave_backend_and_run`,
+        // which never touches `wave()`'s closure). Calling
+        // `real_backend_ctor` directly here proves the ACTUAL production
+        // construction — the one `wave()` runs — carries its `kind`/`args`
+        // through to the `HerdrBackend` it builds, via that struct's own
+        // derived `Debug` output (no accessor exists, and none should be
+        // added just for this test — `fleet` is out of scope here). If
+        // `real_backend_ctor` is ever mutated to ignore its arguments and
+        // construct with constants, this assertion — not any seam one
+        // level up — is what fails.
+        let backend = real_backend_ctor("codex".to_string(), vec!["--flag".to_string(), "value".to_string()]);
+        let debug = format!("{backend:?}");
+        assert!(
+            debug.contains("agent_kind: \"codex\""),
+            "constructed backend must carry the kind it was handed, got: {debug}"
+        );
+        assert!(
+            debug.contains(r#"agent_args: ["--flag", "value"]"#),
+            "constructed backend must carry the args it was handed, got: {debug}"
+        );
     }
 
     // ─── the bridge: occupancy reports which answer it gave ────────────
