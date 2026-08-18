@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "start-feature-reservation-scope",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"start-feature-reservation-scope\" started at phase \"swarming\" (lane).",
-  "next_action": "Close the feature; the scoped hold precondition is stated as R86 in areas/workflow-state/gates.md",
+  "next_action": "bee close finished \"start-feature-reservation-scope\" — feature is closed.",
   "created_at": "2026-08-18T11:53:51.549Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "last_scribing_run": {
     "feature": "start-feature-reservation-scope",
