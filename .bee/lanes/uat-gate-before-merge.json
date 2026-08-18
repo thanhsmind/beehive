@@ -13,6 +13,6 @@
   "summary": "Feature \"uat-gate-before-merge\" started at phase \"exploring\" (lane).",
   "next_action": "Merged to main and shipped in 2.11.0; lane closed. Capture debt remains: bee close --feature uat-gate-before-merge doors (ug-3 proof line, impact, doc-deferral).",
   "created_at": "2026-08-17T09:11:43.571Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null
 }

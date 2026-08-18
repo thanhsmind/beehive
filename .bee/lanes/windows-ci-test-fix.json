@@ -13,7 +13,7 @@
   "summary": "Feature \"windows-ci-test-fix\" started at phase \"swarming\" (lane).",
   "next_action": "Merged to main; lane closed.",
   "created_at": "2026-08-17T23:56:45.114Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "bugfix",

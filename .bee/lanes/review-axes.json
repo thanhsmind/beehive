@@ -13,6 +13,6 @@
   "summary": "Feature \"review-axes\" started at phase \"exploring\" (lane).",
   "next_action": "Merged to main; lane closed.",
   "created_at": "2026-08-18T06:23:47.282Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null
 }

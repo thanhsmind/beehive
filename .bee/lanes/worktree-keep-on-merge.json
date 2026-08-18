@@ -13,6 +13,6 @@
   "summary": "Feature \"worktree-keep-on-merge\" started at phase \"exploring\" (lane).",
   "next_action": "Merged to main; lane closed.",
   "created_at": "2026-08-17T08:02:32.245Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null
 }
