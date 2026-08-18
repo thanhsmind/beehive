@@ -266,8 +266,9 @@ In order, from the MAIN checkout:
    worktree in one move; read the path from its output.
 2. Split a runtime pane for the working agent. On herdr 0.8.0, `agent start`
    requires `--pane` and "never creates, splits, or moves layout" — splitting
-   first is now MANDATORY, not forbidden (this inverts the earlier proof;
-   re-recorded live in `references/spawn-proof.md`).
+   first is now MANDATORY, not forbidden. This inverts the split-order proof
+   that `references/spawn-proof.md` documents (that file still describes the
+   pre-0.8.0 form as of this writing).
    ```
    herdr pane split <runtime-pane-id> --direction right|down --ratio <r> --cwd <worktree_path> --no-focus
    ```
@@ -293,8 +294,9 @@ In order, from the MAIN checkout:
    herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout <ms> -- <agent args>
    ```
    `<kind>` and `<agent args>` come from `herding.agent_command`, per the next
-   paragraph. **On any `agent start` failure, close the pane §2 just created
-   (`herdr pane close <new_pane_id>`) before reporting** — an unlabelled pane
+   paragraph. **On any `agent start` failure, close the pane step 2 of this
+   section just created (`herdr pane close <new_pane_id>`) before reporting**
+   — an unlabelled pane
    whose `foreground_cwd` is the worktree is exactly what §4 classifies as an
    anomaly candidate, and this section created that pane, so this section is
    the one that cleans it up.
@@ -331,10 +333,10 @@ In order, from the MAIN checkout:
    (`references/operational-invariants.md`), not a default to trim.
 
    Afterwards, confirm: `herdr pane list --workspace <workspace_id>` filtered
-   to the runtime tab shows exactly **one** new pane — the one §2 split —
-   live agent, right cwd, not two, not zero. Anything wrong → apply this
-   step's cleanup rule if `agent start` itself failed, report one plain line
-   into the chat pane, and do **not** blindly repeat the spawn next
+   to the runtime tab shows exactly **one** new pane — the one step 2 of this
+   section split — live agent, right cwd, not two, not zero. Anything wrong →
+   apply the pane-close rule above if `agent start` itself failed, report one
+   plain line into the chat pane, and do **not** blindly repeat the spawn next
    iteration: a blind retry is how a cold loop turns one mistake into 1440 a
    day.
 
