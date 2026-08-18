@@ -523,11 +523,13 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     // break, not just noisy telemetry. Each probe below is read-only.
 
     let commands = read_worktree_commands(&main_root)?; // corrupt config -> Node
-    // test-simple (412e9b3a) + no-test-repos D1/D2. `commands.verify` was
-    // retired (one declared test command, one contract): the merge gate now
-    // runs `commands.test`, with the literal "none" sentinel mapped to "no
-    // test command configured".
-    let verify_command = commands.test_string.clone().filter(|c| c != "none");
+    // D7/D8 (docs/history/test-doctrine/CONTEXT.md, td-3): merge no longer
+    // spawns `commands.test` itself — the tests door reads whether every
+    // capped cell for the merging feature already carries a recorded D8
+    // proof line instead (`merge_stage`'s own zero-mutation precondition,
+    // verbs/cells/proof.rs `feature_proof_check`, the same helper `bee
+    // close`'s tests door reads, td-2). `commands` is still read here only
+    // for the companion-teardown command below.
     // worktree-companion-hook: resolved unconditionally (cheap) — there is no
     // `--with-companion` on the merge side, because the worktree's own marker
     // IS the signal. A worktree WITH a marker is torn down even when this
@@ -537,12 +539,6 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     // readGrants is consulted twice (P1's grant check, P3's fence); an
     // unparseable registry delegates here rather than from inside a hold.
     read_grants_strict(&main_root.join(".bee"))?;
-
-    // runVerifyChild's ONLY V8/libuv byte is its spawn-`error` message, and it
-    // is reached AFTER the merge is staged — see `shell_launchable`.
-    if verify_command.is_some() && !shell_launchable() {
-        return None;
-    }
 
     let main_root_s = p(&main_root);
     let ctrl_root_s = crate::verbs::reservations::control_root_for(&main_root_s).ok()?;
@@ -590,7 +586,6 @@ pub(crate) fn run_merge(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
                 &main_root,
                 &id,
                 cleanup,
-                verify_command.as_deref(),
                 companion_end_command.as_deref(),
                 skip_uat_flag,
                 Some(hooks),
