@@ -22,8 +22,11 @@ When running as Opus 5: optimize for wall-clock speed. Finish tasks quickly.
 
 ## Release
 
-When the user asks for a release: bump the version in
-`.claude-plugin/plugin.json`, make the release commit, then run
+When the user asks for a release: bump the version in BOTH
+`.claude-plugin/plugin.json` AND `.codex-plugin/plugin.json` (onboard
+reads them as one authoritative tuple — a mismatch blocks it), run
+`bee dev regen` so the ledger, skill-version stamps, and release
+manifest carry the new version, make the release commit, then run
 `scripts/release.sh` to the end. The release is done ONLY when the script
 prints its final `OK` line — tag pushed, release-binaries CI green, GitHub
 release carrying the binaries. A release commit without that OK is NOT a
