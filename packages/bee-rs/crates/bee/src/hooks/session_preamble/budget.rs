@@ -603,16 +603,20 @@ pub fn build_session_preamble(
             ));
         } else if opt_truthy(commands.get("test")) {
             lines.push(
-                // REWRITTEN TWICE. It first read "before your first `cells
-                // claim`, check CI INSTEAD of running anything locally",
-                // wrong in both directions: CI ran nightly only, so its
-                // answer could predate the change by a day, while the
-                // declared command it stood in for finishes in seconds. It
-                // then keyed on `commands.verify`, which has since been
-                // retired — one declared test command now serves the dev
-                // loop, the cap door, feature close, and the merge gate, and
-                // it IS what CI runs on every push and PR.
-                "- Never build on red: run the test command above before your first `cells claim`, and treat a red as its own fix-first cell. CI runs the same command on every push and PR.".to_string(),
+                // REWRITTEN THREE TIMES. It first read "before your first
+                // `cells claim`, check CI INSTEAD of running anything
+                // locally", wrong in both directions: CI ran nightly only,
+                // so its answer could predate the change by a day, while
+                // the declared command it stood in for finishes in
+                // seconds. It then keyed on `commands.verify`, which has
+                // since been retired — one declared test command now
+                // serves the dev loop, the cap door, feature close, and
+                // the merge gate. Decision D3 (58ec9664) then dropped the
+                // mandatory session-start full-suite red check outright:
+                // the agent owns test scope end to end (D1), so the
+                // preamble teaches proof-per-change-type (D5) instead of
+                // demanding a pre-claim full run.
+                "- Proof-per-change-type: pick the proof your change needs — related tests for code, parity/pointer checks for docs — and record it in the cap proof line. CI runs the same command on every push and PR.".to_string(),
             );
         }
     }

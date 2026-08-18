@@ -142,11 +142,15 @@ use crate::version::BEE_VERSION;
         let text = render(tmp.path());
         assert!(text.contains("### Standard commands (host project)"), "{text}");
         assert!(text.contains("- test: `npm test`"), "{text}");
-        assert!(text.contains("- Never build on red:"), "{text}");
-        // The line points at the LOCAL command, not at a nightly CI run —
-        // the instruction it replaced told agents to trust evidence that
-        // could predate their change by a day.
-        assert!(!text.contains("check CI instead of running anything locally"), "{text}");
+        assert!(
+            text.contains(
+                "- Proof-per-change-type: pick the proof your change needs — related tests for code, parity/pointer checks for docs — and record it in the cap proof line. CI runs the same command on every push and PR."
+            ),
+            "{text}"
+        );
+        // The mandatory pre-claim full-suite red check (dropped by D3,
+        // 58ec9664) never renders again.
+        assert!(!text.contains("- Never build on red:"), "{text}");
         // `commands.verify` is retired: recording one buys no block at all.
         write(tmp.path(), ".bee/config.json", r#"{"commands":{"verify":"npm test"}}"#);
         assert!(!render(tmp.path()).contains("### Standard commands"));
