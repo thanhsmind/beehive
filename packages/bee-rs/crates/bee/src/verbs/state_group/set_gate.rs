@@ -776,6 +776,15 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
         Some(l) => Some(l.to_string()),
         None => target.record().get("feature").filter(|v| truthy(v)).map(js_disp),
     };
+    // R4 (uat-approval-reaches-the-door): a LANE target with no live
+    // workflow is exactly the half-write this cell surfaces — the
+    // `approved_gates.<name>` boolean above already landed on the lane
+    // record (write_through_projection's own C1 fallback), but there is no
+    // live workflow record to also carry the richer stamp onto. The
+    // default-record (`--no-lane`) case is NOT this defect: its write lands
+    // in `.bee/state.json`, which the merge/close doors already read as
+    // their unchanged source-3 fallback, so nothing there is stranded.
+    let mut durable_stamp_unreachable = false;
     if let Some(wf) = routed_feature.as_deref().and_then(|f| find_live_workflow(&workflows, f)) {
         let touched: Vec<&str> = if merge { vec!["shape", "execution"] } else { vec![name.as_str()] };
         let at = now_iso();
@@ -795,12 +804,38 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
             patch.insert("gates".into(), Value::Object(gates));
             Ok(patch)
         })?;
+    } else if target.lane().is_some() {
+        durable_stamp_unreachable = true;
     }
     drop(locks);
     let text = if merge {
         format!("Gates \"shape\" and \"execution\" set to {approved}.{lane_note}")
     } else {
         format!("Gate \"{name}\" set to {approved}.{lane_note}")
+    };
+    // R4: the success line above stays byte-identical — this is a SECOND
+    // line, added beside it, never a replacement, and never a refusal (the
+    // lane write is real; the command still exits 0). It names, in the
+    // operator's own terms, exactly what the silent skip used to hide: the
+    // approval landed on the lane record because the feature's workflow
+    // record is closed or does not exist, so the durable (workflow-record)
+    // copy could not be updated. The same fact rides the JSON result as a
+    // typed field (`gate_durable_stamp_skipped`) for a non-interactive
+    // caller, present only when true.
+    let (text, record) = if durable_stamp_unreachable {
+        let uat_tail = if name == "uat" {
+            " The uat door reads the lane record as a second source, so the approval still reaches it."
+        } else {
+            ""
+        };
+        let text = format!(
+            "{text}\nNote: the feature's workflow record is closed or does not exist, so the durable stamp could not be written there \u{2014} the approval is recorded on the lane record instead.{uat_tail}"
+        );
+        let mut record = record;
+        record.insert("gate_durable_stamp_skipped".into(), Value::Bool(true));
+        (text, record)
+    } else {
+        (text, record)
     };
     Ok(Out::Emit(Value::Object(record), text, 0))
 }
@@ -2110,5 +2145,156 @@ mod tests {
         let workflows = ok_ex(list_workflows(root));
         assert_eq!(workflows.len(), 1, "no second record was created: {workflows:?}");
         assert_eq!(workflows[0].get("status"), Some(&json!("active")));
+    }
+
+    // ── run_gate_body — R4, the durable-stamp note (uat-approval-reaches-the-door) ──
+    //
+    // No existing test in this module approves a gate against a LANE whose
+    // feature's workflow record is closed or absent, so this is new
+    // coverage, not a duplicate. `gate_accepts_uat_from_the_default_user_actor_...`
+    // above pins the live-workflow, no-lane path (the note must never
+    // appear there); `high_risk_merged_gate_approval_succeeds_after_a_fresh_advisor_ref_is_recorded`
+    // above pins the plain lane success text (`gate_durable_stamp_skipped`
+    // must never appear there since a live workflow record answers it).
+
+    /// The load-bearing case: a lane's feature has NO live workflow record
+    /// (closed by ordinary housekeeping) and the gate is `uat`. The success
+    /// line stays byte-identical; a second line names the half-write and
+    /// the uat door's second source; the JSON result carries the same fact
+    /// as a typed field.
+    #[test]
+    fn gate_approval_on_a_lane_with_no_live_workflow_names_the_stranded_uat_stamp() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/uad-closed.json",
+            r#"{"feature":"uad-closed","phase":"compounding"}"#,
+        );
+        write_workflow_fixture(
+            root,
+            "wf-uad-closed",
+            r#"{"id":"wf-uad-closed","feature":"uad-closed","status":"closed","phase":"swarming",
+                "summary":"","next_action":"","created_at":"2026-01-01T00:00:00.000Z"}"#,
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "uad-closed", "--name", "uat", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(json, text, _) = out else {
+            panic!("expected the approval to succeed, got a refusal")
+        };
+        let mut lines = text.lines();
+        assert_eq!(
+            lines.next(),
+            Some("Gate \"uat\" set to true. (lane \"uad-closed\")"),
+            "the existing success line must stay byte-identical: {text:?}"
+        );
+        let note = lines.next().expect("a second line naming the half-write");
+        assert!(note.contains("lane record"), "{note}");
+        assert!(note.contains("closed") || note.contains("does not exist"), "{note}");
+        assert!(note.contains("uat door"), "{note}");
+        assert_eq!(lines.next(), None, "exactly one added line, never more: {text:?}");
+        assert_eq!(json["gate_durable_stamp_skipped"], json!(true), "{json:?}");
+        // The write itself is unchanged: the lane record still carries the
+        // approval, and nothing closed reopened.
+        let lane = read_json_file(root, ".bee/lanes/uad-closed.json");
+        assert_eq!(lane["approved_gates"]["uat"], json!(true), "{lane:?}");
+        let wf = read_workflow_fixture(root, "wf-uad-closed");
+        assert_eq!(wf["status"], json!("closed"), "a closed record is never reopened: {wf:?}");
+    }
+
+    /// A non-uat gate on the same stranded shape still gets the general
+    /// note and the field, but never the uat-specific sentence about the
+    /// door's second source — that claim is only true for `uat`.
+    #[test]
+    fn gate_approval_on_a_lane_with_no_live_workflow_omits_the_uat_tail_for_other_gates() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/uad-closed-2.json",
+            r#"{"feature":"uad-closed-2","phase":"compounding"}"#,
+        );
+        write_workflow_fixture(
+            root,
+            "wf-uad-closed-2",
+            r#"{"id":"wf-uad-closed-2","feature":"uad-closed-2","status":"closed","phase":"swarming",
+                "summary":"","next_action":"","created_at":"2026-01-01T00:00:00.000Z"}"#,
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "uad-closed-2", "--name", "context", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(json, text, _) = out else {
+            panic!("expected the approval to succeed, got a refusal")
+        };
+        assert!(text.contains("lane record"), "{text}");
+        assert!(!text.contains("uat door"), "the uat-specific tail must not appear: {text}");
+        assert_eq!(json["gate_durable_stamp_skipped"], json!(true), "{json:?}");
+    }
+
+    /// The live-workflow counterpart: same lane, same gate name, but the
+    /// feature's workflow record is still active. Neither the note line nor
+    /// the JSON field appears — the durable stamp was reachable and reached.
+    #[test]
+    fn gate_approval_on_a_lane_with_a_live_workflow_omits_the_note_and_field() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(
+            root,
+            ".bee/lanes/uad-live.json",
+            r#"{"feature":"uad-live","phase":"compounding"}"#,
+        );
+        write_workflow_fixture(
+            root,
+            "wf-uad-live",
+            r#"{"id":"wf-uad-live","feature":"uad-live","status":"active","phase":"swarming",
+                "summary":"","next_action":"","created_at":"2026-01-01T00:00:00.000Z"}"#,
+        );
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "uad-live", "--name", "uat", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(json, text, _) = out else {
+            panic!("expected the approval to succeed, got a refusal")
+        };
+        assert_eq!(
+            text, "Gate \"uat\" set to true. (lane \"uad-live\")",
+            "no second line when the durable stamp was reached: {text:?}"
+        );
+        assert!(
+            json.get("gate_durable_stamp_skipped").is_none(),
+            "the field must not appear on the live-record path: {json:?}"
+        );
+        let wf = read_workflow_fixture(root, "wf-uad-live");
+        assert_eq!(wf["gates"]["uat"]["actor"], json!("user"), "{wf:?}");
+    }
+
+    /// The default (`--no-lane`) counterpart with no live workflow record:
+    /// this is NOT the defect this cell fixes (the write already lands in
+    /// `.bee/state.json`, which the doors' unchanged source-3 fallback
+    /// already reads), so neither the note nor the field appears here.
+    #[test]
+    fn gate_approval_on_the_default_record_with_no_live_workflow_omits_the_note_and_field() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        w(root, ".bee/state.json", &idle_state_at("compounding", "uad-no-lane"));
+        let out = run_gate_body(
+            root,
+            &flags(&["--no-lane", "--name", "uat", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(json, text, _) = out else {
+            panic!("expected the approval to succeed, got a refusal")
+        };
+        assert_eq!(text, "Gate \"uat\" set to true.", "no lane, no added line: {text:?}");
+        assert!(
+            json.get("gate_durable_stamp_skipped").is_none(),
+            "the field must not appear on the default-record path: {json:?}"
+        );
     }
 }
