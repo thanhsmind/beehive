@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"uat-stop-placement\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"uat-stop-placement\" (lane).",
+  "next_action": "Merged into main at 6b6b71c; capture what settled, then bee close --feature uat-stop-placement.",
   "created_at": "2026-08-18T11:50:42.443Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
