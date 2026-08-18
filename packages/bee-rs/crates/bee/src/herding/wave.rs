@@ -1181,5 +1181,26 @@ mod tests {
              live worker through occupancy's own path — a --pane-id/--path swap inside the \
              wrapper must fail this test, not just the pure-helper crossing above"
         );
+
+        // Read the recorded row back directly (not just the live count) so
+        // every value that crossed argv is watched, not only the one number
+        // that happened to be easiest to observe. A `name`/`task` swap or a
+        // `path`/`task` swap inside record_worker()'s call into
+        // `append_worker_row` types perfectly and leaves the live-count
+        // assertion above green — only reading the row back catches it.
+        let waves = wave_ledger::read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(
+            waves[0].wave_id, "argv-slug",
+            "no --wave-id given, so it must default to the value given to --name, not --task \
+             or any other flag"
+        );
+        assert_eq!(waves[0].workers.len(), 1);
+        assert_eq!(waves[0].workers[0].name, "argv-slug", "the recorded row's name must be the value given to --name");
+        assert_eq!(
+            waves[0].workers[0].worktree, "/tmp/wt-argv-slug",
+            "the recorded row's worktree must be the value given to --path"
+        );
+        assert_eq!(waves[0].workers[0].task, "P-777", "the recorded row's task must be the value given to --task");
     }
 }
