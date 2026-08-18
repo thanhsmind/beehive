@@ -39,14 +39,17 @@ file marked *projection* below is derived from it.
 
 Each `gates` entry (one per name in `GATE_NAMES` — `context`, `shape`,
 `execution`, `review`, `uat`) carries more than the boolean flag. `uat` is
-the acceptance stop before `bee worktree merge`: user-only approval — an
+the acceptance stop for the finished work: user-only approval — an
 `--actor auto` call is refused outright for `uat` at any `gate_bypass`
 level, including `total` (uat-gate-before-merge D1) — and it is only
 enforced for `standard`/`high-risk` features (a missing or unrecognized
 lane fails closed as standard); `tiny`/`small`/`docs`/`spike` are exempt.
-`bee worktree merge` refuses `WORKTREE_MERGE_UAT_PENDING` until the gate is
-approved, unless `--skip-uat` is passed for that one merge or config
-`uat_before_merge` is `false` repo-wide (below).
+Config `uat_stop` (below) picks WHERE it sits: under `"merge"` (default,
+absent means this) `bee worktree merge` refuses `WORKTREE_MERGE_UAT_PENDING`
+until the gate is approved, unless `--skip-uat` is passed for that one
+merge or the door is turned off repo-wide; under `"close"` the merge lands
+first and `bee close` carries the door instead; under `"off"` neither door
+exists anywhere.
 
 | Field | Holds |
 |-------|-------|
@@ -122,8 +125,9 @@ Per-repo configuration.
 | `ship_visibility` | how much of the ship line a session prints |
 | `dogfood_repos` | the foreign repos `bee feedback` collects a digest from |
 | `worktree_cleanup_on_merge` | boolean, absent means KEEP (worktree-keep-on-merge D1) — `worktree merge` leaves the merged worktree in place unless this is explicitly `true` or the one-merge `--cleanup` flag is passed; `--no-cleanup` wins over both and always keeps |
-| `uat_before_merge` | boolean, absent means ON — whether `worktree merge` enforces the `uat` gate for standard/high-risk features; explicit `false` turns the door off repo-wide, a non-boolean value refuses `WORKTREE_MERGE_UAT_CONFIG_INVALID` rather than guessing (uat-gate-before-merge D1) |
-| `staging_before_merge` | boolean, absent means ON — whether the repo uses the staging mixing ground at all; explicit `false` makes `bee staging add`/`bee staging rebuild` refuse `STAGING_DISABLED`, so the repo runs feature worktree -> `uat` gate -> main with no staging step; a non-boolean value refuses `STAGING_CONFIG_INVALID` rather than guessing. Independent of `uat_before_merge` — the `uat` gate itself is unaffected |
+| `uat_stop` | `"merge"` (default, absent means this) \| `"close"` \| `"off"` — where the `uat` acceptance stop sits: at `bee worktree merge` (today's behavior), moved to `bee close` (merge lands first so the product is testable on main; that merge SETS the lane's `waiting_on` gate mark instead of clearing it, and holds the worktree — `--cleanup`/`worktree_cleanup_on_merge: true` are ignored, reported as `WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING`, while the gate is pending), or off everywhere. A value outside the three refuses `WORKTREE_MERGE_UAT_CONFIG_INVALID` rather than guessing (uat-stop-placement D1) |
+| `uat_before_merge` | back-compat alias for `uat_stop`, read only when `uat_stop` itself is absent — boolean, `true` reads as `"merge"`, `false` reads as `"off"`; a non-boolean value refuses `WORKTREE_MERGE_UAT_CONFIG_INVALID` rather than guessing (uat-gate-before-merge D1, superseded as the primary key by uat-stop-placement D1) |
+| `staging_before_merge` | boolean, absent means ON — whether the repo uses the staging mixing ground at all; explicit `false` makes `bee staging add`/`bee staging rebuild` refuse `STAGING_DISABLED`, so the repo runs feature worktree -> `uat` gate -> main with no staging step; a non-boolean value refuses `STAGING_CONFIG_INVALID` rather than guessing. Independent of `uat_stop` — the `uat` gate itself is unaffected |
 | `doc_viewer` | `{base_url, project}` — an opt-in URL prefix. When set, the session preamble and the compaction capsule give doc links as this URL plus the repo-relative path, instead of the bare path |
 
 Read by hive (bypass level), planning (test scoping), swarming (model tiers),
@@ -466,7 +470,8 @@ reason, never a silent skip — it is written onto the record it excuses.
 | write-guard, `docs/history/<feature>/plan.md` | that feature's `approved_gates.shape` is true — plan.md freezes once shape is locked | `bee state plan-rev bump --lane <feature>`, or unapprove shape to redraft |
 | model-guard, `Agent`/`Task` | the dispatch declares no tier and names no pinned subagent type. A pinned `bee-gather`/`bee-build`/`bee-extract`/`bee-review` now *derives* its tier instead of refusing | declare `[bee-tier: <tier>]` or a `model` param. A derived `cli` tier still refuses — an external process is not dispatchable as an agent |
 | `worktree merge`, dirty main | before this row's own refusal can fire, dirt confined to `.bee/` (plus `docs/history/<the-merging-feature>/` when the feature is known) is auto-committed first, warn-never-block; dirt found ANYWHERE ELSE still refuses, named by path | `worktree_merge_commit_bookkeeping: false` in config turns the auto-commit off — then a dirty main refuses unconditionally, exactly as before. Mirrors `bee close`'s own bookkeeping auto-commit |
-| `worktree merge` (`WORKTREE_MERGE_UAT_PENDING`) | the feature's lane is standard/high-risk (missing/unrecognized lane fails closed as standard) and its `uat` gate is not approved | approve it (`bee gate --name uat --approved true`), or skip uat for JUST this merge (`bee worktree merge --id <id> --skip-uat`), or turn the door off repo-wide (`uat_before_merge: false`). Never auto-approved — `uat` is user-only at every `gate_bypass` level (uat-gate-before-merge D1) |
+| `worktree merge` (`WORKTREE_MERGE_UAT_PENDING`) | under `uat_stop: "merge"` (default), the feature's lane is standard/high-risk (missing/unrecognized lane fails closed as standard) and its `uat` gate is not approved | approve it (`bee gate --name uat --approved true`), or skip uat for JUST this merge (`bee worktree merge --id <id> --skip-uat`), or turn the door off repo-wide (`uat_stop: "off"`). Never auto-approved — `uat` is user-only at every `gate_bypass` level (uat-gate-before-merge D1) |
+| `bee close` (`uat` door, headline "Uat gate pending for") | under `uat_stop: "close"`, standard/high-risk lane (same fail-closed rule), the merged feature's `uat` gate is not yet approved | approve it (`bee gate --name uat --approved true`), or log a `uat-deferral` decision naming the feature (uat-stop-placement D2) |
 | `worktree merge` (`WORKTREE_MERGE_STAGING_FORBIDDEN`) | the worktree/branch being merged IS the staging branch — staging is disposable, never a source main merges from | none — the catastrophic direction has no hatch; the only exit is removing the staging config/record by hand (staging-lane D0) |
 
 Three notes on doors that are not refusals:
