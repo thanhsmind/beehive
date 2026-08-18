@@ -9,7 +9,7 @@ use crate::roots::{resolve_roots_core, Resolution};
 use crate::verbs::reservations::{js_numberify, js_trim, now_iso, parse_flags, Err2, FlagV, Flags};
 use crate::verbs::workspace_store as ws;
 use crate::verbs::{emit_no_root_error, record_timing};
-use crate::uat::uat_gate_applies_to_lane;
+use crate::uat::{uat_gate_applies_to_lane, uat_stop_config, UatStop};
 use crate::{jsjson, lock};
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -47,6 +47,11 @@ pub(crate) struct Staged {
     /// second time. `None` only when the worktree's feature could not be
     /// resolved — matches `proof`'s own `None` condition exactly.
     pub(crate) feature: Option<String>,
+    /// uat-stop-placement D4.1: the placement `uat_stop_config` already
+    /// resolved for the merge precondition above, carried across the
+    /// released lock so P3's lane write (D4.2) and cleanup suppression
+    /// (D4.3) branch on the exact same resolved value.
+    pub(crate) uat_stop: UatStop,
 }
 
 pub(crate) enum StageOut {
@@ -283,25 +288,33 @@ pub(crate) fn merge_stage(
         ));
     }
 
-    // uat-gate-before-merge D1: the LAST zero-mutation precondition — a
+    // uat-stop-placement D1/D4.1: the LAST zero-mutation precondition — a
     // standard/high-risk feature whose "uat" gate is not yet approved
     // refuses here, before the companion is torn down or anything else
-    // mutates. `identity` was already resolved above (line ~97) for the
-    // bookkeeping auto-commit's scope; reused here rather than re-resolved.
-    // `uat_before_merge_config`'s `None` (a present-but-non-boolean config
-    // value) refuses UNCONDITIONALLY, before the lane/gate reads even run —
-    // a typo'd config must never silently resolve to either outcome, on ANY
-    // merge, not just the ones that would otherwise be gated.
-    let Some(uat_before_merge) = uat_before_merge_config(main_root) else {
+    // mutates, but ONLY under `uat_stop: "merge"` (today's default). Under
+    // `"close"` and `"off"` this precondition never refuses at all — the
+    // door has either moved to `bee close` or is off entirely. `identity`
+    // was already resolved above (line ~97) for the bookkeeping
+    // auto-commit's scope; reused here rather than re-resolved.
+    // `uat_stop_config`'s `None` (a typo'd string, a non-string `uat_stop`,
+    // or a non-boolean `uat_before_merge`) refuses UNCONDITIONALLY, before
+    // the lane/gate reads even run and before the placement is even known —
+    // a typo'd config must never silently resolve to any outcome, on ANY
+    // merge, not just the ones that would otherwise be gated. `uat_stop` is
+    // resolved exactly ONCE, here, and carried in `Staged` so P3's lane
+    // write (D4.2) and cleanup suppression (D4.3) act on the SAME resolved
+    // value this precondition already checked — never a second, possibly-
+    // drifted read.
+    let Some(uat_stop) = uat_stop_config(main_root) else {
         return Err(refuse_merge(
             "WORKTREE_MERGE_UAT_CONFIG_INVALID",
             format!(
-                "\"uat_before_merge\" in {}/.bee/config.json must be a boolean (true or false) \u{2014} merge refuses rather than guess which way to resolve it. FIX: set it to true or false, or remove the key entirely to use the default (true, uat-gate-before-merge D1).",
+                "{}/.bee/config.json's uat-stop-placement config is invalid \u{2014} \"uat_stop\" must be \"merge\", \"close\", or \"off\" when present, and its back-compat alias \"uat_before_merge\" must be a boolean (true or false) when present \u{2014} merge refuses rather than guess which way to resolve it. FIX: set \"uat_stop\" to one of those three values, set \"uat_before_merge\" to true or false, or remove both keys entirely to use the default (\"merge\", uat-stop-placement D1).",
                 p(main_root)
             ),
         ));
     };
-    if uat_before_merge && !skip_uat {
+    if uat_stop == UatStop::Merge && !skip_uat {
         let precheck = uat_merge_precheck(main_root, identity.feature.as_deref());
         if precheck.lane_applies && !precheck.gate_approved {
             let feature_disp = identity.feature.as_deref().unwrap_or("(unresolved)");
@@ -443,25 +456,57 @@ pub(crate) fn merge_stage(
         bookkeeping_commit,
         proof,
         feature: identity.feature.clone(),
+        uat_stop,
     })))
 }
 
-/// mcl-2 (R1): the merge-time half of "a shipped feature stops reading
-/// waiting on you". Clears the merging feature's stranded `waiting_on` +
-/// `run_state` pair through mcl-1's shared helper (`clear_lane_waiting_on_pair`,
+/// mcl-2 (R1) / uat-stop-placement D4.2: what `close_the_lane_on_merge`
+/// answers with — the `next_action` text it wrote (empty when the feature
+/// has no lane file at all, nothing to rewrite), and whether the D4.2 SET
+/// branch fired (`uat_wait_set`), the one bit `merge_finish` needs to also
+/// force D4.3's cleanup suppression.
+struct CloseLaneOutcome {
+    next_action: String,
+    uat_wait_set: bool,
+}
+
+/// mcl-2 (R1) / uat-stop-placement D4.2: the merge-time half of "a shipped
+/// feature stops reading waiting on you" — now branching on the SAME
+/// resolved `uat_stop` the merge precondition above already checked (D4.1).
+///
+/// Under `Merge`/`Off`, or under `Close` when the lane is exempt or uat is
+/// already approved: today's behavior, kept BYTE-FOR-BYTE — clears the
+/// merging feature's stranded `waiting_on` + `run_state` pair through
+/// mcl-1's shared helper (`clear_lane_waiting_on_pair`,
 /// `state_group/waiting_on.rs` — read, never re-implemented here) and
-/// rewrites the lane's `next_action` to name the close road. Returns the
-/// written `next_action` text, or an empty string when the feature has no
-/// lane file at all (nothing to rewrite — not an error). Every failure
-/// surfaces as `Err` so the one caller can warn and keep the merge green;
-/// this function itself never decides warn-vs-fail.
-fn close_the_lane_on_merge(main_root: &Path, feature: &str, merge_commit_sha: &str) -> Result<String, String> {
+/// rewrites the lane's `next_action` to name the close road.
+///
+/// Under `Close`, when the lane cares (`uat_gate_applies_to_lane`) and uat
+/// is still unapproved (the SAME fail-closed reads `uat_merge_precheck`
+/// already uses under `Merge`, reused here rather than re-derived): the
+/// INVERSE — delegates to `set_lane_uat_wait_on_merge`, which SETS
+/// `waiting_on` instead of clearing it.
+///
+/// Every failure surfaces as `Err` so the one caller can warn and keep the
+/// merge green; this function itself never decides warn-vs-fail.
+fn close_the_lane_on_merge(
+    main_root: &Path,
+    feature: &str,
+    merge_commit_sha: &str,
+    uat_stop: UatStop,
+) -> Result<CloseLaneOutcome, String> {
+    if uat_stop == UatStop::Close {
+        let precheck = uat_merge_precheck(main_root, Some(feature));
+        if precheck.lane_applies && !precheck.gate_approved {
+            return set_lane_uat_wait_on_merge(main_root, feature, merge_commit_sha);
+        }
+    }
     crate::verbs::state_group::clear_lane_waiting_on_pair(main_root, feature)
         .map_err(lane_write_err_text)?;
     let Some(mut lane) =
         crate::verbs::workflow_store::read_lane_strict(main_root, feature).map_err(lane_write_err_text)?
     else {
-        return Ok(String::new());
+        return Ok(CloseLaneOutcome { next_action: String::new(), uat_wait_set: false });
     };
     let short_sha = &merge_commit_sha[..merge_commit_sha.len().min(7)];
     let next_action = format!(
@@ -469,10 +514,52 @@ fn close_the_lane_on_merge(main_root: &Path, feature: &str, merge_commit_sha: &s
     );
     lane.insert("next_action".into(), json!(next_action.clone()));
     crate::verbs::workflow_store::write_lane(main_root, &lane).map_err(lane_write_err_text)?;
-    Ok(next_action)
+    Ok(CloseLaneOutcome { next_action, uat_wait_set: false })
 }
 
-/// `Err2`'s two shapes, rendered as one warn-line message — `close_the_lane_on_merge`'s only consumer.
+/// uat-stop-placement D4.2's SET branch: under `uat_stop: "close"`, a merge
+/// whose merged feature's "uat" gate is still pending INVERTS
+/// `close_the_lane_on_merge`'s usual clear — it SETS `waiting_on` to a
+/// `"gate"` mark naming `"uat: <feature>"` instead of clearing it, and
+/// points `next_action` at the reload-test-approve-or-fix road rather than
+/// at `bee close`. The mark is written straight onto the lane record (not
+/// through a live workflow's session-scoped `set_workflow_waiting_on` —
+/// mirroring `clear_lane_waiting_on_pair`'s own lane-file-direct write, the
+/// only copy a merged-and-possibly-torn-down worktree's feature reliably
+/// still has), so `session` names the merge itself
+/// (`WORKTREE_MERGE_SESSIONLESS_ID`) rather than a live interactive
+/// session. Returns an empty, unset outcome when the feature has no lane
+/// file at all — nothing to rewrite, not an error.
+fn set_lane_uat_wait_on_merge(
+    main_root: &Path,
+    feature: &str,
+    merge_commit_sha: &str,
+) -> Result<CloseLaneOutcome, String> {
+    let Some(mut lane) =
+        crate::verbs::workflow_store::read_lane_strict(main_root, feature).map_err(lane_write_err_text)?
+    else {
+        return Ok(CloseLaneOutcome { next_action: String::new(), uat_wait_set: false });
+    };
+    let short_sha = &merge_commit_sha[..merge_commit_sha.len().min(7)];
+    lane.insert(
+        "waiting_on".into(),
+        json!({
+            "kind": "gate",
+            "subject": format!("uat: {feature}"),
+            "asked_at": now_iso(),
+            "session": WORKTREE_MERGE_SESSIONLESS_ID,
+        }),
+    );
+    let next_action = format!(
+        "Merged into main at {short_sha}; reload the product and test \"{feature}\", then either approve uat (\"bee gate --name uat --approved true --lane {feature}\") or fix it in the worktree and merge again."
+    );
+    lane.insert("next_action".into(), json!(next_action.clone()));
+    crate::verbs::workflow_store::write_lane(main_root, &lane).map_err(lane_write_err_text)?;
+    Ok(CloseLaneOutcome { next_action, uat_wait_set: true })
+}
+
+/// `Err2`'s two shapes, rendered as one warn-line message —
+/// `close_the_lane_on_merge`/`set_lane_uat_wait_on_merge`'s only consumers.
 fn lane_write_err_text(e: Err2) -> String {
     match e {
         Err2::Msg(m) => m,
@@ -507,6 +594,7 @@ pub(crate) fn merge_finish(
         bookkeeping_commit,
         proof,
         feature,
+        uat_stop,
     } = state;
 
     let mut committed = false;
@@ -619,9 +707,12 @@ pub(crate) fn merge_finish(
         // reading before this write touches the tracked lane file, or every
         // green merge would trip `verify_mutated_tracked_files` on its own
         // work.
+        let mut uat_wait_set = false;
         if let Some(feature) = feature.as_deref() {
-            match close_the_lane_on_merge(main_root, feature, &merge_commit_sha) {
-                Ok(next_action) if !next_action.is_empty() => {
+            match close_the_lane_on_merge(main_root, feature, &merge_commit_sha, *uat_stop) {
+                Ok(outcome) if !outcome.next_action.is_empty() => {
+                    uat_wait_set = outcome.uat_wait_set;
+                    let next_action = outcome.next_action;
                     result.insert("next_action".into(), json!(next_action));
                     // mct-1: the lane rewrite just above landed a TRACKED
                     // file (`.bee/lanes/<feature>.json`) modified-but-
@@ -657,7 +748,7 @@ pub(crate) fn merge_finish(
                     }
                     result.insert("lane_bookkeeping_commit".into(), lane_commit.value());
                 }
-                Ok(_) => {} // no lane file for this feature: nothing to rewrite
+                Ok(_) => {} // no lane file for this feature: nothing to rewrite (uat_wait_set stays false)
                 Err(reason) => {
                     eprintln!(
                         "bee worktree merge: could not close {feature}'s lane after this green merge ({reason}) — run \"bee close --feature {feature}\" when ready; its waiting_on/next_action may be stale until then."
@@ -672,15 +763,38 @@ pub(crate) fn merge_finish(
         // legacy caps with no D8 proof line — rather than "no commands.test
         // configured".
         let proof_unproven = proof.as_ref().map(|p| p.proven_count == 0).unwrap_or(true);
-        attach_cleanup_outcome(
-            &mut result,
-            main_root,
-            worktree_root,
-            branch,
-            id,
-            cleanup,
-            proof_unproven,
-        );
+        // uat-stop-placement D4.3: while the uat wait THIS merge just set is
+        // live (only reachable when `uat_wait_set` is true — `uat_stop:
+        // "close"`, the lane cares, and uat is still unapproved),
+        // `--cleanup` and `worktree_cleanup_on_merge: true` are both
+        // ignored — the worktree is the only place a failed uat can be
+        // fixed, and tearing it down now would drop the grant the SECOND
+        // merge needs (the no-granted-worktree refusal, WORKTREE_MERGE_UNKNOWN_ID,
+        // above). `effective_cleanup` collapses to exactly `cleanup` when
+        // `uat_wait_set` is false (Merge, Off, or Close-exempt/-approved),
+        // so that path is untouched. Only override the result's `cleanup`
+        // reporting when a real request (`cleanup == true`) was actually
+        // suppressed — an unrequested keep needs no explanation beyond the
+        // existing `cleanup_suggested_command` line `attach_cleanup_outcome`
+        // already writes.
+        let effective_cleanup = cleanup && !uat_wait_set;
+        if cleanup && uat_wait_set {
+            result.insert("cleanup".into(), json!({
+                "ok": false,
+                "code": "WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING",
+                "reason": "the merged feature's \"uat\" gate is still pending under uat_stop \"close\" \u{2014} the worktree is the only place a failed uat can be fixed, and tearing it down now would drop the grant a second merge needs (WORKTREE_MERGE_UNKNOWN_ID). Reload the product and test it, then either approve uat (\"bee gate --name uat --approved true\") or fix in the worktree and merge again.",
+            }));
+        } else {
+            attach_cleanup_outcome(
+                &mut result,
+                main_root,
+                worktree_root,
+                branch,
+                id,
+                effective_cleanup,
+                proof_unproven,
+            );
+        }
         // staging-lane D0a (trigger 3): a successful merge just moved main,
         // which is exactly what makes any existing staging record stale —
         // nudge, never force, a rebuild. Only reachable here (a REAL commit
@@ -693,8 +807,10 @@ pub(crate) fn merge_finish(
         // wkm-1 (D1): the keep path (cleanup == false) queues its one
         // cross-check entry AFTER attach_cleanup_outcome runs — this is the
         // real-merge success path only; ALREADY_UP_TO_DATE (merge_stage's
-        // own arm above) never reaches merge_finish at all.
-        if !cleanup {
+        // own arm above) never reaches merge_finish at all. Uses
+        // `effective_cleanup` (D4.3): a merge suppressed by a live uat wait
+        // kept the worktree too, so it queues the same cross-check entry.
+        if !effective_cleanup {
             enqueue_worktree_cleanup_deferral(main_root, worktree_root, id, branch, &merge_commit_sha);
         }
         Ok(MergeAnswer { result, ok: true })
@@ -708,19 +824,10 @@ pub(crate) fn merge_finish(
     outcome
 }
 
-/// uat-gate-before-merge D1: `uat_before_merge` in `.bee/config.json` — ON
-/// by default (absent \u{2192} true, so the door protects every repo until
-/// someone opts it off), an explicit `false` disables it repo-wide, and any
-/// other shape refuses (`None`) rather than guessing which way to resolve a
-/// typo. Models `worktree_cleanup_on_merge_config`'s fail-closed shape
-/// (handlers.rs:415-421) with the default flipped to ON.
-pub(crate) fn uat_before_merge_config(main_root: &Path) -> Option<bool> {
-    match crate::state::read_config_raw(main_root).get("uat_before_merge") {
-        None => Some(true),
-        Some(Value::Bool(b)) => Some(*b),
-        Some(_) => None,
-    }
-}
+// uat-stop-placement D1: the placement read (`uat_stop_config`, `.bee/config.json`
+// "uat_stop" with the "uat_before_merge" back-compat alias) now lives once,
+// in `crate::uat` (imported above) — `uat_before_merge_config` (formerly
+// here) is retired; nothing calls it anymore.
 
 // uat-stop-placement D2 (docs/history/uat-stop-placement/CONTEXT.md): the
 // lane rule now lives once, in `crate::uat` (imported above), so the merge
