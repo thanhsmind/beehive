@@ -20,11 +20,11 @@
     },
     {
       "name": "bee-hive",
-      "sha256": "59f8afa640d014af121651240ee600b2e8f07454e6d6ee22ec3cc72018dcf705"
+      "sha256": "e41b84d1341bde0a94b67437651a55a4618f22f5475e4172fd8bb75c79862fc7"
     },
     {
       "name": "bee-planning",
-      "sha256": "e749790b50cbdd901c40e20de57a95272c6a40a3f280e6b8f6ad0266acc6833e"
+      "sha256": "bd6e84f245381cfc2521c7a3f78b1be7f0f352e6d04dedbec82556546d8a041e"
     },
     {
       "name": "bee-researching",
@@ -36,11 +36,11 @@
     },
     {
       "name": "bee-shaping",
-      "sha256": "0655677f18ba0f02814e1b6e3804cb300b4ff57faec889e7aee3638061a256de"
+      "sha256": "ce189ca39a5acec106af2f6c0ac04a02d27168dd25c60060e593d73721d0c9c8"
     },
     {
       "name": "bee-swarming",
-      "sha256": "cc57548ffd06d7fc79e19c2648c12a051c6273b4099be680d98b36b6f85d8cb3"
+      "sha256": "d093bd188b083b32881a6bcf486ce58a1eebfae2dd318b2be5b72753137a1933"
     },
     {
       "name": "bee-wayfinding",
