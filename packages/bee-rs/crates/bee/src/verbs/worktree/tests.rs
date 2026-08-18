@@ -3635,6 +3635,83 @@ use std::time::Instant;
         assert!(next_action.contains("bee close --feature demo"), "{next_action}");
     }
 
+    /// mct-1: the P3 residual an independent judge raised against
+    /// merge-closes-the-lane. `close_the_lane_on_merge` rewrites a TRACKED
+    /// file (`.bee/lanes/<feature>.json`, force-tracked here — the SAME
+    /// fixture shape the sibling test above uses, since an untracked lane
+    /// file is invisible to both the guard and this behavior, the exact
+    /// blindness that hid the original defect) — a green merge must commit
+    /// that rewrite in its own path-scoped commit, not leave it as dirt for
+    /// main. Pins: (1) main's tree is clean after the merge, (2) the lane
+    /// commit lands as a NEW, separate commit on top of the merge commit
+    /// (the merge commit is never amended — still a real merge with two
+    /// parents), and (3) that new commit's diff touches ONLY the lane path.
+    #[test]
+    fn a_green_merge_of_a_tracked_lane_file_commits_the_rewrite_and_leaves_main_clean() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        write_stranded_lane(&main, "demo", "scribing");
+        // `main_repo`'s blanket `.bee/*` ignore (unlike the real repo's own
+        // `.gitignore`, which never blanket-ignores `.bee/lanes/`) would
+        // make git's own `add` refuse a re-add of this already-tracked path
+        // on its later modification without an explicit `-f` every time —
+        // negate it here so the fixture matches production's actual shape
+        // instead of masking the lane-commit step this test exists to pin.
+        std::fs::write(main.join(".gitignore"), ".bee/*\n!.bee/companion-session.json\n!.bee/lanes/\n").unwrap();
+        git_ok(&main, &["add", "-A", "--", ".gitignore"]);
+        git_ok(&main, &["commit", "-qm", "stop ignoring lanes"]);
+        git_ok(&main, &["add", "-f", ".bee/lanes/demo.json"]);
+        git_ok(&main, &["commit", "-qm", "track the demo lane"]);
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => panic!("merge threw: {m}"),
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            answer.result["lane_bookkeeping_commit"]["committed"],
+            Value::Bool(true),
+            "{}",
+            answer.result["lane_bookkeeping_commit"]
+        );
+
+        // (1) main's tree is clean — the rewrite is committed, not dirt.
+        assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+
+        // (2) the lane commit is a NEW commit on top of the merge commit:
+        // HEAD has exactly one parent (an ordinary commit, not amended into
+        // the merge), and HEAD~1 (the merge commit itself) still has two —
+        // it was never rewritten.
+        let head_parents =
+            js_trim(&run_git(&main, &["rev-list", "--parents", "-1", "HEAD"]).stdout.unwrap_or_default())
+                .to_string();
+        assert_eq!(
+            head_parents.split_whitespace().count(),
+            2,
+            "HEAD (the lane commit) must have exactly one parent: {head_parents}"
+        );
+        let merge_parents = js_trim(
+            &run_git(&main, &["rev-list", "--parents", "-1", "HEAD~1"]).stdout.unwrap_or_default(),
+        )
+        .to_string();
+        assert_eq!(
+            merge_parents.split_whitespace().count(),
+            3,
+            "HEAD~1 (the merge commit) must still carry both its parents, unamended: {merge_parents}"
+        );
+
+        // (3) the lane commit's diff names only the lane path.
+        let touched = js_trim(
+            &run_git(&main, &["diff", "--name-only", "HEAD~1", "HEAD"]).stdout.unwrap_or_default(),
+        )
+        .to_string();
+        assert_eq!(touched, ".bee/lanes/demo.json", "{touched}");
+    }
+
     /// Truth 2a: the same standard-lane feature merges once its uat gate is
     /// approved on the live workflow record.
     #[test]

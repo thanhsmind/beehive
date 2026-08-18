@@ -622,6 +622,39 @@ pub(crate) fn merge_finish(
             match close_the_lane_on_merge(main_root, feature, &merge_commit_sha) {
                 Ok(next_action) if !next_action.is_empty() => {
                     result.insert("next_action".into(), json!(next_action));
+                    // mct-1: the lane rewrite just above landed a TRACKED
+                    // file (`.bee/lanes/<feature>.json`) modified-but-
+                    // uncommitted in main — dirt indistinguishable from any
+                    // OTHER post-commit drift until some unrelated
+                    // bookkeeping auto-commit happened to sweep it up. One
+                    // path-scoped commit of exactly that one file, through
+                    // the SAME mechanism trun-4's pre-merge bookkeeping
+                    // commit already owns (`commit_main_bookkeeping` —
+                    // `git add -A -- <lane path>` then `git commit --
+                    // <lane path>`, never a bare `git add -A`, never
+                    // `--amend` the merge commit that already landed).
+                    // Runs strictly AFTER the post-commit dirty guard above
+                    // has taken its reading (mcl-2 R2 ordering, unchanged)
+                    // and after the lane write itself, so it commits
+                    // exactly the rewrite this merge just made — never a
+                    // moving target. BEST-EFFORT, same warn-never-block
+                    // contract as the lane write and the pre-merge
+                    // bookkeeping commit: a failure here warns on its own
+                    // line and never turns this green merge red.
+                    let lane_pathspec = format!(".bee/lanes/{feature}.json");
+                    let lane_commit = commit_main_bookkeeping(
+                        main_root,
+                        &format!("Commit {feature}'s lane rewrite after merging worktree {id}"),
+                        &[lane_pathspec],
+                    );
+                    if let MainBookkeepingCommit::Skipped { reason, .. } = &lane_commit {
+                        if reason != "clean" {
+                            eprintln!(
+                                "bee worktree merge: could not commit {feature}'s lane rewrite after this green merge ({reason}) — the lane file will show as modified in \"git status\" until committed by hand."
+                            );
+                        }
+                    }
+                    result.insert("lane_bookkeeping_commit".into(), lane_commit.value());
                 }
                 Ok(_) => {} // no lane file for this feature: nothing to rewrite
                 Err(reason) => {
