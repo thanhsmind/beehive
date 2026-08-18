@@ -207,6 +207,16 @@ fn invariant_4_fail_closed_status_is_never_treated_as_safe() {
 /// collected", because nothing has been dispatched yet at the moment the
 /// failure happens. `w2`, dispatched after `w1`, keeps the "or later" half
 /// covered too.
+///
+/// Limit of that premise, in the same spirit as Invariant 7's proxy note
+/// below: "`w0` is dispatched BEFORE `w1`" rests on phase 4 iterating its
+/// baselined targets forward, and no test pins that iteration order — a
+/// judge reversed it and the whole suite stayed green. The invariant this
+/// test names still holds under reversal (an already-dispatched target is
+/// never abandoned, whichever end the wave starts from), so this is a limit
+/// of the proxy, not a defect; it is written down so a reader knows the
+/// ordering words are describing the current implementation rather than
+/// pinning it.
 #[test]
 fn invariant_5_one_send_failing_does_not_abandon_other_dispatched_targets() {
     let backend = FakeBackend::new();
@@ -342,6 +352,15 @@ fn invariant_7_settling_on_finished_early_does_not_wait_out_the_full_ceiling() {
 /// Ordering Invariant 8 — dedupe before preflight: a name naming one
 /// target that appears twice in the wave's worker list must be sent to
 /// exactly once, and must cost exactly one preflight read.
+///
+/// Scope, per herding-orchestration D15 (`fb8a8628`): at this layer the
+/// invariant holds only for specs whose `name` is the exact same string,
+/// which is what this test exercises. Two different name strings resolving
+/// to one underlying target — a name and its backend-side pane id — are
+/// NOT collapsed here, because the generic core has no canonical-identity
+/// resolver and cannot gain one without knowing a backend's identity
+/// scheme (D2). Closing that half is the backend phase's obligation, and
+/// D15 records the four things it owes.
 #[test]
 fn invariant_8_a_duplicate_target_name_is_sent_to_exactly_once() {
     let backend = FakeBackend::new();
