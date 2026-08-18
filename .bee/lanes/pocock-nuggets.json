@@ -8,12 +8,12 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"pocock-nuggets\" started at phase \"exploring\" (lane).",
   "next_action": "Dispatch pn-1 worker.",
   "created_at": "2026-08-18T06:15:19.583Z",
-  "run_state": "awaiting-approval",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
