@@ -15,10 +15,13 @@ proves each step before taking the next.
 
 Use bee to build with bee. For any non-trivial code, docs, or behavior
 change, load the `bee-hive` skill and follow the bee lifecycle:
-explore, gate, plan, execute, scribe, compound. The skill routes by
-size and risk — a typo fix takes one cell and one merged question; an
-auth change takes the full chain. Independent review is a separate,
-user-invoked pass, never an automatic stage of that chain.
+explore, gate, plan, execute, scribe, compound. That lifecycle is the
+Main flow, idea to ship; a separate Discovery flow carries a
+fog-state ask from an open question to a locked decision before
+handing into it. The skill routes by size and risk — a typo fix takes
+one cell and one merged question; an auth change takes the full
+chain. Independent review is a separate, user-invoked pass, never an
+automatic stage of that chain.
 
 Four boundaries hold in every mode:
 
