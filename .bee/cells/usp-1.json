@@ -1,0 +1,68 @@
+{
+  "id": "usp-1",
+  "feature": "uat-stop-placement",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "uat.rs: one policy module for where the uat stop sits and which lanes it covers",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/uat.rs",
+    "packages/bee-rs/crates/bee/src/lib.rs"
+  ],
+  "read_first": [
+    "docs/history/uat-stop-placement/CONTEXT.md",
+    "docs/history/uat-stop-placement/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "action": "Create packages/bee-rs/crates/bee/src/uat.rs and register it in the crate root (lib.rs, or main.rs if that is where modules are declared — check before writing). It holds the whole uat-placement policy, stated once, so the merge side and the close side never carry two copies of it (CONTEXT.md D1, D2).\n\n(1) `pub(crate) enum UatStop { Merge, Close, Off }`, derive Debug/Clone/Copy/PartialEq.\n\n(2) `pub(crate) fn uat_stop_config(main_root: &Path) -> Option<UatStop>` — fail closed, modelled on `uat_before_merge_config` at packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:683-689. Read order, stated once and only here: if `.bee/config.json` has `uat_stop`, it wins — the strings \"merge\"/\"close\"/\"off\" map to the three variants and ANY other value (wrong string, wrong type) returns None; else if it has `uat_before_merge`, read it as the D1 back-compat alias — Bool(true) => Merge, Bool(false) => Off, any non-boolean => None; else Merge (absent means today's behavior). Read config via `crate::state::read_config_raw(main_root)`.\n\n(3) `pub(crate) fn uat_gate_applies_to_lane(mode: Option<&str>) -> bool` — MOVED here verbatim from phases.rs:698-700, keeping its exact semantics (only tiny/small/docs/spike are exempt; a missing, null, or unrecognized mode fails CLOSED as standard). Delete the copy in phases.rs and have phases.rs call this one — a re-export is fine, a second copy is not.\n\n(4) Unit tests in the same file covering every read-order branch: uat_stop \"merge\"/\"close\"/\"off\"; uat_stop wins over a contradicting uat_before_merge; uat_before_merge true => Merge and false => Off when uat_stop is absent; both keys absent => Merge; a bogus uat_stop string => None; a non-boolean uat_before_merge => None; and the lane rule for tiny/small/docs/spike (exempt) plus standard/high-risk/None/unknown (applies).\n\nDo NOT change any behavior at the merge or close call sites in this cell beyond the phases.rs lane-rule delegation — usp-2 and usp-3 own those. The crate must still compile and the existing suite must still pass.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml uat",
+  "verify_owner": "worker",
+  "done_when": "packages/bee-rs/crates/bee/src/uat.rs exists and is registered in the crate; uat_stop_config resolves every documented branch including both fail-closed None cases; uat_gate_applies_to_lane lives ONLY in uat.rs and phases.rs delegates to it with no second copy; the new unit tests pass and the pre-existing suite still passes.",
+  "notes": "Phase 1, blocks usp-2 and usp-3. Pure policy read, no user-visible behavior of its own — the one justified skeleton exception, made visible by usp-2 in the same slice (plan.md).",
+  "must_haves": {
+    "truths": [
+      "uat_stop wins over uat_before_merge whenever it is present.",
+      "uat_before_merge true reads as Merge and false reads as Off when uat_stop is absent, so no existing repo changes behavior.",
+      "Both keys absent resolves to Merge.",
+      "An unrecognized uat_stop value, and a non-boolean uat_before_merge, each return None rather than guessing.",
+      "uat_gate_applies_to_lane exists in exactly one place in the crate and keeps its fail-closed-as-standard semantics.",
+      "The pre-existing test suite still passes."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "usp-1-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/uat.rs",
+      "packages/bee-rs/crates/bee/src/main.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T11:58:23.542Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T11:52:53.332Z",
+    "report": {
+      "outcome": "Added uat.rs with UatStop enum, uat_stop_config (D1 read order), and uat_gate_applies_to_lane (D2) moved from phases.rs; phases.rs now delegates to it, no second copy.",
+      "commit": "6b2340af1919c6c01f7648b916cd5a01a58fad5f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/uat.rs",
+        "packages/bee-rs/crates/bee/src/main.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml uat — green — 28 uat tests pass; full suite (2053 passed, 11 ignored) also verified green",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 172 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

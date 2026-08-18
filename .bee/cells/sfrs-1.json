@@ -1,0 +1,65 @@
+{
+  "id": "sfrs-1",
+  "feature": "start-feature-reservation-scope",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Scope start_default's reservation refusal to declared-path overlap or same-session holds",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/start-feature-reservation-scope/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+    "docs/knowledge/patterns/20260710-never-release-another-agents-reservations-on-a-stall.md"
+  ],
+  "action": "In policy.rs: add a `paths: &[String]` parameter to `start_default` (place it immediately before `workflows`, mirroring `start_lane`) and pass `&paths` from `run_start_feature`'s non-lane branch. Replace the blanket reservation precondition (currently 'startFeature: refused - N active reservation(s) remain (...). FIX: release them first (bee reservations release).') with two scoped refusals, both reading the SAME `list_reservations(&root_s, true, now_ms())` result once. (1) Same-session holds: reservations whose `session` field equals the trimmed acting `session_id` (skip entirely when `session_id` is None or empty). Refuse naming those holds via `resv_disp`, FIX = 'release your own hold(s) first (bee reservations release --agent <agent>)' listing the caller's own agent value(s) - never a bare `bee reservations release`. (2) Peer path overlap: reservations whose `session` differs from the acting session AND whose `path` overlaps one of the non-empty trimmed `paths` entries, using `paths_overlap` exactly as the lane branch (d) does. Mirror the lane FIX wording: 'FIX: wait for release/expiry, or start over non-overlapping paths.' Never instruct the caller to release another session's holds. Leave the claimed-cells precondition below and every other precondition byte-identical. In tests.rs: fix the existing `start_default(...)` call sites for the new parameter (pass `&[]`), and add regression tests covering: a peer session's reservation over an unrelated path no longer refuses a default start; a peer's reservation that DOES overlap a declared `--paths` entry refuses with the wait/non-overlapping wording and never invites releasing it; a same-session leftover hold refuses with a FIX naming `--agent`.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "A live peer's reservation in another worktree over a path this start does not declare no longer refuses bee state start-feature",
+      "No refusal message on this path tells the caller to release another session's reservations"
+    ]
+  },
+  "decisions": [
+    "start-feature-reservation-scope D1"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-sfrs-1",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+      "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+      "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+    ],
+    "deviations": [
+      "Also touched crates/bee/tests/workflow_verbs.rs (not a cell-declared file): its start_feature_refuses_over_an_active_reservation_with_zero_mutations test exercised exactly the old blanket-refusal behavior D1 removes, so it went red under the fix; renamed it to assert the new declared-path-overlap refusal and added a companion test for the now-allowed unrelated-path case, to keep the full-suite proof green."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-18T12:07:56.666Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "536f916d-ec59-49de-a3de-1c320deae5ff",
+    "claimed_at": "2026-08-18T11:56:23.113Z",
+    "report": {
+      "outcome": "start_default now takes paths like start_lane and refuses only on the caller's own leftover reservation holds or a peer hold overlapping a declared --paths entry; the old unscoped blanket refusal and its release-a-peer's-holds FIX line are gone.",
+      "commit": "60f9d2c7c9278cf1fe458b43cbc30080b84f531e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs",
+        "packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs",
+        "packages/bee-rs/crates/bee/tests/workflow_verbs.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — full workspace suite per the cell's declared verify command: 2045 passed, 11 ignored, 0 failed",
+      "deviations": [
+        "Touched crates/bee/tests/workflow_verbs.rs, outside the cell's declared files, to fix an integration test that encoded the exact blanket-refusal behavior D1 removes."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

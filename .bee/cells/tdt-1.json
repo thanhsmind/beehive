@@ -1,0 +1,150 @@
+{
+  "id": "tdt-1",
+  "feature": "test-doctrine-text-sweep",
+  "lane": "small",
+  "tier": "generation",
+  "title": "bee test: stop telling the user the boundary doors run the suite",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md"
+  ],
+  "action": "Two stale assertions an independent citation audit found in the SOURCE while auditing docs. Both state, in bare present tense, a boundary auto-run that decisions 58ec9664 and 1f534837 retired: no local door runs commands.test any more — each cap records its own proof line, bee close and bee worktree merge check that record and run nothing themselves, and CI runs the declared command on every push. Verified in code by the audit: run_declared_tests has exactly ONE live caller, the bee test verb itself (test_runner.rs:122); both doors call crate::verbs::cells::feature_proof_check (drivers/close.rs:1524, worktree/phases.rs:150). (1) USER-VISIBLE, the important one — test_runner.rs:114-115, the text bee test prints when commands.test is undeclared, says 'tests prove at the boundary: bee close runs it when the feature has no worktree, bee worktree merge runs it when the feature has one' and 'bee cells finish records tests: boundary and does not run it'. Both halves are now false: no door runs it, and finish records a proof line, not the retired tests: boundary enum value. Rewrite both sentences to state the live rule, keeping the surrounding lines and the next: line intact. CHECK FIRST, then act on what you find: the audit flagged this file as possibly a byte-parity port of an older bee.mjs handleTest, so a parity test may pin the exact wording. Search for such a test before editing; if one exists, update it in the same cell and say so on the cap; if none exists, say that too. (2) COMMENT TOMBSTONE — finish_support.rs:36-38 claims 'bee close and bee worktree merge keep running the declared command through their own copies (drivers/close.rs, worktree/phases.rs) — the boundary is now the only place a test process runs locally'. drivers/close.rs:97-108 already records that those copies were deleted. Correct the comment to match.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "`bee test` with no commands.test declared prints text that states the live rule: no local door runs the declared command, each cap records its own proof line, and CI runs it on every push.",
+      "That text no longer claims bee close or bee worktree merge runs the suite, and no longer claims bee cells finish records `tests: boundary`.",
+      "The comment at finish_support.rs no longer claims the doors keep their own copies of the declared-command run.",
+      "If a parity test pins the printed wording, it is updated in the same cell; if none exists, the cap says so explicitly.",
+      "The full suite is green — this cell touches shared verb code, so its scope is the whole suite, not one module."
+    ]
+  },
+  "done_when": "Both stale assertions state the live proof-line rule; any parity test pinning the wording is updated in the same cell; the full suite is green.",
+  "notes": "Text and one comment only — no behavior change to the test runner itself. Do not touch drivers/close.rs or worktree/phases.rs; they are already correct and are cited only as the evidence that the copies are gone.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "tdt-1-worker",
+    "outcome": "Rewrote both stale boundary-run text/comment assertions; full suite green",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T11:57:40.156Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
+    "claimed_at": "2026-08-18T11:54:03.616Z",
+    "report": {
+      "outcome": "Rewrote bee test undeclared-commands.test text and finish_support.rs tombstone comment to state the live proof-line rule; no parity test pinned the old wording anywhere in the tree",
+      "commit": "b09f6c1e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/test_runner.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/finish_support.rs"
+      ],
+      "tests": "PATH=$HOME/.cargo/bin:$PATH cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green (2041 passed, 11 ignored, 0 failed) — full suite scope, cell touches shared verb code",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1-live-rule-accurate",
+            "status": "PASS",
+            "evidence": "Every clause of the new text checks out against the code. run_declared_tests has exactly one live call site, the bee test verb itself; every other hit is its own definition or its own unit tests. Both doors call feature_proof_check and spawn no process (drivers/close.rs:1514-1524, worktree/phases.rs:138-152). The cap path makes a report required on every branch, with tests as a proof string. CI runs the declared command on push in both workflow files, matching the configured command."
+          },
+          {
+            "id": "t2-no-boundary-run-or-tests-boundary-claim",
+            "status": "PASS",
+            "evidence": "The revision removed both false sentences. A literal search over the worktree finds the old boundary-run phrasing only in docs and the tests-boundary phrasing only in a historical promote proposal — zero hits anywhere in the Rust source."
+          },
+          {
+            "id": "t3-finish-support-comment-true",
+            "status": "PASS",
+            "evidence": "The comment now states that the doors' own copies were retired and that both call feature_proof_check instead, checking the cap's recorded proof line rather than running the command. Verified against both door call sites and against the close driver's own record that its copy was deleted. The unrelated surrounding sentence is unchanged and still matches its writer."
+          },
+          {
+            "id": "t4-no-parity-test-pins-wording",
+            "status": "PASS",
+            "evidence": "Literal searches for three distinctive phrases from the printed text find only the source line itself plus one generated registry entry that describes the verb's behavior rather than asserting its printed lines. The tree holds two unrelated script files and no snapshot fixtures. The verb's own test module covers only command resolution and the declared-run path; no test reaches the undeclared branch. The worker's claim holds — and the changed strings are covered by no test at all, passing only because nothing exercises that branch."
+          },
+          {
+            "id": "t5-scope-two-files",
+            "status": "PASS",
+            "evidence": "The revision changes exactly the two declared files, nine insertions against seven deletions, and the worktree is clean at that commit."
+          },
+          {
+            "id": "t6-full-suite-green",
+            "status": "PASS",
+            "evidence": "The full declared suite ran read-only from the worktree: 2041 passed, 11 ignored, 0 failed, exit 0 — matching the cap's recorded numbers."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T12:01:33.593Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1-live-rule-accurate",
+            "status": "PASS",
+            "evidence": "Every clause of the new text checks out against the code. run_declared_tests has exactly one live call site, the bee test verb itself; every other hit is its own definition or its own unit tests. Both doors call feature_proof_check and spawn no process (drivers/close.rs:1514-1524, worktree/phases.rs:138-152). The cap path makes a report required on every branch, with tests as a proof string. CI runs the declared command on push in both workflow files, matching the configured command."
+          },
+          {
+            "id": "t2-no-boundary-run-or-tests-boundary-claim",
+            "status": "PASS",
+            "evidence": "The revision removed both false sentences. A literal search over the worktree finds the old boundary-run phrasing only in docs and the tests-boundary phrasing only in a historical promote proposal — zero hits anywhere in the Rust source."
+          },
+          {
+            "id": "t3-finish-support-comment-true",
+            "status": "PASS",
+            "evidence": "The comment now states that the doors' own copies were retired and that both call feature_proof_check instead, checking the cap's recorded proof line rather than running the command. Verified against both door call sites and against the close driver's own record that its copy was deleted. The unrelated surrounding sentence is unchanged and still matches its writer."
+          },
+          {
+            "id": "t4-no-parity-test-pins-wording",
+            "status": "PASS",
+            "evidence": "Literal searches for three distinctive phrases from the printed text find only the source line itself plus one generated registry entry that describes the verb's behavior rather than asserting its printed lines. The tree holds two unrelated script files and no snapshot fixtures. The verb's own test module covers only command resolution and the declared-run path; no test reaches the undeclared branch. The worker's claim holds — and the changed strings are covered by no test at all, passing only because nothing exercises that branch."
+          },
+          {
+            "id": "t5-scope-two-files",
+            "status": "PASS",
+            "evidence": "The revision changes exactly the two declared files, nine insertions against seven deletions, and the worktree is clean at that commit."
+          },
+          {
+            "id": "t6-full-suite-green",
+            "status": "PASS",
+            "evidence": "The full declared suite ran read-only from the worktree: 2041 passed, 11 ignored, 0 failed, exit 0 — matching the cap's recorded numbers."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T12:01:42.849Z"
+      }
+    ]
+  }
+}

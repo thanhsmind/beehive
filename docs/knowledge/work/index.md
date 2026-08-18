@@ -12,6 +12,7 @@ never a generation timestamp or any other wall-clock value.
 
 - [awaiting-human/](awaiting-human/index.md) — 1 concept(s)
 - [full-failure-evidence/](full-failure-evidence/index.md) — 1 concept(s)
+- [merge-commits-the-lane/](merge-commits-the-lane/index.md) — 1 concept(s)
 - [okf-foundation/](okf-foundation/index.md) — 3 concept(s)
 - [okf-migration-f2/](okf-migration-f2/index.md) — 1 concept(s)
 - [retire-collation-guard/](retire-collation-guard/index.md) — 1 concept(s)
