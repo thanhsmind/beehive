@@ -1122,4 +1122,64 @@ mod tests {
         );
         assert_eq!(occupancy_json(&occ), serde_json::json!({"count": 1, "source": "live"}));
     }
+
+    // ─── THE argv-level crossing: enter through record_worker()'s OWN flag
+    // parsing, not through the pure `append_worker_row` helper above ────────
+    //
+    // The test above proves the ledger row and the occupancy read agree once
+    // a row exists — but it builds that row by calling `append_worker_row`
+    // directly, the same way `record_worker()` calls it AFTER parsing argv.
+    // It never crosses the parsing itself, so a mis-wire inside
+    // `record_worker()` — e.g. `--pane-id`'s value and `--path`'s value
+    // swapped before being passed positionally to `append_worker_row` — types
+    // perfectly and leaves this file's whole suite green. This test enters
+    // at the same boundary production enters at: real flags, in the order
+    // `role-dispatch.md` §8 actually sends them, through `record_worker()`
+    // itself.
+    #[test]
+    fn a_row_recorded_through_record_workers_own_argv_reads_back_as_one_live_worker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let root_str = root.to_str().unwrap();
+
+        // Write through record_worker()'s own argv parsing — the exact CLI
+        // wrapper `bee herding record-worker` runs, with real `--pane-id`
+        // and `--path` flags. A swap of these two same-typed arguments
+        // inside `record_worker()` must fail this test.
+        let exit = record_worker(&[
+            "--main-root",
+            root_str,
+            "--name",
+            "argv-slug",
+            "--pane-id",
+            "w4:pA",
+            "--path",
+            "/tmp/wt-argv-slug",
+            "--task",
+            "P-777",
+        ]);
+        assert!(exit == ExitCode::SUCCESS, "record_worker() must accept a fully-flagged call");
+
+        // Read through occupancy's own path — the exact function
+        // `occupancy()` (the CLI verb) calls, with a live pane list supplied
+        // directly. The recorded row's pane id must be the value given to
+        // `--pane-id` ("w4:pA"), not the value given to `--path`; if the
+        // wrapper swapped them, the row's pane id would be the worktree
+        // path instead and this live-pane list would not match it.
+        let live_panes: HashSet<String> = ["w4:pA".to_string()].into_iter().collect();
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let occ = wave_ledger::live_worker_count(
+            root,
+            Some(&live_panes),
+            now_ms,
+            wave_ledger::DEFAULT_STALE_AFTER_MS,
+        );
+        assert_eq!(
+            occ,
+            wave_ledger::Occupancy::Live(1),
+            "a row recorded through record_worker()'s own argv parsing must read back as one \
+             live worker through occupancy's own path — a --pane-id/--path swap inside the \
+             wrapper must fail this test, not just the pure-helper crossing above"
+        );
+    }
 }
