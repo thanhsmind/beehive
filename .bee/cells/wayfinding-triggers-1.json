@@ -1,0 +1,35 @@
+{
+  "id": "wayfinding-triggers-1",
+  "feature": "wayfinding-triggers",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Strengthen bee-wayfinding description triggers so brainstorm phrasing activates it",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-wayfinding/SKILL.md",
+    "skills/bee-wayfinding/agents/openai.yaml",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-writing-skills/references/prompt-style.md"
+  ],
+  "action": "Rewrite the description frontmatter in SKILL.md and the matching short_description in agents/openai.yaml: keep the purpose clause and 'Not for' exclusions, replace the buried 'explicit invocation asks to explore or brainstorm' clause with explicit user-phrase triggers ('brainstorm', 'let's brainstorm', 'explore this idea', 'think through this', 'wayfinding', any language). Both files must carry the same description verbatim. Then run the regen chain inside this cell: bee dev regen (render-skill-trees, onboard --repo-root . --apply, release-manifest --write).",
+  "verify": "rg -c \"let's brainstorm\" skills/bee-wayfinding/SKILL.md skills/bee-wayfinding/agents/openai.yaml && .bee/bin/bee dev release-manifest --check",
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "main-session",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "99f421d1-5089-498e-b10f-a0940e6ab421",
+    "claimed_at": "2026-08-18T04:24:17.021Z"
+  }
+}

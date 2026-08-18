@@ -1,7 +1,7 @@
 ---
 name: bee-wayfinding
 description: >-
-  Chart a fog-state idea into a map of decision tickets before shaping. Use when the user has an itch or idea with no nameable outcome yet, when explicit invocation asks to explore or brainstorm, when `bee orient` resumes an open map with frontier tickets, or when a `bee route` Qualify verdict parks something for vagueness. Not for locking product decisions in one sitting (that's bee-shaping) or for building product work.
+  Chart a fog-state idea into a map of decision tickets before shaping. Use when the user says "brainstorm", "let's brainstorm", "explore this idea", "think through this", or "wayfinding" — in any language; when an itch or idea has no nameable outcome yet; when a feature request is too vague to shape; when `bee orient` resumes an open map with frontier tickets; or when a `bee route` Qualify verdict parks something for vagueness. Not for locking product decisions in one sitting (that's bee-shaping) or for building product work.
 metadata:
   version: '0.1'
   ecosystem: bee
