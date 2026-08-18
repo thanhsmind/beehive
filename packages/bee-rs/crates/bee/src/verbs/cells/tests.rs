@@ -1143,6 +1143,10 @@ use std::time::Instant;
         assert!(refusal.contains("cargo test --release"), "{refusal}");
         assert!(refusal.contains(TEST_RESULTS_RELATIVE), "{refusal}");
         assert!(refusal.contains("--fix-first"), "{refusal}");
+        // D7: `bee test` is the only writer of this record left (close and
+        // worktree merge stopped running commands.test) — the remedy must
+        // name it as the refresh path.
+        assert!(refusal.contains("bee test"), "{refusal}");
         assert!(!claims_dir(root).join("rb-1.json").exists());
         let untouched = read_cell_norm(root, "rb-1").ok().unwrap().unwrap();
         assert_eq!(untouched["status"], json!("open"));

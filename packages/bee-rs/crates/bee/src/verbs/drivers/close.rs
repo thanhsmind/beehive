@@ -25,18 +25,11 @@ use std::time::Instant;
 
 // ═══ close ═════════════════════════════════════════════════════════════════
 
-/// provenance: test-runner.mjs TEST_RESULTS_RELATIVE (verbs/test_runner.rs:60).
-pub(crate) const TEST_RESULTS_RELATIVE: &str = ".bee/logs/test-results.json";
-
-/// provenance: bee.mjs CLOSE_TESTS_UNDECLARED_DETAIL.
-pub(crate) const CLOSE_TESTS_UNDECLARED_DETAIL: &str = "no commands.test declared — close has no test door here; declare commands.test in .bee/config.json (string or array) to give it one";
-
-/// test-cadence-boundary D1/D1b (decision 13ce1858): the boundary run
-/// happens exactly once. A feature with a granted worktree — including one
-/// kept pending-cleanup after its merge — proves tests at `bee worktree
-/// merge`, never a second time here; wording is tense-neutral because the
-/// merge run has not happened yet when close reports this.
-pub(crate) const CLOSE_TESTS_DEFERRED_TO_MERGE_DETAIL: &str = "tests prove at bee worktree merge — a granted worktree exists for this feature, so close does not re-run the declared suite here";
+/// D7/D8 (docs/history/test-doctrine/CONTEXT.md): pinned prefix of the
+/// tests-door refusal headline — a capped cell whose `trace.report` is
+/// present but carries no valid D8 proof string (verbs/cells/proof.rs).
+/// Message-contract tests live in verbs/drivers/tests.rs.
+pub(crate) const CLOSE_PROOF_DEBT_PREFIX: &str = "Proof debt for";
 
 /// Pinned prefix of the D1 capture-debt refusal headline (message-contract
 /// test: `close_refuses_uncaptured_behavior_change_cells`). Cite: CONTEXT.md
@@ -99,184 +92,22 @@ pub(crate) fn declared_test_commands(root: &Path) -> D<Option<Vec<String>>> {
     Ok(if cleaned.is_empty() { None } else { Some(cleaned) })
 }
 
-pub(crate) struct CommandResult {
-    pub(crate) command: String,
-    pub(crate) exit: Option<i64>,
-    pub(crate) duration_ms: u64,
-    pub(crate) failure_excerpt: Option<String>,
-    /// full-failure-evidence: the path of the complete-output log for a
-    /// failing command (relative, `.bee/logs/test-failure-close-<index>.log`),
-    /// or `None` when the command passed or the log write failed.
-    pub(crate) failure_log: Option<String>,
-}
-
-pub(crate) struct TestRun {
-    pub(crate) ran_at: String,
-    pub(crate) green: bool,
-    pub(crate) undeclared: bool,
-    pub(crate) commands: Vec<CommandResult>,
-    pub(crate) write_error: Option<String>,
-}
-
-/// provenance: test-runner.mjs spawnDeclaredCommand + posixShell. Resolution
-/// lives in crate::shell — `bee close` runs the SAME proof command
-/// `bee test` does, so it must resolve the same shell (and never WSL).
-pub(crate) fn shell_command(shell: &str) -> Command {
-    crate::shell::command().unwrap_or_else(|| Command::new(shell))
-}
-
-/// provenance: test-runner.mjs posixShell — shared resolver, probed once.
+// D7 (docs/history/test-doctrine/CONTEXT.md): close used to own a private
+// copy of the declared-test runner here (`CommandResult`/`TestRun`/
+// `shell_command`/`run_declared_tests`/`tests_result_value`/
+// `command_result_value`/`render_test_command_lines`/`first_failure_line`).
+// No boundary auto-run remains — close never spawns `commands.test` itself
+// — so that whole runner is DELETED here rather than kept unreachable;
+// `bee test` (test_runner.rs) keeps its own independent copy, and
+// `.bee/logs/test-results.json` stays exactly as it was, per D4/prohibition.
+// The tests door now reads recorded proof instead (verbs/cells/proof.rs,
+// `feature_proof_check`) — see `close_handler` below. `posix_shell` alone
+// survives, unused by `close_handler` itself now, kept only because this
+// module's own test fixtures still probe it before building a `commands.test`
+// fixture that threads a (now-ignored) shell through `close_handler`'s
+// still-compatible signature.
 pub(crate) fn posix_shell() -> Option<&'static str> {
     crate::shell::posix_shell()
-}
-
-/// provenance: test-runner.mjs runDeclaredTests (verbs/test_runner.rs:263).
-pub(crate) fn run_declared_tests(root: &Path, commands: &[String], shell: &str) -> TestRun {
-    let ran_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
-    let mut results: Vec<CommandResult> = Vec::new();
-    let mut green = true;
-    for (index, command) in commands.iter().enumerate() {
-        let started = Instant::now();
-        let spawned = shell_command(shell)
-            .arg("-c")
-            .arg(command)
-            .current_dir(root)
-            .stdin(Stdio::null())
-            .output();
-        let duration_ms = started.elapsed().as_millis() as u64;
-        let (mut output, exit, spawn_err) = match &spawned {
-            Ok(out) => (
-                format!(
-                    "{}{}",
-                    String::from_utf8_lossy(&out.stdout),
-                    String::from_utf8_lossy(&out.stderr)
-                ),
-                out.status.code().map(i64::from),
-                None,
-            ),
-            Err(e) => (String::new(), None, Some(e.to_string())),
-        };
-        if let Some(msg) = spawn_err {
-            output.push_str(&format!("\n[bee test] spawn error: {msg}"));
-        }
-        let passed = spawned.is_ok() && exit == Some(0);
-        if !passed {
-            green = false;
-        }
-        let failure_excerpt = if passed {
-            None
-        } else {
-            let trimmed = js_trim(&output).to_string();
-            Some(fsutil::failure_excerpt(&trimmed, exit))
-        };
-        // full-failure-evidence D1/D3 — see finish_support.rs's own
-        // run_declared_tests for the shared rationale.
-        let failure_log = if passed {
-            fsutil::clear_failure_log(root, "close", index);
-            None
-        } else {
-            fsutil::write_failure_log(root, "close", index, &output)
-        };
-        results.push(CommandResult { command: command.clone(), exit, duration_ms, failure_excerpt, failure_log });
-    }
-    let mut record = Map::new();
-    record.insert("ran_at".into(), Value::String(ran_at.clone()));
-    record.insert("green".into(), Value::Bool(green));
-    record.insert(
-        "commands".into(),
-        Value::Array(results.iter().map(command_result_value).collect()),
-    );
-    let write_error = write_json_atomic(
-        &root.join(".bee").join("logs").join("test-results.json"),
-        &Value::Object(record),
-    )
-    .err()
-    .map(|e| e.to_string());
-    TestRun { ran_at, green, undeclared: false, commands: results, write_error }
-}
-
-/// The `tests` result field shared by every close outcome that has already
-/// run the suite (green, and the D1 capture-debt refusal that follows it) —
-/// one shape, so the two surfaces can never render the same run differently.
-pub(crate) fn tests_result_value(run: &TestRun) -> Value {
-    if run.undeclared {
-        return Value::Null;
-    }
-    let mut tests = Map::new();
-    tests.insert("ran_at".into(), Value::String(run.ran_at.clone()));
-    tests.insert("green".into(), Value::Bool(true));
-    tests.insert(
-        "commands".into(),
-        Value::Array(run.commands.iter().map(command_result_value).collect()),
-    );
-    tests.insert("results".into(), Value::String(TEST_RESULTS_RELATIVE.into()));
-    Value::Object(tests)
-}
-
-/// {command, exit, duration_ms, failure_excerpt, failure_log} — frozen key
-/// order; `failure_log` (full-failure-evidence) is appended LAST so the
-/// order grows rather than shifts.
-pub(crate) fn command_result_value(c: &CommandResult) -> Value {
-    let mut m = Map::new();
-    m.insert("command".into(), Value::String(c.command.clone()));
-    m.insert(
-        "exit".into(),
-        match c.exit {
-            Some(code) => Value::Number(Number::from(code)),
-            None => Value::Null,
-        },
-    );
-    m.insert("duration_ms".into(), Value::Number(Number::from(c.duration_ms)));
-    m.insert(
-        "failure_excerpt".into(),
-        match &c.failure_excerpt {
-            Some(s) => Value::String(s.clone()),
-            None => Value::Null,
-        },
-    );
-    m.insert(
-        "failure_log".into(),
-        match &c.failure_log {
-            Some(s) => Value::String(s.clone()),
-            None => Value::Null,
-        },
-    );
-    Value::Object(m)
-}
-
-/// provenance: bee.mjs renderTestCommandLines (~7601) — shared by `bee test`
-/// and close, so the two surfaces can never render the same run differently.
-pub(crate) fn render_test_command_lines(run: &TestRun) -> Vec<String> {
-    run.commands
-        .iter()
-        .map(|c| {
-            let secs = format!("{:.1}s", c.duration_ms as f64 / 1000.0);
-            match &c.failure_excerpt {
-                None => format!("✓ {} ({})", c.command, secs),
-                Some(_) => format!(
-                    "✗ {} ({}, exit {})",
-                    c.command,
-                    secs,
-                    c.exit.map(|e| e.to_string()).unwrap_or_else(|| "spawn-failed".to_string())
-                ),
-            }
-        })
-        .collect()
-}
-
-/// provenance: test-runner.mjs firstFailureLine (verbs/test_runner.rs:381).
-pub(crate) fn first_failure_line(run: &TestRun) -> Option<String> {
-    let failing = run
-        .commands
-        .iter()
-        .find(|c| c.failure_excerpt.as_deref().is_some_and(|s| !s.is_empty()))?;
-    failing
-        .failure_excerpt
-        .as_deref()?
-        .split('\n')
-        .map(js_trim)
-        .find(|l| !l.is_empty())
-        .map(str::to_string)
 }
 
 // ── scribing debt + capture queue (the report-only doors) ──────────────────
@@ -1623,6 +1454,32 @@ pub(crate) fn render_close_door_lines(doors: &[Door]) -> Vec<String> {
         .collect()
 }
 
+/// D7/D8: the tests door's own wording over a `feature_proof_check` verdict
+/// (verbs/cells/proof.rs) — the helper hands back counts and offending ids,
+/// same split `scribing_debt`/`judge_debt` already use, and this is the one
+/// place that turns them into the door's prose so the dry-run listing, the
+/// refusal, and the GREEN headline can never describe the same verdict
+/// differently.
+fn proof_door_detail(proof: &crate::verbs::cells::ProofCheck) -> String {
+    if proof.blocking {
+        return format!(
+            "{} capped cell(s) carry a report with no valid proof line ({}) — re-cap with a real proof line: \"<command> — <result> — <scope reason>\".",
+            proof.bad_ids.len(),
+            proof.bad_ids.join(", ")
+        );
+    }
+    if proof.proven_count == 0 && proof.legacy_count == 0 {
+        return "no capped cells yet — nothing to prove".to_string();
+    }
+    if proof.legacy_count > 0 {
+        return format!(
+            "{} capped cell(s) carry a proof line; {} legacy cap(s) with no report record pass ungated (pre-contract)",
+            proof.proven_count, proof.legacy_count
+        );
+    }
+    format!("{} capped cell(s) all carry a proof line", proof.proven_count)
+}
+
 /// provenance: bee.mjs handleClose (~7643). `worktree` is provably null here
 /// (see the file header), so the merge-back line never renders natively.
 pub(crate) fn close_handler(
@@ -1654,37 +1511,24 @@ pub(crate) fn close_handler(
         )));
     }
 
-    // test-cadence-boundary D1/D1b (decision 13ce1858): the boundary run
-    // happens exactly once. A granted worktree for this feature — INCLUDING
-    // one kept pending-cleanup after a merge — means `bee worktree merge`
-    // is where tests prove; close reports and defers instead of re-running
-    // the suite a second time. No worktree: close runs fresh exactly as
-    // before (same root from resolve_store_root, red still stops close).
-    let worktree_deferred = declared.is_some()
-        && crate::verbs::status_full::find_granted_worktree_for_feature(root, feature).is_some();
+    // D7 (docs/history/test-doctrine/CONTEXT.md): no boundary auto-run
+    // remains — close never spawns `commands.test` itself, whether or not a
+    // worktree is granted for the feature. The tests door instead reads
+    // whether every capped cell already carries a recorded D8 proof line
+    // (verbs/cells/proof.rs `feature_proof_check`) — `declared`/`shell`
+    // stay as parameters only so this signature keeps matching every
+    // existing caller (verbs/cells/tests.rs `close_refuses_judge_debt_for_
+    // a_standard_lane_feature` calls this directly with both).
+    let _ = &declared;
+    let _ = shell;
+    let proof = crate::verbs::cells::feature_proof_check(root, feature)?;
 
     if dry_run {
         let mut doors = vec![Door {
             door: "tests",
-            blocking: false,
-            detail: if worktree_deferred {
-                CLOSE_TESTS_DEFERRED_TO_MERGE_DETAIL.to_string()
-            } else {
-                match &declared {
-                    Some(cmds) => format!(
-                        "commands.test declared ({} command(s)) — close runs the full declared suite fresh; a stale test-results record is never trusted",
-                        cmds.len()
-                    ),
-                    None => CLOSE_TESTS_UNDECLARED_DETAIL.to_string(),
-                }
-            },
-            command: if worktree_deferred {
-                Some("bee worktree merge")
-            } else if declared.is_some() {
-                Some("bee test")
-            } else {
-                None
-            },
+            blocking: proof.blocking,
+            detail: proof_door_detail(&proof),
+            command: if proof.blocking { Some("bee cells finish") } else { None },
         }];
         doors.extend(build_close_report_doors(root, feature)?);
         doors.push(build_pattern_check_door(root, feature, pattern_verdicts)?);
@@ -1692,17 +1536,12 @@ pub(crate) fn close_handler(
         doors.push(build_impact_door(root, feature)?);
         doors.push(build_routing_door(root, feature)?);
         doors.push(build_doc_deferral_door(root, feature)?);
-        let next_line = if worktree_deferred {
+        let next_line = if proof.blocking {
             format!(
-                "next: bee close --feature {feature} — tests prove at bee worktree merge, not here; close reports and proceeds"
+                "next: re-cap the cell(s) above with a real proof line (\"<command> — <result> — <scope reason>\"), then re-run bee close --feature {feature}"
             )
         } else {
-            match &declared {
-                Some(_) => format!("next: bee close --feature {feature} — runs the declared tests and reports"),
-                None => format!(
-                    "next: feature \"{feature}\" has no test door — close proceeds; capture stays pending for bee-capturing"
-                ),
-            }
+            format!("next: bee close --feature {feature} — checks every capped cell's proof line and reports")
         };
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
@@ -1712,33 +1551,6 @@ pub(crate) fn close_handler(
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 0));
     }
 
-    // The real run: the tests door is the full declared run, fresh — unless
-    // a granted worktree already owns proving it (worktree_deferred above),
-    // in which case no test process runs here at all.
-    let run = if worktree_deferred {
-        TestRun {
-            ran_at: String::new(),
-            green: false,
-            undeclared: true,
-            commands: Vec::new(),
-            write_error: None,
-        }
-    } else {
-        match (&declared, shell) {
-            (Some(commands), Some(shell)) => run_declared_tests(root, commands, shell),
-            _ => TestRun {
-                ran_at: String::new(),
-                green: false,
-                undeclared: true,
-                commands: Vec::new(),
-                write_error: None,
-            },
-        }
-    };
-    if let Some(msg) = &run.write_error {
-        // Node: writeJsonAtomic throws -> main's catch -> emitError.
-        return Ok(Out::Thrown(msg.clone()));
-    }
     let report_doors = build_close_report_doors(root, feature)?;
     let pattern_door = build_pattern_check_door(root, feature, pattern_verdicts)?;
     let knowledge_freshness_door = build_knowledge_freshness_door(root, feature)?;
@@ -1746,19 +1558,12 @@ pub(crate) fn close_handler(
     let routing_door = build_routing_door(root, feature)?;
     let doc_deferral_door = build_doc_deferral_door(root, feature)?;
 
-    if !run.undeclared && !run.green {
-        let failing: Vec<&CommandResult> =
-            run.commands.iter().filter(|c| c.failure_excerpt.is_some()).collect();
-        let first_line = first_failure_line(&run);
+    if proof.blocking {
         let mut doors = vec![Door {
             door: "tests",
             blocking: true,
-            detail: format!(
-                "the declared test run is RED ({} of {} command(s) failed; record: {TEST_RESULTS_RELATIVE})",
-                failing.len(),
-                run.commands.len()
-            ),
-            command: Some("bee test"),
+            detail: proof_door_detail(&proof),
+            command: Some("bee cells finish"),
         }];
         doors.extend(report_doors);
         doors.push(pattern_door);
@@ -1769,64 +1574,27 @@ pub(crate) fn close_handler(
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
-        result.insert("ran_tests".into(), Value::Bool(true));
-        let mut tests = Map::new();
-        tests.insert("ran_at".into(), Value::String(run.ran_at.clone()));
-        tests.insert("green".into(), Value::Bool(false));
-        tests.insert(
-            "commands".into(),
-            Value::Array(run.commands.iter().map(command_result_value).collect()),
-        );
-        tests.insert("results".into(), Value::String(TEST_RESULTS_RELATIVE.into()));
-        result.insert("tests".into(), Value::Object(tests));
-
-        let mut lines = vec![format!(
-            "Tests RED for \"{feature}\" — close stops at the tests door (record: {TEST_RESULTS_RELATIVE}):"
-        )];
-        lines.extend(render_test_command_lines(&run));
-        for c in &failing {
-            lines.push(format!(
-                "--- {} (exit {}) ---\n{}",
-                c.command,
-                c.exit.map(|e| e.to_string()).unwrap_or_else(|| "spawn-failed".to_string()),
-                c.failure_excerpt.clone().unwrap_or_default()
-            ));
-            if let Some(log) = &c.failure_log {
-                lines.push(format!("log: {log}"));
-            }
-        }
-        lines.push(format!(
-            "next: the red is the work — fix it ({}), then re-run bee close --feature {feature}",
-            first_line.unwrap_or_else(|| "see the excerpt above".to_string())
-        ));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let lines = vec![
+            format!(
+                "{CLOSE_PROOF_DEBT_PREFIX} \"{feature}\" — close stops at the tests door: {} capped cell(s) carry a report with no valid proof line ({}).",
+                proof.bad_ids.len(),
+                proof.bad_ids.join(", ")
+            ),
+            "remedy: re-cap each cell above with a real proof line: \"<command> — <result> — <scope reason>\" (bee cells finish --id <id> --report '{...}').".to_string(),
+            format!("next: settle the proof debt above, then re-run bee close --feature {feature}"),
+        ];
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
-    // Green (or no declared test path): what remains is the capture checklist.
-    let tests_door = if worktree_deferred {
-        Door {
-            door: "tests",
-            blocking: false,
-            detail: CLOSE_TESTS_DEFERRED_TO_MERGE_DETAIL.to_string(),
-            command: Some("bee worktree merge"),
-        }
-    } else if run.undeclared {
-        Door {
-            door: "tests",
-            blocking: false,
-            detail: CLOSE_TESTS_UNDECLARED_DETAIL.to_string(),
-            command: None,
-        }
-    } else {
-        Door {
-            door: "tests",
-            blocking: false,
-            detail: format!(
-                "GREEN — {} command(s) passed (record: {TEST_RESULTS_RELATIVE})",
-                run.commands.len()
-            ),
-            command: None,
-        }
+    // Proof clear (including the no-capped-cells and legacy-only cases):
+    // what remains is the capture checklist.
+    let tests_door = Door {
+        door: "tests",
+        blocking: false,
+        detail: proof_door_detail(&proof),
+        command: None,
     };
     let scribing_detail = report_doors
         .iter()
@@ -1859,8 +1627,8 @@ pub(crate) fn close_handler(
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
-        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
-        result.insert("tests".into(), tests_result_value(&run));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
         let lines = vec![
             format!(
                 "{CLOSE_CAPTURE_DEBT_PREFIX} \"{feature}\" — close stops at the scribing-debt door: {} behavior_change cell(s) uncaptured ({}).",
@@ -1887,8 +1655,8 @@ pub(crate) fn close_handler(
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
-        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
-        result.insert("tests".into(), tests_result_value(&run));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
         // hpf-1: `cells judge-record` refuses an archived cell outright, so
         // an offending id that only resolves under the archive owes the
         // unarchive step FIRST, named ahead of the judge commands.
@@ -1924,8 +1692,8 @@ pub(crate) fn close_handler(
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
-        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
-        result.insert("tests".into(), tests_result_value(&run));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
         let pattern_detail = doors
             .iter()
             .find(|d| d.door == "pattern-check")
@@ -1950,8 +1718,8 @@ pub(crate) fn close_handler(
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
-        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
-        result.insert("tests".into(), tests_result_value(&run));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
         let freshness_detail = doors
             .iter()
             .find(|d| d.door == "knowledge-freshness")
@@ -1978,8 +1746,8 @@ pub(crate) fn close_handler(
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
-        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
-        result.insert("tests".into(), tests_result_value(&run));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
         let impact_detail = doors
             .iter()
             .find(|d| d.door == "impact")
@@ -2004,8 +1772,8 @@ pub(crate) fn close_handler(
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
-        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
-        result.insert("tests".into(), tests_result_value(&run));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
         let routing_detail = doors
             .iter()
             .find(|d| d.door == "routing")
@@ -2028,8 +1796,8 @@ pub(crate) fn close_handler(
         let mut result = Map::new();
         result.insert("feature".into(), Value::String(feature.to_string()));
         result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
-        result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
-        result.insert("tests".into(), tests_result_value(&run));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
         let doc_deferral_detail = doors
             .iter()
             .find(|d| d.door == "doc-deferral")
@@ -2045,25 +1813,12 @@ pub(crate) fn close_handler(
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
-    let headline = if worktree_deferred {
-        format!(
-            "Tests for \"{feature}\" prove at bee worktree merge — a granted worktree owns this feature, so close does not run them here."
-        )
-    } else if run.undeclared {
-        format!(
-            "No commands.test declared for \"{feature}\" — nothing gated close; declare commands.test in .bee/config.json to give close a test door."
-        )
-    } else {
-        format!(
-            "Tests GREEN for \"{feature}\" — {} command(s) passed (record: {TEST_RESULTS_RELATIVE}).",
-            run.commands.len()
-        )
-    };
+    let headline = format!("Tests GREEN for \"{feature}\" — {}", proof_door_detail(&proof));
     let mut result = Map::new();
     result.insert("feature".into(), Value::String(feature.to_string()));
     result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
-    result.insert("ran_tests".into(), Value::Bool(!run.undeclared));
-    result.insert("tests".into(), tests_result_value(&run));
+    result.insert("ran_tests".into(), Value::Bool(false));
+    result.insert("tests".into(), Value::Null);
 
     // ── D2: soft promote door — computed BEFORE retirement ─────────────────
     //
@@ -2112,9 +1867,6 @@ pub(crate) fn close_handler(
     let retired = auto_archive_on_close(root, feature);
 
     let mut lines = vec![headline];
-    if !run.undeclared {
-        lines.extend(render_test_command_lines(&run));
-    }
     lines.push(format!(
         "Capture (deferred, decision c8e25271): scribing {scribing_detail}; capture queue {queue_detail}."
     ));
@@ -2505,18 +2257,15 @@ pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         }
         Roots::None => return Some(emit_no_root_error(&cwd, "close", use_json, t0)),
     };
+    // D7: close never spawns commands.test, so no shell needs resolving and
+    // no `.bee/logs/` dir needs creating up front any more — `declared` is
+    // still read (and still passed through below) only to keep
+    // `close_handler`'s signature matching its other callers.
     let declared = declared_test_commands(&root).ok()?;
-    let shell = if !dry_run && declared.is_some() {
-        let s = posix_shell()?; // no POSIX sh — Node's cmd.exe fallback owns it
-        ensure_dir(&root.join(".bee").join("logs")).ok()?;
-        Some(s)
-    } else {
-        None
-    };
     // Delegation pre-flight for the report doors: they are pure reads, so
-    // computing them here (and again, for real, after the suite runs) can
-    // only cost two cheap directory scans — but it means a corrupt store can
-    // still hand the whole command to Node BEFORE a test suite is spent.
+    // computing them here (and again, for real, in close_handler) can only
+    // cost two cheap directory scans — but it means a corrupt store can
+    // still hand the whole command to Node BEFORE close_handler runs.
     build_close_report_doors(&root, &feature).ok()?;
     build_pattern_check_door(&root, &feature, &pattern_verdicts).ok()?;
 
@@ -2524,7 +2273,7 @@ pub(crate) fn run_close(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
-    let out: R2<Out> = close_handler(&ctx.root, &feature, dry_run, declared, shell, &pattern_verdicts)
+    let out: R2<Out> = close_handler(&ctx.root, &feature, dry_run, declared, None, &pattern_verdicts)
         .map_err(crate::verbs::reservations::Err2::from);
     finish(&ctx, out)
 }
@@ -3070,26 +2819,22 @@ mod tests {
         assert!(result.get("bookkeeping_commit").is_none(), "{result}");
         assert!(!git_status_porcelain(root).is_empty(), "dry-run must never commit");
 
-        // RED: the declared suite fails, close stops at the tests door
-        // before the bookkeeping code is ever reached.
+        // D7: a capped cell with no valid proof line stops close at the
+        // tests door before the bookkeeping code is ever reached.
         let tmp2 = tempfile::tempdir().unwrap();
         let root2 = tmp2.path();
         init_bee_repo(root2);
         dirty_tracked_bee_file(root2);
-        let shell = posix_shell().expect("a POSIX shell is required for this test");
-        let out = close_handler(
+        w(
             root2,
-            "demo",
-            false,
-            Some(vec!["exit 1".to_string()]),
-            Some(shell),
-            &HashMap::new(),
-        )
-        .unwrap();
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"","deviations":[]}}}"#,
+        );
+        let out = close_handler(root2, "demo", false, None, None, &HashMap::new()).unwrap();
         let Out::Emit(result, _text, code) = out else { panic!("expected Emit") };
         assert_eq!(code, 1);
         assert!(result.get("bookkeeping_commit").is_none(), "{result}");
-        assert!(!git_status_porcelain(root2).is_empty(), "a red close must never commit");
+        assert!(!git_status_porcelain(root2).is_empty(), "a proof-debt-refused close must never commit");
     }
 
     /// P3-4: `GIT_CEILING_DIRECTORIES` is process environment, so a bare
