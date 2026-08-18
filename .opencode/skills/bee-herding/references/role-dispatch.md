@@ -79,7 +79,8 @@ Root resolution matches `interlock` and `classify-lane`: `--main-root`
 overrides, otherwise `git rev-parse --git-common-dir` — running from MAIN
 (§0) needs no flag. The answer is `{"count": N, "source": "live"|"fallback"}`.
 **`source` is the field that carries the distinction that matters most here,
-and the two values must never be treated alike:**
+and neither value, nor an outright command failure (see the third case
+below), may ever be treated alike:**
 
 - `source: "live"` — a real crossing of the wave ledger's unresolved worker
   rows against herdr's own live pane list. Read `count` as `occupied_count`
@@ -89,12 +90,28 @@ and the two values must never be treated alike:**
 - `source: "fallback"` — the degraded one-hour timer answer, returned when the
   live pane list could not be obtained. This is the SAME condition that would
   have broken pane-counting too, so there is no better answer sitting anywhere
-  else this iteration. Occupancy is undetermined: send exactly one plain line
-  into the chat pane —
+  else this iteration. Occupancy is undetermined: this is a refusal, not a
+  guess — dispatching on an unknown count is exactly the over-spawn D10
+  exists to prevent — so end the iteration without building a dispatchable
+  set (§5-8), and announce it **at most once**, using the SAME dedup the
+  anomaly scan below uses: read
+  `herdr pane read <chat_pane_id> --source recent --lines 200` first, and
+  only send the line if that scrollback does not already carry it —
   `herdr pane send-text <chat_pane_id> "dispatch: occupancy undetermined this iteration — herdr's live pane list could not be reached, so the ledger's fallback answer cannot be trusted as a real count"`
-  — and end the iteration without building a dispatchable set (§5-8). This is
-  a refusal, not a guess: dispatching on an unknown count is exactly the
-  over-spawn D10 exists to prevent.
+  — a line repeated every poll for as long as herdr stays down is exactly
+  the noise this dedup exists to prevent (the same failure that would have
+  made pane-counting emit an identical line every poll too, forbidden
+  everywhere else in this section). **If the send itself fails** — likely,
+  since this branch fires precisely because herdr could not be reached —
+  that failure is not escalated further: there is no second channel to
+  report through, and the refusal to dispatch holds either way. Do not
+  retry the send; end the iteration regardless of whether it went through.
+- **The command failing outright** — a non-zero exit, output that does not
+  parse as JSON, or a shape carrying neither `count` nor `source` (the error
+  envelope a stale or pre-D18 `bee` binary returns, since it predates this
+  verb) — is a THIRD case, never read as a count of zero or of anything
+  else. Treat it exactly like `source: "fallback"` above: the same one-time
+  dedup, the same refusal to build a dispatchable set this iteration.
 
 (The plain, non-`--json` form prints `occupancy: {count} worker(s) live
 ({source})` — the parenthetical word carries the identical live/fallback
@@ -352,9 +369,12 @@ In order, from the MAIN checkout:
 
    **The argv must carry the working agent's opening instruction.** A bare
    `claude` starts with an empty buffer and sits there: it never self-names, so
-   its pane stays unlabelled, §4 does not count it as occupying a slot, and the
-   next iteration spawns again — every 60 seconds, straight through the cap of
-   4. The positional prompt tells it to (a) run `herdr pane current --current`
+   its pane stays unlabelled. §4 no longer counts panes at all — the ledger
+   row step 4 below records already carries its pane id regardless of any
+   label — but the anomaly scan (§4) and merge's own pane lookup both still
+   key off the label, so an unlabelled pane still cannot be tied to a
+   specific PBI there, and merge cannot find it. The positional prompt tells
+   it to (a) run `herdr pane current --current`
    then `herdr pane rename <pane_id> <slug>` as its very first act, labelled
    with the **bare slug** and nothing else (§4's `cells list --feature <label>`
    and merge's pane lookup both match it exactly), and (b) work `<PBI id>`
@@ -375,6 +395,25 @@ In order, from the MAIN checkout:
    plain line into the chat pane, and do **not** blindly repeat the spawn next
    iteration: a blind retry is how a cold loop turns one mistake into 1440 a
    day.
+4. **Record the spawn in the wave ledger — only after that confirm step
+   passed.** This is what closes the loop (herding-orchestration D18): **a
+   spawn that is not recorded here is invisible to the next iteration's
+   occupancy read (§4)** — §4 no longer counts panes, it reads the wave
+   ledger, and a spawn with no row in it simply is not in what it reads. From
+   the MAIN checkout:
+   ```
+   .bee/bin/bee herding record-worker --name <slug> --pane-id <new_pane_id> \
+     --path <worktree_path> --task <PBI-ID>
+   ```
+   Root resolution matches every other verb in this section: `--main-root`
+   overrides, otherwise `git rev-parse --git-common-dir`. **On any failure of
+   this call** — non-zero exit, or any error — do not treat it as a minor
+   bookkeeping miss: an unrecorded spawn is WORSE than no spawn at all, since
+   it is a live agent the next iteration's occupancy read cannot see, which
+   lets the four-slot cap be walked past silently. Report it loudly —
+   `herdr pane send-text <chat_pane_id> "dispatch: recording <slug> (pane <new_pane_id>) in the wave ledger FAILED — occupancy will undercount until this is repaired"`
+   — and still end the iteration without spawning again this poll: do not
+   retry the recording call, and do not spawn a second worker to compensate.
 
 The working agent is on its own from there — it runs the ordinary bee chain
 inside its worktree until its item is finished. This role does not watch it,
@@ -415,3 +454,4 @@ or in the herdr workspace changes as a result.
 | Create the worktree | `bee worktree new --feature <slug> --json` |
 | Split the runtime pane | `herdr pane split <runtime-pane-id> --direction right\|down --ratio <r> --cwd <path> --no-focus` → read `.result.pane.pane_id` (§8) |
 | Start the working agent | `herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout 60000 -- <agent args>` — `<kind>` and `<agent args>` are `herding.agent_command`-driven; pane must exist first (split, then start), never `-p` (§8) |
+| Record the spawn (closes the occupancy loop) | `.bee/bin/bee herding record-worker --name <slug> --pane-id <new_pane_id> --path <worktree_path> --task <PBI-ID>` — only after the confirm step; failure is reported loudly, never silently passed over (§8) |

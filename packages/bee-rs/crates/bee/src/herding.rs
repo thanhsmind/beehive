@@ -14,6 +14,10 @@
 //                             HerdrBackend, then appends one row to the wave ledger.
 //   bee herding occupancy <- the CLI bridge to the wave ledger's read side (D10),
 //                             reachable from a markdown role for the first time.
+//   bee herding record-worker <- (herding-orchestration D18) the recording verb
+//                             role-dispatch.md §8 calls right after a successful
+//                             spawn, so the row occupancy reads next iteration
+//                             actually exists. See wave.rs.
 //
 // The next three (herdr-result, herdr-pane-id, command-template) are the cockpit
 // shell scripts' inline `node -e` snippets. They
@@ -76,6 +80,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "herdr-pane-id" => Some(herdr_pane_id(rest)),
         "wave" => Some(wave::wave(rest)),
         "occupancy" => Some(wave::occupancy(rest)),
+        "record-worker" => Some(wave::record_worker(rest)),
         _ => None,
     }
 }

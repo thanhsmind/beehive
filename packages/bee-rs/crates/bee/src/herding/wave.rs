@@ -567,6 +567,144 @@ pub(super) fn occupancy(flags: &[&str]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// bee herding record-worker
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// The pure write side of `record-worker` (herding-orchestration D18): build
+/// one `WaveRow` holding a SINGLE unresolved `WorkerRow` and append it
+/// through the SAME `wave_ledger::append_wave` path `run_wave_and_record`
+/// above uses — no second write path into the ledger, and the file stays
+/// append-only exactly as `wave_ledger`'s own module doc requires.
+///
+/// `wave_id` defaults to the worker's own `name` when the caller does not
+/// override it. That default is deliberate, not arbitrary: `role-dispatch.md`
+/// §8 calls this once per spawn, with no wave-level id of its own to give —
+/// dispatch opens one agent and walks away (D18), it never learns an
+/// outcome — but the worker's self-chosen slug is already the identity a
+/// LATER caller (a merge-side outcome recorder, not built by this cell)
+/// would have on hand too, since it is the same slug the pane gets labelled
+/// with and the same slug `role-dispatch.md` §5(c)/§7 already key off. A
+/// later row appended under that identical `wave_id` — outcome filled in —
+/// supersedes this one entirely at READ time
+/// (`wave_ledger::fold_waves_by_wave_id`), never by rewriting these bytes.
+fn append_worker_row(
+    root: &Path,
+    name: String,
+    pane_id: String,
+    worktree: String,
+    task: String,
+    wave_id: Option<String>,
+    started_at: String,
+) -> std::io::Result<String> {
+    let wave_id = wave_id.unwrap_or_else(|| name.clone());
+    let row = wave_ledger::WaveRow {
+        wave_id: wave_id.clone(),
+        started_at,
+        workers: vec![wave_ledger::WorkerRow {
+            name,
+            pane_id,
+            worktree,
+            task,
+            outcome: None,
+            evidence: None,
+        }],
+    };
+    wave_ledger::append_wave(root, &row)?;
+    Ok(wave_id)
+}
+
+/// `bee herding record-worker` (D18) — the recording verb `role-dispatch.md`
+/// §8 calls immediately after a successful `herdr agent start`, and only
+/// after §8's own confirm step already checked exactly one new pane
+/// appeared. A spawn this verb is never called for is invisible to the
+/// NEXT iteration's occupancy read (`bee herding occupancy`, above): that
+/// read is the whole reason this verb exists — §4 no longer counts panes,
+/// it reads the wave ledger, and a spawn with no row in it simply is not in
+/// what it reads.
+///
+/// Flags: `--main-root <path>` (same override every other verb in this file
+/// takes), `--name <worker>` (the worker's own self-chosen slug — reuses
+/// the existing `--name` spelling), `--pane-id <id>` (the herdr pane it is
+/// running in), `--path <worktree>` (the worktree path it was given —
+/// reuses the existing `--path` spelling from `reservations reserve`),
+/// `--task <item>` (the item it was given, e.g. a PBI id), `--wave-id <id>`
+/// (override the default described on `append_worker_row` above), `--json`.
+/// All of `--name`, `--pane-id`, `--path` and `--task` are required.
+pub(super) fn record_worker(flags: &[&str]) -> ExitCode {
+    let mut explicit_root: Option<&str> = None;
+    let mut name: Option<String> = None;
+    let mut pane_id: Option<String> = None;
+    let mut path: Option<String> = None;
+    let mut task: Option<String> = None;
+    let mut wave_id: Option<String> = None;
+    let mut json = false;
+    let mut i = 0usize;
+    while i < flags.len() {
+        match flags[i] {
+            "--main-root" => {
+                explicit_root = flags.get(i + 1).copied();
+                i += 2;
+            }
+            "--name" => {
+                name = flags.get(i + 1).map(|s| s.to_string());
+                i += 2;
+            }
+            "--pane-id" => {
+                pane_id = flags.get(i + 1).map(|s| s.to_string());
+                i += 2;
+            }
+            "--path" => {
+                path = flags.get(i + 1).map(|s| s.to_string());
+                i += 2;
+            }
+            "--task" => {
+                task = flags.get(i + 1).map(|s| s.to_string());
+                i += 2;
+            }
+            "--wave-id" => {
+                wave_id = flags.get(i + 1).map(|s| s.to_string());
+                i += 2;
+            }
+            "--json" => {
+                json = true;
+                i += 1;
+            }
+            _ => i += 1,
+        }
+    }
+
+    let Some(main_root) = super::resolve_main_root(explicit_root) else {
+        eprintln!(
+            "bee herding record-worker: could not resolve the MAIN checkout root (no \
+             --main-root given and `git rev-parse --git-common-dir` failed)"
+        );
+        return ExitCode::FAILURE;
+    };
+    let (Some(name), Some(pane_id), Some(path), Some(task)) = (name, pane_id, path, task) else {
+        eprintln!(
+            "bee herding record-worker: --name, --pane-id, --path and --task are all required"
+        );
+        return ExitCode::FAILURE;
+    };
+
+    let started_at = chrono::Utc::now().to_rfc3339();
+    let result = append_worker_row(&main_root, name, pane_id, path, task, wave_id, started_at);
+    let wave_id = match result {
+        Ok(wave_id) => wave_id,
+        Err(e) => {
+            eprintln!("bee herding record-worker: could not append the wave ledger row: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if json {
+        println!("{}", serde_json::json!({"wave_id": wave_id, "recorded": true}));
+    } else {
+        println!("recorded worker in wave ledger (wave_id {wave_id})");
+    }
+    ExitCode::SUCCESS
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -867,5 +1005,121 @@ mod tests {
             .map(OsString::from)
             .collect();
         assert!(super::super::try_native(&args).is_some());
+    }
+
+    // ─── record-worker (D18): the closed loop ──────────────────────────
+
+    #[test]
+    fn record_worker_defaults_the_wave_id_to_the_workers_own_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let wave_id = append_worker_row(
+            root,
+            "some-slug".to_string(),
+            "w4:p9".to_string(),
+            "/tmp/wt-some-slug".to_string(),
+            "P-123".to_string(),
+            None,
+            "2026-08-18T00:00:00Z".to_string(),
+        )
+        .unwrap();
+        assert_eq!(wave_id, "some-slug", "no --wave-id given, so it must default to the worker's own name");
+
+        let waves = wave_ledger::read_waves(root);
+        assert_eq!(waves.len(), 1);
+        assert_eq!(waves[0].wave_id, "some-slug");
+        assert_eq!(waves[0].workers.len(), 1);
+        assert_eq!(waves[0].workers[0].name, "some-slug");
+        assert_eq!(waves[0].workers[0].pane_id, "w4:p9");
+        assert_eq!(waves[0].workers[0].worktree, "/tmp/wt-some-slug");
+        assert_eq!(waves[0].workers[0].task, "P-123");
+        assert!(waves[0].workers[0].outcome.is_none(), "a freshly recorded spawn carries no outcome yet");
+    }
+
+    #[test]
+    fn record_worker_honours_an_explicit_wave_id_override() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let wave_id = append_worker_row(
+            root,
+            "some-slug".to_string(),
+            "w4:p9".to_string(),
+            String::new(),
+            "P-123".to_string(),
+            Some("wave-explicit".to_string()),
+            "2026-08-18T00:00:00Z".to_string(),
+        )
+        .unwrap();
+        assert_eq!(wave_id, "wave-explicit");
+    }
+
+    #[test]
+    fn record_worker_is_dispatched_by_try_native() {
+        use std::ffi::OsString;
+        // Missing --name/--pane-id/--path/--task fails closed rather than
+        // writing a partial row — this only proves the argv reaches
+        // `record_worker` at all, not its full behaviour (covered above and
+        // by the crossing test below). No herdr binary is needed.
+        let args: Vec<OsString> = [
+            "herding",
+            "record-worker",
+            "--main-root",
+            "/nonexistent-root-for-test",
+        ]
+        .iter()
+        .map(OsString::from)
+        .collect();
+        assert!(super::super::try_native(&args).is_some());
+    }
+
+    // ─── THE crossing test: write through record-worker, read through occupancy ─
+    //
+    // This is the exact gap the three prior cells left open: a ledger writer
+    // with one caller (`run_wave_and_record`, reachable only through
+    // `bee herding wave`) and an occupancy reader with a real caller
+    // (`role-dispatch.md` §4, via `bee herding occupancy`) that never met on
+    // the path dispatch actually takes. Nothing before this test wrote a row
+    // through `record-worker`'s own path and then read it back through the
+    // occupancy path — so nothing before this test would have caught a wire
+    // that silently did not connect.
+    #[test]
+    fn a_row_recorded_through_record_worker_reads_back_as_one_live_worker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Write through record-worker's own path — the exact function
+        // `record_worker()` (the CLI verb) calls.
+        let wave_id = append_worker_row(
+            root,
+            "crossing-slug".to_string(),
+            "w4:p9".to_string(),
+            "/tmp/wt-crossing-slug".to_string(),
+            "P-999".to_string(),
+            None,
+            chrono::Utc::now().to_rfc3339(),
+        )
+        .unwrap();
+        assert_eq!(wave_id, "crossing-slug");
+
+        // Read through occupancy's own path — the exact function
+        // `occupancy()` (the CLI verb) calls, with a live pane list supplied
+        // directly (the crossing check needs the recorded pane id to be IN
+        // that list for the row to count, exactly as occupancy() would if
+        // `herdr pane list` had reported it live).
+        let live_panes: HashSet<String> = ["w4:p9".to_string()].into_iter().collect();
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let occ = wave_ledger::live_worker_count(
+            root,
+            Some(&live_panes),
+            now_ms,
+            wave_ledger::DEFAULT_STALE_AFTER_MS,
+        );
+        assert_eq!(
+            occ,
+            wave_ledger::Occupancy::Live(1),
+            "a row written through record-worker's own path must read back as one live worker \
+             through occupancy's own path — this is the whole loop D18 closes"
+        );
+        assert_eq!(occupancy_json(&occ), serde_json::json!({"count": 1, "source": "live"}));
     }
 }
