@@ -266,9 +266,10 @@ In order, from the MAIN checkout:
    worktree in one move; read the path from its output.
 2. Split a runtime pane for the working agent. On herdr 0.8.0, `agent start`
    requires `--pane` and "never creates, splits, or moves layout" — splitting
-   first is now MANDATORY, not forbidden. This inverts the split-order proof
-   that `references/spawn-proof.md` documents (that file still describes the
-   pre-0.8.0 form as of this writing).
+   first is now MANDATORY, not forbidden. `references/spawn-proof.md` is the
+   re-recorded live evidence for this split-then-start order: a real
+   `herdr agent start … --kind … --pane …` round trip against the installed
+   0.8.0 binary.
    ```
    herdr pane split <runtime-pane-id> --direction right|down --ratio <r> --cwd <worktree_path> --no-focus
    ```
@@ -278,9 +279,11 @@ In order, from the MAIN checkout:
    the pane with the largest `rect.width * rect.height`, and pass
    `--direction right` if it is wider than tall, else `--direction down`.
    There is always a runtime root pane to split — `bootstrap-cockpit.sh`
-   creates it — so there is no "no panes yet" case. Keep `--ratio 0.5` unless
-   the geometry rule computes otherwise. Read the new pane's id from the
-   response's `.result.pane.pane_id`.
+   creates it — so there is no "no panes yet" case. The geometry rule above
+   computes only the split *direction* (right vs down); the ratio to pass is
+   `--ratio 0.5`, unconditionally — confirmed live in
+   `references/spawn-proof.md`, where 0.5 produced a normal, readable split.
+   Read the new pane's id from the response's `.result.pane.pane_id`.
 
    **Settle before starting the agent.** `agent start` requires its target
    pane to already be at its interactive shell prompt; `pane split` returns
@@ -291,7 +294,7 @@ In order, from the MAIN checkout:
    failure most likely to fire on Windows, where ConPTY starts slower.
 3. Start the working agent into that pane.
    ```
-   herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout <ms> -- <agent args>
+   herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout 60000 -- <agent args>
    ```
    `<kind>` and `<agent args>` come from `herding.agent_command`, per the next
    paragraph. **On any `agent start` failure, close the pane step 2 of this
@@ -377,4 +380,4 @@ or in the herdr workspace changes as a result.
 | Announce / report | `herdr pane send-text <chat_pane_id> "..."` |
 | Create the worktree | `bee worktree new --feature <slug> --json` |
 | Split the runtime pane | `herdr pane split <runtime-pane-id> --direction right\|down --ratio <r> --cwd <path> --no-focus` → read `.result.pane.pane_id` (§8) |
-| Start the working agent | `herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout <ms> -- <agent args>` — `<kind>` and `<agent args>` are `herding.agent_command`-driven; pane must exist first (split, then start), never `-p` (§8) |
+| Start the working agent | `herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout 60000 -- <agent args>` — `<kind>` and `<agent args>` are `herding.agent_command`-driven; pane must exist first (split, then start), never `-p` (§8) |
