@@ -11,8 +11,17 @@
     "uat": false
   },
   "summary": "Feature \"staging-lane\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged to main and shipped in 2.11.0; lane closed. Capture debt remains: bee close --feature staging-lane doors (doc-deferral).",
+  "next_action": "Feature closed; promote proposals reviewed, nothing applied.",
   "created_at": "2026-08-17T10:29:08.288Z",
   "run_state": null,
-  "waiting_on": null
+  "waiting_on": null,
+  "last_scribing_run": {
+    "feature": "staging-lane",
+    "date": "2026-08-18",
+    "at": "2026-08-18T11:51:47.890Z",
+    "areas_synced": [
+      "worktree-parallelism"
+    ],
+    "next_action": "none"
+  }
 }

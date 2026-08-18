@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"merge-commits-the-lane\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"merge-commits-the-lane\" — feature is closed.",
+  "next_action": "Feature closed; promote proposals reviewed, nothing applied.",
   "created_at": "2026-08-18T11:28:33.814Z",
   "run_state": "shaping",
   "waiting_on": null,
@@ -29,9 +29,10 @@
   "last_scribing_run": {
     "feature": "merge-commits-the-lane",
     "date": "2026-08-18",
-    "at": "2026-08-18T11:47:14.430Z",
+    "at": "2026-08-18T11:51:16.817Z",
     "areas_synced": [
-      "worktree-parallelism"
+      "worktree-parallelism",
+      "workflow-state"
     ],
     "next_action": "none"
   }
