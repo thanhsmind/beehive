@@ -340,6 +340,24 @@ fn resolve_canonical_id(body: &Value, name: &str) -> String {
         .unwrap_or_else(|| name.to_string())
 }
 
+/// Whether `canonical_id` can answer `name` without ever calling `agent
+/// list` at all: `Some(name)` when `name` is already herdr's own
+/// canonical pane-id shape (no lookup needed, and no risk of a stale
+/// `agent list` read disagreeing with the identifier's own shape),
+/// `None` when `name` is a friendly name `canonical_id` still needs
+/// `resolve_canonical_id` to look up. Isolated from `run_herdr` purely so
+/// this exact skip — disabling it makes `canonical_id` call herdr even
+/// for an already-canonical id, a process-only-visible regression the
+/// cfg(unix) suite alone used to catch — is provable on every platform
+/// including Windows.
+fn skip_lookup_for_canonical_id(name: &str) -> Option<String> {
+    if is_pane_id_shaped(name) {
+        Some(name.to_string())
+    } else {
+        None
+    }
+}
+
 /// The one place herdr's five status strings become `WorkerStatus`.
 /// `unknown` maps to `Unverifiable`, not to some other "safe" reading —
 /// herdr's own skill states `unknown` "is not proof of completion", which
@@ -437,6 +455,27 @@ fn build_prompt_argv(worker: &str, wrapped: &str) -> Vec<String> {
         "prompt".to_string(),
         worker.to_string(),
         wrapped.to_string(),
+    ]
+}
+
+/// The argv `read_output` passes to herdr — `agent read <worker> --source
+/// recent-unwrapped --lines <READ_LINES>`. This exact source and line
+/// count IS this module's own documented mitigation for the
+/// alternate-screen read failure (see `read_output`'s own docs and
+/// `READ_LINES`'s field doc): `recent-unwrapped` is the source spawn-
+/// proof.md's own round trip reads from, and `READ_LINES` is the count
+/// generous enough a normal reply is never truncated by this number
+/// alone. Isolated from `run_herdr` purely so this exact argv is provable
+/// without a process, on every platform including Windows.
+fn build_read_argv(worker: &str) -> Vec<String> {
+    vec![
+        "agent".to_string(),
+        "read".to_string(),
+        worker.to_string(),
+        "--source".to_string(),
+        "recent-unwrapped".to_string(),
+        "--lines".to_string(),
+        READ_LINES.to_string(),
     ]
 }
 
@@ -593,9 +632,11 @@ impl WorkerBackend for HerdrBackend {
     fn canonical_id(&self, name: &str) -> String {
         // Already herdr's own canonical addressing form — no lookup
         // needed, and no risk of a stale `agent list` read disagreeing
-        // with the identifier's own shape.
-        if is_pane_id_shaped(name) {
-            return name.to_string();
+        // with the identifier's own shape. `skip_lookup_for_canonical_id`
+        // makes this skip provable purely, not only through the
+        // cfg(unix) suite's invocation-count assertion.
+        if let Some(id) = skip_lookup_for_canonical_id(name) {
+            return id;
         }
         // `name` is a friendly agent name; resolve it to the pane id that
         // addresses the exact same target (herding-orchestration D15 —
@@ -663,8 +704,10 @@ impl WorkerBackend for HerdrBackend {
     }
 
     fn read_output(&self, worker: &str) -> anyhow::Result<String> {
+        let argv = build_read_argv(worker);
+        let args: Vec<&str> = argv.iter().map(String::as_str).collect();
         let body = self
-            .run_herdr(&["agent", "read", worker, "--source", "recent-unwrapped", "--lines", READ_LINES])
+            .run_herdr(&args)
             .map_err(|e| anyhow::anyhow!("herdr agent read {worker} failed: {e}"))?;
         let transcript = extract_transcript(&body, worker)?;
         let spill = self.spill_path(worker);
@@ -767,6 +810,27 @@ mod tests {
         assert_eq!(resolve_canonical_id(&malformed, "reviewer-1"), "reviewer-1");
     }
 
+    // ── skip_lookup_for_canonical_id: the early return that used to be
+    //    provable only through the cfg(unix) suite's invocation count ───
+
+    #[test]
+    fn skip_lookup_for_canonical_id_skips_the_lookup_for_pane_id_shaped_names() {
+        assert_eq!(
+            skip_lookup_for_canonical_id("w4:pB"),
+            Some("w4:pB".to_string()),
+            "an already pane-id-shaped identifier must resolve without any lookup"
+        );
+    }
+
+    #[test]
+    fn skip_lookup_for_canonical_id_defers_to_the_lookup_for_a_friendly_name() {
+        assert_eq!(
+            skip_lookup_for_canonical_id("reviewer-1"),
+            None,
+            "a friendly name still needs resolve_canonical_id's own agent-list lookup"
+        );
+    }
+
     // ── interpret_status_lookup: judge mutations H1, H2, H3, H6 ─────────
 
     #[test]
@@ -823,6 +887,20 @@ mod tests {
         assert!(
             !argv.iter().any(|a| a == "--wait"),
             "send's argv must never include --wait: got {argv:?}"
+        );
+    }
+
+    // ── build_read_argv: read_output's own documented alternate-screen
+    //    mitigation, pinned so it cannot be silently loosened ────────────
+
+    #[test]
+    fn build_read_argv_pins_the_transcript_source_and_line_count() {
+        let argv = build_read_argv("w1");
+        assert_eq!(
+            argv,
+            vec!["agent", "read", "w1", "--source", "recent-unwrapped", "--lines", "500"],
+            "read_output's own documented mitigation for the alternate-screen read failure \
+             depends on this exact source and line count; got {argv:?}"
         );
     }
 
@@ -1011,6 +1089,64 @@ mod tests {
                     .position(|a| a == "--kind")
                     .expect("--kind must be present in the spawn argv");
                 assert_eq!(argv[idx + 1], "codex");
+            }
+            other => panic!("a pane id with no agent yet must spawn; got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn decide_start_for_uses_the_module_s_own_start_timeout_constant() {
+        let backend =
+            HerdrBackend::with_test_seams(Vec::new(), std::env::temp_dir(), "claude", Vec::new());
+        let body: Value = serde_json::json!({"type":"ok","result":{"agents":[]}});
+        match backend.decide_start_for(&body, "w4:pB") {
+            StartDecision::Spawn(argv) => {
+                let idx = argv
+                    .iter()
+                    .position(|a| a == "--timeout")
+                    .expect("--timeout must be present in the spawn argv");
+                assert_eq!(
+                    argv[idx + 1],
+                    "60000",
+                    "the START_TIMEOUT_MS actually injected at the call site must reach the \
+                     spawn argv; got {argv:?}"
+                );
+            }
+            other => panic!("a pane id with no agent yet must spawn; got {other:?}"),
+        }
+    }
+
+    // ── HerdrBackend::new: the production constructor has no caller yet
+    //    (herding-orchestration D17 is not built) — nothing but this test
+    //    proves its fields reach the spawn argv rather than being
+    //    discarded (D14) ────────────────────────────────────────────────
+
+    #[test]
+    fn new_wires_its_agent_kind_and_agent_args_through_to_the_spawn_argv() {
+        let backend = HerdrBackend::new("codex", vec!["--model".to_string(), "opus".to_string()]);
+        let body: Value = serde_json::json!({"type":"ok","result":{"agents":[]}});
+        match backend.decide_start_for(&body, "w4:pB") {
+            StartDecision::Spawn(argv) => {
+                let kind_idx = argv
+                    .iter()
+                    .position(|a| a == "--kind")
+                    .expect("--kind must be present in the spawn argv");
+                assert_eq!(
+                    argv[kind_idx + 1],
+                    "codex",
+                    "HerdrBackend::new's agent_kind must reach the spawn argv, never be \
+                     discarded; got {argv:?}"
+                );
+                let dd_idx = argv
+                    .iter()
+                    .position(|a| a == "--")
+                    .expect("agent_args must be appended after a literal --");
+                assert_eq!(
+                    &argv[dd_idx + 1..],
+                    &["--model", "opus"],
+                    "HerdrBackend::new's agent_args must reach the spawn argv, never be \
+                     discarded; got {argv:?}"
+                );
             }
             other => panic!("a pane id with no agent yet must spawn; got {other:?}"),
         }
