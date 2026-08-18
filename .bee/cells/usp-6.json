@@ -1,0 +1,59 @@
+{
+  "id": "usp-6",
+  "feature": "uat-stop-placement",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Point the merge-side lane classification at uat_lane_mode so the two copies cannot drift apart again",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/uat.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "action": "Residual named by the usp-3 re-judge (verdict PASS, so this is tidying, not a repair). usp-3 lifted the merge side's lane classification into crate::uat::uat_lane_mode and pointed the close-time uat door at it, but the merge side still carries its own copy of that read inside uat_merge_precheck around packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:884-897. The judge diffed the two and found them expression-identical — the same list_workflows to find_live_workflow to workflow mode read, falling back to read_lane_display and the record's mode. So the brief's ONE read, both ends call it is met behaviorally but not structurally, and two identical copies are exactly what drifted apart to produce the defect usp-3 just fixed. FIX: delete the merge-side copy and have uat_merge_precheck call crate::uat::uat_lane_mode, then feed uat_gate_applies_to_lane from its result. This is a pure dedup — behavior must not change by one bit, and the existing merge tests are the proof of that. Do NOT touch the close side, do NOT change uat_lane_mode's signature or semantics, and do NOT alter feature_route or any other door's lane read. If the two are NOT in fact expression-identical when you read them, stop and report the difference instead of forcing them together — a behavior change hiding inside a dedup is the one outcome this cell must not produce.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml uat && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml close",
+  "verify_owner": "worker",
+  "done_when": "The lane classification behind the uat stop exists in exactly one place in the crate, crate::uat::uat_lane_mode, called by both the merge precheck and the close door. No test changed its expectations, and the worktree, uat, and close suites are all green at the same counts as before this cell.",
+  "notes": "Phase 5, tidy-up after usp-3's revision. Last cell of the feature.",
+  "must_haves": {
+    "truths": [
+      "uat_merge_precheck calls crate::uat::uat_lane_mode instead of carrying its own copy of the read.",
+      "The lane classification behind the uat stop exists in exactly one place in the crate.",
+      "No test expectation changed, and the worktree, uat, and close suites stay green at their existing counts.",
+      "feature_route and every other close door's lane read are untouched.",
+      "uat_lane_mode's signature and semantics are unchanged."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "usp-6-worker",
+    "outcome": "Deleted uat_merge_precheck's inline lane-mode read; it now calls crate::uat::uat_lane_mode",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T13:36:38.604Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T13:33:54.970Z",
+    "report": {
+      "outcome": "Deleted uat_merge_precheck's inline lane-mode read; it now calls crate::uat::uat_lane_mode, so the lane classification behind the uat stop exists in exactly one place in the crate.",
+      "commit": "59de087c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree/uat/close — green (200/49/147, all counts unchanged from before this cell) — pure dedup, the three declared suites are the direct proof no behavior changed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

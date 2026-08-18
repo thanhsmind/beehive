@@ -1,0 +1,64 @@
+{
+  "id": "usp-5",
+  "feature": "uat-stop-placement",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "worktree merge: a missing lane record must not let cleanup delete the worktree under uat_stop close",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/uat-stop-placement/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/uat.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "action": "A narrow hole the semantic judge found in usp-2 (verdict PASS, observation 1) — it passes the letter of usp-2's truths and defeats their purpose, so it is fixed rather than filed. Under uat_stop close, set_lane_uat_wait_on_merge returns early with uat_wait_set false when the feature has a live workflow record but NO .bee/lanes/<feature>.json on disk. merge_finish then computes effective_cleanup as cleanup AND NOT uat_wait_set, so cleanup is NOT suppressed and the worktree is torn down — taking away the only place a failed uat can be fixed, and dropping the grant so the second merge cannot even run. The two branches are asymmetric: the merge-time precondition fails CLOSED in the same situation, because uat_gate_applies_to_lane(None) returns true. FIX: make the cleanup suppression fail closed the same way the precondition already does. Under uat_stop close, when the feature's uat is unapproved and the lane rule says the lane cares (including the fails-closed-as-standard case of a missing or unrecognized classification), cleanup is suppressed REGARDLESS of whether the lane file could be written. Whether the lane record exists is a bookkeeping fact; whether the user still needs their worktree is not, and the second must not be decided by the first. Keep every other behavior exactly as usp-2 left it: the lane write itself stays best-effort warn-never-fail (a missing lane record still must not turn a green merge red, and still must not fabricate a lane file), the Merge and Off branches are untouched, and --no-cleanup still means keep. Name the suppression the same way usp-2 does so the reported result key stays consistent. Tests in worktree/tests.rs: under uat_stop close with uat unapproved and NO lane record on disk, a merge with --cleanup keeps the worktree, keeps the branch, and keeps the grant, and the same merge reports the cleanup suppression; a second merge on that same worktree afterwards still runs rather than hitting the no-granted-worktree refusal; and the same case with uat APPROVED still cleans up normally. Assert too that the missing lane record still produces no red merge and no fabricated .bee/lanes/<feature>.json.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "verify_owner": "worker",
+  "done_when": "Under uat_stop close with an unapproved uat and no lane record on disk, --cleanup and worktree_cleanup_on_merge true no longer delete the worktree; the grant survives and a repeat merge still runs. The lane write stays best-effort and never fabricates a lane file or reddens the merge. The Merge and Off branches, and the approved-uat path, are unchanged. The worktree suite is green.",
+  "notes": "Phase 4, fix-first on a judge observation against usp-2. Files are disjoint from usp-3's revision (uat.rs + close.rs) — the two run concurrently.",
+  "must_haves": {
+    "truths": [
+      "Under uat_stop close with uat unapproved and NO lane record on disk, a merge passed --cleanup keeps the worktree, the branch, and the grant.",
+      "The same merge reports the cleanup suppression with the same result key usp-2 introduced.",
+      "A second merge on that worktree afterwards still runs instead of hitting the no-granted-worktree refusal.",
+      "With uat APPROVED, that same case cleans up normally.",
+      "A missing lane record still never reddens the merge and never causes a lane file to be fabricated.",
+      "The Merge and Off branches behave exactly as they did before this cell."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "usp-5-worker",
+    "outcome": "merge_finish now computes uat_wait_set directly from the fail-closed precheck, so a missing lane record no longer lets cleanup tear down a worktree with a pending uat under uat_stop close.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T13:22:58.446Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T13:16:14.046Z",
+    "report": {
+      "outcome": "merge_finish now computes uat_wait_set directly from the fail-closed precheck instead of reading it off the lane-write outcome, so a missing .bee/lanes/<feature>.json no longer lets --cleanup tear down a worktree with a pending uat under uat_stop close.",
+      "commit": "65b0520abe560951e5ae6fce828ede8c9388cb31",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — green — full worktree suite (200 passed, 0 failed), including 3 new tests for the no-lane-record case",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
