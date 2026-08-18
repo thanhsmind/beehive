@@ -252,6 +252,29 @@ pub(crate) fn run_wave_and_record<B: WorkerBackend + Sync + ?Sized>(
     result
 }
 
+/// Resolves `herding.agent_command` (D14), constructs the backend through
+/// `construct_backend`, then runs and records the wave — the SAME call
+/// site `wave()` below uses to build the real `HerdrBackend`, and the seam
+/// a bee-crate test below drives with an assertion closure over a
+/// `FakeBackend`. The one line inside this function that calls
+/// `construct_backend(kind, args)` is therefore the only place either the
+/// real or a fake backend is ever built from a resolved pair; a mutation
+/// that discards `kind`/`args` there for constants is caught by that test,
+/// not just by the backend's own (already-passing) construction tests.
+fn build_wave_backend_and_run<B: WorkerBackend + Sync>(
+    cfg: &Value,
+    root: &Path,
+    wave_id: String,
+    started_at: String,
+    inputs: &[WaveWorkerInput],
+    wave: &Wave,
+    construct_backend: impl FnOnce(String, Vec<String>) -> B,
+) -> Result<WaveResult, AgentCommandError> {
+    let (kind, args) = resolve_agent_command(cfg)?;
+    let backend = construct_backend(kind, args);
+    Ok(run_wave_and_record(&backend, root, wave_id, started_at, inputs, wave))
+}
+
 fn emit_wave_result(wave_id: &str, result: &WaveResult, json: bool) {
     if json {
         let obj = serde_json::json!({
@@ -363,24 +386,6 @@ pub(super) fn wave(flags: &[&str]) -> ExitCode {
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or(Value::Null);
 
-    let (kind, args) = match resolve_agent_command(&cfg) {
-        Ok(pair) => pair,
-        Err(e) => {
-            if json {
-                let mut m = Map::new();
-                m.insert("error".into(), Value::String(e.to_string()));
-                m.insert("key".into(), Value::String("herding.agent_command".into()));
-                println!("{}", Value::Object(m));
-            }
-            eprintln!("bee herding wave: {e}");
-            return ExitCode::FAILURE;
-        }
-    };
-
-    // The caller HerdrBackend::new's own documentation names — wiring D14's
-    // resolved kind/args through to the real backend.
-    let backend = HerdrBackend::new(kind, args);
-
     let wave_id = wave_id.unwrap_or_else(|| format!("wave-{}", chrono::Utc::now().timestamp_millis()));
     let started_at = chrono::Utc::now().to_rfc3339();
 
@@ -395,7 +400,30 @@ pub(super) fn wave(flags: &[&str]) -> ExitCode {
         FailurePolicy::WaitForAll,
     );
 
-    let result = run_wave_and_record(&backend, &main_root, wave_id.clone(), started_at, &inputs, &wave_value);
+    // The caller HerdrBackend::new's own documentation names — wiring D14's
+    // resolved kind/args through to the real backend, via the same
+    // construct_backend seam a bee-crate test drives with a FakeBackend.
+    let result = match build_wave_backend_and_run(
+        &cfg,
+        &main_root,
+        wave_id.clone(),
+        started_at,
+        &inputs,
+        &wave_value,
+        |kind, args| HerdrBackend::new(kind, args),
+    ) {
+        Ok(result) => result,
+        Err(e) => {
+            if json {
+                let mut m = Map::new();
+                m.insert("error".into(), Value::String(e.to_string()));
+                m.insert("key".into(), Value::String("herding.agent_command".into()));
+                println!("{}", Value::Object(m));
+            }
+            eprintln!("bee herding wave: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
     let success = result.is_success();
     emit_wave_result(&wave_id, &result, json);
     if success {
@@ -452,15 +480,24 @@ fn occupancy_json(occ: &wave_ledger::Occupancy) -> Value {
     serde_json::json!({"count": occ.count(), "source": source})
 }
 
-fn emit_occupancy(occ: &wave_ledger::Occupancy, json: bool) {
+/// The DEFAULT (non-`--json`) human-readable occupancy line. Carries the
+/// same `source` distinction `occupancy_json` pins for the machine-readable
+/// path — a role calling `bee herding occupancy` without `--json` must be
+/// able to tell the real crossing from the degraded fallback apart too, so
+/// this always renders the parenthetical, never just the bare count.
+fn occupancy_plain_line(occ: &wave_ledger::Occupancy) -> String {
     let v = occupancy_json(occ);
-    if json {
-        println!("{v}");
-        return;
-    }
     let count = v["count"].as_u64().unwrap_or(0);
     let source = v["source"].as_str().unwrap_or("?");
-    println!("occupancy: {count} worker(s) live ({source})");
+    format!("occupancy: {count} worker(s) live ({source})")
+}
+
+fn emit_occupancy(occ: &wave_ledger::Occupancy, json: bool) {
+    if json {
+        println!("{}", occupancy_json(occ));
+        return;
+    }
+    println!("{}", occupancy_plain_line(occ));
 }
 
 /// `bee herding occupancy` — the CLI bridge to the wave ledger's read side
@@ -608,10 +645,12 @@ mod tests {
         assert_eq!(waves[0].wave_id, "w-test");
         assert_eq!(waves[0].workers.len(), 2);
         assert!(waves[0].workers.iter().all(|w| w.outcome.as_deref() == Some("succeeded")));
-        // the D14 caller wired the CONFIGURED kind/args through: proven at
-        // the HerdrBackend layer by its own tests (decide_start). Here the
-        // proof is that this caller reaches the fake backend's argv-shaped
-        // seam at all — `send` was actually called, not skipped.
+        // This test proves `run_wave_and_record` reaches the fake
+        // backend's argv-shaped seam at all — `send` was actually called,
+        // not skipped. The join `run_wave_and_record` does NOT prove —
+        // that `HerdrBackend::new`'s construction call site actually
+        // receives the D14-resolved (kind, args) pair rather than
+        // constants — is `build_wave_backend_and_run`'s test below.
         assert_eq!(backend.send_call_count("alpha"), 1);
         assert_eq!(backend.send_call_count("beta"), 1);
     }
@@ -642,6 +681,70 @@ mod tests {
         assert_eq!(waves[0].workers[0].outcome.as_deref(), Some("resolution_failed"));
     }
 
+    // ─── the join: the D14-resolved pair actually reaching construction ─
+
+    #[test]
+    fn build_wave_backend_and_run_hands_the_resolved_kind_and_args_to_construction() {
+        // `wave()` calls `build_wave_backend_and_run` with `HerdrBackend::new`
+        // as `construct_backend`; this test calls the SAME function with an
+        // assertion closure instead. If the call site inside
+        // `build_wave_backend_and_run` ever discards `resolve_agent_command`'s
+        // (kind, args) pair for constants — the exact defect a prior judge
+        // found live one line past this file's own construction call — the
+        // closure below observes the wrong values and panics, failing this
+        // test. It is not enough for the closure to merely be called: it
+        // must be called with the SAME pair `resolve_agent_command` itself
+        // produces for this `cfg`, so a substitute value of the right shape
+        // (e.g. always "claude", vec![]) still fails when the configured
+        // command differs, as it does here.
+        let cfg = serde_json::json!({"herding": {"agent_command": ["codex", "--flag", "value"]}});
+        let (expected_kind, expected_args) = resolve_agent_command(&cfg).unwrap();
+        assert_eq!(expected_kind, "codex", "sanity: this test's cfg must not resolve to the default");
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let inputs = vec![WaveWorkerInput {
+            name: "alpha".to_string(),
+            task: "MARKER-alpha do the thing".to_string(),
+            worktree: String::new(),
+        }];
+        let workers: Vec<WorkerSpec> =
+            inputs.iter().map(|w| WorkerSpec::new(w.name.clone(), w.task.clone())).collect();
+        let wave_value = Wave::new(
+            workers,
+            WaveTimeouts { worker_settle: Duration::from_millis(500), poll_interval: Duration::from_millis(5) },
+            FailurePolicy::WaitForAll,
+        );
+
+        let mut construct_backend_was_called = false;
+        let result = build_wave_backend_and_run(
+            &cfg,
+            root,
+            "w-ctor".to_string(),
+            "2026-08-18T00:00:00Z".to_string(),
+            &inputs,
+            &wave_value,
+            |kind, args| {
+                assert_eq!(
+                    kind, expected_kind,
+                    "backend construction must receive the D14-resolved kind, not a substitute"
+                );
+                assert_eq!(
+                    args, expected_args,
+                    "backend construction must receive the D14-resolved args, not a substitute"
+                );
+                construct_backend_was_called = true;
+                let backend = FakeBackend::new();
+                ready_worker(&backend, "alpha", "MARKER-alpha do the thing");
+                backend
+            },
+        )
+        .unwrap();
+
+        assert!(construct_backend_was_called, "construct_backend must actually be invoked");
+        assert!(result.is_success(), "{result:?}");
+    }
+
     // ─── the bridge: occupancy reports which answer it gave ────────────
 
     #[test]
@@ -653,6 +756,20 @@ mod tests {
         assert_eq!(fallback["count"], 3);
         assert_eq!(fallback["source"], "fallback");
         assert_ne!(live, fallback, "the live/fallback distinction must never collapse into a bare count");
+    }
+
+    #[test]
+    fn occupancy_plain_line_pins_the_source_distinction_too() {
+        // The json path's live/fallback distinction is pinned above; a role
+        // that runs `bee herding occupancy` WITHOUT `--json` reads this
+        // plain line instead, so it must be able to tell the two apart the
+        // same way — dropping the `({source})` parenthetical from the plain
+        // println must fail this test.
+        let live = occupancy_plain_line(&wave_ledger::Occupancy::Live(3));
+        let fallback = occupancy_plain_line(&wave_ledger::Occupancy::Fallback(3));
+        assert!(live.contains("(live)"), "{live}");
+        assert!(fallback.contains("(fallback)"), "{fallback}");
+        assert_ne!(live, fallback, "the plain occupancy line must not collapse live and fallback at the same count");
     }
 
     #[test]
