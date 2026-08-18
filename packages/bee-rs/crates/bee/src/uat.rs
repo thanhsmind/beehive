@@ -59,6 +59,45 @@ pub(crate) fn uat_gate_applies_to_lane(mode: Option<&str>) -> bool {
     !matches!(mode, Some("tiny") | Some("small") | Some("docs") | Some("spike"))
 }
 
+/// uat-stop-placement D4 revision (usp-3): the ONE lane-classification read
+/// for the uat door, lifted verbatim from the merge side's
+/// `uat_merge_precheck` (`verbs/worktree/phases.rs`) so `bee close` and
+/// `bee worktree merge` never disagree on which lane a feature is in.
+///
+/// Before this, `close`'s uat door classified through `feature_route`
+/// (which prefers a lane record's `route.lane`) while `merge` classified
+/// through the live workflow's — or the lane record's — `mode`. The two
+/// disagree whenever a record's `route.lane` and `mode` name different lane
+/// classes (12 of 95 real records in `.bee/lanes` at the time of this fix,
+/// e.g. `.bee/lanes/knowledge-loop.json`: `mode` "standard", `route.lane`
+/// "small"): under `uat_stop: "close"` the merge side would set the uat
+/// wait while `bee close` reported the same feature exempt, and the stop
+/// vanished silently.
+///
+/// Read order, exactly mirroring the merge side: prefer the live workflow
+/// record's own `mode` field, falling back to `.bee/lanes/<feature>.json`'s
+/// `mode` (`read_lane_display`, the same fail-open display read `close`'s
+/// own scoping already reuses) when no live workflow names the feature.
+/// `route.lane` is never consulted here — only `judge-debt` and the other
+/// doors that call `feature_route` directly still read it, unchanged.
+/// Every read is fail-open by construction (`list_workflows`,
+/// `read_lane_display` never throw for an ordinary missing/corrupt shape),
+/// so an unreadable store returns `None`, which `uat_gate_applies_to_lane`
+/// then reads as "standard" (applies) — the safe direction.
+pub(crate) fn uat_lane_mode(main_root: &Path, feature: &str) -> Option<String> {
+    let workflows = crate::verbs::workflow_store::list_workflows(main_root).unwrap_or_default();
+    let live = crate::verbs::workflow_store::find_live_workflow(&workflows, feature);
+    live.and_then(|wf| wf.get("mode"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or_else(|| {
+            crate::verbs::workflow_store::read_lane_display(main_root, feature)
+                .ok()
+                .flatten()
+                .and_then(|rec| rec.get("mode").and_then(Value::as_str).map(str::to_string))
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

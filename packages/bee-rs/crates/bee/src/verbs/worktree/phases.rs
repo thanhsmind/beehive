@@ -461,13 +461,16 @@ pub(crate) fn merge_stage(
 }
 
 /// mcl-2 (R1) / uat-stop-placement D4.2: what `close_the_lane_on_merge`
-/// answers with — the `next_action` text it wrote (empty when the feature
-/// has no lane file at all, nothing to rewrite), and whether the D4.2 SET
-/// branch fired (`uat_wait_set`), the one bit `merge_finish` needs to also
-/// force D4.3's cleanup suppression.
+/// answers with — the `next_action` text it wrote, empty when the feature
+/// has no lane file at all (nothing to rewrite). usp-5: `merge_finish` no
+/// longer reads a `uat_wait_set` bit off this outcome to drive D4.3's
+/// cleanup suppression — whether the lane record exists is a bookkeeping
+/// fact this type carries, and whether the user still needs their worktree
+/// is a DIFFERENT, precheck-only fact `merge_finish` now computes itself
+/// directly (see its own `uat_wait_set` local), so a missing lane file can
+/// never silently un-suppress cleanup.
 struct CloseLaneOutcome {
     next_action: String,
-    uat_wait_set: bool,
 }
 
 /// mcl-2 (R1) / uat-stop-placement D4.2: the merge-time half of "a shipped
@@ -506,7 +509,7 @@ fn close_the_lane_on_merge(
     let Some(mut lane) =
         crate::verbs::workflow_store::read_lane_strict(main_root, feature).map_err(lane_write_err_text)?
     else {
-        return Ok(CloseLaneOutcome { next_action: String::new(), uat_wait_set: false });
+        return Ok(CloseLaneOutcome { next_action: String::new() });
     };
     let short_sha = &merge_commit_sha[..merge_commit_sha.len().min(7)];
     let next_action = format!(
@@ -514,7 +517,7 @@ fn close_the_lane_on_merge(
     );
     lane.insert("next_action".into(), json!(next_action.clone()));
     crate::verbs::workflow_store::write_lane(main_root, &lane).map_err(lane_write_err_text)?;
-    Ok(CloseLaneOutcome { next_action, uat_wait_set: false })
+    Ok(CloseLaneOutcome { next_action })
 }
 
 /// uat-stop-placement D4.2's SET branch: under `uat_stop: "close"`, a merge
@@ -538,7 +541,7 @@ fn set_lane_uat_wait_on_merge(
     let Some(mut lane) =
         crate::verbs::workflow_store::read_lane_strict(main_root, feature).map_err(lane_write_err_text)?
     else {
-        return Ok(CloseLaneOutcome { next_action: String::new(), uat_wait_set: false });
+        return Ok(CloseLaneOutcome { next_action: String::new() });
     };
     let short_sha = &merge_commit_sha[..merge_commit_sha.len().min(7)];
     lane.insert(
@@ -555,7 +558,7 @@ fn set_lane_uat_wait_on_merge(
     );
     lane.insert("next_action".into(), json!(next_action.clone()));
     crate::verbs::workflow_store::write_lane(main_root, &lane).map_err(lane_write_err_text)?;
-    Ok(CloseLaneOutcome { next_action, uat_wait_set: true })
+    Ok(CloseLaneOutcome { next_action })
 }
 
 /// `Err2`'s two shapes, rendered as one warn-line message —
@@ -707,11 +710,29 @@ pub(crate) fn merge_finish(
         // reading before this write touches the tracked lane file, or every
         // green merge would trip `verify_mutated_tracked_files` on its own
         // work.
-        let mut uat_wait_set = false;
+        // usp-5: whether THIS merge's feature still owes an unapproved
+        // "uat" under `uat_stop: "close"` is a precheck fact — the SAME
+        // fail-closed reads `uat_merge_precheck` already takes for the
+        // merge-time precondition above, and the same call
+        // `close_the_lane_on_merge` makes internally to pick its own
+        // branch. It is computed HERE, directly, rather than read back off
+        // `CloseLaneOutcome::uat_wait_set` (which `set_lane_uat_wait_on_merge`
+        // only sets when a `.bee/lanes/<feature>.json` record exists to
+        // rewrite): whether the lane record exists on disk is a bookkeeping
+        // fact, and whether the user still needs their worktree is not — the
+        // second must never be decided by the first. So `uat_wait_set` below
+        // stays true for a pending uat even when the lane write below finds
+        // no lane file to touch (`Ok` with an empty `next_action`) or fails
+        // outright (`Err`) — the D4.3 cleanup suppression it feeds must fail
+        // closed exactly like the precondition already does.
+        let uat_wait_set = *uat_stop == UatStop::Close
+            && feature.as_deref().is_some_and(|feature| {
+                let precheck = uat_merge_precheck(main_root, Some(feature));
+                precheck.lane_applies && !precheck.gate_approved
+            });
         if let Some(feature) = feature.as_deref() {
             match close_the_lane_on_merge(main_root, feature, &merge_commit_sha, *uat_stop) {
                 Ok(outcome) if !outcome.next_action.is_empty() => {
-                    uat_wait_set = outcome.uat_wait_set;
                     let next_action = outcome.next_action;
                     result.insert("next_action".into(), json!(next_action));
                     // mct-1: the lane rewrite just above landed a TRACKED
@@ -748,7 +769,7 @@ pub(crate) fn merge_finish(
                     }
                     result.insert("lane_bookkeeping_commit".into(), lane_commit.value());
                 }
-                Ok(_) => {} // no lane file for this feature: nothing to rewrite (uat_wait_set stays false)
+                Ok(_) => {} // no lane file for this feature: nothing to rewrite; `uat_wait_set` above already carries the precheck's own fail-closed answer regardless
                 Err(reason) => {
                     eprintln!(
                         "bee worktree merge: could not close {feature}'s lane after this green merge ({reason}) — run \"bee close --feature {feature}\" when ready; its waiting_on/next_action may be stale until then."
@@ -839,12 +860,14 @@ struct UatPrecheck {
     gate_approved: bool,
 }
 
-/// uat-gate-before-merge D1: `lane_applies` prefers the live workflow
-/// record's own `mode` field (present regardless of whether the feature was
-/// ever bound to an explicit `--as-lane` file), falling back to
-/// `.bee/lanes/<feature>.json` (`read_lane_display` — the same fail-open
-/// display read `close`'s own scoping already reuses, drivers/close.rs:305)
-/// when no live workflow names the feature. `gate_approved` reads the live
+/// uat-gate-before-merge D1: `lane_applies` reads through `crate::uat::uat_lane_mode`
+/// (usp-6: the one lane-classification read, shared with `close`'s uat
+/// door), which prefers the live workflow record's own `mode` field
+/// (present regardless of whether the feature was ever bound to an
+/// explicit `--as-lane` file), falling back to `.bee/lanes/<feature>.json`
+/// (`read_lane_display` — the same fail-open display read `close`'s own
+/// scoping already reuses, drivers/close.rs:305) when no live workflow
+/// names the feature. `gate_approved` reads the live
 /// workflow record's own `gates.uat.approved` (GATE_NAMES-driven, written by
 /// `bee state gate --name uat`), falling back to the plain default
 /// `.bee/state.json` record's `approved_gates.uat` ONLY when that record is
@@ -863,16 +886,7 @@ fn uat_merge_precheck(main_root: &Path, feature: Option<&str>) -> UatPrecheck {
     let workflows = crate::verbs::workflow_store::list_workflows(main_root).unwrap_or_default();
     let live = crate::verbs::workflow_store::find_live_workflow(&workflows, feature);
 
-    let mode = live
-        .and_then(|wf| wf.get("mode"))
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .or_else(|| {
-            crate::verbs::workflow_store::read_lane_display(main_root, feature)
-                .ok()
-                .flatten()
-                .and_then(|rec| rec.get("mode").and_then(Value::as_str).map(str::to_string))
-        });
+    let mode = crate::uat::uat_lane_mode(main_root, feature);
     let lane_applies = uat_gate_applies_to_lane(mode.as_deref());
 
     let gate_approved = if let Some(wf) = live {

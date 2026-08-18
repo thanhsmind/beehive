@@ -1326,10 +1326,17 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
             });
         }
         Some(crate::uat::UatStop::Close) => {
-            // D2: the same lane rule the merge side uses, now read from the
-            // one shared policy module — missing or unknown fails closed as
-            // "standard" (applies), only tiny/small/docs/spike are exempt.
-            let lane = feature_route(root, feature)?;
+            // usp-3 revision (D4): classify through `crate::uat::uat_lane_mode`
+            // — the SAME lane-mode read the merge side's `uat_merge_precheck`
+            // uses — not `feature_route`. `feature_route` prefers a lane
+            // record's `route.lane`, which can name a different class than
+            // the record's `mode`; the merge side is canonical, so the
+            // close-time door must read what the merge side reads, or the
+            // two ends of the uat stop can disagree and the stop vanishes
+            // silently under `uat_stop: "close"`. Missing or unknown still
+            // fails closed as "standard" (applies), only
+            // tiny/small/docs/spike are exempt.
+            let lane = crate::uat::uat_lane_mode(root, feature);
             let lane_applies = crate::uat::uat_gate_applies_to_lane(lane.as_deref());
             let gate_approved = lane_applies && uat_gate_approved(root, feature);
             let uat_deferred =
@@ -3386,6 +3393,18 @@ mod tests {
         w(root, &format!(".bee/lanes/{feature}.json"), &format!(r#"{{"feature":"{feature}","mode":"{mode}"}}"#));
     }
 
+    /// usp-3 revision (D4): a lane record whose `mode` and `route.lane`
+    /// name DIFFERENT lane classes — the one shape `write_lane_mode` above
+    /// cannot produce, and the exact shape that let `feature_route`
+    /// (`route.lane`) and the merge side's `mode` read disagree.
+    fn write_lane_mode_and_route(root: &Path, feature: &str, mode: &str, route_lane: &str) {
+        w(
+            root,
+            &format!(".bee/lanes/{feature}.json"),
+            &format!(r#"{{"feature":"{feature}","mode":"{mode}","route":{{"lane":"{route_lane}"}}}}"#),
+        );
+    }
+
     fn write_uat_gate_state(root: &Path, feature: &str, approved: bool) {
         w(
             root,
@@ -3462,6 +3481,55 @@ mod tests {
             if let Some(uat_door) = uat_door {
                 assert!(!uat_door.blocking, "lane {lane} must never block: {}", uat_door.detail);
             }
+        }
+    }
+
+    /// usp-3 revision (D4, judge NEEDS_REVISION t4): the door must classify
+    /// through the SAME source the merge side reads (`mode`), not through
+    /// `feature_route` (which prefers `route.lane`). A record whose `mode`
+    /// is "standard" but whose `route.lane` names "small" — the exact
+    /// shape of `.bee/lanes/knowledge-loop.json`, the judge's worked
+    /// example — must still block under close: the merge side would set
+    /// the uat wait for this feature, so close must agree.
+    #[test]
+    fn uat_door_blocks_when_mode_and_route_lane_disagree_toward_standard() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode_and_route(root, "demo", "standard", "small");
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors
+            .iter()
+            .find(|d| d.door == "uat")
+            .expect("mode standard must grow a blocking door even when route.lane disagrees");
+        assert!(
+            uat_door.blocking,
+            "mode=standard/route.lane=small must block — the merge side reads mode and would wait on this feature: {}",
+            uat_door.detail
+        );
+    }
+
+    /// usp-3 revision (D4): mirror of the above in the other direction — a
+    /// record whose `mode` is "small" but whose `route.lane` names
+    /// "standard" must stay EXEMPT under close, again agreeing with the
+    /// merge side's `mode`-only read rather than `feature_route`'s
+    /// `route.lane`-preferring one.
+    #[test]
+    fn uat_door_is_exempt_when_mode_and_route_lane_disagree_toward_small() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode_and_route(root, "demo", "small", "standard");
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat");
+        if let Some(uat_door) = uat_door {
+            assert!(
+                !uat_door.blocking,
+                "mode=small/route.lane=standard must stay exempt — the merge side reads mode: {}",
+                uat_door.detail
+            );
         }
     }
 
