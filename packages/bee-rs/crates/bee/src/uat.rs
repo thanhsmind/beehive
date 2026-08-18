@@ -59,6 +59,81 @@ pub(crate) fn uat_gate_applies_to_lane(mode: Option<&str>) -> bool {
     !matches!(mode, Some("tiny") | Some("small") | Some("docs") | Some("spike"))
 }
 
+/// docs/history/uat-approval-reaches-the-door/plan.md R1-R3: the single
+/// `uat` gate-approval resolver both doors call — the merge-time
+/// `uat_merge_precheck` (verbs/worktree/phases.rs) and the close-time door
+/// (verbs/drivers/close.rs). Formerly two byte-identical copies, each
+/// missing the source below — the defect this function exists to close.
+///
+/// Fixed three-source precedence. Source 1 stops the cascade on its own
+/// presence alone, approved or not — unchanged from before this fix.
+/// Sources 2 and 3 do NOT stand alone the same way: `read_lane_display` and
+/// `read_state_peek` both merge the record they find over a shared gate
+/// default (`crate::state::spread_gates`) that already stamps `uat: false`
+/// on ANY record missing an opinion, live or default — so "the lane record
+/// has no opinion on uat" and "the lane record explicitly says false" are
+/// indistinguishable data once merged, by construction, everywhere in this
+/// store. Once no live record stands, this function reads as approved if
+/// EITHER remaining source's `approved_gates.uat` is a literal `true` —
+/// never a strict fallback chain, an OR:
+///
+/// 1. the live workflow record's own `gates.uat.approved`
+///    (`find_live_workflow`) — unchanged, still first. A live record saying
+///    `false` beats a lane file saying `true`; this function never looks
+///    past a live record once one is found.
+/// 2. NEW: failing that (no live record — closed, or never opened), the
+///    LANE record `.bee/lanes/<feature>.json`'s `approved_gates.uat`, read
+///    through the existing display reader `read_lane_display` — never by
+///    hand-parsing the file. This is the file `bee gate --lane <f>` writes
+///    when the live-record lookup comes up empty, and the file neither
+///    door used to read.
+/// 3. the default `.bee/state.json`'s `approved_gates.uat`, but ONLY when
+///    that record is presently tracking THIS feature — a foreign feature's
+///    approval must never leak through as "approved" for a different one.
+///    Unchanged, for the unbound default-record case — including a lane
+///    record that exists but never opined on `uat` (e.g. one carrying only
+///    `mode`), which must still let a genuine default-state approval
+///    through rather than being shadowed by the lane's merged-in default.
+///
+/// Every source fails CLOSED on anything but a literal JSON `true`: a
+/// missing gate, a missing `approved_gates`, `false`, or a non-boolean
+/// value all read as "not approved" — this widens WHERE an approval is
+/// found, never WHAT counts as one. Every read here is fail-open by
+/// construction (`list_workflows`, `read_lane_display`, `read_state_peek`
+/// never throw for an ordinary missing/corrupt shape), so an unreadable
+/// store reads as "not approved" too.
+pub(crate) fn uat_gate_approved(main_root: &Path, feature: &str) -> bool {
+    let workflows = crate::verbs::workflow_store::list_workflows(main_root).unwrap_or_default();
+    if let Some(wf) = crate::verbs::workflow_store::find_live_workflow(&workflows, feature) {
+        return matches!(
+            wf.get("gates").and_then(|g| g.get("uat")).and_then(|e| e.get("approved")),
+            Some(Value::Bool(true))
+        );
+    }
+
+    let lane_approved = crate::verbs::workflow_store::read_lane_display(main_root, feature)
+        .ok()
+        .flatten()
+        .is_some_and(|lane| {
+            matches!(
+                lane.get("approved_gates").and_then(|g| g.get("uat")),
+                Some(Value::Bool(true))
+            )
+        });
+
+    let default_state_approved = crate::verbs::state_group::read_state_peek(main_root)
+        .ok()
+        .filter(|state| matches!(state.get("feature"), Some(Value::String(f)) if f == feature))
+        .is_some_and(|state| {
+            matches!(
+                state.get("approved_gates").and_then(|g| g.get("uat")),
+                Some(Value::Bool(true))
+            )
+        });
+
+    lane_approved || default_state_approved
+}
+
 /// uat-stop-placement D4 revision (usp-3): the ONE lane-classification read
 /// for the uat door, lifted verbatim from the merge side's
 /// `uat_merge_precheck` (`verbs/worktree/phases.rs`) so `bee close` and
