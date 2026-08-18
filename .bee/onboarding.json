@@ -12,7 +12,7 @@
       "apis.md": "b7350c145f4442d4d0cf0f58a4e21e118ab4bb96654256a6837e10ccd5a070a8",
       "architecture.md": "a5cf1eddea09eed19e44b18841e58d91780070cf3cf9ebf13c6cd1c61aeb44c0",
       "data.md": "799000e64e6c274447e94571ec8b78dfeba8df015a3d566e7b9afc7ea7ef7785",
-      "debugging.md": "6ae9c24b07cd2a39c411fa705e1ee2397f8c8c22421a7eb5156a3758de33db03",
+      "debugging.md": "3fb9b82b2d1739393189956ad50be5b446f921c2a2b6846b7277d8f258e79dd5",
       "decisions.md": "599b07310c5ae8b037a02ee9464c209b9f50e4a7a35744a36c5f5ad38832b9e9",
       "documentation.md": "7b3cf8afcea9dcb969d2a6965671f0282b53897da9275d09da5686b53f8aca19",
       "frontend.md": "1abcec2e73165a5c2c1b4537a377a30d0da9608de64d1cacab97434e77a78439",
@@ -22,10 +22,10 @@
       "merges.md": "bca07c0dce2296d5d1b1b4b5d2714bd92085371589de6383037ca13d4277af1d",
       "operations.md": "464a6e355d640422c617e9f9e6c09a63f495d69c95ef0d0163bbf95d1ed88dba",
       "performance.md": "71afb3cb39be78c6538a0eb12baa0f3b460194140d3d70e35bfcdb66052088e8",
-      "planning.md": "a4a68351d5680aacb6078f622d39bd1500adb73c286720aeb7a07e7111b133ad",
+      "planning.md": "7ced919f4d3eb9c1406b19aea1fafe55cf82b4dabbd19c4145c7191209f45c55",
       "review.md": "4e5c70544d99d0f3cf7414fb0903f253530e348a0e4504fcba6a69465c29d47b",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
-      "tests.md": "176018edd890a74bf78ed623acf9aee23bf6c8253e488e2fe1e1876f0d168c63",
+      "tests.md": "fdec638fdc89ed19d046e74cf5e575ccad5b11e44fec82be03082e4c8cc71895",
       "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
       "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
       "tests/patterns/differential-testing.md": "2c089b719275b401ae62c5f6f6af4cdcdfc7e5a2528fc64ce16eff8a1d0b6add",
@@ -76,5 +76,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-18T05:44:28.055Z"
+  "updated_at": "2026-08-18T06:18:35.036Z"
 }

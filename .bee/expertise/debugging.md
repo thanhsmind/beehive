@@ -149,6 +149,14 @@ this way is not a fix; it is a guess, and a guess that happens to make the
 symptom vanish is the most dangerous outcome available — the fault is
 still there and you have stopped looking.
 
+**For a hard bug, generate 3–5 before testing any.** Rank them by how
+well they explain the evidence, state each in the X-because-Y-so-Z-
+produces-W shape, then test the top-ranked one first. A single hypothesis
+anchors on the first plausible idea and stops looking; the ranked set
+forces you to consider alternatives the first idea would have hidden.
+Compare candidate fixes only after diagnosis lands on one cause — never
+propose a menu of fixes from the symptom alone.
+
 ## Instrument before guessing
 
 When the cause is unclear → resist the speculative edit — the "maybe it's

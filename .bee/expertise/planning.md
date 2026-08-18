@@ -154,6 +154,15 @@ you find at unit 4 that invalidates units 1 through 3.
 look for what is *not* there: units with no edges between them can proceed
 in parallel, and pretending otherwise serializes work for no reason.
 
+**Expand, migrate, contract.** A wide mechanical refactor — a rename or a
+signature change touching many call sites — never goes in one red-to-green
+step. Expand: add the new form beside the old, so nothing breaks. Migrate:
+move callers over in batches sized by blast radius, one small reversible
+step at a time. Contract: delete the old form once no caller remains. Full
+green is promised only at contract, never mid-migration. The prefactor
+mantra names the step before expand: make the change easy, then make the
+easy change.
+
 ## Spike craft
 
 The section above names the spike as the unit that answers an unverified
