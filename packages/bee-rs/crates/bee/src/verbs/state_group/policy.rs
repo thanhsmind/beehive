@@ -418,6 +418,7 @@ pub(crate) fn start_lane(
 /// startFeature's DEFAULT (non-lane) legacy body, run inside the 'state' hold.
 /// Every read happens before the single write at the end, so a refusal leaves
 /// zero mutations.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn start_default(
     root: &Path,
     control_root: &Path,
@@ -425,6 +426,7 @@ pub(crate) fn start_default(
     mode: Option<&str>,
     phase: &str,
     session_id: Option<&str>,
+    paths: &[String],
     workflows: &[Map<String, Value>],
 ) -> R2<Result<Map<String, Value>, String>> {
     let mut state = read_state_strict(root)?;
@@ -483,14 +485,62 @@ pub(crate) fn start_default(
     // msn-20 D3 RETIRED the old "another session is active, wait" precondition
     // — applyWritePolicy above is its replacement, so nothing stands here.
 
+    // Reservation preconditions, both read from the SAME list: (a) this
+    // session's OWN leftover holds (the original hygiene intent — a caller
+    // is only ever told to release its own agent's holds, never a peer's,
+    // per docs/knowledge/patterns/20260710-never-release-another-agents-reservations-on-a-stall.md),
+    // then (b) a DIFFERENT session's hold that overlaps a path THIS start
+    // declares via --paths. A live peer's reservation over an UNRELATED path
+    // refuses nothing.
     let root_s = root.to_str().ok_or(Err2::Ex)?.to_string();
     let active_reservations = list_reservations(&root_s, true, now_ms())?;
-    if !active_reservations.is_empty() {
-        return Ok(Err(format!(
-            "startFeature: refused — {} active reservation(s) remain ({}). FIX: release them first (bee reservations release).",
-            active_reservations.len(),
-            active_reservations.iter().map(resv_disp).collect::<Vec<_>>().join(", ")
-        )));
+    let acting_session = session_id.map(js_trim).filter(|s| !s.is_empty());
+
+    if let Some(acting) = acting_session {
+        let own_holds: Vec<_> = active_reservations
+            .iter()
+            .filter(|r| &r.session.clone().unwrap_or(Value::Null) == &json!(acting))
+            .collect();
+        if !own_holds.is_empty() {
+            let mut agents: Vec<String> = Vec::new();
+            for r in &own_holds {
+                let a = js_disp_opt(r.agent.as_ref());
+                if !agents.contains(&a) {
+                    agents.push(a);
+                }
+            }
+            return Ok(Err(format!(
+                "startFeature: refused — this session's own reservation(s) remain ({}). FIX: release your own hold(s) first ({}).",
+                own_holds.iter().map(|r| resv_disp(r)).collect::<Vec<_>>().join(", "),
+                agents
+                    .iter()
+                    .map(|a| format!("bee reservations release --agent {a}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        }
+    }
+
+    let declared: Vec<String> = paths
+        .iter()
+        .filter(|p| !js_trim(p).is_empty())
+        .map(|p| js_trim(p).to_string())
+        .collect();
+    if !declared.is_empty() {
+        let peer_overlap: Vec<_> = active_reservations
+            .iter()
+            .filter(|r| {
+                let same_session =
+                    acting_session.is_some_and(|a| &r.session.clone().unwrap_or(Value::Null) == &json!(a));
+                !same_session && declared.iter().any(|d| paths_overlap(&r.path, d))
+            })
+            .collect();
+        if !peer_overlap.is_empty() {
+            return Ok(Err(format!(
+                "startFeature: refused — declared path(s) overlap active reservation hold(s): {}. FIX: wait for release/expiry, or start over non-overlapping paths.",
+                peer_overlap.iter().map(|r| resv_disp(r)).collect::<Vec<_>>().join(", ")
+            )));
+        }
     }
 
     let cells = list_all_cells_for_start(root)?;
@@ -716,6 +766,7 @@ pub(crate) fn run_start_feature(flags: Flags, use_json: bool, t0: Instant) -> Op
                 mode.as_deref(),
                 &phase,
                 session_id_trimmed.as_deref(),
+                &paths,
                 &workflows,
             )
         };

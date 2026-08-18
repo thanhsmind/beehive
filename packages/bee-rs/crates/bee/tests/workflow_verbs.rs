@@ -188,7 +188,13 @@ fn start_feature_refuses_a_non_idle_non_terminal_phase_with_zero_mutations() {
 }
 
 #[test]
-fn start_feature_refuses_over_an_active_reservation_with_zero_mutations() {
+fn start_feature_refuses_over_a_reservation_overlapping_declared_paths_with_zero_mutations() {
+    // start-feature-reservation-scope D1: the blanket "any active reservation
+    // anywhere refuses" precondition this test used to exercise is gone — a
+    // reservation only refuses now when THIS start declares an overlapping
+    // --paths entry (or the hold is the acting session's own leftover). See
+    // start_feature_ignores_an_unrelated_active_reservation_with_no_declared_paths
+    // below for the unrelated-path case this scoping was built to unblock.
     let tmp = tempfile::tempdir().unwrap();
     let repo = fixture(tmp.path());
     let before = state_json(&repo);
@@ -198,13 +204,32 @@ fn start_feature_refuses_over_an_active_reservation_with_zero_mutations() {
     );
     assert_eq!(rc, 0, "{rout}");
 
-    let (code, out) = run(&repo, &["state", "start-feature", "--feature", "wf-a"]);
+    let (code, out) = run(
+        &repo,
+        &["state", "start-feature", "--feature", "wf-a", "--paths", "foo/bar.txt"],
+    );
     assert_ne!(code, 0, "{out}");
-    assert!(out.contains("active reservation(s) remain"), "{out}");
+    assert!(out.contains("declared path(s) overlap active reservation hold(s)"), "{out}");
     assert!(out.contains("a1:foo/bar.txt"), "the blocker must be named: {out}");
 
     assert_eq!(state_json(&repo), before, "a refused start must touch no byte of state.json");
     assert!(!workflows_dir(&repo).exists(), "no workflow record may be created");
+}
+
+#[test]
+fn start_feature_ignores_an_unrelated_active_reservation_with_no_declared_paths() {
+    // The defect start-feature-reservation-scope D1 fixes: a live reservation
+    // over a path this start never declares must refuse nothing.
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path());
+    let (rc, rout) = run(
+        &repo,
+        &["reservations", "reserve", "--agent", "a1", "--cell", "c1", "--path", "foo/bar.txt"],
+    );
+    assert_eq!(rc, 0, "{rout}");
+
+    let (code, out) = run(&repo, &["state", "start-feature", "--feature", "wf-a"]);
+    assert_eq!(code, 0, "{out}");
 }
 
 #[test]
