@@ -597,9 +597,13 @@ pub fn build_session_preamble(
         if str_eq(commands.get("test"), NO_TEST_SENTINEL) {
             // no-test-repos D1 (decision 55b951e1): the sentinel REPLACES the
             // test-gate paragraph outright with one loud line — never a
-            // silent drop of the gate.
+            // silent drop of the gate. Text kept in step with test-doctrine
+            // D7/D8 (td-1): no door runs tests anywhere anymore, sentinel or
+            // not, and every cap — this repo included — still owes a proof
+            // line; a sentinel repo's proof line names its command segment
+            // `none` and points the reason at the parity/docs check used.
             lines.push(format!(
-                "- Test gates disabled by repo declaration (commands.test: {NO_TEST_SENTINEL}) — cells cap on diff-backed outcomes; re-enable by recording a real commands.test."
+                "- Test gates disabled by repo declaration (commands.test: {NO_TEST_SENTINEL}) — every cap still records a proof line (command segment `{NO_TEST_SENTINEL}`, reason naming the parity/docs proof used, e.g. `{NO_TEST_SENTINEL} — green — docs pointer check`); recording a real commands.test re-enables CI's full-run net."
             ));
         } else if opt_truthy(commands.get("test")) {
             lines.push(

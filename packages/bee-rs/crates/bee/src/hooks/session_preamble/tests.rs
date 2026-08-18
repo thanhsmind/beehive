@@ -154,10 +154,17 @@ use crate::version::BEE_VERSION;
         // `commands.verify` is retired: recording one buys no block at all.
         write(tmp.path(), ".bee/config.json", r#"{"commands":{"verify":"npm test"}}"#);
         assert!(!render(tmp.path()).contains("### Standard commands"));
-        // The sentinel REPLACES the red paragraph with one loud line.
+        // The sentinel REPLACES the red paragraph with one loud line — and
+        // (test-doctrine D7/D8, td-1) that line still points to a required
+        // proof line, never a bare diff-backed cap.
         write(tmp.path(), ".bee/config.json", r#"{"commands":{"test":"none"}}"#);
         let text = render(tmp.path());
-        assert!(text.contains("- Test gates disabled by repo declaration (commands.test: none)"));
+        assert!(
+            text.contains(
+                "- Test gates disabled by repo declaration (commands.test: none) — every cap still records a proof line (command segment `none`, reason naming the parity/docs proof used, e.g. `none — green — docs pointer check`); recording a real commands.test re-enables CI's full-run net."
+            ),
+            "{text}"
+        );
         assert!(!text.contains("- Never build on red:"));
     }
 
