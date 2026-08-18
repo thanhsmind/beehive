@@ -4,7 +4,7 @@
   "title": "Add the append-only wave ledger on the bee side",
   "lane": "standard",
   "behavior_change": true,
-  "action": "Implement the wave ledger D10 locks, in the bee crate, NOT in fleet — the core records nothing, and this is bee's own record. One append-only row per wave, in the shape .bee/ already uses for backlog.jsonl, decisions.jsonl and capture-queue.jsonl: one JSON object per line, appended, never rewritten in place. A row carries the wave id, when it started, and per worker: the worker's name, its pane id, its worktree, the task it was given, its outcome, and a pointer to the evidence. Choose the file path and the exact field names — CONTEXT.md fixes the content, not the schema — and follow the existing ledger conventions in this crate for atomic append and for where under .bee/ it lives. Study how the existing ledgers are written before inventing anything. THE POINT OF THE LEDGER IS NOT THE RECORD, IT IS OCCUPANCY. The cockpit's four-slot cap is enforced today by the control model counting panes, and an agent that fails to name itself leaves a slot looking free so the next iteration over-spawns — a recorded Open Gap that D10 exists to close. So the ledger needs a read side, not only a write side: a way to ask how many workers a wave believes are live. Decide and implement what makes a row stale — a wave whose workers have all reported an outcome is closed, and a row with no outcome after some bound is not the same thing as a live worker — and write down the rule you chose. An unswept append-only log would reproduce the very over-spawn failure D10 removes, which is why the plan's risk map rates this MEDIUM rather than LOW. Tests: one wave leaves exactly one row; a row's worker outcomes round-trip; the occupancy read counts what is actually live and not what is merely recorded; and a stale row is either swept or provably ignored, whichever rule you chose.",
+  "action": "REWORK after a NEEDS_REVISION verdict on commit 9400633f. The append-only write side is correct and its tests are real — do NOT redo that. The read side is wrong, and the judge measured both directions on a scratchpad copy: a wave dispatched 90 minutes ago with one unresolved worker reports 0 live when the answer is 1, and a finished worker still reports 1 live when the answer is 0. Two root causes, fix both. ROOT CAUSE ONE, there is no close path. append_wave is the only writer and its own doc forbids calling it twice for a wave_id, while live_worker_count iterates every row with no folding by wave_id — so a worker that finishes can never stop counting. The fix keeps the file append-only: allow a LATER row for the same wave_id, and make the READER fold rows by wave_id so a subsequent row supersedes the earlier one per worker. Nothing is ever rewritten on disk; the fold happens at read time. Update append_wave's doc, which currently states the opposite. ROOT CAUSE TWO, occupancy is a timer question and it must be a liveness question. is_live has only two inputs — is the row closed, and is it younger than one hour — so nothing distinguishes an orphan from a worker still genuinely running, and an ordinary feature-sized worker outlives the bound. Make the correct read cross the ledger's UNRESOLVED pane ids against the backend's actual live pane list and count the intersection: the ledger says who should be there, the live list says who is. That closes the original Open Gap too, because a worker that never named its pane is still in the ledger with its pane id. Read the live list the same way the cockpit already does, from the bee side — do NOT reach into the fleet crate for it, which would blur D5. Keep the one-hour bound STRICTLY as the fallback used when the live list cannot be obtained, and say so in the doc where the rule is stated; the doc currently claims one hour errs toward false live over false stale, which is only true if every worker finishes inside an hour, and this feature's own sessions have not. TESTS. Re-run the judge's two probes as real tests: a 90-minute-old unresolved worker whose pane IS in the live list still counts as live; a worker whose outcome arrived in a later row for the same wave_id does not count, at any age. Add: a worker whose pane is absent from the live list does not count, whatever its age; and the fallback path, where the live list is unavailable and the timer decides, is exercised and its degraded nature is asserted rather than hidden.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "read_first": [
     "docs/history/herding-orchestration/CONTEXT.md",
@@ -18,24 +18,21 @@
   ],
   "must_haves": {
     "truths": [
-      "A wave appends exactly one row, and the file is only ever appended to.",
-      "A row carries the wave id, its start time, and per worker the name, pane id, worktree, task, outcome and an evidence pointer.",
-      "There is a read side that answers how many workers are live, and it is the answer occupancy will use instead of counting panes.",
-      "The rule for what makes a row stale is implemented and written down, and a stale row cannot be mistaken for a live worker.",
-      "The ledger lives in the bee crate; the fleet crate gains no knowledge of it."
-    ],
-    "artifacts": [
-      "the append-only wave ledger with its write side, its read side, and its staleness rule",
-      "tests covering one row per wave, outcome round-trip, a live-count that excludes stale rows, and the staleness rule itself"
-    ],
-    "key_links": [
-      "The occupancy read and the ledger writer agree on what a live worker is."
+      "A later row for the same wave_id supersedes the earlier one per worker at read time, and nothing on disk is ever rewritten.",
+      "append_wave's documentation no longer forbids a second row for a wave_id.",
+      "Occupancy crosses the ledger's unresolved pane ids against the backend's live pane list and counts the intersection.",
+      "A 90-minute-old unresolved worker whose pane is still live counts as live — the exact case that measured 0 before.",
+      "A worker whose outcome arrived in a later row does not count, at any age — the exact case that measured 1 before.",
+      "A worker whose pane is absent from the live list does not count, whatever its age.",
+      "The one-hour bound is used only when the live list cannot be obtained, and the doc says so where the rule is stated.",
+      "The fallback path is exercised by a test and its degraded nature is asserted, not hidden.",
+      "The live list is read from the bee side; the ledger does not reach into the fleet crate."
     ],
     "prohibitions": [
-      "Do not put the ledger in the fleet crate — D10 says the core records nothing.",
-      "Do not rewrite rows in place; the log is append-only.",
-      "Do not change role-dispatch.md section 4 in this cell — that move is its own cell.",
-      "Do not invent a new file convention where .bee/ already has one."
+      "Do not rewrite or delete rows on disk — the fold is a read-time operation.",
+      "Do not keep the timer as the primary occupancy answer.",
+      "Do not import the fleet crate from the bee-side ledger.",
+      "Do not change role-dispatch.md section 4 in this cell — that move is its own cell."
     ]
   },
   "status": "open",

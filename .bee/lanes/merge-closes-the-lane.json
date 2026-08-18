@@ -31,9 +31,8 @@
   "last_scribing_run": {
     "feature": "merge-closes-the-lane",
     "date": "2026-08-18",
-    "at": "2026-08-18T10:45:11.151Z",
+    "at": "2026-08-18T11:09:56.436Z",
     "areas_synced": [
-      "workflow-state",
       "worktree-parallelism"
     ],
     "next_action": "none"

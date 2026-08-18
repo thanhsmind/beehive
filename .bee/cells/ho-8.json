@@ -4,7 +4,7 @@
   "title": "Implement the herdr backend behind the worker-backend trait",
   "lane": "standard",
   "behavior_change": true,
-  "action": "Implement WorkerBackend against the real herdr CLI, as a module inside the fleet crate beside the fake one, per D16. Read skills/bee-herding/references/spawn-proof.md first — it is a recording of a real herdr 0.8.0 round trip and it is the authority on what the commands actually return, ahead of any documentation. `herdr --skill` prints the installed binary's own agent skill and is the second authority; the per-verb --help is the third. Shell out with std::process::Command, argv-based, never a shell string, and null stdin — copy the pattern at packages/bee-rs/crates/bee/src/verbs/worktree/git.rs:86-91. Parse JSON responses; read identifiers out of them rather than predicting them. THE STATUS MAPPING IS THE HARD PART AND IT IS WHERE THE BUGS LIVE. herdr reports idle, working, blocked, done, unknown. Map them onto the trait's ready, working, blocked, finished, unverifiable — and treat every failure of the lookup itself as unverifiable, never as a safe default: a non-zero exit, an unparseable body, a null pane field, a missing agent_status key, and a value outside herdr's enum are all unverifiable. herdr's own error contract is that server errors are JSON on stderr with exit 1 and syntax errors exit 2. Carry into the code, as comments a later reader will trip over, the two things the live run found that no documentation states: agent start has NO --no-focus flag and moves the workspace's global tab focus; and idle versus done tracks the individual pane's own focused field rather than merely whether the tab has been seen, so a done reading is NOT proof that work happened. Implement the D15 obligation while you are here: give the trait a canonical-identity step so a worker name and its backend-side pane id collapse to one target. Whether that is a new trait method or a backend-side pre-pass is yours to choose, but the generic choreography must key its dedupe on the canonical id and must not learn herdr's identity scheme. Add the invariant 8 test that D15 names: a name and its pane id pointing at one target produce exactly one send, one baseline and one succeeded entry. TESTS. The three hazards the distill recorded on this exact path each need one: a prompt sent to an agent that is already working must not report the previous turn's completion as this send's; a response longer than the read window must still be recovered, and herdr's own documented fallback is to have the agent write its reply to a file and return the path; and a status read must not depend on the pane having been focused. Drive them through a fake herdr process rather than a live server — the crate must stay testable with no herdr installed, which is what D7 made the trait for. A PATH-prepended stub binary is the established shape here; packages/bee-rs/crates/bee/src/shell.rs:74-89 already does a PATH-prepend for Git Bash and is the precedent.",
+  "action": "REWORK after a NEEDS_REVISION verdict on commit 76656a11. The backend logic itself is sound — the status mapping, the fail-closed folding, canonical identity and the three hazard tests all survived mutation. Do NOT redo or revert that. Fix the two failures. ITEM ONE, the Windows gap (judge check H5): tests/herdr_backend.rs carries a file-level cfg(unix), so 17 of 57 fleet tests never run on Windows, and the judge measured that ALL SEVEN backend mutations survive a run restricted to what Windows compiles — on Windows the backend could fail open on every lookup failure, pass --wait, drop spill recovery and stop refusing anything, with CI green. D4 makes Windows a required outcome, and .github/workflows/windows.yml states in words that the Rust suite runs unexcluded and that a Windows-only failure is a real failure rather than a suite to skip. THE FIX IS STRUCTURAL, not a second stub: split the backend into a pure half and a thin process half. The pure half builds argv and interprets a response — given bytes and an exit status, it returns a WorkerStatus, a canonical id, a recovered output, or a typed error. It touches no process, so its tests run on every platform. The thin half only spawns and hands the bytes over. Move every behaviour the seven mutations covered into the pure half and test it there: the fail-closed folding of non-zero exit, unparseable body, absent target and missing-or-null field; canonical identity; the no---wait rule; spill recovery; and start's refusal. What may remain unix-only is a small set of tests proving the process plumbing itself works, and those must carry no behaviour a mutation could hide in. Verify the fix the way the judge did: run the mutations again against ONLY the test set Windows compiles, and report which now die. Any mutation still surviving that run is the cell unfinished. ITEM TWO, the hardcoded kind (judge check H6): HerdrBackend::start does not merely refuse — for a pane-id-shaped name it spawns and passes --kind claude as a hardcoded literal, and a new test pins that constant green. D14 requires the kind to come from herding.agent_command token 0, with an unrecognised token 0 surfacing as a typed error naming that config key. But fleet must not read bee's config (D2), so the fix is layering, not a config read: HerdrBackend takes the agent kind and the agent arguments as CONSTRUCTION PARAMETERS, and the bee side — D17's bee herding wave verb, a later cell — is what reads herding.agent_command, splits token 0 into the kind and the remainder into the arguments, and raises D14's typed error when token 0 is not a kind herdr knows. Remove the hardcoded literal, take the kind at construction, and change the test that currently asserts the constant so it asserts the CONSTRUCTED kind reaches the argv instead. Document at the constructor that D14's mapping is the caller's obligation and name the key, so the next implementer meets it.",
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "read_first": [
     "docs/history/herding-orchestration/CONTEXT.md",
@@ -18,29 +18,21 @@
   ],
   "must_haves": {
     "truths": [
-      "The herdr backend implements the same WorkerBackend trait the fake does, with no test-only method added to the trait.",
-      "Every herdr status lookup failure — non-zero exit, unparseable body, null pane, missing key, off-enum value — becomes unverifiable, never a safe default.",
-      "A worker name and its backend-side pane id collapse to one target, proven by a test asserting one send, one baseline and one succeeded entry.",
-      "The generic choreography keys its dedupe on a canonical identity and contains no herdr-specific knowledge.",
-      "A prompt sent to an already-working agent does not report the previous turn's completion as this send's.",
-      "A reply longer than the read window is still recovered.",
-      "A status read does not require the pane to have been focused first.",
-      "The whole crate's tests pass with no herdr binary installed."
-    ],
-    "artifacts": [
-      "the herdr backend module inside the fleet crate, argv-based and JSON-parsing, with the focus-dependence and tab-focus findings recorded as comments where a later reader meets them",
-      "the canonical-identity step satisfying D15, with the invariant 8 test it names",
-      "three hazard tests — already-working prompt, oversized reply, unfocused status read — driven through a stub herdr rather than a live server"
-    ],
-    "key_links": [
-      "The choreography's dedupe and the herdr backend's identity resolution meet at the canonical id and nowhere else."
+      "The backend is split so that argv construction and response interpretation are pure functions with no process dependency.",
+      "Every behaviour the seven judge mutations covered is tested by a test that runs on Windows.",
+      "Re-running those seven mutations against only the test set Windows compiles kills all seven — reported, not assumed.",
+      "Any test still gated to unix proves process plumbing only, and no behaviour hides behind that gate.",
+      "HerdrBackend takes the agent kind and agent arguments at construction; no --kind literal appears in the backend.",
+      "The test that pinned --kind claude now asserts the constructed kind reaches the argv instead.",
+      "The constructor documents that deriving the kind from herding.agent_command token 0, and raising D14's typed error naming that key, is the caller's obligation.",
+      "The status mapping, fail-closed folding, canonical identity and three hazard behaviours are unchanged in substance."
     ],
     "prohibitions": [
-      "Do not put any bee concept — cell, lane, worktree, gate, proof — into the fleet crate.",
-      "Do not build a shell command string; use argv and null stdin.",
-      "Do not require a running herdr server for any test.",
-      "Do not treat a failed status lookup as safe.",
-      "Do not add an async runtime."
+      "Do not read bee configuration from the fleet crate — D2.",
+      "Do not weaken or delete any existing hazard or invariant test; move it if you must, keep its assertion.",
+      "Do not leave a behaviour testable only on unix.",
+      "Do not add an async runtime or a dependency.",
+      "Do not implement the bee-side wave verb here — that is D17's own cell."
     ]
   },
   "status": "open",
