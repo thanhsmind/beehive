@@ -200,10 +200,22 @@ fn invariant_4_fail_closed_status_is_never_treated_as_safe() {
 
 /// Ordering Invariant 5 — partial-failure isolation: one target's `send`
 /// failing mid-fan-out must not abandon a target dispatched earlier (or
-/// later) in the same wave.
+/// later) in the same wave. `w0` is dispatched successfully BEFORE `w1`'s
+/// send fails — that ordering is load-bearing: a test that only dispatches
+/// the surviving target AFTER the failure (as an earlier version of this
+/// test did) never exercises "earlier workers keep running and are still
+/// collected", because nothing has been dispatched yet at the moment the
+/// failure happens. `w2`, dispatched after `w1`, keeps the "or later" half
+/// covered too.
 #[test]
 fn invariant_5_one_send_failing_does_not_abandon_other_dispatched_targets() {
     let backend = FakeBackend::new();
+
+    backend.set_output("w0", "baseline, no marker");
+    backend.schedule_output_on_send("w0", "baseline, no marker T5W0 done");
+    backend.schedule_status("w0", RawStatus::Value(WorkerStatus::Ready)); // phase 2
+    backend.schedule_status("w0", RawStatus::Value(WorkerStatus::Ready)); // phase 4
+    backend.schedule_status("w0", RawStatus::Value(WorkerStatus::Finished)); // wait poll
 
     backend.schedule_status("w1", RawStatus::Value(WorkerStatus::Ready)); // phase 2
     backend.schedule_status("w1", RawStatus::Value(WorkerStatus::Ready)); // phase 4
@@ -217,6 +229,7 @@ fn invariant_5_one_send_failing_does_not_abandon_other_dispatched_targets() {
 
     let wave = Wave::new(
         vec![
+            WorkerSpec::new("w0", "T5W0"),
             WorkerSpec::new("w1", "T5W1"),
             WorkerSpec::new("w2", "T5W2"),
         ],
@@ -230,11 +243,14 @@ fn invariant_5_one_send_failing_does_not_abandon_other_dispatched_targets() {
         vec!["w1".to_string()],
         "w1's send failure must be isolated to w1; got {result:?}"
     );
+    let mut succeeded = result.succeeded.clone();
+    succeeded.sort();
     assert_eq!(
-        result.succeeded,
-        vec!["w2".to_string()],
-        "w2, dispatched after w1's send failed, must still be waited on and succeed; got \
-         {result:?}"
+        succeeded,
+        vec!["w0".to_string(), "w2".to_string()],
+        "w0, dispatched successfully BEFORE w1's send failed, and w2, dispatched after, must \
+         both still be waited on and land in succeeded — a target already dispatched must never \
+         be abandoned just because a later target's send failed; got {result:?}"
     );
     assert!(
         !result.is_success(),
@@ -289,6 +305,10 @@ fn invariant_6_a_dropped_target_fails_the_wave_even_if_every_sent_target_succeed
 /// that settles on `Finished` (confirmed) on its first wait poll must not
 /// be made to wait out the rest of a much longer `worker_settle` ceiling.
 /// Proven by counting backend calls, never by measuring elapsed time.
+/// Limit of this proxy: the call count pins exactly one wait-loop
+/// iteration having run, so it cannot see a wait inserted OUTSIDE the
+/// poll loop — a sleep placed before the loop starts leaves the count at
+/// 3 and this test green, only slower.
 #[test]
 fn invariant_7_settling_on_finished_early_does_not_wait_out_the_full_ceiling() {
     let backend = FakeBackend::new();
@@ -357,6 +377,49 @@ fn invariant_8_a_duplicate_target_name_is_sent_to_exactly_once() {
         "a name appearing twice must still cost exactly one preflight read, one re-check, and \
          one wait poll — not two of each; got {} calls",
         backend.status_call_count("w1")
+    );
+}
+
+/// Supporting truth (not one of the eight numbered invariants, but the
+/// `unverifiable_after_send` clause of `WaveResult::is_success` needs its
+/// own proof): a wave whose ONLY populated bucket is
+/// `unverifiable_after_send` must still be reported as a failure. Every
+/// other invariant test above also populates a different bucket
+/// (`send_failed`, `timed_out`, and so on) alongside
+/// `unverifiable_after_send`, so none of them alone would notice if the
+/// `unverifiable_after_send` clause were dropped from `is_success` — this
+/// test isolates that one clause by keeping every other bucket empty.
+#[test]
+fn is_success_treats_unverifiable_after_send_as_failure_even_when_no_other_bucket_is_populated() {
+    let backend = FakeBackend::new();
+    backend.set_output("w1", "baseline, no marker");
+    backend.schedule_status("w1", RawStatus::Value(WorkerStatus::Ready)); // phase 2
+    backend.schedule_status("w1", RawStatus::Value(WorkerStatus::Ready)); // phase 4
+    backend.schedule_status("w1", RawStatus::LookupFailed); // wait poll: fail-closed -> Unverifiable
+
+    let wave = one_worker_wave(WorkerSpec::new("w1", "UNVERIFYMARK"), small_timeouts());
+    let result = run_wave(&backend, &wave);
+
+    assert_eq!(
+        result.unverifiable_after_send,
+        vec!["w1".to_string()],
+        "the only sent target's status must go unverifiable while waiting; got {result:?}"
+    );
+    assert!(
+        result.resolution_failed.is_empty()
+            && result.unsafe_at_preflight.is_empty()
+            && result.flipped_before_send.is_empty()
+            && result.send_failed.is_empty()
+            && result.timed_out.is_empty()
+            && result.succeeded.is_empty(),
+        "every other bucket must stay empty so this test isolates the unverifiable_after_send \
+         clause of is_success; got {result:?}"
+    );
+    assert!(
+        !result.is_success(),
+        "a wave whose only populated bucket is unverifiable_after_send must still be a failure \
+         — this is exactly what pins the unverifiable_after_send clause in is_success; got \
+         {result:?}"
     );
 }
 

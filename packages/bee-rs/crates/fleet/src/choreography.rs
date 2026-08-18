@@ -82,9 +82,9 @@ impl WaveResult {
 /// core, `WorkerSpec::name` IS the canonical identity — the trait exposes
 /// no separate name-to-canonical-id resolution, so a name and an alias
 /// referring to the same backend-side target (for example a herdr pane
-/// id) collapse only in a later, backend-specific phase, not here. This
-/// MUST run before any status is read (phase 2) or anything is sent
-/// (phase 4/5).
+/// id) collapse only in a later, backend-specific phase, not here (D2;
+/// herding-orchestration D15 — `fb8a8628`). This MUST run before any
+/// status is read (phase 2) or anything is sent (phase 4/5).
 fn resolve_and_dedupe(workers: &[WorkerSpec]) -> Vec<WorkerSpec> {
     let mut seen = HashSet::new();
     let mut deduped = Vec::with_capacity(workers.len());

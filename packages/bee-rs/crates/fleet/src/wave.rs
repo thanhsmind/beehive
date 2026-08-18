@@ -10,10 +10,15 @@ use std::time::Duration;
 /// it is to be given once the choreography sends to it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkerSpec {
-    /// The name the backend resolves this worker by. Distinct worker
-    /// specs that resolve to the same underlying target must be deduped
-    /// before dispatch (Ordering Invariant 8) — that dedupe is the
-    /// choreography's job, not this type's.
+    /// The name the backend resolves this worker by. The choreography
+    /// dedupes specs whose `name` is the exact same string before
+    /// dispatch (Ordering Invariant 8) — that string-level dedupe is the
+    /// choreography's job, not this type's. It does NOT collapse two
+    /// different name strings that resolve to the same underlying target
+    /// (for example a name and its backend-side pane id): canonical-
+    /// identity resolution is backend-layer work, because the generic
+    /// core cannot know a backend's identity scheme without violating D2
+    /// (herding-orchestration D15 — `fb8a8628`).
     pub name: String,
     /// The task text this worker is sent once the choreography dispatches
     /// to it.
