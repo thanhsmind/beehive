@@ -1,0 +1,50 @@
+{
+  "id": "tf-2",
+  "feature": "two-flows",
+  "lane": "small",
+  "title": "Make the Discovery flow whole: guarded claims, spike recipe, primary-source rule",
+  "behavior_change": false,
+  "deps": [
+    "tf-1"
+  ],
+  "files": [
+    "skills/bee-wayfinding/SKILL.md",
+    "skills/bee-wayfinding/references/wayfinding-reference.md",
+    "skills/bee-researching/references/research-protocol.md",
+    "expertise/planning.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/two-flows/CONTEXT.md",
+    "docs/history/research/pocock-shaping-trio-distill.md",
+    "skills/bee-wayfinding/SKILL.md",
+    "skills/bee-wayfinding/references/wayfinding-reference.md",
+    "skills/bee-writing-skills/references/prompt-style.md"
+  ],
+  "action": "Implement CONTEXT.md D5-D8 (docs/history/two-flows/CONTEXT.md) exactly; match each file's voice. (1) PROVE D5 FIRST, per D6: pick a real ticket path under docs/discovery/ (for example docs/discovery/test-doctrine/tickets/001-enforcement-lines.md), run .bee/bin/bee reservations reserve --agent probe-tf2 --cell two-flows-probe --path <that path>, then .bee/bin/bee reservations list to observe it, then .bee/bin/bee reservations release for the same agent+path. Record the observed output in the finish report's deviations or outcome. If the reserve is refused for a docs path, DO NOT write the guard rule as law — instead write the fallback: the claimed-by line stays convention-only, plus an explicit stale-claim sweep rule, and report the refusal. (2) On a successful probe, write D5: in skills/bee-wayfinding/SKILL.md's 'Later sessions' claim step and in references/wayfinding-reference.md's resolution protocol, state that claiming a ticket reserves its file (bee reservations reserve --agent <name> --cell <effort>-wayfinding --path docs/discovery/<effort>/tickets/NNN-<slug>.md) alongside the display-only claimed-by line, that the frontier is open, unblocked, and UNRESERVED tickets, that a reservation deny means take another ticket and report the conflict rather than writing through it, and that a dead session's claim expires with its heartbeat instead of lying forever. Replace the current convention-only wording (the 'convention-only in v1 — no CLI guard' line in the reference and the matching SKILL.md line) so the two files agree; keep blocked-by convention-only and say so. (3) Add a one-line flow-position note near the top of skills/bee-wayfinding/SKILL.md: it is the spine of the Discovery flow, and the flow exits into bee-shaping's Lock. (4) D7: in references/wayfinding-reference.md 'Spike rules', add the LOGIC-page recipe — the page reads top to bottom as title plus the question, a labelled state panel re-rendered after every action (labelled fields, never raw JSON), one free-play button per action, and guided-walkthrough steps that each reset to a known initial state — and the cap that more than five variants stops being different and starts being noise. Keep it to a few lines in the existing voice. (5) D8: in skills/bee-researching/references/research-protocol.md step 4, state the primary-source rule — a secondary write-up is not evidence; follow every claim back to the source that owns it (official docs, the source code, the spec, the first-party API). (6) expertise/planning.md 'Spike craft': add the same five-variant cap in one clause, consistent with the wayfinding wording. (7) Run the regen chain in this cell: bee dev regen, then bee dev release-manifest --write; the .bee/expertise tree is the vendored copy of expertise/ and must end identical. One commit, imperative subject, cell id trailer.",
+  "verify": ".bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "The reservation probe was actually run and its result recorded, and the written rule matches what the probe proved",
+      "SKILL.md and the reference agree on the claim rule; no convention-only claim wording is left behind",
+      "Frontier is defined as open, unblocked, and unreserved",
+      "The LOGIC-page recipe, the five-variant cap, and the primary-source rule all landed",
+      "Regen chain ran; manifest check clean; vendored .bee/expertise identical to sources"
+    ]
+  },
+  "status": "open",
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

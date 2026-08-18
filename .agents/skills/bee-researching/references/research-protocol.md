@@ -41,7 +41,7 @@ Prefer sources close to the repo's stack: the framework repo, the library repo, 
 
 ## 4. Current Official Docs
 
-Capability: `web-docs-search` — fallback WebSearch/WebFetch/browser. Bias toward official domains and docs matching the repo's installed versions; use beta/canary guidance only when specifically relevant. The step answers:
+Capability: `web-docs-search` — fallback WebSearch/WebFetch/browser. Bias toward official domains and docs matching the repo's installed versions; use beta/canary guidance only when specifically relevant. A secondary write-up is not evidence: follow every claim back to the source that owns it — official docs, the source code, the spec, the first-party API. The step answers:
 
 - does the framework/library already support the requested capability?
 - what is the currently recommended API or workflow?

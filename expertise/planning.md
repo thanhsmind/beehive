@@ -184,7 +184,8 @@ The question's shape decides the spike's shape:
   structurally different variants: different layout, different
   information hierarchy, different primary affordance. Variants that
   differ only in color or copy answer nothing — that is a tweak wearing
-  a spike's clothes.
+  a spike's clothes. More than five variants stops being different and
+  starts being noise.
 
 Both shapes share the same restraint: no tests, no error handling beyond
 what keeps the thing runnable, no abstractions. A spike exists to learn

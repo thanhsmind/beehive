@@ -105,17 +105,18 @@ The result is meant to be *trustworthy, not ceremonial*: every "done" is backed 
 
 A hive is a staged, self-regulating system — each bee role maps to a workflow stage:
 
-| Hive role | bee skill | What it does |
-|---|---|---|
-| The hive itself | `bee-hive` | Route the workflow: session start, the next skill, gates, onboarding, and the gate-bypass level — load first in every session |
-| Scout bees | `bee-shaping` | Shape fuzzy intent into locked, buildable decisions — one front door for interviewing (Explore), unattended triage (Qualify), decision locking (Lock), and the reviewable implement plan (Brief) |
-| Waggle dance | `bee-planning` | Shape approved-scope work into an executable plan: classify the lane, research just enough, draft the smallest honest shape, gate it, prepare current-slice cells |
-| The swarm | `bee-swarming` | Run approved cells to done — orchestrate bounded workers over gate-approved cells, or execute exactly one assigned cell inside a dispatched worker |
-| Inspector bees | `bee-reviewing` | The multi-agent review gate — severity findings, artifact verification, user acceptance — over an immutable scope the user explicitly asked to review |
-| Honey | `bee-capturing` | Capture what settles into durable records — area specs (Scribe), decisions and learnings (Compound) — the moment it settles |
-| Forager bees | `bee-researching` | Evidence-labeled research into unfamiliar, ambiguous, or version-sensitive territory |
-| Undertaker bees | `bee-grooming` | Hunt and kill tech debt in the current project — dead code, stale docs, TODO/stubs, duplication, drifted specs |
-| The keeper's cockpit | `bee-herding` | The autonomous cockpit's three roles — bootstrap, dispatch, merge — that start safe backlog work in fresh worktrees and land finished ones |
+| Hive role | bee skill | Flow | What it does |
+|---|---|---|---|
+| The hive itself | `bee-hive` | Both | Route the workflow: session start, the next skill, gates, onboarding, and the gate-bypass level — load first in every session |
+| Pathfinder bees | `bee-wayfinding` | Discovery | Chart a fog-state idea from an open question to a locked decision — the spine of the Discovery flow; research, spike, and grilling resolve its tickets |
+| Scout bees | `bee-shaping` | Main | Shape fuzzy intent into locked, buildable decisions — one front door for interviewing (Explore), unattended triage (Qualify), decision locking (Lock), and the reviewable implement plan (Brief) |
+| Waggle dance | `bee-planning` | Main | Shape approved-scope work into an executable plan: classify the lane, research just enough, draft the smallest honest shape, gate it, prepare current-slice cells |
+| The swarm | `bee-swarming` | Main | Run approved cells to done — orchestrate bounded workers over gate-approved cells, or execute exactly one assigned cell inside a dispatched worker |
+| Inspector bees | `bee-reviewing` | Main | The multi-agent review gate — severity findings, artifact verification, user acceptance — over an immutable scope the user explicitly asked to review |
+| Honey | `bee-capturing` | Main | Capture what settles into durable records — area specs (Scribe), decisions and learnings (Compound) — the moment it settles |
+| Forager bees | `bee-researching` | Both | Evidence-labeled research into unfamiliar, ambiguous, or version-sensitive territory |
+| Undertaker bees | `bee-grooming` | — | Hunt and kill tech debt in the current project — dead code, stale docs, TODO/stubs, duplication, drifted specs |
+| The keeper's cockpit | `bee-herding` | — | The autonomous cockpit's three roles — bootstrap, dispatch, merge — that start safe backlog work in fresh worktrees and land finished ones |
 
 Gate-bypass autopilot lives inside `bee-hive` ("Gates"). The maintainer guides for building bee's own skills and running its self-improvement loop moved out of the product into [docs/handbook/writing-skills.md](docs/handbook/writing-skills.md) and [docs/handbook/evolving.md](docs/handbook/evolving.md).
 
@@ -124,6 +125,8 @@ Gate-bypass autopilot lives inside `bee-hive` ("Gates"). The maintainer guides f
 ## The workflow, explained simply
 
 You describe what you want. bee routes it by size and risk, then walks it through the chain below. **Bold = you decide; everything else the agent does on its own.**
+
+bee routes every request into one of two flows. A nameable outcome lands in the **Main flow** — the chain below. Fog, or an effort too big to name in one sitting, lands in the **Discovery flow** first: `bee-wayfinding` charts it down to a locked decision, then hands off into the chain below.
 
 ```
         bee-hive               reads your request, picks the lane, routes
