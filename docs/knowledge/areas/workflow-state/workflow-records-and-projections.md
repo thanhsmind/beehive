@@ -646,6 +646,39 @@ generator; `p-62f0566d` (backlog) already tracks closing that gap generally.
   alone. `bee state waiting-on set` keeps the narrower resolution and its
   refusal wording unchanged (merge-closes-the-lane D3, 500fa2f9, extends
   waiting-on-pair-clear f9fd9d46).
+- R130 — R128's "only agent-facing doors" is not "only writers": the
+  session-stop hook also sets a mark, on EVERY turn end, without inferring
+  anything from what the agent said. A turn end is the definitional fact
+  that control returned to the human, so no text heuristic, phrase table,
+  or language detection decides it — the event alone does. That mark's
+  `kind` is `turn-end`, and it is what separates "the run is idle, a person
+  holds the next move" from "the run is blocked on a person": a reader
+  wanting only real blocks filters `kind != turn-end`. The hook never
+  overwrites a live mark, so an agent-declared `gate` or `question` always
+  outranks it; it fills an empty slot or does nothing. Its `subject` is the
+  turn's last non-empty assistant line, trimmed and truncated, with a fixed
+  fallback when that line is blank, because R125 refuses an empty subject.
+  The write is best-effort in the same shape as the `UserPromptSubmit`
+  clear: a failure is logged and the hook still emits its normal output
+  (auto-wait-mark D1/D2/D5/D6, awm-2).
+- R131 — A surface that renders a live wait as a BLOCKER excludes a
+  `turn-end` mark, because a turn end is by definition not a blocker; a
+  surface that merely DISPLAYS the wait keeps showing all three kinds.
+  `bee orient` is the one blocker-shaped surface and carries the exception;
+  `bee status`, the text status renderer, the session preamble and the
+  compact capsule all keep reporting every kind. This is why R127's "every
+  surface that reports run_state also reports a live wait" still holds
+  while orient's blockers array does not (auto-wait-mark D3/D4, awm-1).
+- R132 — The hook reads the session transcript exactly once per turn end.
+  One resolver and one read serve both the performance rollup and the
+  turn-end subject: the rollup hands its already-parsed events onward, and
+  every fallible bookkeeping step that follows is arranged so a late
+  failure cannot discard them. Two successive attempts leaked a second read
+  here — the first re-read outright, the second re-read only when the
+  rollup failed after its own read, while carrying a comment asserting that
+  path had no caller. Both were caught by review, not by the suite that was
+  green at the time; the guard that holds now is a test counting reads, not
+  a reading of the call graph (auto-wait-mark, awm-2 rework 2).
 - R105 — A feature's workflow record is created through one idempotent seam
   (asked twice, it changes nothing) and retired through a verb taking exactly one
   of three modes — by feature, by id, or all-but-active; the active feature's own
