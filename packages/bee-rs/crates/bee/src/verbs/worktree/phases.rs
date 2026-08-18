@@ -9,6 +9,7 @@ use crate::roots::{resolve_roots_core, Resolution};
 use crate::verbs::reservations::{js_numberify, js_trim, now_iso, parse_flags, Err2, FlagV, Flags};
 use crate::verbs::workspace_store as ws;
 use crate::verbs::{emit_no_root_error, record_timing};
+use crate::uat::uat_gate_applies_to_lane;
 use crate::{jsjson, lock};
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -721,16 +722,9 @@ pub(crate) fn uat_before_merge_config(main_root: &Path) -> Option<bool> {
     }
 }
 
-/// uat-gate-before-merge D1: does `mode` (a record's risk-lane
-/// classification) require uat approval before merge? Only the known
-/// LOW-risk lanes are exempt (`tiny`/`small`/`docs`/`spike`, i.e.
-/// `ROUTE_LANE_VALUES` minus `standard`/`high-risk`) — a missing record, a
-/// null mode, or any value this port does not recognize fails CLOSED as
-/// "standard", because an unclassified feature is exactly the case a silent
-/// skip would be most dangerous for.
-fn uat_gate_applies_to_lane(mode: Option<&str>) -> bool {
-    !matches!(mode, Some("tiny") | Some("small") | Some("docs") | Some("spike"))
-}
+// uat-stop-placement D2 (docs/history/uat-stop-placement/CONTEXT.md): the
+// lane rule now lives once, in `crate::uat` (imported above), so the merge
+// side and the close side never carry two copies of it.
 
 /// The merge-time uat precondition's two fail-closed reads.
 struct UatPrecheck {
