@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"herding-orchestration\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 77d7cac; capture what settled, then bee close --feature herding-orchestration.",
   "created_at": "2026-08-18T08:07:25.780Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",
