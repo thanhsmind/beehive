@@ -3,7 +3,7 @@
   "feature": "doc-deferral-baseline",
   "title": "Give bee close's doc-deferral door a tracked, seed-once baseline",
   "lane": "small",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "D1",
@@ -56,14 +56,16 @@
   "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
   "trace": {
     "worker": "ddb-1-r",
-    "outcome": "doc-deferral door now blocks only NEW deferral-shaped lines via a seeded, git-tracked content baseline",
+    "outcome": "bee close's doc-deferral door now blocks only NEW deferral-shaped lines, against a tracked baseline seeded once repo-wide",
     "files_changed": [
       "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
       "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
     ],
-    "deviations": [],
+    "deviations": [
+      "The seed writes at close.rs:1828, above the proof refusal at :1830, so a close that REFUSES at a later door leaves the baseline file on disk but never reaches commit_close_bookkeeping at :2224. Not fixed. The next green close does commit it: the bookkeeping add stages the bee store with -A, which picks up untracked files; the porcelain status reports untracked as \"??\" so the clean early-return will not swallow it; and the path is not gitignored. Residual risk, named rather than hidden: if that untracked file is DISCARDED before any green close (a hard clean, or tearing down a feature worktree that could not carry an uncommitted file), the later re-seed freezes the docs tree as of THEN and silently adopts every deferral line added meanwhile. Narrow: it needs the first-ever close in a repo lineage to refuse AND the file to be lost before any green close. An earlier draft of this deviation also claimed that a deterministic repo-wide seed regenerates identically elsewhere; the judge refuted it (determinism holds for a fixed docs tree, not across time) and it is withdrawn."
+    ],
     "friction": null,
-    "capped_at": "2026-08-18T16:06:55.702Z",
+    "capped_at": "2026-08-19T03:30:02.036Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
@@ -71,15 +73,15 @@
     "claim_session": "57dd6bbf-d280-4c42-9da6-61ed72419a29",
     "claimed_at": "2026-08-18T16:23:23.160Z",
     "report": {
-      "outcome": "doc-deferral door now blocks only NEW deferral-shaped lines via a seeded, git-tracked content baseline",
-      "commit": "f89dd43",
+      "outcome": "bee close's doc-deferral door now blocks only NEW deferral-shaped lines, against a tracked baseline seeded once repo-wide",
+      "commit": "cd80b0ca",
       "files": [
         "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
         "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
       ],
-      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee — 2112 passed, 11 ignored, 0 failed — full crate suite covers the changed door plus every existing close/commit-bookkeeping test that could regress from the new write",
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — 18 suites, 2116 passed, 0 failed — full crate suite: the door sits beside the bookkeeping-commit tests that an always-written baseline file could regress, three of which pin that a close with nothing to record leaves the bee store untouched",
       "deviations": [
-        "D2 says the seed run writes the baseline file on the first run that finds none; narrowed to skip the write when zero lines were flagged that run (an absent baseline and an empty-files baseline are behaviorally identical for every future match), because three existing pinned tests (clean_store_green_close_reports_reason_clean, green_close_commits_only_dirty_bee_paths_leaving_unrelated_dirt_uncommitted, linked_worktree_root_commits_on_its_own_branch) pin that a real close with nothing to record leaves .bee untouched"
+        "seed write precedes a later door's refusal; see the recorded deviation"
       ]
     },
     "warnings": [],
@@ -182,6 +184,222 @@
         "judge_model": "opus",
         "model_independence": "confirmed",
         "recorded_at": "2026-08-18T16:22:24.395Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "DEV-A",
+            "status": "PASS",
+            "evidence": "(a) close.rs:1274-1286 — the Missing arm now writes unconditionally; the !candidates.is_empty() gate is gone. The judge's OWN probe, injected into a scratch copy rather than reusing the worker's tests: judge_empty_seed_writes_and_then_enforces ok — a seed over docs with NO deferral line still creates .bee/doc-deferral-baseline.json, and a deferral line added afterwards BLOCKS, while the baseline bytes are unchanged by the blocking run. (b) close.rs:1168-1175 doc_deferral_seed_files walks root/docs via list_bundle_markdown; close.rs:1245-1246 uses it for the seed while close.rs:1236-1237 keeps doc_deferral_scan_files for enforcement. Own probe judge_seed_freezes_a_docs_file_outside_the_feature_scan_set ok asserts the scan set is exactly one file, yet the baseline JSON contains deferral lines from docs/specs/ and from another area, and the later close of that other feature returns clear. Non-docs markdown (README.md, packages/x/notes.md) is absent. Extra probe judge_seed_when_bee_dir_absent ok — write_json_atomic creates .bee/ when missing, so the seed survives a fresh repo."
+          },
+          {
+            "id": "REGRESS",
+            "status": "PASS",
+            "evidence": "All six pre-existing door tests call write_empty_doc_deferral_baseline (ENFORCE fixture) at tests.rs:3151, :3166, :3185, :3205, :3216, :3239; helper at tests.rs:3117. Independent mutation runs in a scratch copy: (M1) disabling the fence exemption FAILED doc_deferral_door_exempts_fenced_code. (M2) disabling the citation escape FAILED both doc_deferral_door_clears_with_a_registered_trigger_citation and the new uncovered-line citation test. (M3) neutralising the docs/history/<feature>/ union in doc_deferral_scan_files FAILED doc_deferral_door_scan_set_includes_the_on_disk_context_md_with_no_capped_cells and close_refuses_at_the_doc_deferral_door. (M4) stubbing has_doc_deferral_decision to None FAILED the demotion test. (M6) flipping the final Door blocking flag FAILED five tests including blocks_a_deferral_line_with_no_registered_trigger. Every one of the six dies to at least one mutation; none is vacuous."
+          },
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "tests.rs:3266-3280 asserts the exact on-disk JSON after a seed. Green in the full suite and in the judge's own unmutated scratch run."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "tests.rs:3305-3321 blocks the added line and asserts the seeded line stays out of the detail. Independently reproduced by the judge's own empty-seed probe."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "tests.rs:3327-3342 inserts two unrelated lines above the baselined line and asserts clear. Identity is close.rs:1293 set-contains on normalized content, never an index."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "tests.rs:3287-3299 compares baseline bytes after seed versus after enforce. Determinism comes from the BTreeMap/BTreeSet at close.rs:1116 and sorted insertion at close.rs:1141-1149. Noted weakness: the second run does not write at all, so this assertion is trivially satisfied; the real serialization pin is the exact-JSON assert at tests.rs:3275-3279."
+          },
+          {
+            "id": "T5",
+            "status": "PASS",
+            "evidence": "close.rs:1247-1273 returns before any write when dry_run. tests.rs:3347-3357 and :3433-3446 both assert the baseline path does not exist. The judge's own probe re-proves it on a two-file docs tree with no .bee/ at all."
+          },
+          {
+            "id": "T6",
+            "status": "PASS",
+            "evidence": "Citation escape resolves at close.rs:1200-1205, before the baseline is consulted at :1293; tests.rs:3451-3465 clears a NEW line against a baseline covering something else. Decision escape runs on new_items after the baseline filter at close.rs:1304-1315. Mutations M2 and M4 each turned the matching test red."
+          },
+          {
+            "id": "K1",
+            "status": "PASS",
+            "evidence": "rg over crates/bee/src finds normalize_doc_deferral_line defined at close.rs:1109 with exactly ONE call site at close.rs:1208 inside doc_deferral_candidates — the single function both the seed path (close.rs:1246) and the enforce path (close.rs:1237) pass through."
+          },
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "git diff --name-only over verbs/decisions/ prints nothing; matches_deferral_prose and its word list are byte-unchanged."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "Function-body comparison of close.rs before versus after: doc_deferral_scan_files IDENTICAL, feature_touched_files IDENTICAL, line_trigger_ids IDENTICAL. The fence block appears exactly once before and once after, byte-identical. The ENFORCE scan set is untouched; only the SEED added doc_deferral_seed_files."
+          },
+          {
+            "id": "P3",
+            "status": "PASS",
+            "evidence": "Exactly two escapes remain, citation at close.rs:1200-1205 and the doc-deferral decision at close.rs:1304, with no hand-edit or suppression path. Corrupt fails closed at close.rs:1288; the judge's own probe writes malformed JSON and asserts the door blocks."
+          },
+          {
+            "id": "P4",
+            "status": "PASS",
+            "evidence": "The only write_json_atomic call is close.rs:1285, inside the Missing arm AFTER the dry_run early returns at :1247-1273. Confirmed on the new repo-wide path by the judge's own probe and by tests.rs:3445."
+          },
+          {
+            "id": "P5",
+            "status": "PASS",
+            "evidence": "git diff --name-only lists exactly two files, close.rs and tests.rs. Nothing under .bee/, scripts/, or the plugin trees; no registry_payload.json hunk; cli.rs and main.rs untouched. dry_run is an internal parameter reusing close's existing flag."
+          },
+          {
+            "id": "P6",
+            "status": "PASS",
+            "evidence": "The baseline stores only the normalized content (close.rs:1283); the line number lives solely in the human-facing message at close.rs:1210 and is never a key. tests.rs:3327 proves survival across insertion above."
+          },
+          {
+            "id": "TRACKED",
+            "status": "PASS",
+            "evidence": "close.rs:1120-1122 resolves to .bee/doc-deferral-baseline.json; git check-ignore exits 1 with no output. The .gitignore bee fence lists .bee/state.json, .bee/runtime/ and .bee/cache/ but not this path."
+          },
+          {
+            "id": "SEED-COST",
+            "status": "PASS",
+            "evidence": "close.rs:1170 calls the SAME walker doc_deferral_scan_files already uses (list_bundle_markdown) — no second scanner. The walker is rooted at the passed directory with no parent traversal, skips symlinks, and collects only *.md regular files; paths are re-prefixed docs/{rel}, so nothing outside docs/ can enter. Measured on this repo: 1554 markdown files, 1258 pre-existing deferral lines, 1.63-1.70 s for the one-time repo-wide pass, which only ever runs on the Missing arm. ADVISORY RAISED AND NOW FIXED: the dry-run branch joined every seed message into one detail string, measured at 143010 bytes on this repo, printed and embedded in the JSON doors payload on every dry run until the baseline lands. Closed in commit cd80b0ca — the count stays exact, the sample stops at DOC_DEFERRAL_DRY_RUN_SAMPLE (20) and the remainder is summarised, pinned by doc_deferral_door_dry_run_detail_caps_the_sample_and_still_names_the_exact_count with literal fixture numbers. The orchestrator's first attempt at that test derived its fixture size from the constant and therefore passed with the cap raised to 100000; rewritten with literals, it fails under that mutation and the detail is asserted under 4096 bytes."
+          },
+          {
+            "id": "REFUSED-CLOSE",
+            "status": "PASS",
+            "evidence": "Confirmed: the writing call at close.rs:1828 sits above the proof refusal at :1830 and above every later refusal, while commit_close_bookkeeping is only reached at :2224 on the green path. The deviation is named in-source at close.rs:1816-1827. The judge agrees with deferring the fix and verified the first half of the reasoning: commit_close_bookkeeping uses git add -A -- .bee, -A stages untracked files, git status --porcelain -- .bee reports untracked as ?? so the clean early-return will not swallow it, and the path is not gitignored — so the next green close does commit it. The SECOND half of the orchestrator's stated reasoning is NOT sound and was withdrawn rather than recorded: a deterministic repo-wide seed regenerates identically only for a FIXED docs tree, not across time. A seed regenerated after the untracked file is lost — to git clean -fdx, or to tearing down a feature worktree that could not carry an uncommitted file — freezes the docs tree AS OF THEN, silently adopting every deferral line added meanwhile, which is exactly the hole D6's always-write clause closes. Residual risk is narrow and pre-existing rather than newly introduced: it needs the FIRST-EVER close in a repo lineage to refuse AND the untracked baseline to be discarded before any green close."
+          },
+          {
+            "id": "FULL-SUITE",
+            "status": "PASS",
+            "evidence": "The judge's own unfiltered run at faebfdf6 gave 18 suites, 2115 passed, 11 ignored, 0 failed, exit 0, reconciling exactly with the orchestrator's measurement, and confirmed the working tree unmodified afterwards with all mutation work in an rsync copy. After the SEED-COST fix at cd80b0ca the orchestrator re-ran the same unfiltered command: 18 suites, 2116 passed, 0 failed — the one added test being the dry-run cap."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-19T03:28:28.493Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "DEV-A",
+            "status": "PASS",
+            "evidence": "(a) close.rs:1274-1286 — the Missing arm now writes unconditionally; the !candidates.is_empty() gate is gone. The judge's OWN probe, injected into a scratch copy rather than reusing the worker's tests: judge_empty_seed_writes_and_then_enforces ok — a seed over docs with NO deferral line still creates .bee/doc-deferral-baseline.json, and a deferral line added afterwards BLOCKS, while the baseline bytes are unchanged by the blocking run. (b) close.rs:1168-1175 doc_deferral_seed_files walks root/docs via list_bundle_markdown; close.rs:1245-1246 uses it for the seed while close.rs:1236-1237 keeps doc_deferral_scan_files for enforcement. Own probe judge_seed_freezes_a_docs_file_outside_the_feature_scan_set ok asserts the scan set is exactly one file, yet the baseline JSON contains deferral lines from docs/specs/ and from another area, and the later close of that other feature returns clear. Non-docs markdown (README.md, packages/x/notes.md) is absent. Extra probe judge_seed_when_bee_dir_absent ok — write_json_atomic creates .bee/ when missing, so the seed survives a fresh repo."
+          },
+          {
+            "id": "REGRESS",
+            "status": "PASS",
+            "evidence": "All six pre-existing door tests call write_empty_doc_deferral_baseline (ENFORCE fixture) at tests.rs:3151, :3166, :3185, :3205, :3216, :3239; helper at tests.rs:3117. Independent mutation runs in a scratch copy: (M1) disabling the fence exemption FAILED doc_deferral_door_exempts_fenced_code. (M2) disabling the citation escape FAILED both doc_deferral_door_clears_with_a_registered_trigger_citation and the new uncovered-line citation test. (M3) neutralising the docs/history/<feature>/ union in doc_deferral_scan_files FAILED doc_deferral_door_scan_set_includes_the_on_disk_context_md_with_no_capped_cells and close_refuses_at_the_doc_deferral_door. (M4) stubbing has_doc_deferral_decision to None FAILED the demotion test. (M6) flipping the final Door blocking flag FAILED five tests including blocks_a_deferral_line_with_no_registered_trigger. Every one of the six dies to at least one mutation; none is vacuous."
+          },
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "tests.rs:3266-3280 asserts the exact on-disk JSON after a seed. Green in the full suite and in the judge's own unmutated scratch run."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "tests.rs:3305-3321 blocks the added line and asserts the seeded line stays out of the detail. Independently reproduced by the judge's own empty-seed probe."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "tests.rs:3327-3342 inserts two unrelated lines above the baselined line and asserts clear. Identity is close.rs:1293 set-contains on normalized content, never an index."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "tests.rs:3287-3299 compares baseline bytes after seed versus after enforce. Determinism comes from the BTreeMap/BTreeSet at close.rs:1116 and sorted insertion at close.rs:1141-1149. Noted weakness: the second run does not write at all, so this assertion is trivially satisfied; the real serialization pin is the exact-JSON assert at tests.rs:3275-3279."
+          },
+          {
+            "id": "T5",
+            "status": "PASS",
+            "evidence": "close.rs:1247-1273 returns before any write when dry_run. tests.rs:3347-3357 and :3433-3446 both assert the baseline path does not exist. The judge's own probe re-proves it on a two-file docs tree with no .bee/ at all."
+          },
+          {
+            "id": "T6",
+            "status": "PASS",
+            "evidence": "Citation escape resolves at close.rs:1200-1205, before the baseline is consulted at :1293; tests.rs:3451-3465 clears a NEW line against a baseline covering something else. Decision escape runs on new_items after the baseline filter at close.rs:1304-1315. Mutations M2 and M4 each turned the matching test red."
+          },
+          {
+            "id": "K1",
+            "status": "PASS",
+            "evidence": "rg over crates/bee/src finds normalize_doc_deferral_line defined at close.rs:1109 with exactly ONE call site at close.rs:1208 inside doc_deferral_candidates — the single function both the seed path (close.rs:1246) and the enforce path (close.rs:1237) pass through."
+          },
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "git diff --name-only over verbs/decisions/ prints nothing; matches_deferral_prose and its word list are byte-unchanged."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "Function-body comparison of close.rs before versus after: doc_deferral_scan_files IDENTICAL, feature_touched_files IDENTICAL, line_trigger_ids IDENTICAL. The fence block appears exactly once before and once after, byte-identical. The ENFORCE scan set is untouched; only the SEED added doc_deferral_seed_files."
+          },
+          {
+            "id": "P3",
+            "status": "PASS",
+            "evidence": "Exactly two escapes remain, citation at close.rs:1200-1205 and the doc-deferral decision at close.rs:1304, with no hand-edit or suppression path. Corrupt fails closed at close.rs:1288; the judge's own probe writes malformed JSON and asserts the door blocks."
+          },
+          {
+            "id": "P4",
+            "status": "PASS",
+            "evidence": "The only write_json_atomic call is close.rs:1285, inside the Missing arm AFTER the dry_run early returns at :1247-1273. Confirmed on the new repo-wide path by the judge's own probe and by tests.rs:3445."
+          },
+          {
+            "id": "P5",
+            "status": "PASS",
+            "evidence": "git diff --name-only lists exactly two files, close.rs and tests.rs. Nothing under .bee/, scripts/, or the plugin trees; no registry_payload.json hunk; cli.rs and main.rs untouched. dry_run is an internal parameter reusing close's existing flag."
+          },
+          {
+            "id": "P6",
+            "status": "PASS",
+            "evidence": "The baseline stores only the normalized content (close.rs:1283); the line number lives solely in the human-facing message at close.rs:1210 and is never a key. tests.rs:3327 proves survival across insertion above."
+          },
+          {
+            "id": "TRACKED",
+            "status": "PASS",
+            "evidence": "close.rs:1120-1122 resolves to .bee/doc-deferral-baseline.json; git check-ignore exits 1 with no output. The .gitignore bee fence lists .bee/state.json, .bee/runtime/ and .bee/cache/ but not this path."
+          },
+          {
+            "id": "SEED-COST",
+            "status": "PASS",
+            "evidence": "close.rs:1170 calls the SAME walker doc_deferral_scan_files already uses (list_bundle_markdown) — no second scanner. The walker is rooted at the passed directory with no parent traversal, skips symlinks, and collects only *.md regular files; paths are re-prefixed docs/{rel}, so nothing outside docs/ can enter. Measured on this repo: 1554 markdown files, 1258 pre-existing deferral lines, 1.63-1.70 s for the one-time repo-wide pass, which only ever runs on the Missing arm. ADVISORY RAISED AND NOW FIXED: the dry-run branch joined every seed message into one detail string, measured at 143010 bytes on this repo, printed and embedded in the JSON doors payload on every dry run until the baseline lands. Closed in commit cd80b0ca — the count stays exact, the sample stops at DOC_DEFERRAL_DRY_RUN_SAMPLE (20) and the remainder is summarised, pinned by doc_deferral_door_dry_run_detail_caps_the_sample_and_still_names_the_exact_count with literal fixture numbers. The orchestrator's first attempt at that test derived its fixture size from the constant and therefore passed with the cap raised to 100000; rewritten with literals, it fails under that mutation and the detail is asserted under 4096 bytes."
+          },
+          {
+            "id": "REFUSED-CLOSE",
+            "status": "PASS",
+            "evidence": "Confirmed: the writing call at close.rs:1828 sits above the proof refusal at :1830 and above every later refusal, while commit_close_bookkeeping is only reached at :2224 on the green path. The deviation is named in-source at close.rs:1816-1827. The judge agrees with deferring the fix and verified the first half of the reasoning: commit_close_bookkeeping uses git add -A -- .bee, -A stages untracked files, git status --porcelain -- .bee reports untracked as ?? so the clean early-return will not swallow it, and the path is not gitignored — so the next green close does commit it. The SECOND half of the orchestrator's stated reasoning is NOT sound and was withdrawn rather than recorded: a deterministic repo-wide seed regenerates identically only for a FIXED docs tree, not across time. A seed regenerated after the untracked file is lost — to git clean -fdx, or to tearing down a feature worktree that could not carry an uncommitted file — freezes the docs tree AS OF THEN, silently adopting every deferral line added meanwhile, which is exactly the hole D6's always-write clause closes. Residual risk is narrow and pre-existing rather than newly introduced: it needs the FIRST-EVER close in a repo lineage to refuse AND the untracked baseline to be discarded before any green close."
+          },
+          {
+            "id": "FULL-SUITE",
+            "status": "PASS",
+            "evidence": "The judge's own unfiltered run at faebfdf6 gave 18 suites, 2115 passed, 11 ignored, 0 failed, exit 0, reconciling exactly with the orchestrator's measurement, and confirmed the working tree unmodified afterwards with all mutation work in an rsync copy. After the SEED-COST fix at cd80b0ca the orchestrator re-ran the same unfiltered command: 18 suites, 2116 passed, 0 failed — the one added test being the dry-run cap."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-19T03:28:44.231Z"
       }
     ],
     "reopened_for_rework": {

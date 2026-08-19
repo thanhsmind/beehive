@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "**Còn trong sổ, chưa làm:** thu hồi phê duyệt phía lane vẫn không phủ quyết được `true` cũ ở state mặc định (P3); `staging` còn giữ bản sao",
-    "asked_at": "2026-08-19T03:01:20.970Z",
+    "subject": "Việc tôi tự làm tiếp nếu anh muốn: xoá cái intent cũ 29/07 (đã kiểm, làm xong từ lâu, chỉ còn là rác trong sổ).",
+    "asked_at": "2026-08-19T03:31:37.774Z",
     "session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd"
   },
   "route": {

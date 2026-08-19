@@ -300,6 +300,45 @@ with a same-line trigger citation (backtick trigger id or
 `[[trigger:<id>]]`) resolving in the trigger registry. Escape:
 `doc-deferral`.
 
+**That door blocks only lines a BASELINE does not already carry
+(doc-deferral-baseline D1/D6, cell ddb-1).** It had fired five times across
+five features and every flagged line on every occasion was prose DESCRIBING
+deferral machinery rather than deferring work — zero true positives — because
+this repo's own domain is deferral queues and triggers, so `defer`, `later`
+and `for now` are its nouns. The word list, the scan set, the fence exemption
+and both escapes are unchanged; what changed is that a line already recorded
+in the baseline no longer counts. Identity is the line's NORMALIZED CONTENT
+per file, never its line number, so inserting text above a baselined line does
+not resurrect it, and one normalization function serves both recording and
+matching.
+
+**The baseline is seeded once per repo, REPO-WIDE, by the door itself
+(doc-deferral-baseline D6, superseding D2).** The first run finding no
+baseline file walks every markdown file under `docs/` — not the door's own
+per-feature scan set — records every deferral-shaped line in the whole tree,
+writes the file, and passes; enforcement afterwards stays per-feature over the
+unchanged scan set. Seeding from the scan set instead would freeze only the
+docs one feature happened to touch, so the next feature touching a different
+long-lived doc would enter enforcement against an empty entry and inherit
+every pre-existing line in it — the false positives returning on a delay. The
+seed ALWAYS writes, even when it flags nothing, because an absent file IS the
+seed state: skipping the write leaves the next close reading a missing
+baseline and ADOPTING the first genuine deferral line anyone adds. The file is
+git-tracked so a clone or fresh worktree inherits it instead of re-seeding,
+and `--dry-run` never writes — it reports the door non-blocking and names the
+count it would baseline, spelling out a bounded sample rather than every
+message, since the repo-wide set runs to four figures.
+
+**A line the baseline does not cover has exactly two ways through, and
+hand-editing the baseline is not one (doc-deferral-baseline D4, later widened
+by D8).** Cite a registered trigger inline, or log a `doc-deferral`-tagged
+decision naming the feature. D8 then admitted a third, built in the
+doc-deferral-scope lane: a reasoned marker pair naming why a passage documents
+deferral machinery, where an empty or missing reason exempts nothing. The
+baseline forgives the PAST automatically and repo-wide; the marker is how NEW
+prose states intent at the site, which a baseline cannot express — asked why a
+line is forgiven, a baseline can only answer that it was already there.
+
 **Once every hard door above (tests, scribing-debt, judge-debt, pattern-check,
 knowledge-freshness) has cleared, close also runs `bee knowledge promote` for
 the closing feature in process — a SOFT door (knowledge-loop D2/D9, cells

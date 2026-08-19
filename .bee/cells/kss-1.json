@@ -1,0 +1,69 @@
+{
+  "id": "kss-1",
+  "feature": "knowledge-sweep-scope",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Scope the merge's docs/knowledge auto-commit to the merging feature, the way docs/history already is",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-sweep-scope/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "action": "bee worktree merge auto-commits main's dirty bookkeeping before merging, so the dirty-main guard cannot deadlock against the worktree-first rule. main_bookkeeping_roots (packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs:184-190) returns .bee, docs/decisions, docs/knowledge as BLANKET roots and docs/history/<feature> as a feature-SCOPED one. The asymmetry is deliberate for history — tests.rs:1804-1833 (another_features_docs_history_dirt_still_refuses_and_is_named) already proves a peer feature's docs/history is left alone and still refuses. The intent to scope exists; it was never carried to docs/knowledge. REAL INCIDENT, 2026-08-18: merging uat-stop-placement produced bookkeeping commit 7429dfda which swallowed 21 insertions of a SIBLING session's spec sync to docs/knowledge/areas/workflow-state/gates.md, work belonging to feature start-feature-reservation-scope. Nothing was lost; the authorship and the feature attribution were both wrong. A peer session found it, no test did. docs/knowledge/ is the ONE root in that list holding AUTHORED prose — .bee is the machine-written control plane and docs/decisions is its rendered index, so sweeping those is bookkeeping, while sweeping authored capture is taking someone else's work. FIX: scope docs/knowledge the way docs/history already is, using data bee already keeps. feature_touched_files(root, feature) at packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1388 is ALREADY pub(crate) and already returns the merging feature's own capped cells' files_changed — close.rs's own doc-deferral scan set uses it exactly this way, so this is an established read, not a new concept. Call it, filter its result to paths under docs/knowledge/, and pass those exact paths in place of the blanket docs/knowledge root. Everything under docs/knowledge/ that this feature's cells did NOT record stays uncommitted, and the EXISTING dirty-main refusal names it — that path is already built and already tested, and the instruction it gives a sibling (commit your own capture) is the honest one. Keep .bee and docs/decisions blanket: they are machine-written and shared, and narrowing them would trade a real deadlock for an attribution nicety. Keep the commit subject honest — if it still names docs/knowledge it should read as the feature's own, not the whole tree; adjust the string at phases.rs:217-222 to match what is actually swept, and keep the feature-less arm working. Do NOT change the dirty-main refusal's shape or message contract, the worktree_merge_commit_bookkeeping opt-out (merge.rs:201-206), or bee close's own .bee-only bookkeeping commit. Do NOT edit packages/bee-rs/crates/bee/src/verbs/drivers/close.rs — it is reserved by another session's cell ddb-1; feature_touched_files is CALLED, never changed. TESTS: docs_knowledge_dirt_is_auto_committed_alongside_bee (tests.rs:1758-1795) is the one whose expectation changes — rewrite it so this feature's OWN recorded knowledge dirt is swept, and add its mirror proving a SIBLING feature's docs/knowledge dirt is NOT swept and still refuses while naming the file, modelled line-for-line on another_features_docs_history_dirt_still_refuses_and_is_named (tests.rs:1804-1833). Also cover: a knowledge file dirty but recorded by no cell of this feature stays uncommitted; and the feature-less merge arm (main_bookkeeping_roots(None)) still behaves. Every other test in tests.rs:1622-1893 must still pass unchanged.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "verify_owner": "worker",
+  "done_when": "A merge sweeps only the docs/knowledge paths the merging feature's own capped cells recorded; a sibling feature's docs/knowledge dirt is left uncommitted and named by the existing dirty-main refusal; .bee and docs/decisions are still swept blanket; the opt-out, the refusal contract, and bee close's own bookkeeping commit are unchanged; the commit subject describes what is actually swept; close.rs is untouched; and the worktree suite is green.",
+  "notes": "Third of three defects the owner queued. Files are disjoint from the two cells other sessions hold (drivers/close.rs, drivers/tests.rs, .gitignore, herding/*).",
+  "must_haves": {
+    "truths": [
+      "A merge sweeps the docs/knowledge paths this feature's own capped cells recorded.",
+      "A sibling feature's dirty docs/knowledge file is NOT swept, and the existing dirty-main refusal names it.",
+      "A docs/knowledge file dirty but recorded by no cell of this feature stays uncommitted.",
+      ".bee and docs/decisions are still swept blanket.",
+      "The worktree_merge_commit_bookkeeping opt-out and the dirty-main refusal's message contract are unchanged.",
+      "The feature-less merge arm still behaves, and the commit subject describes what is actually swept.",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs is not edited.",
+      "Every other prefix-list test in tests.rs still passes unchanged."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "kss-1-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T03:23:43.813Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-19T03:15:02.700Z",
+    "report": {
+      "outcome": "Scoped the pre-merge docs/knowledge bookkeeping sweep to the paths the merging features own capped cells recorded (feature_touched_files), leaving a sibling features docs/knowledge dirt refused and named exactly as docs/history already was.",
+      "commit": "a1f31cf9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — green (213 passed, 0 failed) — full worktree suite including the 3 new/rewritten docs/knowledge scoping tests",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
