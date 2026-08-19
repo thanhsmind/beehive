@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Next: nothing owed by me. My own feature `auto-wait-mark` is closed.",
-    "asked_at": "2026-08-19T03:32:25.807Z",
-    "session": "54931542-0fbf-440d-b590-029f08105e7f"
+    "subject": "I am not picking that up. It belongs with whoever holds `kss-1`. Nothing for you to do.",
+    "asked_at": "2026-08-19T03:37:24.117Z",
+    "session": "3503e7e0-266d-4651-b2b1-ad5c5c3a15cc"
   },
   "route": {
     "class": "feature",

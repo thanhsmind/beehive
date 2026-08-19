@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Dọn ngay.",
-    "asked_at": "2026-08-19T03:32:15.404Z",
+    "subject": "Đúng tình huống ngược lại: giờ có file untracked của session kia chặn merge của tôi — `docs/history/learnings/20260819-doc-deferral-baseline",
+    "asked_at": "2026-08-19T03:50:42.530Z",
     "session": "837fbcd4-540d-49a6-a882-7366f6bc3f97"
   },
   "route": {

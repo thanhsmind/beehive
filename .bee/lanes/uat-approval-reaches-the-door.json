@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Việc tôi tự làm tiếp nếu anh muốn: xoá cái intent cũ 29/07 (đã kiểm, làm xong từ lâu, chỉ còn là rác trong sổ).",
-    "asked_at": "2026-08-19T03:31:37.774Z",
+    "subject": "Spec này nói cơ chế nhưng thiếu **cảnh báo cho người đọc**. Thêm vào đúng chỗ người ta sẽ tra.",
+    "asked_at": "2026-08-19T03:37:31.879Z",
     "session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd"
   },
   "route": {

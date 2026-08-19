@@ -14,7 +14,12 @@
   "next_action": "Continue bee-exploring for \"doc-deferral-baseline\" (lane).",
   "created_at": "2026-08-18T15:48:57.292Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Không sao — chính bản auto-commit của tôi (`a750c5da`) đã lấy, đúng feature của tôi. Commit nốt phần còn lại.",
+    "asked_at": "2026-08-19T03:51:19.487Z",
+    "session": "57dd6bbf-d280-4c42-9da6-61ed72419a29"
+  },
   "route": {
     "class": "bugfix",
     "lane": "small",
