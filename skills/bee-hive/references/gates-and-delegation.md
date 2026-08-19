@@ -142,7 +142,7 @@ The one orchestration pattern bee runs: the session model (the owner's best mode
   this same boundary already draws for `cli`). The worker itself stays bee-ignorant; ALL bee
   bookkeeping this branch owes — `cells finish`, the proof line, reservations, the dispatch-log row —
   is done by the orchestrator after it reads the result back, exactly the D4 split gather workers
-  never needed in the first place (`skills/bee-herding/references/operational-invariants.md`, "`bee
+  never needed in the first place (`bee-herding/references/operational-invariants.md`, "`bee
   herding run` — one foreign agent as a cell-execution worker").
 
 ### Judgment contract — rails for workers, boundaries for the orchestrator
