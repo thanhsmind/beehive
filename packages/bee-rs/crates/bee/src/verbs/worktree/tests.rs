@@ -1884,6 +1884,109 @@ use std::time::Instant;
         assert!(msg.contains("unrecorded.md"), "{msg}");
     }
 
+    /// kss-2, the last arm: a merge whose feature cannot be resolved
+    /// (`resolve_worktree_feature` — absent for a worktree registered
+    /// without bee's own creation identity) has no cell record to scope
+    /// `docs/knowledge` by, so it sweeps NEITHER `docs/history` NOR
+    /// `docs/knowledge` — only `.bee` and `docs/decisions`, exactly like the
+    /// existing feature-less `docs/history` behavior this cell mirrors.
+    /// Modelled on `bee_only_dirt_in_main_auto_commits_and_merge_succeeds`
+    /// and `docs_decisions_dirt_is_auto_committed_alongside_bee`, with
+    /// `make_feature_unresolvable` (the usp-7 fixture) genuinely stripping
+    /// the feature instead of just dirtying an already-scoped tree.
+    #[test]
+    fn feature_less_merge_still_sweeps_bee_and_docs_decisions() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        make_feature_unresolvable(&created.worktree_root);
+        assert_eq!(
+            resolve_worktree_feature(&created.worktree_root).feature,
+            None,
+            "fixture must genuinely leave the feature unresolvable"
+        );
+
+        std::fs::create_dir_all(main.join("docs").join("decisions")).unwrap();
+        std::fs::write(main.join("docs").join("decisions").join("taxonomy.json"), "{}\n").unwrap();
+        git_ok(&main, &["add", "-A"]);
+        git_ok(&main, &["commit", "-qm", "seed taxonomy.json"]);
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        std::fs::write(main.join("docs").join("decisions").join("taxonomy.json"), "{\"a\": 1}\n").unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
+            .unwrap_or_else(|e| match e {
+                MErr::Thrown(m) => {
+                    panic!("a feature-less merge must still auto-commit .bee and docs/decisions dirt: {m}")
+                }
+                MErr::Ex => panic!("merge delegated"),
+            });
+        assert!(answer.ok, "{:?}", answer.result);
+        assert_eq!(answer.result["merged"], Value::Bool(true));
+        assert_eq!(
+            answer.result["bookkeeping_commit"]["committed"],
+            Value::Bool(true),
+            "{}",
+            answer.result["bookkeeping_commit"]
+        );
+        assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+
+        // Truth 4: the bookkeeping commit's own subject names what it
+        // actually swept — never a stale claim on `docs/knowledge`, which
+        // this arm never touches. (`git log -1` would read the MERGE
+        // commit that lands on top of it, not the bookkeeping commit
+        // itself, so this reads the bookkeeping sha directly.)
+        let sha = answer.result["bookkeeping_commit"]["sha"].as_str().unwrap();
+        let subject = std::process::Command::new("git")
+            .args(["show", "-s", "--format=%s", sha])
+            .current_dir(&main)
+            .output()
+            .unwrap();
+        let subject = String::from_utf8_lossy(&subject.stdout);
+        assert!(subject.contains(".bee"), "{subject}");
+        assert!(subject.contains("docs/decisions"), "{subject}");
+        assert!(!subject.contains("docs/knowledge"), "{subject}");
+    }
+
+    /// The other half: a feature-less merge with dirty `docs/knowledge`
+    /// (no cell record exists to scope it by — there is no resolvable
+    /// feature to have recorded one) leaves it uncommitted and the existing
+    /// dirty-main refusal names it, the same mechanism that already names
+    /// an unscoped `docs/history` file today. Modelled on
+    /// `another_features_docs_knowledge_dirt_still_refuses_and_is_named`.
+    #[test]
+    fn feature_less_merge_docs_knowledge_dirt_stays_uncommitted_and_is_named() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+        make_feature_unresolvable(&created.worktree_root);
+        assert_eq!(resolve_worktree_feature(&created.worktree_root).feature, None);
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        std::fs::create_dir_all(main.join("docs").join("knowledge").join("areas")).unwrap();
+        std::fs::write(
+            main.join("docs").join("knowledge").join("areas").join("example.md"),
+            "captured, but nobody can name whose feature this is\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
+        let Err(err) = result else {
+            panic!("a feature-less merge must still refuse on dirty docs/knowledge")
+        };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains("example.md"), "{msg}");
+        // Nothing committed, nothing merged: the file is left exactly as
+        // dirtied, same as an unscoped docs/history file is today.
+        let after = git_status_porcelain_excluding_untracked_all(&main, &[]).unwrap();
+        assert!(
+            after.contains("docs/knowledge/areas/example.md"),
+            "the unscoped docs/knowledge file must be left untouched: {after}"
+        );
+    }
+
     /// The sharper half of this cell: another feature's OWN
     /// `docs/history/<other>/` must never be swept into THIS merge's
     /// auto-commit — a sibling session can be writing it at the same
