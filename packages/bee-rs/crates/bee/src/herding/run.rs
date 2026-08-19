@@ -70,6 +70,10 @@ struct Options {
     main_root: PathBuf,
     json: bool,
     dry_run: bool,
+    /// `--continue <job-id>` (D3): reuse the EXISTING job mailbox instead of
+    /// spawning a fresh pane. `job_id` above already carries the target id
+    /// in this mode — `execute` branches on this flag alone.
+    is_continue: bool,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -99,6 +103,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut task_file: Option<&str> = None;
     let mut cwd: Option<&str> = None;
     let mut job_id: Option<&str> = None;
+    let mut continue_job_id: Option<&str> = None;
     let mut idle_timeout_secs = DEFAULT_IDLE_TIMEOUT_SECS;
     let mut ceiling_secs = DEFAULT_CEILING_SECS;
     let mut close_always = false;
@@ -122,6 +127,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
             }
             "--job-id" => {
                 job_id = flags.get(i + 1).copied();
+                i += 2;
+            }
+            "--continue" => {
+                continue_job_id = flags.get(i + 1).copied();
                 i += 2;
             }
             "--idle-timeout" => {
@@ -167,9 +176,13 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         None => std::env::current_dir()
             .map_err(|e| format!("could not resolve the current directory: {e}"))?,
     };
-    let job_id = job_id
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("job-{}", chrono::Utc::now().timestamp_millis()));
+    let (job_id, is_continue) = match continue_job_id {
+        Some(id) => (id.to_string(), true),
+        None => (
+            job_id.map(str::to_string).unwrap_or_else(|| format!("job-{}", chrono::Utc::now().timestamp_millis())),
+            false,
+        ),
+    };
 
     Ok(Options {
         task: task_text,
@@ -181,6 +194,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         main_root,
         json,
         dry_run,
+        is_continue,
     })
 }
 
@@ -225,6 +239,17 @@ trait Herdr {
     /// `herdr pane close <id>` — best-effort; a failure here is reported,
     /// never allowed to hide the run's own result.
     fn pane_close(&self, pane_id: &str) -> Result<(), String>;
+    /// `herdr agent prompt <job_id> <prompt>` (D3 `--continue`) — sends the
+    /// round N+1 brief to an ALREADY-RUNNING agent, never `agent start`
+    /// (that would spawn a second agent instead of continuing this one).
+    fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String>;
+    /// `herdr pane list`, membership-tested against `pane_id` — the D3
+    /// `--continue` "is the pane gone" check. Unlike `pane_rect` (which
+    /// fails open to a default direction on ANY trouble), this fails
+    /// CLOSED: herdr missing, a non-zero exit, or an unparseable body all
+    /// read as "not alive" — `--continue` refuses rather than prompting a
+    /// pane it cannot confirm still exists.
+    fn pane_alive(&self, pane_id: &str) -> bool;
 }
 
 struct RealHerdr;
@@ -325,6 +350,31 @@ impl Herdr for RealHerdr {
 
     fn pane_close(&self, pane_id: &str) -> Result<(), String> {
         self.call(&["pane", "close", pane_id]).map(|_| ())
+    }
+
+    fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String> {
+        self.call(&["agent", "prompt", job_id, prompt]).map(|_| ())
+    }
+
+    fn pane_alive(&self, pane_id: &str) -> bool {
+        // Mirrors `wave::live_pane_ids_via_herdr`'s parse: a bare array or
+        // `{"panes": […]}`, an explicit `error` envelope, or any other
+        // shape all fail CLOSED (not alive) — this is a refusal gate, not
+        // an occupancy estimate.
+        let Ok(v) = self.call(&["pane", "list"]) else { return false };
+        if v.get("error").is_some_and(|e| !e.is_null()) {
+            return false;
+        }
+        let result = v.get("result").cloned().unwrap_or(Value::Null);
+        let panes = match &result {
+            Value::Array(a) => a.clone(),
+            Value::Object(o) => match o.get("panes") {
+                Some(Value::Array(a)) => a.clone(),
+                _ => return false,
+            },
+            _ => return false,
+        };
+        panes.iter().any(|p| p.get("pane_id").and_then(Value::as_str) == Some(pane_id))
     }
 }
 
@@ -433,10 +483,53 @@ fn now_ms() -> i64 {
 // the run itself
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// The three typed refusals `--continue` can hit before it ever touches
+/// `Herdr` for real (D3's "refuses typed when…" clause). Each names the
+/// job id so the caller can tell which job it asked about.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ContinueRefusal {
+    /// No `.bee/mailbox/<job-id>/` directory, or no readable `job.json`
+    /// inside it — there is no job to continue.
+    JobDirMissing { job_id: String },
+    /// The job dir exists but holds no `result-N.json` at all — a round
+    /// this job never finished has nothing to continue FROM.
+    NoPriorResult { job_id: String },
+    /// `job.json` recorded no pane, or `herdr pane list` no longer shows
+    /// the one it did record — the agent this job would prompt is gone.
+    PaneGone { job_id: String, pane_id: Option<String> },
+}
+
+impl std::fmt::Display for ContinueRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContinueRefusal::JobDirMissing { job_id } => write!(
+                f,
+                "--continue {job_id}: no job mailbox found (no job.json under .bee/mailbox/{job_id}/) — \
+                 run without --continue to start a new job"
+            ),
+            ContinueRefusal::NoPriorResult { job_id } => write!(
+                f,
+                "--continue {job_id}: no prior result-N.json in this job's mailbox — nothing to continue from"
+            ),
+            ContinueRefusal::PaneGone { job_id, pane_id: Some(p) } => write!(
+                f,
+                "--continue {job_id}: pane {p} is no longer alive (absent from `herdr pane list`) — cannot continue"
+            ),
+            ContinueRefusal::PaneGone { job_id, pane_id: None } => write!(
+                f,
+                "--continue {job_id}: job.json has no recorded pane — cannot continue"
+            ),
+        }
+    }
+}
+
 #[derive(Debug)]
 enum RunOutcome {
     /// `--dry-run`: the rendered brief, for inspection — nothing spawned.
     DryRun(String),
+    /// `--continue` refused before touching `Herdr` for real: the job dir,
+    /// prior result, or recorded pane was missing (D3).
+    ContinueRefused(ContinueRefusal),
     /// Could not even start: agent-command resolution, a pane operation, or
     /// `agent start` itself failed. Any pane this created is already closed
     /// by the time this variant is returned.
@@ -518,8 +611,75 @@ fn record_dispatch(main_root: &Path, opts: &Options, kind: &str, pane_id: &str) 
 }
 
 /// The whole verb, generic over `Herdr` so tests drive it with a fake
-/// (production's only caller, `run()` below, passes `&RealHerdr`).
+/// (production's only caller, `run()` below, passes `&RealHerdr`). Branches
+/// on `--continue` (D3) right at the top: a fresh spawn and a follow-up
+/// round share the poll loop (`wait_for_round`) and pane lifecycle, but
+/// nothing else — a fresh spawn never reuses a pane, and `--continue` never
+/// splits one.
 fn execute(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
+    if opts.is_continue {
+        execute_continue(opts, herdr)
+    } else {
+        execute_new(opts, herdr)
+    }
+}
+
+/// The `wait_for_round` a fresh spawn and `--continue` share: sleep, poll
+/// the mailbox for a `result-N.json` with `round >= min_round`, and check
+/// heartbeat freshness (`log.txt` mtime, `herdr agent list` status) — the
+/// SAME timing rule (`decide_poll`) either path runs under. A fresh spawn
+/// passes `min_round: 1` (any round satisfies it, since none exist yet); a
+/// `--continue` round passes the NEXT round explicitly, so an
+/// already-present prior round's result file can never be mistaken for
+/// this round's completion (D3's own "not the already-present round N").
+fn wait_for_round(
+    bee_dir: &Path,
+    job_id: &str,
+    min_round: u32,
+    started_at_ms: i64,
+    idle_timeout_secs: u64,
+    ceiling_secs: u64,
+    herdr: &dyn Herdr,
+) -> PollDecision {
+    let log_file_path = mailbox::log_path(bee_dir, job_id);
+    let mailbox_path = mailbox::mailbox_dir(bee_dir, job_id);
+    let mut last_log_mtime: Option<std::time::SystemTime> = None;
+    run_poll_loop(
+        started_at_ms,
+        idle_timeout_secs,
+        ceiling_secs,
+        POLL_INTERVAL,
+        || {
+            let result_ready = std::fs::read_dir(&mailbox_path)
+                .ok()
+                .map(|rd| {
+                    rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
+                        .collect::<Vec<_>>()
+                })
+                .and_then(|names| mailbox::latest_result_round(&names))
+                .is_some_and(|round| round >= min_round);
+            let mut heartbeat_fresh = false;
+            if let Ok(meta) = std::fs::metadata(&log_file_path) {
+                if let Ok(modified) = meta.modified() {
+                    if last_log_mtime.map_or(true, |prev| modified > prev) {
+                        last_log_mtime = Some(modified);
+                        heartbeat_fresh = true;
+                    }
+                }
+            }
+            if herdr.agent_status(job_id).as_deref() == Some("working") {
+                heartbeat_fresh = true;
+            }
+            PollTick { result_ready, heartbeat_fresh }
+        },
+        |d| std::thread::sleep(d),
+        now_ms,
+    )
+}
+
+/// A fresh spawn: split a pane off the caller's own, `agent start` into it,
+/// then wait for round 1.
+fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     let bee_dir = opts.main_root.join(".bee");
     let files: Vec<String> = Vec::new();
     let spec = BriefSpec {
@@ -532,7 +692,7 @@ fn execute(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     };
     let brief = mailbox::render_brief(&spec);
 
-    let job_value = serde_json::json!({
+    let mut job_value = serde_json::json!({
         "job_id": opts.job_id,
         "task": opts.task,
         "cwd": opts.cwd.display().to_string(),
@@ -593,43 +753,21 @@ fn execute(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
 
     record_dispatch(&opts.main_root, opts, &kind, &new_pane);
 
-    let started_at_ms = now_ms();
-    let job_id = opts.job_id.clone();
-    let log_file_path = mailbox::log_path(&bee_dir, &job_id);
-    let mailbox_path = mailbox::mailbox_dir(&bee_dir, &job_id);
-    let mut last_log_mtime: Option<std::time::SystemTime> = None;
+    // Persist pane+agent identity into job.json (D3): the ONLY way a later
+    // `--continue` can find this agent's pane again. Best-effort — a
+    // failure here is reported, never allowed to hide the agent that IS
+    // now running.
+    if let Value::Object(ref mut m) = job_value {
+        m.insert("pane_id".into(), Value::String(new_pane.clone()));
+        m.insert("kind".into(), Value::String(kind.clone()));
+    }
+    if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
+        eprintln!("bee herding run: could not record pane/kind into {}: {e}", job_file_path.display());
+    }
 
-    let decision = run_poll_loop(
-        started_at_ms,
-        opts.idle_timeout_secs,
-        opts.ceiling_secs,
-        POLL_INTERVAL,
-        || {
-            let result_ready = std::fs::read_dir(&mailbox_path)
-                .ok()
-                .map(|rd| {
-                    rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
-                        .collect::<Vec<_>>()
-                })
-                .map(|names| mailbox::latest_result_round(&names).is_some())
-                .unwrap_or(false);
-            let mut heartbeat_fresh = false;
-            if let Ok(meta) = std::fs::metadata(&log_file_path) {
-                if let Ok(modified) = meta.modified() {
-                    if last_log_mtime.map_or(true, |prev| modified > prev) {
-                        last_log_mtime = Some(modified);
-                        heartbeat_fresh = true;
-                    }
-                }
-            }
-            if herdr.agent_status(&job_id).as_deref() == Some("working") {
-                heartbeat_fresh = true;
-            }
-            PollTick { result_ready, heartbeat_fresh }
-        },
-        |d| std::thread::sleep(d),
-        now_ms,
-    );
+    let started_at_ms = now_ms();
+    let decision =
+        wait_for_round(&bee_dir, &opts.job_id, 1, started_at_ms, opts.idle_timeout_secs, opts.ceiling_secs, herdr);
 
     let outcome = match decision {
         PollDecision::ResultReady => read_result(&bee_dir, &opts.job_id),
@@ -655,9 +793,138 @@ fn execute(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     ExecResult { outcome, pane_id: Some(new_pane), closed_pane }
 }
 
+/// `--continue <job-id>` (D3): reuse the EXISTING job mailbox — read the
+/// highest prior round, render round N+1's brief, `agent prompt` it to the
+/// job's recorded pane, then wait for round N+1's result under the same
+/// timing and pane-lifecycle rules a fresh spawn uses. Never calls
+/// `agent_start` — the whole point is addressing the SAME agent again, not
+/// starting a second one.
+fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
+    let bee_dir = opts.main_root.join(".bee");
+    let job_id = &opts.job_id;
+    let mailbox_path = mailbox::mailbox_dir(&bee_dir, job_id);
+    let job_file_path = mailbox::job_path(&bee_dir, job_id);
+
+    let refused = |refusal: ContinueRefusal| ExecResult {
+        outcome: RunOutcome::ContinueRefused(refusal),
+        pane_id: None,
+        closed_pane: false,
+    };
+
+    // Job dir missing: no directory listing, or no readable job.json in it.
+    let entries: Vec<String> = match std::fs::read_dir(&mailbox_path) {
+        Ok(rd) => rd.filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned())).collect(),
+        Err(_) => return refused(ContinueRefusal::JobDirMissing { job_id: job_id.clone() }),
+    };
+    let job_value: Value = match std::fs::read_to_string(&job_file_path)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+    {
+        Some(v) => v,
+        None => return refused(ContinueRefusal::JobDirMissing { job_id: job_id.clone() }),
+    };
+
+    // No prior result: nothing to continue FROM.
+    let prior_round = match mailbox::latest_result_round(&entries) {
+        Some(r) => r,
+        None => return refused(ContinueRefusal::NoPriorResult { job_id: job_id.clone() }),
+    };
+    let next_round = prior_round + 1;
+
+    let recorded_pane = job_value.get("pane_id").and_then(Value::as_str).map(str::to_string);
+    let worktree_root = job_value
+        .get("cwd")
+        .and_then(Value::as_str)
+        .map(PathBuf::from)
+        .unwrap_or_else(|| opts.cwd.clone());
+
+    let files: Vec<String> = Vec::new();
+    let spec = BriefSpec {
+        job_id,
+        task: &opts.task,
+        worktree_root: &worktree_root,
+        files: &files,
+        bee_dir: &bee_dir,
+        round: next_round,
+    };
+    let brief = mailbox::render_brief(&spec);
+
+    if opts.dry_run {
+        // Renders the round N+1 brief and sends nothing — no `Herdr` call
+        // of any kind, the same contract a fresh spawn's `--dry-run` keeps.
+        return ExecResult { outcome: RunOutcome::DryRun(brief), pane_id: None, closed_pane: false };
+    }
+
+    // Pane gone: no recorded pane, or `herdr pane list` no longer shows it.
+    let pane_id = match &recorded_pane {
+        Some(p) if herdr.pane_alive(p) => p.clone(),
+        _ => {
+            return refused(ContinueRefusal::PaneGone { job_id: job_id.clone(), pane_id: recorded_pane });
+        }
+    };
+
+    if let Err(e) = herdr.agent_prompt(job_id, &brief) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("agent prompt failed: {e}")),
+            pane_id: Some(pane_id),
+            closed_pane: false,
+        };
+    }
+
+    let kind = job_value.get("kind").and_then(Value::as_str).unwrap_or("unknown").to_string();
+    record_dispatch(&opts.main_root, opts, &kind, &pane_id);
+
+    // Advance job.json's round so a THIRD `--continue` finds this round as
+    // its prior one — everything else in job.json (pane_id, kind, cwd…)
+    // stays as spawn recorded it.
+    let mut updated_job = job_value.clone();
+    if let Value::Object(ref mut m) = updated_job {
+        m.insert("round".into(), Value::from(next_round));
+        m.insert("continued_at".into(), Value::String(chrono::Utc::now().to_rfc3339()));
+    }
+    if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &updated_job) {
+        eprintln!("bee herding run --continue: could not update {}: {e}", job_file_path.display());
+    }
+
+    let started_at_ms = now_ms();
+    let decision = wait_for_round(
+        &bee_dir,
+        job_id,
+        next_round,
+        started_at_ms,
+        opts.idle_timeout_secs,
+        opts.ceiling_secs,
+        herdr,
+    );
+
+    let outcome = match decision {
+        PollDecision::ResultReady => read_result(&bee_dir, job_id),
+        PollDecision::TimedOutIdle => RunOutcome::TimedOutIdle,
+        PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
+        PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
+    };
+
+    let valid_result = matches!(outcome, RunOutcome::Result(_));
+    let close = should_close_pane(valid_result, opts.close_always);
+    let closed_pane = if close {
+        match herdr.pane_close(&pane_id) {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("bee herding run --continue: could not close pane {pane_id}: {e}");
+                false
+            }
+        }
+    } else {
+        false
+    };
+
+    ExecResult { outcome, pane_id: Some(pane_id), closed_pane }
+}
+
 fn outcome_label(o: &RunOutcome) -> &'static str {
     match o {
         RunOutcome::DryRun(_) => "dry_run",
+        RunOutcome::ContinueRefused(_) => "continue_refused",
         RunOutcome::SpawnFailed(_) => "spawn_failed",
         RunOutcome::Result(r) => match r.status {
             MailboxStatus::Done => "done",
@@ -699,6 +966,9 @@ fn emit_result(opts: &Options, result: &ExecResult) {
             }
             RunOutcome::SpawnFailed(msg) | RunOutcome::Malformed(msg) => {
                 m.insert("error".into(), Value::String(msg.clone()));
+            }
+            RunOutcome::ContinueRefused(refusal) => {
+                m.insert("error".into(), Value::String(refusal.to_string()));
             }
             RunOutcome::DryRun(brief) => {
                 m.insert("brief".into(), Value::String(brief.clone()));
@@ -847,8 +1117,17 @@ mod tests {
         rect: Option<(u64, u64)>,
         split_result: Result<String, String>,
         start_result: Result<(), String>,
+        prompt_result: Result<(), String>,
         status: RefCell<Option<String>>,
         closed: RefCell<Vec<String>>,
+        /// Pane ids `pane_alive` answers `true` for — the FakeHerdr's
+        /// stand-in for `herdr pane list`'s membership set.
+        alive_panes: RefCell<Vec<String>>,
+        /// Every `agent_prompt(job_id, prompt)` call, in order — the seam a
+        /// `--continue` test reads to prove a prompt was sent (and
+        /// `start_calls` stays empty, proving `agent_start` was NOT).
+        prompt_calls: RefCell<Vec<(String, String)>>,
+        start_calls: RefCell<Vec<String>>,
     }
 
     impl FakeHerdr {
@@ -858,8 +1137,12 @@ mod tests {
                 rect: Some((100, 50)),
                 split_result: Ok("w1:p2".to_string()),
                 start_result: Ok(()),
+                prompt_result: Ok(()),
                 status: RefCell::new(None),
                 closed: RefCell::new(Vec::new()),
+                alive_panes: RefCell::new(vec!["w1:p2".to_string()]),
+                prompt_calls: RefCell::new(Vec::new()),
+                start_calls: RefCell::new(Vec::new()),
             }
         }
     }
@@ -876,12 +1159,13 @@ mod tests {
         }
         fn agent_start(
             &self,
-            _job_id: &str,
+            job_id: &str,
             _kind: &str,
             _pane_id: &str,
             _args: &[String],
             _prompt: &str,
         ) -> Result<(), String> {
+            self.start_calls.borrow_mut().push(job_id.to_string());
             self.start_result.clone()
         }
         fn agent_status(&self, _job_id: &str) -> Option<String> {
@@ -890,6 +1174,13 @@ mod tests {
         fn pane_close(&self, pane_id: &str) -> Result<(), String> {
             self.closed.borrow_mut().push(pane_id.to_string());
             Ok(())
+        }
+        fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String> {
+            self.prompt_calls.borrow_mut().push((job_id.to_string(), prompt.to_string()));
+            self.prompt_result.clone()
+        }
+        fn pane_alive(&self, pane_id: &str) -> bool {
+            self.alive_panes.borrow().iter().any(|p| p == pane_id)
         }
     }
 
@@ -922,6 +1213,12 @@ mod tests {
         fn pane_close(&self, _pane_id: &str) -> Result<(), String> {
             panic!("dry-run must never call Herdr::pane_close")
         }
+        fn agent_prompt(&self, _job_id: &str, _prompt: &str) -> Result<(), String> {
+            panic!("dry-run must never call Herdr::agent_prompt")
+        }
+        fn pane_alive(&self, _pane_id: &str) -> bool {
+            panic!("dry-run must never call Herdr::pane_alive")
+        }
     }
 
     fn test_options(main_root: &Path, dry_run: bool) -> Options {
@@ -935,6 +1232,50 @@ mod tests {
             main_root: main_root.to_path_buf(),
             json: true,
             dry_run,
+            is_continue: false,
+        }
+    }
+
+    /// Writes a job.json + result-N.json pair matching what a real spawn
+    /// (`execute_new`) and a real worker would have left behind, so a
+    /// `--continue` test can start from "round N already finished" without
+    /// running the whole spawn path first.
+    fn seed_job(main_root: &Path, job_id: &str, pane_id: &str, round: u32) {
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": job_id,
+            "task": "round 1 task",
+            "cwd": main_root.join("work").display().to_string(),
+            "round": round,
+            "idle_timeout_secs": 3_600,
+            "ceiling_secs": 3_600,
+            "close_always": false,
+            "created_at": "2026-01-01T00:00:00Z",
+            "pane_id": pane_id,
+            "kind": "claude",
+        });
+        std::fs::write(mailbox::job_path(&bee_dir, job_id), serde_json::to_string(&job).unwrap()).unwrap();
+        std::fs::write(
+            mailbox::result_path(&bee_dir, job_id, round),
+            r#"{"status":"done","summary":"round done","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+    }
+
+    fn continue_options(main_root: &Path, dry_run: bool) -> Options {
+        Options {
+            task: "round 2: keep going".to_string(),
+            cwd: main_root.join("work"),
+            job_id: "job-1".to_string(),
+            idle_timeout_secs: 3_600,
+            ceiling_secs: 3_600,
+            close_always: false,
+            main_root: main_root.to_path_buf(),
+            json: true,
+            dry_run,
+            is_continue: true,
         }
     }
 
@@ -1088,5 +1429,152 @@ mod tests {
         assert!(opts.dry_run);
         assert_eq!(opts.idle_timeout_secs, 30);
         assert_eq!(opts.ceiling_secs, 60);
+    }
+
+    #[test]
+    fn parse_options_continue_sets_is_continue_and_the_job_id() {
+        let opts = parse_options(&["--task", "round 2", "--main-root", ".", "--continue", "job-9"]).unwrap();
+        assert!(opts.is_continue);
+        assert_eq!(opts.job_id, "job-9");
+    }
+
+    // ─── --continue (D3) ────────────────────────────────────────────────
+
+    #[test]
+    fn continue_sends_a_prompt_to_the_recorded_pane_and_never_calls_agent_start() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        let opts = continue_options(tmp.path(), false);
+        let fake = FakeHerdr::new();
+
+        // Round 2's result lands from a second thread shortly after the
+        // wait starts — NOT before `execute` is called, which would let
+        // the directory listing see it as round 2 already being the
+        // "prior" round and ask for round 3 instead. `execute_continue`
+        // sends its prompt (and writes the updated job.json) before the
+        // wait loop starts, so this thread racing the write is safe: the
+        // prompt-recording assertions below read state `execute` already
+        // finished setting before it ever started waiting.
+        let bee_dir = tmp.path().join(".bee");
+        let result_path = mailbox::result_path(&bee_dir, "job-1", 2);
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            std::fs::write(
+                &result_path,
+                r#"{"status":"done","summary":"round 2 done","files_changed":[],"proof":"n/a"}"#,
+            )
+            .unwrap();
+        });
+
+        let result = execute(&opts, &fake);
+        writer.join().unwrap();
+
+        assert!(fake.start_calls.borrow().is_empty(), "--continue must never call agent_start");
+        let prompts = fake.prompt_calls.borrow();
+        assert_eq!(prompts.len(), 1, "expected exactly one agent_prompt call: {prompts:?}");
+        assert_eq!(prompts[0].0, "job-1");
+        assert!(prompts[0].1.contains("round 2: keep going"), "prompt missing the round 2 task:\n{}", prompts[0].1);
+        assert!(prompts[0].1.contains("round 2"), "prompt does not name round 2:\n{}", prompts[0].1);
+        assert!(prompts[0].1.contains("result-2.json"), "prompt does not name result-2.json:\n{}", prompts[0].1);
+
+        match &result.outcome {
+            RunOutcome::Result(r) => assert_eq!(r.summary, "round 2 done"),
+            other => panic!("expected Result, got {other:?}"),
+        }
+        assert_eq!(result.pane_id.as_deref(), Some("w1:p2"));
+    }
+
+    #[test]
+    fn continue_waits_on_the_incremented_round_not_the_already_present_round_1() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Round 1's result already exists (seed_job writes it) — a poll
+        // that merely checked "any result present" would return
+        // immediately with round 1's stale result. This test proves it
+        // instead times out waiting specifically for round 2.
+        seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        let mut opts = continue_options(tmp.path(), false);
+        opts.idle_timeout_secs = 1; // no round-2 result ever arrives; trips fast
+        let fake = FakeHerdr::new();
+
+        let result = execute(&opts, &fake);
+
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+    }
+
+    #[test]
+    fn continue_refuses_when_the_job_dir_is_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = continue_options(tmp.path(), false);
+        let result = execute(&opts, &PanicHerdr);
+        match &result.outcome {
+            RunOutcome::ContinueRefused(ContinueRefusal::JobDirMissing { job_id }) => {
+                assert_eq!(job_id, "job-1")
+            }
+            other => panic!("expected ContinueRefused(JobDirMissing), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn continue_refuses_when_there_is_no_prior_result() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, "job-1");
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": "job-1",
+            "task": "round 1 task",
+            "cwd": tmp.path().join("work").display().to_string(),
+            "round": 1,
+            "pane_id": "w1:p2",
+            "kind": "claude",
+        });
+        std::fs::write(mailbox::job_path(&bee_dir, "job-1"), serde_json::to_string(&job).unwrap()).unwrap();
+        let opts = continue_options(tmp.path(), false);
+        let result = execute(&opts, &PanicHerdr);
+        match &result.outcome {
+            RunOutcome::ContinueRefused(ContinueRefusal::NoPriorResult { job_id }) => {
+                assert_eq!(job_id, "job-1")
+            }
+            other => panic!("expected ContinueRefused(NoPriorResult), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn continue_refuses_when_the_recorded_pane_is_gone() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        let opts = continue_options(tmp.path(), false);
+        let mut fake = FakeHerdr::new();
+        fake.alive_panes = RefCell::new(Vec::new()); // w1:p2 no longer alive
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::ContinueRefused(ContinueRefusal::PaneGone { job_id, pane_id }) => {
+                assert_eq!(job_id, "job-1");
+                assert_eq!(pane_id.as_deref(), Some("w1:p2"));
+            }
+            other => panic!("expected ContinueRefused(PaneGone), got {other:?}"),
+        }
+        assert!(fake.prompt_calls.borrow().is_empty(), "a gone pane must never receive a prompt");
+    }
+
+    #[test]
+    fn continue_with_dry_run_renders_the_round_n_plus_one_brief_and_sends_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        let opts = continue_options(tmp.path(), true);
+        // PanicHerdr: proves --continue --dry-run touches no Herdr method,
+        // including pane_alive — the same "spawns no process" contract a
+        // fresh --dry-run keeps.
+        let result = execute(&opts, &PanicHerdr);
+        match &result.outcome {
+            RunOutcome::DryRun(brief) => {
+                assert!(brief.contains("round 2"), "brief does not name round 2:\n{brief}");
+                assert!(brief.contains("result-2.json"), "brief does not name result-2.json:\n{brief}");
+                assert!(brief.contains("round 2: keep going"), "brief missing the round 2 task:\n{brief}");
+            }
+            other => panic!("expected DryRun, got {other:?}"),
+        }
+        assert!(result.pane_id.is_none());
+        assert!(!result.closed_pane);
     }
 }
