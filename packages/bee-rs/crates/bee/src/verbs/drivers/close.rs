@@ -1115,6 +1115,10 @@ pub(crate) fn normalize_doc_deferral_line(line: &str) -> String {
 /// deterministic regardless of scan order.
 type DocDeferralBaseline = std::collections::BTreeMap<String, std::collections::BTreeSet<String>>;
 
+/// How many seed messages the `--dry-run` detail spells out before it
+/// summarises the rest. The count is always exact; only the sample is capped.
+pub(crate) const DOC_DEFERRAL_DRY_RUN_SAMPLE: usize = 20;
+
 /// D3: the tracked, git-visible baseline file (D3) — beside `.bee/backlog.
 /// jsonl`, not in the gitignored `.bee/state.json`/`.bee/runtime/` family.
 pub(crate) fn doc_deferral_baseline_path(root: &Path) -> PathBuf {
@@ -1258,15 +1262,28 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str, dry_run: bool)
                         command: None,
                     });
                 }
-                let messages: Vec<String> = seed_candidates.iter().map(|c| c.message.clone()).collect();
+                // The repo-wide seed set runs to four figures on a real docs
+                // tree, and this detail is printed AND embedded in the JSON
+                // doors payload. Name the count, then show a sample — D5 asks
+                // for an honest prediction, not a transcript of it.
+                let shown = seed_candidates.len().min(DOC_DEFERRAL_DRY_RUN_SAMPLE);
+                let messages: Vec<String> =
+                    seed_candidates.iter().take(shown).map(|c| c.message.clone()).collect();
+                let remainder = seed_candidates.len() - shown;
+                let tail = if remainder > 0 {
+                    format!("; and {remainder} more")
+                } else {
+                    String::new()
+                };
                 return Ok(Door {
                     door: "doc-deferral",
                     blocking: false,
                     detail: format!(
-                        "SEED (dry-run) — no baseline file yet; a real `bee close` would baseline {} pre-existing deferral line(s) across {} markdown file(s) under docs/, repo-wide, and pass: {}",
+                        "SEED (dry-run) — no baseline file yet; a real `bee close` would baseline {} pre-existing deferral line(s) across {} markdown file(s) under docs/, repo-wide, and pass: {}{}",
                         seed_candidates.len(),
                         seed_files.len(),
-                        messages.join("; ")
+                        messages.join("; "),
+                        tail
                     ),
                     command: None,
                 });

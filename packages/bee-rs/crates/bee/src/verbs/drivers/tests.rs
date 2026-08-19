@@ -3356,6 +3356,53 @@ use std::time::Instant;
         assert!(!doc_deferral_baseline_path(root).exists());
     }
 
+    /// The repo-wide seed set runs to four figures on a real docs tree, and
+    /// this detail is both printed and embedded in the JSON doors payload.
+    /// Spelling every message out made it 143 KB on the bee repo itself. The
+    /// COUNT stays exact — D5 wants an honest prediction — but the sample is
+    /// capped and the remainder summarised.
+    ///
+    /// Every number below is a LITERAL on purpose. Deriving them from
+    /// `DOC_DEFERRAL_DRY_RUN_SAMPLE` made this test pass with the cap raised
+    /// to 100000 — it asserted only that the code agreed with itself.
+    #[test]
+    fn doc_deferral_door_dry_run_detail_caps_the_sample_and_still_names_the_exact_count() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        for i in 0..27 {
+            w(
+                root,
+                &format!("docs/knowledge/areas/demo/note{i}.md"),
+                "intro line\nThis work is deferred for now.\n",
+            );
+        }
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/note0.md");
+        let door = build_doc_deferral_door(root, "demo", true).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert!(
+            door.detail.contains("27 pre-existing deferral line(s)"),
+            "the exact count must survive the cap: {}",
+            door.detail
+        );
+        assert!(
+            door.detail.contains("and 7 more"),
+            "the remainder must be summarised: {}",
+            door.detail
+        );
+        assert_eq!(
+            door.detail.matches("deferral-shaped prose").count(),
+            20,
+            "exactly the sample is spelled out, not every match: {}",
+            door.detail
+        );
+        assert!(
+            door.detail.len() < 4096,
+            "the detail is printed and embedded in JSON; it stayed {} bytes",
+            door.detail.len()
+        );
+        assert!(!doc_deferral_baseline_path(root).exists());
+    }
+
     /// D6: the SEED is REPO-WIDE — it records deferral lines from every
     /// markdown file under `docs/`, including files the closing feature's
     /// own scan set never sees. Without that, the seed would freeze only the
