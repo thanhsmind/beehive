@@ -14,7 +14,7 @@ bee:
   lifecycle: active
   areas: [workflow-state, rust-runtime]
   required_context: [docs/history/auto-wait-mark/CONTEXT.md, docs/history/auto-wait-mark/plan.md]
-  sources: [docs/history/auto-wait-mark/CONTEXT.md, docs/history/auto-wait-mark/plan.md, .bee/cells/awm-1.json, .bee/cells/awm-2.json]
+  sources: [docs/history/auto-wait-mark/CONTEXT.md, docs/history/auto-wait-mark/plan.md, .bee/cells/archive/auto-wait-mark/awm-1.json, .bee/cells/archive/auto-wait-mark/awm-2.json]
 ---
 
 # auto-wait-mark — Delivery
@@ -44,12 +44,12 @@ Proposed by `bee knowledge promote --work auto-wait-mark` from 2 capped cell tra
 areas: from the scribing stamp for "auto-wait-mark" — .bee/logs/scribing-runs.jsonl's most recent entry (2026-08-18T14:47:32.075Z), the work item declares no bee.areas.
 
 area workflow-state:
-  - [awm-1] Widened the waiting_on kind vocabulary to gate/question/turn-end and stopped bee orient calling a turn-end mark a blocker; refusal-message assertions now pin all three values, proven red-then-green by mutation. OWED and deliberately not fixed here: verbs/state_group/tests.rs:586 and tests/workflow_verbs.rs:566 still carry the prefix-only two-value assertion — the first is reserved by worktree start-feature-reservation-scope (cell sfrs-1, whose commit 60f9d2c7 already rewrote that file in main, so this worktree's copy is stale), the second was found by the judge and belongs to the same re-triage pass after that merge. — feature-wide sync per the scribing stamp, 9 file(s) changed (trace .bee/cells/awm-1.json)
-  - [awm-2] The Stop hook writes a turn-end waiting mark on every genuine turn end, reusing the store's existing setter and D3 target resolution, never overwriting a declared gate or question mark, with the subject taken from the transcript's last non-empty assistant line. The transcript is read exactly once per Stop — one resolver, one read, proven by two read-counting tests including the late-perf-failure path that two earlier attempts leaked. — feature-wide sync per the scribing stamp, 7 file(s) changed (trace .bee/cells/awm-2.json)
+  - [awm-1] Widened the waiting_on kind vocabulary to gate/question/turn-end and stopped bee orient calling a turn-end mark a blocker; refusal-message assertions now pin all three values, proven red-then-green by mutation. OWED and deliberately not fixed here: verbs/state_group/tests.rs:586 and tests/workflow_verbs.rs:566 still carry the prefix-only two-value assertion — the first is reserved by worktree start-feature-reservation-scope (cell sfrs-1, whose commit 60f9d2c7 already rewrote that file in main, so this worktree's copy is stale), the second was found by the judge and belongs to the same re-triage pass after that merge. — feature-wide sync per the scribing stamp, 9 file(s) changed (trace .bee/cells/archive/auto-wait-mark/awm-1.json)
+  - [awm-2] The Stop hook writes a turn-end waiting mark on every genuine turn end, reusing the store's existing setter and D3 target resolution, never overwriting a declared gate or question mark, with the subject taken from the transcript's last non-empty assistant line. The transcript is read exactly once per Stop — one resolver, one read, proven by two read-counting tests including the late-perf-failure path that two earlier attempts leaked. — feature-wide sync per the scribing stamp, 7 file(s) changed (trace .bee/cells/archive/auto-wait-mark/awm-2.json)
 
 area rust-runtime:
-  - [awm-1] Widened the waiting_on kind vocabulary to gate/question/turn-end and stopped bee orient calling a turn-end mark a blocker; refusal-message assertions now pin all three values, proven red-then-green by mutation. OWED and deliberately not fixed here: verbs/state_group/tests.rs:586 and tests/workflow_verbs.rs:566 still carry the prefix-only two-value assertion — the first is reserved by worktree start-feature-reservation-scope (cell sfrs-1, whose commit 60f9d2c7 already rewrote that file in main, so this worktree's copy is stale), the second was found by the judge and belongs to the same re-triage pass after that merge. — feature-wide sync per the scribing stamp, 9 file(s) changed (trace .bee/cells/awm-1.json)
-  - [awm-2] The Stop hook writes a turn-end waiting mark on every genuine turn end, reusing the store's existing setter and D3 target resolution, never overwriting a declared gate or question mark, with the subject taken from the transcript's last non-empty assistant line. The transcript is read exactly once per Stop — one resolver, one read, proven by two read-counting tests including the late-perf-failure path that two earlier attempts leaked. — feature-wide sync per the scribing stamp, 7 file(s) changed (trace .bee/cells/awm-2.json)
+  - [awm-1] Widened the waiting_on kind vocabulary to gate/question/turn-end and stopped bee orient calling a turn-end mark a blocker; refusal-message assertions now pin all three values, proven red-then-green by mutation. OWED and deliberately not fixed here: verbs/state_group/tests.rs:586 and tests/workflow_verbs.rs:566 still carry the prefix-only two-value assertion — the first is reserved by worktree start-feature-reservation-scope (cell sfrs-1, whose commit 60f9d2c7 already rewrote that file in main, so this worktree's copy is stale), the second was found by the judge and belongs to the same re-triage pass after that merge. — feature-wide sync per the scribing stamp, 9 file(s) changed (trace .bee/cells/archive/auto-wait-mark/awm-1.json)
+  - [awm-2] The Stop hook writes a turn-end waiting mark on every genuine turn end, reusing the store's existing setter and D3 target resolution, never overwriting a declared gate or question mark, with the subject taken from the transcript's last non-empty assistant line. The transcript is read exactly once per Stop — one resolver, one read, proven by two read-counting tests including the late-perf-failure path that two earlier attempts leaked. — feature-wide sync per the scribing stamp, 7 file(s) changed (trace .bee/cells/archive/auto-wait-mark/awm-2.json)
 
 (c) PATTERN CANDIDATES — candidate bee.pattern concepts, bee.polarity pitfall
 
@@ -64,7 +64,7 @@ bee:
   id: auto-wait-mark-awm-1-pitfall
   lifecycle: draft
   areas: [workflow-state, rust-runtime]
-  sources: [.bee/cells/awm-1.json]
+  sources: [.bee/cells/archive/auto-wait-mark/awm-1.json]
   polarity: pitfall
 ---
 
@@ -74,7 +74,7 @@ bee:
 
 Widened the waiting_on kind vocabulary to gate/question/turn-end and stopped bee orient calling a turn-end mark a blocker; refusal-message assertions now pin all three values, proven red-then-green by mutation. OWED and deliberately not fixed here: verbs/state_group/tests.rs:586 and tests/workflow_verbs.rs:566 still carry the prefix-only two-value assertion — the first is reserved by worktree start-feature-reservation-scope (cell sfrs-1, whose commit 60f9d2c7 already rewrote that file in main, so this worktree's copy is stale), the second was found by the judge and belongs to the same re-triage pass after that merge.
 
-## Recorded evidence (verbatim from .bee/cells/awm-1.json)
+## Recorded evidence (verbatim from .bee/cells/archive/auto-wait-mark/awm-1.json)
 
 - **failure_signature** — orient.rs:407 hardcodes the "turn-end" literal instead of sharing record.rs's constant — two spellings of the kind value, K1's drift guard unmet
 
@@ -93,7 +93,7 @@ bee:
   id: auto-wait-mark-awm-2-pitfall
   lifecycle: draft
   areas: [workflow-state, rust-runtime]
-  sources: [.bee/cells/awm-2.json]
+  sources: [.bee/cells/archive/auto-wait-mark/awm-2.json]
   polarity: pitfall
 ---
 
@@ -103,7 +103,7 @@ bee:
 
 The Stop hook writes a turn-end waiting mark on every genuine turn end, reusing the store's existing setter and D3 target resolution, never overwriting a declared gate or question mark, with the subject taken from the transcript's last non-empty assistant line. The transcript is read exactly once per Stop — one resolver, one read, proven by two read-counting tests including the late-perf-failure path that two earlier attempts leaked.
 
-## Recorded evidence (verbatim from .bee/cells/awm-2.json)
+## Recorded evidence (verbatim from .bee/cells/archive/auto-wait-mark/awm-2.json)
 
 - **failure_signature** — transcript-read-doubled: turn_end_subject (mod.rs:357 read_jsonl) re-reads the transcript perf_refresh already read via rollup_transcript (perf.rs:378), so every Stop performs two full std::fs::read of the same file — violating K2, P3, and CONTEXT.md:45-47's locked constraint. Fix: have perf_refresh or rollup hand back the parsed events and feed turn_end_subject from those instead of re-reading.
 - **failure_signature** — Stop still reads the transcript twice when perf_refresh errors after its own read (html.rs:272-286 -> mod.rs:159 None -> mod.rs:386 fallback re-read), and mod.rs:365-368 documents that caller as non-existent
