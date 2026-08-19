@@ -81,8 +81,8 @@ binary or a transient error cannot produce an infinite retry, and the control in
 turn ceiling — iterations were bounded in the original design, spend was not.
 
 **The working-agent and control-pane spawn commands are config-driven templates,
-byte-equivalent to the hardcoded default (i54-closeout D4).** `control-loop.sh`
-reads an optional `.bee/config.json` `herding.control_command` — a JSON array of
+byte-equivalent to the hardcoded default (i54-closeout D4).** `bee herding
+control-loop` reads an optional `.bee/config.json` `herding.control_command` — a JSON array of
 argv-token strings — and, when present, substitutes `{PROMPT}` / `{MODEL}` /
 `{MAX_TURNS}` / `{ALLOWED_TOOLS}` per token and runs the result verbatim: tokens
 are never joined into one string and re-split or shell-`eval`'d, so a
@@ -169,7 +169,8 @@ the dispatch interlock, or the merge owner-gesture change.
 ## Pointers (implementation)
 
 - The skill and its three roles: `skills/bee-herding/SKILL.md`; the loop driver
-  `skills/bee-herding/scripts/control-loop.sh`; the one-shot
+  `bee herding control-loop`
+  (`packages/bee-rs/crates/bee/src/herding/control_loop.rs`); the one-shot
   `skills/bee-herding/scripts/bootstrap-cockpit.sh`.
 - The `herding` command group — `classify-lane`, `interlock`, `command-template`,
   `herdr-result` and `herdr-pane-id`, the five verbs the current binary actually

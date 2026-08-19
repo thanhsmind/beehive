@@ -71,7 +71,7 @@ Useful first: `--dry-run` prints the herdr commands and executes nothing. `--no-
 When you want finished worktrees merged into main, run merge yourself, in the merge pane (or any shell rooted at the main checkout):
 
 ```
-bash .claude/skills/bee-herding/scripts/control-loop.sh \
+<main-root>/.bee/bin/bee herding control-loop \
     --role merge --main-root <main-root> --timeout 5400 --once
 ```
 
