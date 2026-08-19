@@ -574,6 +574,57 @@ enum StartDecision {
     Spawn(Vec<String>),
 }
 
+/// Turns a pane id (or any `worker_name`) into a slug `herdr agent start`
+/// will actually accept as its NAME argument. herdr 0.8.0, live, rejects
+/// anything outside its own stated rule with `invalid_agent_name`: "agent
+/// name must start with a lowercase letter and contain only lowercase
+/// letters, digits, '-' or '_' (1-32 characters)" — the exact error a real
+/// D6 run hit on `w4:pG`/`w4:pH`, because herdr numbers panes `p1..p9`
+/// then `pA`, `pB`, `pC`…, so most panes in a busy workspace carry an
+/// uppercase letter the old `worker_name.replace(':', "-")` passed
+/// through unchanged. This function makes the result legal BY
+/// CONSTRUCTION rather than merely handling the colon:
+///
+/// 1. Lowercase every character (folds `pG` → `pg`).
+/// 2. Map every character outside `[a-z0-9_-]` (the colon included) to a
+///    dash, so the pane id's own `<workspace>:p<N>` shape stays
+///    recognizable in `herdr agent list` output — sanitizing rather than
+///    discarding the pane id is the only reason the slug is derived from
+///    it at all (see `decide_start`'s own docs).
+/// 3. Prepend `a` when step 1/2 left a first character that is not a
+///    lowercase letter (an empty string, or one starting with a digit,
+///    dash, or underscore) — herdr's rule requires the FIRST character
+///    specifically to be a lowercase letter, not just an allowed one.
+/// 4. Truncate to 32 characters, herdr's own stated ceiling.
+///
+/// **Accepted collision.** Step 1 means a lowercased slug cannot
+/// distinguish pane ids that differ only by case (`w4:pG` and `w4:pg`
+/// collapse onto the same `w4-pg`) — herdr itself has no such collision
+/// today (it names panes `p1..p9`, `pA..`, one case only), so this is a
+/// theoretical hazard, not an observed one. It is accepted rather than
+/// fixed with a hash of the original id: a hash keeps the slug unique but
+/// throws away exactly the property `agent list` readability exists for
+/// (see point 2) — a human skimming `herdr agent list` could no longer
+/// tell which pane an agent slug belongs to, trading a real, checked-in
+/// debugging aid for a collision this module has no evidence herdr can
+/// ever actually produce.
+///
+/// Pure: no process dependency, so this exact mapping is provable without
+/// spawning herdr, on every platform including Windows.
+fn sanitize_agent_slug(worker_name: &str) -> String {
+    let mut slug: String = worker_name
+        .chars()
+        .map(|c| c.to_ascii_lowercase())
+        .map(|c| if c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_' { c } else { '-' })
+        .collect();
+    let starts_with_lowercase_letter = slug.chars().next().is_some_and(|c| c.is_ascii_lowercase());
+    if !starts_with_lowercase_letter {
+        slug.insert(0, 'a');
+    }
+    slug.truncate(32);
+    slug
+}
+
 /// Decides `start`'s outcome from an already-fetched `agent list` body.
 /// `agent_kind`/`agent_args` are `HerdrBackend`'s own construction
 /// parameters (D14 — see the struct's field docs); this function only
@@ -593,11 +644,13 @@ enum StartDecision {
 ///   literal `"claude"` here) and `agent_args`, when non-empty, appended
 ///   after a literal `--` (D14's "remaining tokens go after `--` as agent
 ///   arguments"). The slug passed as `agent start`'s own NAME argument is
-///   derived from the pane id — herdr's own examples (spawn-proof.md) use
-///   caller-chosen slugs with no fixed relationship to the pane, so any
-///   stable, herdr-legal string works; sanitizing the pane id's colon
-///   keeps it recognizable in `herdr agent list` output without guessing
-///   at a naming scheme this trait has no other input to derive one from.
+///   derived from the pane id via `sanitize_agent_slug` — herdr's own
+///   examples (spawn-proof.md) use caller-chosen slugs with no fixed
+///   relationship to the pane, so any stable, herdr-legal string works;
+///   sanitizing the pane id (see `sanitize_agent_slug`'s own docs for
+///   exactly what "legal" requires and the collision it accepts) keeps it
+///   recognizable in `herdr agent list` output without guessing at a
+///   naming scheme this trait has no other input to derive one from.
 ///
 /// Pure: spawns nothing, so `start`'s refusal rule (judge mutation H7,
 /// "silently returns Ok instead of refusing") and the constructed-not-
@@ -621,7 +674,7 @@ fn decide_start(
              backend's"
         ));
     }
-    let slug = worker_name.replace(':', "-");
+    let slug = sanitize_agent_slug(worker_name);
     let mut argv = vec![
         "agent".to_string(),
         "start".to_string(),
@@ -1060,6 +1113,43 @@ mod tests {
                     .position(|a| a == "--")
                     .expect("agent_args must be appended after a literal --");
                 assert_eq!(&argv[idx + 1..], &["--model", "opus"]);
+            }
+            other => panic!("a pane id with no agent yet must spawn; got {other:?}"),
+        }
+    }
+
+    /// herdr 0.8.0's own stated rule for `agent start`'s NAME argument,
+    /// live: "agent name must start with a lowercase letter and contain
+    /// only lowercase letters, digits, '-' or '_' (1-32 characters)".
+    /// Written independently of `sanitize_agent_slug` (not by calling it)
+    /// so the test below states herdr's CONTRACT, not merely that the
+    /// production function agrees with itself.
+    fn is_legal_herdr_agent_name(name: &str) -> bool {
+        let mut chars = name.chars();
+        let starts_with_lowercase_letter = chars.next().is_some_and(|c| c.is_ascii_lowercase());
+        starts_with_lowercase_letter
+            && (1..=32).contains(&name.len())
+            && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+    }
+
+    #[test]
+    fn decide_start_derives_an_herdr_legal_slug_from_an_uppercase_pane_id() {
+        // Reproduces the live D6 failure verbatim: herdr numbers panes
+        // p1..p9 then pA, pB, pC..., and `w4:pG` is exactly the pane id a
+        // real wave aborted phase 1 on (invalid_agent_name) before this
+        // fix, because the old `worker_name.replace(':', "-")` passed the
+        // uppercase `G` straight through.
+        let body: Value = serde_json::json!({"type":"ok","result":{"agents":[]}});
+        match decide_start(&body, "w4:pG", "claude", &[], START_TIMEOUT_MS) {
+            StartDecision::Spawn(argv) => {
+                let name = &argv[2];
+                assert!(
+                    is_legal_herdr_agent_name(name),
+                    "the NAME argument passed to `herdr agent start` must satisfy herdr's own \
+                     stated naming rule (start with a lowercase letter; only lowercase letters, \
+                     digits, '-', or '_'; 1-32 characters) for every pane id, uppercase letters \
+                     included; got {name:?}"
+                );
             }
             other => panic!("a pane id with no agent yet must spawn; got {other:?}"),
         }

@@ -486,7 +486,11 @@ fn start_spawns_a_fresh_agent_using_the_constructed_kind_never_a_hardcoded_liter
     assert_eq!(invocations.len(), 2, "got {invocations:?}");
     assert!(invocations[0].starts_with("agent list"), "got {:?}", invocations[0]);
     assert!(
-        invocations[1].starts_with("agent start w4-pB --kind codex --pane w4:pB"),
+        // The slug is now derived by `sanitize_agent_slug` (herding-
+        // orchestration ho-17): lowercased, not merely colon-to-dash, so
+        // it stays legal per herdr's own `invalid_agent_name` rule for
+        // uppercase pane ids like `w4:pB` too.
+        invocations[1].starts_with("agent start w4-pb --kind codex --pane w4:pB"),
         "the constructed kind must reach agent start's argv, never a hardcoded literal; got {:?}",
         invocations[1]
     );
