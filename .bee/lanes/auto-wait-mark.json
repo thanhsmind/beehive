@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Tôi chọn **A** — verb đã xây xong mà không ai biết dùng thì coi như chưa ship. Bạn nói đi.",
-    "asked_at": "2026-08-19T13:37:33.013Z",
-    "session": "761ea1d0-6aa0-4de9-b549-8d7b597174e1"
+    "subject": "Ghi vào thiết kế rồi. Việc tiếp vẫn là: gom hồ sơ shaping khoá quyết định — mailbox, health-check trong Rust, đóng pane, bỏ allow-list, scop",
+    "asked_at": "2026-08-19T16:04:49.711Z",
+    "session": "1adb69d1-67be-4463-8349-af8832af8a32"
   },
   "route": {
     "class": "feature",

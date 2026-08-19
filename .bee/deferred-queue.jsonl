@@ -92,3 +92,18 @@
 {"ts":"2026-08-19T10:54:10.384Z","event":"add","id":"906398ff-38a8-462d-98dc-34e54767106e","kind":"scribe","feature":"herding-orchestration","cells":["ho-17"],"areas":[],"files":["packages/bee-rs/crates/fleet/src/backend/herdr.rs"],"reason":"Scribing debt: 1 capped behavior_change cell(s) for \"herding-orchestration\" with no scribing/compounding record since capping."}
 {"ts":"2026-08-19T10:57:37.627Z","event":"add","id":"9536347b-3e74-4018-bde8-892e07d7dedd","kind":"promote","feature":"herding-orchestration","cells":[],"areas":[],"files":["docs/history/herding-orchestration/promote-proposals.md"],"reason":"Promote proposal for \"herding-orchestration\" awaiting apply — docs/history/herding-orchestration/promote-proposals.md."}
 {"ts":"2026-08-19T13:52:16.392Z","event":"add","id":"fb279460-0102-42a7-a345-71605a5612d0","kind":"promote","feature":"auto-wait-mark","cells":[],"areas":[],"files":["docs/history/auto-wait-mark/promote-proposals.md"],"reason":"Promote proposal for \"auto-wait-mark\" awaiting apply — docs/history/auto-wait-mark/promote-proposals.md."}
+{"ts":"2026-08-19T14:14:36.117Z","event":"complete","id":"41ea0b2f-bc36-4ed1-94eb-f4e852236576"}
+{"ts":"2026-08-19T14:14:36.659Z","event":"complete","id":"e7071ede-5a11-4eca-a709-92f6672e42e9"}
+{"ts":"2026-08-19T14:14:37.059Z","event":"complete","id":"90b39a77-cf58-4c97-8f7a-f794362fdac9"}
+{"ts":"2026-08-19T14:14:37.059Z","event":"complete","id":"40469d31-e690-4a90-9be5-c1a51d564786"}
+{"ts":"2026-08-19T14:14:37.332Z","event":"complete","id":"01e989ac-bc97-478b-80a2-2d2b45e2d7af"}
+{"ts":"2026-08-19T14:14:37.668Z","event":"complete","id":"f5c0548e-2a38-477e-a5fc-904f73b985d3"}
+{"ts":"2026-08-19T14:14:37.955Z","event":"complete","id":"d5a2ddac-a220-4671-af78-6bbee4d9234c"}
+{"ts":"2026-08-19T14:14:38.383Z","event":"complete","id":"a778109a-5b5a-4508-a3ba-6f432242d6dc"}
+{"ts":"2026-08-19T14:14:38.666Z","event":"complete","id":"3c90c94c-01f8-42e5-bcd9-b04ba7379a6e"}
+{"ts":"2026-08-19T14:14:39.277Z","event":"complete","id":"a276efb9-2703-4493-849f-383443ab157e"}
+{"ts":"2026-08-19T14:14:39.277Z","event":"complete","id":"b5deeb22-3dda-4512-96f4-febbf94606c5"}
+{"ts":"2026-08-19T14:14:39.277Z","event":"complete","id":"1ee0fef2-f75b-4d61-b421-8ef6df13d395"}
+{"ts":"2026-08-19T14:14:39.532Z","event":"complete","id":"f9cd3292-3746-4e17-920c-e4aede8db2d3"}
+{"ts":"2026-08-19T14:14:39.799Z","event":"complete","id":"116ffab5-8406-4fdb-a160-d7c074f8ac75"}
+{"ts":"2026-08-19T16:10:07.248Z","event":"add","id":"51f9cf10-af26-4f56-b574-ac158f55102d","kind":"promote","feature":"auto-wait-mark","cells":[],"areas":[],"files":["docs/history/auto-wait-mark/promote-proposals.md"],"reason":"Promote proposal for \"auto-wait-mark\" awaiting apply — docs/history/auto-wait-mark/promote-proposals.md."}
