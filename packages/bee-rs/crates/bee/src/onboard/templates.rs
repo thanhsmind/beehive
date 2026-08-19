@@ -54,6 +54,12 @@ pub const GITIGNORE_BLOCK_PATTERNS: &[&str] = &[
     ".bee/bin/bee.exe",
     ".claude/settings.json.bak",
     ".codex/hooks.json.bak",
+    // herding-executor D3/D8: the file mailbox worker-completion contract
+    // (job.json, result-N.json, log.txt) — runtime data, never committed.
+    // Appended at the end deliberately: the block's order is load-bearing
+    // (hashed into the managed ledger), so a new pattern joins at the tail
+    // rather than reordering any existing one.
+    ".bee/mailbox/",
 ];
 
 /// onboard_bee.mjs HOOK_FILENAMES (l. 225–248) — the vendoring order is the
