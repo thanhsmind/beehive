@@ -28,6 +28,11 @@ isolated copy — is what runs unattended.**
   iteration; every fact it needs is read live from state, the trunk, and the pane workspace.
 - **Merge** is **not a loop.** It is a single-shot the owner runs by hand when they want finished
   work retired.
+- **A wave is a fourth entry point, and no role calls it.** Dispatch starts one worker per iteration
+  and never speaks to it again; a wave briefs several already-running workers in one act and waits
+  on all of them together. It carries none of dispatch's guards — no arming marker, no classifier —
+  so it is a fan-out over workers that already exist, never the way ordinary backlog work is
+  started. It is invoked directly, by a human or by an agent that was told to.
 
 ## Data Dictionary
 
