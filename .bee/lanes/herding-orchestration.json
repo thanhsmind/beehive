@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"herding-orchestration\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 77d7cac; capture what settled, then bee close --feature herding-orchestration.",
+  "next_action": "Merged into main at 5ee4da5; capture what settled, then bee close --feature herding-orchestration.",
   "created_at": "2026-08-18T08:07:25.780Z",
   "run_state": null,
   "waiting_on": null,
