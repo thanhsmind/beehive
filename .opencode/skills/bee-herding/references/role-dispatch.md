@@ -383,8 +383,8 @@ In order, from the MAIN checkout:
    **Never pass `-p`/`--print`.** Also proven live: a headless argv runs to
    completion and exits, and herdr closes the pane with it — the working agent
    must be a plain interactive `claude` that stays alive for the whole item.
-   (`control-loop.sh` uses `claude -p` for the *control* panes, where the pane
-   runs a shell loop, not the agent.) The working agent keeps
+   (`bee herding control-loop` uses `claude -p` for the *control* panes, where the pane
+   runs the control loop, not the agent.) The working agent keeps
    `bypassPermissions` with no allowlist — the owner's recorded accepted risk
    (`references/operational-invariants.md`), not a default to trim.
 

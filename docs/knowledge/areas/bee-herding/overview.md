@@ -173,12 +173,13 @@ the dispatch interlock, or the merge owner-gesture change.
   (`packages/bee-rs/crates/bee/src/herding/control_loop.rs`); the one-shot
   `skills/bee-herding/scripts/bootstrap-cockpit.sh`.
 - The `herding` command group — `classify-lane`, `interlock`, `command-template`,
-  `herdr-result` and `herdr-pane-id`, the five verbs the current binary actually
+  `herdr-result`, `herdr-pane-id`, `wave`, `occupancy`, `record-worker` and
+  `control-loop`, the nine verbs the current binary actually
   serves — is implemented in `packages/bee-rs/crates/bee/src/herding.rs`, dispatched
   from `packages/bee-rs/crates/bee/src/router.rs`, and listed (with `enable`,
   `disable` and `status` marked `unavailable`) in the command catalog
   `packages/bee-rs/crates/bee/src/catalog.rs`. `enable`, `disable` and `status` are
-  not among the five live verbs and refuse by name; the manual `touch`/`rm` marker
+  not among the nine live verbs and refuse by name; the manual `touch`/`rm` marker
   gesture is their only live form (see Data Dictionary). Test coverage is inline:
   the `#[cfg(test)] mod tests` block in `herding.rs`.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that

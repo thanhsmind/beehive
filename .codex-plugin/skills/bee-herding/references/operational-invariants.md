@@ -29,7 +29,7 @@ risk, owned by the operator.**
 > is a sandbox.
 
 **Control panes — enumerated command surface, never `bypassPermissions`,
-never "read-only".** `control-loop.sh` starts each control pane
+never "read-only".** `bee herding control-loop` starts each control pane
 under an enumerated `--allowedTools` list sized to exactly what that role
 measurably does. It is not read-only, because both control roles genuinely
 write: **dispatch** runs `bee worktree new` (creates a worktree and registers
@@ -50,13 +50,13 @@ Narrowing the control panes buys a second thing honestly — it stops
 that same cold model from "helpfully" improvising a command outside
 its job (e.g. cleaning a dirty main). The exact allowlist per role, and
 the note that it must grow if a role gains a command, live in
-`control-loop.sh`.
+`bee herding control-loop`.
 
 ## Runtime adapter
 
 Config-driven spawn commands. Both spawn points — the
 working agent's trailing argv (Dispatch role §8), and the control pane's real
-invocation inside `control-loop.sh` — read from an optional `.bee/config.json`
+invocation inside `bee herding control-loop` — read from an optional `.bee/config.json`
 command-template seam instead of a hardcoded string. **With no `herding`
 config keys at all, every spawned command is THE SAME EFFECTIVE SPAWN this
 skill has always run — zero behavior change.** Not byte-equivalent: herdr
@@ -79,7 +79,7 @@ Two independent keys, each a JSON array of argv-token strings:
   — the documented default array is unchanged; token 0 (`claude`) now feeds
   `--kind` and the rest follows `--`.
 - **`herding.control_command`** — the CONTROL pane's real invocation inside
-  `control-loop.sh`'s `run_iteration`. Placeholders: `{PROMPT}`, `{MODEL}`,
+  `bee herding control-loop`'s `build_control_argv`. Placeholders: `{PROMPT}`, `{MODEL}`,
   `{MAX_TURNS}`, `{ALLOWED_TOOLS}`. Default when absent:
   `["claude", "-p", "{PROMPT}", "--model", "sonnet", "--max-turns",
   "{MAX_TURNS}", "--allowedTools", "{ALLOWED_TOOLS}"]` — exactly today's
@@ -103,8 +103,9 @@ element is substituted and passed as one discrete argv element; a value
 containing spaces, quotes, or shell metacharacters (the free-form `{PROMPT}`
 text, in particular) lands as the literal content of that one argument and
 can never spill into another argument or be reinterpreted as a shell
-operator. `control-loop.sh`'s `read_command_template`/`substitute_placeholders`
-functions are the reference implementation for `control_command`; a
+operator. `bee herding control-loop`'s `build_control_argv` (via
+`read_command_template_tokens`/`substitute_token`) is the reference
+implementation for `control_command`; a
 dispatch-role agent applies the identical per-token substitution itself when
 building `agent_command` for §8 (there is no script to call — the
 working-agent spawn line is issued live by whichever agent is running the
@@ -162,7 +163,7 @@ obvious English keyword hit," never as "safe."
 ## Stop and resume
 
 `touch <main-root>/.bee/tmp/bee-herding.stop` stops the **control loop**
-(dispatch) at the next iteration boundary — `control-loop.sh` checks the file
+(dispatch) at the next iteration boundary — `bee herding control-loop` checks the file
 both before and after every iteration, so a stop created mid-iteration takes
 effect at that boundary rather than a full interval later. Removing the file
 lets the loop be started again (it does not restart on its own — re-run
