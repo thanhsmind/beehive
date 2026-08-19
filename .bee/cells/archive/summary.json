@@ -613,5 +613,10 @@
     "capped": 17,
     "dropped": 0,
     "archived_at": "2026-08-19T10:57:37.626Z"
+  },
+  "herding-executor": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-08-19T23:18:37.261Z"
   }
 }
