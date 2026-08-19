@@ -4,9 +4,9 @@
   "mode": "feature",
   "phase": "exploring",
   "approved_gates": {
-    "context": false,
-    "shape": false,
-    "execution": false,
+    "context": true,
+    "shape": true,
+    "execution": true,
     "review": false,
     "uat": false
   },

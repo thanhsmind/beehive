@@ -1,0 +1,68 @@
+{
+  "id": "ho-13",
+  "feature": "herding-orchestration",
+  "title": "Replace control-loop.sh with a Rust control loop",
+  "lane": "standard",
+  "behavior_change": true,
+  "action": "Replace skills/bee-herding/scripts/control-loop.sh with Rust in the bee crate, per D8. This is the last Windows blocker: the script's only Windows-fatal parts are GNU coreutils timeout and a bash-4.3 nameref, and everything else in its 438 lines is flow control. Read the script in full first — it is the specification. WHAT IT DOES, and all of it must survive: parse a required role of dispatch or merge plus optional main-root, interval, timeout, max-iterations, max-consecutive-failures, turn-ceiling and a run-once switch; read the role's opening prompt from the references directory; build the control agent's argv; check the stop file before AND after every iteration and exit cleanly when it appears; run one iteration under a wall-clock ceiling; count consecutive failures and back off with a cap; stop at the iteration ceiling; and exit zero on a normal stop and non-zero when the failure ceiling is reached. THE PART THAT HOLDS THE LANE AT STANDARD IS D13. The script builds the control pane's --allowedTools surface and the working agent's permission tail. When no herding.control_command config is present, the argv this Rust loop constructs must be BYTE-IDENTICAL to the bash default, and a test must prove it — a silent drift here breaks the recorded permission-posture split (herding-adopt D7 / R4) with nothing failing loudly. When the config IS present, substitution stays per-token, never a join-then-split and never a shell eval, exactly as the existing seam documents. THE HARD TECHNICAL PART, deferred to planning by CONTEXT.md and now due: reproduce the wall-clock ceiling GNU timeout gave, on both platforms. The bash form sends a terminate signal at the deadline and a kill 30 seconds later. std has no timed wait on a child, so the shape is a wait on another thread with a bounded receive, then killing the child. Decide and document what happens to a child that ignores the first signal, and note in a comment whether the child's own descendants are reached — a control agent spawns processes of its own, and if the answer is no, say so rather than implying a guarantee that does not hold. TESTS, and heed the lesson this feature has now paid for eight times: assert at the boundary production crosses, and assert every value that crosses it. The argv test must compare the WHOLE token vector the loop will actually spawn, not a prefix or a count. The ceiling test must prove an overrunning iteration is actually killed rather than merely that a timer elapsed. Drive the loop with an injectable command rather than spawning a real control agent, so tests need no claude binary and no herdr. Leave the shell script in place for now, unreferenced — the cell that rewires bootstrap-cockpit.sh removes it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "skills/bee-herding/scripts/control-loop.sh",
+    "skills/bee-herding/references/operational-invariants.md",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/*",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "With no herding.control_command config, the argv the loop constructs is byte-identical to the bash default, proven by a test comparing the whole token vector.",
+      "With the config present, substitution is per-token, never a join-then-split and never a shell eval.",
+      "An iteration that overruns the wall-clock ceiling is actually killed, proven by a test, on a path that uses no GNU timeout and no shell.",
+      "The stop file is honoured before and after every iteration.",
+      "The consecutive-failure ceiling and its capped backoff, the iteration ceiling, and the exit codes all match the script's behaviour.",
+      "Whether a killed child's own descendants are reached is stated in a comment rather than implied.",
+      "Tests drive the loop through an injectable command and need neither a claude binary nor herdr.",
+      "The whole suite runs on Windows — nothing behind a unix-only gate carries behaviour."
+    ],
+    "artifacts": [
+      "the Rust control loop with its argv construction, its wall-clock ceiling, its stop-file checks and its failure ceiling",
+      "the argv byte-equivalence test comparing the whole token vector",
+      "the ceiling test proving an overrunning iteration is killed"
+    ],
+    "key_links": [
+      "The argv the test compares is the argv the loop actually spawns — the builder and the spawn meet at one named point, not at two closures."
+    ],
+    "prohibitions": [
+      "Do not depend on GNU coreutils timeout, on bash, or on any shell.",
+      "Do not change the allowedTools surface or the permission posture — reproduce them exactly.",
+      "Do not delete control-loop.sh in this cell; the rewiring cell removes it.",
+      "Do not add an async runtime.",
+      "Do not use bee cells cap --override-judge."
+    ]
+  },
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-13",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-19T03:01:32.393Z"
+  },
+  "tier": "generation"
+}

@@ -1,0 +1,49 @@
+{
+  "id": "uls-1",
+  "feature": "uat-lane-source",
+  "lane": "small",
+  "tier": "generation",
+  "title": "uat_lane_mode must resolve the lane from route.lane, not from mode",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/uat.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/uat.rs",
+    "docs/history/uat-stop-placement/CONTEXT.md"
+  ],
+  "action": "crate::uat::uat_lane_mode (packages/bee-rs/crates/bee/src/uat.rs) is the ONE lane-classification read behind the uat stop — both bee worktree merge's precondition and bee close's uat door call it. It reads the live workflow record's mode, falling back to the lane record's mode, and its own doc comment says route.lane is never consulted. That is the wrong field. MEASURED, on the live store: .bee/lanes/doc-deferral-scope.json has mode \"feature\" with route.lane \"small\"; .bee/lanes/uat-stop-placement.json has mode \"feature\" with route.lane \"standard\"; .bee/lanes/staging-optional.json has mode \"feature\" with no route at all; only older records like .bee/lanes/knowledge-loop.json happen to carry a lane value in mode (\"standard\") alongside route.lane \"small\". So mode holds the WORKFLOW mode vocabulary (feature, release — what state start-feature --mode writes), while route.lane holds the ROUTE_LANE_VALUES vocabulary (tiny, small, standard, high-risk, docs, spike — what bee route --set --lane writes). Because mode is almost never a lane value, uat_gate_applies_to_lane's tiny/small/docs/spike exemption has effectively NEVER fired, and every feature is asked for uat regardless of lane. The failure is over-strict rather than unsafe, which is exactly why no test and no user ever caught it. FIX: uat_lane_mode resolves the LANE. Read order: the live workflow record's route.lane first, then the lane record's route.lane, then — only as a legacy fallback for the older records — mode, and ONLY when mode's value is a recognized member of the route-lane vocabulary; a mode holding \"feature\", \"release\", or anything else outside that set contributes nothing. When nothing yields a recognized lane, return None, which uat_gate_applies_to_lane already reads as standard (applies) — the safe direction, unchanged. Keep the function fail-open by construction the way it is today: an unreadable or absent store must return None, never panic. Keep the signature and the name; both call sites keep calling it untouched. REWRITE the doc comment — it currently asserts route.lane is never consulted, which becomes the opposite of the truth, and it should record WHY the earlier revision picked the wrong winner: the two-source divergence it fixed was real, but the merge side was named canonical by the cell brief rather than by evidence, and the merge side was reading the wrong field. Tests in the same file: a record with mode feature and route.lane small classifies as small (exempt); mode feature with route.lane standard classifies as standard (applies); the legacy shape mode standard with no route classifies as standard; mode standard WITH route.lane small resolves to small, proving route.lane wins over a mode that merely looks like a lane; mode feature with no route yields None and therefore applies; and a live workflow's route.lane beats the lane record's. Assert through uat_gate_applies_to_lane for at least the exempt and applies cases, so the test pins the user-visible outcome and not only the string.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml uat && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml close",
+  "verify_owner": "worker",
+  "done_when": "uat_lane_mode resolves the lane from route.lane, using mode only when it holds a recognized route-lane value, and returning None otherwise so the gate still fails closed as standard. A feature routed small is exempt from the uat gate at both ends; a feature routed standard still applies at both ends. The signature, the name, and both call sites are unchanged. The doc comment tells the truth about which field wins and why the earlier revision chose wrong. The uat, worktree, and close suites are green.",
+  "notes": "Fix-first on a defect the orchestrator introduced: cell usp-3's revision brief named the merge side canonical, and the merge side was reading mode. Only uat.rs is touched — close.rs is held by another session's cell ddb-1 and must not be edited.",
+  "must_haves": {
+    "truths": [
+      "A record with mode feature and route.lane small resolves to small, and uat_gate_applies_to_lane reports it exempt.",
+      "A record with mode feature and route.lane standard resolves to standard and applies.",
+      "route.lane wins over a mode that also holds a lane-looking value.",
+      "A mode outside the route-lane vocabulary contributes nothing; with no route.lane the result is None and the gate applies.",
+      "A legacy record carrying a recognized lane in mode and no route still resolves through mode.",
+      "The signature and name are unchanged and both call sites still compile untouched.",
+      "The doc comment no longer claims route.lane is never consulted, and records why the earlier revision picked the wrong field.",
+      "The uat, worktree, and close suites are green."
+    ]
+  },
+  "status": "claimed",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "uls-1-worker",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-19T03:00:50.715Z"
+  }
+}

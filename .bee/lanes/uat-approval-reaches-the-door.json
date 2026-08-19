@@ -13,8 +13,13 @@
   "summary": "Feature \"uat-approval-reaches-the-door\" started at phase \"exploring\" (lane).",
   "next_action": "Feature closed; proposals reviewed, one pattern promoted.",
   "created_at": "2026-08-18T13:09:50.347Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "**Còn trong sổ, chưa làm:** thu hồi phê duyệt phía lane vẫn không phủ quyết được `true` cũ ở state mặc định (P3); `staging` còn giữ bản sao",
+    "asked_at": "2026-08-19T03:01:20.970Z",
+    "session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd"
+  },
   "route": {
     "class": "bugfix",
     "lane": "high-risk",
