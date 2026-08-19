@@ -1,0 +1,11 @@
+{
+  "id": "scope-a-bee-herding-run-has-executed-rea__de911edd",
+  "decision": "de911edd",
+  "condition": "scope A (bee herding run) has executed real cells green a few times — then pick up the scope B tier-kind proposal",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-19T21:12:00.883Z",
+  "updated_at": "2026-08-19T21:12:00.883Z",
+  "outcome": null
+}

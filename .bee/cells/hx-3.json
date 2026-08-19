@@ -1,0 +1,83 @@
+{
+  "id": "hx-3",
+  "feature": "herding-executor",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Write-guard: exempt .bee/mailbox/ from the scratch-shape deny",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-executor/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs"
+  ],
+  "action": "Per D8: add \".bee/mailbox/\" to the scratch-shape exemption under_any list (guards.rs:118, currently .bee/tmp/, .bee/spikes/, .bee/logs/, .bee/workers/). The real deny is the scratch-shape guard firing on tmp-suffixed staging files (guards.rs:150) — exactly D3's tmp-then-rename gesture. Tests both directions: .bee/mailbox/<job>/result-1.json.tmp allowed; .bee/other/x.tmp still denied.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard",
+  "must_haves": {
+    "truths": [
+      "A .tmp write under .bee/mailbox/ passes the guard",
+      "A .tmp write under any other non-exempt .bee/ path is still denied"
+    ]
+  },
+  "decisions": [
+    "herding-executor D8"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hx-3",
+    "outcome": "Exempted .bee/mailbox/ from the scratch-shape write-guard deny per D8",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+      "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T20:32:18.916Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-19T20:28:12.835Z",
+    "report": {
+      "outcome": "Exempted .bee/mailbox/ from the scratch-shape write-guard deny per D8",
+      "commit": "6d59a4a1a2c7778302913dba35416efc757dfdac",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/guards.rs",
+        "packages/bee-rs/crates/bee/src/hooks/write_guard/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml write_guard — green — touched write_guard scratch-shape exemption",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "scratch-shape-matrix",
+            "status": "PASS",
+            "evidence": "mailbox .tmp allowed, .bee/other/x.tmp denied — real hook end-to-end"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "no undeclared files in 6d59a4a1"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-19T21:11:20.095Z"
+      }
+    ]
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "id": "hx-4",
+  "feature": "herding-executor",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "bee herding run: spawn, mailbox wait, health check, pane lifecycle",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+    ".gitignore"
+  ],
+  "read_first": [
+    "docs/history/herding-executor/CONTEXT.md",
+    "docs/history/herding-executor/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/fleet/src/backend/herdr.rs"
+  ],
+  "action": "New verb bee herding run (herding/run.rs, try_native arm in herding.rs). Flags: --task|--task-file, --cwd, --job-id, --idle-timeout, --ceiling, --close-always, --main-root, --json, --dry-run. Flow per D1/D5/D6/D9: write job.json via mailbox module; spawn worker (herdr pane split --cwd, agent start from herding.agent_command tokens, prompt = rendered brief); native poll loop — stat result-N.json, log.txt mtime, herdr agent list — heartbeat idle-timeout kill plus absolute ceiling, zero-token; on valid result close pane (herdr pane close), on failure/timeout keep pane, --close-always overrides; append dispatch.jsonl row and wave-ledger record-worker row; result JSON to stdout. --dry-run renders job.json + brief, spawns nothing. Registry: hand-add herding.run entry to generated/registry_payload.json (regen does NOT write it) with examples[0] = the --dry-run form so registry_dispatch executes it green in a scratch tempdir without herdr and without tripping refusal markers. Gitignore: add .bee/mailbox/ to GITIGNORE_BLOCK_PATTERNS (onboard/templates.rs, order load-bearing) and re-render the block into .gitignore. Seam-test poll/lifecycle decisions with fakes, no real herdr (FakeBackend pattern in wave.rs).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch",
+  "must_haves": {
+    "truths": [
+      "bee herding run --dry-run renders job.json + brief and spawns no process",
+      "registry_dispatch passes with the new herding.run entry and its executed example",
+      "Poll loop decision logic: fresh heartbeat extends, idle past --idle-timeout kills, --ceiling caps regardless of activity",
+      "Valid result closes the pane; failure keeps it; --close-always closes always"
+    ]
+  },
+  "decisions": [
+    "herding-executor D1",
+    "herding-executor D2",
+    "herding-executor D5",
+    "herding-executor D6",
+    "herding-executor D9"
+  ],
+  "deps": [
+    "hx-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hx-4",
+    "outcome": "Added bee herding run: pane split, agent start, native mailbox poll (idle-timeout/ceiling), pane lifecycle close, dispatch/wave-ledger bookkeeping, --dry-run, and the registry entry",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      ".gitignore"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T20:59:43.204Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-19T20:37:36.043Z",
+    "verify_command": null,
+    "verified_at": null,
+    "report": {
+      "outcome": "Added bee herding run: pane split, agent start, native mailbox poll (idle-timeout/ceiling), pane lifecycle close, dispatch/wave-ledger bookkeeping, --dry-run, and the registry entry",
+      "commit": "db0ac18c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        ".gitignore"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch — green (101 + 8 passed) — new herding::run module and its dry-run registry entry",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1118 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "dry-run-spawn-free",
+            "status": "PASS",
+            "evidence": "proven against PanicHerdr — every herdr method panics"
+          },
+          {
+            "id": "registry-example",
+            "status": "PASS",
+            "evidence": "registry_dispatch 8 passed executing the herding.run --dry-run example"
+          },
+          {
+            "id": "poll-loop",
+            "status": "PASS",
+            "evidence": "injected-clock tests; ceiling wins over per-tick heartbeat"
+          },
+          {
+            "id": "pane-lifecycle",
+            "status": "PASS",
+            "evidence": "FakeHerdr close-list asserted all four ways"
+          },
+          {
+            "id": "wording-advisory",
+            "status": "PASS",
+            "evidence": "record says idle-timeout kill; code ends the wait, agent keeps running (D6 forensics) — wording only"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-19T21:11:20.099Z"
+      }
+    ]
+  }
+}

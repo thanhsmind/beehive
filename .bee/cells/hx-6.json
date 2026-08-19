@@ -1,0 +1,104 @@
+{
+  "id": "hx-6",
+  "feature": "herding-executor",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "bee herding run --continue: follow-up rounds through the same mailbox",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/herding-executor/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "action": "Per D3 (round-numbered results): add --continue <job-id> to bee herding run — reuses the EXISTING job mailbox: reads the highest result-N.json, renders the round N+1 brief via the mailbox module (round number explicit), sends it with herdr agent prompt to the job's recorded pane/agent (persist pane+agent identity into job.json at spawn so --continue can address it), then runs the same poll loop waiting for result-(N+1).json with the same idle-timeout/ceiling/pane-lifecycle flags. Refuses typed when the job dir is missing, has no prior result, or the pane is gone. --continue with --dry-run renders the round N+1 brief and sends nothing. Update the registry entry only if its flags block executes examples (keep examples[0] unchanged and green). Seam tests with FakeHerdr: continue sends prompt (never agent start), waits on the incremented round, refuses on missing job/result/pane.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch",
+  "must_haves": {
+    "truths": [
+      "--continue sends herdr agent prompt with the round N+1 brief and never calls agent start",
+      "--continue waits on result-(N+1).json, not the already-present round N",
+      "Missing job dir, missing prior result, or dead pane each refuse with a typed error"
+    ]
+  },
+  "decisions": [
+    "herding-executor D3",
+    "herding-executor D5",
+    "herding-executor D6"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hx-6",
+    "outcome": "bee herding run --continue reuses the job mailbox for follow-up rounds: sends the round N+1 brief via agent prompt (never agent start), waits on result-(N+1), and refuses typed on a missing job dir, prior result, or dead pane",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T22:44:07.203Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-19T22:06:42.795Z",
+    "report": {
+      "outcome": "bee herding run --continue reuses the job mailbox for follow-up rounds via agent prompt, never agent start",
+      "commit": "fd480e8b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run:: and herding::mailbox:: plus --test registry_dispatch — green — full herding filter hits slow subprocess tests in control_loop unrelated to this cell, scoped to the touched modules plus the registry contract test",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 572 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "prompt-never-start",
+            "status": "PASS",
+            "evidence": "execute_continue calls only agent_prompt (run.rs:866); test asserts start_calls empty, one prompt with round 2 + result-2.json"
+          },
+          {
+            "id": "incremented-round-gate",
+            "status": "PASS",
+            "evidence": "wait_for_round filters >= min_round (run.rs:660); seeded result-1 test gets TimedOutIdle, never the stale round"
+          },
+          {
+            "id": "typed-refusals",
+            "status": "PASS",
+            "evidence": "ContinueRefusal::JobDirMissing|NoPriorResult|PaneGone, three tests match variants; PaneGone sends no prompt"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "git show --stat fd480e8b = exactly the two declared files; registry_dispatch 8 passed"
+          },
+          {
+            "id": "catalog-pin-follow-up",
+            "status": "PASS",
+            "evidence": "judge found PINNED_FLAG_COUNT stale (170 vs 177) — fixed post-wave in 341ab77 with the reason in the pin comment; catalog:: 8 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-19T22:59:03.904Z"
+      }
+    ]
+  }
+}
