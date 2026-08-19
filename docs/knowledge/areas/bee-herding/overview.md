@@ -46,6 +46,17 @@ isolated copy — is what runs unattended.**
 - **Dispatchable** — a backlog item that is ready, unclaimed, has no worktree yet, and passes the
   work classifier. This is a *candidate* state, not a licence — the interlock still governs whether
   any candidate is acted on.
+- **Wave** — one coordinated run over several workers, described as a single value rather than a
+  sequence of calls: the worker list, the timeouts, and the failure policy (wait-for-all,
+  first-success-cancel-rest, best-effort) all sit in that one value, so a scenario is something you
+  hand over rather than something you perform (herding-orchestration D11).
+- **Wave ledger** — the append-only record of what each wave did: one row per wave, one entry per
+  worker carrying its name, its pane, its worktree, its brief and its outcome. It is the cockpit's
+  memory of who was started, and it is written at the moment of the spawn rather than at the end
+  (herding-orchestration D10).
+- **Occupancy** — how many working slots are actually taken. It is answered by crossing the ledger's
+  unresolved workers against the live pane list, and it carries the SOURCE of its own answer: a real
+  crossing, or a degraded timer fallback used when the live list cannot be obtained.
 
 ## Behaviors & Operations
 
@@ -80,9 +91,32 @@ stop that silently leaves agents running is worse than none.
 binary or a transient error cannot produce an infinite retry, and the control invocations carry a
 turn ceiling — iterations were bounded in the original design, spend was not.
 
+**The control loop is a native command, not a script.** The loop that re-invokes the dispatch role
+on its interval is part of the tool itself. This is what made the cockpit portable: the previous
+form was a shell script that depended on GNU utilities and a modern shell, so it could not run on
+Windows at all. The one-shot cockpit setup is still a shell script and is a recorded gap
+(herding-orchestration D8).
+
+**A wave is run once and recorded once.** The entry point takes the worker list on its input, runs
+the whole choreography — resolve and de-duplicate the targets, refuse any target that is not safe to
+disturb, take a baseline, re-check each target immediately before handing it its brief, then wait on
+all of them at the same time and aggregate what came back — and appends exactly ONE ledger row for
+the whole wave. Each worker's outcome is classified into a named bucket (finished, refused at
+pre-flight, changed under us before the send, send failed, timed out, or unverifiable afterwards)
+rather than into a bare pass/fail, because partial failure is the normal case and the caller needs
+to know which kind it got. A worker that fails does not stop the others.
+
+**Occupancy is read, and an unverifiable read refuses.** The dispatch role asks for the occupancy
+count instead of counting panes itself, and it reads WHICH answer it got. On a real crossing it
+compares the count against the four-slot cap as before. On the degraded fallback it cannot know
+occupancy, so it reports one plain line saying so and dispatches nothing that iteration. The
+fallback fires exactly when the live pane list could not be obtained — which is also when counting
+panes would have failed — so refusing is not a lost opportunity, and dispatching on a count nobody
+can verify is the over-spawn the ledger exists to prevent.
+
 **The working-agent and control-pane spawn commands are config-driven templates,
-byte-equivalent to the hardcoded default (i54-closeout D4).** `control-loop.sh`
-reads an optional `.bee/config.json` `herding.control_command` — a JSON array of
+byte-equivalent to the hardcoded default (i54-closeout D4).** `bee herding
+control-loop` reads an optional `.bee/config.json` `herding.control_command` — a JSON array of
 argv-token strings — and, when present, substitutes `{PROMPT}` / `{MODEL}` /
 `{MAX_TURNS}` / `{ALLOWED_TOOLS}` per token and runs the result verbatim: tokens
 are never joined into one string and re-split or shell-`eval`'d, so a
@@ -143,10 +177,29 @@ the dispatch interlock, or the merge owner-gesture change.
 
 ## Edge Cases Settled
 
-- **A working agent that fails to name its own pane** leaves a slot looking free, so the loop could
-  spawn again next interval. The four-slot cap is currently enforced by the control model counting
-  panes, not by code — a known limit, recorded so it is chosen rather than assumed. Making it
-  mechanical is deferred.
+- **A working agent that fails to name its own pane** used to leave a slot looking free, because the
+  four-slot cap was enforced by the control model counting panes. **That hole is closed** — the cap
+  now rests on the wave ledger, not on a pane count (herding-orchestration D10, D18). §8 records a
+  row the moment it spawns, carrying the worker's pane id, so an agent that never names its own pane
+  is still visible to the next iteration: the ledger knows the pane even when the pane does not know
+  itself. Occupancy is a liveness question — the ledger's unresolved pane ids crossed against herdr's
+  own live pane list — and a one-hour timer survives only as an explicitly tagged FALLBACK for when
+  that list cannot be obtained. §4 refuses to dispatch on a fallback answer rather than guessing,
+  because a count it cannot verify is exactly the over-spawn the ledger exists to remove. The case is
+  still worth knowing, because it names the class: a cap enforced by counting what you can see is
+  only as good as the naming discipline of the things being counted.
+- **Starting an agent steals the owner's view.** Splitting a pane and creating a tab both honour a
+  do-not-focus request; starting an agent has no such option and moves the workspace's focus to the
+  new agent. For a loop that dispatches unattended on a fixed interval, every single spawn yanks the
+  owner away from whatever they were reading — the one thing the do-not-focus option exists to
+  prevent everywhere else. Found only by running the spawn for real; no documentation states it.
+- **"Idle" tracks the pane's own focus, not the work.** A worker's runtime status flips to idle or
+  done according to whether that individual pane has been seen, not according to whether the work
+  finished — a pane reported done while never being focused, and the multiplexer's own
+  documentation states a coarser tab-level rule than its behavior actually follows. Any reading of a
+  worker's status must therefore treat "done" as a fact about attention, never as evidence that the
+  work is complete; that is why an explicitly UNVERIFIABLE outcome is a first-class answer rather
+  than an error.
 - **A control pane narrowed too far** stalls silently every interval — the exact failure the whole
   cockpit exists to end. This is why the control surface is enumerated against measured actions, and
   why it is documented to grow when a role gains a command, rather than being set to "read-only".
@@ -155,23 +208,44 @@ the dispatch interlock, or the merge owner-gesture change.
 
 ## Open Gaps
 
-- **The four-slot concurrency cap is not yet mechanical** (see Edge Cases). Until it is, a spawned
-  agent that fails to self-name can lead the loop to over-spawn.
+- **A wave cannot confirm that a worker finished.** Proven by the first live run on Linux: two
+  workers were started in their own worktrees, took their briefs and answered correctly, and the
+  wave still reported both as UNVERIFIABLE — which is the honest answer, because the only completion
+  signal available tracks the pane's attention rather than the work (see Edge Cases). The
+  consequence is that a wave over ordinary agent sessions reports overall failure even when every
+  worker did its job, so today the ledger row and the pane's own output are what an owner reads, not
+  the verdict. Closing this needs a completion signal the worker itself emits.
+- **The live D6 scenario has not been run end to end on Windows.** The mechanism is proven there —
+  the whole suite runs unexcluded on a Windows CI lane and every behavior that matters is pinned by
+  platform-portable tests — but a live run needs a running herdr server, real panes and real agents,
+  which CI cannot stand up. That run is an owner-run supervised cycle, the same shape as R7, not an
+  agent-run step (herding-orchestration D19, narrowing D4).
 - **The classifier reads the backlog row, not the work.** It vouches for an item from its one-line
   description, never opening the feature's own context. Reading the real work is the honest form of
   the safety check and is not yet built — the interlock (R3) is the compensating control meanwhile.
-- **The dependency on herdr's JSON shapes is unpinned** — no capability probe, so an upstream shape
-  change degrades to the silent-stall class.
+- **The dependency on the multiplexer's JSON shapes is still unpinned** — there is no capability or
+  version probe anywhere on the path. What changed is the failure DIRECTION, not the gap: an
+  unrecognised status string now maps to unverifiable, and a live-pane list that cannot be read now
+  returns the tagged fallback that makes dispatch refuse. So an upstream shape change degrades to a
+  loud refusal rather than to a silent stall — but it is still not detected, and nothing names the
+  version this cockpit was proven against.
 - **The supervised acceptance cycle (R7) is owner-run and outstanding** for this repo.
 
 ## Pointers (implementation)
 
 - The skill and its three roles: `skills/bee-herding/SKILL.md`; the loop driver
-  `scripts/control-loop.sh`; the one-shot `scripts/bootstrap-cockpit.sh`; the owner interlock
-  `scripts/dispatch-interlock.mjs`; the work classifier `scripts/classify-lane.mjs`.
-- The CLI-verb equivalent of the manual marker gesture: `packages/bee/lib/herding.mjs`,
-  wired into `the bee binary` as the `herding` command group. Test coverage:
-  `packages/bee/tests/test_herding_cli.mjs`.
-- Regression coverage: `packages/bee/tests/test_herding.mjs`.
+  `bee herding control-loop`
+  (`packages/bee-rs/crates/bee/src/herding/control_loop.rs`); the one-shot
+  `skills/bee-herding/scripts/bootstrap-cockpit.sh`.
+- The `herding` command group — `classify-lane`, `interlock`, `command-template`,
+  `herdr-result`, `herdr-pane-id`, `wave`, `occupancy`, `record-worker` and
+  `control-loop`, the nine verbs the current binary actually
+  serves — is implemented in `packages/bee-rs/crates/bee/src/herding.rs`, dispatched
+  from `packages/bee-rs/crates/bee/src/router.rs`, and listed (with `enable`,
+  `disable` and `status` marked `unavailable`) in the command catalog
+  `packages/bee-rs/crates/bee/src/catalog.rs`. `enable`, `disable` and `status` are
+  not among the nine live verbs and refuse by name; the manual `touch`/`rm` marker
+  gesture is their only live form (see Data Dictionary). Test coverage is inline:
+  the `#[cfg(test)] mod tests` block in `herding.rs`.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.

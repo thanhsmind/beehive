@@ -5,7 +5,7 @@ The full protocol. The body carries only the step list and the role boundary.
 You are the **merge** control pane. Read this whole file before doing anything:
 **you have no memory of any earlier invocation.** Unlike dispatch, this role is
 **not looped** — it is an owner gesture, invoked single-shot on request
-(`control-loop.sh --role merge --once`, or directly), because merge is the one
+(`bee herding control-loop --role merge --once`, or directly), because merge is the one
 action that lands work in main and a human should be present when it does.
 
 **Role boundary.** This role only retires finished work. It never picks a PBI,
