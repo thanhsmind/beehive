@@ -91,13 +91,22 @@ stop that silently leaves agents running is worse than none.
 binary or a transient error cannot produce an infinite retry, and the control invocations carry a
 turn ceiling — iterations were bounded in the original design, spend was not.
 
+**The control panes and the working panes do not share a permission posture
+(herding-orchestration D13).** A control agent runs headless under an enumerated command surface; a working agent runs with
+its permissions open inside its own worktree. Keeping the two argv forms separate is what stops the
+narrow one from silently widening.
+
 **The control loop is a native command, not a script.** The loop that re-invokes the dispatch role
 on its interval is part of the tool itself. This is what made the cockpit portable: the previous
 form was a shell script that depended on GNU utilities and a modern shell, so it could not run on
 Windows at all. The one-shot cockpit setup is still a shell script and is a recorded gap
 (herding-orchestration D8).
 
-**A wave is run once and recorded once.** The entry point takes the worker list on its input, runs
+**A wave is run once and recorded once.** The coordination that drives it is deliberately generic —
+it knows nothing about this tool's own vocabulary, and lives behind a boundary a compiler enforces
+rather than a promise (herding-orchestration D2/D5). Workers run beside each other on ordinary
+threads rather than on an event runtime, because a wave is a handful of workers and each waiter is a
+blocking poll (herding-orchestration D9). The entry point takes the worker list on its input, runs
 the whole choreography — resolve and de-duplicate the targets, refuse any target that is not safe to
 disturb, take a baseline, re-check each target immediately before handing it its brief, then wait on
 all of them at the same time and aggregate what came back — and appends exactly ONE ledger row for
@@ -199,7 +208,13 @@ the dispatch interlock, or the merge owner-gesture change.
   documentation states a coarser tab-level rule than its behavior actually follows. Any reading of a
   worker's status must therefore treat "done" as a fact about attention, never as evidence that the
   work is complete; that is why an explicitly UNVERIFIABLE outcome is a first-class answer rather
-  than an error.
+  than an error (herding-orchestration D7, which makes unverifiable one of the five worker states a
+  backend must map its own vocabulary onto).
+- **Starting a worker is two acts, not one.** The pane is created first, and the agent is started
+  INTO that pane; a single call that both creates and starts no longer exists
+  (herding-orchestration D12). What the agent itself is — which runtime, and the arguments it gets —
+  is configuration, read as separate tokens and never re-joined into a string a shell could
+  reinterpret (herding-orchestration D14).
 - **A worker's agent name is derived from its pane, and the multiplexer will not take it raw.**
   Panes are numbered 1 to 9 and then A, B, C…, so most panes in a busy workspace carry an uppercase
   letter — and an agent name may only be lowercase letters, digits, dash and underscore, must begin

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-orchestration",
   "mode": "feature",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"herding-orchestration\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 5ee4da5; capture what settled, then bee close --feature herding-orchestration.",
+  "next_action": "bee close finished \"herding-orchestration\" — feature is closed.",
   "created_at": "2026-08-18T08:07:25.780Z",
   "run_state": null,
   "waiting_on": null,
