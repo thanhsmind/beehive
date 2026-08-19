@@ -4,8 +4,8 @@
   "condition": "The wave ledger lands and role-dispatch §4 reads occupancy from it instead of counting panes — at which point the four-slot cap is mechanical and this Edge Case line must be rewritten, not merely re-deferred.",
   "tier": "manual",
   "predicate": null,
-  "status": "waiting",
+  "status": "resolved",
   "created_at": "2026-08-18T09:06:02.131Z",
-  "updated_at": "2026-08-18T09:06:02.131Z",
-  "outcome": null
+  "updated_at": "2026-08-19T05:53:01.995Z",
+  "outcome": "Fired and acted on. The wave ledger landed across cells ho-9 through ho-12 and role-dispatch section 4 now reads occupancy from it: section 8 records a row carrying the worker's pane id at spawn, occupancy crosses the ledger's unresolved pane ids against herdr's own live pane list, and the one-hour timer survives only as an explicitly tagged fallback that section 4 refuses to dispatch on. The Edge Case the deferral guarded was REWRITTEN rather than re-deferred, per this trigger's own condition, in commit 4055cd22 — it now describes what closed the hole and keeps the case for the class it names."
 }

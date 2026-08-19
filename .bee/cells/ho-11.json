@@ -88,7 +88,52 @@
     "warnings": [
       "advisory: this cap's commit changes 418 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "The prose tells the role to ask the occupancy verb every iteration from the main checkout with the json flag, and quotes the answer shape as a count field plus a source field carrying either live or fallback. Running the built binary confirms all of it: the help text describes both answers, the json invocation emits exactly the quoted two-field shape, and the plain invocation emits exactly the quoted line. Every field and value the prose names is real."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "Section 4 names the fallback value literally, states outright that the two values must never be treated alike, and gives the fallback branch as an imperative with the stopping point named by section reference, labelling it a refusal rather than a guess. Recognition requires no inference because the literal field and value are quoted and match what the verb emits; the action requires none because the stopping point is named. The quick-reference row repeats the rule."
+          },
+          {
+            "id": "P3",
+            "status": "PASS",
+            "evidence": "A word-level diff of the anomaly portion shows the only changes are removals of slot-counting clauses. Unchanged byte for byte: the runtime-tab resolution, the pane enumeration, the three-way classification, the label-derived worktree path rule, the four finished conditions, the dead-session anomaly rule, the once-only scrollback dedup and the tail-stuck wording. The fact that an unlabelled pane whose foreground directory is a worktree is an anomaly candidate survives."
+          },
+          {
+            "id": "P4",
+            "status": "PASS",
+            "evidence": "The commit touches the canonical role file, its five mirrors, the five render stamps, the onboarding record and the release manifest. The merge role is absent. Within the role file every hunk falls inside section 4 or the quick-reference table; the interlock, the lane-safety filter, the ranking section and the section 8 spawn sequence carry no hunk. The table row names the same command and the same two values with the same refusal as the body."
+          },
+          {
+            "id": "P5",
+            "status": "PASS",
+            "evidence": "A hash over all six copies of the role file prints one identical digest, so no mirror carries a hand edit. The mirrors and the canonical file moved together with identical line counts alongside all five render stamps and an onboarding record whose only change is its timestamp — the signature of the regen chain. The release manifest's entries for the file all moved to the digest the files on disk carry."
+          },
+          {
+            "id": "P6",
+            "status": "PASS",
+            "evidence": "RECORDED AS RESOLVED, with its original finding preserved. The first judge on this cell read section 4 as a cold agent and found that it reads its slot count from the wave ledger while nothing on the dispatch path ever wrote to it — the append function had one caller, the wave verb, and section 8 never invoked it. Measured then: no ledger file existed and the occupancy verb returned a count of zero with a source of live, so the cap could never engage. That finding was real and is why decision D18 exists. It was a SLICE-level gap rather than a defect in this cell's own scope: section 8's writer was never in this cell's must_haves, and cell ho-12 closed it by adding the recording verb, wiring section 8 to call it after each spawn, and proving the loop with a crossing test that enters through the verb's own argv and reads back every value that crosses. Two independent judges then confirmed that crossing dies under argument-swap mutation. This cell's own seven must_haves were met at its own commit; the system gap it exposed is closed on the record by ho-12."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-19T05:51:49.162Z"
+      }
+    ]
   },
   "tier": "generation"
 }

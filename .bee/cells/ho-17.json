@@ -1,0 +1,50 @@
+{
+  "id": "ho-17",
+  "feature": "herding-orchestration",
+  "title": "Derive an herdr-legal agent slug from the pane id",
+  "lane": "small",
+  "behavior_change": true,
+  "action": "THE LIVE D6 RUN FOUND THIS, and no unit test did. The herdr backend derives the agent slug it passes to `herdr agent start` from the pane id by replacing the colon with a dash (decide_start in packages/bee-rs/crates/fleet/src/backend/herdr.rs). herdr rejects the result for every pane whose id carries an uppercase letter: error code invalid_agent_name, message 'agent name must start with a lowercase letter and contain only lowercase letters, digits, - or _ (1-32 characters)'. herdr numbers panes p1..p9 then pA, pB, pC..., so MOST panes in a busy workspace cannot be started into at all — the whole wave aborts at phase 1 with every target in resolution_failed, which is exactly what a real run over w4:pG and w4:pH did. Fix decide_start so the derived slug is legal by construction: lowercase it, map any character outside [a-z0-9_-] to a dash, ensure it starts with a lowercase letter, and truncate to 32 characters. Keep the slug recognizable in `herdr agent list` output, which is the only reason it is derived from the pane id at all. State the collision this introduces in the function's own doc comment — a lowercased slug cannot distinguish pane ids that differ only by case — and say why that is accepted rather than fixed with a hash. Pin the behavior with a test over decide_start that asserts the argv's NAME argument for an uppercase pane id satisfies herdr's stated rule; assert the RULE, not one hardcoded string, so the test states the contract. Do NOT change is_pane_id_shaped, the Refuse arm, the --kind derivation, or anything in the choreography.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+    "skills/bee-herding/references/spawn-proof.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/fleet/src/backend/herdr.rs"
+  ],
+  "deps": [],
+  "decisions": [],
+  "status": "capped",
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+      "packages/bee-rs/crates/fleet/tests/herdr_backend.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T10:25:25.762Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "761ea1d0-6aa0-4de9-b549-8d7b597174e1",
+    "claimed_at": "2026-08-19T10:18:14.051Z",
+    "report": {
+      "outcome": "Derived an herdr-legal agent slug (sanitize_agent_slug) so decide_start no longer passes uppercase pane ids like w4:pG straight through to agent start, which herdr 0.8.0 rejects as invalid_agent_name.",
+      "commit": "c30f63202a2e91f97a833ea983883f5a22671df3",
+      "files": [
+        "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+        "packages/bee-rs/crates/fleet/tests/herdr_backend.rs"
+      ],
+      "deviations": [
+        "Cell files list named only src/backend/herdr.rs, but the correct slug fix (full lowercase, not colon-only) invalidated one pre-existing hardcoded literal in tests/herdr_backend.rs (a --kind test asserting the full argv string); updated that one line so the declared verify stays green rather than shipping a fix that breaks its own suite."
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — bee test deterministic runner (.bee/logs/test-results.json), 1938 tests passed in fleet+bee lib suite plus all integration/doctest binaries green"
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

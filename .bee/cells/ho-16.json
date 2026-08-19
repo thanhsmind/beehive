@@ -1,0 +1,49 @@
+{
+  "id": "ho-16",
+  "feature": "herding-orchestration",
+  "title": "Rewrite the four-slot Edge Case now that its trigger has fired",
+  "lane": "tiny",
+  "behavior_change": false,
+  "action": "The Edge Cases section of docs/knowledge/areas/bee-herding/overview.md still says the four-slot cap is enforced by the control model counting panes and that making it mechanical is deferred. That is no longer true, and the deferral's own registered trigger says what must happen: the wave ledger has landed, role-dispatch section 4 now reads occupancy from it, and the trigger's condition states this line is to be REWRITTEN rather than re-deferred. Rewrite it from what the code now does, not from memory: cells ho-9 through ho-12 built an append-only wave ledger, a recording verb section 8 calls after every spawn, and an occupancy read that crosses the ledger's unresolved pane ids against herdr's live pane list, with a one-hour timer surviving only as a tagged fallback for when that list cannot be obtained — and section 4 refuses to dispatch when it gets the fallback answer rather than guessing. Say plainly what the cap now rests on and what is still true of the old failure: a working agent that never names its pane is now visible to occupancy because the ledger recorded its pane id at spawn, which is precisely the hole the old text described. Keep the Edge Case entry as an entry — it is still a case worth knowing — but it now describes a solved case and how it was solved, with the decisions cited. Do not touch the other Edge Cases, the business rules, or the Open Gaps that remain genuinely open.",
+  "verify": ".bee/bin/bee knowledge check",
+  "read_first": [
+    "docs/knowledge/areas/bee-herding/overview.md",
+    "docs/history/herding-orchestration/CONTEXT.md"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": "Rewrote the four-slot Edge Case from what the code now does, and resolved the trigger that guarded it",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/overview.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T05:53:02.031Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-19T05:52:14.303Z",
+    "report": {
+      "outcome": "The four-slot Edge Case now describes the closed hole — ledger-backed occupancy crossed against herdrs live pane list, with a tagged fallback the role refuses to dispatch on — instead of describing a deferred fix",
+      "commit": "4055cd22",
+      "files": [
+        "docs/knowledge/areas/bee-herding/overview.md"
+      ],
+      "tests": "bee knowledge check — green — 228 concepts in 257 files, 0 errors; docs-only change to one area file, and the knowledge check is the parity proof for this change type",
+      "deviations": [
+        "Ran inline in the orchestrator session rather than through a dispatched worker — permitted for a tiny cell, and the change is one Edge Case entry with no code touched.",
+        "The trigger this entry was deferred under was resolved in the same turn, with its outcome naming the commit that rewrote the line."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

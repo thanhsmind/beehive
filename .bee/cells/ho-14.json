@@ -1,0 +1,150 @@
+{
+  "id": "ho-14",
+  "feature": "herding-orchestration",
+  "title": "Point the cockpit at the Rust control loop and retire the shell script",
+  "lane": "standard",
+  "behavior_change": true,
+  "deps": [
+    "ho-13"
+  ],
+  "action": "Cell ho-13 replaced the control loop with a native verb. Now make the cockpit use it and delete the script. bootstrap-cockpit.sh STAYS BASH — D8 records that as a known gap, so do not port it; only change what it invokes. Edit the canonical tree under skills/bee-herding/ then run the regen chain inside this cell so all five mirrors carry it. THE REFERENCES TO MOVE, from a ripgrep of control-loop across the skill and the knowledge area, so nothing is missed: bootstrap-cockpit.sh carries eleven — a comment about the merge gesture at line 15, comments about pane cwd anchoring at 30 and 32, the path-resolution comment at 41, a comment about a shared trailing-flag fix at 82, a stop-file comment at 138, a script-location comment at 148, the CONTROL_LOOP variable assignment at 150, the not-found failure message at 224, and the closing echo at 244 that tells the owner how to run the merge gesture. SKILL.md carries one, inside its frontmatter DESCRIPTION — treat that with care, since the description is what routes the skill; keep its meaning and only change the mechanism it names. README.md carries one at line 74, the merge-gesture command a human types. The knowledge area overview.md carries two: a runtime-adapter paragraph at 84 and the Pointers entry at 170. WHAT TO SAY INSTEAD. Every one of these should now name the verb, and the merge gesture a human runs becomes that verb with the same role and once semantics rather than a bash invocation. Where a comment explains WHY something was done — the cwd anchoring, the stop-file sharing, the trailing-flag fix — keep the reasoning and update only the artefact it points at; do not delete an explanation because its subject moved. THEN DELETE skills/bee-herding/scripts/control-loop.sh. Check first that nothing else in the repo still invokes it: search the whole tree, not just the skill, and if a caller exists outside the files listed above, stop and report it rather than deleting under it. VERIFY THE HANDOFF ACTUALLY WORKS. bootstrap-cockpit.sh's own guard refuses when the control loop is missing; that guard must now check the verb is reachable instead of checking a file path, and its failure message must name what a human should do. State in the commit body how you confirmed the bootstrap script still starts a loop — a dry-run of the script is the honest proof, and it has a --dry-run flag already.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "skills/bee-herding/scripts/bootstrap-cockpit.sh",
+    "skills/bee-herding/README.md",
+    "skills/bee-herding/SKILL.md",
+    "docs/knowledge/areas/bee-herding/overview.md",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "files": [
+    "skills/bee-herding/scripts/bootstrap-cockpit.sh",
+    "skills/bee-herding/scripts/control-loop.sh",
+    "skills/bee-herding/README.md",
+    "skills/bee-herding/SKILL.md",
+    "docs/knowledge/areas/bee-herding/overview.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".claude-plugin/skills/bee-herding/*",
+    ".codex-plugin/skills/bee-herding/*",
+    ".claude/skills/bee-herding/*",
+    ".agents/skills/bee-herding/*",
+    ".opencode/skills/bee-herding/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "Every one of the fourteen references to the shell control loop now names the verb instead, across bootstrap-cockpit.sh, SKILL.md, README.md and the knowledge area.",
+      "SKILL.md's frontmatter description still routes the same work; only the mechanism it names changed.",
+      "The merge gesture a human types is the verb with the same role and once semantics.",
+      "bootstrap-cockpit.sh's missing-control-loop guard checks the verb is reachable, and its failure message names what a human should do.",
+      "skills/bee-herding/scripts/control-loop.sh is deleted, and a repo-wide search confirms nothing else invoked it.",
+      "bootstrap-cockpit.sh stays bash — D8 keeps it as a recorded gap.",
+      "Comments explaining WHY something was done keep their reasoning; only the artefact they point at moved."
+    ],
+    "artifacts": [
+      "bootstrap-cockpit.sh invoking the verb, with its guard and failure message updated",
+      "SKILL.md, README.md and the knowledge area naming the verb",
+      "the shell control loop removed"
+    ],
+    "key_links": [
+      "The command bootstrap-cockpit.sh runs and the command README.md tells a human to type are the same verb with the same flags."
+    ],
+    "prohibitions": [
+      "Do not port bootstrap-cockpit.sh to Rust — D8 keeps it bash.",
+      "Do not hand-edit any mirrored skill tree.",
+      "Do not delete the script if a caller outside the listed files exists — report it instead.",
+      "Do not drop a comment's reasoning while updating what it points at.",
+      "Do not use bee cells cap --override-judge."
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-14",
+    "outcome": "Rewired bootstrap-cockpit.sh to invoke bee herding control-loop via the vendored binary, updated all comment/doc references, and deleted the retired shell script across canonical tree and all five mirrors.",
+    "files_changed": [
+      "skills/bee-herding/scripts/bootstrap-cockpit.sh",
+      "skills/bee-herding/scripts/control-loop.sh",
+      "skills/bee-herding/README.md",
+      "skills/bee-herding/SKILL.md",
+      "docs/knowledge/areas/bee-herding/overview.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T05:39:13.313Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-19T05:28:40.813Z",
+    "report": {
+      "outcome": "Rewired bootstrap-cockpit.sh to invoke bee herding control-loop via the vendored binary, updated all comment/doc references, and deleted the retired shell script across canonical tree and all five mirrors.",
+      "commit": "a13977f7dd72bda7e580174a09b8413868d6a885",
+      "files": [
+        "skills/bee-herding/scripts/bootstrap-cockpit.sh",
+        "skills/bee-herding/scripts/control-loop.sh",
+        "skills/bee-herding/README.md",
+        "skills/bee-herding/SKILL.md",
+        "docs/knowledge/areas/bee-herding/overview.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml && bee dev regen && bee dev release-manifest --check — green — cargo: 1937 passed/0 failed/11 ignored (bee crate unit tests; the interspersed quick_exit_helper FAILED lines are expected captured child-process stdout from real_spawner_actually_spawns_the_given_program, not top-level failures); dev regen: 3/3 steps green then idempotent on rerun; release-manifest --check: 267 files match",
+      "deviations": [
+        "Rebuilt the worktree's stale .bee/bin/bee (predated ho-13's verb) before it could run bee herding control-loop --help, per the dispatch note.",
+        "Left skills/bee-herding/agents/openai.yaml and references/*.md untouched — they still say control-loop.sh but were not in the cell's files list; openai.yaml is a hand-maintained projection of SKILL.md (not auto-regenerated by bee dev regen), so it now needs a follow-up parity edit.",
+        "Did not touch the pre-existing five-verbs count in overview.md Pointers (now six with control-loop) — outside the cell's named two references."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 3048 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "W1",
+            "status": "PASS",
+            "evidence": "The script now invokes the verb through the vendored binary with a role and a main root, and every flag it or its docs pass appears on the verb's own help output. A dry run of the bootstrap script printed the exact pane-run command it would issue. The merge-gesture flag set from the README was run for real and the verb accepted it, honouring the timeout, with no unknown-flag error. No flag the verb rejects appears anywhere."
+          },
+          {
+            "id": "W2",
+            "status": "PASS",
+            "evidence": "The old guard was a file-path existence check with a message naming a missing script. The new guard invokes the verb's help and refuses on a non-zero result, with a comment explaining that reachability rather than a path is now the right question because the loop is a verb inside the vendored binary. Its failure message names the remedy — re-run onboarding or the repo's vendoring step so the binary is present and up to date, then re-run bootstrap. Placement is unchanged: after the layout build and the no-start exit, before the pane run."
+          },
+          {
+            "id": "W3",
+            "status": "PASS",
+            "evidence": "Proved from live output rather than inference. Running the verb with a main root that has no skills tree printed the exact path it looked for, anchored on the flag and role, and the same run under the other role printed the other role's prompt file. A directory listing at the root the script actually passes confirms both prompt files exist there. The judge explicitly declined to run a real iteration against the repo root, since that would spawn a live control agent and exceed a read-only review."
+          },
+          {
+            "id": "W4",
+            "status": "PASS",
+            "evidence": "A tracked-file search and a filesystem search both return nothing for the retired script; the commit deletes it in the canonical tree and all five mirrors. All six copies of the bootstrap script hash identically. No history was rewritten: under docs and plans the commit touches only the generated release manifest and the knowledge area, while the discovery map, its tickets, the earlier closeout report, the research brief and this feature's own plan and context all still mention the old script and are untouched. The one history file touched is the generated manifest, whose diff is hash updates plus removal of the deleted entries, matching four earlier commits that updated it the same way."
+          },
+          {
+            "id": "W5",
+            "status": "PASS",
+            "evidence": "Each comment that justified a decision kept its argument and changed only the artefact. The pane-anchoring comment keeps its reasoning about the stale-stop-file guard and the loop's own check naming the same file. The shared-stop-file comment keeps its reason. The trailing-flag comment keeps its whole causal chain about a silent shift failure spinning the loop at full CPU. The two-skill-root resolution comment is rewritten but keeps and extends its argument, correctly naming the old script as a predecessor and explaining that the vendored binary sidesteps the split. The merge-gesture comment keeps its full kill-risk reasoning with only the command swapped. No comment was reduced to a bare statement."
+          },
+          {
+            "id": "W6",
+            "status": "PASS",
+            "evidence": "The skill's frontmatter description changed exactly one clause, replacing the script name with the verb name in the sentence describing a single dispatch or merge iteration. The rest — the three roles, the bootstrap wording, and the exclusion of feature work inside a worktree — is byte-identical in the diff. Routing meaning intact; only the named mechanism moved."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-19T05:44:01.320Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}
