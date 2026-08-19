@@ -71,9 +71,10 @@ Two independent keys, each a JSON array of argv-token strings:
 - **`herding.agent_command`** — the WORKING agent's spawn argv. bee splits it
   at spawn: token 0 feeds `herdr agent start`'s `--kind`, and the remaining
   tokens, substituted per-token, follow the `--` separator as the agent's own
-  arguments (Dispatch role §8 step 3). An unrecognised token 0 — not one of
-  herdr's supported kinds — surfaces as a typed error naming this config key,
-  never as a generic `agent start` failure. Placeholder: `{MODEL}` (the fixed
+  arguments (Dispatch role §8 step 3). bee keeps no agent-kind allow-list of
+  its own; token 0 passes through unchecked and `herdr` validates it as a
+  `--kind`, after the pane split — an unrecognised kind surfaces as herdr's
+  own refusal, not a bee-side error naming this config key. Placeholder: `{MODEL}` (the fixed
   model, `sonnet`). Default when absent:
   `["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"]`
   — the documented default array is unchanged; token 0 (`claude`) now feeds

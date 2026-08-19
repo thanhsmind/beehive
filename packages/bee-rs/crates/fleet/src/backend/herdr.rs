@@ -126,11 +126,11 @@ pub struct HerdrBackend {
     /// maps this from `herding.agent_command` token 0 — but `fleet` must
     /// never read bee's own configuration (D2), so THIS BACKEND DOES NOT
     /// DERIVE IT. The caller supplies it already resolved, at
-    /// construction; deriving it from `herding.agent_command`'s token 0,
-    /// and raising D14's typed error naming that config key when the
-    /// token names no kind herdr recognizes, is the caller's obligation —
-    /// the bee-side `bee herding wave` verb (herding-orchestration D17),
-    /// not yet built.
+    /// construction — deriving it from `herding.agent_command`'s token 0
+    /// is the caller's obligation, the bee-side `bee herding wave` verb
+    /// (herding-orchestration D17). The caller validates it against no
+    /// allow-list of its own (herding-executor D2); `herdr` refuses an
+    /// unrecognised kind itself, after the pane split.
     agent_kind: String,
     /// The remaining `herding.agent_command` tokens (D14's "remaining
     /// tokens go after `--` as agent arguments"), appended verbatim to
@@ -150,14 +150,13 @@ impl HerdrBackend {
     /// never parses `herding.agent_command` itself (`agent_kind`'s field
     /// doc has the private-field detail this paragraph does not repeat).
     /// The caller owns that split — herding-orchestration D14's mapping,
-    /// today the bee-side `bee herding wave` verb (D17, not yet built):
-    /// `herding.agent_command` token 0 becomes `agent_kind`, fed to
-    /// herdr's `agent start --kind`; its remaining tokens become
-    /// `agent_args`, appended after a literal `--`. When token 0 names no
-    /// kind herdr recognises, raising D14's typed error naming the
-    /// `herding.agent_command` key is that caller's obligation, not this
-    /// constructor's — `new` takes `agent_kind`/`agent_args` on faith and
-    /// validates neither.
+    /// the bee-side `bee herding wave` verb (D17): `herding.agent_command`
+    /// token 0 becomes `agent_kind`, fed to herdr's `agent start --kind`;
+    /// its remaining tokens become `agent_args`, appended after a literal
+    /// `--`. The caller does not validate `agent_kind` against any allow-
+    /// list of its own (herding-executor D2) — `new` takes
+    /// `agent_kind`/`agent_args` on faith and validates neither; `herdr`
+    /// itself refuses an unrecognised kind, after the pane split.
     pub fn new(agent_kind: impl Into<String>, agent_args: Vec<String>) -> Self {
         Self {
             path_prepend: Vec::new(),
