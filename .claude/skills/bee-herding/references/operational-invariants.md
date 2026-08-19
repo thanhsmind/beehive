@@ -71,9 +71,10 @@ Two independent keys, each a JSON array of argv-token strings:
 - **`herding.agent_command`** — the WORKING agent's spawn argv. bee splits it
   at spawn: token 0 feeds `herdr agent start`'s `--kind`, and the remaining
   tokens, substituted per-token, follow the `--` separator as the agent's own
-  arguments (Dispatch role §8 step 3). An unrecognised token 0 — not one of
-  herdr's supported kinds — surfaces as a typed error naming this config key,
-  never as a generic `agent start` failure. Placeholder: `{MODEL}` (the fixed
+  arguments (Dispatch role §8 step 3). bee keeps no agent-kind allow-list of
+  its own; token 0 passes through unchecked and `herdr` validates it as a
+  `--kind`, after the pane split — an unrecognised kind surfaces as herdr's
+  own refusal, not a bee-side error naming this config key. Placeholder: `{MODEL}` (the fixed
   model, `sonnet`). Default when absent:
   `["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"]`
   — the documented default array is unchanged; token 0 (`claude`) now feeds
@@ -128,6 +129,59 @@ control-loop run in this repo — the event loop and pane protocol both still
 assume a `claude` session underneath (Merge role / Dispatch role in
 SKILL.md). Treat it as a documented starting point for a future adapter, not
 a claim that codex control panes work today.
+
+## `bee herding run` — one foreign agent as a cell-execution worker
+
+`bee herding run` is a native verb, not a script: give it one task, and it
+starts ONE external CLI agent (any herdr-supported kind — token 0 of
+`herding.agent_command` passes straight through, same seam as above) in a
+fresh pane, hands it a fully self-contained brief, and waits for a written
+result. It exists to make a foreign agent usable as a cell-execution worker
+the way an in-family subagent is today (herding-executor D1). Flags:
+`--task`/`--task-file`, `--cwd`, `--job-id`, `--idle-timeout`, `--ceiling`,
+`--close-always`, `--main-root`, `--json`, `--dry-run` — the last renders
+`job.json` and the brief and spawns nothing, the seam this verb's own tests
+drive instead of a real `herdr`.
+
+**Completion travels through a file mailbox, never a screen (D3).**
+`.bee/mailbox/<job-id>/` holds `job.json`, round-numbered `result-N.json`,
+and `log.txt`, every write staged tmp-then-rename. A result file's
+appearance under its final name IS the done signal for that round — no
+screen-scraping, one exact schema-checkable shape across all herdr-supported
+kinds.
+
+**The worker stays bee-ignorant; the orchestrator owns bee's own
+bookkeeping (D4).** The dispatch prompt this verb writes into the brief is
+fully self-contained — task, absolute paths, file constraints, the result
+schema, the tmp-rename write gesture — so a worker that has never seen bee
+can complete it. Everything bee-shaped that follows (`cells finish`, the
+proof line, reservations, the dispatch-log row for the CALLER's bookkeeping)
+is done by the orchestrator after it reads the result file back, never by
+the worker. The one exception the verb itself owns: it appends the
+`dispatch.jsonl` row and a wave-ledger `record-worker` row for every run it
+starts (D9), so occupancy counts these workers too, mechanically, without
+relying on the bee-ignorant worker to say anything back.
+
+**Liveness is health-check based, native, at zero token cost (D5).** The
+poll loop watches `result-N.json` presence, `log.txt` mtime, worktree diff
+activity, and `herdr agent list` status — no LLM call anywhere on the wait
+path. A stale heartbeat past `--idle-timeout` ends the wait; an absolute
+`--ceiling` caps it regardless of activity, the busy-loop backstop for the
+infinite fix-test-fix case a heartbeat alone would miss. There is no fixed
+short wall-clock timeout — wall-clock cannot tell a long cell from a stuck
+agent.
+
+**Pane lifecycle mirrors the result, not the clock (D6).** A valid result
+closes the pane (`herdr pane close`); a failure or a timed-out wait leaves
+it open as forensics — a dead foreign agent's pane is the only remaining
+trace. `--close-always` closes the pane on every outcome, overriding both.
+
+**This verb is cell-execution-only (D7)** — the mirror of the `cli` tier
+kind, which is gather/review/advisor-only (`gates-and-delegation.md`'s cli
+gather branch). A gather never dispatches through a herding pane; when the
+backlogged `{kind:"herding"}` tier-kind proposal (scope B) lands, a
+gather-purpose resolution to `kind=herding` falls back to the default
+instead.
 
 ## What actually contains this
 
