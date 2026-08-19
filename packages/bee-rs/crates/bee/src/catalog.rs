@@ -418,7 +418,16 @@ mod tests {
         // worktree, review, trigger — never an external system's), and the
         // item a worker was given (`--request`/`--subject`/`--cos` are all
         // different concepts) — so both are genuinely new. Net +2: 161 -> 163.
-        const PINNED_FLAG_COUNT: usize = 163;
+        // herding-orchestration D8 (ho-13): `herding control-loop` lands —
+        // the Rust replacement for control-loop.sh. Checked first:
+        // `--main-root` (interlock/command-template/wave/occupancy/
+        // record-worker) is reused unchanged, no cost. `--role`, `--interval`,
+        // `--timeout`, `--max-iterations`, `--max-consecutive-failures`,
+        // `--turn-ceiling` and `--once` name concepts no existing flag
+        // carries — which control agent this loop drives, the loop's own
+        // poll/kill/ceiling/backoff knobs, and "run one iteration then
+        // exit" — so all seven are genuinely new. Net +7: 163 -> 170.
+        const PINNED_FLAG_COUNT: usize = 170;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

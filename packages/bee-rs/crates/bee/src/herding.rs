@@ -19,6 +19,12 @@
 //                             spawn, so the row occupancy reads next iteration
 //                             actually exists. See wave.rs.
 //
+//   bee herding control-loop <- (herding-orchestration D8) the Rust replacement
+//                             for skills/bee-herding/scripts/control-loop.sh.
+//                             See control_loop.rs — control-loop.sh itself stays
+//                             in place, unreferenced, until the cell that rewires
+//                             bootstrap-cockpit.sh removes it.
+//
 // The next three (herdr-result, herdr-pane-id, command-template) are the cockpit
 // shell scripts' inline `node -e` snippets. They
 // are not bee state at all — they parse a config file and herdr's own JSON
@@ -64,6 +70,10 @@ mod wave_ledger;
 // the ledger's read side. See `wave.rs` for both.
 mod wave;
 
+// `bee herding control-loop` (D8) — the Rust replacement for
+// control-loop.sh. See control_loop.rs.
+mod control_loop;
+
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
@@ -81,6 +91,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "wave" => Some(wave::wave(rest)),
         "occupancy" => Some(wave::occupancy(rest)),
         "record-worker" => Some(wave::record_worker(rest)),
+        "control-loop" => Some(control_loop::control_loop(rest)),
         _ => None,
     }
 }
@@ -531,6 +542,35 @@ fn interlock(flags: &[&str]) -> ExitCode {
 // the cockpit shell scripts' inline JSON readers
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Shared by the `command_template` CLI verb below (the shell scripts'
+/// external reader) and `control_loop::resolve_iteration_argv` (the same
+/// read done in-process, no child `bee` call): `herding.<key>` from
+/// `<main_root>/.bee/config.json` as a JSON array of argv-token strings.
+/// `None` covers every "fall back to the hardcoded default" case
+/// control-loop.sh's `read_command_template` covered by printing nothing: a
+/// missing file, a missing key, a non-array value, an empty array, a
+/// non-string element, or an element containing a newline (the line-per-token
+/// protocol `command_template` still prints over cannot carry one, so the
+/// same rejection is kept here even though nothing crosses a line in the
+/// in-process caller).
+pub(crate) fn read_command_template_tokens(main_root: &Path, key: &str) -> Option<Vec<String>> {
+    let path = main_root.join(".bee").join("config.json");
+    let raw = std::fs::read_to_string(&path).ok()?;
+    let cfg: Value = serde_json::from_str(&raw).ok()?;
+    let Value::Array(tmpl) = cfg.get("herding")?.get(key)? else { return None };
+    if tmpl.is_empty() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(tmpl.len());
+    for t in tmpl {
+        match t.as_str() {
+            Some(s) if !s.contains('\n') => out.push(s.to_string()),
+            _ => return None,
+        }
+    }
+    Some(out)
+}
+
 /// control-loop.sh `read_command_template KEY`: print `herding.<KEY>` from
 /// `<main-root>/.bee/config.json`, one argv token per line. A missing file, a
 /// missing key, a non-array value, an empty array, a non-string element, or an
@@ -555,24 +595,10 @@ fn command_template(flags: &[&str]) -> ExitCode {
     }
     let Some(key) = key else { return ExitCode::SUCCESS };
     let Some(main_root) = resolve_main_root(explicit) else { return ExitCode::SUCCESS };
-    let path = main_root.join(".bee").join("config.json");
-    let Ok(raw) = std::fs::read_to_string(&path) else { return ExitCode::SUCCESS };
-    let Ok(cfg) = serde_json::from_str::<Value>(&raw) else { return ExitCode::SUCCESS };
-    let Some(Value::Array(tmpl)) = cfg.get("herding").and_then(|h| h.get(key)) else {
-        return ExitCode::SUCCESS;
-    };
-    if tmpl.is_empty() {
-        return ExitCode::SUCCESS;
-    }
-    let mut out = Vec::with_capacity(tmpl.len());
-    for t in tmpl {
-        match t.as_str() {
-            Some(s) if !s.contains('\n') => out.push(s),
-            _ => return ExitCode::SUCCESS,
+    if let Some(tokens) = read_command_template_tokens(&main_root, key) {
+        for s in tokens {
+            println!("{s}");
         }
-    }
-    for s in out {
-        println!("{s}");
     }
     ExitCode::SUCCESS
 }
