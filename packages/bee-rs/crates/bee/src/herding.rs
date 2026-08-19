@@ -21,9 +21,9 @@
 //
 //   bee herding control-loop <- (herding-orchestration D8) the Rust replacement
 //                             for skills/bee-herding/scripts/control-loop.sh.
-//                             See control_loop.rs — control-loop.sh itself stays
-//                             in place, unreferenced, until the cell that rewires
-//                             bootstrap-cockpit.sh removes it.
+//                             See control_loop.rs — control-loop.sh was deleted
+//                             by ho-14, which rewired bootstrap-cockpit.sh onto
+//                             this verb; ho-15 moved the references it left.
 //
 // The next three (herdr-result, herdr-pane-id, command-template) are the cockpit
 // shell scripts' inline `node -e` snippets. They

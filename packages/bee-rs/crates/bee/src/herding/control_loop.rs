@@ -2,8 +2,9 @@
 // (herding-orchestration D8, docs/history/herding-orchestration/CONTEXT.md).
 //
 // WHAT SURVIVES FROM THE BASH SCRIPT (it is the specification;
-// `skills/bee-herding/scripts/control-loop.sh` stays in place, unreferenced,
-// until the cell that rewires bootstrap-cockpit.sh removes it):
+// `skills/bee-herding/scripts/control-loop.sh` was deleted by ho-14, which
+// rewired bootstrap-cockpit.sh onto this verb — read the script in git
+// history, not on disk):
 //   - parse a required `--role dispatch|merge` plus the optional
 //     `--main-root`, `--interval`, `--timeout`, `--max-iterations`,
 //     `--max-consecutive-failures`, `--turn-ceiling` and `--once`;
