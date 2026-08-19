@@ -603,5 +603,10 @@
     "capped": 7,
     "dropped": 0,
     "archived_at": "2026-08-19T03:13:02.108Z"
+  },
+  "auto-wait-mark": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-19T03:13:05.566Z"
   }
 }
