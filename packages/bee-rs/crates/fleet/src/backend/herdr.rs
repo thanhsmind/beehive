@@ -1140,18 +1140,32 @@ mod tests {
         // fix, because the old `worker_name.replace(':', "-")` passed the
         // uppercase `G` straight through.
         let body: Value = serde_json::json!({"type":"ok","result":{"agents":[]}});
-        match decide_start(&body, "w4:pG", "claude", &[], START_TIMEOUT_MS) {
-            StartDecision::Spawn(argv) => {
-                let name = &argv[2];
-                assert!(
-                    is_legal_herdr_agent_name(name),
-                    "the NAME argument passed to `herdr agent start` must satisfy herdr's own \
-                     stated naming rule (start with a lowercase letter; only lowercase letters, \
-                     digits, '-', or '_'; 1-32 characters) for every pane id, uppercase letters \
-                     included; got {name:?}"
-                );
+        // One input per clause of the rule, because a single input reaches
+        // only the clause it happens to violate: `w4:pG` is short and
+        // already starts with a letter, so on its own it leaves the
+        // leading-letter and length clauses unexercised — a judge deleted
+        // each of them and the whole crate stayed green.
+        for (pane_id, clause) in [
+            ("w4:pG", "an uppercase letter must be folded"),
+            ("9:pA", "a slug that would not start with a lowercase letter must be repaired"),
+            (
+                "workspace-with-a-deliberately-long-name:pAB",
+                "a slug longer than herdr's 32-character limit must be truncated",
+            ),
+        ] {
+            match decide_start(&body, pane_id, "claude", &[], START_TIMEOUT_MS) {
+                StartDecision::Spawn(argv) => {
+                    let name = &argv[2];
+                    assert!(
+                        is_legal_herdr_agent_name(name),
+                        "the NAME argument passed to `herdr agent start` must satisfy herdr's own \
+                         stated naming rule (start with a lowercase letter; only lowercase \
+                         letters, digits, '-', or '_'; 1-32 characters) for every pane id — here \
+                         {clause}; pane id {pane_id:?} produced {name:?}"
+                    );
+                }
+                other => panic!("a pane id with no agent yet must spawn; got {other:?}"),
             }
-            other => panic!("a pane id with no agent yet must spawn; got {other:?}"),
         }
     }
 
