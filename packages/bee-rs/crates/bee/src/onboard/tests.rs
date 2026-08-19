@@ -208,6 +208,7 @@ fn plan_on_an_empty_repo_lists_the_whole_install() {
         "create_runtime_file",
         "create_runtime_file",
         "create_runtime_file",
+        "create_runtime_file", // .bee/config-sample.json (config-sample-herding D3)
         "create_dir",
         "create_dir",
         "copy_helper",
@@ -279,6 +280,15 @@ fn apply_on_an_empty_repo_then_reapply_is_a_no_op() {
     assert!(gi.ends_with("# BEE:END\n"));
     assert!(fx.repo.join(".bee").join("bin").join("lib").join("cells.mjs").exists());
     assert!(fx.repo.join(".bee").join("bin").join("prompts").join("worker-cell.md").exists());
+
+    // config-sample-herding D3: the annotated sample is seeded verbatim
+    // (embedded from the bee repo's own .bee/config-sample.json) and carries
+    // the herding key.
+    let sample: Value = serde_json::from_str(
+        &std::fs::read_to_string(fx.repo.join(".bee").join("config-sample.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(sample.get("herding").is_some());
     assert!(fx.repo.join("docs").join("specs").join("reading-map.md").exists());
     assert!(fx.repo.join("docs").join("history").join("learnings").join("critical-patterns.md").exists());
 

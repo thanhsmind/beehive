@@ -265,6 +265,8 @@ pub fn apply_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> ApplyOut
                         format!("{}\n", jsjson::stringify_pretty(&T::default_config()))
                     } else if rel.ends_with("reservations.json") {
                         format!("{}\n", jsjson::stringify_pretty(&T::default_reservations()))
+                    } else if rel.ends_with("config-sample.json") {
+                        T::CONFIG_SAMPLE_JSON.to_string()
                     } else {
                         String::new()
                     };
