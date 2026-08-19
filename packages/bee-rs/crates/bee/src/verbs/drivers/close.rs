@@ -1148,6 +1148,32 @@ fn doc_deferral_baseline_to_value(baseline: &DocDeferralBaseline) -> Value {
     Value::Object(root)
 }
 
+/// D6's SEED file set: every markdown file under `docs/`, REPO-WIDE, as
+/// root-relative paths — deliberately NOT `doc_deferral_scan_files`, which
+/// is per-FEATURE (the closing feature's capped cells' `files_changed` plus
+/// `docs/history/<feature>/`). A scan-set-wide seed would freeze only the
+/// docs one feature happened to touch, so the next feature touching a
+/// different long-lived doc would enter enforcement against an empty entry
+/// and block on every pre-existing line in it — the exact false-positive
+/// class this whole feature exists to end, returning on a delay. Reuses
+/// `list_bundle_markdown` (the same walker `doc_deferral_scan_files` already
+/// uses for `docs/history/<feature>/`) rather than adding a second walker;
+/// it skips symlinks, and its `None` (a path carrying a char at or above
+/// U+E000) reads here as "no files", which seeds an empty baseline rather
+/// than half of one.
+///
+/// ENFORCEMENT is untouched by this and stays per-feature over
+/// `doc_deferral_scan_files` — freeze all existing debt once, then police
+/// only what each feature touches.
+fn doc_deferral_seed_files(root: &Path) -> Vec<String> {
+    let docs_dir = root.join("docs");
+    crate::verbs::knowledge::list_bundle_markdown(&docs_dir)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|rel| format!("docs/{rel}"))
+        .collect()
+}
+
 /// The scan loop itself, unchanged in spirit from the pre-baseline door:
 /// `doc_deferral_scan_files` for the file set (D1, untouched), `matches_
 /// deferral_prose` for the word list (D1, untouched), the `in_fence` toggle
@@ -1196,12 +1222,16 @@ fn doc_deferral_candidates(root: &Path, files: &[String]) -> Vec<DeferralCandida
 /// normalized content already present in the tracked baseline (D1), or it
 /// blocks, naming file:line and the create-the-trigger teach line.
 ///
-/// D2: a repo with no baseline file seeds it — on a REAL run (`dry_run` is
+/// D2 + D6: a repo with no baseline file seeds it, REPO-WIDE — the seed
+/// walks every markdown file under `docs/` (`doc_deferral_seed_files`), not
+/// the per-feature scan set enforcement uses. On a REAL run (`dry_run` is
 /// false) it records every line still flagged after the citation escape and
-/// writes the file, then passes; on `--dry-run` (D5) it writes nothing and
-/// reports non-blocking, naming the count a real close would freeze. Every
-/// run after that only reads the baseline — nothing is ever adopted back
-/// into it automatically (D2/D4).
+/// ALWAYS writes the file, even when it flagged nothing (an absent file IS
+/// the seed state, so skipping the write would leave the next close free to
+/// adopt the first genuine deferral line ever added); on `--dry-run` (D5) it
+/// writes nothing and reports non-blocking, naming the repo-wide count a
+/// real close would freeze. Every run after that only reads the baseline —
+/// nothing is ever adopted back into it automatically (D2/D4).
 pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str, dry_run: bool) -> D<Door> {
     let files = doc_deferral_scan_files(root, feature)?;
     let candidates = doc_deferral_candidates(root, &files);
@@ -1209,8 +1239,18 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str, dry_run: bool)
 
     let new_items: Vec<&DeferralCandidate> = match read_json(&baseline_path) {
         ReadJson::Missing => {
+            // D6: the seed is REPO-WIDE. `candidates` above is the
+            // per-feature ENFORCEMENT set and is deliberately ignored here —
+            // seeding from it would freeze only this feature's own docs.
+            let seed_files = doc_deferral_seed_files(root);
+            let seed_candidates = doc_deferral_candidates(root, &seed_files);
             if dry_run {
-                if candidates.is_empty() {
+                // D5: `--dry-run` writes NOTHING, ever. It still has to
+                // predict the verdict honestly — and the verdict is
+                // non-blocking either way, so a seed that would freeze
+                // nothing reports the same plain "clear" every enforcing
+                // run reports.
+                if seed_candidates.is_empty() {
                     return Ok(Door {
                         door: "doc-deferral",
                         blocking: false,
@@ -1218,32 +1258,31 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str, dry_run: bool)
                         command: None,
                     });
                 }
-                let messages: Vec<String> = candidates.iter().map(|c| c.message.clone()).collect();
+                let messages: Vec<String> = seed_candidates.iter().map(|c| c.message.clone()).collect();
                 return Ok(Door {
                     door: "doc-deferral",
                     blocking: false,
                     detail: format!(
-                        "SEED (dry-run) — no baseline file yet; a real `bee close` would baseline {} pre-existing deferral line(s) and pass: {}",
-                        candidates.len(),
+                        "SEED (dry-run) — no baseline file yet; a real `bee close` would baseline {} pre-existing deferral line(s) across {} markdown file(s) under docs/, repo-wide, and pass: {}",
+                        seed_candidates.len(),
+                        seed_files.len(),
                         messages.join("; ")
                     ),
                     command: None,
                 });
             }
-            // Nothing flagged this run: skip the write rather than freezing
-            // an empty file. Behaviorally identical either way for every
-            // future run (an absent baseline and an empty-`files` baseline
-            // both cover nothing), but a real close with nothing to record
-            // must leave `.bee` untouched — `clean_store_green_close_
-            // reports_reason_clean` pins exactly that for the store as a
-            // whole, and a stray tracked file here would break it.
-            if !candidates.is_empty() {
-                let mut baseline: DocDeferralBaseline = DocDeferralBaseline::new();
-                for c in &candidates {
-                    baseline.entry(c.rel.clone()).or_default().insert(c.norm.clone());
-                }
-                write_json_atomic(&baseline_path, &doc_deferral_baseline_to_value(&baseline)).map_err(|_| Delegate)?;
+            // D6: ALWAYS write, even with nothing to record. An absent file
+            // IS the seed state — a skipped write leaves the repo in SEED,
+            // so the next close reads `Missing` again and ADOPTS whatever it
+            // finds, swallowing the first genuine deferral line anyone adds.
+            // An empty-`files` baseline is NOT equivalent to an absent one:
+            // it takes the `Parsed` arm below, where every candidate is new
+            // and blocks.
+            let mut baseline: DocDeferralBaseline = DocDeferralBaseline::new();
+            for c in &seed_candidates {
+                baseline.entry(c.rel.clone()).or_default().insert(c.norm.clone());
             }
+            write_json_atomic(&baseline_path, &doc_deferral_baseline_to_value(&baseline)).map_err(|_| Delegate)?;
             Vec::new()
         }
         ReadJson::Corrupt => candidates.iter().collect(),
@@ -1774,6 +1813,18 @@ pub(crate) fn close_handler(
     let knowledge_freshness_door = build_knowledge_freshness_door(root, feature)?;
     let impact_door = build_impact_door(root, feature)?;
     let routing_door = build_routing_door(root, feature)?;
+    // D2/D6: this is the one REAL (writing) call — the door seeds itself
+    // here, before the proof-debt refusal just below and before every other
+    // blocking door further down. NAMED DEVIATION (recorded on cell ddb-1):
+    // a close that refuses at a later door therefore writes the seed file
+    // and never reaches `commit_close_bookkeeping`, leaving it untracked
+    // until the next GREEN close. Accepted rather than fixed: the file is
+    // correct and fully enforcing from the moment it lands, so no verdict
+    // is ever wrong; `commit_close_bookkeeping` stages with
+    // `git add -A -- .bee`, which picks the untracked file up on that next
+    // green close; and moving the write onto close's green path would take
+    // the seed out of the door, which D2 locks as the door's own job (and
+    // would put it beyond the reach of this door's unit tests).
     let doc_deferral_door = build_doc_deferral_door(root, feature, false)?;
 
     if proof.blocking {
@@ -2865,7 +2916,16 @@ mod tests {
         // below is the one test that turns `commit.gpgsign` ON and pins
         // the flag directly.
         w(root, ".bee/config.json", "{}\n");
-        git_ok(root, &["add", ".bee/config.json"]);
+        // D7 (doc-deferral-baseline): every close driven through this
+        // fixture runs the doc-deferral door for real, and a repo with NO
+        // baseline file is in SEED state — the door would write one (D6:
+        // always, even with nothing to record) and the bookkeeping-commit
+        // tests below would see a `.bee` path they never asked about.
+        // Seeding an empty baseline into the SEED COMMIT keeps those tests
+        // in ENFORCE mode, so each goes on asserting exactly what it
+        // asserts today about commit scoping.
+        w(root, ".bee/doc-deferral-baseline.json", "{\"files\":{}}\n");
+        git_ok(root, &["add", ".bee/config.json", ".bee/doc-deferral-baseline.json"]);
         // D-P3-1: this SEED commit is fixture setup, not the code under
         // test, so it passes `--no-gpg-sign` directly rather than relying on
         // the repo's own (unset) config — a developer whose GLOBAL

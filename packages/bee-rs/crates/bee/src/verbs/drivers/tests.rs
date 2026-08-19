@@ -3106,9 +3106,14 @@ use std::time::Instant;
     /// A pre-seeded baseline (`.bee/doc-deferral-baseline.json`) whose
     /// entries cover none of the lines a test cares about — writing this
     /// first flips `build_doc_deferral_door` from a first-run SEED (which
-    /// always passes, D2) into ENFORCE mode, so a still-fresh test can go on
-    /// proving the block/clear/deferred behavior the door had before the
+    /// always passes, D2/D6) into ENFORCE mode, so a still-fresh test can go
+    /// on proving the block/clear/deferred behavior the door had before the
     /// baseline existed at all.
+    ///
+    /// D7: EVERY door test needs this. A door test left in seed mode is
+    /// vacuous by construction — the seed arm returns non-blocking no matter
+    /// what the scan found, so the fenced-code exemption and the citation
+    /// escape can both be deleted outright without the test noticing.
     fn write_empty_doc_deferral_baseline(root: &Path) {
         w(root, ".bee/doc-deferral-baseline.json", "{\"files\":{}}\n");
     }
@@ -3156,6 +3161,9 @@ use std::time::Instant;
     fn doc_deferral_door_clears_with_a_registered_trigger_citation() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+        // D7: ENFORCE mode, covering nothing — without it the seed arm
+        // passes this test even with the citation escape deleted.
+        write_empty_doc_deferral_baseline(root);
         write_trigger(root, "demo-trigger");
         w(
             root,
@@ -3172,6 +3180,9 @@ use std::time::Instant;
     fn doc_deferral_door_exempts_fenced_code() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+        // D7: ENFORCE mode, covering nothing — without it the seed arm
+        // passes this test even with the fenced-code exemption deleted.
+        write_empty_doc_deferral_baseline(root);
         w(
             root,
             "docs/knowledge/areas/demo/notes.md",
@@ -3244,10 +3255,13 @@ use std::time::Instant;
         assert_eq!(doc_deferral.get("blocking"), Some(&json!(true)));
     }
 
-    // ─── doc-deferral-baseline: D1-D5 ────────────────────────────────────────
+    // ─── doc-deferral-baseline: D1-D7 ────────────────────────────────────────
 
     /// D2: a repo with no baseline file seeds it on a REAL close run — it
-    /// records what it flagged, passes, and writes the tracked file.
+    /// records what it flagged, passes, and writes the tracked file. (Here
+    /// the one docs/ file is also the whole repo-wide seed set, so D6's
+    /// wider walk and the old scan-set walk agree; the two tests below
+    /// separate them.)
     #[test]
     fn doc_deferral_door_seeds_the_baseline_on_a_real_run_and_passes() {
         let tmp = tempfile::tempdir().unwrap();
@@ -3339,6 +3353,95 @@ use std::time::Instant;
         assert!(!door.blocking, "{}", door.detail);
         assert!(door.detail.contains("1 pre-existing deferral line(s)"), "{}", door.detail);
         assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:2"), "{}", door.detail);
+        assert!(!doc_deferral_baseline_path(root).exists());
+    }
+
+    /// D6: the SEED is REPO-WIDE — it records deferral lines from every
+    /// markdown file under `docs/`, including files the closing feature's
+    /// own scan set never sees. Without that, the seed would freeze only the
+    /// docs one feature happened to touch, and the NEXT feature to close
+    /// over a different long-lived doc would enter enforcement against an
+    /// empty entry and block on every pre-existing line in it.
+    #[test]
+    fn doc_deferral_door_seed_is_repo_wide_and_covers_docs_outside_the_feature_scan_set() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // In "demo"'s scan set.
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        // NOT in "demo"'s scan set — another feature's long-lived doc.
+        w(root, "docs/history/other/CONTEXT.md", "# Other\n\nThat migration is deferred for now.\n");
+        let scan_set = doc_deferral_scan_files(root, "demo").unwrap();
+        assert!(!scan_set.iter().any(|f| f == "docs/history/other/CONTEXT.md"), "{scan_set:?}");
+
+        let seeded = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!seeded.blocking, "{}", seeded.detail);
+
+        // Both files are frozen, not just the one "demo" touched.
+        let expected = doc_deferral_baseline_json(&[
+            ("docs/history/other/CONTEXT.md", &["That migration is deferred for now."]),
+            ("docs/knowledge/areas/demo/notes.md", &["This work is deferred for now."]),
+        ]);
+        assert_eq!(String::from_utf8(read_doc_deferral_baseline_bytes(root)).unwrap(), expected);
+
+        // D6's whole point: the next feature closing over that other doc is
+        // already covered, instead of eating its pre-existing line.
+        let other = build_doc_deferral_door(root, "other", false).unwrap();
+        assert!(!other.blocking, "{}", other.detail);
+        assert_eq!(other.detail, "clear");
+    }
+
+    /// D6: a seed run that flags NOTHING still writes the baseline file. An
+    /// absent file IS the seed state, so skipping the write would leave the
+    /// next close reading `Missing` and ADOPTING the first genuine deferral
+    /// line anyone adds — a true positive swallowed by the very mechanism
+    /// built to catch it.
+    #[test]
+    fn doc_deferral_door_seed_with_nothing_to_record_still_writes_the_file_and_a_later_line_blocks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nplain prose with nothing pending.\n");
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        assert!(!doc_deferral_baseline_path(root).exists());
+
+        let seeded = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!seeded.blocking, "{}", seeded.detail);
+        assert_eq!(seeded.detail, "clear");
+        // Written anyway, empty — observed on disk, never inferred from the
+        // verdict (both states report the same non-blocking door).
+        assert_eq!(
+            String::from_utf8(read_doc_deferral_baseline_bytes(root)).unwrap(),
+            doc_deferral_baseline_json(&[])
+        );
+
+        // The repo is now in ENFORCE, so a genuine deferral line added after
+        // the seed BLOCKS instead of being adopted by a second seed run.
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "line one\nplain prose with nothing pending.\nThis work is deferred for now.\n",
+        );
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:3"), "{}", door.detail);
+    }
+
+    /// D5 + D6: `--dry-run` still writes nothing, and the count it names is
+    /// the REPO-WIDE seed a real close would perform — never the closing
+    /// feature's narrower scan set, which would under-report it.
+    #[test]
+    fn doc_deferral_door_dry_run_names_the_repo_wide_seed_count_not_the_scan_set_count() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, "docs/knowledge/areas/demo/notes.md", "line one\nThis work is deferred for now.\n");
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        w(root, "docs/history/other/CONTEXT.md", "# Other\n\nThat migration is deferred for now.\n");
+
+        let door = build_doc_deferral_door(root, "demo", true).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("2 pre-existing deferral line(s)"), "{}", door.detail);
+        assert!(door.detail.contains("2 markdown file(s) under docs/"), "{}", door.detail);
+        assert!(door.detail.contains("docs/history/other/CONTEXT.md:3"), "{}", door.detail);
         assert!(!doc_deferral_baseline_path(root).exists());
     }
 
