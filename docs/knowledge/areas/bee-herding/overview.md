@@ -208,6 +208,13 @@ the dispatch interlock, or the merge owner-gesture change.
 
 ## Open Gaps
 
+- **A wave cannot confirm that a worker finished.** Proven by the first live run on Linux: two
+  workers were started in their own worktrees, took their briefs and answered correctly, and the
+  wave still reported both as UNVERIFIABLE — which is the honest answer, because the only completion
+  signal available tracks the pane's attention rather than the work (see Edge Cases). The
+  consequence is that a wave over ordinary agent sessions reports overall failure even when every
+  worker did its job, so today the ledger row and the pane's own output are what an owner reads, not
+  the verdict. Closing this needs a completion signal the worker itself emits.
 - **The live D6 scenario has not been run end to end on Windows.** The mechanism is proven there —
   the whole suite runs unexcluded on a Windows CI lane and every behavior that matters is pinned by
   platform-portable tests — but a live run needs a running herdr server, real panes and real agents,
