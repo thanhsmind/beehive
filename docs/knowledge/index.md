@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 105 concept(s)
-- [patterns/](patterns/index.md) — 118 concept(s)
+- [patterns/](patterns/index.md) — 119 concept(s)
 - [work/](work/index.md) — 12 concept(s)
 
 ## Critical patterns
@@ -57,5 +57,6 @@ never a generation timestamp or any other wall-clock value.
 - [A green count is not evidence that your new test ran](patterns/20260818-a-green-count-is-not-evidence-that-your-new-test-ran.md) — A green count is not evidence that your new test ran
 - [A "never do X twice" constraint is invisible to a suite that only asserts outcomes](patterns/20260818-a-never-do-x-twice-constraint-is-invisible-to-a-suite-that-only-asserts-outcomes.md) — A "never do X twice" constraint is invisible to a suite that only asserts outcomes
 - [A rule checked at two points needs one shared read — a fixture that cannot diverge proves nothing](patterns/20260818-a-rule-checked-at-two-points-needs-one-shared.md) — A rule checked at two points needs one shared read — a fixture that cannot diverge proves nothing
+- [A sweep proven by a matcher inherits the matcher's blind spots](patterns/20260818-a-sweep-proven-by-a-matcher-inherits-the-matchers-blind-spots.md) — A sweep proven by a matcher inherits the matcher's blind spots
 - [A write placed before a self-check makes the check accuse itself](patterns/20260818-a-write-placed-before-a-self-check-makes-the.md) — A write placed before a self-check makes the check accuse itself
 - [Defaults merged into a read erase the difference between absent and refused](patterns/20260818-defaults-merged-into-a-read-erase-the-difference-between-absent-and-refused.md) — Defaults merged into a read erase the difference between absent and refused
