@@ -618,5 +618,10 @@
     "capped": 7,
     "dropped": 0,
     "archived_at": "2026-08-19T23:18:37.261Z"
+  },
+  "config-sample-herding": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-19T23:39:45.821Z"
   }
 }
