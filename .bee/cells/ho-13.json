@@ -47,22 +47,46 @@
       "Do not use bee cells cap --override-judge."
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [],
   "trace": {
     "worker": "w-ho-13",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "Replaced control-loop.sh with a Rust bee herding control-loop verb (D8/D13)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-19T03:27:57.775Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
-    "claimed_at": "2026-08-19T03:01:32.393Z"
+    "claimed_at": "2026-08-19T03:01:32.393Z",
+    "report": {
+      "outcome": "Replaced control-loop.sh with a Rust bee herding control-loop verb (D8/D13): byte-identical default argv, per-token config substitution, and a real pid-based terminate-then-kill wall-clock ceiling with no shell and no GNU timeout.",
+      "commit": "5f2afeaae6c4d6abe3765bc0d7e43e27bc02ec87",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — 1932 passed in the bee bin including 23 new control_loop tests, registry_dispatch/registry_contracts 15 passed cover the new catalog entry, full workspace suite exit 0",
+      "deviations": [
+        "No --command test-only flag on the new CLI verb since the bash shape it used is exactly the shell dependency D8 removes; tests inject through ArgvProvider/IterationSpawner traits instead.",
+        "PROMPT_FILE is resolved relative to --main-root instead of a script-directory-relative path, since a compiled binary has no SCRIPT_DIR; it resolves to the exact same file in practice."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1200 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   },
   "tier": "generation"
 }
