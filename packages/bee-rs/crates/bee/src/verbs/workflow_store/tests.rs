@@ -368,7 +368,24 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
     #[test]
     fn build_waiting_on_refuses_unknown_kind_empty_subject_and_empty_session() {
         match build_waiting_on("vibe", "why?", "sess-1") {
-            Err(Err2::Msg(m)) => assert!(m.contains("kind must be one of gate/question"), "{m}"),
+            // Pin the FULL rendered vocabulary (gate/question/turn-end), not
+            // just a leading substring — a regression that dropped turn-end
+            // from WAITING_ON_KIND_VALUES would still satisfy a two-value
+            // prefix check and this test would stay green while the third
+            // legal value silently vanished. The expected string must NOT be
+            // built from WAITING_ON_KIND_VALUES.join("/") — that reads the
+            // same array the code under test reads, so removing turn-end
+            // from the array changes both sides together and the assertion
+            // can never go red. "gate/question/" is hardcoded (that ordering
+            // is stable and not what this test guards); only the third
+            // value comes from the constant, so a rename still tracks it
+            // without writing "turn-end" a second time.
+            Err(Err2::Msg(m)) => assert!(
+                m.contains(&format!(
+                    "kind must be one of gate/question/{WAITING_ON_KIND_TURN_END}"
+                )),
+                "{m}"
+            ),
             other => panic!("expected a typed refusal, got {other:?}"),
         }
         match build_waiting_on("question", "   ", "sess-1") {
@@ -385,6 +402,34 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
         assert_eq!(mark["session"], json!("sess-1"));
         assert!(mark.get("asked_at").is_some());
         assert!(waiting_on_is_live(Some(&mark)));
+    }
+
+    /// auto-wait-mark D3: `turn-end` is the third legal `kind` — the Stop
+    /// hook's ordinary-turn-close value, not just gate/question. Proves
+    /// `build_waiting_on` accepts it AND that it round-trips through a real
+    /// workflow record (`set_workflow_waiting_on` write, `read_workflow_
+    /// record` read), the same shape already proven for `question` above.
+    #[test]
+    fn build_waiting_on_accepts_turn_end_and_it_round_trips_through_the_record() {
+        let mark = ok(build_waiting_on("turn-end", "say go and I will do it", "sess-1"));
+        assert_eq!(mark["kind"], json!("turn-end"));
+        assert_eq!(mark["subject"], json!("say go and I will do it"));
+        assert!(waiting_on_is_live(Some(&mark)));
+
+        let tmp = tmp_root();
+        let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
+        let id = record.get("id").unwrap().as_str().unwrap().to_string();
+        let marked = ok(set_workflow_waiting_on(tmp.path(), &id, "turn-end", "say go and I will do it", "sess-1"));
+        assert_eq!(
+            marked.get("waiting_on").and_then(|v| v.get("kind")),
+            Some(&json!("turn-end"))
+        );
+        let on_disk = ok(read_workflow_record(tmp.path(), &id));
+        assert_eq!(
+            on_disk.get("waiting_on").and_then(|v| v.get("kind")),
+            Some(&json!("turn-end"))
+        );
+        assert!(waiting_on_is_live(on_disk.get("waiting_on")));
     }
 
     #[test]
@@ -453,7 +498,15 @@ use std::path::{Path, PathBuf, MAIN_SEPARATOR};
         let record = ok(create_workflow(tmp.path(), NewWorkflow::for_feature("f1")));
         let id = record.get("id").unwrap().as_str().unwrap().to_string();
         match set_workflow_waiting_on(tmp.path(), &id, "vibe", "why?", "sess-1") {
-            Err(Err2::Msg(m)) => assert!(m.contains("kind must be one of gate/question"), "{m}"),
+            // Same full-vocabulary pin as build_waiting_on_refuses_unknown_
+            // kind_empty_subject_and_empty_session above — see its comment
+            // on why this must not read WAITING_ON_KIND_VALUES itself.
+            Err(Err2::Msg(m)) => assert!(
+                m.contains(&format!(
+                    "kind must be one of gate/question/{WAITING_ON_KIND_TURN_END}"
+                )),
+                "{m}"
+            ),
             other => panic!("expected a typed refusal, got {other:?}"),
         }
         match set_workflow_waiting_on(tmp.path(), &id, "question", "", "sess-1") {

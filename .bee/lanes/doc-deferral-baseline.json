@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "doc-deferral-baseline",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"doc-deferral-baseline\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"doc-deferral-baseline\" (lane).",
+  "created_at": "2026-08-18T15:48:57.292Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Không sao — chính bản auto-commit của tôi (`a750c5da`) đã lấy, đúng feature của tôi. Commit nốt phần còn lại.",
+    "asked_at": "2026-08-19T03:51:19.487Z",
+    "session": "57dd6bbf-d280-4c42-9da6-61ed72419a29"
+  },
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 1,
+    "rationale": "One flag. covered-contract-change: six existing tests pin the doc-deferral door's current behaviour and the seeding path changes what a first run does. Not public-contracts: no CLI flag, verb, or registry entry moves - D2 deliberately puts the seed inside the door precisely to avoid that. Not multi-domain: the change lives in verbs/drivers/close.rs plus its tests, with one new tracked state file. 1 product file.",
+    "updated_at": "2026-08-18T15:49:05.393Z",
+    "feature": "doc-deferral-baseline"
+  }
+}

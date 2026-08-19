@@ -2,16 +2,17 @@
   "schema_version": "1.0",
   "feature": "addcell-all-problems",
   "mode": "feature",
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"addcell-all-problems\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"addcell-all-problems\" (lane).",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-17T11:25:49.840Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null
 }

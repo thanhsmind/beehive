@@ -76,7 +76,13 @@ bee-planning for the next batch (an approved plan stays frozen; planning
 shapes the next batch, never reopens it). Final slice green → put the work
 where the user actually tests it: `bee staging add --feature <slug>` plus
 the staging build, when the host repo records `commands.staging_build`;
-fall back to presenting the feature worktree itself when it does not.
+fall back to presenting the feature worktree itself when it does not, or
+when the repo sets `"staging_before_merge": false` — `bee staging add`
+then refuses `STAGING_DISABLED` and the feature worktree stands in for
+staging; the `uat` gate and `bee worktree merge` are unchanged. Under
+`uat_stop: "close"` this order inverts — merge first, then hand the user
+the reloaded product on main and ask for uat there; a failed uat is fixed
+in the worktree and merged again.
 Present what changed, how to run or see it, and the fixed question "Ready
 to merge?" — never merge on your own read of green tests. Mark the wait:
 `bee state waiting-on set --kind gate --subject "uat: <feature>"`. Capture

@@ -20,7 +20,9 @@ use crate::verbs::reservations::{
     js_numberify, js_trim, keys_known, now_iso, now_ms, parse_flags, prelude, truthy,
     Ctx, Err2, Ex, Exotic, FlagV, Flags, Out, Pre, R2,
 };
-use crate::verbs::reservations::{list_reservations, paths_overlap, rebuild_reservations_projection};
+use crate::verbs::reservations::{
+    list_reservations, paths_overlap, rebuild_reservations_projection, reserve_exec, ReserveParams,
+};
 use crate::verbs::workspace_store as ws;
 use crate::verbs::workflow_store::{
     acquire_named_lock, acquire_workflow_lock, adopt_mailbox_handoff, create_workflow,
@@ -694,13 +696,46 @@ use std::time::Instant;
         }
     }
 
+    // R3 (mcl-1) DELIBERATE INVERSION: this test used to pin that a bound
+    // lane naming no LIVE workflow always refuses, closed or altogether
+    // absent alike. `state waiting-on clear`'s own help text already
+    // promises "a no-op, never a refusal" once the workflow is closed — a
+    // closed workflow still HAS a record, it is simply not live — so the
+    // fixture below now gives "ghost-lane" a CLOSED workflow (not an absent
+    // one) and the CLEAR-verb resolver must fall back to it rather than
+    // refuse. The zero-record case (still refused, narrowed wording) is
+    // its own test right below.
     #[test]
-    fn waiting_on_target_refuses_a_bound_lane_naming_no_live_workflow() {
+    fn waiting_on_target_clear_on_a_bound_lane_falls_back_to_its_closed_workflow() {
         let tmp = tmp_root();
         let sid = fixture_session_id(tmp.path());
         write_session(tmp.path(), &sid, Some("ghost-lane"));
-        // A different feature's live workflow exists, but not "ghost-lane" —
-        // the resolver never falls back to it.
+        let created = ok(create_workflow(
+            tmp.path(),
+            NewWorkflow {
+                status: Some("closed"),
+                ..NewWorkflow::for_feature("ghost-lane")
+            },
+        ));
+        let (id, feature) = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on clear",
+            None,
+            false,
+            None,
+        ))
+        .expect("clear falls back to the closed workflow rather than refusing");
+        assert_eq!(feature, "ghost-lane");
+        assert_eq!(id, wf_id(&created));
+    }
+
+    #[test]
+    fn waiting_on_target_clear_still_refuses_a_bound_lane_with_no_workflow_record_at_all() {
+        let tmp = tmp_root();
+        let sid = fixture_session_id(tmp.path());
+        write_session(tmp.path(), &sid, Some("ghost-lane"));
+        // A different feature's live workflow exists, but not "ghost-lane"
+        // at all (live or closed) — the resolver never falls back to it.
         ok(create_workflow(tmp.path(), NewWorkflow::for_feature("some-other-f")));
         match resolve_waiting_on_target(
             tmp.path(),
@@ -712,6 +747,81 @@ use std::time::Instant;
             Err(Err2::Msg(m)) => {
                 assert!(m.starts_with("state waiting-on clear: refused"), "{m}");
                 assert!(m.contains("bound to lane \"ghost-lane\""), "{m}");
+            }
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn waiting_on_target_clear_still_refuses_an_explicit_lane_with_no_workflow_record_at_all() {
+        // R3's narrowed clear-verb wording: the "and status !== closed"
+        // clause is dropped because this refusal now fires only when NO
+        // record at all (live or closed) names the feature.
+        let tmp = tmp_root();
+        ok(create_workflow(tmp.path(), NewWorkflow::for_feature("some-other-f")));
+        match resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on clear",
+            Some("ghost-feature"),
+            false,
+            None,
+        ) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.starts_with("state waiting-on clear: refused"), "{m}");
+                assert!(m.contains("--lane \"ghost-feature\" names no live workflow"), "{m}");
+                assert!(!m.contains("status !== closed"), "{m}");
+                assert!(m.contains(".bee/runtime/workflows"), "{m}");
+            }
+            other => panic!("expected a typed refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn waiting_on_target_clear_falls_back_to_an_explicit_lanes_closed_workflow() {
+        let tmp = tmp_root();
+        let created = ok(create_workflow(
+            tmp.path(),
+            NewWorkflow {
+                status: Some("closed"),
+                ..NewWorkflow::for_feature("closed-f")
+            },
+        ));
+        let (id, feature) = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on clear",
+            Some("closed-f"),
+            false,
+            None,
+        ))
+        .expect("clear falls back to the closed workflow rather than refusing");
+        assert_eq!(feature, "closed-f");
+        assert_eq!(id, wf_id(&created));
+    }
+
+    #[test]
+    fn waiting_on_target_set_never_widens_to_a_closed_workflow() {
+        // The SET verb's own refusal on the identical fixture the clear-verb
+        // fallback test above resolves successfully against — byte-identical
+        // wording, still refuses, you cannot mark a closed lane as waiting.
+        let tmp = tmp_root();
+        ok(create_workflow(
+            tmp.path(),
+            NewWorkflow {
+                status: Some("closed"),
+                ..NewWorkflow::for_feature("closed-f")
+            },
+        ));
+        match resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on set",
+            Some("closed-f"),
+            false,
+            None,
+        ) {
+            Err(Err2::Msg(m)) => {
+                assert!(m.starts_with("state waiting-on set: refused"), "{m}");
+                assert!(m.contains("--lane \"closed-f\" names no live workflow"), "{m}");
+                assert!(m.contains("status !== closed"), "{m}");
             }
             other => panic!("expected a typed refusal, got {other:?}"),
         }
@@ -772,6 +882,130 @@ use std::time::Instant;
 
         let projected = ok(read_state_strict(tmp.path()));
         assert_eq!(projected.get("waiting_on"), Some(&Value::Null));
+    }
+
+    // ── awaiting-human: R4 (mcl-1), the lane pair-clear ─────────────────────
+    //
+    // `clear_lane_waiting_on_pair` is the lane-file counterpart of decision
+    // f9fd9d46's default-record fix — called only when
+    // `rebuild_lane_projection_reporting` just answered non-authoritative
+    // (R3's own closed-workflow fallback), where the live-only projection
+    // sync is correctly a no-op and would otherwise leave the lane file's
+    // `waiting_on`+`run_state` pair exactly as stuck as before this feature.
+
+    #[test]
+    fn clear_lane_waiting_on_pair_nulls_the_stuck_pair() {
+        let tmp = tmp_root();
+        write_lane_file(
+            tmp.path(),
+            "closed-f",
+            r#"{"feature":"closed-f","phase":"idle","waiting_on":{"kind":"gate","subject":"uat","asked_at":"2026-01-01T00:00:00.000Z","session":"sess-1"},"run_state":"awaiting-approval"}"#,
+        );
+        ok(clear_lane_waiting_on_pair(tmp.path(), "closed-f"));
+        let lane = ok(read_lane_strict(tmp.path(), "closed-f")).unwrap();
+        assert_eq!(lane.get("waiting_on"), Some(&Value::Null));
+        assert_eq!(lane.get("run_state"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn clear_lane_waiting_on_pair_nulls_run_state_even_when_waiting_on_already_reads_null() {
+        // The live-repro shape this feature closes: a mark that already
+        // cleared by some other path, but the frozen projection left
+        // `run_state: awaiting-approval` behind (plan.md's "Live repro").
+        let tmp = tmp_root();
+        write_lane_file(
+            tmp.path(),
+            "closed-f",
+            r#"{"feature":"closed-f","phase":"idle","waiting_on":null,"run_state":"awaiting-approval"}"#,
+        );
+        ok(clear_lane_waiting_on_pair(tmp.path(), "closed-f"));
+        let lane = ok(read_lane_strict(tmp.path(), "closed-f")).unwrap();
+        assert_eq!(lane.get("run_state"), Some(&Value::Null));
+    }
+
+    #[test]
+    fn clear_lane_waiting_on_pair_never_clobbers_a_record_derived_run_state() {
+        let tmp = tmp_root();
+        for value in ["done", "shaping", "running", "blocked"] {
+            write_lane_file(
+                tmp.path(),
+                "f1",
+                &format!(
+                    r#"{{"feature":"f1","phase":"idle","waiting_on":{{"kind":"gate","subject":"uat","asked_at":"2026-01-01T00:00:00.000Z","session":"sess-1"}},"run_state":"{value}"}}"#
+                ),
+            );
+            ok(clear_lane_waiting_on_pair(tmp.path(), "f1"));
+            let lane = ok(read_lane_strict(tmp.path(), "f1")).unwrap();
+            assert_eq!(lane.get("waiting_on"), Some(&Value::Null), "waiting_on for run_state {value}");
+            assert_eq!(
+                lane.get("run_state"),
+                Some(&json!(value)),
+                "run_state {value} must survive the clear untouched"
+            );
+        }
+    }
+
+    #[test]
+    fn clear_lane_waiting_on_pair_is_a_no_op_with_no_lane_file() {
+        let tmp = tmp_root();
+        ok(clear_lane_waiting_on_pair(tmp.path(), "no-such-lane"));
+        assert!(!lanes_dir(tmp.path()).join("no-such-lane.json").exists());
+    }
+
+    #[test]
+    fn clear_lane_waiting_on_pair_is_a_no_op_when_already_clear() {
+        let tmp = tmp_root();
+        write_lane_file(
+            tmp.path(),
+            "f1",
+            r#"{"feature":"f1","phase":"idle","waiting_on":null,"run_state":"done"}"#,
+        );
+        ok(clear_lane_waiting_on_pair(tmp.path(), "f1"));
+        let lane = ok(read_lane_strict(tmp.path(), "f1")).unwrap();
+        assert_eq!(lane.get("run_state"), Some(&json!("done")));
+    }
+
+    /// The full R3+R4 flow `run_waiting_on_clear` drives: a closed workflow
+    /// resolves (R3), `clear_workflow_waiting_on` touches only the workflow
+    /// record, `rebuild_lane_projection_reporting` is correctly non-
+    /// authoritative (not live), and the pair-clear directly repairs the
+    /// stuck lane copy (R4) — the exact stuck shape plan.md's "Live repro"
+    /// names: phase idle, waiting_on already null, run_state stuck at
+    /// "awaiting-approval".
+    #[test]
+    fn waiting_on_clear_on_a_closed_workflow_repairs_the_stuck_lane_pair() {
+        let tmp = tmp_root();
+        let created = ok(create_workflow(
+            tmp.path(),
+            NewWorkflow {
+                status: Some("closed"),
+                ..NewWorkflow::for_feature("closed-f")
+            },
+        ));
+        write_lane_file(
+            tmp.path(),
+            "closed-f",
+            r#"{"feature":"closed-f","phase":"idle","waiting_on":null,"run_state":"awaiting-approval"}"#,
+        );
+
+        let (id, feature) = ok(resolve_waiting_on_target(
+            tmp.path(),
+            "state waiting-on clear",
+            Some("closed-f"),
+            false,
+            None,
+        ))
+        .expect("clear falls back to the closed workflow rather than refusing");
+        assert_eq!(id, wf_id(&created));
+
+        ok(clear_workflow_waiting_on(tmp.path(), &id));
+        let proj = ok(rebuild_lane_projection_reporting(tmp.path(), &feature));
+        assert!(!proj.authoritative, "a closed workflow never re-syncs the lane projection");
+        ok(clear_lane_waiting_on_pair(tmp.path(), &feature));
+
+        let lane = ok(read_lane_strict(tmp.path(), &feature)).unwrap();
+        assert_eq!(lane.get("waiting_on"), Some(&Value::Null));
+        assert_eq!(lane.get("run_state"), Some(&Value::Null));
     }
 
     // ── worker add / prune ────────────────────────────────────────────────
@@ -1939,7 +2173,7 @@ use std::time::Instant;
                 "route":{"class":"feature","lane":"high-risk","flags":[],"product_files":7,
                          "rationale":null,"updated_at":"2020-01-01T00:00:00.000Z","feature":"old-feat"}}"#,
         );
-        let record = match ok(start_default(root, root, "new-feat", Some("standard"), "shaping", None, &[])) {
+        let record = match ok(start_default(root, root, "new-feat", Some("standard"), "shaping", None, &[], &[])) {
             Ok(r) => r,
             Err(m) => panic!("unexpected refusal: {m}"),
         };
@@ -1967,7 +2201,7 @@ use std::time::Instant;
 
         // A freshly started feature carries no route — the first --set is
         // accepted whatever lane it names, even the top of the ladder.
-        ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[]));
+        ok(start_default(root, root, "feat-a", Some("standard"), "shaping", None, &[], &[]));
         let target = ok(resolve_mutation_target(root, None, "route", true));
         assert!(target.record().get("route").is_none());
 
@@ -2002,7 +2236,7 @@ use std::time::Instant;
         let mut terminal = ok(read_state_strict(root));
         terminal.insert("phase".into(), json!("compounding-complete"));
         ok(write_state(root, &terminal));
-        ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[]));
+        ok(start_default(root, root, "feat-b", Some("standard"), "shaping", None, &[], &[]));
         let target3 = ok(resolve_mutation_target(root, None, "route", true));
         assert!(target3.record().get("route").is_none());
         let feature_b = target3.record().get("feature").cloned().unwrap();
@@ -2076,7 +2310,7 @@ use std::time::Instant;
         let root = tmp.path();
         occupied_state_fixture(root);
 
-        let message = match ok(start_default(root, root, "new-feat", Some("standard"), "shaping", None, &[])) {
+        let message = match ok(start_default(root, root, "new-feat", Some("standard"), "shaping", None, &[], &[])) {
             Ok(_) => panic!("expected a refusal"),
             Err(m) => m,
         };
@@ -2110,7 +2344,7 @@ use std::time::Instant;
         write_session_fixture(root, "peer", &fresh, None);
 
         let message = match ok(start_default(
-            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &[],
+            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &[], &[],
         )) {
             Ok(_) => panic!("expected a refusal"),
             Err(m) => m,
@@ -2148,7 +2382,7 @@ use std::time::Instant;
         write_session_fixture(root, "peer", "2020-01-01T00:00:00.000Z", None);
 
         let message = match ok(start_default(
-            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &[],
+            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &[], &[],
         )) {
             Ok(_) => panic!("expected a refusal"),
             Err(m) => m,
@@ -2175,7 +2409,7 @@ use std::time::Instant;
         write_session_fixture(root, "acting", &fresh, None);
 
         let message = match ok(start_default(
-            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &[],
+            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &[], &[],
         )) {
             Ok(_) => panic!("expected a refusal"),
             Err(m) => m,
@@ -2183,5 +2417,101 @@ use std::time::Instant;
         assert!(
             !message.contains("LIVE session"),
             "the acting session's own record must never read as its own peer: {message}"
+        );
+    }
+
+    // ── start-feature-reservation-scope D1: scoped reservation refusals ────
+
+    /// Writes a single active path lease directly through the real reserve
+    /// path (reserve_exec with no worktree topology — the ordinary
+    /// single-checkout shape these fixtures need), the same idiom
+    /// reservations/tests.rs uses for its own fixtures.
+    fn reserve_fixture(root: &Path, agent: &str, cell: &str, path: &str, session: Option<&str>) {
+        let root_s = root.to_str().unwrap().to_string();
+        let params = ReserveParams {
+            agent: agent.to_string(),
+            cell: cell.to_string(),
+            path: path.to_string(),
+            ttl: None,
+            session: session.map(str::to_string),
+            kind: None,
+        };
+        match reserve_exec(None, &root_s, &params, 1) {
+            Ok(Out::Emit(_, _, 0)) => {}
+            Ok(Out::Emit(result, _, _)) => panic!(
+                "reserve fixture refused: {}",
+                jsjson::stringify(&result)
+            ),
+            Ok(Out::Thrown(m)) => panic!("reserve fixture thrown: {m}"),
+            Err(_) => panic!("reserve fixture errored"),
+        }
+    }
+
+    /// The defect this cell fixes: a peer session's active reservation over a
+    /// path this start does NOT declare must refuse nothing at all.
+    #[test]
+    fn start_default_ignores_a_peer_reservation_over_an_unrelated_path() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        reserve_fixture(root, "peer-agent", "peer-cell", "src/other.rs", Some("peer-session"));
+        let declared = vec!["src/mine.rs".to_string()];
+
+        let record = match ok(start_default(
+            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &declared, &[],
+        )) {
+            Ok(r) => r,
+            Err(m) => panic!("unexpected refusal: {m}"),
+        };
+        assert_eq!(record.get("feature"), Some(&json!("new-feat")));
+    }
+
+    /// A peer session's reservation that DOES overlap a declared --paths
+    /// entry still refuses — with the lane's wait/non-overlapping wording,
+    /// never the forbidden "release them first" instruction.
+    #[test]
+    fn start_default_refuses_on_a_peers_overlapping_declared_path() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        reserve_fixture(root, "peer-agent", "peer-cell", "src/shared.rs", Some("peer-session"));
+        let declared = vec!["src/shared.rs".to_string()];
+
+        let message = match ok(start_default(
+            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &declared, &[],
+        )) {
+            Ok(_) => panic!("expected a refusal"),
+            Err(m) => m,
+        };
+        assert!(
+            message.contains("declared path(s) overlap active reservation hold(s)"),
+            "message: {message}"
+        );
+        assert!(message.contains("wait for release/expiry"), "message: {message}");
+        assert!(message.contains("non-overlapping paths"), "message: {message}");
+        assert!(
+            !message.contains("release them first"),
+            "must never invite releasing a peer's hold: {message}"
+        );
+    }
+
+    /// The caller's OWN leftover hold from an earlier, unrelated reserve
+    /// still refuses — but the FIX names the caller's own --agent, never a
+    /// bare `bee reservations release`.
+    #[test]
+    fn start_default_refuses_on_its_own_sessions_leftover_hold() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        reserve_fixture(root, "w-me", "my-cell", "src/whatever.rs", Some("acting"));
+
+        let message = match ok(start_default(
+            root, root, "new-feat", Some("standard"), "shaping", Some("acting"), &[], &[],
+        )) {
+            Ok(_) => panic!("expected a refusal"),
+            Err(m) => m,
+        };
+        assert!(message.contains("own reservation(s) remain"), "message: {message}");
+        assert!(message.contains("--agent w-me"), "message: {message}");
+        assert!(
+            !message.contains("release them first"),
+            "must never use the old bare-release wording: {message}"
         );
     }

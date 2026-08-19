@@ -1,0 +1,170 @@
+{
+  "id": "ho-9",
+  "feature": "herding-orchestration",
+  "title": "Add the append-only wave ledger on the bee side",
+  "lane": "standard",
+  "behavior_change": true,
+  "action": "REWORK after a NEEDS_REVISION verdict on commit 9400633f. The append-only write side is correct and its tests are real — do NOT redo that. The read side is wrong, and the judge measured both directions on a scratchpad copy: a wave dispatched 90 minutes ago with one unresolved worker reports 0 live when the answer is 1, and a finished worker still reports 1 live when the answer is 0. Two root causes, fix both. ROOT CAUSE ONE, there is no close path. append_wave is the only writer and its own doc forbids calling it twice for a wave_id, while live_worker_count iterates every row with no folding by wave_id — so a worker that finishes can never stop counting. The fix keeps the file append-only: allow a LATER row for the same wave_id, and make the READER fold rows by wave_id so a subsequent row supersedes the earlier one per worker. Nothing is ever rewritten on disk; the fold happens at read time. Update append_wave's doc, which currently states the opposite. ROOT CAUSE TWO, occupancy is a timer question and it must be a liveness question. is_live has only two inputs — is the row closed, and is it younger than one hour — so nothing distinguishes an orphan from a worker still genuinely running, and an ordinary feature-sized worker outlives the bound. Make the correct read cross the ledger's UNRESOLVED pane ids against the backend's actual live pane list and count the intersection: the ledger says who should be there, the live list says who is. That closes the original Open Gap too, because a worker that never named its pane is still in the ledger with its pane id. Read the live list the same way the cockpit already does, from the bee side — do NOT reach into the fleet crate for it, which would blur D5. Keep the one-hour bound STRICTLY as the fallback used when the live list cannot be obtained, and say so in the doc where the rule is stated; the doc currently claims one hour errs toward false live over false stale, which is only true if every worker finishes inside an hour, and this feature's own sessions have not. TESTS. Re-run the judge's two probes as real tests: a 90-minute-old unresolved worker whose pane IS in the live list still counts as live; a worker whose outcome arrived in a later row for the same wave_id does not count, at any age. Add: a worker whose pane is absent from the live list does not count, whatever its age; and the fallback path, where the live list is unavailable and the timer decides, is exercised and its degraded nature is asserted rather than hidden.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/*",
+    "packages/bee-rs/crates/bee/tests/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "A later row for the same wave_id supersedes the earlier one per worker at read time, and nothing on disk is ever rewritten.",
+      "append_wave's documentation no longer forbids a second row for a wave_id.",
+      "Occupancy crosses the ledger's unresolved pane ids against the backend's live pane list and counts the intersection.",
+      "A 90-minute-old unresolved worker whose pane is still live counts as live — the exact case that measured 0 before.",
+      "A worker whose outcome arrived in a later row does not count, at any age — the exact case that measured 1 before.",
+      "A worker whose pane is absent from the live list does not count, whatever its age.",
+      "The one-hour bound is used only when the live list cannot be obtained, and the doc says so where the rule is stated.",
+      "The fallback path is exercised by a test and its degraded nature is asserted, not hidden.",
+      "The live list is read from the bee side; the ledger does not reach into the fleet crate."
+    ],
+    "prohibitions": [
+      "Do not rewrite or delete rows on disk — the fold is a read-time operation.",
+      "Do not keep the timer as the primary occupancy answer.",
+      "Do not import the fleet crate from the bee-side ledger.",
+      "Do not change role-dispatch.md section 4 in this cell — that move is its own cell."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-9r",
+    "outcome": "Folded the wave ledger by wave_id at read time and made occupancy cross unresolved pane ids against an injectable live pane list, with the one-hour timer as a tagged fallback only",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T11:31:18.549Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T11:22:30.077Z",
+    "report": {
+      "outcome": "Folded the wave ledger by wave_id at read time and made occupancy cross unresolved pane ids against an injectable live pane list, with the one-hour timer as a tagged fallback only",
+      "commit": "8524c10d2cfe928bde06aebca10b8dda19e4c335",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::wave_ledger — 13 passed, 0 failed — full workspace also re-run green (cargo test --release --manifest-path packages/bee-rs/Cargo.toml — 2085 passed, 11 ignored)",
+      "deviations": [
+        "Judge probe 1 (90-min-old unresolved worker whose pane is live) now returns Occupancy::Live(1) via a_90_minute_old_unresolved_worker_whose_pane_is_still_live_counts_as_live — was 0 before",
+        "Judge probe 2 (finished worker still reporting live) now returns Occupancy::Live(0) via a_worker_whose_outcome_arrived_in_a_later_row_never_counts_at_any_age — was 1 before"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 307 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "L1",
+            "status": "PASS",
+            "evidence": "Nine wave_ledger tests pass. one_wave_leaves_exactly_one_row asserts a single line after one append_wave. a_second_wave_appends_without_disturbing_the_first_rows_bytes asserts the post-second-append bytes start with the post-first-append bytes — a genuine byte-level append-only check rather than a count. a_rows_worker_outcomes_round_trip includes a worker with a null outcome and null evidence and asserts full struct equality after re-read. append_wave is the only writer and delegates to the crate's existing append helper; there is no rewrite or truncate path in the file."
+          },
+          {
+            "id": "L2",
+            "status": "FAIL",
+            "evidence": "The timer alone produces over-spawn for an ordinary long-running worker, measured rather than argued. Probe on a scratchpad copy: a wave dispatched 90 minutes ago with one still-unresolved worker gives 'a worker that is still genuinely running must still occupy its slot; got 0 — left 0, right 1'. is_live has exactly two inputs, whether the row is closed and whether now minus started_at is within the bound; nothing distinguishes an orphan from a live worker, and the bound is one hour. The situation is worse than suspected: THE LEDGER HAS NO CLOSE PATH AT ALL. append_wave is the only writer and its own doc says never to call it twice for the same wave_id because the ledger has no update path. Second probe: append an open row, then append a second row for the same wave_id with the outcome filled in — 'a finished worker must stop occupying its slot; got 1 — left 1, right 0', because live_worker_count iterates every row with no dedupe by wave_id, so the stale open row keeps counting. The consequence is that only one operating mode ever yields non-zero occupancy, and in that mode a row can never be closed, so the count degenerates to workers dispatched in the last hour — over-counting everyone who already finished and under-counting everyone still running past the bound. The module's own rationale asserts the reverse, that one hour errs toward false live over false stale; that holds only if every worker finishes inside an hour, and sessions on this very feature have not. RECOMMENDATION, which matches the orchestrator's own reading: make occupancy a liveness question rather than a timer question. The ledger already records a pane id per worker, so the correct read crosses the ledger's unresolved pane ids against the backend's actual live pane list and counts the intersection, keeping the timer strictly as the fallback for when the backend is unreachable and saying so in the doc. That preserves append-only, since the crossing is derived at read time and never written back, and removes both failure directions."
+          },
+          {
+            "id": "L3",
+            "status": "PASS",
+            "evidence": "A search for wave_ledger, append_wave, live_worker_count and WaveRow across the workspace confines every hit to the bee crate's herding.rs and herding/wave_ledger.rs, with no hit anywhere in the fleet crate. Conversely the fleet manifest declares only anyhow, serde and serde_json, and wave_ledger.rs contains no use of fleet — the single occurrence of the word is prose. The manifest boundary test still passes and remains the mechanism enforcing the split rather than review by eye."
+          },
+          {
+            "id": "L4",
+            "status": "FAIL",
+            "evidence": "Two blockers. First, semantics: per L2 the read side cannot produce a correct answer in either operating mode — appending at completion leaves occupancy at zero for the whole duration of a running wave because no row exists yet, and appending at dispatch produces a row that can never be closed and decays to zero at the one-hour mark regardless of reality. Section 4's cap decision would be strictly worse off than today's pane count, which at least tracks live processes. Second, reachability: live_worker_count and live_worker_count_now are crate-private and marked dead code, the module itself is marked dead code, and the herding verb dispatcher exposes no occupancy verb — the file says outright that no CLI verb reads or writes the ledger yet. Section 4 is a markdown role that can only run shell commands, so it cannot reach a private Rust function, and it still enumerates and classifies panes unchanged. The reachability half is arguably sequencing the plan defers within phase 3; the semantics half is not."
+          }
+        ],
+        "failure_signature": "The wave ledger's one-hour timer combined with its total absence of a close path makes live_worker_count wrong in both directions — measured: a 90-minute live worker reads 0, a finished worker reads 1 — so the occupancy answer D10 exists for is not usable by role-dispatch section 4, and would be worse than the pane count it was meant to replace.",
+        "fixability": "authority",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T11:08:43.690Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "W1",
+            "status": "PASS",
+            "evidence": "The test a_90_minute_old_unresolved_worker_whose_pane_is_still_live_counts_as_live appends a wave started 90 minutes ago with one outcome-less worker, passes that worker's pane in the live list, and asserts Occupancy::Live(1). Baseline on a scratchpad copy: 13 passed. Mutation replacing the live-list arm with the timer path, still tagged Live, produced 'a 90-minute-old worker whose pane is still live must count as live — left Live(0), right Live(1)' and 11 passed, 2 failed. The mutant reproduces the previous judge's measured 0 exactly."
+          },
+          {
+            "id": "W2",
+            "status": "PASS",
+            "evidence": "The test a_worker_whose_outcome_arrived_in_a_later_row_never_counts_at_any_age appends two rows for one wave_id — the first unresolved, the second carrying an outcome — asserts both lines survive on disk, and asserts Occupancy::Live(0) with the pane still in the live list. Mutation gutting fold_waves_by_wave_id to return the rows unfolded produced 'the later, resolved row must supersede the earlier unresolved one — left Live(1), right Live(0)' and 12 passed, 1 failed. The mutant reproduces the previous judge's measured 1 exactly."
+          },
+          {
+            "id": "W3",
+            "status": "PASS",
+            "evidence": "The test a_worker_whose_pane_is_absent_from_the_live_list_never_counts_whatever_its_age uses a fresh wave whose live list holds only an unrelated pane and asserts Occupancy::Live(0). Mutation dropping the pane-membership check from the crossing filter, so any unresolved worker counts, produced 'a fresh worker whose pane is absent from the live list must not count — left Live(1), right Live(0)' and 12 passed, 1 failed. The same test also caught the W1 mutant, so the absent-pane case is pinned against drift in both directions."
+          },
+          {
+            "id": "W4",
+            "status": "PASS",
+            "evidence": "The return type is an enum with Live and Fallback variants deriving PartialEq, so Live(1) is not equal to Fallback(1) — a caller cannot receive an untagged number and can only discard the tag by deliberately calling the count accessor. The Fallback variant is returned only on the arm where no live pane list was supplied, and the always-degraded convenience wrapper is documented as such until a CLI verb wires a real pane source. Mutation changing the fallback arm to return Live produced TWO independent failures: 'the timer-based fallback must still count a fresh unresolved worker — left Live(1), right Fallback(1)' and 'no live_panes was passed, so this must be the fallback path'."
+          },
+          {
+            "id": "W5",
+            "status": "PASS",
+            "evidence": "A search for every write-shaped symbol across the module returns exactly one non-test write site, the append helper call inside append_wave; the other path uses are a read and five test-only sites. The append helper itself opens with create and append and writes, with no truncate, seek or rewrite, and the module contains no file removal, length set, or rename. The fold builds an in-memory map from a read and is read-time only, which the W2 test independently confirms by asserting both disk lines survive. No other module in the crate writes the ledger."
+          },
+          {
+            "id": "W6",
+            "status": "PASS",
+            "evidence": "The old append_wave doc said never to call it twice for the same wave_id because the ledger has no update path. The new doc says calling it again for the same wave_id is allowed, that a caller may append at dispatch time with no outcomes and again at completion, that the ledger stays append-only either way, and that the later row supersedes the earlier one at READ time and never on disk. The prohibition the fold depends on is gone. The old staleness doc framed one hour as erring toward false live with no fallback framing; the new doc states the bound applies only on the FALLBACK path used when no live pane list could be obtained, that the one-hour bias applies to that degraded path only, and that it is not the primary answer. The module header repeats that the timer is fallback only."
+          },
+          {
+            "id": "W7",
+            "status": "PASS",
+            "evidence": "The module's imports are the crate's own append and read helpers, serde_json, and two std modules — nothing from fleet. The three occurrences of the word fleet in the file are prose in doc comments stating the non-dependency. The rework commit touches exactly one path, the ledger module itself, and a path-scoped diff against role-dispatch.md produces empty output, so section 4 is untouched."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T11:38:40.806Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T11:08:43.690Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null,
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-08-18T11:31:18.549Z",
+        "reason": "Rework of the NEEDS_REVISION on 9400633f: both flagged probes re-verified as real tests and now pass — a_90_minute_old_unresolved_worker_whose_pane_is_still_live_counts_as_live (was 0, now Live(1)) and a_worker_whose_outcome_arrived_in_a_later_row_never_counts_at_any_age (was 1, now Live(0)); added the absent-pane and fallback-degradation cases the rework brief called for. Full workspace cargo test still green (2085 passed, 11 ignored).",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ]
+  },
+  "tier": "generation"
+}

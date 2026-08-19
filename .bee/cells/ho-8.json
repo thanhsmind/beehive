@@ -1,0 +1,249 @@
+{
+  "id": "ho-8",
+  "feature": "herding-orchestration",
+  "title": "Implement the herdr backend behind the worker-backend trait",
+  "lane": "standard",
+  "behavior_change": true,
+  "action": "FIFTH AND GENUINELY FINAL PASS on ho-8, and it is a few lines of work. Everything else is done and independently verified: all thirteen mutations across four passes die on the Windows-compilable set, and a judge checked every locked decision — D2, D5, D7, D9, D14, D15, D16 — and found no violation. Do not touch any of it. ONE THING IS LEFT, and it is a truthfulness defect rather than a coverage one. The module header still says the cfg(unix) suite 'asserts no behaviour the pure tests below do not already cover on their own'. That sentence is false: disabling canonical_id's pane-id early return at its CALL SITE survives the Windows-compilable set entirely and dies only in tests/herdr_backend.rs on canonical_id_is_a_no_op_for_an_already_pane_id_shaped_identifier. The new pure tests exercise skip_lookup_for_canonical_id in isolation but never canonical_id's USE of it — the same call-site-versus-function gap this cell has already closed twice elsewhere. What makes this worth one more pass is not the gap itself but the record: the previous commit's body claims it corrected this header, and the header is byte-identical to the commit before it. A commit that says it fixed something it did not fix is worse than the thing it did not fix. Fix it properly, which means making the sentence TRUE rather than softening it: move the pane-id short-circuit into the pure resolution function, or have canonical_id delegate to a pure function that owns the whole decision, so the existing pure tests cover the call site and the mutation dies on the Windows set. Only if that turns out to be genuinely impossible should you instead correct the sentence to say what is actually true, and if you take that path, say so plainly in the commit body. Then re-run the mutation — replace the pane-id skip at canonical_id's call site with a no-op — against cargo test -p fleet --lib --test choreography --test manifest_boundary and report it dying.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "skills/bee-herding/references/spawn-proof.md",
+    "packages/bee-rs/crates/fleet/src/backend.rs",
+    "docs/history/research/herdr-orchestrator-distill.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/fleet/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "Disabling canonical_id's pane-id early return at its call site now fails a test on the Windows-compilable set — observed, not assumed.",
+      "The module header's claim about the cfg(unix) suite is true as written, or has been corrected to what is true.",
+      "The commit body states plainly which of those two routes was taken.",
+      "The thirteen mutations from the four previous passes still die.",
+      "No assertion anywhere was deleted or loosened."
+    ],
+    "prohibitions": [
+      "Do not soften the header sentence into vagueness to make it technically defensible — either make it true or state the truth.",
+      "Do not undo the pure-versus-process split or any existing test.",
+      "Do not read bee configuration from the fleet crate.",
+      "Do not add a dependency or an async runtime.",
+      "Do not use bee cells cap --override-judge; if finish refuses on the judge verdict, return BLOCKED with your commit hash."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-8z",
+    "outcome": "Implemented the herdr backend behind the worker-backend trait: fail-closed status mapping, canonical identity per D15, the three recorded hazards, and caller-supplied kind and arguments per D14 — every behaviour pinned by pure tests that run on Windows",
+    "files_changed": [
+      "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+      "packages/bee-rs/crates/fleet/src/backend.rs",
+      "packages/bee-rs/crates/fleet/src/backend/fake.rs",
+      "packages/bee-rs/crates/fleet/src/choreography.rs",
+      "packages/bee-rs/crates/fleet/src/wave.rs",
+      "packages/bee-rs/crates/fleet/tests/herdr_backend.rs",
+      "packages/bee-rs/crates/fleet/tests/choreography.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T12:27:50.182Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T12:17:04.123Z",
+    "report": {
+      "outcome": "The herdr backend behind the WorkerBackend trait, with fail-closed status mapping, canonical identity per D15, the three recorded hazards, and caller-supplied kind and arguments per D14 — split into pure interpretation and thin process glue so every behaviour is pinned by tests that run on Windows",
+      "commit": "800855f",
+      "files": [
+        "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+        "packages/bee-rs/crates/fleet/src/backend.rs",
+        "packages/bee-rs/crates/fleet/src/backend/fake.rs",
+        "packages/bee-rs/crates/fleet/src/choreography.rs",
+        "packages/bee-rs/crates/fleet/src/wave.rs",
+        "packages/bee-rs/crates/fleet/tests/herdr_backend.rs",
+        "packages/bee-rs/crates/fleet/tests/choreography.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — 2114 passed, 11 ignored; plus fourteen independent mutation runs across five judge passes, every one dying on the Windows-compilable set",
+      "deviations": [
+        "Five passes. Pass 1 shipped the backend with its whole behaviour behind a cfg(unix) gate: a judge measured all seven backend mutations SURVIVING a Windows-equivalent run, and found start hardcoding --kind claude with a test pinning the constant.",
+        "Pass 2 split pure interpretation from process glue; all seven then died. A judge found three further gaps by its own hunting — canonical identity left inline, the refusal arm, and the constructed agent arguments proven only by reading.",
+        "Pass 3 closed those three; a judge found three production values pinned by no test on any platform, the worst being that the production constructor had zero callers anywhere.",
+        "Pass 4 pinned those; a judge found the module header still claiming the gated tests cover nothing new, byte-identical despite the commit body saying it was corrected.",
+        "Pass 5 made that claim true by moving the short circuit into a pure function taking an injected lookup closure, so a test proves the lookup is never reached rather than that its value matched."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "H1",
+            "status": "PASS",
+            "evidence": "No fail-open path found. map_status has no safe-default arm; status folds spawn failure, non-zero exit, unparseable body, target-absent and missing-or-null agent_status all into Unverifiable. Mutation-tested on a scratchpad copy with cargo test -p fleet after each single-line mutation: off-enum arm to Ready, lookup-error arm to Ready, target-absent to Ready, missing field to Ready, and the unknown mapping to Finished — 5 of 5 caught by named tests. Two cases correct by construction but untested: an explicit JSON null agent_status (only the missing-key case has a test; both take the same and_then arm) and a null pane_id in canonical_id. Caveat carried into H5: three of the five catching tests live in the cfg(unix)-gated suite."
+          },
+          {
+            "id": "H2",
+            "status": "PASS",
+            "evidence": "WorkerBackend::canonical_id exists and resolve_and_dedupe keys on its result rather than the raw name. The choreography holds no herdr knowledge: a case-insensitive search for herdr, pane, worktree, cell, lane, gate and proof across choreography.rs, wave.rs and lib.rs returned exactly one hit, a doc-comment example. Mutation-tested: deduping on the raw name is caught by invariant_8_a_name_and_its_backend_side_pane_id_collapse_to_one_target, and so is a variant where the choreography short-circuits on a colon in the identifier — that is, where it learns herdr's pane-id shape. The invariant 8 test asserts quantitatively through fake-backend counters rather than by eye."
+          },
+          {
+            "id": "H3",
+            "status": "PASS",
+            "evidence": "All three hazard tests exist in tests/herdr_backend.rs and each pins what it names. The already-working-agent test asserts the recorded argv carries no --wait, and adding --wait to the prompt argv is caught. The oversized-reply test uses a 50,000-character spill file, and disabling the spill-recovery branch is caught. The unfocused-status test drives a done status with focused false and asserts agent list is the only herdr call; making status return Unverifiable unless focused is true is caught by it and by one other. 3 of 3 caught. Caveat: all three live in the cfg(unix)-gated file — see H5."
+          },
+          {
+            "id": "H4",
+            "status": "PASS",
+            "evidence": "The diff of tests/choreography.rs between c945e4ae and 76656a11 is 87 insertions and zero deletions. The only edits to pre-existing tests are added doc comments; every assertion is byte-identical. The new invariant 8 test is additive. The fake backend gains alias, canonical_id and two call counters; its one behavioural change is read_output switching to an entry-or-default so it can count calls, which returns the same value for a known worker and an empty string for an unknown one, identical to the prior behaviour."
+          },
+          {
+            "id": "H5",
+            "status": "FAIL",
+            "evidence": "tests/herdr_backend.rs is gated by a file-level cfg(unix). Test counts: lib 23, choreography 11, herdr_backend 17, manifest_boundary 6 — so 17 of 57 fleet tests, 30 percent, do not run on Windows, and they are every test that drives the backend against a process. What survives on Windows is four pure-function unit tests. Concretely: the five-string status map has Windows coverage, but the fail-closed folding of lookup failures has NONE; the generic half of canonical identity is covered, the herdr resolution half is NOT; and the three hazards have zero Windows coverage. Measured rather than argued — re-running each mutation with only the test set Windows would compile gives SURVIVED for all seven: lookup-error fails open, target-absent fails open, missing or null field fails open, send passes --wait, spill recovery deleted, status requires focus, and start silently returning Ok instead of refusing. On Windows the backend could do all of that and CI would stay green. This contradicts D4, which makes Windows a required outcome rather than a follow-up, and contradicts the Windows workflow's own stated policy that the Rust suite has no split, runs unexcluded, and that a Windows-only failure is a real failure rather than a suite to add to a skip list. This cell added exactly such a skip list. The file header names the gap, but its mitigation claim covers only four of the seventeen and none of the three hazards."
+          },
+          {
+            "id": "H6",
+            "status": "FAIL",
+            "evidence": "The deferral boundary is only half real, and the half that is not real is pinned green. WorkerSpec does carry only name and task, so that premise is honest. But HerdrBackend::start does not simply refuse: it refuses only a never-seen, non-pane-id-shaped name. For a pane-id-shaped name it spawns for real and invents the agent kind, passing --kind claude as a hardcoded literal, and a test now PINS that hardcode by asserting the invocation starts with agent start w4-pB --kind claude --pane w4:pB. D14 requires --kind to be derived from herding.agent_command token 0, with an unrecognised token 0 surfacing as a typed error naming the key. The one path the cell claims it deferred to D17 is the exact path it silently implemented with a wrong constant, and a green test now defends it — the silent-drift class D13 and D14 exist to prevent. What D17's cell now owes: replace the hardcoded kind with the config-derived one plus D14's typed error, and un-pin the test asserting the constant; supply a cwd and kind carrying spec so start no longer guesses a slug from the pane id; and restore the caller's tab focus after agent start, which the code explicitly declines to do. ORCHESTRATOR CORRECTION, recorded because a verdict must not carry a claim known to be false: the judge also reported that D15, D16 and D17 have no decision record behind their cited hashes, having searched the worktree's own git-tracked copy of the decision log. That copy is frozen at the branch point by construction. The control root's store holds all three hashes; the decisions exist. The real and related gap, which was genuine, is that CONTEXT.md's locked table stopped at D14 — fixed in commit 6e2db85b."
+          }
+        ],
+        "failure_signature": "The herdr backend's behaviour is entirely unproven on Windows: 17 of 57 fleet tests sit behind a file-level cfg(unix), and 7 of 7 backend mutations SURVIVE a run restricted to the tests Windows compiles, against D4's required-outcome and the Windows workflow's explicit no-skip-list policy. Separately, HerdrBackend::start hardcodes --kind claude and a new test pins that constant green, contradicting D14 and the very D17 boundary the cell claims to defer.",
+        "fixability": "authority",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T11:08:43.671Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "V1",
+            "status": "PASS",
+            "evidence": "Run on a scratchpad copy, one mutation at a time, the file restored from a pristine copy between runs, using exactly cargo test -p fleet --lib --test choreography --test manifest_boundary. Baseline green at 37 lib plus 11 choreography plus 6 manifest_boundary, 54 total. All seven die: the lookup-error arm returning Ready dies on interpret_status_lookup_is_unverifiable_on_a_failed_lookup; the target-absent arm dies on interpret_status_lookup_is_unverifiable_when_the_target_is_absent; the missing-or-null agent_status arm dies on interpret_status_lookup_is_unverifiable_when_agent_status_is_missing_or_null; inserting --wait into the prompt argv dies on build_prompt_argv_never_includes_wait; disabling spill recovery dies on recover_transcript_reads_the_spill_file_when_the_last_line_hands_back_its_path; gating status on focused being true dies on interpret_status_lookup_does_not_depend_on_the_pane_having_been_focused; and start silently returning Ok dies on decide_start_refuses_a_never_seen_non_pane_shaped_name_rather_than_fabricate_a_spawn. Seven of seven die on the Windows-compilable set; none survives."
+          },
+          {
+            "id": "V2",
+            "status": "FAIL",
+            "evidence": "Seventeen tests remain behind the file-level cfg(unix) gate. Thirteen of them duplicate the pure tests, which V1 proves. The other four do not: canonical_id's D15 name-to-pane-id resolution is the one interpretation step the rework left inline in the trait method, with no pure function and no lib test. Collapsing it so a friendly name never resolves onto its pane id — the exact D15 defect an earlier judge found by execution — SURVIVES the Windows set at 37, 11 and 6 all ok, and dies only inside the gated file. Two further glue arms are likewise Windows-invisible: the Refuse arm mapping to Ok means start's refusal is unproven on Windows end to end and survives the Windows set; and replacing the constructed agent_args with an empty slice at the call site SURVIVES THE ENTIRE FLEET SUITE of 71 tests, so no test at any tier proves the constructed agent arguments reach the argv. The gate therefore still hides one real behaviour plus two unproven wiring arms."
+          },
+          {
+            "id": "V3",
+            "status": "PASS",
+            "evidence": "No kind literal remains in production code: the only argv site pushes the --kind flag followed by the constructed value, and every other occurrence of the string is doc prose or a test argument. Mutating both constructors to discard the parameter and substitute the old literal is not caught by the Windows set but IS caught by the full suite, on start_spawns_a_fresh_agent_using_the_constructed_kind_never_a_hardcoded_literal, whose failure quotes the argv it got. The kind is genuinely constructed rather than defaulted. The agent arguments are appended after a literal double dash, asserted by decide_start_appends_agent_args_after_a_literal_double_dash and by the omission case, both pure and both green on the Windows set. Caveat carried into V2: only the pure leg is proven — the constructor-to-argv leg survives its mutation across all 71 tests."
+          },
+          {
+            "id": "V4",
+            "status": "FAIL",
+            "evidence": "The constructor's own documentation says the backend resolves herdr off the host PATH, that long replies spill to the OS temp directory, and that every spawned agent is started with the agent kind and arguments already resolved by the caller, deferring to the agent_kind field's own docs. It never names herding.agent_command, never says token 0 becomes the kind, and never mentions the typed error for an unrecognised value. The field it defers to is PRIVATE, so rustdoc does not render it on the struct page — verified by building the docs and grepping the rendered HTML, where the struct page carries no match and only the module page does. cargo doc emitted no warning because the reference is backticked prose rather than an intra-doc link, so the pointer is silently dead in rendered form. The obligation exists in the module docs; it is absent from the constructor doc where the caller meets it."
+          },
+          {
+            "id": "V5",
+            "status": "PASS",
+            "evidence": "The rework commit touches exactly two files. The test diff is sixteen insertions and five deletions across three hunks: a new constructor helper, one test renamed from the pane-id spawn case to the constructed-kind case with the helper swapped in, and the assertion tightened from the old literal to a different constructed kind, keeping the same predicate with a stronger message. The test inventory is seventeen names before and seventeen after, one renamed, none deleted. The four pre-existing pure tests survive byte-identical and eleven were added, taking the lib count from twenty-six to thirty-seven. In substance the status map is unchanged, the fail-closed fold is character-for-character the body now living in the pure interpretation function, canonical_id is byte-identical to its previous form, and the spill recovery is the previous body relocated. No assertion was deleted or loosened."
+          },
+          {
+            "id": "V6",
+            "status": "PASS",
+            "evidence": "The manifest diff across the rework is empty, so no dependency was added. The fleet manifest lists only anyhow, serde and serde_json, carries no bee path dependency, and the manifest boundary test passes in every run. A search for an async runtime, await points, or any read of bee state finds none; the only environment access builds the child process PATH rather than reading bee configuration. The module's imports are std process and path types, serde_json, and the crate's own trait and wave types — nothing from bee."
+          }
+        ],
+        "failure_signature": "The unix gate still hides one real behaviour and two unproven wiring arms: canonical_id's D15 name-to-pane-id resolution has no pure function and no lib test, so collapsing it survives the Windows-compilable set and dies only in the gated file; the Refuse-to-error arm likewise survives that set; and replacing the constructed agent_args with an empty slice survives all 71 fleet tests, so nothing proves the constructed arguments reach the argv. Separately, the constructor's doc omits the D14 obligation entirely, deferring to a private field doc that rustdoc never renders on the struct page.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T11:44:15.387Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "All three new mutations applied to a scratchpad copy, reverted between each, measured with the Windows-compilable command. Baseline green at 44 lib, 11 choreography, 6 manifest_boundary. Collapsing resolve_canonical_id so a friendly name is returned unchanged dies on resolve_canonical_id_resolves_a_friendly_name_to_its_pane_id. Changing the start decision's Refuse arm to succeed dies on apply_start_decision_maps_refuse_to_an_error. Replacing the constructed agent_args with an empty slice at the decide_start call site dies on decide_start_for_passes_the_backend_s_own_agent_args_through_to_the_spawn_argv. Each reported 43 passed, 1 failed."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "All seven earlier mutations re-applied independently on the copy with the same command, reverted between each, and all seven still die on their named tests: the lookup-error arm, the target-absent arm, the missing-or-null agent_status arm, the injected --wait, the disabled spill recovery, the focused gate, and the silently-succeeding start. Each reported 43 passed, 1 failed. A bonus re-check of the first pass's defect, hardcoding the kind inside decide_start, dies with two failures. No regression."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "The constructor doc was checked in rendered form rather than in source. cargo doc generated the struct page, and probing the stripped text yields every required token: the config key is named, token 0 becoming the kind is stated, and raising the typed error for an unrecognised value is called the caller's obligation, with the constructor saying plainly that it takes both on faith and validates neither. All three obligations render on the struct page, which is what the previous pass failed. Minor non-blocking nit: one detail is still deferred to a private field doc rustdoc does not render, but the paragraph says so and no required obligation depends on it."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "The diff against the previous rework touches one file, 172 insertions and 17 deletions. The test module region has zero removed lines. The test function set drops none and adds seven. Assertion count rises from 34 to 42. The seventeen deleted lines are all source doc and glue prose, not assertions. Nothing was weakened."
+          },
+          {
+            "id": "T5",
+            "status": "FAIL",
+            "evidence": "Five self-chosen mutations, all reverted after; all five survive the Windows-compilable set and three survive the FULL suite. Worst: the production constructor can be rewritten to discard both of its parameters and substitute the old hardcoded kind, and both the Windows set and the full suite stay green — because a search across the workspace returns ZERO callers of it; only the test-seam constructor is ever used. The constructor carrying the entire D14 obligation just verified as rendered is exercised by nothing, so the first pass's defect is still reachable one function over with a fully green suite. This is exactly the constructed-stored-used shape where each part has a test and the join does not. Second: the start timeout constant can be changed to zero and survives both the Windows set and the full suite, because the decide_start tests pass their own literal and the call-site tests assert only the kind and the trailing arguments. Third: read_output's transcript argv, which is the module's own documented mitigation for the alternate-screen read failure, can be changed to a different source and a single line and survives both sets — that hazard mitigation is pinned by no test on any platform. Fourth and fifth: breaking the send-to-read spill-path join, and disabling the pane-id early return in canonical identity, both survive the Windows set and die only in the cfg(unix) file. The fifth also falsifies a claim the module header makes, that the unix tests assert no behaviour the pure tests do not already cover — that test asserts behaviour no pure test covers, so the sentence is a doc defect."
+          }
+        ],
+        "failure_signature": "Windows-set survivors on the production path: the production constructor can discard its caller-resolved kind and arguments with both the lib set and the full suite staying green, because nothing calls it anywhere; the start timeout constant and read_output's transcript argv are pinned by no test on any platform, and the latter is the documented mitigation for the alternate-screen hazard; and the pane-id early return plus the spill-path join are proven only by the cfg(unix) file, which also falsifies the module header's claim that those tests cover nothing the pure tests do not.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T11:59:27.568Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "G1",
+            "status": "PASS",
+            "evidence": "The header sentence now reads that the gated suite still exercises the real process wiring end to end against a stub binary, proving the process call itself talks to a child correctly, but that it asserts no DECISION behaviour the pure tests do not already cover. Verified by diff rather than by commit message, because the previous commit claimed a change that did not exist: the header region genuinely changed this time, six lines removed and twelve added, and the old sentence is among the removals. The claim is now true rather than merely narrowed — each decision the gated tests assert has a pure mirror, including the three new canonical-identity tests and the not-found case."
+          },
+          {
+            "id": "G2",
+            "status": "PASS",
+            "evidence": "On a scratchpad copy with the worktree untouched, the pane-id short circuit was removed from inside the pure canonical-identity function and the Windows-compilable command FAILED on canonical_id_via_never_calls_lookup_for_a_pane_id_shaped_name, panicking with 'lookup must not be called for an already pane-id-shaped identifier — this is the exact call-site short circuit a judge once found surviving on the cfg(unix) suite alone', at 51 passed and 1 failed. STRENGTH, asked for explicitly: this is the STRONG form. The failure is a panic raised from inside the injected closure, so the test can only pass if the closure is never invoked. A value-match assertion would have SURVIVED the mutation, since the resolution would still have returned the same string from a body naming it. The equality assertion present is secondary, not load-bearing."
+          },
+          {
+            "id": "G3",
+            "status": "PASS",
+            "evidence": "Three earlier mutations re-applied on the copy, each dying on its own distinct test under the measuring command: the lookup-error arm returning Ready killed interpret_status_lookup_is_unverifiable_on_a_failed_lookup; the injected wait flag killed build_prompt_argv_never_includes_wait; and the production constructor discarding both parameters killed new_wires_its_agent_kind_and_agent_args_through_to_the_spawn_argv. The combined run reported 49 passed and 3 failed. After restoring the pristine file the measuring command is green again at 52, 11 and 6 across the three suites, matching the pre-mutation baseline."
+          },
+          {
+            "id": "G4",
+            "status": "PASS",
+            "evidence": "The diff since the previous commit touches only the backend source file; the tests directory diff is EMPTY, so all three integration test files are byte-identical. Within the in-file test module the raw diff has twenty-seven removed lines, and filtering them for assertions, test attributes, function definitions or panics yields only two PROSE lines. Zero test attributes, zero test functions and zero assertions were deleted. The assertion count rises from fifty to fifty-two, fully accounted for by two removed prose lines carrying the word, one added prose line, and three new assertions in the added canonical-identity tests. Every other deletion is production glue moved out of the trait method into the pure function. Additions and moves only; nothing loosened."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T12:27:50.150Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T11:08:43.672Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  },
+  "tier": "generation"
+}

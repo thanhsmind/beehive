@@ -2,15 +2,16 @@
   "schema_version": "1.0",
   "feature": "knowledge-loop",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"knowledge-loop\" started at phase \"exploring\" (lane).",
-  "next_action": "Merge wt/knowledge-loop back to main, then close the feature.",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-05T04:42:15.819Z",
   "route": {
     "class": "feature",

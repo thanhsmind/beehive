@@ -1,0 +1,63 @@
+{
+  "id": "dds-1",
+  "feature": "doc-deferral-scope",
+  "lane": "small",
+  "tier": "generation",
+  "title": "doc-deferral door: honour a reasoned not-a-deferral marker the way it already honours code fences",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs"
+  ],
+  "action": "The bee close doc-deferral door (build_doc_deferral_door in packages/bee-rs/crates/bee/src/verbs/drivers/close.rs) full-text scans every docs/ file a capped cell touched, and blocks on any line matching matches_deferral_prose (packages/bee-rs/crates/bee/src/verbs/decisions/verbs_read.rs — the stems defer/defers/deferred/deferring, later, for now, revisit when, revisit if) that carries no registered trigger citation. Only fenced code is exempt today. The result: a doc section that DOCUMENTS deferral machinery is unreadable to the door, because there the word is the subject matter, not a promise. Real incident, twice: closing features staging-optional and uat-stop-placement both blocked on the same prose in docs/handbook/register.md — the register entries for .bee/deferred-queue.jsonl and .bee/capture-queue.jsonl, plus a heading whose backtick span is the FILENAME '.bee/deferred-queue.jsonl' and gets tried as a trigger id. No honest remedy exists for those lines: registering a trigger for them would be a lie, and the prose cannot drop the word without losing the name of the file it documents. ADD a second exemption, modelled exactly on the existing in_fence toggle at close.rs:1075-1082. A line whose trimmed content matches the opening marker turns the exemption on; a line matching the closing marker turns it off; lines between are skipped. Opening marker: an HTML comment of the form <!-- bee:not-a-deferral: <reason> --> where <reason> is non-empty after trimming. Closing marker: <!-- /bee:not-a-deferral -->. An opening marker with an EMPTY or missing reason does NOT open the exemption — it is ignored, so the lines below it still block, and skipping stays a named act rather than an oversight (this is the same posture regen_obligation_ack takes on a cell). An unclosed exemption ends at end of file. The marker and a code fence nest independently — neither closes the other. Keep every other behavior byte-identical: the same scan file set, the same prose matcher, the same trigger-citation clearing, the same refusal shape and message. WIDEN the refusal's remedy line to name this marker as a third option beside registering a trigger and citing it, so a reader who hits a genuine false positive learns the escape from the message itself. Tests beside the existing door tests: a deferral line inside a reasoned marker does not block; the same line with the marker's reason empty DOES block; a line after the closing marker blocks again; an unclosed marker exempts to end of file; a code fence inside a marked block and a marked block inside a fence each behave independently; and the exact register.md shapes from the incident (the heading '### `.bee/deferred-queue.jsonl`', a prose line carrying 'deferred', and one carrying 'later') stop blocking once wrapped.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml close",
+  "verify_owner": "worker",
+  "done_when": "A reasoned <!-- bee:not-a-deferral: <reason> --> ... <!-- /bee:not-a-deferral --> block exempts the lines between it from the doc-deferral door; a reasonless marker exempts nothing; lines outside the block are unaffected; the fence exemption still works and the two nest independently; the refusal message names the marker as an option; and the close suite is green.",
+  "notes": "Phase 1. dds-2 applies the marker to register.md and documents it — it depends on this cell shipping the syntax first.",
+  "must_haves": {
+    "truths": [
+      "A deferral-shaped line inside a reasoned not-a-deferral block does not block the close.",
+      "The same marker with an empty or missing reason exempts nothing — the lines below it still block.",
+      "A deferral-shaped line after the closing marker blocks again.",
+      "An unclosed opening marker exempts to end of file.",
+      "The code-fence exemption still works, and a fence and a marker nest independently.",
+      "The scan file set, the prose matcher, and the trigger-citation clearing are all unchanged.",
+      "The refusal's remedy line names the marker as an option alongside registering and citing a trigger."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "dds-1-worker",
+    "outcome": "Added a reasoned <!-- bee:not-a-deferral: <reason> --> marker to the doc-deferral door, nesting independently of the existing code-fence exemption; widened the refusal remedy to name it.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T14:43:39.789Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T14:37:44.420Z",
+    "report": {
+      "outcome": "Added a reasoned <!-- bee:not-a-deferral: <reason> --> marker to the doc-deferral door, nesting independently of the existing code-fence exemption; widened the refusal remedy to name it.",
+      "commit": "b2555652",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml close — green — full declared close-suite filter, plus a doc_deferral-substring run (14 passed) confirming every new not-a-deferral test",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

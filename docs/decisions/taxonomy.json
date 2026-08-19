@@ -363,6 +363,8 @@
     "impact-deferral",
     "research",
     "discovery",
-    "platform"
+    "platform",
+    "public-contracts",
+    "test-doctrine"
   ]
 }

@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "bee-hive-prompt-polish",
   "mode": "standard",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": false,
@@ -11,8 +11,8 @@
     "uat": false
   },
   "summary": "Feature \"bee-hive-prompt-polish\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"bee-hive-prompt-polish\" (lane).",
+  "next_action": "Merged to main; lane closed.",
   "created_at": "2026-08-18T00:07:23.896Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null
 }

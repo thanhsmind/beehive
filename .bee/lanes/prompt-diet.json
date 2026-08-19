@@ -2,15 +2,16 @@
   "schema_version": "1.0",
   "feature": "prompt-diet",
   "mode": "standard",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"prompt-diet\" started at phase \"planning\" (lane).",
-  "next_action": "CLOSED in substance - merged to main, renders synced, suite 989/0, learnings recorded. Lane parked at compounding because the compounding-complete close delegates to the deleted Node debt door (set_gate.rs:180,214) - see decision + follow-up chip.",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-03T08:08:58.985Z",
   "last_scribing_run": {
     "feature": "prompt-diet",

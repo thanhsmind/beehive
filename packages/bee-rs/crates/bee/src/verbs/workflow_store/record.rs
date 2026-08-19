@@ -349,11 +349,25 @@ pub(crate) fn derive_run_state(status: &str, gates: &Value, cells: &CellCounts) 
 
 // ─── waiting mark (D1/D3, awaiting-human) ──────────────────────────────────
 
+/// auto-wait-mark D3's own spelling for the third `kind` value — the ONE
+/// place `"turn-end"` is ever spelled as a string literal. Every other
+/// reference reads THIS constant: `WAITING_ON_KIND_VALUES` just below builds
+/// its array from it, `status_full/orient.rs`'s D4 blocker guard imports it,
+/// and the Stop-hook setter (`hooks/session_close/mod.rs`, awm-2) reads it
+/// too — three hand-written copies of the same string is exactly the drift
+/// this constant exists to forbid.
+pub(crate) const WAITING_ON_KIND_TURN_END: &str = "turn-end";
+
 /// D1: what a waiting mark is ABOUT — a formal gate the human must approve,
-/// or a question the agent asked and has not yet received an answer to.
-/// Closed vocabulary, same typed-refusal discipline `check_gate_entry_fields`
-/// already applies to a gate entry's own `state`.
-pub(crate) const WAITING_ON_KIND_VALUES: [&str; 2] = ["gate", "question"];
+/// a question the agent asked and has not yet received an answer to, or
+/// (auto-wait-mark D3) an ordinary turn end: control is back with the
+/// human, but nothing is owed. `turn-end` is appended LAST so the joined
+/// rendering `gate/question/turn-end` still contains the substring
+/// `gate/question` — the three refusal-message assertions pinned to that
+/// substring keep passing unchanged. Closed vocabulary, same typed-refusal
+/// discipline `check_gate_entry_fields` already applies to a gate entry's
+/// own `state`.
+pub(crate) const WAITING_ON_KIND_VALUES: [&str; 3] = ["gate", "question", WAITING_ON_KIND_TURN_END];
 
 /// D1: build a validated waiting mark — `kind` must be in
 /// WAITING_ON_KIND_VALUES, `subject` (the gate name or the question asked)

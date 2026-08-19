@@ -2,17 +2,18 @@
   "schema_version": "1.0",
   "feature": "gate-help-drift",
   "mode": "small",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"gate-help-drift\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"gate-help-drift\" (lane).",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-15T23:50:55.356Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",

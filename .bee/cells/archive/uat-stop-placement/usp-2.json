@@ -1,0 +1,125 @@
+{
+  "id": "usp-2",
+  "feature": "uat-stop-placement",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "worktree merge: honor uat_stop, invert the post-merge lane write, hold the worktree",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/uat-stop-placement/CONTEXT.md",
+    "docs/history/uat-stop-placement/plan.md",
+    "packages/bee-rs/crates/bee/src/uat.rs"
+  ],
+  "action": "The merge side of CONTEXT.md D4.1, D4.2, D4.3. Locate every anchor BY NAME, not by line number — usp-1 already edited phases.rs and the numbers have shifted. (1) D4.1 — the merge-time uat precondition (the block that refuses WORKTREE_MERGE_UAT_PENDING, today gated on uat_before_merge_config) now asks crate::uat::uat_stop_config. It refuses ONLY under UatStop::Merge; under Close and Off it does not refuse. A None from the reader keeps refusing the whole merge as an invalid-config error — keep the existing WORKTREE_MERGE_UAT_CONFIG_INVALID code and widen its message to name BOTH keys and their legal values. Delete uat_before_merge_config from phases.rs once nothing calls it; its read now lives inside uat_stop_config. Keep --skip-uat working exactly as today under Merge. (2) D4.2 — close_the_lane_on_merge branches on the same resolved UatStop. Under Merge and Off, today's behavior is kept BYTE-FOR-BYTE: clear the waiting_on/run_state pair via clear_lane_waiting_on_pair and write the existing next_action naming bee close. Under Close, ask whether this feature's uat is still pending — reuse the same gate read the merge precondition uses (the live workflow record first, the default state record only as a same-feature fallback) and the lane rule crate::uat::uat_gate_applies_to_lane. If the lane cares AND uat is unapproved, do the INVERSE of today: set waiting_on kind gate, subject 'uat: <feature>', on the lane record, and write a next_action that names the road in one line — reload the product, test it, then either approve uat with bee gate --name uat --approved true, or fix in the worktree and merge again. If the lane is exempt, or uat is already approved, today's clear-and-point-at-close behavior is correct and stays. (3) D4.3 — while that uat wait is live, cleanup is forced OFF: --cleanup and config worktree_cleanup_on_merge true are both ignored, and the merge result carries one visible line saying why (the worktree is the only place a failed uat can be fixed; tearing it down drops the grant and the second merge would hit the no-granted-worktree refusal in handlers.rs). resolve_cleanup_on_merge in handlers.rs is the seam. --no-cleanup already means keep and is unaffected. (4) Preserve, and assert in tests, everything CONTEXT.md D5 says does not move: a merge NEVER writes lane phase; the lane write stays best-effort warn-never-fail (a failure warns, the merge stays green); ALREADY_UP_TO_DATE writes no lane change; MERGE_CONFLICT and WORKTREE_MERGE_PROOF_DEBT write nothing. (5) Tests in worktree/tests.rs: for each of the three uat_stop values, a merge of a standard-lane feature with uat unapproved and with uat approved; a tiny or small lane under close (exempt — clears, does not set the wait); the forced-cleanup-off case under close with both --cleanup and config true; a repeat merge after the wait is set (must still work, grant still present); and the four no-write paths from (4). Follow the existing fixture style in that file; note that a lane fixture file created UNTRACKED hides tracked-file behavior, so create it tracked where the assertion needs it.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "verify_owner": "worker",
+  "done_when": "Under uat_stop merge (and the uat_before_merge alias) every merge behavior is byte-identical to today. Under close a merge of a standard or high-risk feature with uat unapproved lands the code, sets the lane's waiting_on to the uat gate mark, writes a next_action naming reload-test-approve-or-fix-and-merge-again, and keeps the worktree even against --cleanup and config true. Under off nothing refuses and today's clear behavior holds. phase is never written, the lane write never turns a merge red, and the up-to-date, conflict, and proof-debt paths write nothing. The worktree suite is green.",
+  "notes": "Phase 2. Depends on usp-1's crate::uat. Files are disjoint from usp-3 — the two run concurrently.",
+  "must_haves": {
+    "truths": [
+      "uat_stop merge, and a repo carrying only the old uat_before_merge key, both behave exactly as bee does today.",
+      "Under close the merge no longer refuses WORKTREE_MERGE_UAT_PENDING.",
+      "Under close with the lane caring and uat unapproved, the merge SETS waiting_on kind gate subject 'uat: <feature>' instead of clearing it.",
+      "Under close the next_action names reloading and testing the product, and names both roads out: approve uat, or fix and merge again.",
+      "While that wait is live, --cleanup and worktree_cleanup_on_merge true are both ignored and the worktree survives.",
+      "A tiny, small, docs, or spike lane under close is exempt and keeps today's clearing behavior.",
+      "A merge never writes lane phase; the lane write stays warn-never-fail; up-to-date, conflict, and proof-debt paths write no lane change."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "usp-2-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T12:17:33.877Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T12:00:58.082Z",
+    "report": {
+      "outcome": "worktree merge honors uat_stop close/merge/off: merge-time precondition only refuses under Merge; under Close an unapproved standard/high-risk feature merges and SETS the lane waiting_on gate mark (reload/test/approve-or-fix) instead of clearing it; cleanup is forced off while that wait is live and the merge result names why; D5 no-write paths (phase, warn-never-fail, up-to-date, conflict, proof-debt) proven unchanged.",
+      "commit": "e94f62fb",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=$HOME/.cargo/bin:$PATH cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — green — full declared worktree suite, the cells verify scope",
+      "deviations": [
+        "handlers.rs listed in cell files but needed no edit: the D4.3 cleanup-suppression override lives in merge_finish (phases.rs), the point where the resolved uat-wait status is actually known; resolve_cleanup_on_merge itself needed no change since its bool output is what merge_finish overrides."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "truth": "uat_stop merge, and a repo carrying only the old uat_before_merge key, both behave exactly as bee does today.",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/uat.rs:31 uat_stop_config — both keys absent => Some(Merge), uat_before_merge true => Merge, false => Off, non-boolean => None (same fail-closed shape the retired uat_before_merge_config had). phases.rs:317 `if uat_stop == UatStop::Merge && !skip_uat` is arithmetically the old `if uat_before_merge && !skip_uat`. phases.rs:498 close_the_lane_on_merge guards the new work behind `if uat_stop == UatStop::Close`; the fall-through body (clear_lane_waiting_on_pair + the bee-close next_action) is unchanged from the diff. phases.rs:786 `let effective_cleanup = cleanup && !uat_wait_set;` and uat_wait_set can only become true inside the Close branch, so Merge/Off reach attach_cleanup_outcome with the caller's exact cleanup bool. Only user-visible delta: WORKTREE_MERGE_UAT_CONFIG_INVALID's message text widened to name both keys (phases.rs:310-315) — the code is unchanged and the widening is the cell's own instruction. cargo test --release worktree: 197 passed; full suite 2075 passed, 11 ignored."
+          },
+          {
+            "id": "t2",
+            "truth": "Under close the merge no longer refuses WORKTREE_MERGE_UAT_PENDING.",
+            "status": "PASS",
+            "evidence": "rg 'WORKTREE_MERGE_UAT_PENDING' over crates/bee/src finds exactly one production site, phases.rs:327, and it sits inside the `uat_stop == UatStop::Merge` arm opened at phases.rs:317 — Close and Off never enter it. Proven live by tests.rs:3959 uat_stop_close_unapproved_standard_lane_merges_and_sets_the_uat_wait, which asserts answer.ok and result[\"merged\"] == true with the gate unapproved."
+          },
+          {
+            "id": "t3",
+            "truth": "Under close with the lane caring and uat unapproved, the merge SETS waiting_on kind gate subject 'uat: <feature>' instead of clearing it.",
+            "status": "PASS",
+            "evidence": "phases.rs:498-503 — under Close, close_the_lane_on_merge re-runs uat_merge_precheck and, when precheck.lane_applies && !precheck.gate_approved, RETURNS set_lane_uat_wait_on_merge before ever reaching clear_lane_waiting_on_pair. phases.rs:544-551 inserts waiting_on = {kind:\"gate\", subject: format!(\"uat: {feature}\"), asked_at, session: WORKTREE_MERGE_SESSIONLESS_ID}. Branch is reachable, not dead: tests.rs:3959 reads the lane back and asserts kind==\"gate\" and subject==\"uat: demo\"."
+          },
+          {
+            "id": "t4",
+            "truth": "Under close the next_action names reloading and testing the product, and names both roads out: approve uat, or fix and merge again.",
+            "status": "PASS",
+            "evidence": "phases.rs:552 writes: \"Merged into main at {short_sha}; reload the product and test \\\"{feature}\\\", then either approve uat (\\\"bee gate --name uat --approved true --lane {feature}\\\") or fix it in the worktree and merge again.\" The named command is real — `.bee/bin/bee gate --help` lists flags --name --merge --approved --lane. tests.rs:3959 asserts the text contains \"reload\", \"approve uat\", \"merge again\" and does NOT contain \"bee close\"; the same string is echoed on the merge result (result[\"next_action\"]) and rendered by handlers.rs:merge_text_lines as a `next:` line."
+          },
+          {
+            "id": "t5",
+            "truth": "While that wait is live, --cleanup and worktree_cleanup_on_merge true are both ignored and the worktree survives.",
+            "status": "PASS",
+            "evidence": "phases.rs:786-800 — when `cleanup && uat_wait_set`, attach_cleanup_outcome is not called at all and a WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING object is inserted instead; the only worktree remover is perform_cleanup, reached only from attach_cleanup_outcome (merge.rs:709-718). phases.rs:807 uses effective_cleanup so the suppressed merge also queues the keep-path cleanup deferral. Both entry points covered: tests.rs:4093 (flag, resolve_cleanup_on_merge(&main,true,false)) and tests.rs:4128 (config worktree_cleanup_on_merge:true) each assert created.worktree_root.exists() after the merge; tests.rs:4162 merges twice and gets ALREADY_UP_TO_DATE on the second rather than a no-granted-worktree refusal."
+          },
+          {
+            "id": "t6",
+            "truth": "A tiny, small, docs, or spike lane under close is exempt and keeps today's clearing behavior.",
+            "status": "PASS",
+            "evidence": "phases.rs:499 gates the SET branch on precheck.lane_applies, which is uat_gate_applies_to_lane(mode) at phases.rs:876 / uat.rs:57 — false for tiny/small/docs/spike, so a Close merge falls through to the unchanged clear-and-name-bee-close body. tests.rs:4066 uat_stop_close_tiny_lane_is_exempt_and_clears_the_lane asserts the cleared shape and a next_action naming \"bee close --feature demo\"."
+          },
+          {
+            "id": "t7",
+            "truth": "A merge never writes lane phase; the lane write stays warn-never-fail; up-to-date, conflict, and proof-debt paths write no lane change.",
+            "status": "PASS",
+            "evidence": "phase: rg '\"phase\"' over worktree/phases.rs and worktree/handlers.rs returns zero hits; set_lane_uat_wait_on_merge mutates only waiting_on and next_action on the map read_lane_strict returned, so phase rides through untouched (pinned on the clear path by tests.rs:3522). warn-never-fail: phases.rs:748-755 Err arm eprintln!s and inserts lane_close_warning, then still returns Ok(MergeAnswer{ok:true}); tests.rs:3570 a_failing_lane_write_only_warns_and_the_merge_still_completes_green. No-write paths: MERGE_CONFLICT (phases.rs:372) and ALREADY_UP_TO_DATE (phases.rs:406) both return StageOut::Done from merge_stage before Staged is built, so merge_finish's lane write is unreachable; WORKTREE_MERGE_PROOF_DEBT (phases.rs:165) is a zero-mutation refuse_merge. Byte-identity asserted by tests.rs:3542 (up-to-date) and the two new tests a_merge_conflict_leaves_the_lane_record_byte_identical and a_proof_debt_refusal_leaves_the_lane_record_byte_identical (tests.rs:~4200-4271), each comparing std::fs::read of the lane file before and after."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T13:14:46.052Z"
+      }
+    ]
+  }
+}

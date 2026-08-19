@@ -1,0 +1,245 @@
+{
+  "id": "awm-1",
+  "feature": "auto-wait-mark",
+  "title": "Make turn-end a legal waiting_on kind and stop orient calling it a blocker",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/auto-wait-mark/CONTEXT.md",
+    "docs/history/auto-wait-mark/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+  ],
+  "action": "REWORK of a NEEDS_REVISION verdict on commit b956e03e. The original cell is done and green; two things remain, and only one of them is yours.\n\nNOT YOURS — the judge's K1 failure (orient.rs held a hand-written \"turn-end\" literal instead of sharing record.rs's constant) was already repaired by cell awm-2 in commit 8461cccc, which introduced pub(crate) const WAITING_ON_KIND_TURN_END in record.rs and made both orient.rs and the Stop hook read it. Do not touch record.rs or orient.rs. Read the constant only to reference its name.\n\nYOURS — a test-coverage gap the judge recorded under check T1. The refusal-message assertions still pin only the OLD two-value substring:\n  packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs:371   assert!(m.contains(\"kind must be one of gate/question\"), \"{m}\")\n  packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs:484   assert!(m.contains(\"kind must be one of gate/question\"), \"{m}\")\n(search for the assertion text; the line numbers are anchors and may have drifted). Because the refusal message is rendered from WAITING_ON_KIND_VALUES.join(\"/\"), a regression that dropped turn-end from the array would still satisfy contains(\"gate/question\") and both tests would stay green — the judge's exact words: nothing pins the third value in the message.\n\nTighten both assertions so the third value is pinned too. Assert the FULL rendered list, not a prefix substring — the point is that removing any legal value from the vocabulary must turn these red. Reference WAITING_ON_KIND_TURN_END (or WAITING_ON_KIND_VALUES itself) rather than writing the string a second time, so the assertion cannot drift from the constant it is guarding.\n\nDo NOT touch packages/bee-rs/crates/bee/src/verbs/state_group/tests.rs — it carries the same stale assertion at :586 but is RESERVED BY ANOTHER WORKTREE (feature start-feature-reservation-scope, cell sfrs-1). Note in your trace that it is still owed, so it can be re-triaged after that worktree merges.\n\nProve the tightening actually bites: temporarily remove turn-end from WAITING_ON_KIND_VALUES in your working tree, confirm both assertions go RED, then restore record.rs to HEAD exactly and confirm green. Report that red-then-green in your Result form — it is the only evidence that the new assertion is not another tautology.",
+  "must_haves": {
+    "truths": [
+      "build_waiting_on accepts kind \"turn-end\" and refuses an unknown kind with a message naming all three legal values",
+      "bee orient omits a turn-end mark from its blockers array while still reporting gate and question marks there",
+      "bee orient still echoes a turn-end mark under where.waiting_on — the display path is untouched",
+      "No file in .claude/skills/ or AGENTS.md is hand-edited; both re-render from their sources via bee dev regen"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+        "substantive": "WAITING_ON_KIND_VALUES carries three values; the refusal message still derives from the constant rather than a hand-written string"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "substantive": "the blockers push is guarded on kind, with a comment citing auto-wait-mark D4"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "substantive": "a case proving a turn-end mark is absent from blockers, beside the existing case proving a question mark is present"
+      },
+      {
+        "path": "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md",
+        "substantive": "R125 and the build_waiting_on paragraph both name three kinds and define turn-end"
+      }
+    ],
+    "key_links": [
+      "orient.rs's blocker guard reads the same kind spelling that record.rs's constant defines — one spelling, not two literals that can drift apart"
+    ],
+    "prohibitions": [
+      "No provenance or source field is added to the waiting_on record (per D2)",
+      "No change to how a gate or question mark behaves on any surface",
+      "No hand-edit of AGENTS.md or anything under .claude/skills/ — those regenerate",
+      "No second closed-list check added anywhere; build_waiting_on stays the only validator"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "trace": {
+    "worker": "awm-1-r",
+    "outcome": "Widened the waiting_on kind vocabulary to gate/question/turn-end and stopped bee orient calling a turn-end mark a blocker; refusal-message assertions now pin all three values, proven red-then-green by mutation. OWED and deliberately not fixed here: verbs/state_group/tests.rs:586 and tests/workflow_verbs.rs:566 still carry the prefix-only two-value assertion — the first is reserved by worktree start-feature-reservation-scope (cell sfrs-1, whose commit 60f9d2c7 already rewrote that file in main, so this worktree's copy is stale), the second was found by the judge and belongs to the same re-triage pass after that merge.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md",
+      "skills/bee-hive/references/routing-and-contracts.md",
+      "packages/bee/AGENTS.block.md",
+      "AGENTS.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T13:11:13.985Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57dd6bbf-d280-4c42-9da6-61ed72419a29",
+    "claimed_at": "2026-08-18T12:48:40.140Z",
+    "verify_command": null,
+    "verified_at": null,
+    "report": {
+      "outcome": "Widened the waiting_on kind vocabulary to three values, narrowed orient so a turn-end mark is not a blocker, and pinned all three values in the refusal-message assertions",
+      "commit": "698c5e4a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/knowledge/areas/workflow-state/workflow-records-and-projections.md",
+        "skills/bee-hive/references/routing-and-contracts.md",
+        "packages/bee/AGENTS.block.md",
+        "AGENTS.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — 2051 passed, 0 failed, 11 ignored, 18 suites — full declared suite, re-run independently by the judge on HEAD e6141ada",
+      "deviations": [
+        "registry_payload.json is not re-rendered by bee dev regen (no live subcommand generates it despite the header comment); hand-edited the one changed command entry, judged honest and scoped",
+        "Rejected building the expected refusal string from WAITING_ON_KIND_VALUES.join as a tautology; used a hardcoded prefix plus the WAITING_ON_KIND_TURN_END constant, proven red-then-green",
+        "state_group/tests.rs:586 and tests/workflow_verbs.rs:566 keep the prefix-only assertion — owed, re-triage after start-feature-reservation-scope merges"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "record.rs:361 `pub(crate) const WAITING_ON_KIND_VALUES: [&str; 3] = [\"gate\", \"question\", \"turn-end\"];`; the refusal at record.rs:371-376 renders `WAITING_ON_KIND_VALUES.join(\"/\")` so the message reads `kind must be one of gate/question/turn-end`. Acceptance proven by the new test workflow_store/tests.rs:390 build_waiting_on_accepts_turn_end_and_it_round_trips_through_the_record. Ran `cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- build_waiting_on orient_omits orient_reports` -> 4 passed, 1913 filtered out. COVERAGE GAP (not a T1 failure): the two refusal tests at workflow_store/tests.rs:371 and :484 still assert only m.contains(\"kind must be one of gate/question\"), so nothing pins the third value in the message and a regression dropping turn-end from the rendering would still pass."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "orient.rs:405-413 wraps the blockers push in `if vget(w, \"kind\").and_then(Value::as_str) != Some(\"turn-end\")`. New test status_full/tests.rs:3789 orient_omits_a_turn_end_wait_from_blockers_but_still_displays_it asserts no blocker carries the subject; the pre-existing orient_reports_a_live_wait_as_a_blocker_naming_the_subject (tests.rs:3763, a question mark) still passes in the same run, so gate and question still reach blockers."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "status_full/tests.rs:3805-3809 asserts where.waiting_on.subject for a turn-end mark. `git show b956e03e -- orient.rs` is +12/-5 confined to the blockers block at lines 400-413; the where.waiting_on assembly is untouched."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "All five skill mirrors byte-identical to source: diff against .claude, .agents, .claude-plugin, .codex-plugin, .opencode returned identical (rc=0 each). AGENTS.md:171-183 byte-identical to packages/bee/AGENTS.block.md:164-176. .bee/onboarding.json agents_block hash moved b4d735d5->2ce58a3e with updated_at restamped, the signature of `bee onboard --apply` rather than a hand-edit. `bee dev release-manifest --check` -> 270 files match, rc=0."
+          },
+          {
+            "id": "K1",
+            "status": "FAIL",
+            "evidence": "Two independent literals. record.rs:361 defines the spelling inside an array literal; orient.rs:407 compares against its own literal Some(\"turn-end\"). `rg -n WAITING_ON_KIND_VALUES packages/bee-rs/crates/bee/src/` hits only record.rs (:361,:364,:371,:374,:407,:424) — orient.rs neither imports nor indexes the constant, and `rg -n TURN_END` returns no hits. K1 required one spelling, not two literals that can drift apart. Repair is carried by cell awm-2 PART 0, which introduces a pub(crate) named constant in record.rs, builds the array from it, and replaces the orient literal with it."
+          },
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "record.rs:391-396 — the built mark is exactly {kind, subject, asked_at, session}. No source, origin, provenance, or via field added; the build_waiting_on diff is doc-comment plus the array arity."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "The orient guard excludes only the exact string turn-end; gate and question fall through to the unchanged push at orient.rs:408-412, and the pre-existing blocker test stays green. Registry payload compared semantically old vs new: only state.waiting-on.set differs, and within it only the kind enum (2->3 values) and two description strings."
+          },
+          {
+            "id": "P3",
+            "status": "PASS",
+            "evidence": "Same evidence as T4: five mirrors identical to their source, AGENTS.md hunk identical to AGENTS.block.md, onboarding ledger hash restamped, release-manifest --check rc=0. Nothing under .claude/skills/ diverges from skills/."
+          },
+          {
+            "id": "P4",
+            "status": "PASS",
+            "evidence": "No new closed-list validator. WAITING_ON_KIND_VALUES is referenced only inside record.rs at :371 (build_waiting_on), :407 (waiting_on_is_live, pre-existing), :424 (check_patch_waiting_on, pre-existing). The orient addition is a single-value != display filter mandated by D4, not a membership check. verbs/state_group/waiting_on.rs is absent from the commit, so the CLI verb added no second check."
+          },
+          {
+            "id": "DEV-A",
+            "status": "PASS",
+            "evidence": "Honest and acceptable. `bee dev regen` is render-skill-trees + onboard --apply + release-manifest --write (devtools/mod.rs:97-103). `rg -n registry_payload packages/bee-rs/crates/bee/src/devtools/ packages/bee-rs/crates/bee/build.rs` -> no hits, so nothing under devtools writes src/generated/registry_payload.json and no live subcommand regenerates it; registry.rs:3-5 nonetheless claims it is generated by `bee dev`, the stale header the worker flagged. The hand-edit is minimal and scoped to the one changed command entry, and tests/registry_contracts.rs plus the manifest-hash drift check both pass in the green full suite."
+          },
+          {
+            "id": "DEV-B",
+            "status": "PASS",
+            "evidence": "Honest and acceptable. `git check-ignore -v .bee/bin/bee` -> .gitignore:49. The binary is present but absent from `git show b956e03e --stat`, and git status shows no staged or committed artifact. This also explains release-manifest --check reporting 1 unhashed artifact present."
+          }
+        ],
+        "failure_signature": "orient.rs:407 hardcodes the \"turn-end\" literal instead of sharing record.rs's constant — two spellings of the kind value, K1's drift guard unmet",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T12:26:56.898Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "Acceptance: workflow_store/tests.rs:413 build_waiting_on_accepts_turn_end_and_it_round_trips_through_the_record, green in the full run. Refusal pinning is now non-tautological, PROVEN BY MUTATION on a scratch copy with the worktree untouched: the judge copied packages/bee-rs to a scratchpad, symlinked repo siblings so include_str! resolved, set record.rs:370 back to the two-value array while leaving WAITING_ON_KIND_TURN_END (record.rs:359) intact, then ran the two refusal tests — both FAILED, panicking at tests.rs:383 and tests.rs:504 with 'waiting_on: kind must be one of gate/question (got \"vibe\")'. The two sides read different sources: expected is the hardcoded prefix plus WAITING_ON_KIND_TURN_END (tests.rs:385, :506), actual is WAITING_ON_KIND_VALUES.join(\"/\") (record.rs:383). On HEAD both are green."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "orient.rs:406-415 guards the blockers push with `!= Some(WAITING_ON_KIND_TURN_END)`. status_full/tests.rs:3791 orient_omits_a_turn_end_wait_from_blockers_but_still_displays_it asserts no blocker carries the subject; status_full/tests.rs:3764 orient_reports_a_live_wait_as_a_blocker_naming_the_subject (kind=question) still asserts the blocker IS present. Both green."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "orient.rs:503 inserts where.waiting_on unconditionally from status; status_full/tests.rs:3808-3811 asserts the subject is present for a turn-end mark. The b956e03e orient.rs hunk is +12/-5 confined to the blockers block, leaving the where.waiting_on assembly untouched."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "diff of skills/bee-hive/references/routing-and-contracts.md against its .claude mirror returns identical, rc=0. The changed prose sits at the same lines in the source and in all five mirrors (.claude, .agents, .claude-plugin, .codex-plugin, .opencode). AGENTS.md:171-184 is byte-for-byte the same text as packages/bee/AGENTS.block.md:164-177. `bee dev release-manifest --check` -> 270 files match, rc=0. The only mirror-vs-source diffs anywhere are pre-existing bee:only conditional blocks in other files, the signature of rendering rather than hand-editing."
+          },
+          {
+            "id": "K1",
+            "status": "PASS",
+            "evidence": "Previously FAIL, now satisfied. record.rs:359 `pub(crate) const WAITING_ON_KIND_TURN_END: &str = \"turn-end\";` is the single literal; record.rs:370 builds WAITING_ON_KIND_VALUES from it; orient.rs:12 imports it and orient.rs:408 compares against it. The only other readers are hooks/session_close/mod.rs:319 and :339 plus two tests — no second production literal. The repair landed in awm-2's commit 8461cccc, whose body names this awm-1 must_have miss."
+          },
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "record.rs:399-404 — build_waiting_on emits exactly {kind, subject, asked_at, session}. No source, origin, provenance, or set_by field; the b956e03e record.rs diff touches only the doc comment and the array arity."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "The orient guard excludes only the exact turn-end spelling; gate and question fall through to the unchanged push at orient.rs:409-413, and the question-mark blocker test stays green. state_group and workflow_verbs CLI refusal tests for gate/question are green across all 18 suites, 0 failed."
+          },
+          {
+            "id": "P3",
+            "status": "PASS",
+            "evidence": "Same evidence as T4: five mirrors carry the changed prose at identical line numbers, the .claude mirror is byte-identical to source, the AGENTS.md region is byte-identical to AGENTS.block.md, release-manifest --check rc=0. The rework commit 698c5e4a touches exactly one file, workflow_store/tests.rs."
+          },
+          {
+            "id": "P4",
+            "status": "PASS",
+            "evidence": "No new closed-list check. Membership reads of WAITING_ON_KIND_VALUES occur only at record.rs:380 (build_waiting_on), :416 (waiting_on_is_live) and :433 (check_patch_waiting_on); the latter two are pre-existing and untouched by the commit. The orient addition is a single-value != display filter, not a vocabulary check, and the rework commit adds assertions only."
+          },
+          {
+            "id": "OWED",
+            "status": "PASS",
+            "evidence": "state_group/tests.rs:586 still holds the prefix-only assertion and is confirmed weak — under the judge's mutated scratch copy it would still pass. It does NOT silently weaken T1, because the two workflow_store assertions that were mutation-tested do go red, so the vocabulary is genuinely guarded. The deferral is correct and understated: sfrs-1 landed commit 60f9d2c7, which rewrote 114 lines of that same file, and `git merge-base --is-ancestor 60f9d2c7 HEAD` returns true — this worktree's copy is behind main, so editing it here would edit a stale copy with real conflict risk. The omission is named explicitly in the cell's own action text. Orchestrator condition, not a failure: the cap trace must carry the owed line, or the disclosure lives only in the dispatch."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T13:10:58.923Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T12:26:56.898Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    }
+  },
+  "tier": "generation"
+}

@@ -143,3 +143,4 @@
 {"id":"d290aebb-aa84-42df-abd4-ab8d4339a27a","type":"candidate","date":"2026-08-18T06:23:33.748Z","feature":"pocock-nuggets","head":"f6cadfcb591698e86007c7001a6632a13053f8d3","mode":"small","baseline":null,"cells":[]}
 {"id":"1e54bc2b-3930-461a-9653-02c039109377","type":"candidate","date":"2026-08-18T06:30:24.643Z","feature":"review-axes","head":"48e1a6c5f5c3904333a309e2f40eeee8ef2c911e","mode":"small","baseline":null,"cells":[]}
 {"id":"dac54262-fcf4-4e2a-86a5-3e32d840eea6","type":"candidate","date":"2026-08-18T07:07:58.111Z","feature":"two-flows","head":"2e3ba21b69cfb5a69a73d154f0b990db985f0c7f","mode":"small","baseline":null,"cells":[]}
+{"id":"a88f9197-6556-46a2-ae29-6b3220e41f91","type":"candidate","date":"2026-08-18T14:49:02.553Z","feature":"auto-wait-mark","head":"ad52545c","mode":"standard","baseline":null,"cells":["awm-1","awm-2"]}

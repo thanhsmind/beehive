@@ -718,6 +718,15 @@ pub(crate) fn merge_text_lines(id: &str, main_root: &Path, answer: &MergeAnswer)
                 jsjson::js_to_string(cmd)
             ));
         }
+        // mcl-2 (R1): names the close road beside the existing
+        // cleanup/staging lines — the same `next_action` `merge_finish`
+        // (phases.rs) just wrote onto the merged feature's lane.
+        if let Some(next_action) = r.get("next_action").filter(|v| js_truthy(v)) {
+            lines.push(format!("  next: {}", jsjson::js_to_string(next_action)));
+        }
+        if let Some(warning) = r.get("lane_close_warning").filter(|v| js_truthy(v)) {
+            lines.push(format!("  WARNING: {}", jsjson::js_to_string(warning)));
+        }
     } else {
         // The only non-ok arm `phases.rs` produces via `StageOut::Done` is
         // `MERGE_CONFLICT` (a real textual conflict from `git merge`);

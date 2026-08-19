@@ -60,6 +60,12 @@ pub(crate) const CLOSE_ROUTING_PREFIX: &str = "Routing debt for";
 /// CONTEXT.md D3, plan v2 kds-3.
 pub(crate) const CLOSE_DOC_DEFERRAL_PREFIX: &str = "Doc deferral debt for";
 
+/// uat-stop-placement D4.4/D2 (docs/history/uat-stop-placement/CONTEXT.md):
+/// pinned prefix of the close-time uat-door refusal headline
+/// (message-contract test lives beside the rest of this door's tests,
+/// below in this file's own `mod tests`).
+pub(crate) const CLOSE_UAT_PREFIX: &str = "Uat gate pending for";
+
 /// provenance: test-runner.mjs declaredTestCommands + state.mjs
 /// normalizeCommands (verbs/test_runner.rs:184 declared_test_commands).
 /// `None` == JS `null` (undeclared).
@@ -409,6 +415,30 @@ pub(crate) fn has_judge_deferral_decision(root: &Path, feature: &str) -> D<bool>
     .map_err(|_| Delegate)?;
     Ok(!filtered.is_empty())
 }
+
+/// uat-stop-placement D2 (docs/history/uat-stop-placement/CONTEXT.md):
+/// mirrors `has_judge_deferral_decision` above — a logged decision tagged
+/// `uat-deferral` naming the feature lifts the close-time uat-door
+/// refusal, the same escape shape `judge-debt` already established.
+pub(crate) fn has_uat_deferral_decision(root: &Path, feature: &str) -> D<bool> {
+    let active = crate::verbs::decisions::active_decisions(root, false).map_err(|_| Delegate)?;
+    let filtered = crate::verbs::decisions::filter_decision_events(
+        active,
+        &crate::verbs::decisions::DecisionFilters {
+            tag: Some("uat-deferral".to_string()),
+            feature: Some(feature.to_string()),
+            ..Default::default()
+        },
+    )
+    .map_err(|_| Delegate)?;
+    Ok(!filtered.is_empty())
+}
+
+// uat-stop-placement D4.4/D2, docs/history/uat-approval-reaches-the-door/
+// plan.md R1-R3: `gates.uat.approved` now resolves through the single
+// shared resolver `crate::uat::uat_gate_approved` — the same one
+// `uat_merge_precheck` (verbs/worktree/phases.rs) calls — so this door and
+// the merge door never carry two copies of the resolution again.
 
 /// provenance: capture.mjs pendingCaptureStubs + captureQueue
 /// (verbs/status_full.rs:2382) — only the COUNT used to reach close's door
@@ -1253,6 +1283,63 @@ pub(crate) fn build_close_report_doors(root: &Path, feature: &str) -> D<Vec<Door
             command: judge_command,
         });
     }
+
+    // uat-stop-placement D4.4/D2 (docs/history/uat-stop-placement/CONTEXT.md):
+    // built and ordered beside the judge-debt door just above — same
+    // lane-scoped, blocking, deferral-escapable shape. The door is PRESENT
+    // ONLY under `UatStop::Close`: under `Merge` the stop already lives at
+    // `bee worktree merge` (untouched here), and under `Off` there is no
+    // uat stop anywhere, so neither placement grows this door at all. A
+    // `None` from `uat_stop_config` (a bogus `uat_stop`/`uat_before_merge`
+    // value) still grows the door, but BLOCKING with an invalid-config
+    // detail naming both keys and their legal values — the two-key read
+    // order is ambiguous on a typo, and guessing either way is worse than
+    // refusing.
+    match crate::uat::uat_stop_config(root) {
+        None => {
+            doors.push(Door {
+                door: "uat",
+                blocking: true,
+                detail: "invalid config — \"uat_stop\" must be \"merge\", \"close\", or \"off\"; the legacy \"uat_before_merge\" must be a boolean (true reads as \"merge\", false reads as \"off\") — fix .bee/config.json".to_string(),
+                command: None,
+            });
+        }
+        Some(crate::uat::UatStop::Close) => {
+            // usp-3 revision (D4): classify through `crate::uat::uat_lane_mode`
+            // — the SAME lane-mode read the merge side's `uat_merge_precheck`
+            // uses — not `feature_route`. `feature_route` prefers a lane
+            // record's `route.lane`, which can name a different class than
+            // the record's `mode`; the merge side is canonical, so the
+            // close-time door must read what the merge side reads, or the
+            // two ends of the uat stop can disagree and the stop vanishes
+            // silently under `uat_stop: "close"`. Missing or unknown still
+            // fails closed as "standard" (applies), only
+            // tiny/small/docs/spike are exempt.
+            let lane = crate::uat::uat_lane_mode(root, feature);
+            let lane_applies = crate::uat::uat_gate_applies_to_lane(lane.as_deref());
+            let gate_approved = lane_applies && crate::uat::uat_gate_approved(root, feature);
+            let uat_deferred =
+                if lane_applies && !gate_approved { has_uat_deferral_decision(root, feature)? } else { false };
+            let uat_blocking = lane_applies && !gate_approved && !uat_deferred;
+            doors.push(Door {
+                door: "uat",
+                blocking: uat_blocking,
+                detail: if !lane_applies {
+                    "clear — this lane is exempt from the close-time uat door".to_string()
+                } else if gate_approved {
+                    "clear".to_string()
+                } else if uat_deferred {
+                    format!("deferred — the uat gate for \"{feature}\" is not yet approved; a logged uat-deferral decision names \"{feature}\"")
+                } else {
+                    format!(
+                        "pending — the uat gate for \"{feature}\" is not yet approved; the product is on main now — reload it, test it, then bee gate --name uat --approved true, or fix in the worktree and merge again"
+                    )
+                },
+                command: if uat_blocking { Some("bee gate --name uat --approved true") } else { None },
+            });
+        }
+        Some(crate::uat::UatStop::Merge) | Some(crate::uat::UatStop::Off) => {}
+    }
     Ok(doors)
 }
 
@@ -1683,6 +1770,30 @@ pub(crate) fn close_handler(
         return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
     }
 
+    // ── uat-stop-placement D4.4/D2: refuse on a pending close-time uat door ─
+    //
+    // Runs only here — tests GREEN (or undeclared) and past the D1 capture-
+    // debt and judge-debt refusals above — same "reads the door's own
+    // verdict, never recomputes it" discipline those doors already
+    // established. The door only exists under `uat_stop: "close"` for a
+    // lane that cares (build_close_report_doors omits or clears it
+    // otherwise), so under `"merge"`/`"off"`, an exempt lane, an approved
+    // gate, or a logged `uat-deferral` decision, this refusal is
+    // unreachable.
+    if doors.iter().any(|d| d.door == "uat" && d.blocking) {
+        let mut result = Map::new();
+        result.insert("feature".into(), Value::String(feature.to_string()));
+        result.insert("doors".into(), Value::Array(doors.iter().map(Door::value).collect()));
+        result.insert("ran_tests".into(), Value::Bool(false));
+        result.insert("tests".into(), Value::Null);
+        let lines = vec![
+            format!("{CLOSE_UAT_PREFIX} \"{feature}\" — close stops at the uat door: the uat gate is not yet approved."),
+            "remedy: the product is on main now — reload it, test it, then bee gate --name uat --approved true, or fix in the worktree and merge again.".to_string(),
+            format!("next: settle the uat gate above, then re-run bee close --feature {feature}"),
+        ];
+        return Ok(Out::Emit(Value::Object(result), lines.join("\n"), 1));
+    }
+
     // ── U7: refuse on a recorded `violated` pattern verdict ─────────────────
     //
     // Runs only here — tests GREEN (or undeclared) and past the D1 refusal
@@ -1942,6 +2053,74 @@ pub(crate) fn close_handler(
             };
             lines.push(format!(
                 "Warning: bee-store bookkeeping commit failed for \"{feature}\": {detail}{stage_note}"
+            ));
+        }
+    }
+
+    // ── mcl-3 (merge-closes-the-lane R2): green, non-dry-run close sets
+    // the feature's lane to the terminal phase ─────────────────────────────
+    //
+    // This whole GREEN path already sits past every BLOCKING door and past
+    // the dry-run branch (which returns early, near the top of this
+    // function) — so a blocked or `--dry-run` close never reaches this line
+    // at all, by construction, and no separate guard for either is needed
+    // here. Reuses `run_set_body` (state_group/set_gate.rs) rather than
+    // hand-writing the lane record: it enforces the `--owner` precondition
+    // and the phase enum for free. `--owner` is the record's OWN
+    // pre-mutation phase, read from `read_lane_display` right here — never
+    // guessed. NEVER writes "compounding-complete": that value is gated on
+    // a fresh recorded compounding run (state_group/store.rs) and close has
+    // no standing to waive it; "idle" is the only terminal value this write
+    // ever names. A lane already at a terminal phase (`idle` or
+    // `compounding-complete`) is left untouched — checked before the call,
+    // not left to `run_set_body` to no-op, so a repeat close never rewrites
+    // a record that already reads terminal. Best-effort like the
+    // bookkeeping commit right above: no lane record for this feature is
+    // silent (nothing to close), and any other read or write failure warns
+    // on its own line and leaves the close GREEN.
+    match crate::verbs::workflow_store::read_lane_display(root, feature) {
+        Ok(Some(lane)) => {
+            let current_phase = lane
+                .get("phase")
+                .and_then(|v| v.as_str())
+                .unwrap_or("idle")
+                .to_string();
+            if current_phase != "idle" && current_phase != "compounding-complete" {
+                let next_action = format!("bee close finished \"{feature}\" — feature is closed.");
+                let set_flags = Flags(vec![
+                    ("lane".to_string(), FlagV::S(feature.to_string())),
+                    ("phase".to_string(), FlagV::S("idle".to_string())),
+                    ("owner".to_string(), FlagV::S(current_phase)),
+                    ("next-action".to_string(), FlagV::S(next_action)),
+                ]);
+                match crate::verbs::state_group::run_set_body(root, &set_flags) {
+                    Ok(Out::Emit(..)) => {
+                        lines.push(format!(
+                            "Lane phase set to \"idle\" for \"{feature}\" — close is the terminal write."
+                        ));
+                    }
+                    Ok(Out::Thrown(msg)) => {
+                        lines.push(format!(
+                            "Warning: could not set lane phase to \"idle\" for \"{feature}\": {msg}"
+                        ));
+                    }
+                    Err(Err2::Msg(msg)) => {
+                        lines.push(format!(
+                            "Warning: could not set lane phase to \"idle\" for \"{feature}\": {msg}"
+                        ));
+                    }
+                    Err(Err2::Ex) => {
+                        lines.push(format!(
+                            "Warning: could not set lane phase to \"idle\" for \"{feature}\": lane mutation lock or lane read failed."
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(None) => {}
+        Err(_) => {
+            lines.push(format!(
+                "Warning: could not read the lane record for \"{feature}\" to set its terminal phase."
             ));
         }
     }
@@ -3065,5 +3244,344 @@ mod tests {
         let queued = crate::verbs::deferred_queue::items_for(root, "promote", "demo");
         assert_eq!(queued.len(), 1);
         assert!(!queued[0].completed);
+    }
+
+    // ─── mcl-3 (merge-closes-the-lane R2): green close sets the lane's
+    // terminal phase ──────────────────────────────────────────────────────
+
+    fn read_lane_json(root: &Path, feature: &str) -> Value {
+        let ReadJson::Parsed(v) = read_json(&root.join(".bee/lanes").join(format!("{feature}.json")))
+        else {
+            panic!("lane record must still parse")
+        };
+        v
+    }
+
+    /// Happy path (must-have: "a green non-dry-run close leaves the lane at
+    /// phase idle with a next_action naming the close"): a non-terminal
+    /// lane phase moves to "idle" and a next_action naming the close is
+    /// stamped — on disk, not just claimed in the emitted text.
+    #[test]
+    fn a_green_close_sets_the_lane_phase_to_idle_with_a_next_action() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/lanes/demo.json", r#"{"feature":"demo","phase":"swarming"}"#);
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_, text, code) = out else { panic!("expected a green close") };
+        assert_eq!(code, 0);
+        assert!(text.contains("Lane phase set to \"idle\" for \"demo\""), "text: {text}");
+        let lane = read_lane_json(root, "demo");
+        assert_eq!(lane["phase"], json!("idle"));
+        let next_action = lane["next_action"].as_str().unwrap_or_default();
+        assert!(next_action.contains("close"), "next_action: {next_action}");
+        assert!(next_action.contains("demo"), "next_action: {next_action}");
+    }
+
+    /// Edge (must-have: "--dry-run leaves the lane record byte-identical"):
+    /// the phase write sits entirely past the dry-run branch, which returns
+    /// early, near the top of `close_handler`.
+    #[test]
+    fn a_dry_run_close_leaves_the_lane_record_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let before = r#"{"feature":"demo","phase":"swarming"}"#;
+        w(root, ".bee/lanes/demo.json", before);
+        let out = close_handler(root, "demo", true, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(..) = out else { panic!("expected the dry-run door report") };
+        let after = std::fs::read_to_string(root.join(".bee/lanes/demo.json")).unwrap();
+        assert_eq!(after, before);
+    }
+
+    /// Edge (must-have: "a close stopped by any BLOCKING door leaves the
+    /// lane record byte-identical"): the proof-debt tests door stops this
+    /// close at exit 1, well before the tail line this feature's write
+    /// lives on.
+    #[test]
+    fn a_close_blocked_by_a_door_leaves_the_lane_record_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let before = r#"{"feature":"demo","phase":"swarming"}"#;
+        w(root, ".bee/lanes/demo.json", before);
+        w(
+            root,
+            ".bee/cells/demo-1.json",
+            r#"{"id":"demo-1","feature":"demo","status":"capped","trace":{"report":{"outcome":"o","commit":"c","files":[],"tests":"not a proof string","deviations":[]}}}"#,
+        );
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_, _text, code) = out else { panic!("expected the proof-debt refusal") };
+        assert_eq!(code, 1);
+        let after = std::fs::read_to_string(root.join(".bee/lanes/demo.json")).unwrap();
+        assert_eq!(after, before);
+    }
+
+    /// Edge (must-have: "a lane already at a terminal phase ('idle' or
+    /// 'compounding-complete') is not rewritten"): a green close leaves
+    /// either terminal value byte-identical rather than rewriting it —
+    /// close never writes "compounding-complete" itself, but must not
+    /// clobber a lane that already carries it.
+    #[test]
+    fn a_lane_already_terminal_is_left_untouched_by_a_green_close() {
+        for phase in ["idle", "compounding-complete"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            let before = format!(r#"{{"feature":"demo","phase":"{phase}"}}"#);
+            w(root, ".bee/lanes/demo.json", &before);
+            let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+            let Out::Emit(_, text, code) = out else { panic!("expected a green close") };
+            assert_eq!(code, 0);
+            assert!(
+                !text.contains("Lane phase set to"),
+                "an already-terminal lane must not be rewritten: {text}"
+            );
+            let after = std::fs::read_to_string(root.join(".bee/lanes/demo.json")).unwrap();
+            assert_eq!(after, before, "phase {phase} must stay byte-identical");
+        }
+    }
+
+    /// Error (must-have: "a failing phase write emits a warning line and
+    /// the close still exits 0"): a lane whose pre-mutation phase sits
+    /// outside the known-phase enum makes `run_set_body`'s own phase-known
+    /// guard refuse the write — this warns on its own line rather than
+    /// failing the close, and nothing reaches disk.
+    #[test]
+    fn a_failing_lane_phase_write_warns_and_the_close_still_exits_0() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/lanes/demo.json", r#"{"feature":"demo","phase":"frobnicating"}"#);
+        let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
+        let Out::Emit(_, text, code) = out else {
+            panic!("expected a green close despite the lane write failing")
+        };
+        assert_eq!(code, 0);
+        assert!(text.contains("Warning: could not set lane phase"), "text: {text}");
+        assert!(text.starts_with("Tests GREEN for \"demo\""), "text: {text}");
+        let after = std::fs::read_to_string(root.join(".bee/lanes/demo.json")).unwrap();
+        assert_eq!(after, r#"{"feature":"demo","phase":"frobnicating"}"#);
+    }
+
+    // ─── tests: uat-stop-placement D4.4/D2 close-time uat door ─────────────
+    //
+    // Precedent: judge-debt (above, `judge_debt_door_*`/`close_refuses_
+    // judge_debt_for_a_standard_lane_feature`, verbs/cells/tests.rs) —
+    // lane-scoped, blocking, escapable by a logged deferral decision. These
+    // tests live here rather than there because the door itself, and every
+    // helper it calls, is local to this file (this cell's scope is
+    // drivers/close.rs alone).
+
+    fn write_lane_mode(root: &Path, feature: &str, mode: &str) {
+        w(root, &format!(".bee/lanes/{feature}.json"), &format!(r#"{{"feature":"{feature}","mode":"{mode}"}}"#));
+    }
+
+    /// usp-3 revision (D4): a lane record whose `mode` and `route.lane`
+    /// name DIFFERENT lane classes — the one shape `write_lane_mode` above
+    /// cannot produce, and the exact shape that let `feature_route`
+    /// (`route.lane`) and the merge side's `mode` read disagree.
+    fn write_lane_mode_and_route(root: &Path, feature: &str, mode: &str, route_lane: &str) {
+        w(
+            root,
+            &format!(".bee/lanes/{feature}.json"),
+            &format!(r#"{{"feature":"{feature}","mode":"{mode}","route":{{"lane":"{route_lane}"}}}}"#),
+        );
+    }
+
+    fn write_uat_gate_state(root: &Path, feature: &str, approved: bool) {
+        w(
+            root,
+            ".bee/state.json",
+            &format!(r#"{{"feature":"{feature}","approved_gates":{{"uat":{approved}}}}}"#),
+        );
+    }
+
+    /// D4.4: under `uat_stop: "merge"` (today's default — no key at all)
+    /// and under `"off"`, the door does not appear in the door list at
+    /// all, even for a standard lane whose uat gate is unapproved.
+    #[test]
+    fn uat_door_is_absent_under_merge_and_under_off() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_mode(root, "demo", "standard");
+
+        // Default: no `uat_stop` key at all reads as `Merge`.
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        assert!(doors.iter().find(|d| d.door == "uat").is_none(), "merge (default) must never grow the door");
+
+        w(root, ".bee/config.json", r#"{"uat_stop":"off"}"#);
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        assert!(doors.iter().find(|d| d.door == "uat").is_none(), "off must never grow the door");
+    }
+
+    /// D2, D4.4: under `close`, a standard lane whose uat gate is
+    /// unapproved grows a BLOCKING uat door naming the remedy command.
+    #[test]
+    fn uat_door_blocks_a_standard_lane_feature_under_close_with_uat_unapproved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode(root, "demo", "standard");
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat").expect("door must exist under close for a standard lane");
+        assert!(uat_door.blocking, "an unapproved uat gate must block under close");
+        assert_eq!(uat_door.command, Some("bee gate --name uat --approved true"));
+        assert!(uat_door.detail.contains("not yet approved"), "{}", uat_door.detail);
+    }
+
+    /// D2, D4.4: the same lane, once the uat gate is approved (via the
+    /// default-state fallback, same-feature-owned), clears the door — still
+    /// present, no longer blocking.
+    #[test]
+    fn uat_door_does_not_block_once_uat_is_approved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode(root, "demo", "standard");
+        write_uat_gate_state(root, "demo", true);
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat").expect("door must exist under close for a standard lane");
+        assert!(!uat_door.blocking, "an approved uat gate must not block");
+        assert_eq!(uat_door.detail, "clear");
+        assert_eq!(uat_door.command, None);
+    }
+
+    /// D2: the same lane rule the merge side uses — `tiny`/`small`/`docs`/
+    /// `spike` are exempt, so the door never blocks for them even with the
+    /// uat gate unapproved.
+    #[test]
+    fn uat_door_does_not_block_for_exempt_lanes_under_close() {
+        for lane in ["tiny", "small", "docs", "spike"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+            write_lane_mode(root, "demo", lane);
+
+            let doors = build_close_report_doors(root, "demo").unwrap();
+            let uat_door = doors.iter().find(|d| d.door == "uat");
+            if let Some(uat_door) = uat_door {
+                assert!(!uat_door.blocking, "lane {lane} must never block: {}", uat_door.detail);
+            }
+        }
+    }
+
+    /// usp-3 revision (D4, judge NEEDS_REVISION t4): the door must classify
+    /// through the SAME source the merge side reads (`mode`), not through
+    /// `feature_route` (which prefers `route.lane`). A record whose `mode`
+    /// is "standard" but whose `route.lane` names "small" — the exact
+    /// shape of `.bee/lanes/knowledge-loop.json`, the judge's worked
+    /// example — must still block under close: the merge side would set
+    /// the uat wait for this feature, so close must agree.
+    #[test]
+    fn uat_door_blocks_when_mode_and_route_lane_disagree_toward_standard() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode_and_route(root, "demo", "standard", "small");
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors
+            .iter()
+            .find(|d| d.door == "uat")
+            .expect("mode standard must grow a blocking door even when route.lane disagrees");
+        assert!(
+            uat_door.blocking,
+            "mode=standard/route.lane=small must block — the merge side reads mode and would wait on this feature: {}",
+            uat_door.detail
+        );
+    }
+
+    /// usp-3 revision (D4): mirror of the above in the other direction — a
+    /// record whose `mode` is "small" but whose `route.lane` names
+    /// "standard" must stay EXEMPT under close, again agreeing with the
+    /// merge side's `mode`-only read rather than `feature_route`'s
+    /// `route.lane`-preferring one.
+    #[test]
+    fn uat_door_is_exempt_when_mode_and_route_lane_disagree_toward_small() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode_and_route(root, "demo", "small", "standard");
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat");
+        if let Some(uat_door) = uat_door {
+            assert!(
+                !uat_door.blocking,
+                "mode=small/route.lane=standard must stay exempt — the merge side reads mode: {}",
+                uat_door.detail
+            );
+        }
+    }
+
+    /// D1 (`uat_stop_config`'s own fail-closed read): a bogus `uat_stop`
+    /// value blocks with an invalid-config detail naming both keys and
+    /// their legal values, rather than resolving either way.
+    #[test]
+    fn uat_door_blocks_with_invalid_config_detail_on_a_bogus_uat_stop_value() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"sometime"}"#);
+        write_lane_mode(root, "demo", "standard");
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat").expect("a bogus value must still grow the door");
+        assert!(uat_door.blocking, "an unresolvable uat_stop must block rather than guess");
+        assert!(uat_door.detail.contains("invalid config"), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("uat_stop"), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("uat_before_merge"), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("\"merge\""), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("\"close\""), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("\"off\""), "{}", uat_door.detail);
+    }
+
+    /// D2: mirrors the judge-debt door's own escape — a logged
+    /// `uat-deferral` decision naming the feature clears the door without
+    /// touching the underlying gate state.
+    #[test]
+    fn uat_door_is_cleared_by_a_logged_uat_deferral_decision() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode(root, "demo", "standard");
+        w(
+            root,
+            ".bee/decisions.jsonl",
+            "{\"id\":\"d1\",\"type\":\"decide\",\"date\":\"2026-08-18T00:00:00.000Z\",\"decision\":\"defer uat for demo\",\"rationale\":\"r\",\"tags\":[\"uat-deferral\"],\"scope\":\"repo\"}\n",
+        );
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat").unwrap();
+        assert!(!uat_door.blocking, "a logged uat-deferral decision must clear the door");
+        assert!(uat_door.detail.contains("deferred"), "{}", uat_door.detail);
+        assert!(uat_door.detail.contains("demo"), "{}", uat_door.detail);
+        assert_eq!(uat_door.command, None);
+
+        // A uat-deferral decision naming a DIFFERENT feature never lifts
+        // THIS feature's block.
+        assert!(!has_uat_deferral_decision(root, "elsewhere").unwrap());
+    }
+
+    /// End to end: `bee close` on a standard-lane feature under
+    /// `uat_stop: "close"` with an unapproved uat gate refuses even with no
+    /// other debt in play, names the pinned prefix, and states the remedy
+    /// in the user's own terms.
+    #[test]
+    fn close_refuses_the_uat_door_for_a_standard_lane_feature_under_uat_stop_close() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
+        write_lane_mode(root, "demo", "standard");
+
+        let Out::Emit(result, text, code) = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(code, 1, "an unapproved uat gate refuses even though nothing else is in debt");
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert!(lines[0].starts_with(CLOSE_UAT_PREFIX), "{}", lines[0]);
+        assert!(lines[1].contains("bee gate --name uat --approved true"), "{}", lines[1]);
+        assert!(lines[1].contains("worktree"), "remedy must name the worktree fix-forward path: {}", lines[1]);
+        assert!(lines[2].starts_with("next:"));
+        let doors = result.get("doors").unwrap().as_array().unwrap();
+        assert_eq!(doors.iter().find(|d| d["door"] == "uat").unwrap()["blocking"], json!(true));
     }
 }

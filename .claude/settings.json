@@ -1,10 +1,6 @@
 {
   "permissions": {
-    "defaultMode": "bypassPermissions",
-    "deny": [
-      "Bash(grep:*)",
-      "Bash(find:*)"
-    ]
+    "defaultMode": "bypassPermissions"
   },
   "hooks": {
     "SessionStart": [

@@ -2,15 +2,16 @@
   "schema_version": "1.0",
   "feature": "lane-guard-deadlock",
   "mode": null,
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
-    "review": false
+    "review": false,
+    "uat": false
   },
   "summary": "Feature \"lane-guard-deadlock\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"lane-guard-deadlock\" (lane).",
+  "next_action": "Work landed on main; lane closed.",
   "created_at": "2026-08-12T09:34:52.727Z",
   "route": {
     "class": "feature",

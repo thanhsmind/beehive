@@ -1,0 +1,208 @@
+{
+  "id": "ho-6",
+  "feature": "herding-orchestration",
+  "title": "Implement the five-phase choreography and pin its eight ordering invariants",
+  "lane": "standard",
+  "behavior_change": true,
+  "deps": [
+    "ho-5"
+  ],
+  "action": "REWORK after a NEEDS_REVISION judge verdict on commit 396e5f92. The choreography itself is correct and committed — the five phases are in the right order, the buckets are right, and six of the eight invariants are genuinely pinned. Do NOT redo any of that and do not revert it. The judge ran a real mutation matrix and found two things wrong; fix exactly these four items on top of the existing commit. ITEM ONE, the failing check: invariant 5 (partial-failure isolation) survives its own mutation, so it currently pins nothing. The test at tests/choreography.rs:205 orders the FAILING send FIRST, so at the moment the send fails nothing has been dispatched yet — the 'earlier workers keep running and are still collected' half of the invariant is never exercised. The judge proved it by adding sent.clear() to the send-Err arm at choreography.rs:238, which abandons every already-dispatched target, and the whole suite stayed green. Fix the TEST, not the implementation: order the wave so at least one target is dispatched SUCCESSFULLY BEFORE the failing send, then assert that earlier target still lands in succeeded. Then re-run the judge's mutation yourself — temporarily add sent.clear() to the send-Err arm, confirm the test now goes RED, and put it back. Record that observation; without it this fix is unproven. ITEM TWO: the unverifiable_after_send clause of is_success (choreography.rs:76) is unpinned — deleting it leaves every test green, because no test has unverifiable_after_send as the only non-empty bucket. Add a test where exactly one target is sent, becomes unverifiable after the send, and no other bucket is populated, and assert the wave verdict is a failure. Prove it the same way: delete the clause, see the new test go red, restore it. ITEM THREE: wave.rs:13-16 contradicts the implementation in public. The doc on WorkerSpec::name currently tells a reader that 'distinct worker specs that resolve to the same underlying target must be deduped before dispatch (Ordering Invariant 8) — that dedupe is the choreography's job, not this type's', but the choreography can only collapse identical name strings, and canonical-identity resolution is backend-layer work per decision D15 (fb8a8628). Rewrite that doc so it states what is actually true today, names the same-string limit plainly, and cites D15 for what the backend phase owes. The private rustdoc on resolve_and_dedupe should cite D15 too, so both ends agree. ITEM FOUR: add one sentence to invariant 7's test documentation recording the limit of its own proxy — the status call count pins exactly one wait-loop iteration, so it cannot see a wait implemented OUTSIDE the poll loop; the judge confirmed that inserting a sleep before the loop keeps the count at 3 and the suite green, only slower. A reader should know what that test does not cover. Do not change the implementation of the choreography for any of these four items except where item one's mutation check temporarily requires it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "docs/history/research/herdr-orchestrator-distill.md"
+  ],
+  "files": [
+    "packages/bee-rs/crates/fleet/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "Invariant 5's test dispatches at least one target successfully BEFORE the failing send, and asserts that earlier target still lands in succeeded.",
+      "Adding sent.clear() to the send-Err arm turns invariant 5's test red — observed, not assumed.",
+      "A test exists in which one sent target becomes unverifiable after its send with no other bucket populated, and the wave verdict is a failure.",
+      "Deleting the unverifiable_after_send clause from is_success turns that new test red — observed, not assumed.",
+      "The public doc on WorkerSpec::name states the same-string dedupe limit truthfully and cites D15; it no longer claims the choreography handles specs that resolve to one target under different names.",
+      "Invariant 7's test documentation records that the call-count proxy cannot see a wait implemented outside the poll loop.",
+      "The five-phase order, the bucket set, and the six already-pinned invariants are unchanged."
+    ],
+    "artifacts": [
+      "tests/choreography.rs — invariant 5 reordered so a successful dispatch precedes the failing send, plus a new test pinning the unverifiable_after_send fold, plus the invariant 7 proxy-limit note",
+      "src/wave.rs — the WorkerSpec::name doc corrected to state the same-string limit and cite D15",
+      "src/choreography.rs — resolve_and_dedupe's rustdoc citing D15 so both ends agree"
+    ],
+    "key_links": [
+      "The public doc on WorkerSpec::name and the private rustdoc on resolve_and_dedupe say the same thing about what dedupe can and cannot collapse."
+    ],
+    "prohibitions": [
+      "Do not change the five-phase order, the bucket set, or any already-passing invariant test.",
+      "Do not add canonical-identity resolution to the generic core — D15 puts it in the backend phase and D2 forbids the core knowing a backend's identity scheme.",
+      "Do not weaken an assertion to make anything pass.",
+      "Do not claim a mutation observation you did not run.",
+      "Do not add an async runtime, and do not add a dependency.",
+      "Do not gate or move the fake backend module — that is filed as its own backlog item, not part of this rework."
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-6r",
+    "outcome": "Implemented the five-phase choreography as fleet::choreography::run_wave over the WorkerBackend trait, with concurrent std::thread waiting and named failure buckets, and pinned all eight ordering invariants by tests proven against deliberate mutation",
+    "files_changed": [
+      "packages/bee-rs/crates/fleet/src/choreography.rs",
+      "packages/bee-rs/crates/fleet/src/wave.rs",
+      "packages/bee-rs/crates/fleet/src/backend/fake.rs",
+      "packages/bee-rs/crates/fleet/src/lib.rs",
+      "packages/bee-rs/crates/fleet/tests/choreography.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T10:09:54.116Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T09:55:59.678Z",
+    "report": {
+      "outcome": "Five-phase choreography over the WorkerBackend trait with std::thread concurrent waiting and named failure buckets; all eight ordering invariants pinned, two of them repaired after a judge proved they survived their own mutation",
+      "commit": "c945e4ae",
+      "files": [
+        "packages/bee-rs/crates/fleet/src/choreography.rs",
+        "packages/bee-rs/crates/fleet/src/wave.rs",
+        "packages/bee-rs/crates/fleet/src/backend/fake.rs",
+        "packages/bee-rs/crates/fleet/src/lib.rs",
+        "packages/bee-rs/crates/fleet/tests/choreography.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — 2047 passed, 11 ignored; plus six independent mutation runs by the judge confirming each repaired invariant goes red when the behaviour it names is broken",
+      "deviations": [
+        "First cap refused on a NEEDS_REVISION verdict: invariant 5 survived its own mutation because its test put the failing send first, and the unverifiable_after_send fold was unpinned. Both repaired and re-proven by mutation.",
+        "Invariant 8 is satisfied only for same-string duplicates at this layer; canonical-identity resolution is backend-layer work, recorded as D15 (fb8a8628) with four obligations on the backend phase.",
+        "Residual proxy limit found by the judge and not repaired here: reversing phase-4 dispatch order leaves the suite green, so the invariant 5 test premise rests on forward iteration that no test pins. Pre-existing, same class as the documented invariant 7 limit."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "choreography.rs run_wave at :181 executes the five phases in D3's order, each labelled: :182 phase 1 resolve_and_dedupe then a start loop; :199 phase 2 bulk is_safe_to_send filter; :212 phase 3 baselines EVERY survivor with no send call in that loop; :222 phase 4 re-checks status immediately before that same target's send; :244 phase 5 thread::scope fan-out plus mpsc collection, then bucket aggregation. Dedupe precedes the first status read; every baseline precedes the first send."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "choreography.rs:186-197 returns early with resolution_failed before phase 2. Pinned by tests/choreography.rs:369, which asserts status_call_count(w2) == 0 and succeeded empty. Mutation M9 (is_success no longer folds resolution_failed) turned that test red. Nuance, not a defect: the abort fires after the whole phase-1 loop, so start is still called on targets following a failing one — nothing is ever sent, which is what the truth states."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "choreography.rs:248-262 uses mpsc::channel plus thread::scope with one spawn per sent target; each waiter returns the structured enum TargetOutcome (choreography.rs:120-124) through the channel. A search for tempfile, File::create, fs::write and std::fs returns nothing in src/ — no temporary-file handoff layer exists (D9 honoured)."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "One named test per CONTEXT.md invariant in tests/choreography.rs: inv1 at :39, inv2 at :74, inv3 at :109, inv4 at :147, inv5 at :205, inv6 at :249, inv7 at :293, inv8 at :326. All eight present and correctly named; whether each pins its own behaviour is judged under X1 and X2."
+          },
+          {
+            "id": "T5",
+            "status": "PASS",
+            "evidence": "choreography.rs:69-77 is_success folds all six non-success buckets, including the never-sent ones (resolution_failed, unsafe_at_preflight, flipped_before_send). Mutation M5 (delete the unsafe_at_preflight clause) turned invariant_6 red; M7 (drop flipped_before_send) turned invariant_3 red; M9 (drop resolution_failed) turned the resolution test red. Caveat carried into X1: the unverifiable_after_send clause of the same fold is NOT pinned."
+          },
+          {
+            "id": "T6",
+            "status": "PASS",
+            "evidence": "A search for sleep, Instant, SystemTime and elapsed across tests/choreography.rs matches only doc prose and one assertion message — no test calls sleep, constructs a clock type, or reads elapsed. Every verdict is bucket- or call-count-based; invariant 7 counts status calls instead of measuring duration. The fleet suite finishes in 0.01s. Two latent, non-verdict-defining time couplings named for the record: invariant_2 reaches its verdict only after the implementation's 12ms worker_settle really elapses, and invariant_4's w4 leg needs a second status poll inside a 20ms ceiling, so a scheduler stall over 20ms on loaded CI would flip it to timed_out and turn the test red."
+          },
+          {
+            "id": "T7",
+            "status": "PASS",
+            "evidence": "A search for FakeBackend and fake:: returns zero hits in choreography.rs. run_wave<B: WorkerBackend + Sync + ?Sized> and wait_for_target<B: WorkerBackend + ?Sized> are generic over the trait only. Non-blocking note for the orchestrator: src/backend.rs:12 declares pub mod fake; with no #[cfg(test)] and no feature gate, so FakeBackend and its fault-injection API compile into the shipped library that links into the bee binary (D5) — not a choreography coupling, but shipped test-support surface."
+          },
+          {
+            "id": "T8",
+            "status": "PASS",
+            "evidence": "crates/fleet/Cargo.toml declares exactly anyhow.workspace and serde.workspace under [dependencies]; no tokio, async-std, rayon or crossbeam in any table. git show 396e5f92 --stat lists four files and touches neither the manifest nor the lockfile, so this cell added no dependency. tests/manifest_boundary.rs enforces the separate no-bee-dependency edge."
+          },
+          {
+            "id": "X1",
+            "status": "FAIL",
+            "evidence": "A real mutation matrix was run on a scratchpad copy; the worktree was untouched. Genuinely pinned: invariant 2 — deleting the baseline-absence half of confirmed_against (backend.rs:98) turns invariant_2 red, so the stale-marker test pins its own behaviour rather than only the stub. Invariant 4 — making is_safe_to_send accept Unverifiable (choreography.rs:105) turns invariant_4 and invariant_6 red. Invariant 6 — deleting the unsafe_at_preflight clause from is_success turns invariant_6 red. Invariant 7 — the call count of 3 pins exactly one wait-loop iteration and the loop's only time cost is the in-loop sleep, so the count is a faithful structural proxy. WEAKLY PINNED, invariant 5, and this is the failure: tests/choreography.rs:205 orders the FAILING send FIRST, so at the moment of failure nothing has been dispatched yet — the 'already working' half of the invariant is untested, while plan.md:257 states it as 'one send failing mid-fan-out leaves EARLIER workers running and still collects them'. Minimal mutation, executed: at choreography.rs:238 make the send-Err arm also run sent.clear(). That abandons every already-dispatched target, the exact behaviour invariant 5 forbids, and the whole suite stayed green — 9 passed, 0 failed. No other test exercises the send-Err arm. Fix: dispatch a target successfully BEFORE the failing send and assert it still lands in succeeded. Second, lesser gap: deleting the unverifiable_after_send clause from is_success (choreography.rs:76) leaves all 31 tests green — invariant 4 pins the bucket assignment, but no test has unverifiable_after_send as the only non-empty bucket, so the verdict-level fold for a sent-then-unverifiable target is unpinned. Residual note on invariant 7: inserting a sleep before the poll loop keeps the call count at 3 and the suite green, only slower — the call-count proxy cannot see a wait implemented outside the poll loop."
+          },
+          {
+            "id": "X2",
+            "status": "FAIL",
+            "evidence": "The technical claim is HONEST and correctly bounded: backend.rs:110-140 exposes only start, status, send and read_output, so there is no name-to-canonical-id resolver and choreography.rs:88 resolve_and_dedupe can only key on the spec name string — nothing more is available inside the generic core (D2, D7). But the invariant is HALF-SATISFIED, not satisfied. CONTEXT.md:87 states invariant 8 as 'a name and its pane id resolving to one target is sent to once' and plan.md:242 repeats it as an acceptance truth; tests/choreography.rs:326 tests only the same string twice. Two specs naming one real target under different strings survive dedupe today and get two preflight reads, two baselines and TWO sends — the precise double-send the invariant forbids. The deferral is also badly placed for a later implementer: it lives only in the rustdoc of a PRIVATE fn (choreography.rs:79-87), it is absent from CONTEXT.md, plan.md, the decision log and the backlog, and wave.rs:13-16 states the OPPOSITE on the public WorkerSpec::name field — 'distinct worker specs that resolve to the same underlying target must be deduped before dispatch (Ordering Invariant 8) — that dedupe is the choreography's job, not this type's.' A backend implementer reading the public type is told the core already handles what the core's private comment says it cannot. What a later phase now owes: a canonical-identity step (a resolve method on WorkerBackend, or a backend-side pre-pass rewriting each spec name to a canonical id) with the dedupe keyed on it; a test with a name and its pane id pointing at one target asserting exactly one send, one baseline and one succeeded entry; a correction to wave.rs:13-16 so the public doc stops contradicting the implementation; and the deferral recorded where planning reads it, not only in a private rustdoc."
+          }
+        ],
+        "failure_signature": "invariant-5-survives-its-own-mutation: adding sent.clear() to the send-Err arm at choreography.rs:238 abandons already-dispatched targets and all nine choreography tests stay green, because tests/choreography.rs:205 puts the failing send first. Plus invariant-8 pinned only on same-string duplicates while CONTEXT.md:87 and plan.md:242 state name-versus-pane-id, with the deferral recorded only in a private rustdoc and publicly contradicted at wave.rs:13-16.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T09:54:52.930Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "R1",
+            "status": "PASS",
+            "evidence": "Re-run independently on a full scratchpad copy of packages/bee-rs; the worktree was untouched, git status clean at start and end. Baseline cargo test -p fleet = 32 passed. Mutation M1: the phase-4 send-Err arm was changed to also run sent.clear(). Result: invariant_5_one_send_failing_does_not_abandon_other_dispatched_targets FAILED with 'w0, dispatched successfully BEFORE w1's send failed, and w2, dispatched after, must both still be waited on and land in succeeded — a target already dispatched must never be abandoned just because a later target's send failed', left [\"w2\"] right [\"w0\", \"w2\"]. Exactly one test went red. Reverted."
+          },
+          {
+            "id": "R2",
+            "status": "PASS",
+            "evidence": "Mutation M2: deleted the unverifiable_after_send clause from WaveResult::is_success. Result: is_success_treats_unverifiable_after_send_as_failure_even_when_no_other_bucket_is_populated FAILED with 'a wave whose only populated bucket is unverifiable_after_send must still be a failure', got a WaveResult whose only non-empty bucket was unverifiable_after_send. It was the ONLY test to go red, which independently confirms the worker's isolation claim — no other test would have caught this clause. Reverted."
+          },
+          {
+            "id": "R3",
+            "status": "PASS",
+            "evidence": "M3, deleting the baseline-absence half of confirmed_against, still kills both the unit test completion_signal_rejects_a_marker_already_present_in_the_baseline and the integration test invariant_2_a_marker_already_present_in_the_baseline_is_never_credited. M4, making is_safe_to_send accept Unverifiable, still turns invariant_4 and invariant_6 red together. Both earlier mutations still kill their tests; the rework loosened nothing. Reverted."
+          },
+          {
+            "id": "R4",
+            "status": "PASS",
+            "evidence": "git diff 396e5f92 c945e4ae --numstat is exactly three files: src/choreography.rs 3/3, src/wave.rs 9/4, tests/choreography.rs 68/5. A comment-stripped diff of both source files against the first landing printed NO CODE CHANGE for each, so the five phases, their order, resolve_and_dedupe, is_safe_to_send, wait_for_target and all seven WaveResult buckets are byte-identical. The tests diff removes only five lines: one doc line rewritten and the old three-line assertion replaced by the strictly stronger sorted form. No assertion was deleted or weakened."
+          },
+          {
+            "id": "R5",
+            "status": "PASS",
+            "evidence": "The contradiction is gone and both ends cite the same decision. wave.rs on WorkerSpec::name now says the choreography dedupes specs whose name is the exact same string, and explicitly that it does NOT collapse two different name strings resolving to the same underlying target, because canonical-identity resolution is backend-layer work under D2 and D15 (fb8a8628). choreography.rs on resolve_and_dedupe says the same, citing the same decision. The citation was verified against the control root's decision log, where fb8a8628 holds the matching D15 text. Minor observation, not a failure: D15 also asks that it be cited wherever invariant 8 is stated, and the invariant 8 test doc states the invariant without citing it."
+          },
+          {
+            "id": "R6",
+            "status": "PASS",
+            "evidence": "The invariant 7 test documentation now records: 'Proven by counting backend calls, never by measuring elapsed time. Limit of this proxy: the call count pins exactly one wait-loop iteration having run, so it cannot see a wait inserted OUTSIDE the poll loop — a sleep placed before the loop starts leaves the count at 3 and this test green, only slower.' That is exactly the limit required."
+          },
+          {
+            "id": "R7",
+            "status": "PASS",
+            "evidence": "Four extra mutations beyond the worker's two. A1, a minimal variant of the invariant 5 mutation that drops only the one already-dispatched target rather than all of them, still turns the test red — and the pre-rework test, which had no earlier target, would have survived it. A2, a clause SWAP rather than a deletion in is_success (duplicating the timed_out clause in place of the unverifiable one, so arity and shape are unchanged), still turns the new test red. A4, misrouting UnverifiableAfterSend into the timed_out bucket, turns the new test red on the aggregation side too. Both new tests are tight against clause-level and bucket-level mutation. One survivor is reported and is NOT a weakness the rework introduced: A3, reversing phase-4's dispatch iteration order, leaves the whole suite green. The invariant 5 doc's premise that w0 is dispatched BEFORE w1 rests on phase-4's forward iteration, which no test pins. The named invariant still holds under reversal, and the gap predates this rework, so it is a proxy limit of the same class as invariant 7's documented one, not a regression. Follow-up suggested, not blocking: pin phase-4 send order, or note the limit in the invariant 5 test doc as invariant 7 does."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T10:09:54.095Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T09:54:52.930Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  },
+  "tier": "generation"
+}

@@ -1,0 +1,60 @@
+{
+  "id": "dds-2",
+  "feature": "doc-deferral-scope",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Mark the two register sections that document deferral machinery, and write the marker down",
+  "behavior_change": false,
+  "files": [
+    "docs/handbook/register.md",
+    "docs/config-reference.md"
+  ],
+  "read_first": [
+    "docs/handbook/register.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs"
+  ],
+  "action": "Apply the marker dds-1 shipped, and document it. (1) docs/handbook/register.md — wrap the '### `.bee/deferred-queue.jsonl`' section and the '### `.bee/capture-queue.jsonl`' section in the reasoned marker. Give each its own honest reason, not boilerplate: these sections name and describe the deferral queues themselves, so the word is the subject matter rather than a promise to act later. Wrap the whole section including its heading — the heading is one of the blocking lines, because its backtick span is a filename the door tries to resolve as a trigger id. Do NOT wrap anything else, and do NOT reword the prose to dodge the matcher; the point is to name the exemption, not to hide from it. Verify the result by running bee close --feature doc-deferral-scope --dry-run --json with the NEWLY BUILT binary and confirming the doc-deferral door no longer names any docs/handbook/register.md line. (2) Document the marker where a reader will meet it. register.md's own doc-deferral / close-doors material is the first home; docs/config-reference.md only if that file already covers close doors — check before writing, and if it does not, say so and skip part 2's second half rather than inventing a section. State the exact syntax, that the reason is required and a reasonless marker exempts nothing, and that it is for prose that DOCUMENTS deferral rather than prose that defers.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo build --release --manifest-path packages/bee-rs/Cargo.toml && ./packages/bee-rs/target/release/bee close --feature doc-deferral-scope --dry-run --json && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity",
+  "verify_owner": "worker",
+  "done_when": "The two register sections that document the deferral and capture queues carry reasoned markers with their own honest reasons; bee close --dry-run with the newly built binary names no docs/handbook/register.md line in its doc-deferral door; the marker's syntax and its reason-required rule are written down where a reader meets close doors; no prose was reworded to dodge the matcher; pointer-integrity is green.",
+  "notes": "Phase 2. Depends on dds-1 shipping the marker syntax.",
+  "must_haves": {
+    "truths": [
+      "Both register sections that document deferral machinery are wrapped in reasoned markers, headings included.",
+      "Each marker carries its own honest reason rather than boilerplate.",
+      "bee close --dry-run with the newly built binary names no docs/handbook/register.md line in the doc-deferral door.",
+      "No prose was reworded to dodge the matcher.",
+      "The marker's syntax and the reason-required rule are documented where a reader meets close doors."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "dds-2-worker",
+    "outcome": null,
+    "files_changed": [
+      "docs/handbook/register.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T14:48:27.772Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T14:44:01.521Z",
+    "report": {
+      "outcome": "Wrapped both register.md deferral-queue sections in reasoned not-a-deferral markers and documented the door row; config-reference.md untouched (does not cover close doors)",
+      "tests": "cargo build --release --manifest-path packages/bee-rs/Cargo.toml && ./packages/bee-rs/target/release/bee close --feature doc-deferral-scope --dry-run --json && cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity — green — doc-deferral door reports clear (no docs/handbook/register.md line named) with the newly built binary; pointer_integrity suite 10 passed",
+      "deviations": [],
+      "commit": "a4909c5da9be4f4ad3efd67b93842b76affcbea1",
+      "files": [
+        "docs/handbook/register.md"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

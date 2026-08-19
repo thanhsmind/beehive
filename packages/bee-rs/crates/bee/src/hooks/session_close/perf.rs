@@ -374,12 +374,28 @@ pub(crate) struct Rollup {
     pub(crate) ended_ms: Option<f64>,
 }
 
+/// auto-wait-mark rework: `perf_refresh` no longer calls this — it reads the
+/// transcript itself and calls `rollup_from_events` directly so the events
+/// can be reused for the turn-end mark — so this read-then-roll wrapper is
+/// test-only in a release build (kept for the roundtrip test below and any
+/// future direct caller that only has a path, not pre-read events).
+#[allow(dead_code)]
 pub(crate) fn rollup_transcript(file: &Path) -> Option<Rollup> {
     let events = read_jsonl(file);
+    rollup_from_events(file, &events)
+}
+
+/// auto-wait-mark rework: the rollup half of `rollup_transcript`, split out
+/// so a caller that already holds the parsed events (the Stop hook's own
+/// `perf_refresh`, which then hands the same events to `turn_end_subject`)
+/// never has to `read_jsonl` the transcript a second time. `rollup_transcript`
+/// above is kept as a thin read-then-roll wrapper for callers (tests, and
+/// any future direct caller) that only have a path.
+pub(crate) fn rollup_from_events(file: &Path, events: &[Value]) -> Option<Rollup> {
     if events.is_empty() {
         return None;
     }
-    let usage = aggregate_usage(&events);
+    let usage = aggregate_usage(events);
     let session_dir = strip_jsonl_suffix(file);
     let sub = walk_subagents(&session_dir);
     let stamps: Vec<f64> = events.iter().filter_map(event_ms).collect();
@@ -394,8 +410,8 @@ pub(crate) fn rollup_transcript(file: &Path) -> Option<Rollup> {
         models: usage.models.to_value(),
         subagent_models: sub.models.to_value(),
         subagent_count: sub.agents.len(),
-        parallel: detect_parallel(&sub.agents, &events),
-        running_time_ms: running_time_ms(&events),
+        parallel: detect_parallel(&sub.agents, events),
+        running_time_ms: running_time_ms(events),
         event_count: events.len(),
         started_ms: stamps.iter().cloned().fold(None, |acc: Option<f64>, x| Some(acc.map_or(x, |a| a.min(x)))),
         ended_ms: stamps.iter().cloned().fold(None, |acc: Option<f64>, x| Some(acc.map_or(x, |a| a.max(x)))),

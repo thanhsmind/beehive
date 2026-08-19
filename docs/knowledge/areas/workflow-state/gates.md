@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [workflow-state]
   required_context: [areas/workflow-state/overview.md]
-  decisions: ["chain-integrity D1-REVISED/D2/D3/D4 (the tail of the chain: learning capture is produced not asserted, the sync demands executed work, the close demands zero spec debt, the waiver is audited)", "AO3/AO13 (execution-gate adviser precondition — folded from the old standalone execution gate into Gate 2, validation-diet D2/D14 — event-based staleness, never a TTL — cells ao-4-1/ao-4-2 2026-07-17)", codex-hook-state-parity D4-D6 (pre-phase routing ownership and review isolation), "scribing-integrity D1-D3/D6 (the wall at every door — feature-swap guard, lane-aware close, durable scribing ledger + orphan sweep, pre-ledger amnesty; cells si-1/si-3, 2026-07-24)", multisession-native D1/D7 (starting a feature also creates its own workflow record via three separate lock transactions; the execution gate records approved_for_plan_rev — docs/history/multisession-native/CONTEXT.md), "scribing-stamp-seam 5b2f963d (sss-1 — the close-door threshold folds in the durable ledger as fallback/max, not the record stamp alone)", "validation-diet D2/D14/D15 (the merged approval flips `shape` and `execution` together via `bee state gate --merge`, inherits the high-risk advisor-consult precondition D14 previously guarding execution alone, and stamps `approved_for_plan_rev` on both fields together so a later bump can never leave the merged approval half-revoked — docs/history/validation-diet/CONTEXT.md, cell vd-3, 2026-07-28)", "compounding-gate D1 (the close also demands recorded learning-capture evidence, fresh against the knowledge-sync stamp, waivable only with a logged decision; cells cg-1/cg-2, 2026-07-27)", derived-check-hardening E5 (the six hand-copied terminal-phase memberships are pinned by a parity suite rather than refactored to derive from the phase enum), "knowledge-loop D2/D9 (a soft promote door on the green path, after the tests and scribing-debt doors, computed before auto_archive_on_close retires the closing feature's cells; cells kl-3/kl-5, 2026-08-05)", "cc4b381a (advisor-gate-port Gate 2: port the consult anchors, the event-based staleness rule, the record/show verbs, and the high-risk execution precondition to the single remaining runtime — cells agp-1/agp-2, 2026-08-05)", "ae0a96ec (feature-swap-door Gate 2: the swap wall runs natively off the shared debt counter and gains the close door's capture-deferral escape; the waiver names the abandoned feature — cell fsd-1, 2026-08-05)", "2b35d98c (debt-door-archive Gate 2: every scribing-debt counter reads the archive as well as the active store, active copy wins on a duplicate id, and one parity test pins all four counters — cells dda-1/dda-2, 2026-08-06)", "20969403 (gate-door-refusal: the high-risk execution refusal states its own cause instead of rendering as an argument-shape complaint; the truthful refusal unblocks nobody and the real unblock deadlocks against the door it repairs — cell gdr-1, 2026-08-04)", "js-parity-cleanup D2 (docs/history/js-parity-cleanup/CONTEXT.md, 2026-08-04 — a stored approvals map merges over the defaults only when it is an object; every other shape takes the defaults whole, and the position-keyed spread inherited from a foreign language's accident is gone)", "counter-teeth D1/D6 (docs/history/counter-teeth/CONTEXT.md, 2026-08-04 — the close refuses uncaptured behavior-changing units unless a logged capture-deferral decision names the feature; the refusal names the units and both remedies, and the counter is proven before the flip)", "traceable-runs D2 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — gate_bypass decides whether a run halts, never whether the approval record exists; an auto-approval must carry its bypass level and reason, tying R25's ladder to a per-gate audit trail owned by workflow-records-and-projections.md)"]
+  decisions: ["chain-integrity D1-REVISED/D2/D3/D4 (the tail of the chain: learning capture is produced not asserted, the sync demands executed work, the close demands zero spec debt, the waiver is audited)", "AO3/AO13 (execution-gate adviser precondition — folded from the old standalone execution gate into Gate 2, validation-diet D2/D14 — event-based staleness, never a TTL — cells ao-4-1/ao-4-2 2026-07-17)", codex-hook-state-parity D4-D6 (pre-phase routing ownership and review isolation), "scribing-integrity D1-D3/D6 (the wall at every door — feature-swap guard, lane-aware close, durable scribing ledger + orphan sweep, pre-ledger amnesty; cells si-1/si-3, 2026-07-24)", multisession-native D1/D7 (starting a feature also creates its own workflow record via three separate lock transactions; the execution gate records approved_for_plan_rev — docs/history/multisession-native/CONTEXT.md), "scribing-stamp-seam 5b2f963d (sss-1 — the close-door threshold folds in the durable ledger as fallback/max, not the record stamp alone)", "validation-diet D2/D14/D15 (the merged approval flips `shape` and `execution` together via `bee state gate --merge`, inherits the high-risk advisor-consult precondition D14 previously guarding execution alone, and stamps `approved_for_plan_rev` on both fields together so a later bump can never leave the merged approval half-revoked — docs/history/validation-diet/CONTEXT.md, cell vd-3, 2026-07-28)", "compounding-gate D1 (the close also demands recorded learning-capture evidence, fresh against the knowledge-sync stamp, waivable only with a logged decision; cells cg-1/cg-2, 2026-07-27)", derived-check-hardening E5 (the six hand-copied terminal-phase memberships are pinned by a parity suite rather than refactored to derive from the phase enum), "knowledge-loop D2/D9 (a soft promote door on the green path, after the tests and scribing-debt doors, computed before auto_archive_on_close retires the closing feature's cells; cells kl-3/kl-5, 2026-08-05)", "cc4b381a (advisor-gate-port Gate 2: port the consult anchors, the event-based staleness rule, the record/show verbs, and the high-risk execution precondition to the single remaining runtime — cells agp-1/agp-2, 2026-08-05)", "ae0a96ec (feature-swap-door Gate 2: the swap wall runs natively off the shared debt counter and gains the close door's capture-deferral escape; the waiver names the abandoned feature — cell fsd-1, 2026-08-05)", "2b35d98c (debt-door-archive Gate 2: every scribing-debt counter reads the archive as well as the active store, active copy wins on a duplicate id, and one parity test pins all four counters — cells dda-1/dda-2, 2026-08-06)", "20969403 (gate-door-refusal: the high-risk execution refusal states its own cause instead of rendering as an argument-shape complaint; the truthful refusal unblocks nobody and the real unblock deadlocks against the door it repairs — cell gdr-1, 2026-08-04)", "js-parity-cleanup D2 (docs/history/js-parity-cleanup/CONTEXT.md, 2026-08-04 — a stored approvals map merges over the defaults only when it is an object; every other shape takes the defaults whole, and the position-keyed spread inherited from a foreign language's accident is gone)", "counter-teeth D1/D6 (docs/history/counter-teeth/CONTEXT.md, 2026-08-04 — the close refuses uncaptured behavior-changing units unless a logged capture-deferral decision names the feature; the refusal names the units and both remedies, and the counter is proven before the flip)", "traceable-runs D2 (docs/history/traceable-runs/CONTEXT.md, 2026-08-14 — gate_bypass decides whether a run halts, never whether the approval record exists; an auto-approval must carry its bypass level and reason, tying R25's ladder to a per-gate audit trail owned by workflow-records-and-projections.md)", "merge-closes-the-lane D2 (f220f461, 2026-08-18 — bee close is the only command entitled to write a terminal lane phase; a green, non-dry-run close sets the lane to idle, never compounding-complete, which stays gated on a fresh recorded compounding run; --dry-run, a door-blocked close, and an already-terminal lane all write nothing, and a failed write warns without reddening the close; commit 939771ec)"]
   sources: ["chain-integrity cells ci-1/ci-2/ci-3 (traces in .bee/cells/, CONTEXT docs/history/chain-integrity/CONTEXT.md, 2026-07-14 — origin: an owner-supplied post-mortem of a real session in which the chain's tail was bypassed seven times)", "advisor-and-orchestration Slice 4 cells ao-4-1/ao-4-2 (adviser consult record + event-based staleness + high-risk execution precondition, live-throw verified, 2026-07-17)", "codex-hook-state-parity cell codex-hook-state-parity-1 (pre-phase routing ownership and review isolation; report and capped trace, 2026-07-16)", "docs/specs/workflow-state.md#B1", "docs/specs/workflow-state.md#B2", "docs/specs/workflow-state.md#B9a", "docs/specs/workflow-state.md#B19", "docs/specs/workflow-state.md#R1", "docs/specs/workflow-state.md#R2", "docs/specs/workflow-state.md#R3", "docs/specs/workflow-state.md#R19a", "docs/specs/workflow-state.md#R20a", "docs/specs/workflow-state.md#R21a", "docs/specs/workflow-state.md#R22", "docs/specs/workflow-state.md#R23", "docs/specs/workflow-state.md#R25", "docs/specs/workflow-state.md#R29", "docs/specs/workflow-state.md#R30", "docs/specs/workflow-state.md#R31", "docs/specs/workflow-state.md#E1", "docs/specs/workflow-state.md#E2", "docs/specs/workflow-state.md#P2", "docs/specs/workflow-state.md#P3", "docs/specs/workflow-state.md#P4", "docs/specs/workflow-state.md#P5", "multisession-native cell multisession-native-6 (startFeature creates a workflow record; trace .bee/cells/multisession-native-6.json, commit f4fe163, 2026-07-25)", "multisession-native cell multisession-native-9 (gates scoped to plan revision; trace .bee/cells/multisession-native-9.json, commit 2dd834f, 2026-07-25)", "scribing-stamp-seam cell sss-1 (trace .bee/cells/sss-1.json, capped 2026-07-26)", "compounding-gate cells cg-1/cg-2 (state compounding-run verb + close gate + mutation-proven suite; traces .bee/cells/cg-1.json/cg-2.json, 2026-07-27)", "derived-check-hardening cell dch-6 (terminal-phase parity suite over 12 discovered declarations vs KNOWN_PHASES; trace .bee/cells/dch-6.json, report docs/history/derived-check-hardening/reports/dch-6.md, 2026-07-29)", "knowledge-loop cell kl-3 (soft promote door; trace .bee/cells/kl-3.json, commit 384587a1, 2026-08-05)", "knowledge-loop cell kl-5 (promote computed before cell retirement; trace .bee/cells/kl-5.json, commit c8d25dff, 2026-08-05)", CONTEXT.md `docs/history/knowledge-loop/CONTEXT.md`, "advisor-gate-port cells agp-1/agp-2 (anchors + staleness + record/show verbs, then the high-risk execution precondition; traces .bee/cells/agp-1.json/agp-2.json, commits fb94ba8f and 6fefd6ee, capped 2026-08-05)", "feature-swap-door cell fsd-1 (native swap door + shared escapes + after-write waiver naming the abandoned feature, six run_set tests; commit 41d8b0e6, capped 2026-08-05)", "debt-door-archive cells dda-1/dda-2 (archive-aware debt enumeration behind all four counters plus the four-way parity test; commits fd5f8253 and e44e56e9, capped 2026-08-06)", "counter-teeth cell ct-2 (the close door and its refusal share one computed verdict; trace .bee/cells/ct-2.json, commit bf7f022f, 2026-08-04 — drivers 47 passed, 0 failed)", "gate-door-refusal cell gdr-1 (both refusal arms return a stated refusal naming the advisor cause instead of a bare unsupported-argument-shape error; trace .bee/cells/gdr-1.json, 2026-08-04 — state_group tests green)", "js-parity-cleanup cell jp-4 (one native approvals merge; the exotic-shape error branch and compaction's masking fallback deleted; trace .bee/cells/jp-4.json, 2026-08-04 — 999 passed, 0 failed)"]
   authoritative_for: "workflow-state: feature start, the phase vocabulary, phase-owned routing mutation, and the closing tail"
 ---
@@ -27,7 +27,8 @@ owned by the phase it started from.
 
 **B1 — Guarded feature start.** Starting a feature fails closed — with zero
 changes to the record — unless ALL of: the prior phase is terminal; no handoff
-record exists; no worker is registered; no file reservation is active; and the
+record exists; no worker is registered; no file hold stands in this start's own
+way (scoped — see R86, never "any hold anywhere"); and the
 prior feature has no nonterminal cell. An intentionally abandoned cell must
 first be dropped through the explicit drop verb, which records the reason —
 the start operation never clears work as a side effect. When the preconditions
@@ -202,6 +203,17 @@ phase is always legal (a failed feasibility check or a negative proof must be
 able to return to planning), and returning to idle — the way an abandoned
 exploration is dropped — is unaffected.
 
+**A green, non-dry-run close also closes the feature's own lane
+(merge-closes-the-lane D2, f220f461).** `bee close` is the only command
+entitled to write a terminal lane phase at all: on a green, non-dry-run
+close, the lane is set to `idle` — never `compounding-complete`, which stays
+gated on a fresh recorded compounding run (R21a) rather than manufactured by
+close finishing. Four guards keep the write narrow: `--dry-run` writes
+nothing; a close blocked at any hard door above writes nothing; a lane
+already sitting in a terminal phase (`idle` or `compounding-complete`) is
+left untouched rather than rewritten; and a failed lane write warns on its
+own line without turning the close red.
+
 **The wall stands at every door a feature can leave through — the front close
 door, an abandoning swap, and a per-feature lane close alike (scribing-integrity
 D1-D3; feature-swap-door, cell fsd-1).** Swapping the routing record to a new
@@ -287,6 +299,45 @@ that set, never a repo scan; fenced code is exempt. A flagged line clears
 with a same-line trigger citation (backtick trigger id or
 `[[trigger:<id>]]`) resolving in the trigger registry. Escape:
 `doc-deferral`.
+
+**That door blocks only lines a BASELINE does not already carry
+(doc-deferral-baseline D1/D6, cell ddb-1).** It had fired five times across
+five features and every flagged line on every occasion was prose DESCRIBING
+deferral machinery rather than deferring work — zero true positives — because
+this repo's own domain is deferral queues and triggers, so `defer`, `later`
+and `for now` are its nouns. The word list, the scan set, the fence exemption
+and both escapes are unchanged; what changed is that a line already recorded
+in the baseline no longer counts. Identity is the line's NORMALIZED CONTENT
+per file, never its line number, so inserting text above a baselined line does
+not resurrect it, and one normalization function serves both recording and
+matching.
+
+**The baseline is seeded once per repo, REPO-WIDE, by the door itself
+(doc-deferral-baseline D6, superseding D2).** The first run finding no
+baseline file walks every markdown file under `docs/` — not the door's own
+per-feature scan set — records every deferral-shaped line in the whole tree,
+writes the file, and passes; enforcement afterwards stays per-feature over the
+unchanged scan set. Seeding from the scan set instead would freeze only the
+docs one feature happened to touch, so the next feature touching a different
+long-lived doc would enter enforcement against an empty entry and inherit
+every pre-existing line in it — the false positives returning on a delay. The
+seed ALWAYS writes, even when it flags nothing, because an absent file IS the
+seed state: skipping the write leaves the next close reading a missing
+baseline and ADOPTING the first genuine deferral line anyone adds. The file is
+git-tracked so a clone or fresh worktree inherits it instead of re-seeding,
+and `--dry-run` never writes — it reports the door non-blocking and names the
+count it would baseline, spelling out a bounded sample rather than every
+message, since the repo-wide set runs to four figures.
+
+**A line the baseline does not cover has exactly two ways through, and
+hand-editing the baseline is not one (doc-deferral-baseline D4, later widened
+by D8).** Cite a registered trigger inline, or log a `doc-deferral`-tagged
+decision naming the feature. D8 then admitted a third, built in the
+doc-deferral-scope lane: a reasoned marker pair naming why a passage documents
+deferral machinery, where an empty or missing reason exempts nothing. The
+baseline forgives the PAST automatically and repo-wide; the marker is how NEW
+prose states intent at the site, which a baseline cannot express — asked why a
+line is forgiven, a baseline can only answer that it was already there.
 
 **Once every hard door above (tests, scribing-debt, judge-debt, pattern-check,
 knowledge-freshness) has cleared, close also runs `bee knowledge promote` for
@@ -497,11 +548,35 @@ a malformed record has earned none.
   enqueues one capture stub pointing at that proposal, so the flush loop —
   not a separate reminder channel — is what carries the review-then-merge
   obligation forward (knowledge-usable U4, cell ku-4, 2026-08-10).
+- R85 — A green, non-dry-run `bee close` writes its own lane's phase to
+  `idle` — never `compounding-complete`, which stays gated on a fresh
+  recorded compounding run. `--dry-run` writes nothing; a door-blocked close
+  writes nothing; an already-terminal lane (`idle` or `compounding-complete`)
+  is left untouched; a failed write warns without failing the close
+  (merge-closes-the-lane D2, f220f461).
+- R86 — The feature-start hold precondition is SCOPED, and its remedy is
+  always one the caller may take alone. A start refuses on an active file
+  hold in exactly two situations: the hold belongs to the starting session
+  itself — its own leftover state, whose remedy names that caller's own
+  holder — or the hold belongs to a different session AND covers a path this
+  start explicitly declares as its own working scope, whose remedy is to wait
+  for release or expiry, or to start over non-overlapping paths. A different
+  session's hold over a path this start does not declare refuses nothing, no
+  matter which working copy it was taken in. Both the lane road and the
+  default road now state the rule the same way, and the default road accepts
+  a declared working scope for exactly this reason. No refusal on this path
+  may name a remedy that would strip another session's holds — a refusal
+  whose only cure touches someone else's resources is a mis-scoped refusal
+  (start-feature-reservation-scope D1, e62d1311).
 
 ## Edge Cases Settled
 
 - A capped prior-feature cell never blocks a new start; an expired-by-TTL
-  reservation never blocks a new start (only active ones do).
+  reservation never blocks a new start (only active ones do), and an active
+  one blocks only within R86's scope.
+- A start that declares no working scope of its own can still be refused by
+  its own session's leftover holds, but never by another session's — with
+  nothing declared there is no overlap to find.
 - Refused starts are proven side-effect-free: the record is byte-identical
   after a refusal.
 
@@ -562,6 +637,12 @@ a malformed record has earned none.
   `workflowGatesToApprovedGates`, and the `plan-rev bump` verb. Evidence:
   traces `.bee/cells/multisession-native-{6,9}.json`, commits f4fe163,
   2dd834f.
+- Lane-closing write (R85, merge-closes-the-lane D2): the tail of the green,
+  non-dry-run path in `close_handler`
+  (`packages/bee-rs/crates/bee/src/verbs/drivers/close.rs`) reuses
+  `run_set_body` to write the lane phase to `idle`. Evidence: commit
+  `939771ec`; full suite `cargo test --release --manifest-path
+  packages/bee-rs/Cargo.toml` — 2033 passed, 0 failed.
 - Merged approval (validation-diet D2/D14/D15): `bee state gate --merge
   --approved true` flips `approved_gates.shape` and `approved_gates.execution`
   together in one call (mutually exclusive with `--name`, refused together);

@@ -1,0 +1,48 @@
+{
+  "id": "ho-7",
+  "feature": "herding-orchestration",
+  "title": "Record the two proxy limits the ho-6 judge left open",
+  "lane": "tiny",
+  "behavior_change": false,
+  "action": "Two documentation lines the independent judge on ho-6 named as open, neither of which changes behaviour. FIRST, in the invariant 5 test's documentation in packages/bee-rs/crates/fleet/tests/choreography.rs: record the limit of its own premise, the way invariant 7's test already does. The judge reversed phase 4's dispatch iteration order and the whole suite stayed green, which means the doc's claim that w0 is dispatched BEFORE w1's send fails rests on phase 4 iterating forward — and no test pins that order. The named invariant still holds under reversal, so this is a proxy limit, not a defect; say so plainly in one or two sentences so a reader knows what the test does not cover. SECOND, in the invariant 8 test's documentation in the same file: cite decision D15 (fb8a8628) where the invariant is stated. D15 asks to be cited wherever invariant 8 appears, and the source files already comply — only the test doc does not. Change no code and no assertion.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "packages/bee-rs/crates/fleet/tests/choreography.rs",
+    "packages/bee-rs/crates/fleet/src/choreography.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/fleet/tests/choreography.rs"
+  ],
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "orchestrator-inline",
+    "outcome": "Documented the two proxy limits the ho-6 judge left open: invariant 5's ordering premise is not itself pinned, and invariant 8 holds only for identical name strings per D15",
+    "files_changed": [
+      "packages/bee-rs/crates/fleet/tests/choreography.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T10:11:33.433Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T10:10:16.280Z",
+    "report": {
+      "outcome": "Documented invariant 5s unpinned ordering premise and invariant 8s D15 scope in the choreography test docs",
+      "commit": "d5362328",
+      "files": [
+        "packages/bee-rs/crates/fleet/tests/choreography.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p fleet — green — 32 passed, 4 suites; scoped to the only crate this docs-only change touches",
+      "deviations": [
+        "Ran inline in the orchestrator session rather than through a dispatched worker — permitted for a tiny cell, and the change is two doc blocks with no code or assertion touched."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

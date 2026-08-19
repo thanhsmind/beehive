@@ -1,0 +1,445 @@
+{
+  "id": "awm-2",
+  "feature": "auto-wait-mark",
+  "title": "Set a turn-end waiting mark from the Stop hook on every turn end",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/html.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/auto-wait-mark/CONTEXT.md",
+    "docs/history/auto-wait-mark/plan.md",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs",
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs"
+  ],
+  "action": "REWORK of a NEEDS_REVISION verdict on commit 8461cccc. Sixteen of eighteen checks passed and the full suite is green at 2050 passed. ONE defect, and it is a real one — fix exactly that, change nothing else.\n\nTHE DEFECT (judge checks K2 and P3, both FAIL). The Stop hook now reads the transcript file TWICE on every turn end:\n  read #1 — mod.rs:151 calls perf_refresh(&root, session_id); that reaches html.rs:262-265, which calls resolve_transcript_for then rollup_transcript, and perf.rs:378 does read_jsonl(file).\n  read #2 — mod.rs:357, inside turn_end_subject, calls read_jsonl(&path) on the same file.\nreads.rs:178 read_jsonl performs an unconditional std::fs::read (reads.rs:179) with no cache between the two calls, so a large transcript is fully read and parsed twice on every single Stop.\n\nWHY IT MATTERS. CONTEXT.md's Agent's Discretion section locks this: the resolution must be 'one resolution path, not two, and it must not add a second transcript read per turn'. The cell's own key_link K2 and prohibition P3 both restate it. The resolver reuse half is already correct — mod.rs:356 does call perf.rs:71 resolve_transcript_for. Only the second READ is wrong.\n\nTHE FIX. Thread the already-parsed events out of the perf path and feed turn_end_subject from them, instead of re-reading. Concretely: have perf_refresh (or rollup_transcript, whichever seam is cleaner in the code as it actually stands) hand back the parsed event vector — or the resolved path plus the parsed events — and pass that into the turn-end subject extraction. Read the three files yourself and pick the seam that adds the least surface; do NOT introduce a global cache, a lazy static, or a second parsing helper. After the change, exactly one std::fs::read of the transcript must happen per Stop.\n\nPROVE IT, do not assert it. Add a test that fails on the old code and passes on the new one — count the reads rather than eyeballing the call graph. Options, pick whichever fits the existing test style: make the transcript a path whose read count is observable (a counting wrapper, or an fs fixture you can inspect), or assert on an instrumented counter you add behind cfg(test). A test that merely checks the subject is still correct does NOT prove the fix and will not be accepted — the judge's failure signature is specifically 'two full std::fs::read of the same file', so that is what your test must pin.\n\nKEEP EVERYTHING ELSE. All seven truths, both other key_links, and all six prohibitions already PASS — do not disturb them. In particular keep: the D5 live-mark guard at mod.rs:296 and :317; the two-tier None/Some split in turn_end_subject that the judge examined and accepted (DEV-C); the Done/Crash arm placement in run_inner that the judge verified reaches every genuine Stop and no SessionEnd or PreCompact (DEV-B); and the WAITING_ON_KIND_TURN_END constant wiring (T7, K3). The perf rollup's own behaviour must not change — performance.jsonl and performance.html must still be produced exactly as before, and their existing tests must stay green.\n\nRun the FULL suite and report its real number: PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml. It gives 2050 passed, 11 ignored across 18 suites at HEAD. Note for your own sanity: a -p bee or --bins run reports 1913 and is NOT the full suite — the previous worker mistook one for the other.",
+  "must_haves": {
+    "truths": [
+      "A Stop event with no live mark writes a waiting_on mark whose kind is turn-end and whose subject is the transcript's last non-empty assistant text line",
+      "A live gate or question mark survives a Stop untouched (per D5)",
+      "SessionEnd, PreCompact, and any non-Stop event write no mark",
+      "A missing, unreadable, or malformed transcript leaves the Stop hook's normal output intact and writes no mark",
+      "A failing store write is logged and does not fail the Stop hook",
+      "A turn whose final text block is empty or whitespace-only still produces a non-empty subject",
+      "The turn-end spelling exists exactly once in the tree, as a named constant in record.rs, and orient.rs plus the new setter both read it"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+        "substantive": "a Stop-only branch that resolves the session, reads the transcript's last text line, and calls the existing waiting-on setter behind a live-mark check"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "substantive": "cases for the happy path, the D5 no-overwrite rule, the non-Stop events, the empty-final-text fallback, and a failure injection proving the hook survives a failing write"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+        "substantive": "a pub(crate) named constant for the turn-end kind, with WAITING_ON_KIND_VALUES built from it"
+      }
+    ],
+    "key_links": [
+      "the setter calls the store functions in verbs/state_group/waiting_on.rs, reusing their D3 target resolution rather than resolving the target again",
+      "the transcript path comes from session_close/perf.rs's existing resolver, so the hook still reads the transcript exactly once per turn",
+      "orient.rs's blocker guard and the new setter both reference record.rs's named turn-end constant, never a literal"
+    ],
+    "prohibitions": [
+      "No second waiting_on writer and no second target resolver (per R128)",
+      "No provenance or source field on the mark (per D2)",
+      "No second transcript read per Stop",
+      "No text heuristic deciding whether the turn was a question (per D1)",
+      "The hook never overwrites a live mark (per D5)",
+      "No change to how a gate or question mark behaves on any surface"
+    ]
+  },
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "trace": {
+    "worker": "awm-2-r",
+    "outcome": "The Stop hook writes a turn-end waiting mark on every genuine turn end, reusing the store's existing setter and D3 target resolution, never overwriting a declared gate or question mark, with the subject taken from the transcript's last non-empty assistant line. The transcript is read exactly once per Stop — one resolver, one read, proven by two read-counting tests including the late-perf-failure path that two earlier attempts leaked.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/html.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/reads.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T13:35:01.083Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "57dd6bbf-d280-4c42-9da6-61ed72419a29",
+    "claimed_at": "2026-08-18T12:49:03.736Z",
+    "report": {
+      "outcome": "Stop hook sets a turn-end mark every turn end, reading the transcript exactly once",
+      "commit": "3a57dbd38f692398fb5f3bc954c3b559bc6db5a8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/mod.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/html.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/reads.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/workflow_store/record.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/orient.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — 2052 passed, 0 failed, 11 ignored, 18 suites — full declared suite, re-run independently by the judge, which also reproduced the new read-count test as red on the pre-fix code",
+      "deviations": [
+        "Took two reworks: rework 1 fixed the main double read but leaked a second one whenever perf_refresh failed after its own read, and shipped a comment falsely claiming that path had no caller. Rework 2 restructured perf_refresh into PerfRefresh{events,result} so a late failure cannot discard the events, and deleted turn_end_subject fallback branch entirely rather than re-documenting an unreachable path.",
+        "Introduced WAITING_ON_KIND_TURN_END in record.rs and pointed orient.rs at it, repairing awm-1s recorded key_link miss of two drifting literals.",
+        "Marking call sits on run_inner Done and Crash arms rather than inside advisory(), so the run_stop test helper used by 18 unrelated tests gains no hidden side effect; the judge verified this reaches every genuine Stop and no SessionEnd or PreCompact.",
+        "perf.rs rollup_transcript is now test-only and carries allow(dead_code); the judge noted the stated reason for not cleaning it up was inaccurate but the outcome cosmetic.",
+        "Model independence: reworks 1 and 2 were built by different tiers, sonnet then opus, and judged by opus. The final pass is opus-built and opus-judged, so that last verdict is not model-independent; the two failures it had to survive were both found by earlier opus judges over sonnet work."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "mod.rs:177 gates the setter on ctx.event==\"Stop\"; test stop_with_no_live_mark_sets_a_turn_end_mark_from_the_transcripts_last_line (session_close/tests.rs:589) writes a transcript whose FINAL assistant entry is a bare tool_use and asserts state[waiting_on][kind]==turn-end, subject==\"Say go and I will do it.\", run_state==awaiting-approval (tests.rs:629-633). Green in the 2050-test run."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "mod.rs:296-298 and mod.rs:317-319 return early on waiting_on_is_live(current.get(waiting_on)) before any write. Test stop_never_overwrites_a_live_declared_wait (tests.rs:752) sets a real question mark via set_default_state_waiting_on, runs run_inner on a Stop with a DIFFERENT transcript line, asserts kind==question with subject and session unchanged (tests.rs:798-800)."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "Control flow read directly: mod.rs:126 SessionEnd closes the session record and returns; mod.rs:132 PreCompact returns Err(()) to delegate. Both return before advisory(); every other event reaches the match arms but is filtered by ctx.event == Stop at mod.rs:177 and :188. Test session_end_pre_compact_and_a_non_stop_event_write_no_mark (tests.rs:720) loops SessionEnd, PreCompact, SubagentStop and asserts waiting_on absent or null."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "mod.rs:355-360 turn_end_subject returns None when resolve_transcript_for yields nothing or read_jsonl yields an empty vec; mod.rs:278-280 then returns Ok(()) with no write. Test a_missing_or_malformed_transcript_writes_no_mark_but_leaves_the_hook_native (tests.rs:676) covers both cases and asserts run_inner returns Ok(()) plus no waiting_on."
+          },
+          {
+            "id": "T5",
+            "status": "PASS",
+            "evidence": "mod.rs:270-272 wraps the setter in if let Err(msg) = try_set_turn_end_mark(..) { log_crash(..) } with no propagation. Test a_failing_store_write_is_logged_and_never_fails_the_stop_hook (tests.rs:857, cfg(unix)) chmods .bee to 0o555 and asserts outcome==Ok(()) and that .bee/logs/hooks.jsonl carries HOOK_NAME and waiting_on (tests.rs:911-915)."
+          },
+          {
+            "id": "T6",
+            "status": "PASS",
+            "evidence": "mod.rs:362-367: trimmed-empty text falls to TURN_END_FALLBACK_SUBJECT (\"(turn ended)\", mod.rs:93). Test a_final_assistant_text_block_that_is_blank_still_yields_a_non_empty_subject (tests.rs:635) feeds whitespace-only text and asserts kind==turn-end with a non-empty subject (tests.rs:672-675)."
+          },
+          {
+            "id": "T7",
+            "status": "PASS",
+            "evidence": "rg -n WAITING_ON_KIND_TURN_END over src/ hits record.rs:359 (the definition), record.rs:370 (WAITING_ON_KIND_VALUES), orient.rs:12 (import) and orient.rs:408 (the D4 guard), mod.rs:302 and mod.rs:322 (both setter branches). rg -n for the bare literal finds it only at record.rs:359, in two test assertions, one test fixture, and the generated registry payload. Zero production literals outside record.rs:359."
+          },
+          {
+            "id": "K1",
+            "status": "PASS",
+            "evidence": "mod.rs:284-290 calls crate::verbs::state_group::resolve_waiting_on_target(root, \"hooks stop\", None, false, Some(session)) — the same fn run_waiting_on_set calls at waiting_on.rs:256-262. The write sequence mod.rs:299-310 (set_workflow_waiting_on, rebuild_lane_projection, rebuild_state_projection) and mod.rs:320-326 (set_default_state_waiting_on) matches waiting_on.rs:265-267 and :277 primitive for primitive. The clear-verb widening branch (waiting_on.rs:103) is false for verb \"hooks stop\", so the narrower setter resolution is taken."
+          },
+          {
+            "id": "K2",
+            "status": "FAIL",
+            "evidence": "Resolver reuse holds (mod.rs:356 calls perf.rs:71 resolve_transcript_for), but the second half of K2 is false: the file is read TWICE per Stop. mod.rs:151 perf_refresh(&root, session_id) reaches html.rs:262-265 resolve_transcript_for then rollup_transcript, which does perf.rs:378 read_jsonl(file) — read #1, an unconditional std::fs::read at reads.rs:179. Then mod.rs:357 read_jsonl(&path) reads the same file again — read #2. CONTEXT.md:45-47 makes this a locked constraint: one resolution path, not two, and it must not add a second transcript read per turn. No deviation was recorded for it."
+          },
+          {
+            "id": "K3",
+            "status": "PASS",
+            "evidence": "orient.rs:12 imports WAITING_ON_KIND_TURN_END from workflow_store and orient.rs:408 compares against it; the setter at mod.rs:302 and mod.rs:322 uses the same path-qualified constant. No literal on either side."
+          },
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "The hook defines no writer of its own — it calls the store's set_workflow_waiting_on and set_default_state_waiting_on (mod.rs:299, :320), the same two run_waiting_on_set calls (waiting_on.rs:265, :277), and the shared resolve_waiting_on_target (mod.rs:284). No third resolution or build path exists."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "The setter passes exactly (root, id, kind, subject, session) at mod.rs:299-305 and mod.rs:320-325 — the same arity state waiting-on set passes. The commit's record.rs hunk touches only the constant and WAITING_ON_KIND_VALUES; build_waiting_on's field set is unchanged, so no provenance key can enter the record."
+          },
+          {
+            "id": "P3",
+            "status": "FAIL",
+            "evidence": "Same root cause as K2: a second full transcript read per Stop. perf.rs:378 read_jsonl(file) inside rollup_transcript (reached from mod.rs:151) and mod.rs:357 read_jsonl(&path) inside turn_end_subject both call reads.rs:178 read_jsonl, which does an unconditional std::fs::read at reads.rs:179 with no cache between them. On a large transcript this doubles hot-path I/O on every turn end."
+          },
+          {
+            "id": "P4",
+            "status": "PASS",
+            "evidence": "mod.rs:177 branches on ctx.event alone; mod.rs:355-368 uses text only to EXTRACT the subject (trim, fallback, truncate). No predicate on a question mark, no phrase list, no language check — nothing in the added block conditions the write on message content."
+          },
+          {
+            "id": "P5",
+            "status": "PASS",
+            "evidence": "Both write branches are guarded by the store's own waiting_on_is_live before the setter call (mod.rs:296, :317), and the re-entrancy test (tests.rs:809) proves the guard holds across two consecutive run_inner Stops: the subject stays the first stop's line (tests.rs:853-856)."
+          },
+          {
+            "id": "P6",
+            "status": "PASS",
+            "evidence": "The commit touches 4 files; the only non-hook production edit is orient.rs:408, a literal-to-constant substitution of the identical string, so gate and question behavior is byte-identical. record.rs's change is the added constant plus WAITING_ON_KIND_VALUES rebuilt from it. Full suite 2050 passed, 11 ignored, exit 0 — no pre-existing gate/question surface test regressed."
+          },
+          {
+            "id": "DEV-A",
+            "status": "PASS",
+            "evidence": "Honest and correct. Before, awm-1 left two hand-written literals; after, record.rs:359 is the sole definition, record.rs:370 builds the array from it, orient.rs:12 and :408 import and use it, mod.rs:302 and :322 read it. This is exactly T7, and it repairs awm-1's recorded K1 failure."
+          },
+          {
+            "id": "DEV-B",
+            "status": "PASS",
+            "evidence": "Verified by reading run_inner, not on trust. SessionEnd returns at mod.rs:126-129 and PreCompact at mod.rs:132-134, both BEFORE advisory(), so neither reaches the Done/Crash arms; the arms are additionally gated on ctx.event == Stop (mod.rs:177, :188), excluding SubagentStop. Disabled (mod.rs:161) and Block (mod.rs:165) return early, correct since Block forces a continuation. Two honest caveats, neither a rule break: the Crash arm (mod.rs:188) marks in a case an in-advisory branch would not reach, which the in-code comment at mod.rs:183-187 discloses and which favors D1; and a Stop that delegates writes no mark, a pre-existing native/Node abstention identical under either placement. The stated motive checks out: run_stop has 18 call sites in tests.rs and calls advisory() directly, never run_inner."
+          },
+          {
+            "id": "DEV-C",
+            "status": "PASS",
+            "evidence": "The two-tier split is what the must-haves imply, not a convenient reading. T4 names a missing, unreadable, or malformed transcript and requires no mark; T6 names an empty or whitespace-only final text block and requires a non-empty subject. mod.rs:356-360 returns None only when resolve fails or read_jsonl yields zero parseable events; mod.rs:361-367 returns Some once the transcript is usable. Both tiers have their own test (tests.rs:676 and tests.rs:635). One case sits between and is unnamed by either must_have: a transcript that parses but holds no assistant entry — final_assistant_text_line returns None (mod.rs:395), unwrap_or_default makes it empty, and the fallback subject is written. That errs toward marking, which is D1's direction. Acceptable."
+          },
+          {
+            "id": "DEV-D",
+            "status": "PASS",
+            "evidence": "The probe is real, not asserted. Test a_second_stop_before_any_clear_never_doubles_or_changes_the_mark (tests.rs:809) runs run_inner twice on the same Stop payload, rewriting the transcript between runs so a second write would be visible, and asserts the subject stays the first stop's line (tests.rs:853-856). The mechanism is the D5 guard already at mod.rs:296 and :317, not a new one, so adding no stop_hook_active guard is the right call and the plan's probe-first instruction is satisfied on its own terms."
+          }
+        ],
+        "failure_signature": "transcript-read-doubled: turn_end_subject (mod.rs:357 read_jsonl) re-reads the transcript perf_refresh already read via rollup_transcript (perf.rs:378), so every Stop performs two full std::fs::read of the same file — violating K2, P3, and CONTEXT.md:45-47's locked constraint. Fix: have perf_refresh or rollup hand back the parsed events and feed turn_end_subject from those instead of re-reading.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T12:47:29.345Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "K2",
+            "status": "PASS",
+            "evidence": "One resolver only: html.rs:268 resolve_transcript_for is the sole resolution in perf_refresh; mod.rs:386 is the same perf.rs resolver, reached only when no cache was handed in. On a healthy Stop the read count is exactly 1 — `cargo test --release --bin bee session_close::tests` shows stop_reads_the_transcript_exactly_once_per_turn ok, 28 passed. Rollup reuse is real: html.rs:270 read_jsonl, :271 rollup_from_events(&transcript,&events), :275 Some(events), then mod.rs:155 -> :186 -> :295 -> :383 Some(events) => events."
+          },
+          {
+            "id": "P3",
+            "status": "FAIL",
+            "evidence": "A LIVE call site still reaches the fallback and reads a second time. perf_refresh's `?` exits at html.rs:272, :273, :281, :284 and :286 all fire AFTER the read at html.rs:270; run_inner turns that Err into None at mod.rs:159, and that None flows to mod.rs:186/:197 into turn_end_subject's fallback (mod.rs:386-387), which re-resolves and re-reads. Reproduced by the judge: same e6141ada sources in a scratch copy, only the test patched to point BEEHIVE_PERF_DIR at a regular file so create_dir_all in upsert_session_records fails -> the read-counting test printed left: 2. Worse than the extra I/O: mod.rs:365-368 documents this path as unreachable, saying None is only passed by a caller outside the Stop dispatch and that there is none today. That is false — mod.rs:159 is exactly that caller, inside the Stop dispatch. The defect is the silent, mis-documented deviation from CONTEXT.md:47; the extra read on an already-crash-logged turn would be defensible once named truthfully."
+          },
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "stop_with_no_live_mark_sets_a_turn_end_mark_from_the_transcripts_last_line ok; asserts subject \"Say go and I will do it.\" past a trailing bare tool_use entry (tests.rs:604-632)."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "stop_never_overwrites_a_live_declared_wait ok and a_second_stop_before_any_clear_never_doubles_or_changes_the_mark ok; guard at mod.rs:313 and mod.rs:334 via the store's own waiting_on_is_live."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "session_end_pre_compact_and_a_non_stop_event_write_no_mark ok; the setter is gated on ctx.event == Stop at mod.rs:185 and :196, after SessionEnd returns at mod.rs:128 and PreCompact delegates at mod.rs:133."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "a_missing_or_malformed_transcript_writes_no_mark_but_leaves_the_hook_native ok. The rework preserves it: an unresolvable transcript gives perf_events None and the fallback re-resolves to None (mod.rs:386, zero reads); a resolvable but unparseable one gives Some(vec![]) and returns None at mod.rs:390-392."
+          },
+          {
+            "id": "T5",
+            "status": "PASS",
+            "evidence": "a_failing_store_write_is_logged_and_never_fails_the_stop_hook ok; the best-effort wrapper logs via log_crash at mod.rs:281 and returns unit."
+          },
+          {
+            "id": "T6",
+            "status": "PASS",
+            "evidence": "a_final_assistant_text_block_that_is_blank_still_yields_a_non_empty_subject ok; the fallback constant at mod.rs:95 is applied at mod.rs:395-397."
+          },
+          {
+            "id": "T7",
+            "status": "PASS",
+            "evidence": "rg over crates/bee/src for the constant and the literal: the only non-test literal is record.rs:359 pub(crate) const WAITING_ON_KIND_TURN_END, with record.rs:370 composing WAITING_ON_KIND_VALUES from it. Readers are orient.rs:12/:408 and mod.rs:319/:339."
+          },
+          {
+            "id": "K1",
+            "status": "PASS",
+            "evidence": "Single resolver resolve_waiting_on_target defined at verbs/state_group/waiting_on.rs:80, called by the agent verbs at waiting_on.rs:256 and :308 and by the hook at mod.rs:301 — no second definition anywhere in crates/bee/src."
+          },
+          {
+            "id": "K3",
+            "status": "PASS",
+            "evidence": "orient.rs:12 imports the constant and orient.rs:408 compares against it, no literal; the setter uses the same constant at mod.rs:319 and :339."
+          },
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "The hook writes only through the existing store doors: set_workflow_waiting_on (mod.rs:316) and set_default_state_waiting_on (mod.rs:337), then the store's own rebuild_lane_projection and rebuild_state_projection (mod.rs:324, :326). No new writer, no second resolver. The rework touched only html.rs, mod.rs, perf.rs, reads.rs and tests.rs."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "record.rs:399-404 — build_waiting_on emits exactly kind, subject, asked_at, session; no provenance or source key, and the hook passes only kind, subject and session (mod.rs:316-322)."
+          },
+          {
+            "id": "P4",
+            "status": "PASS",
+            "evidence": "mod.rs:378-432 — turn_end_subject, final_assistant_text_line and last_non_empty_line contain no punctuation, phrase or language test; the subject is the last non-empty line, trimmed and truncated at mod.rs:398."
+          },
+          {
+            "id": "P5",
+            "status": "PASS",
+            "evidence": "Both branches early-return on a live mark: mod.rs:313 for the workflow record and mod.rs:334 for the default state, both through workflow_store::waiting_on_is_live, never a second predicate."
+          },
+          {
+            "id": "P6",
+            "status": "PASS",
+            "evidence": "The rework diff touches no gate or question surface — five files, all under hooks/session_close. Full suite green at 2051 passed, 11 ignored, 18 suites, including the status_full/orient and workflow_store waiting_on suites."
+          },
+          {
+            "id": "DEV-A",
+            "status": "PASS",
+            "evidence": "rollup_transcript's only remaining caller is tests.rs:469, so it is dead in a release build, and the deviation is named in place at perf.rs:377-381. `cargo check --release` prints exactly one warning, the pre-existing posix_shell at verbs/drivers/close.rs:109, so the allow costs nothing and hides nothing new. A tighter option exists but is not required: delete the wrapper and have the roundtrip test call read_jsonl plus rollup_from_events, so the test exercises the path production actually takes."
+          }
+        ],
+        "failure_signature": "Stop still reads the transcript twice when perf_refresh errors after its own read (html.rs:272-286 -> mod.rs:159 None -> mod.rs:386 fallback re-read), and mod.rs:365-368 documents that caller as non-existent",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T13:16:27.718Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "P3",
+            "status": "PASS",
+            "evidence": "Enumerated by BOTH methods. (a) Control flow, mod.rs:112-208 — pre-read exits at :114 (no root), :117 (bee absent), :126 SessionEnd, :132 PreCompact, :144 preflight Err all return with 0 reads. The single read is html.rs:288-289 inside perf_refresh, called unconditionally at mod.rs:158. html.rs:288 resolves and reads FIRST and binds `resolved`; every fallible step now lives in perf_rollup (html.rs:300-317) taking `resolved.as_ref()`, so the ? exits at :303, :304, :309, :312, :314 return Err from perf_rollup only, and html.rs:293 constructs PerfRefresh { events, result } unconditionally after it — no post-read exit can discard the events. mod.rs:159-162 logs perf.result's Err and keeps perf.events on every path. Post-read branches: Disabled (:171) and Block (:175) return with no mark and no read; Done (:186) and Crash (:197) both pass perf_events to the setter; Delegate (:190) returns Err with no further read. turn_end_subject (mod.rs:380-392) is now fn turn_end_subject(transcript_events: Option<Vec<Value>>) whose body is `let events = transcript_events?;` plus pure in-memory scanning — no resolve, no read, so no third variant of the discard bug can exist. (b) Grep: rg for read_jsonl and resolve_transcript_for over packages/bee-rs/crates/bee/src gives exactly ONE production transcript read (html.rs:289) and ONE resolver call (html.rs:288); the other session_close read_jsonl sites read non-transcript files — nudges.rs:24 capture queue, reads.rs:485 decisions.jsonl, perf.rs:334 subagents, perf.rs:469 and :491 the global perf log. perf.rs:383 rollup_transcript is test-only. Runtime proof: both counting tests green, including the late-failure one pinned at 1."
+          },
+          {
+            "id": "K2",
+            "status": "PASS",
+            "evidence": "Exactly one resolution path remains: resolve_transcript_for is defined at perf.rs:71 and called from exactly one production site, html.rs:288 — rg over the crate returns no other call. perf_refresh has exactly one production caller, mod.rs:158. The former second resolver inside turn_end_subject is gone: mod.rs:380 no longer takes root or session_id and its body cannot reach a resolver."
+          },
+          {
+            "id": "T1",
+            "status": "PASS",
+            "evidence": "tests.rs:589 stop_with_no_live_mark_sets_a_turn_end_mark_from_the_transcripts_last_line asserts kind=turn-end, subject \"Say go and I will do it.\", session s-1, run_state awaiting-approval, with a trailing bare tool_use entry forcing the backward scan. Green in the full run."
+          },
+          {
+            "id": "T2",
+            "status": "PASS",
+            "evidence": "tests.rs:889 stop_never_overwrites_a_live_declared_wait keeps kind=question, its subject and session after a Stop; guarded in code at mod.rs:314 and :335 via waiting_on_is_live. Green."
+          },
+          {
+            "id": "T3",
+            "status": "PASS",
+            "evidence": "session_end_pre_compact_and_a_non_stop_event_write_no_mark loops SessionEnd, PreCompact and SubagentStop and asserts no waiting_on. Code: mod.rs:126 and :132 return before perf_refresh, and both setter calls sit behind if ctx.event == Stop (mod.rs:186, :197). Green."
+          },
+          {
+            "id": "T4",
+            "status": "PASS",
+            "evidence": "The deleted fallback did NOT own this case. None still reaches turn_end_subject and short-circuits at mod.rs:381 (transcript_events?), and an unreadable or malformed file yields Some(empty) which returns None at mod.rs:382-384; try_set_turn_end_mark returns Ok(()) at mod.rs:296-298 without touching stdout or parts. Pinned by a_missing_or_malformed_transcript_writes_no_mark_but_leaves_the_hook_native covering both cases — no file at all, and unparseable content. Green."
+          },
+          {
+            "id": "T5",
+            "status": "PASS",
+            "evidence": "a_failing_store_write_is_logged_and_never_fails_the_stop_hook chmods .bee to 0o555, asserts run_inner == Ok(()) and that .bee/logs/hooks.jsonl contains the hook name and waiting_on. The path is unchanged by the rework: mod.rs:281-283 logs via log_crash. Green."
+          },
+          {
+            "id": "T6",
+            "status": "PASS",
+            "evidence": "a_final_assistant_text_block_that_is_blank_still_yields_a_non_empty_subject feeds whitespace-only text and asserts kind=turn-end with a non-empty subject; mod.rs:387-389 returns TURN_END_FALLBACK_SUBJECT (mod.rs:95). Green."
+          },
+          {
+            "id": "T7",
+            "status": "PASS",
+            "evidence": "rg for the bare literal over the crate excluding tests returns one hit: record.rs:359 pub(crate) const WAITING_ON_KIND_TURN_END. Every other reference reads the constant — record.rs:370, orient.rs:12 and :408, mod.rs:320 and :340. Untouched by this cell, whose diff lists only hooks/session_close files."
+          },
+          {
+            "id": "K1",
+            "status": "PASS",
+            "evidence": "Single definition at verbs/state_group/waiting_on.rs:80; the agent verb calls it at waiting_on.rs:256 and :308, and the hook calls the same fn at mod.rs:302 with the same argument shape. No second resolver in the crate."
+          },
+          {
+            "id": "K3",
+            "status": "PASS",
+            "evidence": "orient.rs:12 imports WAITING_ON_KIND_TURN_END and orient.rs:408 filters on it; the setter reads the same constant at mod.rs:320 and :340, both from record.rs:359."
+          },
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "The hook writes through the same two store setters the agent verb uses — set_workflow_waiting_on (mod.rs:317 vs waiting_on.rs:265) and set_default_state_waiting_on (mod.rs:338 vs waiting_on.rs:277) — and the same resolver. No new writer or resolver appears in the cell diff, which touches only hooks/session_close."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "build_waiting_on (record.rs:399-404) emits exactly kind, subject, asked_at and session; the hook adds no field — mod.rs:317-324 and :338-344 pass only kind, subject and session. No provenance or source key anywhere in the cell diff."
+          },
+          {
+            "id": "P4",
+            "status": "PASS",
+            "evidence": "The mark fires on the event alone: if ctx.event == Stop at mod.rs:186 and :197, with no condition on text. turn_end_subject (mod.rs:380-392) and final_assistant_text_line (mod.rs:401-420) only select and trim the last non-empty line — no question-mark test, no phrase list, no language check anywhere in the file."
+          },
+          {
+            "id": "P5",
+            "status": "PASS",
+            "evidence": "Both write branches check waiting_on_is_live first and return Ok(()) early — mod.rs:314-316 for the workflow record and mod.rs:335-337 for the default state. Pinned by stop_never_overwrites_a_live_declared_wait and a_second_stop_before_any_clear_never_doubles_or_changes_the_mark, which asserts the FIRST Stop's subject is kept. Green."
+          },
+          {
+            "id": "P6",
+            "status": "PASS",
+            "evidence": "git diff --stat 698c5e4a 3a57dbd3 shows the cell touching only hooks/session_close/{html.rs, mod.rs, perf.rs, reads.rs, tests.rs} — waiting_on.rs, record.rs, orient.rs and every rendering surface are untouched, so gate and question behaviour cannot have moved. The full green suite confirms."
+          },
+          {
+            "id": "PERF",
+            "status": "PASS",
+            "evidence": "Line-by-line comparison of e6141ada's perf_refresh body against html.rs:285-317: identical operations in identical order — resolve, read_jsonl, rollup_from_events, session_record?, upsert_session_records?, then the unconditional render, create_dir_all and write block — with the same early-Err short-circuit semantics, including a failing session_record still skipping the html render in both. Only the return type changed. perf.rs's own diff is a pure split of rollup_transcript into rollup_from_events with borrowed events. The existing perf tests rollup_and_upsert_roundtrip_in_isolated_perf_dir and perf_helpers_match_node_shapes are green inside the 2052-passed run."
+          },
+          {
+            "id": "DEV-A",
+            "status": "PASS",
+            "evidence": "Verified in a TEST build, both directions, in a scratch copy. With e6141ada's reads.rs, cargo test --release --bin bee --no-run printed `warning: unused doc comment --> crates/bee/src/hooks/session_close/reads.rs:177:1` spanning the whole doc block over thread_local!, 5 warnings total. With the committed reads.rs the same build printed 4 warnings and zero matches for 'unused doc comment'. The warning span covered lines 177-183, the entire doc block, so moving only the first line would have left the rest attached to the macro — the deviation's reasoning holds. The 4 residual warnings are pre-existing and unrelated."
+          },
+          {
+            "id": "DEV-B",
+            "status": "PASS",
+            "evidence": "Right call. turn_end_subject has exactly one caller chain — try_set_turn_end_mark (mod.rs:296) from set_turn_end_mark_best_effort (mod.rs:281) from run_inner (mod.rs:187, :198) — and both run_inner sites pass perf.events, so the branch really was unreachable; rg finds no direct test caller either. Nothing legitimately needs a re-reading None path: the None VALUE is still needed and still handled (mod.rs:381 means no transcript resolved, write no mark, the first T4 case), it simply no longer triggers a second read. Deleting the branch is also what removed the false comment the previous pass flagged at mod.rs:365-368."
+          },
+          {
+            "id": "DEV-C",
+            "status": "PASS",
+            "evidence": "Acceptable: rollup_transcript (perf.rs:383) is genuinely test-only now, its sole caller being tests.rs:469, the allow is documented in place at perf.rs:377-382, and it changes no behaviour and violates no locked decision. One inaccuracy worth noting, not blocking: the stated reason that the cleanup needs a file this cell does not name does not hold — perf.rs is already in the cell's diff, so swapping the allow for a cfg(test) attribute would have been a perf.rs-only edit. Cosmetic either way."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-18T13:34:38.263Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T12:47:29.345Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  },
+  "tier": "generation"
+}

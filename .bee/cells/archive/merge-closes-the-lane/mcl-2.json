@@ -1,0 +1,179 @@
+{
+  "id": "mcl-2",
+  "feature": "merge-closes-the-lane",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "worktree merge: move the lane write past the post-commit dirty guard",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/handlers.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/merge-closes-the-lane/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs"
+  ],
+  "action": "REVISION after a NEEDS_REVISION semantic-judge verdict. The five must_have truths all PASS — the merge clears the pair, names bee close, never writes phase, writes nothing on up-to-date/conflict/proof-debt, and warns without going red. One collateral defect FAILED: the lane write at verbs/worktree/phases.rs:596-609 runs BEFORE the post-commit dirty guard at phases.rs:611-625, which flags any non-empty `git status --porcelain --untracked-files=no` as warning code `verify_mutated_tracked_files`. Lane files ARE tracked in this repo (git ls-files .bee/lanes -> 88; git check-ignore reports no match), and close_the_lane_on_merge always rewrites next_action with the fresh merge sha, so the tracked lane file is always dirty at that point: every green merge now prints a spurious `WARNING (verify_mutated_tracked_files)`. The three new tests miss it because their fixture lane file is created untracked and the guard excludes untracked files. Fix: move the lane-write block so it runs AFTER the post-commit dirty guard has taken its reading, leaving the guard honest about what the verify command did. Do NOT special-case the lane path inside the guard — the guard must keep measuring the whole tree. Keep every existing behavior: same merged-only gate, same never-write-phase boundary, same best-effort warn-never-fail, same next_action text, same merge_text_lines line. Then close the test gap that hid this: at least one test must create the fixture lane file as a TRACKED file (git add it in the fixture) and assert that a green merge emits no verify_mutated_tracked_files warning.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "done_when": "A green merge of a feature whose lane holds a live uat mark leaves that lane with waiting_on null, run_state no longer 'awaiting-approval', an unchanged `phase`, and a next_action naming `bee close --feature <f>`; an already-up-to-date merge (tests.rs:1444) writes no lane change at all; a failed lane write warns and the merge still returns green; MERGE_CONFLICT and WORKTREE_MERGE_PROOF_DEBT paths write nothing; every existing merge test named in the plan still passes.",
+  "notes": "Phase 2. Depends on mcl-1's pair-clearing helper. Files are disjoint from mcl-1 and mcl-3 — no reservation overlap.",
+  "must_haves": {
+    "truths": [
+      "A green merge of a feature whose lane file is TRACKED emits no verify_mutated_tracked_files warning.",
+      "A green merge still leaves the merged feature's lane with waiting_on null, run_state no longer awaiting-approval, an unchanged phase, and a next_action naming bee close --feature <f>.",
+      "The post-commit dirty guard still reports a genuinely dirty tree caused by the verify command — it is not narrowed, and no path is special-cased inside it.",
+      "An already-up-to-date merge, a MERGE_CONFLICT, and a WORKTREE_MERGE_PROOF_DEBT each still leave the lane record byte-identical.",
+      "A failing lane write still warns and the merge still returns green.",
+      "Every merge test that passed before this revision still passes."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": null,
+    "outcome": "Move worktree merge lane write past the post-commit dirty guard",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T10:58:33.695Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null,
+    "claimed_at": null,
+    "verify_command": null,
+    "verified_at": null,
+    "report": {
+      "outcome": "Moved the worktree merge lane write (close_the_lane_on_merge) so it runs after the post-commit dirty guard reads git status, and added a test that force-tracks the fixture lane file so a green merge of a tracked lane no longer trips a spurious verify_mutated_tracked_files warning.",
+      "commit": "065937de72a0f743f43c8e593df1e01fece8eb2f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — green (185 passed, 0 failed) — cell-declared verify scope: full worktree test module, covering the reordered lane-write/guard fix plus the new tracked-lane-file regression test",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "truth-1-green-merge-clears-waiting-on-and-run-state",
+            "status": "PASS",
+            "evidence": "phases.rs:596-609 calls close_the_lane_on_merge (phases.rs:457-472), which calls clear_lane_waiting_on_pair first. Test a_green_merge_clears_the_merged_features_stranded_lane_mark_and_names_close asserts waiting_on null and run_state null after a real merge; cargo test worktree -> 184 passed, 0 failed."
+          },
+          {
+            "id": "truth-2-merge-never-writes-phase",
+            "status": "PASS",
+            "evidence": "Neither clear_lane_waiting_on_pair nor close_the_lane_on_merge inserts a phase key; both read via read_lane_strict and write via write_lane. No rebuild_lane_projection call exists on the merge path. The test asserts the phase value is unchanged."
+          },
+          {
+            "id": "truth-3-next-action-names-bee-close-in-record-and-text",
+            "status": "PASS",
+            "evidence": "phases.rs:465-469 formats the next_action naming bee close and writes it; phases.rs:598-600 mirrors it into the result; handlers.rs:721-727 pushes the next and warning lines inside the ok branch of merge_text_lines. The test asserts both the on-disk value and the emitted text."
+          },
+          {
+            "id": "truth-4-no-lane-write-on-up-to-date-conflict-or-proof-debt",
+            "status": "PASS",
+            "evidence": "The write lives inside merge_finish, reachable only via the staged outcome at phases.rs:775-776. Proof debt refuses at phases.rs:154-167, conflict returns done at phases.rs:345-381, already-up-to-date returns done at phases.rs:383-428, all before staged is constructed. Test already_up_to_date_merge_leaves_the_lane_record_byte_identical compares raw bytes."
+          },
+          {
+            "id": "truth-5-failing-lane-write-warns-and-merge-stays-green",
+            "status": "PASS",
+            "evidence": "phases.rs:601-608 maps every error to a warning plus a result field, leaving ok and merged untouched. Test a_failing_lane_write_only_warns_and_the_merge_still_completes_green feeds a corrupt lane file and asserts the merge is still green with a byte-identical lane file."
+          },
+          {
+            "id": "collateral-post-commit-dirty-warning-regression",
+            "status": "FAIL",
+            "evidence": "The lane write at phases.rs:596-609 runs before the post-commit dirty guard at phases.rs:611-625, which flags any non-empty git status porcelain with untracked-files=no as verify_mutated_tracked_files. Lane files are tracked in this repo (git ls-files .bee/lanes -> 88, git check-ignore reports no match), and the write always rewrites next_action with the fresh merge sha, so the guard fires on every green merge and the lane change lands outside the merge commit. The three new tests miss it because their fixture lane file is untracked and the guard excludes untracked files.",
+            "failure_signature": "merge_lane_write_placed_before_post_commit_dirty_guard_fires_verify_mutated_tracked_files_on_every_green_merge"
+          }
+        ],
+        "failure_signature": "merge_lane_write_placed_before_post_commit_dirty_guard_fires_verify_mutated_tracked_files_on_every_green_merge",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T10:53:04.870Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "collateral-lane-write-runs-after-post-commit-dirty-guard",
+            "status": "PASS",
+            "evidence": "phases.rs:592-605 holds the git status porcelain read and the warning insert; the lane write block now sits at phases.rs:606-635 with the close_the_lane_on_merge call at phases.rs:622. No early return and no error propagation sits between the guard and the write, so the ordering is straight-line on every path that reaches it. Exactly one call site exists, inside merge_finish."
+          },
+          {
+            "id": "guard-not-narrowed-no-path-special-cased",
+            "status": "PASS",
+            "evidence": "A byte-for-byte diff of the guard block against the pre-fix commit 28928490 shows no difference: same porcelain invocation, same emptiness condition, same warning payload. No pathspec, no exclude, no lane-path branch was added inside the guard."
+          },
+          {
+            "id": "new-test-fixture-genuinely-tracks-the-lane-file",
+            "status": "PASS",
+            "evidence": "tests.rs:3608-3634 force-adds and commits the fixture lane file before the merge, against a fixture repo whose ignore rules would otherwise exclude it. A read-only probe repo reproducing that shape confirmed the file is listed by git after the force-add and reports modified under untracked-files=no once rewritten. At the pre-fix commit the write preceded the guard, so the guard would have read that modification and inserted the warning, failing the test's absent-warning assertion. The test is not theatre."
+          },
+          {
+            "id": "truth-green-merge-clears-pair-names-close-never-writes-phase",
+            "status": "PASS",
+            "evidence": "close_the_lane_on_merge (phases.rs:457-472) clears the pair then inserts only next_action naming bee close; no phase key is inserted and no projection rebuild is called. Both green-merge tests pass."
+          },
+          {
+            "id": "truth-no-lane-write-on-up-to-date-conflict-or-proof-debt",
+            "status": "PASS",
+            "evidence": "The write is inside merge_finish, called only from the staged arm. Proof debt refuses at phases.rs:157-167, conflict returns done at phases.rs:355-382, already-up-to-date returns done at phases.rs:384-428, all before the staged outcome is constructed. The byte-identical already-up-to-date test passes."
+          },
+          {
+            "id": "truth-failing-lane-write-warns-and-merge-stays-green",
+            "status": "PASS",
+            "evidence": "phases.rs:626-632 maps every error to a warning line plus a result field, leaving the ok and merged flags untouched. The corrupt-lane test passes."
+          },
+          {
+            "id": "truth-no-regression-in-existing-merge-tests",
+            "status": "PASS",
+            "evidence": "cargo test worktree reports 185 passed, 0 failed, against 184 at the pre-fix commit; the delta is exactly the one new regression test. Full suite reports 2034 passed, 0 failed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T11:03:01.977Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T10:53:04.870Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "ownership_overrides": [
+      {
+        "verb": "unclaimCell",
+        "forced_by": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+        "owner_bypassed": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
+        "at": "2026-08-18T10:57:15.806Z"
+      }
+    ],
+    "judge_overrides": [
+      {
+        "overridden_at": "2026-08-18T10:58:33.695Z",
+        "reason": "Fixed the sole FAIL check (collateral-post-commit-dirty-warning-regression, signature merge_lane_write_placed_before_post_commit_dirty_guard_fires_verify_mutated_tracked_files_on_every_green_merge): moved the lane write in phases.rs to run after the post-commit git-status read instead of before it, without narrowing the guard, and added a_green_merge_of_a_tracked_lane_file_emits_no_mutated_tracked_files_warning (force-tracks the fixture lane file, asserts no warning key) to close the test gap that let the untracked fixture hide the bug. All 5 PASS truths from the original verdict are re-verified unchanged by the full worktree suite (185 passed, 0 failed).",
+        "last_verdict": "NEEDS_REVISION"
+      }
+    ],
+    "inline_reason": "trace.worker was unset on this reopened cell (the NEEDS_REVISION rework cleared it) even though the dispatch registered mcl-2-fix-worker in state.json workers[] with cell mcl-2, status running, before hand-off; recording this cap under that already-registered worker rather than re-running cells claim, which this worker's contract forbids for a cell already handed to it."
+  }
+}

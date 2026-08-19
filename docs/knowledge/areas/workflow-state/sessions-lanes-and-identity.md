@@ -98,6 +98,20 @@ blocks a new feature from starting; a live *other* session holding a claim
 still blocks exactly as before; a solo starter's own heartbeat never
 self-blocks.
 
+**A quiet heartbeat is not a dead session, and a reader must not treat it as
+one.** The renewal fires while a session works, so a session inside one long
+operation emits nothing for as long as that operation runs — the same fact R97
+states for the sweep path, and it binds every reader, not only a sweep. Age
+therefore answers exactly one question: whether the record still falls inside
+the liveness window. Inside it, the owner may be mid-thought or may have died
+moments ago, and the record cannot tell the two apart; outside it, the owner is
+treated as gone. Reading a flat heartbeat as "not listening" is a mistake two
+separate sessions made independently within one hour on 2026-08-19, one of them
+concluding an owner was ignoring messages it was in fact answering. When the
+question is who to contact rather than what to reclaim, the honest report is
+either the bound owner or "unowned" — never a confident aliveness verdict the
+heartbeat was never able to give.
+
 **B13 — Readers resolve through the acting session's lane.** Trigger: any
 read of "where does the workflow stand" while lanes exist. What happens, per
 reader: **claim authorization** — a unit of work is claimable only under its

@@ -33,11 +33,13 @@ pub(crate) fn test_results_path(root: &Path) -> PathBuf {
 // declared-test runner (spawn_declared/run_declared_tests/CmdRun/TestsRun/
 // tests_record_value/first_failure_line, plus this file's own posix_shell)
 // is DELETED here — `cap_cell_from_flags` no longer runs any test command,
-// so nothing in this crate called this copy anymore. `bee close` and
-// `bee worktree merge` keep running the declared command through their own
-// copies (drivers/close.rs, worktree/phases.rs) — the boundary is now the
-// only place a test process runs locally; CI runs the same command on every
-// push. `TEST_RESULTS_RELATIVE`/`test_results_path` above stay: other doors
+// so nothing in this crate called this copy anymore. Decisions 58ec9664 and
+// 1f534837 later retired the doors' own copies too — `bee close` and
+// `bee worktree merge` now call `crate::verbs::cells::feature_proof_check`
+// (drivers/close.rs, worktree/phases.rs) and check the cap's recorded proof
+// line instead of running the command themselves; no local door runs a test
+// process any more, only CI does, on every push. `TEST_RESULTS_RELATIVE`/
+// `test_results_path` above stay: other doors
 // (the D2 red-base claim check, `cells finish --report`'s trace, the
 // verify-none check) still read the last recorded record.
 

@@ -64,7 +64,7 @@ use crate::verbs::workflow_store::{
     rebuild_state_projection_reporting, update_workflow, update_workflow_assuming_lock,
     update_workflow_assuming_lock_with, wf_id, workflows_list_sort, write_lane,
     write_mailbox_handoff, MailboxAdopt, clear_default_state_waiting_on, clear_workflow_waiting_on,
-    set_workflow_waiting_on,
+    set_workflow_waiting_on, waiting_on_is_live,
 };
 use serde_json::{json, Map, Value};
 use std::ffi::OsString;
@@ -88,6 +88,20 @@ pub(crate) fn resolve_waiting_on_target(
     if workflows.is_empty() {
         return Ok(None); // C1: no workflow records anywhere.
     }
+    // R3 (mcl-1): `state waiting-on clear`'s own help text already promises
+    // "a no-op, never a refusal" once the named feature's workflow is
+    // CLOSED — a closed workflow still HAS a record, it is simply no longer
+    // LIVE, so the clear verb widens both lane-naming branches below to fall
+    // back to the newest record for that feature regardless of status.
+    // `state waiting-on set` never widens (you cannot mark a closed lane as
+    // waiting): its refusal stays exactly `find_live_workflow`-only, byte-
+    // identical wording
+    // (`waiting_on_target_refuses_an_explicit_lane_naming_no_live_workflow`,
+    // tests.rs). Branching on the literal verb string mirrors how every
+    // refusal message here already embeds `verb` for its own text — the two
+    // call sites (`run_waiting_on_set`/`run_waiting_on_clear`) pass their own
+    // fixed strings, never a caller-supplied value.
+    let clear_verb = verb == "state waiting-on clear";
     // This verb targets the WORKFLOW record directly (never a `.bee/lanes/*`
     // file), so its own refusal names that store rather than reusing
     // `lane_missing_refusal`/`bound_lane_missing_refusal` — those two are
@@ -97,25 +111,41 @@ pub(crate) fn resolve_waiting_on_target(
     // (sessions.rs), the closest existing precedent for a verb resolving a
     // live workflow rather than a lane record.
     if let Some(f) = lane_feature {
-        return match find_live_workflow(&workflows, f) {
-            Some(wf) => Ok(Some((wf_id(wf), f.to_string()))),
-            None => Err(Err2::Msg(format!(
-                "{verb}: refused \u{2014} --lane \"{f}\" names no live workflow (no .bee/runtime/workflows/*/state.json with feature \"{f}\" and status !== closed). FIX: start it first (\"state start-feature --feature {f} --as-lane\"), or omit --lane."
-            ))),
-        };
+        if let Some(wf) = find_live_workflow(&workflows, f) {
+            return Ok(Some((wf_id(wf), f.to_string())));
+        }
+        if clear_verb {
+            if let Some(wf) = newest_workflow_for_feature(&workflows, f)? {
+                return Ok(Some((wf_id(&wf), f.to_string())));
+            }
+            // R3: narrowed — the "and status !== closed" clause is dropped
+            // because this refusal now fires only when NO record at all
+            // (live or closed) names the feature.
+            return Err(Err2::Msg(format!(
+                "{verb}: refused \u{2014} --lane \"{f}\" names no live workflow (no .bee/runtime/workflows/*/state.json with feature \"{f}\"). FIX: start it first (\"state start-feature --feature {f} --as-lane\"), or omit --lane."
+            )));
+        }
+        return Err(Err2::Msg(format!(
+            "{verb}: refused \u{2014} --lane \"{f}\" names no live workflow (no .bee/runtime/workflows/*/state.json with feature \"{f}\" and status !== closed). FIX: start it first (\"state start-feature --feature {f} --as-lane\"), or omit --lane."
+        )));
     }
     if no_lane {
         return Ok(None);
     }
     let (sid, bound) = session_binding(session_id_flag, root)?;
     if let Some(bound) = bound {
-        return match find_live_workflow(&workflows, &bound) {
-            Some(wf) => Ok(Some((wf_id(wf), bound))),
-            None => Err(Err2::Msg(format!(
-                "{verb}: refused \u{2014} calling session \"{}\" is bound to lane \"{bound}\" but no live workflow names it. FIX: start the lane, unbind the session, or pass --no-lane to target the default record explicitly.",
-                sid_disp(&sid)
-            ))),
-        };
+        if let Some(wf) = find_live_workflow(&workflows, &bound) {
+            return Ok(Some((wf_id(wf), bound)));
+        }
+        if clear_verb {
+            if let Some(wf) = newest_workflow_for_feature(&workflows, &bound)? {
+                return Ok(Some((wf_id(&wf), bound)));
+            }
+        }
+        return Err(Err2::Msg(format!(
+            "{verb}: refused \u{2014} calling session \"{}\" is bound to lane \"{bound}\" but no live workflow names it. FIX: start the lane, unbind the session, or pass --no-lane to target the default record explicitly.",
+            sid_disp(&sid)
+        )));
     }
     let default_record = read_state_strict(root)?;
     if let Some(v) = default_record.get("feature") {
@@ -127,6 +157,59 @@ pub(crate) fn resolve_waiting_on_target(
         }
     }
     Ok(None) // nothing resolves — D3's session-scoped default-record case
+}
+
+/// R3 (mcl-1): the CLEAR verb's own widened fallback — the newest workflow
+/// record naming `feature`, regardless of status (`workflows_list_sort`'s
+/// own newest-`created_at`-first, stable order), so a closed workflow's
+/// stale mark still has a clear path. Only the clear-verb branches in
+/// `resolve_waiting_on_target` above ever call this; the setter keeps
+/// refusing through `find_live_workflow` alone (you cannot mark a closed
+/// lane as waiting).
+fn newest_workflow_for_feature(
+    workflows: &[Map<String, Value>],
+    feature: &str,
+) -> Result<Option<Map<String, Value>>, Err2> {
+    let want = Value::String(feature.to_string());
+    let mut matches: Vec<Map<String, Value>> = workflows
+        .iter()
+        .filter(|w| w.get("feature").unwrap_or(&Value::Null) == &want)
+        .cloned()
+        .collect();
+    if matches.is_empty() {
+        return Ok(None);
+    }
+    workflows_list_sort(&mut matches)?;
+    Ok(matches.into_iter().next())
+}
+
+/// R4 (mcl-1): the lane-file counterpart of `clear_default_state_waiting_on`'s
+/// own pair-clearing (decision f9fd9d46) — called from `run_waiting_on_clear`
+/// only when `rebuild_lane_projection_reporting` just answered
+/// non-authoritative (R3's own closed-workflow fallback, where the live-only
+/// projection sync is correctly a no-op and the `.bee/lanes/<feature>.json`
+/// copy is left exactly as stuck as before this fix). Guarded the identical
+/// way f9fd9d46 already established: `run_state` is nulled ONLY on the
+/// literal "awaiting-approval" value, so a record-derived "done"/"shaping"
+/// (or any other lane whose run_state genuinely still means something else)
+/// is never clobbered. No lane file at all, or a lane copy that already
+/// reads clear on both fields, is itself a no-op — no lock taken, no write.
+/// Factored here rather than inlined so cells mcl-2 (worktree merge) and
+/// mcl-3 (close) — landing next — can call it too.
+pub(crate) fn clear_lane_waiting_on_pair(root: &Path, feature: &str) -> Result<(), Err2> {
+    let Some(mut lane) = read_lane_strict(root, feature)? else {
+        return Ok(());
+    };
+    let waiting_on_live = waiting_on_is_live(lane.get("waiting_on"));
+    let run_state_stuck = lane.get("run_state") == Some(&json!("awaiting-approval"));
+    if !waiting_on_live && !run_state_stuck {
+        return Ok(()); // true no-op: the lane copy already reads clear
+    }
+    lane.insert("waiting_on".into(), Value::Null);
+    if run_state_stuck {
+        lane.insert("run_state".into(), Value::Null);
+    }
+    write_lane(root, &lane)
 }
 
 /// The setter's own refusal when no session resolves at all — distinct from
@@ -232,7 +315,17 @@ pub(crate) fn run_waiting_on_clear(flags: Flags, use_json: bool, t0: Instant) ->
         match target {
             Some((id, feature)) => {
                 let record = clear_workflow_waiting_on(&ctx.root, &id)?;
-                rebuild_lane_projection(&ctx.root, &feature)?;
+                // R4 (mcl-1): `rebuild_lane_projection` only writes when the
+                // resolved workflow is still LIVE (projections.rs's own
+                // `find_live_workflow` gate) — correctly a no-op for R3's
+                // closed-workflow fallback. `clear_lane_waiting_on_pair`
+                // covers exactly that gap, directly on the lane file, so a
+                // closed-workflow clear still leaves `waiting_on`+`run_state`
+                // null on the copy an operator actually reads.
+                let proj = rebuild_lane_projection_reporting(&ctx.root, &feature)?;
+                if !proj.authoritative {
+                    clear_lane_waiting_on_pair(&ctx.root, &feature)?;
+                }
                 rebuild_state_projection(&ctx.root)?;
                 Ok(Out::Emit(
                     Value::Object(record),

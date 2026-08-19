@@ -1,0 +1,118 @@
+{
+  "id": "mct-1",
+  "feature": "merge-commits-the-lane",
+  "lane": "small",
+  "tier": "generation",
+  "title": "worktree merge: commit the lane rewrite instead of leaving it as dirt",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md"
+  ],
+  "action": "Closes the P3 residual the mcl-2 re-judge raised (merge-closes-the-lane D1/D4). Today `close_the_lane_on_merge` runs at the tail of `merge_finish` (verbs/worktree/phases.rs, after the post-commit tracked-files guard has taken its reading) and rewrites `.bee/lanes/<feature>.json` — a TRACKED file in this repo — leaving it modified-but-uncommitted in main. It sits there until some unrelated bookkeeping auto-commit sweeps it up, and until then any OTHER post-commit drift is indistinguishable from it in the operator's tree. Fix: right after the lane rewrite succeeds, make ONE path-scoped commit of exactly that one lane file, so the merge leaves a clean tree. Reuse the existing path-scoped bookkeeping-commit helper the merge path already owns (`commit_main_bookkeeping` and its opt-out key are the precedent — read them and follow their shape rather than inventing a new git invocation): path-scoped `git commit -- <lane path>`, never `git add -A`, never `--amend`. Amending the merge commit was considered and is REJECTED: it rewrites a commit the integration queue has already published as landed, for a bookkeeping row. A second, clearly-named commit solves the actual harm — uncommitted dirt indistinguishable from real drift — without rewriting history. ORDERING, load-bearing: the new commit runs AFTER the post-commit tracked-files guard has already taken its reading. Moving the guard, narrowing it, or exempting a path inside it is out of scope and forbidden (merge-closes-the-lane D4, and the critical pattern docs/knowledge/patterns/20260818-a-write-placed-before-a-self-check-makes-the.md). Best-effort like every other bookkeeping write on this path: a failed commit warns on its own line and the merge stays green.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "must_haves": {
+    "truths": [
+      "After a green merge that rewrote the lane, `git status --porcelain` in MAIN reports the lane file as clean — the rewrite is committed, not left as dirt.",
+      "The lane rewrite lands in its own path-scoped commit naming only that one lane file; no other path is swept in and the merge commit itself is not amended.",
+      "The post-commit tracked-files guard is unchanged — not moved, not narrowed, no path exempted inside it — and still takes its reading before the new commit runs.",
+      "A merge that wrote no lane change (already-up-to-date, MERGE_CONFLICT, WORKTREE_MERGE_PROOF_DEBT) creates no extra commit.",
+      "A failing lane commit warns on its own line and the merge still returns green.",
+      "The regression test keeps its fixture lane file TRACKED, since an untracked one is invisible to both the guard and this behavior.",
+      "Every merge test that passed before this cell still passes."
+    ]
+  },
+  "done_when": "A green merge leaves MAIN's tree clean with respect to the lane file, the rewrite carried in its own path-scoped commit; the guard is byte-identical; no extra commit appears on the no-op merge paths; a failing commit warns without turning the merge red.",
+  "notes": "Single cell, single slice. Do not touch verbs/drivers/close.rs or verbs/state_group/** — the lane-write helper and the close driver both stay as shipped.",
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "mct-1-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T11:37:18.192Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8755264a-6e2d-4d51-bd1a-dfdf235040dd",
+    "claimed_at": "2026-08-18T11:29:11.340Z",
+    "report": {
+      "outcome": "Lane rewrite from close_the_lane_on_merge now lands in its own path-scoped commit right after the write succeeds, via the existing commit_main_bookkeeping mechanism; a green merge leaves main's tree clean, the merge commit is never amended, and a failed lane commit only warns.",
+      "commit": "b02edaee",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — green (186 passed, 0 failed) — scope: cell touches only worktree/phases.rs and worktree/tests.rs, so the worktree test module is the exact and sufficient scope",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "own-path-scoped-commit",
+            "status": "PASS",
+            "evidence": "phases.rs:644-649 builds a single-element pathspec naming only the merged feature's lane record and hands it to commit_main_bookkeeping, which scopes every step — status, add and commit all carry the same pathspec (merge.rs:271-350, git.rs:118-125). No bare add-all reaches this path. The new test asserts the resulting commit's diff names exactly that one file (tests.rs:3707-3712) and passes."
+          },
+          {
+            "id": "merge-commit-not-amended",
+            "status": "PASS",
+            "evidence": "A search for amend across verbs/worktree returns only comment and doc-string hits; no git invocation carries it, and commit_unsigned hardcodes its argument list (git.rs:119). The test asserts the new commit has one parent while the merge commit below it still carries two (tests.rs:3680-3706)."
+          },
+          {
+            "id": "guard-unchanged-and-still-first",
+            "status": "PASS",
+            "evidence": "The revision is purely additive: 110 insertions, zero deletions, a single hunk starting below the guard. The guard block is byte-identical and at the same lines in both trees, still carrying no pathspec and no exemption. The new commit is inserted after both the guard and the lane rewrite."
+          },
+          {
+            "id": "no-extra-commit-on-no-op-paths",
+            "status": "PASS",
+            "evidence": "The call sits inside merge_finish, reachable only from the staged outcome. Already-up-to-date and conflict both return done from merge_stage, and proof debt refuses before the merge runs. Two further guards: the call is nested inside the non-empty next-action arm, and commit_main_bookkeeping reports skipped-clean and commits nothing when its scoped status is empty."
+          },
+          {
+            "id": "failing-lane-commit-warns-stays-green",
+            "status": "PASS",
+            "evidence": "phases.rs:650-656 emits a single warning line on a non-clean skip reason with no return and no error, falling through to the unchanged green result. commit_main_bookkeeping never returns an error shape — every failure arm yields skipped, including an index restore after a failed commit."
+          },
+          {
+            "id": "fixture-lane-file-tracked",
+            "status": "PASS",
+            "evidence": "The fixture un-ignores the lane directory, force-adds the lane record and commits it, through a helper that asserts success — a failed force-add fails the test rather than passing silently. Proof it is genuinely tracked rather than merely present: the test asserts the file appears in a commit diff, which an ignored untracked file never could."
+          },
+          {
+            "id": "main-clean-after-green-merge",
+            "status": "PASS",
+            "evidence": "The test asserts an empty porcelain status through a helper that does NOT pass untracked-files=no, so untracked leftovers would fail it too. The only other tracked-file writer on this path writes the lane record and nothing else."
+          },
+          {
+            "id": "prior-merge-tests-still-green",
+            "status": "PASS",
+            "evidence": "The revision deletes no line, so no pre-existing test was modified or removed. The worktree module reports 186 passed, 0 failed; the full suite reports 2041 passed, 0 failed."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-18T11:42:04.520Z"
+      }
+    ]
+  }
+}

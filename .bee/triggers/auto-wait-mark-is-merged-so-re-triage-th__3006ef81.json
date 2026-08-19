@@ -1,0 +1,11 @@
+{
+  "id": "auto-wait-mark-is-merged-so-re-triage-th__3006ef81",
+  "decision": "3006ef81",
+  "condition": "auto-wait-mark is merged, so re-triage the AskUserQuestion layer: an AskUserQuestion turn never reaches Stop, so the highest-confidence blocked-on-human moment is the one the Stop hook cannot mark. Backlog carries the proposal (P3, layer hooks).",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-18T14:48:11.667Z",
+  "updated_at": "2026-08-18T14:48:11.667Z",
+  "outcome": null
+}

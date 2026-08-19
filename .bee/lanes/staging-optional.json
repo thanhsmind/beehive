@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "feature": "staging-optional",
+  "mode": "feature",
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"staging-optional\" started at phase \"exploring\".",
+  "next_action": "staging-optional is merged at a3f018a and captured; bee close stays blocked by the pre-existing doc-deferral false positive in docs/handbook/register.md (backlog row filed).",
+  "created_at": "2026-08-18T10:57:23.697Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null
+}

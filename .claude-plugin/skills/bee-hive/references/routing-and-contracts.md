@@ -31,7 +31,9 @@ features sit together for the user to test at one place, rebuilt from main plus 
 feature still awaiting approval. The `uat` gate is the door between staging and main —
 a feature only lands on main once its uat gate is approved. See
 `docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md` (staging-lane
-D0/D0a) for the mechanics.
+D0/D0a) for the mechanics. A repo that sets `"staging_before_merge": false` skips
+staging entirely — `bee staging add`/`rebuild` refuse `STAGING_DISABLED`, and the
+feature worktree itself stands in for the mixing ground; the `uat` gate is unaffected.
 
 ## First-Skill Routing
 
@@ -314,15 +316,18 @@ One question per message. Never bundle. Never answer your own question.
 
 **Mark the wait before you send.** A turn that ends on a question —
 a gate or a freeform one — runs `bee state waiting-on set
---kind <gate|question> --subject "<the question>"` before the message
-goes out (awaiting-human D1: the agent marks the wait when it asks).
-The mark flips `run_state` to `awaiting-approval` so an external
-reader — a dashboard, a sibling session — sees "waiting on you"
-instead of "idle"; it works with or without an active feature (D3),
-and it ends on its own: the user's next message clears it via the
-`UserPromptSubmit` hook, `bee state waiting-on clear` clears it
-explicitly, and a stale session's mark expires with its heartbeat
-(D2/D4). Never leave a question pending without its mark.
+--kind <gate|question|turn-end> --subject "<the question>"` before the
+message goes out (awaiting-human D1: the agent marks the wait when it
+asks). `turn-end` is the third kind (auto-wait-mark D3) — the Stop hook
+sets it on every ordinary turn end, so the agent itself only ever passes
+`gate` or `question` here. The mark flips `run_state` to
+`awaiting-approval` so an external reader — a dashboard, a sibling
+session — sees "waiting on you" instead of "idle"; it works with or
+without an active feature (D3), and it ends on its own: the user's next
+message clears it via the `UserPromptSubmit` hook, `bee state
+waiting-on clear` clears it explicitly, and a stale session's mark
+expires with its heartbeat (D2/D4). Never leave a question pending
+without its mark.
 
 ## File Quick Reference
 

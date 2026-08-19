@@ -1,0 +1,130 @@
+{
+  "id": "kss-2",
+  "feature": "knowledge-sweep-scope",
+  "lane": "small",
+  "tier": "generation",
+  "title": "A merge that cannot name its feature must not sweep docs/knowledge either",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/knowledge-sweep-scope/plan.md",
+    "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs"
+  ],
+  "action": "Residual named by the kss-1 semantic judge (verdict PASS, so this is the last arm, not a repair of a failed truth). kss-1 scoped docs/knowledge to the merging feature's own recorded paths in the Some(feature) arm of main_bookkeeping_roots (packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs). The None arm — a merge that cannot resolve WHICH feature it is landing — still does roots.push(\"docs/knowledge\") and sweeps every authored file under it. That is the exact 7429dfda incident shape, still reachable: a merge swallowing a sibling session's spec sync into its own bookkeeping commit, nothing lost but the authorship wrong. The decisive evidence is inside the same match arm: in that same None arm, docs/history is swept NOT AT ALL. The code already holds the rule \"do not sweep an authored tree you cannot scope\" for history, and takes the opposite default for knowledge two lines apart. The existing doc comment defends the None arm on the grounds that there is no data to SCOPE the sweep — which is an argument for not scoping it, never an argument for still TAKING it. FIX: the None arm drops docs/knowledge, exactly as it already drops docs/history. .bee and docs/decisions stay blanket in BOTH arms — they are machine-written, they are the deadlock the auto-commit exists to close, and nothing about them changes here. A knowledge file left dirty is then named by the EXISTING dirty-main refusal, the same path that already names an unscopable docs/history file today; that refusal is already built and already tested, and the instruction it gives (commit your own capture) is the honest one. Update the None arm's commit subject at phases.rs so it names what is actually swept and no longer claims docs/knowledge. Do NOT touch the Some arm kss-1 shipped, the worktree_merge_commit_bookkeeping opt-out, the refusal's message contract, or bee close's own .bee-only bookkeeping commit. Do NOT edit packages/bee-rs/crates/bee/src/verbs/drivers/close.rs — it is reserved by another session. TESTS: a feature-less merge with a dirty docs/knowledge file leaves it uncommitted and the dirty-main refusal names it; the same merge still sweeps .bee and docs/decisions; and the Some-arm tests kss-1 added all still pass unchanged. Mirror the existing feature-less docs/history assertions rather than inventing a new fixture style.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "verify_owner": "worker",
+  "done_when": "A merge that cannot resolve its feature sweeps .bee and docs/decisions and nothing under docs/knowledge; the dirty-main refusal names the untouched knowledge file; the None arm's commit subject matches what it sweeps; the Some arm, the opt-out, the refusal contract, and bee close's bookkeeping commit are all unchanged; close.rs is untouched; and the worktree suite is green.",
+  "notes": "Phase 2, the last arm of the sweep. Judge evidence: in the same None arm, docs/history is already not swept.",
+  "must_haves": {
+    "truths": [
+      "A feature-less merge sweeps nothing under docs/knowledge.",
+      "That merge still sweeps .bee and docs/decisions.",
+      "A dirty docs/knowledge file in that case is left uncommitted and named by the existing dirty-main refusal.",
+      "The None arm's commit subject no longer claims docs/knowledge.",
+      "Every Some-arm behavior and test kss-1 shipped is unchanged.",
+      "The opt-out, the refusal message contract, and bee close's bookkeeping commit are unchanged.",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs is not edited."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "kss-2-worker",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T03:40:37.520Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-19T03:33:12.868Z",
+    "report": {
+      "outcome": "done",
+      "commit": "8b965a86",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — 215 passed, 0 failed — worktree suite covers main_bookkeeping_roots and the merge bookkeeping-commit path this cell changed",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "t1",
+            "truth": "A feature-less merge sweeps nothing under docs/knowledge.",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs:204 main_bookkeeping_roots -- roots is initialised to .bee plus docs/decisions and everything else now sits inside an `if let Some(feature) = feature` block. The old None arm that pushed the blanket docs/knowledge root is gone. Ripgrep for that literal across packages/bee-rs/crates/bee/src finds no blanket root push left in src. FALSIFICATION: exported the 8b965a86 tree to scratch, replaced ONLY merge.rs with the 8b965a86^ version (blanket push confirmed at line 209 of the reverted file), ran cargo test --release --manifest-path packages/bee-rs/Cargo.toml feature_less_merge and got 1 passed / 1 FAILED -- feature_less_merge_docs_knowledge_dirt_stays_uncommitted_and_is_named panicked at tests.rs:1976 with 'a feature-less merge must still refuse on dirty docs/knowledge'. Not vacuous."
+          },
+          {
+            "id": "t2",
+            "truth": "That merge still sweeps .bee and docs/decisions.",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs:205 -- the vec! initialiser holding \".bee\" and \"docs/decisions\" is unconditional and sits OUTSIDE the `if let`, so it applies in both the Some and the feature-less path; the a1f31cf9..8b965a86 delta never touches that line. Test packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs:1895 feature_less_merge_still_sweeps_bee_and_docs_decisions dirties .bee/config.json and docs/decisions/taxonomy.json under an unresolvable feature and asserts bookkeeping_commit.committed == true plus an empty porcelain status afterwards. Green in the real tree."
+          },
+          {
+            "id": "t3",
+            "truth": "A dirty docs/knowledge file in that case is left uncommitted and named by the existing dirty-main refusal.",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:197-212 -- the pre-existing is_tree_dirty_excluding(main_root, &roots) branch is unchanged in code; because docs/knowledge is no longer among roots on the feature-less path, a dirty knowledge file now falls through to WORKTREE_MERGE_MAIN_DIRTY with the offending path listed. Test tests.rs:1956 feature_less_merge_docs_knowledge_dirt_stays_uncommitted_and_is_named asserts the message carries WORKTREE_MERGE_MAIN_DIRTY and 'example.md' and that docs/knowledge/areas/example.md is still dirty afterwards. Red under the merge.rs-only revert (see t1), green at 8b965a86."
+          },
+          {
+            "id": "t4",
+            "truth": "The None arm's commit subject no longer claims docs/knowledge.",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/worktree/phases.rs:222 -- the feature-less subject is now 'Auto-commit .bee and docs/decisions bookkeeping before merging worktree <id>' (it said '.bee, docs/decisions, and docs/knowledge' at 8b965a86^). The paired refusal scope string at phases.rs:203 is now '.bee/ or docs/decisions/'. Both match the roots actually swept; no leftover docs/knowledge claim on that path. FALSIFICATION: with merge.rs at 8b965a86 and ONLY phases.rs reverted to 8b965a86^, feature_less_merge_still_sweeps_bee_and_docs_decisions FAILED at tests.rs:1948 printing the stale subject 'Auto-commit .bee, docs/decisions, and docs/knowledge bookkeeping before merging worktree main--wt--demo'. Not vacuous."
+          },
+          {
+            "id": "t5",
+            "truth": "Every Some-arm behavior and test kss-1 shipped is unchanged.",
+            "status": "PASS",
+            "evidence": "Delta a1f31cf9..8b965a86 on packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs: the only executable change is removal of the feature-less arm, which collapsed the two-arm match on feature into `if let Some(feature) = feature`. The Some-arm statements are token-for-token identical -- feature_touched_files, filter on the docs/knowledge/ prefix, dedupe push, then push docs/history/<feature> -- only indentation and the enclosing construct moved. So NOT byte-identical (match became if-let), but behaviourally identical, which is what this truth asks. phases.rs's Some-arm scope string (:202) and Some-arm subject (:218) are untouched by the delta. The tests.rs delta is a single pure-addition hunk at @@ -1884,6 +1884,109 @@ with only added lines -- no kss-1 test deleted or edited; kss-1's refusal_scope_string_names_the_widened_roots (tests.rs:1690) still asserts all four Some-arm roots. Suite: cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree -- 215 passed, 0 failed."
+          },
+          {
+            "id": "t6",
+            "truth": "The opt-out, the refusal message contract, and bee close's bookkeeping commit are unchanged.",
+            "status": "PASS",
+            "evidence": "worktree_merge_commit_bookkeeping_enabled (packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs:218 plus its doc block) lies outside every hunk of the merge.rs delta -- unchanged; so is the opt-out branch at phases.rs:189-196 whose original unconditional WORKTREE_MERGE_MAIN_DIRTY wording is byte-identical. The dirty-main refusal keeps its code WORKTREE_MERGE_MAIN_DIRTY, its shape (uncommitted changes outside <scope> that the merge verb will not auto-commit, followed by the offending path list) and its warn-never-block semantics; only the feature-less <scope> enumeration narrowed, which truth 4 requires. Changed-file list for a1f31cf9..8b965a86 is worktree/merge.rs, worktree/phases.rs, worktree/tests.rs only -- verbs/drivers/ untouched, so bee close's .bee-only bookkeeping commit is unchanged."
+          },
+          {
+            "id": "t7",
+            "truth": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs is not edited.",
+            "status": "PASS",
+            "evidence": "Changed-file list of 8b965a86 -- packages/bee-rs/crates/bee/src/verbs/worktree/merge.rs, .../phases.rs, .../tests.rs only. Same three files for a1f31cf9. Ripgrep count for close.rs over both lists returns 0."
+          },
+          {
+            "id": "t8",
+            "truth": "(judge-added) The two new tests genuinely construct a feature-less merge.",
+            "status": "PASS",
+            "evidence": "Both call make_feature_unresolvable (packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs:4548), the pre-existing usp-7 fixture, which deletes .bee/runtime/worktree-identity.json and truncates .bee/state.json to an empty object -- it strips the identity source itself, not the tree under test. Each test then asserts resolve_worktree_feature(&worktree_root).feature == None before merging, so the feature-less path is provably the one exercised."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-19T03:49:35.079Z"
+      }
+    ]
+  }
+}

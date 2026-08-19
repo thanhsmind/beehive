@@ -1,0 +1,79 @@
+{
+  "id": "usp-4",
+  "feature": "uat-stop-placement",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Teach the docs and skills that the uat stop has two possible positions",
+  "behavior_change": false,
+  "files": [
+    "docs/handbook/register.md",
+    "docs/config-reference.md",
+    ".bee/config-sample.json",
+    "skills/bee-hive/references/gates-and-delegation.md",
+    "skills/bee-swarming/SKILL.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/uat-stop-placement/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/uat.rs",
+    "docs/handbook/register.md"
+  ],
+  "action": "Document what usp-1, usp-2 and usp-3 shipped. The one idea to carry into every file: the uat stop has TWO possible positions now, and uat_stop says which. Read packages/bee-rs/crates/bee/src/uat.rs first so every value and code name you write matches what actually shipped, and read the merge-side and close-side changes for the exact refusal codes and messages. (1) docs/handbook/register.md — add a staging_before_merge-style row for uat_stop in the config key table, beside the existing uat_before_merge row: three values merge (default, absent means this) / close / off, a non-recognized value refuses rather than guessing, and uat_before_merge is now the back-compat alias (true reads as merge, false reads as off). Update the uat_before_merge row itself to say it is an alias now, not the primary key. If the file carries a table of close doors or refusal codes, add the new uat door and the codes usp-2 and usp-3 introduced. (2) docs/config-reference.md — same key, that file's own house style, and state plainly what changes under close: the merge lands the code so the product can be reloaded and tested, the worktree is HELD (--cleanup and worktree_cleanup_on_merge true are both ignored while the wait is live), and bee close blocks until the user approves uat. (3) .bee/config-sample.json — add a _doc entry and a body entry for uat_stop; keep it valid JSON. (4) skills/bee-hive/references/gates-and-delegation.md — the uat paragraph currently says the stop sits at bee worktree merge. Rewrite it so the stop's POSITION is named as configurable: under uat_stop merge it is where it has always been; under close the merge is a publish-for-testing step and the stop is at bee close. Keep it to the file's existing length and voice; the user-only rule is unchanged and stays stated. (5) skills/bee-swarming/SKILL.md — its completion step tells the agent to present the work and ask 'Ready to merge?'. Add the close-position branch in one clause: under uat_stop close the agent merges first, then hands the user the reloaded product and asks for uat, and a failed uat is fixed in the worktree and merged again. Do not lengthen the section by more than a couple of lines. (6) Then run the FULL regen chain, in this order: .bee/bin/bee dev render-skill-trees, then .bee/bin/bee dev regen, then .bee/bin/bee dev release-manifest --write — and commit all regenerated output including docs/history/codex-harness-hardening/release-manifest.json.",
+  "verify": "python3 -c \"import json;json.load(open('.bee/config-sample.json'))\" && rg -n 'uat_stop' docs/handbook/register.md docs/config-reference.md .bee/config-sample.json skills/bee-hive/references/gates-and-delegation.md skills/bee-swarming/SKILL.md && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test pointer_integrity && PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test instruction_laws && .bee/bin/bee dev release-manifest --check",
+  "verify_owner": "worker",
+  "done_when": "All five documents name uat_stop with its three values and its absent-means-merge default; uat_before_merge is described as the back-compat alias everywhere it appears; .bee/config-sample.json is valid JSON and carries both a _doc and a body entry for the key; both skill files name the two stop positions without growing more than a couple of lines each; the full regen chain has been run and its output committed; pointer-integrity and instruction-laws tests are green.",
+  "notes": "Phase 3. Depends on usp-1, usp-2, usp-3 — all capped. Last cell of the slice.",
+  "must_haves": {
+    "truths": [
+      "docs/handbook/register.md documents uat_stop with three values and the absent-means-merge default.",
+      "uat_before_merge is described as the back-compat alias, not the primary key, everywhere it is documented.",
+      "docs/config-reference.md states what changes under close: merge lands the code, the worktree is held, bee close blocks until uat is approved.",
+      ".bee/config-sample.json is valid JSON and documents uat_stop.",
+      "skills/bee-hive/references/gates-and-delegation.md names the stop's position as configurable rather than fixed at merge.",
+      "skills/bee-swarming/SKILL.md names the close-position branch in one clause at its completion step.",
+      "The full regen chain was run and its regenerated output is part of the commit."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "usp-4-worker",
+    "outcome": null,
+    "files_changed": [
+      "docs/handbook/register.md",
+      "docs/config-reference.md",
+      ".bee/config-sample.json",
+      "skills/bee-hive/references/gates-and-delegation.md",
+      "skills/bee-swarming/SKILL.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T12:24:38.199Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "837fbcd4-540d-49a6-a882-7366f6bc3f97",
+    "claimed_at": "2026-08-18T12:18:50.723Z",
+    "report": {
+      "outcome": "Documented uat_stop two positions (merge/close/off, absent means merge) across register.md, config-reference.md, config-sample.json, and both skill files; uat_before_merge now described as the back-compat alias everywhere; ran the full regen chain and committed regenerated skill trees + release manifest.",
+      "commit": "05b37c6fc1f33ab9ae9189b63f06700e6cbfa3e0",
+      "files": [
+        "docs/handbook/register.md",
+        "docs/config-reference.md",
+        ".bee/config-sample.json",
+        "skills/bee-hive/references/gates-and-delegation.md",
+        "skills/bee-swarming/SKILL.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "cargo test --release --test pointer_integrity/instruction_laws + bee dev release-manifest --check — green — pointer_integrity 10 passed, instruction_laws 9 passed, release-manifest 270 files match",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 232 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

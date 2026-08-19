@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "feature": "release-2-11-0",
+  "mode": "release",
+  "phase": "idle",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"release-2-11-0\" started at phase \"idle\".",
+  "next_action": "Continue bee-idle for \"release-2-11-0\".",
+  "created_at": "2026-08-18T07:12:08.878Z",
+  "run_state": null,
+  "waiting_on": null
+}

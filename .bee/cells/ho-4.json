@@ -1,0 +1,88 @@
+{
+  "id": "ho-4",
+  "feature": "herding-orchestration",
+  "title": "Create the fleet coordination crate and prove its boundary against bee",
+  "lane": "standard",
+  "behavior_change": false,
+  "action": "Create the coordination core crate that D5 locks: its own crate in the packages/bee-rs workspace, compiled into the existing bee binary as a library dependency — NOT a second shipped binary. Name it `fleet` at packages/bee-rs/crates/fleet/. The name is planning's call within D2 and D7: it must name neither bee nor herdr, because the crate knows about neither. Add it to the workspace members list in packages/bee-rs/Cargo.toml, give it a lib target only (no [[bin]]), and declare it as a path dependency of the bee crate in packages/bee-rs/crates/bee/Cargo.toml so it links into the shipped binary. Take the workspace's existing dependency style: version.workspace and edition.workspace in the package table, and workspace-inherited dependencies rather than fresh version pins. The crate needs almost nothing yet — anyhow and serde are the likely two; do not add tokio, async-std, rayon or crossbeam, which D9 rules out. Leave the crate's public surface as a stub module tree with doc comments naming what will live there (the Wave value, the worker-backend trait, the choreography), and one trivial passing unit test so the crate is genuinely wired rather than merely present. THE LOAD-BEARING PART OF THIS CELL IS THE BOUNDARY TEST. D5 states the crate edge is the only mechanism enforcing D2, and the judge on the plan found that review-by-eye is not a mechanism: one bee import inside the core compiles green and every behavioural test still passes. Write a test that reads the fleet crate's own Cargo.toml manifest from disk and fails if it declares any dependency — normal, dev, build or target-conditional — on the bee crate. Read the manifest as text or parse it; either is fine, but the test must fail for a real violation and must not be satisfiable by a comment. Put the test where a reviewer will find it, and give it a failure message that says why the boundary exists, not just that it broke. Run it red first by temporarily adding the forbidden dependency, confirm it fails, then remove that and confirm it passes — the red run is the proof the test has teeth.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "packages/bee-rs/Cargo.toml",
+    "packages/bee-rs/crates/bee/Cargo.toml"
+  ],
+  "files": [
+    "packages/bee-rs/Cargo.toml",
+    "packages/bee-rs/Cargo.lock",
+    "packages/bee-rs/crates/bee/Cargo.toml",
+    "packages/bee-rs/crates/fleet/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "The fleet crate exists in the workspace members list and builds on a plain cargo test run.",
+      "The bee crate declares fleet as a path dependency, so fleet links into the shipped bee binary.",
+      "The fleet crate declares no dependency on the bee crate in any dependency table.",
+      "No async runtime or thread-pool crate is added anywhere.",
+      "A test fails if the fleet crate's manifest ever declares a dependency on bee, and that test was observed failing before it passed."
+    ],
+    "artifacts": [
+      "packages/bee-rs/crates/fleet/Cargo.toml — a lib-only crate inheriting the workspace's version, edition and dependency style",
+      "packages/bee-rs/crates/fleet/src/lib.rs — the stub module tree with doc comments naming the Wave value, the worker-backend trait and the choreography",
+      "the manifest boundary test — reads fleet's Cargo.toml from disk and refuses any dependency on the bee crate, with a failure message explaining the boundary"
+    ],
+    "key_links": [
+      "packages/bee-rs/Cargo.toml members lists the fleet crate.",
+      "packages/bee-rs/crates/bee/Cargo.toml declares fleet as a path dependency."
+    ],
+    "prohibitions": [
+      "Do not add tokio, async-std, rayon, crossbeam or any other async runtime or thread-pool crate — D9 rules them out.",
+      "Do not give the fleet crate a binary target.",
+      "Do not make the fleet crate depend on the bee crate, even transitively.",
+      "Do not put any bee concept — cell, lane, worktree, gate, proof — into the fleet crate's vocabulary."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-4",
+    "outcome": null,
+    "files_changed": [
+      "packages/bee-rs/Cargo.toml",
+      "packages/bee-rs/Cargo.lock",
+      "packages/bee-rs/crates/bee/Cargo.toml",
+      "packages/bee-rs/crates/fleet/Cargo.toml",
+      "packages/bee-rs/crates/fleet/src/lib.rs",
+      "packages/bee-rs/crates/fleet/tests/manifest_boundary.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T09:17:31.940Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T09:12:02.660Z",
+    "report": {
+      "outcome": "Added the fleet coordination crate (lib-only, anyhow+serde) linked into bee, with a D5 manifest boundary test proved red-first via a non-cyclic dev-dependency case",
+      "commit": "41859e1b",
+      "files": [
+        "packages/bee-rs/Cargo.toml",
+        "packages/bee-rs/Cargo.lock",
+        "packages/bee-rs/crates/bee/Cargo.toml",
+        "packages/bee-rs/crates/fleet/Cargo.toml",
+        "packages/bee-rs/crates/fleet/src/lib.rs",
+        "packages/bee-rs/crates/fleet/tests/manifest_boundary.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — 2017 passed, 11 ignored, 21 suites; runs the exact declared verify command",
+      "deviations": [
+        "Red-first run used a temporary [dev-dependencies] bee = { path = \"../bee\" } entry rather than a normal [dependencies] one: adding bee as a normal dependency makes cargo itself refuse the whole workspace with a cyclic-package-dependency error before any test runs (bee already depends on fleet), so it never exercised the test body. The dev-dependency case does not cycle, so cargo built cleanly and fleet_manifest_never_depends_on_bee failed with the intended message; reverting restored green."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "tier": "generation"
+}

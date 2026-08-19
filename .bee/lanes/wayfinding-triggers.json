@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "wayfinding-triggers",
   "mode": null,
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"wayfinding-triggers\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"wayfinding-triggers\" (lane).",
+  "next_action": "Merged to main; lane closed.",
   "created_at": "2026-08-18T04:22:29.158Z",
   "run_state": "done",
   "waiting_on": null,
