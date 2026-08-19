@@ -13,7 +13,8 @@
       "claude.generation": "Gemini via the agy CLI, plan mode, sandboxed, 30m print timeout.",
       "claude.review": "Claude Opus via the opencode CLI, plan agent.",
       "codex.review": "codex exec read-only with high reasoning effort, prompt from stdin ('-')."
-    }
+    },
+    "herding": "The cli slots above and herding.agent_command are NOT the same seam: cli-shaped model/tier slots are GATHER-ONLY (file hunts, scans, reviews, advisor consults — never cell execution), while herding.agent_command is the WRITE-WORK executor for `bee herding run` / `--continue` and `bee herding wave` — a real cell-execution worker in its own worktree. Token 0 is the herdr agent kind (21 kinds, no bee-side allow-list), passed straight through; the rest is that agent's own argv — here a non-claude example, codex with its own model flag. Canonical doc: skills/bee-herding/references/operational-invariants.md."
   },
   "hooks": {
     "session-init": true,
@@ -60,5 +61,8 @@
       },
       "advisor": null
     }
+  },
+  "herding": {
+    "agent_command": ["codex", "--model", "gpt-5.5"]
   }
 }
