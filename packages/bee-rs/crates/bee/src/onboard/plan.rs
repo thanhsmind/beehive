@@ -395,6 +395,10 @@ pub fn compute_plan(engine: &Engine, repo_root: &Path, opts: &Options) -> Comput
         ".bee/reservations.json",
         ".bee/decisions.jsonl",
         ".bee/backlog.jsonl",
+        // config-sample-herding D3: the annotated sample, embedded at
+        // compile time (templates.rs::CONFIG_SAMPLE_JSON) so a fresh repo
+        // gets full documentation without visiting the bee repo.
+        ".bee/config-sample.json",
     ] {
         if !exists(&join_rel(repo_root, rel)) {
             plan.push(plan_item("create_runtime_file", rel));
