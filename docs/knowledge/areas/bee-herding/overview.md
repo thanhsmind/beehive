@@ -143,12 +143,17 @@ the dispatch interlock, or the merge owner-gesture change.
 
 ## Edge Cases Settled
 
-- **A working agent that fails to name its own pane** leaves a slot looking free, so the loop could
-  spawn again next interval. The four-slot cap is currently enforced by the control model counting
-  panes, not by code — a known limit, recorded so it is chosen rather than assumed. Making it
-  mechanical is deferred under trigger `the-wave-ledger-lands-and-role-dispatch-4__984a2cde`:
-  herding-orchestration D10 replaces the pane count with an append-only wave ledger, and when that
-  ledger lands this line is rewritten rather than deferred again.
+- **A working agent that fails to name its own pane** used to leave a slot looking free, because the
+  four-slot cap was enforced by the control model counting panes. **That hole is closed** — the cap
+  now rests on the wave ledger, not on a pane count (herding-orchestration D10, D18). §8 records a
+  row the moment it spawns, carrying the worker's pane id, so an agent that never names its own pane
+  is still visible to the next iteration: the ledger knows the pane even when the pane does not know
+  itself. Occupancy is a liveness question — the ledger's unresolved pane ids crossed against herdr's
+  own live pane list — and a one-hour timer survives only as an explicitly tagged FALLBACK for when
+  that list cannot be obtained. §4 refuses to dispatch on a fallback answer rather than guessing,
+  because a count it cannot verify is exactly the over-spawn the ledger exists to remove. The case is
+  still worth knowing, because it names the class: a cap enforced by counting what you can see is
+  only as good as the naming discipline of the things being counted.
 - **A control pane narrowed too far** stalls silently every interval — the exact failure the whole
   cockpit exists to end. This is why the control surface is enumerated against measured actions, and
   why it is documented to grow when a role gains a command, rather than being set to "read-only".
