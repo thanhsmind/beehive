@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"herding-executor\" started at phase \"exploring\".",
-  "next_action": "Promote the three capture stubs after merge; scope B waits on its trigger",
+  "next_action": "Merged into main at 5242de2; capture what settled, then bee close --feature herding-executor.",
   "created_at": "2026-08-19T16:10:07.376Z",
   "run_state": "done",
   "waiting_on": null,
