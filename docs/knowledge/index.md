@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 105 concept(s)
-- [patterns/](patterns/index.md) — 119 concept(s)
+- [patterns/](patterns/index.md) — 120 concept(s)
 - [work/](work/index.md) — 12 concept(s)
 
 ## Critical patterns
@@ -60,3 +60,4 @@ never a generation timestamp or any other wall-clock value.
 - [A sweep proven by a matcher inherits the matcher's blind spots](patterns/20260818-a-sweep-proven-by-a-matcher-inherits-the-matchers-blind-spots.md) — A sweep proven by a matcher inherits the matcher's blind spots
 - [A write placed before a self-check makes the check accuse itself](patterns/20260818-a-write-placed-before-a-self-check-makes-the.md) — A write placed before a self-check makes the check accuse itself
 - [Defaults merged into a read erase the difference between absent and refused](patterns/20260818-defaults-merged-into-a-read-erase-the-difference-between-absent-and-refused.md) — Defaults merged into a read erase the difference between absent and refused
+- [A test that derives its fixture from the constant under test only proves the code agrees with itself](patterns/20260819-a-test-that-derives-its-fixture-from-the-constant-under-test-only-proves-the-code-agrees-with-itself.md) — A test that derives its fixture from the constant under test only proves the code agrees with itself
