@@ -200,6 +200,14 @@ the dispatch interlock, or the merge owner-gesture change.
   worker's status must therefore treat "done" as a fact about attention, never as evidence that the
   work is complete; that is why an explicitly UNVERIFIABLE outcome is a first-class answer rather
   than an error.
+- **A worker's agent name is derived from its pane, and the multiplexer will not take it raw.**
+  Panes are numbered 1 to 9 and then A, B, C…, so most panes in a busy workspace carry an uppercase
+  letter — and an agent name may only be lowercase letters, digits, dash and underscore, must begin
+  with a lowercase letter, and may not exceed 32 characters. The derived name is therefore made
+  legal by construction before it is used; the cost is that two panes whose ids differ only by case
+  would collapse onto one name, which is accepted because no such pair exists. This was found by the
+  first live run, not by any test: before the repair, every pane with an uppercase letter was
+  refused and the whole wave aborted before sending anything.
 - **A control pane narrowed too far** stalls silently every interval — the exact failure the whole
   cockpit exists to end. This is why the control surface is enumerated against measured actions, and
   why it is documented to grow when a role gains a command, rather than being set to "read-only".
