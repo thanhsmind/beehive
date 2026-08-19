@@ -31,7 +31,6 @@
 .bee/bin/bee.exe
 .claude/settings.json.bak
 .codex/hooks.json.bak
-.bee/mailbox/
 # BEE:END
 
 # rust-port (crates/): compiled artifacts only — Rust source is never
