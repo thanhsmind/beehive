@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "bdc793743db3ca28c1435d6392168883a017d34e99deac29bdfef05e7f7b9685",
+      "sha256": "a4479c911a555735c4d7c69e8c5c2ac16b18805828b4b8c407ffa3c64951e0ed",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -262,7 +262,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/operational-invariants.md",
-      "sha256": "2bfb0023172c404b3797a18798d07a7d9143d2ebdda04f0a6807b6907a36486b",
+      "sha256": "49d6e26ef018d4777a5848de12826bab8079c862de27a9524d0e09df75682b2d",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/operational-invariants.md"
@@ -325,7 +325,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "62c08609a342946139c7da48564ffe58845c4786308a5735873132453f316882",
+      "sha256": "5da3edef6f9607e9d9145f6d269c350d13261316569aa255b3ffab6e196dcbcc",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-hive/references/gates-and-delegation.md"
@@ -514,7 +514,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "3f66ba4e88d5dd41c8bca1e870e5126b6db4587c249f4b4178ca644ec11f63cd",
+      "sha256": "45d52ad7ec07a7de9706717b30758cbdc7b624a95fd117619b0fc24cff9f109f",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-swarming/references/swarming-reference.md"
@@ -647,7 +647,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "554062c445a6d7d1d3ad40bb64110a3c1b286a0dd7b8241b5b379289c19012b4",
+      "sha256": "aca6fba0044882e0998f835b8733473a39f98e00a224919efb1aaa7816810058",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -773,7 +773,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/operational-invariants.md",
-      "sha256": "2bfb0023172c404b3797a18798d07a7d9143d2ebdda04f0a6807b6907a36486b",
+      "sha256": "49d6e26ef018d4777a5848de12826bab8079c862de27a9524d0e09df75682b2d",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/operational-invariants.md"
@@ -836,7 +836,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "b382cc95487ac499c60b08419cff000a0d4704cd61223529599d53857573ba27",
+      "sha256": "e08ba9d86e48f8c0d661105a309f873e95c808a7b9d3d21d1a2522609d06878d",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-hive/references/gates-and-delegation.md"
@@ -1025,7 +1025,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "5b58c686003c9d1067b461bc5f6aa815cb713a42e6b2728d07f8b9ba3fb73a3d",
+      "sha256": "5276a8f9c0dd73191cd05031951a409df154e7980836c160b7af8a7eb156c64f",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-swarming/references/swarming-reference.md"
@@ -1488,7 +1488,7 @@
     },
     {
       "path": "skills/bee-herding/references/operational-invariants.md",
-      "sha256": "2bfb0023172c404b3797a18798d07a7d9143d2ebdda04f0a6807b6907a36486b",
+      "sha256": "49d6e26ef018d4777a5848de12826bab8079c862de27a9524d0e09df75682b2d",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/operational-invariants.md"
@@ -1551,7 +1551,7 @@
     },
     {
       "path": "skills/bee-hive/references/gates-and-delegation.md",
-      "sha256": "c7c7a0ffc050e8fab61280e110bd7107747f32a265d6043045f62f5034ebe686",
+      "sha256": "12d38b01423f46cf646fd7ca7d0bfe24c52dcb763810366f48361e4ce6a95981",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-hive/references/gates-and-delegation.md"
@@ -1740,7 +1740,7 @@
     },
     {
       "path": "skills/bee-swarming/references/swarming-reference.md",
-      "sha256": "b8aeea1231b9b3913ef68b144913fa553c94d1c90e385409bce22cf49fc0bfa3",
+      "sha256": "3dbcfee06fba65ee5b3f061e383a30933439838c6e9c2139e8330007a703f2d4",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/references/swarming-reference.md"

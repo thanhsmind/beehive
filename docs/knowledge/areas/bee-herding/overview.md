@@ -2,14 +2,14 @@
 type: bee.area
 title: "Bee Herding — the three-role cockpit, its safety boundaries, and adoption"
 description: "A herdr-driven cockpit that runs several Claude Code sessions in parallel worktrees: a dispatch loop that starts work behind an owner interlock, a merge gesture the owner runs by hand, and the safety boundaries that make unattended dispatch acceptable while keeping every landing in main a human act."
-timestamp: 2026-07-24
+timestamp: 2026-08-20
 bee:
   id: bee-herding-overview
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/worktree-parallelism/overview.md]
-  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), i54-closeout D4]
-  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", "i54-closeout cell i54-closeout-4 (herding spawn command config-driven templates; trace in .bee/cells/, 2026-07-24)"]
+  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), i54-closeout D4, "herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", herding-executor D9 (the verb appends its own dispatch and ledger rows)]
+  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", "i54-closeout cell i54-closeout-4 (herding spawn command config-driven templates; trace in .bee/cells/, 2026-07-24)", docs/history/herding-executor/CONTEXT.md, "herding-executor cells hx-1..hx-5 (bee herding run: mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, this doc sync; traces in `.bee/cells/`, 2026-08-19/20)"]
   authoritative_for: "bee-herding: the three-role cockpit, its safety boundaries, and adoption"
 ---
 
@@ -33,6 +33,13 @@ isolated copy — is what runs unattended.**
   on all of them together. It carries none of dispatch's guards — no arming marker, no classifier —
   so it is a fan-out over workers that already exist, never the way ordinary backlog work is
   started. It is invoked directly, by a human or by an agent that was told to.
+- **A herding run is a fifth entry point, and it starts a worker rather than briefing one that
+  already exists.** `bee herding run` starts ONE bee-ignorant external agent (any herdr-supported
+  kind) in a fresh pane, hands it a fully self-contained brief over a file mailbox, and waits on
+  that mailbox with native health-check liveness — no LLM call anywhere on the wait path
+  (herding-executor D1, D3, D5). It carries none of dispatch's guards either. It is
+  **cell-execution-only** (D7) — the mirror of the `cli` tier kind's gather/review/advisor-only
+  boundary: a gather never dispatches through a herding pane.
 
 ## Data Dictionary
 
@@ -62,6 +69,10 @@ isolated copy — is what runs unattended.**
 - **Occupancy** — how many working slots are actually taken. It is answered by crossing the ledger's
   unresolved workers against the live pane list, and it carries the SOURCE of its own answer: a real
   crossing, or a degraded timer fallback used when the live list cannot be obtained.
+- **Mailbox** — `.bee/mailbox/<job-id>/`, the file channel `bee herding run` uses to talk to a
+  bee-ignorant worker: `job.json` (the written brief), round-numbered `result-N.json`, and
+  `log.txt`. Every write is staged tmp-then-rename, so a result file's appearance under its final
+  name IS the completion signal — never the pane's screen (herding-executor D3).
 
 ## Behaviors & Operations
 
@@ -127,6 +138,28 @@ occupancy, so it reports one plain line saying so and dispatches nothing that it
 fallback fires exactly when the live pane list could not be obtained — which is also when counting
 panes would have failed — so refusing is not a lost opportunity, and dispatching on a count nobody
 can verify is the over-spawn the ledger exists to prevent.
+
+**A herding run starts one bee-ignorant worker and waits on a file, not a screen.**
+`bee herding run` is a native verb, not a script: it splits a pane off the caller's own
+runtime pane, starts the agent through the same `herding.agent_command` seam the
+working-agent spawn uses, and writes it a fully self-contained brief — task, absolute
+paths, file constraints, the result schema, the tmp-rename write gesture — over the
+mailbox described above, so a worker that has never seen bee can complete it
+(herding-executor D4). Its poll loop is native and health-check based, at zero token
+cost: `result-N.json` presence, `log.txt` mtime, worktree diff activity, and `herdr
+agent list` status all extend the wait; a stale heartbeat past `--idle-timeout` ends
+it, and an absolute `--ceiling` caps it regardless of activity as the busy-loop
+backstop (D5) — there is no fixed short wall-clock timeout, because wall-clock alone
+cannot tell a long cell from a stuck agent. Pane lifecycle follows the result, not the
+clock: a valid result closes the pane, a failure or timeout leaves it open as
+forensics, and `--close-always` overrides both (D6). The verb appends its own
+`dispatch.jsonl` row and a wave-ledger `record-worker` row for every run it starts, so
+occupancy counts these workers too (D9) — everything else bee-shaped (`cells finish`,
+the proof line, reservations) stays the orchestrator's job, done only after it reads
+the result file back (D4). Unlike wave and dispatch, this entry point is
+**cell-execution-only** (D7): the mirror of the `cli` tier kind's
+gather/review/advisor-only boundary — a gather never dispatches through a herding
+pane.
 
 **The working-agent and control-pane spawn commands are config-driven templates,
 byte-equivalent to the hardcoded default (i54-closeout D4).** `bee herding
@@ -266,14 +299,19 @@ the dispatch interlock, or the merge owner-gesture change.
   (`packages/bee-rs/crates/bee/src/herding/control_loop.rs`); the one-shot
   `skills/bee-herding/scripts/bootstrap-cockpit.sh`.
 - The `herding` command group — `classify-lane`, `interlock`, `command-template`,
-  `herdr-result`, `herdr-pane-id`, `wave`, `occupancy`, `record-worker` and
-  `control-loop`, the nine verbs the current binary actually
+  `herdr-result`, `herdr-pane-id`, `wave`, `occupancy`, `record-worker`, `run` and
+  `control-loop`, the ten verbs the current binary actually
   serves — is implemented in `packages/bee-rs/crates/bee/src/herding.rs`, dispatched
   from `packages/bee-rs/crates/bee/src/router.rs`, and listed (with `enable`,
   `disable` and `status` marked `unavailable`) in the command catalog
   `packages/bee-rs/crates/bee/src/catalog.rs`. `enable`, `disable` and `status` are
-  not among the nine live verbs and refuse by name; the manual `touch`/`rm` marker
+  not among the ten live verbs and refuse by name; the manual `touch`/`rm` marker
   gesture is their only live form (see Data Dictionary). Test coverage is inline:
   the `#[cfg(test)] mod tests` block in `herding.rs`.
+- `run`'s own module — pane split/start, the native poll loop, and pane-lifecycle
+  decisions, each seam-tested with a fake so no test needs a real `herdr` on PATH —
+  is `packages/bee-rs/crates/bee/src/herding/run.rs`; the mailbox contract it writes
+  and reads (`job.json`, `result-N.json`, `log.txt`) is
+  `packages/bee-rs/crates/bee/src/herding/mailbox.rs`.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.

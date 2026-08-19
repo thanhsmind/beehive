@@ -5,8 +5,10 @@
 // `herding.agent_command` into a running wave. `HerdrBackend::new`
 // (`crates/fleet/src/backend/herdr.rs`) had ZERO callers anywhere in the
 // workspace before this file — its own documentation names the caller's
-// obligation (split `herding.agent_command` per D14, raise a typed error on
-// an unrecognised token 0) and THIS is that caller.
+// obligation (split `herding.agent_command` per D14 into kind and args)
+// and THIS is that caller. Token 0 passes straight through to herdr as the
+// agent kind, unchecked (D2) — herdr refuses an unrecognised kind itself,
+// after the pane split, not this file's own allow-list.
 //
 // `occupancy` is the CLI bridge to the ledger's read side
 // (`super::wave_ledger::live_worker_count`), which was crate-private and
@@ -58,15 +60,6 @@ use super::wave_ledger;
 const DEFAULT_AGENT_COMMAND: &[&str] =
     &["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"];
 
-/// The agent kinds `herdr agent start --kind` is known to accept, from
-/// every example in this workspace's own herdr fixtures
-/// (`crates/fleet/src/backend/herdr.rs` tests use both) — `herdr --skill`,
-/// the first authority, was not available to this worker (recorded the same
-/// way `herdr.rs`'s own module docs record it). Token 0 outside this list
-/// raises `AgentCommandError::UnrecognizedKind` rather than being handed to
-/// `herdr` on faith, per D14's typed-error obligation.
-const SUPPORTED_AGENT_KINDS: &[&str] = &["claude", "codex"];
-
 /// The one placeholder `herding.agent_command` defines
 /// (`operational-invariants.md`): the fixed model, substituted per-token,
 /// never by joining tokens and re-splitting (the shell-injection-safe shape
@@ -74,23 +67,20 @@ const SUPPORTED_AGENT_KINDS: &[&str] = &["claude", "codex"];
 const MODEL_PLACEHOLDER: &str = "{MODEL}";
 const MODEL_VALUE: &str = "sonnet";
 
-/// D14's typed error: an unrecognised token 0, naming the config key it
-/// came from. Never a generic start failure — this is the whole point of
-/// `HerdrBackend::new`'s caller owning the split.
+/// D14's fail-closed arm: the split left zero tokens, naming the config key
+/// it came from. Per D2, herdr owns validating token 0 as an agent kind —
+/// this error is never raised for an unrecognised kind, only for a split
+/// with nothing in it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AgentCommandError {
-    UnrecognizedKind { key: &'static str, kind: String, supported: Vec<&'static str> },
+    Empty { key: &'static str },
 }
 
 impl std::fmt::Display for AgentCommandError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AgentCommandError::UnrecognizedKind { key, kind, supported } => {
-                write!(
-                    f,
-                    "{key}: token 0 \"{kind}\" is not one of herdr's supported agent kinds ({})",
-                    supported.join(", ")
-                )
+            AgentCommandError::Empty { key } => {
+                write!(f, "{key}: resolved to zero tokens")
             }
         }
     }
@@ -125,28 +115,19 @@ fn agent_command_tokens(cfg: &Value) -> Vec<String> {
 
 /// D14's split: token 0 becomes the agent kind (herdr's `--kind`), the
 /// remaining tokens — each substituted per-token — become the agent args
-/// (herdr's trailing argv after `--`). An unrecognised token 0 surfaces as
-/// `AgentCommandError::UnrecognizedKind` naming `herding.agent_command`,
-/// never a generic start failure.
+/// (herdr's trailing argv after `--`). Token 0 passes through UNCHECKED
+/// (D2): `herdr` validates it as a `--kind` and refuses an unrecognised one
+/// itself, after the pane split — never a bee-side allow-list.
+/// `AgentCommandError::Empty` is the fail-closed arm for a split that
+/// leaves zero tokens.
 pub(crate) fn resolve_agent_command(cfg: &Value) -> Result<(String, Vec<String>), AgentCommandError> {
     let tokens = agent_command_tokens(cfg);
     let substituted: Vec<String> = tokens.iter().map(|t| substitute_model(t)).collect();
     let Some((kind, args)) = substituted.split_first() else {
         // agent_command_tokens() never returns empty (it falls back to the
         // non-empty default), but fail closed rather than panic if it ever did.
-        return Err(AgentCommandError::UnrecognizedKind {
-            key: "herding.agent_command",
-            kind: String::new(),
-            supported: SUPPORTED_AGENT_KINDS.to_vec(),
-        });
+        return Err(AgentCommandError::Empty { key: "herding.agent_command" });
     };
-    if !SUPPORTED_AGENT_KINDS.contains(&kind.as_str()) {
-        return Err(AgentCommandError::UnrecognizedKind {
-            key: "herding.agent_command",
-            kind: kind.clone(),
-            supported: SUPPORTED_AGENT_KINDS.to_vec(),
-        });
-    }
     Ok((kind.clone(), args.to_vec()))
 }
 
@@ -737,18 +718,15 @@ mod tests {
     }
 
     #[test]
-    fn an_unrecognised_kind_is_a_typed_error_naming_the_config_key() {
-        let cfg = serde_json::json!({"herding": {"agent_command": ["not-a-real-kind", "--x"]}});
-        let err = resolve_agent_command(&cfg).unwrap_err();
-        match &err {
-            AgentCommandError::UnrecognizedKind { key, kind, .. } => {
-                assert_eq!(*key, "herding.agent_command");
-                assert_eq!(kind, "not-a-real-kind");
-            }
-        }
-        let msg = err.to_string();
-        assert!(msg.contains("herding.agent_command"), "{msg}");
-        assert!(msg.contains("not-a-real-kind"), "{msg}");
+    fn an_arbitrary_token_0_passes_through_unchecked_to_herdr() {
+        // D2: bee owns no agent-kind allow-list. herdr validates `--kind`
+        // itself, after the pane split — any token 0 (a real herdr kind
+        // like "gemini", a typo, anything) resolves and reaches backend
+        // construction unchanged.
+        let cfg = serde_json::json!({"herding": {"agent_command": ["gemini", "--x"]}});
+        let (kind, args) = resolve_agent_command(&cfg).unwrap();
+        assert_eq!(kind, "gemini");
+        assert_eq!(args, vec!["--x"]);
     }
 
     #[test]

@@ -115,7 +115,7 @@ pub(crate) fn scratch_shape_deny(normalized: &str) -> Option<String> {
     let under_any = |prefixes: &[&str]| {
         prefixes.iter().any(|p| normalized == &p[..p.len() - 1] || normalized.starts_with(p))
     };
-    if under_any(&[".bee/tmp/", ".bee/spikes/", ".bee/logs/", ".bee/workers/"]) {
+    if under_any(&[".bee/tmp/", ".bee/spikes/", ".bee/logs/", ".bee/workers/", ".bee/mailbox/"]) {
         return None;
     }
     if normalized == ".bee/decisions.jsonl" {

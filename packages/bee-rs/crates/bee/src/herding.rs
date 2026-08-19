@@ -25,6 +25,12 @@
 //                             by ho-14, which rewired bootstrap-cockpit.sh onto
 //                             this verb; ho-15 moved the references it left.
 //
+//   bee herding run       <- (herding-executor D1/D2/D5/D6/D9) start one
+//                             bee-ignorant external agent in a pane, wait on
+//                             a file mailbox with native health-check
+//                             liveness, return one structured result. See
+//                             run.rs.
+//
 // The next three (herdr-result, herdr-pane-id, command-template) are the cockpit
 // shell scripts' inline `node -e` snippets. They
 // are not bee state at all — they parse a config file and herdr's own JSON
@@ -74,6 +80,17 @@ mod wave;
 // control-loop.sh. See control_loop.rs.
 mod control_loop;
 
+// The file mailbox worker-completion contract (herding-executor feature:
+// mailbox layout and the self-contained-brief requirement, both locked in
+// .bee/decisions.jsonl feature=herding-executor). See mailbox.rs.
+mod mailbox;
+
+// `bee herding run` (herding-executor D1/D2/D5/D6/D9) — the scope-A verb:
+// spawn one bee-ignorant external agent into a pane, wait on the mailbox
+// above with native health-check liveness, return one structured result.
+// See run.rs.
+mod run;
+
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
@@ -91,6 +108,7 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "wave" => Some(wave::wave(rest)),
         "occupancy" => Some(wave::occupancy(rest)),
         "record-worker" => Some(wave::record_worker(rest)),
+        "run" => Some(run::run(rest)),
         "control-loop" => Some(control_loop::control_loop(rest)),
         _ => None,
     }

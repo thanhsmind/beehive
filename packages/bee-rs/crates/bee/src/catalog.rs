@@ -427,7 +427,11 @@ mod tests {
         // carries — which control agent this loop drives, the loop's own
         // poll/kill/ceiling/backoff knobs, and "run one iteration then
         // exit" — so all seven are genuinely new. Net +7: 163 -> 170.
-        const PINNED_FLAG_COUNT: usize = 170;
+        // herding.run (hx-4/hx-6) adds `--task`, `--task-file`, `--job-id`,
+        // `--idle-timeout`, `--ceiling`, `--close-always`, `--continue` —
+        // the mailbox executor's own knobs, no existing flag names them.
+        // Net +7: 170 -> 177.
+        const PINNED_FLAG_COUNT: usize = 177;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();
