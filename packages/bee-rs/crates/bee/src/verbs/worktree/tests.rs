@@ -827,6 +827,23 @@ use std::time::Instant;
         std::fs::write(dir.join(format!("{id}.json")), cell.to_string()).unwrap();
     }
 
+    /// Same live-store shape `write_capped_cell` leaves, plus
+    /// `trace.files_changed` — the field `feature_touched_files`
+    /// (drivers/close.rs) reads to learn which paths a capped cell of this
+    /// feature actually touched. kss-1: this is how a merging feature earns
+    /// a `docs/knowledge/` path into its own scoped auto-commit.
+    fn write_capped_cell_with_files(main: &Path, id: &str, feature: &str, files: &[&str]) {
+        let cell = json!({
+            "id": id,
+            "feature": feature,
+            "status": "capped",
+            "trace": { "files_changed": files },
+        });
+        let dir = main.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), cell.to_string()).unwrap();
+    }
+
     fn valid_proof_report() -> Value {
         json!({
             "outcome": "did the thing",
@@ -1630,7 +1647,7 @@ use std::time::Instant;
         let commit = commit_main_bookkeeping(
             &main,
             "Auto-commit .bee bookkeeping before merging worktree demo",
-            &main_bookkeeping_roots(None),
+            &main_bookkeeping_roots(&main, None),
         );
         assert!(matches!(commit, MainBookkeepingCommit::Committed { .. }), "{}", commit.value());
 
@@ -1750,13 +1767,14 @@ use std::time::Instant;
         assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
     }
 
-    /// D1 (dirty-main-conflicts): `docs/knowledge/` is bee's own tracked
-    /// output — the capture chain writes `docs/knowledge/**` on every sync
-    /// — so a dirty, already-tracked file under it joins `.bee` in the
-    /// auto-commit's swept roots exactly like `docs/history` does, instead
-    /// of refusing on bee's own bookkeeping.
+    /// kss-1: `docs/knowledge/` holds AUTHORED prose, not bookkeeping, so it
+    /// is swept only when THIS feature's own capped cells recorded touching
+    /// the exact path — the same read `feature_touched_files`
+    /// (drivers/close.rs) already gives close's own doc-deferral scan.
+    /// Recorded, dirty, already-tracked: it joins `.bee` in the auto-commit
+    /// exactly like `docs/history/<feature>` does.
     #[test]
-    fn docs_knowledge_dirt_is_auto_committed_alongside_bee() {
+    fn docs_knowledge_dirt_recorded_by_this_features_own_cell_is_auto_committed_alongside_bee() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo_tracking_bee(tmp.path());
         let created = worktree_with_a_real_commit(&main, "demo");
@@ -1770,12 +1788,14 @@ use std::time::Instant;
         git_ok(&main, &["add", "-A"]);
         git_ok(&main, &["commit", "-qm", "seed knowledge doc"]);
         // Dirty the already-tracked file, the same shape a capture sync
-        // leaves behind.
+        // leaves behind, and record it as touched by one of "demo"'s own
+        // capped cells — the fact that earns it a scoped sweep.
         std::fs::write(
             main.join("docs").join("knowledge").join("areas").join("example.md"),
             "captured, updated\n",
         )
         .unwrap();
+        write_capped_cell_with_files(&main, "demo-1", "demo", &["docs/knowledge/areas/example.md"]);
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
@@ -1792,6 +1812,76 @@ use std::time::Instant;
             answer.result["bookkeeping_commit"]
         );
         assert!(git_status_porcelain_str(&main).is_empty(), "{}", git_status_porcelain_str(&main));
+    }
+
+    /// REAL INCIDENT, 2026-08-18: merging `uat-stop-placement` produced
+    /// bookkeeping commit `7429dfda`, which swallowed a SIBLING session's
+    /// capture sync to `docs/knowledge/areas/workflow-state/gates.md` —
+    /// work belonging to feature `start-feature-reservation-scope`. This is
+    /// the reproduction: another feature's OWN `docs/knowledge/` dirt must
+    /// never be swept into THIS merge's auto-commit, modelled line-for-line
+    /// on `another_features_docs_history_dirt_still_refuses_and_is_named`.
+    /// Only the exact paths THIS feature's own capped cells recorded are
+    /// ever in scope; anything else under `docs/knowledge/` still refuses
+    /// and is named.
+    #[test]
+    fn another_features_docs_knowledge_dirt_still_refuses_and_is_named() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        std::fs::create_dir_all(main.join("docs").join("knowledge").join("areas")).unwrap();
+        std::fs::write(
+            main.join("docs").join("knowledge").join("areas").join("gates.md"),
+            "a peer's in-flight capture sync\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
+        let Err(err) = result else { panic!("another feature's docs/knowledge dirt must still refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains("gates.md"), "{msg}");
+        // Nothing committed, nothing merged: the peer's file is left exactly
+        // as dirtied (plain porcelain collapses an all-untracked `docs/` to
+        // one summary line, per D8a — `--untracked-files=all` is what names
+        // it, already proven above via `msg`).
+        let after = git_status_porcelain_excluding_untracked_all(&main, &[]).unwrap();
+        assert!(
+            after.contains("docs/knowledge/areas/gates.md"),
+            "the peer's docs/knowledge file must be left untouched: {after}"
+        );
+    }
+
+    /// The narrower case within a SINGLE feature: `docs/knowledge/` dirt
+    /// recorded by no cell of THIS feature stays uncommitted even though the
+    /// feature has other capped cells that recorded a DIFFERENT knowledge
+    /// path — only the exact recorded paths are ever swept, never the whole
+    /// root just because the feature touched some part of it.
+    #[test]
+    fn docs_knowledge_dirt_unrecorded_by_any_of_this_features_cells_stays_uncommitted() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = main_repo_tracking_bee(tmp.path());
+        let created = worktree_with_a_real_commit(&main, "demo");
+
+        write_capped_cell_with_files(&main, "demo-1", "demo", &["docs/knowledge/areas/recorded.md"]);
+
+        std::fs::write(main.join(".bee").join("config.json"), "{\"a\": 1}\n").unwrap();
+        std::fs::create_dir_all(main.join("docs").join("knowledge").join("areas")).unwrap();
+        std::fs::write(
+            main.join("docs").join("knowledge").join("areas").join("unrecorded.md"),
+            "dirt this feature never recorded touching\n",
+        )
+        .unwrap();
+
+        let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
+        let result = merge_feature_worktree(&main, &created.id, cleanup, None, true, None);
+        let Err(err) = result else { panic!("unrecorded docs/knowledge dirt must still refuse") };
+        let MErr::Thrown(msg) = err else { panic!("expected a typed refusal, got MErr::Ex") };
+        assert!(msg.contains("WORKTREE_MERGE_MAIN_DIRTY"), "{msg}");
+        assert!(msg.contains("unrecorded.md"), "{msg}");
     }
 
     /// The sharper half of this cell: another feature's OWN
