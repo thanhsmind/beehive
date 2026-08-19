@@ -74,6 +74,13 @@ mod wave;
 // control-loop.sh. See control_loop.rs.
 mod control_loop;
 
+// The file mailbox worker-completion contract (herding-executor feature:
+// mailbox layout and the self-contained-brief requirement, both locked in
+// .bee/decisions.jsonl feature=herding-executor — no CLI verb yet, this is
+// the pure path/brief/parse layer a later cell's dispatcher wires up). See
+// mailbox.rs.
+mod mailbox;
+
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
