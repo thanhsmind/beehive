@@ -415,6 +415,23 @@ In order, from the MAIN checkout:
    — and still end the iteration without spawning again this poll: do not
    retry the recording call, and do not spawn a second worker to compensate.
 
+5. **Give the human their view back.** `agent start` carries no `--no-focus`
+   flag, unlike `pane split` and `tab create`, and it MOVES the workspace's
+   focus onto the new agent's tab (recorded live in
+   `references/spawn-proof.md`). Left alone, a loop polling on a fixed interval
+   yanks the owner away from whatever they were reading, every single spawn —
+   the one thing `--no-focus` exists everywhere else to prevent. Read your own
+   tab from the pane id you already hold (§1), then focus it back:
+   ```
+   herdr pane current --pane <your own pane_id>     # read .result.pane.tab_id
+   herdr tab focus <that tab_id>
+   ```
+   **Never `--current` here**, for the reason §3 already gives: it resolves to
+   the globally focused pane, which after `agent start` is the WORKER's — so
+   `--current` would read the worker's tab and focus the thing you are trying
+   to move away from. A failure here is cosmetic, not structural: report it in
+   one line and end the iteration normally, never retry the spawn over it.
+
 The working agent is on its own from there — it runs the ordinary bee chain
 inside its worktree until its item is finished. This role does not watch it,
 wait on it, or act on it again; the next iteration's occupancy count (§4) is
@@ -455,3 +472,4 @@ or in the herdr workspace changes as a result.
 | Split the runtime pane | `herdr pane split <runtime-pane-id> --direction right\|down --ratio <r> --cwd <path> --no-focus` → read `.result.pane.pane_id` (§8) |
 | Start the working agent | `herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout 60000 -- <agent args>` — `<kind>` and `<agent args>` are `herding.agent_command`-driven; pane must exist first (split, then start), never `-p` (§8) |
 | Record the spawn (closes the occupancy loop) | `.bee/bin/bee herding record-worker --name <slug> --pane-id <new_pane_id> --path <worktree_path> --task <PBI-ID>` — only after the confirm step; failure is reported loudly, never silently passed over (§8) |
+| Give the human their view back after a spawn | `herdr pane current --pane <your own pane_id>` for its `tab_id`, then `herdr tab focus <tab_id>` — `agent start` has no `--no-focus`; never `--current` (§3) |

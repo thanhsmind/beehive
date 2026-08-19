@@ -95,6 +95,21 @@ zero behavior change. Substitution is per-token, never join-then-split,
 never `eval`. Shape and examples:
 `references/operational-invariants.md` ("Runtime adapter").
 
+## Waves — briefing several workers at once
+
+`bee herding wave` is a SEPARATE shape from the three roles, and no role
+calls it. Dispatch starts one worker per iteration and never speaks to
+it again; a wave briefs N already-running panes in one act, waits on
+all of them at the same time, and records the run as one ledger row.
+It has no interlock, no classifier and no gate, so it is never the way
+to start the cockpit's ordinary backlog work — only a fan-out over
+panes that already exist. Three things surprise every first caller: it
+creates no panes and no worktrees (splitting is yours), one
+unresolvable target stops the whole run before any brief is sent, and
+its `success` is `false` even on a perfect run because no completion
+signal exists — read the ledger row and the panes instead. Protocol:
+`references/wave-runs.md`.
+
 ## References
 
 | File | When to load |
@@ -102,6 +117,7 @@ never `eval`. Shape and examples:
 | `references/role-bootstrap.md` | You are the bootstrap role — read the full protocol before any pre-flight action |
 | `references/role-dispatch.md` | You are the dispatch role — read the full protocol (plus quick reference) before building the dispatchable set |
 | `references/role-merge.md` | You are the merge role — read the full protocol (plus quick reference) before touching any worktree |
+| `references/wave-runs.md` | Running `bee herding wave` — what it does not do, the input shape, and why `success` is not the thing to read |
 | `references/operational-invariants.md` | A safety boundary needs its full record — permission posture, runtime adapter, containment, stop/resume |
 | `references/dispatch-dry-run.md` | Auditing what a dispatch iteration decides — the recorded dry-run proof |
 | `references/spawn-proof.md` | Auditing a live spawn end to end — the recorded proof |
