@@ -798,15 +798,32 @@ mod tests {
     /// Spawns a copy of THIS test binary (`current_exe()`), targeting one
     /// named test function by `--exact`, with an env var set so tests need
     /// neither a `claude` binary nor herdr (per-cell requirement) while
-    /// still exercising a REAL OS process on the kill path.
+    /// still exercising a REAL OS process on the kill path. The command it
+    /// actually runs is fixed (it must be a controllable self-exec, not
+    /// whatever argv happens to carry), but it still OBSERVES the argv it
+    /// was handed — `received()` is read by
+    /// `overrunning_iteration_is_actually_killed` below, so a mutation that
+    /// swaps out what `run_iteration_with_ceiling` passes to the spawner is
+    /// still caught even on the kill path.
     struct SelfExecSpawner {
         test_name: &'static str,
         env_var: &'static str,
         env_value: &'static str,
+        received: Mutex<Vec<Argv>>,
+    }
+
+    impl SelfExecSpawner {
+        fn new(test_name: &'static str, env_var: &'static str, env_value: &'static str) -> Self {
+            SelfExecSpawner { test_name, env_var, env_value, received: Mutex::new(Vec::new()) }
+        }
+        fn received(&self) -> Vec<Argv> {
+            self.received.lock().unwrap().clone()
+        }
     }
 
     impl IterationSpawner for SelfExecSpawner {
-        fn spawn(&self, _argv: &Argv) -> std::io::Result<Child> {
+        fn spawn(&self, argv: &Argv) -> std::io::Result<Child> {
+            self.received.lock().unwrap().push(argv.clone());
             let exe = std::env::current_exe().expect("test binary path");
             Command::new(exe).args([self.test_name, "--exact"]).env(self.env_var, self.env_value).spawn()
         }
@@ -818,15 +835,23 @@ mod tests {
 
     #[test]
     fn overrunning_iteration_is_actually_killed() {
-        let spawner = SelfExecSpawner {
-            test_name: "herding::control_loop::tests::sleep_forever_when_asked",
-            env_var: SLEEP_FOREVER_ENV,
-            env_value: "1",
-        };
-        let argv: Argv = vec!["placeholder".to_string()]; // ignored; SelfExecSpawner builds its own
+        let spawner = SelfExecSpawner::new(
+            "herding::control_loop::tests::sleep_forever_when_asked",
+            SLEEP_FOREVER_ENV,
+            "1",
+        );
+        // The command actually run is fixed (a controllable self-exec), but
+        // the argv passed through `run_iteration_with_ceiling` must still be
+        // OBSERVED unaltered — asserted below via `spawner.received()`.
+        let argv: Argv = vec!["placeholder".to_string()];
 
         let result = run_iteration_with_ceiling(&argv, Duration::from_millis(250), &spawner);
         assert!(matches!(result.outcome, IterationOutcome::TimedOut), "{:?}", result.outcome);
+        assert_eq!(
+            spawner.received(),
+            vec![argv.clone()],
+            "the spawner must receive exactly the argv run_iteration_with_ceiling was given"
+        );
         let pid = result.pid.expect("a pid was captured before the kill");
 
         // Prove it is ACTUALLY dead — not merely that our timer elapsed.
@@ -846,23 +871,21 @@ mod tests {
 
     #[test]
     fn an_iteration_finishing_well_inside_the_ceiling_succeeds() {
-        let spawner = SelfExecSpawner {
-            test_name: "herding::control_loop::tests::quick_exit_helper",
-            env_var: QUICK_EXIT_ENV,
-            env_value: "succeed",
-        };
+        let spawner =
+            SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
         let argv: Argv = vec!["placeholder".to_string()];
         let result = run_iteration_with_ceiling(&argv, Duration::from_secs(30), &spawner);
         assert!(matches!(result.outcome, IterationOutcome::Success), "{:?}", result.outcome);
+        assert_eq!(spawner.received(), vec![argv.clone()]);
     }
 
     #[test]
     fn a_failing_iteration_reports_failed_not_timed_out() {
-        let spawner =
-            SelfExecSpawner { test_name: "herding::control_loop::tests::quick_exit_helper", env_var: QUICK_EXIT_ENV, env_value: "fail" };
+        let spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "fail");
         let argv: Argv = vec!["placeholder".to_string()];
         let result = run_iteration_with_ceiling(&argv, Duration::from_secs(30), &spawner);
         assert!(matches!(result.outcome, IterationOutcome::Failed(_)), "{:?}", result.outcome);
+        assert_eq!(spawner.received(), vec![argv.clone()]);
     }
 
     // ── loop mechanics: stop file, ceilings, backoff, --once ───────────────
@@ -884,6 +907,8 @@ mod tests {
     /// Records every argv it is handed and how many times it was called,
     /// then delegates the actual spawn to an inner spawner — lets tests
     /// assert on the full value crossing into the spawner, not just a count.
+    /// `seen()` is read by `real_argv_provider_output_reaches_the_spawner_unaltered`
+    /// below, comparing the WHOLE token vector, not a prefix or a count.
     struct CountingSpawner<'a> {
         inner: &'a dyn IterationSpawner,
         calls: AtomicUsize,
@@ -896,6 +921,9 @@ mod tests {
         }
         fn call_count(&self) -> usize {
             self.calls.load(Ordering::SeqCst)
+        }
+        fn seen(&self) -> Vec<Argv> {
+            self.seen.lock().unwrap().clone()
         }
     }
 
@@ -954,11 +982,7 @@ mod tests {
             &opts(|_| {}),
             &stop_file,
             &NeverCalledArgvProvider,
-            &SelfExecSpawner {
-                test_name: "herding::control_loop::tests::quick_exit_helper",
-                env_var: QUICK_EXIT_ENV,
-                env_value: "succeed",
-            },
+            &SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed"),
             &sleeper,
         );
         assert_eq!(outcome, LoopOutcome::NormalStop);
@@ -986,16 +1010,21 @@ mod tests {
     fn stop_file_created_mid_iteration_is_honoured_right_after_that_iteration() {
         let tmp = tempfile::tempdir().unwrap();
         let stop_file = tmp.path().join("stop");
-        let real_spawner =
-            SelfExecSpawner { test_name: "herding::control_loop::tests::quick_exit_helper", env_var: QUICK_EXIT_ENV, env_value: "succeed" };
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
         let counting = CountingSpawner::new(&real_spawner);
-        let provider = TouchStopFileThenProvide { stop_file: stop_file.clone(), argv: vec!["placeholder".to_string()] };
+        let fixed_argv = vec!["placeholder".to_string()];
+        let provider = TouchStopFileThenProvide { stop_file: stop_file.clone(), argv: fixed_argv.clone() };
         let sleeper = RecordingSleeper::new();
 
         let outcome = run_loop(&opts(|_| {}), &stop_file, &provider, &counting, &sleeper);
 
         assert_eq!(outcome, LoopOutcome::NormalStop);
         assert_eq!(counting.call_count(), 1, "the loop must stop after the iteration that created the stop file, not run more");
+        assert_eq!(
+            counting.seen(),
+            vec![fixed_argv],
+            "the whole argv the provider returned must reach the spawner unaltered"
+        );
         assert!(sleeper.recorded().is_empty(), "the after-iteration stop check must fire before any sleep");
     }
 
@@ -1003,8 +1032,7 @@ mod tests {
     fn iteration_ceiling_stops_the_loop_after_exactly_max_iterations() {
         let tmp = tempfile::tempdir().unwrap();
         let stop_file = tmp.path().join("stop"); // never created
-        let real_spawner =
-            SelfExecSpawner { test_name: "herding::control_loop::tests::quick_exit_helper", env_var: QUICK_EXIT_ENV, env_value: "succeed" };
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
         let counting = CountingSpawner::new(&real_spawner);
         let provider = quick_success_provider();
         let sleeper = RecordingSleeper::new();
@@ -1019,8 +1047,7 @@ mod tests {
     fn once_runs_exactly_one_iteration_then_exits_clean_even_on_a_lone_failure() {
         let tmp = tempfile::tempdir().unwrap();
         let stop_file = tmp.path().join("stop");
-        let real_spawner =
-            SelfExecSpawner { test_name: "herding::control_loop::tests::quick_exit_helper", env_var: QUICK_EXIT_ENV, env_value: "fail" };
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "fail");
         let counting = CountingSpawner::new(&real_spawner);
         let provider = quick_success_provider();
         let sleeper = RecordingSleeper::new();
@@ -1040,8 +1067,7 @@ mod tests {
     fn consecutive_failure_ceiling_gives_up_and_backoff_is_capped() {
         let tmp = tempfile::tempdir().unwrap();
         let stop_file = tmp.path().join("stop");
-        let real_spawner =
-            SelfExecSpawner { test_name: "herding::control_loop::tests::quick_exit_helper", env_var: QUICK_EXIT_ENV, env_value: "fail" };
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "fail");
         let counting = CountingSpawner::new(&real_spawner);
         let provider = quick_success_provider();
         let sleeper = RecordingSleeper::new();
@@ -1073,6 +1099,76 @@ mod tests {
         assert_eq!(backoff_duration(10, 5), Duration::from_secs(50));
         assert_eq!(backoff_duration(1000, 1), Duration::from_secs(BACKOFF_CAP));
         assert_eq!(backoff_duration(100, 100), Duration::from_secs(BACKOFF_CAP));
+    }
+
+    // ── production wiring: the real argv provider, spawner, sleeper and
+    //    the loop entry point, each reached by at least one test ─────────
+
+    /// THE mutation-catching test. `RealArgvProvider` is the production
+    /// wiring `control_loop()` actually uses, `CountingSpawner` records the
+    /// WHOLE argv token vector the spawner received — not a count, not a
+    /// prefix — and this asserts it equals what `resolve_iteration_argv`
+    /// (the same function `RealArgvProvider::argv_for` calls) built for the
+    /// identical inputs. A mutation that discards the argv `run_loop` /
+    /// `run_iteration_with_ceiling` built and hands the spawner a
+    /// hardcoded vector instead fails this test.
+    #[test]
+    fn real_argv_provider_output_reaches_the_spawner_unaltered() {
+        let tmp = tempfile::tempdir().unwrap();
+        let refs = tmp.path().join("skills").join("bee-herding").join("references");
+        std::fs::create_dir_all(&refs).unwrap();
+        std::fs::write(refs.join("dispatch-prompt.md"), "PROMPT BODY dispatch\n").unwrap();
+
+        let provider = RealArgvProvider { main_root: tmp.path().to_path_buf(), role: Role::Dispatch, turn_ceiling: 50 };
+        let expected = resolve_iteration_argv(tmp.path(), Role::Dispatch, 50).expect("argv resolves");
+
+        let stop_file = tmp.path().join("stop");
+        let real_spawner = SelfExecSpawner::new("herding::control_loop::tests::quick_exit_helper", QUICK_EXIT_ENV, "succeed");
+        let counting = CountingSpawner::new(&real_spawner);
+        let sleeper = RecordingSleeper::new();
+
+        let outcome = run_loop(&opts(|o| o.once = true), &stop_file, &provider, &counting, &sleeper);
+
+        assert_eq!(outcome, LoopOutcome::NormalStop);
+        assert_eq!(
+            counting.seen(),
+            vec![expected],
+            "the whole argv token vector RealArgvProvider built must reach the spawner unaltered — \
+             not a prefix, not a length, not the first flag"
+        );
+    }
+
+    #[test]
+    fn real_spawner_actually_spawns_the_given_program() {
+        let exe = std::env::current_exe().expect("test binary path");
+        let argv: Argv = vec![
+            exe.to_string_lossy().to_string(),
+            "herding::control_loop::tests::quick_exit_helper".to_string(),
+            "--exact".to_string(),
+        ];
+        let mut child = RealSpawner.spawn(&argv).expect("RealSpawner must be able to spawn a real program");
+        let status = child.wait().expect("spawned child must be waitable");
+        assert!(status.success(), "{status:?}");
+    }
+
+    #[test]
+    fn real_sleeper_actually_sleeps() {
+        let start = std::time::Instant::now();
+        RealSleeper.sleep(Duration::from_millis(20));
+        assert!(start.elapsed() >= Duration::from_millis(20));
+    }
+
+    #[test]
+    fn control_loop_entry_point_prints_usage_and_exits_clean_on_help() {
+        // Reaches `control_loop()`, the CLI entry point, without needing a
+        // real main-root or a `claude` binary — `--help` returns before
+        // either is touched.
+        let _: ExitCode = control_loop(&["--help"]);
+    }
+
+    #[test]
+    fn control_loop_entry_point_fails_without_required_role() {
+        let _: ExitCode = control_loop(&[]);
     }
 
     // ── CLI parsing ──────────────────────────────────────────────────────
