@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-executor",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": true
   },
   "summary": "Feature \"herding-executor\" started at phase \"exploring\".",
-  "next_action": "Merged into main at 5242de2; capture what settled, then bee close --feature herding-executor.",
+  "next_action": "bee close finished \"herding-executor\" — feature is closed.",
   "created_at": "2026-08-19T16:10:07.376Z",
-  "run_state": "done",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Thông báo cũ lần 5, cùng nguồn: thợ hx-6 để sót process test nền, mỗi cái chết là bắn 1 thông báo rác. Đã ghi 1 dòng friction vào backlog (t",
+    "asked_at": "2026-08-19T23:24:30.175Z",
+    "session": "1adb69d1-67be-4463-8349-af8832af8a32"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
