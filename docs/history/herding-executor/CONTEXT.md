@@ -78,13 +78,13 @@ Decision-log ids are cited beside each row (`bee decisions search`).
 
 - (none)
 
-### Deferred To Planning
+### Questions Handed To Planning
 
-- [ ] D8 mechanism: write-guard allowlist path for `.bee/mailbox/` vs relocating the mailbox — measure what the guard actually matches today
+- [x] D8 mechanism (resolved by hx-3): write-guard allowlist path for `.bee/mailbox/` vs relocating the mailbox — measure what the guard actually matches today
 - [x] Mid-run interactive stalls (permission prompt, login) beyond start-timeout: what herdr status exposes per kind, and whether idle-timeout suffices as the only net — re-opens on [[trigger:first-real-bee-herding-run-against-a-non__3bc0dceb]]
-- [ ] Occupancy: whether `bee herding run` records into the wave ledger (`record-worker`) so cockpit occupancy counts these workers too
+- [x] Occupancy (resolved by hx-4 — it records): whether `bee herding run` records into the wave ledger (`record-worker`) so cockpit occupancy counts these workers too
 
-## Deferred Ideas
+## Ideas Out Of Scope (trigger-registered)
 
 - Scope B — `{kind:"herding"}` tier kind in `models.*.generation` (backlogged as a proposal, feature-tagged herding-executor; picks up on [[trigger:scope-a-bee-herding-run-has-executed-rea__de911edd]])
 - Herding as a review-tier transport (panel members in panes) — not needed while `cli` covers review
