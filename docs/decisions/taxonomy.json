@@ -373,6 +373,7 @@
     "env",
     "worker",
     "limit",
-    "resume"
+    "resume",
+    "brief"
   ]
 }
