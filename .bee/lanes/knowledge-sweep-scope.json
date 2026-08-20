@@ -8,7 +8,7 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"knowledge-sweep-scope\" started at phase \"exploring\" (lane).",
   "next_action": "Continue bee-exploring for \"knowledge-sweep-scope\" (lane).",

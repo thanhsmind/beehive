@@ -8,7 +8,7 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"doc-deferral-baseline\" started at phase \"exploring\" (lane).",
   "next_action": "Continue bee-exploring for \"doc-deferral-baseline\" (lane).",
