@@ -3499,53 +3499,57 @@ mod tests {
         }
     }
 
-    /// usp-3 revision (D4, judge NEEDS_REVISION t4): the door must classify
-    /// through the SAME source the merge side reads (`mode`), not through
-    /// `feature_route` (which prefers `route.lane`). A record whose `mode`
-    /// is "standard" but whose `route.lane` names "small" — the exact
-    /// shape of `.bee/lanes/knowledge-loop.json`, the judge's worked
-    /// example — must still block under close: the merge side would set
-    /// the uat wait for this feature, so close must agree.
+    /// uat-lane-source (uls-1): the door classifies through `route.lane`,
+    /// not through `mode`. `mode` carries the WORKFLOW vocabulary
+    /// (feature, release) while the exemption is written in LANE vocabulary
+    /// (tiny, small, docs, spike, standard, high-risk), so reading `mode`
+    /// meant the exemption almost never fired and every feature was asked
+    /// for uat. Agreement with the merge side is preserved by construction,
+    /// not by matching sources by hand: both sides call the one helper
+    /// `crate::uat::uat_lane_mode` (here, and `verbs/worktree/phases.rs`),
+    /// so flipping it flipped both together.
+    ///
+    /// This case supersedes the usp-3 D4 pair that pinned the `mode` read.
+    /// A record whose `mode` is "standard" but whose `route.lane` names
+    /// "small" is EXEMPT: the lane is what the exemption speaks about.
     #[test]
-    fn uat_door_blocks_when_mode_and_route_lane_disagree_toward_standard() {
+    fn uat_door_reads_route_lane_and_is_exempt_when_mode_disagrees_toward_standard() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
         write_lane_mode_and_route(root, "demo", "standard", "small");
 
         let doors = build_close_report_doors(root, "demo").unwrap();
-        let uat_door = doors
-            .iter()
-            .find(|d| d.door == "uat")
-            .expect("mode standard must grow a blocking door even when route.lane disagrees");
-        assert!(
-            uat_door.blocking,
-            "mode=standard/route.lane=small must block — the merge side reads mode and would wait on this feature: {}",
-            uat_door.detail
-        );
+        let uat_door = doors.iter().find(|d| d.door == "uat");
+        if let Some(uat_door) = uat_door {
+            assert!(
+                !uat_door.blocking,
+                "route.lane=small must stay exempt even though mode says standard — the exemption is written in lane vocabulary: {}",
+                uat_door.detail
+            );
+        }
     }
 
-    /// usp-3 revision (D4): mirror of the above in the other direction — a
-    /// record whose `mode` is "small" but whose `route.lane` names
-    /// "standard" must stay EXEMPT under close, again agreeing with the
-    /// merge side's `mode`-only read rather than `feature_route`'s
-    /// `route.lane`-preferring one.
+    /// Mirror of the above: a record whose `mode` is "small" but whose
+    /// `route.lane` names "standard" BLOCKS, because `route.lane` is the
+    /// source both sides read.
     #[test]
-    fn uat_door_is_exempt_when_mode_and_route_lane_disagree_toward_small() {
+    fn uat_door_reads_route_lane_and_blocks_when_mode_disagrees_toward_small() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
         write_lane_mode_and_route(root, "demo", "small", "standard");
 
         let doors = build_close_report_doors(root, "demo").unwrap();
-        let uat_door = doors.iter().find(|d| d.door == "uat");
-        if let Some(uat_door) = uat_door {
-            assert!(
-                !uat_door.blocking,
-                "mode=small/route.lane=standard must stay exempt — the merge side reads mode: {}",
-                uat_door.detail
-            );
-        }
+        let uat_door = doors
+            .iter()
+            .find(|d| d.door == "uat")
+            .expect("route.lane standard must grow a blocking door even when mode disagrees");
+        assert!(
+            uat_door.blocking,
+            "route.lane=standard must block — the merge side reads the same helper and would wait on this feature: {}",
+            uat_door.detail
+        );
     }
 
     /// D1 (`uat_stop_config`'s own fail-closed read): a bogus `uat_stop`
