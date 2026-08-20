@@ -283,18 +283,21 @@ Two different things in bee carry the name "UAT" — keep them apart:
 
 ### What the `uat` gate is
 
-A feature can be implemented, verified green, even independently reviewed — and still not be *accepted by you*. The `uat` gate is that last word: for a `standard` or `high-risk` feature, `bee worktree merge` refuses with `WORKTREE_MERGE_UAT_PENDING` (a zero-mutation refusal — nothing is touched) until the gate is approved. `tiny`, `small`, and docs lanes are exempt; a missing or unreadable lane classification fails **closed** and is treated as `standard`.
+A feature can be implemented, verified green, even independently reviewed — and still not be *accepted by you*. The `uat` gate is that last word, for every `standard` or `high-risk` feature (`tiny`, `small`, and docs lanes are exempt; a missing or unreadable lane classification fails **closed** and is treated as `standard`). Where the door sits is configurable, and the **default is the close placement**: `bee worktree merge` lands the feature on main so you can test the real product there, the `wt/<feature>` branch is held around for convenience, and `bee close` is what stops until you accept. Under `uat_stop: "merge"` the door moves earlier instead: merge itself refuses with `WORKTREE_MERGE_UAT_PENDING` (a zero-mutation refusal — nothing is touched) until the gate is approved.
 
-You typically test at **staging** first: `bee staging add` mixes the feature's worktree into a disposable staging checkout — the ground between a feature worktree and main — so you can try the product without touching either.
+Staging is **opt-in** (`staging_before_merge: true`): when enabled, `bee staging add` mixes the feature's worktree into a disposable staging checkout — the ground between a feature worktree and main — so you can try the product without touching either.
 
 ```mermaid
 flowchart LR
-    W["feature worktree<br/>verified green"] -->|"bee staging add<br/>(optional)"| S["staging<br/>disposable mixing ground"]
-    S -->|you try the product| U{"uat gate<br/>your acceptance"}
-    W --> U
-    U -->|approved| M["bee worktree merge"]
-    U -->|pending| R["WORKTREE_MERGE_UAT_PENDING<br/>merge refuses, zero mutations"]
+    W["feature worktree<br/>verified green"] -->|"default (uat_stop: close)"| M["bee worktree merge<br/>lands on main"]
     M --> T[(main)]
+    T -->|you test on main<br/>wt branch held| U{"uat gate<br/>your acceptance"}
+    U -->|approved| C["bee close"]
+    W -->|"uat_stop: merge"| U2{"uat gate first"}
+    U2 -->|approved| M
+    U2 -->|pending| R["WORKTREE_MERGE_UAT_PENDING<br/>merge refuses, zero mutations"]
+    W -.->|"bee staging add<br/>(opt-in)"| S["staging<br/>disposable mixing ground"]
+    S -.-> U2
 ```
 
 ### Approving it — and why bypass never covers it
@@ -311,12 +314,12 @@ All keys live in `.bee/config.json` (full reference + sample: [docs/config-refer
 
 | Key | Values | Effect |
 |---|---|---|
-| `uat_stop` | `"merge"` (default — absent means this) | `bee worktree merge` enforces the gate for standard/high-risk features |
-| | `"close"` | The merge lands first — the product is testable on main — and the door moves to `bee close`. While `uat` is pending: the lane carries a `waiting_on` mark `uat: <feature>`, and the worktree is **held** (`--cleanup` / `worktree_cleanup_on_merge: true` are ignored, reported as `WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING`) |
+| `uat_stop` | `"merge"` | `bee worktree merge` enforces the gate for standard/high-risk features before anything lands |
+| | `"close"` (default — absent means this) | The merge lands first — the product is testable on main — and the door moves to `bee close`. While `uat` is pending: the lane carries a `waiting_on` mark `uat: <feature>`, and the worktree is **held** (`--cleanup` / `worktree_cleanup_on_merge: true` are ignored, reported as `WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING`) |
 | | `"off"` | No uat stop anywhere |
 | | anything else | Refuses `WORKTREE_MERGE_UAT_CONFIG_INVALID` — never guesses |
 | `uat_before_merge` | `true` / `false` | Back-compat alias, read **only when `uat_stop` is absent**: `true` → `"merge"`, `false` → `"off"` |
-| `staging_before_merge` | `true` (default) / `false` | `false` makes `bee staging add` / `bee staging rebuild` refuse `STAGING_DISABLED` — the repo runs worktree → uat gate → main with no staging step. **Independent of the `uat` gate**: opting out of staging never opts out of uat, and vice versa |
+| `staging_before_merge` | `true` / `false` (default — absent means off) | Staging is **opt-in**: absent or `false` makes `bee staging add` / `bee staging rebuild` refuse `STAGING_DISABLED` — the repo runs worktree → merge to main → uat at close, with no staging step. Set `true` to enable the mixing ground. **Independent of the `uat` gate**: opting in or out of staging never changes uat, and vice versa |
 
 ---
 
