@@ -106,10 +106,10 @@ Risk map:
 | Defining "absent" (see Definitions) | HIGH | A name-matching liveness check reads an agent's own `cargo`/`git` child as a death and kills it in seconds | A test where the foreground process is a non-agent pid != `shell_pid` and the verdict is "continue" |
 | Fail-open liveness (D2) | HIGH | Getting the direction backwards kills healthy multi-hour jobs — the exact failure this feature must not introduce | A test where the process read ERRORS and the verdict is "continue", never `died` |
 | Debounce (D3) | MEDIUM | An off-by-one makes a single flaky read fatal | A test with N-1 absent reads asserting "continue", the Nth asserting `died` |
-| `/proc` absence off Linux | — | Slice-2 only, and slice 2 is blocked on D6. No `/proc` read enters slices 1 or 3 | Deferred with slice 2 |
+| `/proc` absence off Linux | — | Slice-2 only, and slice 2 is blocked on D6. No `/proc` read enters slices 1 or 3 | Deferred with slice 2 — trigger `real-traces-exist-from-at-least-one-heal__herding-` |
 | `pane read` moving to on-demand (D4) | LOW | `paused_limit` classification must still fire at the same moment it does today | Existing `paused_limit` test stays green |
 | New `died` outcome string | LOW | Additive, and no schema or full-set test pins the vocabulary — the risk is a missed exhaustive match, not a broken reader | `outcome_label`, `emit_result`, `exit_code_for` and the should-close gating all extended; the string asserted in the run's JSON result |
-| Windows CI stays green | LOW (was MEDIUM) | D19 (`d891fc43`) requires the suite to run unexcluded on `windows-latest`. With `/proc` deferred to slice 2, slices 1 and 3 add only a herdr subprocess call, which is already platform-portable | `cargo test --release` green with no `#[cfg]`-excluded test |
+| Windows CI stays green | LOW (was MEDIUM) | D19 (`d891fc43`) requires the suite to run unexcluded on `windows-latest`. With `/proc` deferred to slice 2 (trigger `real-traces-exist-from-at-least-one-heal__herding-`), slices 1 and 3 add only a herdr subprocess call, which is already platform-portable | `cargo test --release` green with no `#[cfg]`-excluded test |
 
 ## Shape
 
