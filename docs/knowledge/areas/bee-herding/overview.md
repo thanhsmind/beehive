@@ -29,9 +29,15 @@ isolated copy — is what runs unattended.**
 - **Merge** is **not a loop.** It is a single-shot the owner runs by hand when they want finished
   work retired.
 - **The config tier route**: setting `{"kind": "herding"}` on a `models.<runtime>.generation`
-  slot routes ordinary cell dispatch through `bee herding run` automatically — no per-cell
-  request needed; a gather/review/advisor purpose on that same slot always falls back to the
-  runtime's own default model instead (herding-tier D1/D3).
+  slot (or any configurable slot) now routes EVERY purpose dispatched against it — cell,
+  gather, reviewer, advisor, extraction — through `bee herding run` automatically, no
+  per-purpose request needed; the old gather/review/advisor default-model fallback is gone,
+  so the operator who sets the slot owns the pane cost for every purpose it serves
+  (herding-tier D1-D6, widened by herding-review-slots D1). An optional `"fallback":
+  "default"` on the same shape lets a failed herding run (spawn failure, timeout, invalid
+  result) re-dispatch through the runtime's own default model path for that slot instead;
+  absent, a failed run stays loud and keeps its pane open as forensics
+  (herding-review-slots D3).
 - **A wave is a fourth entry point, and no role calls it.** Dispatch starts one worker per iteration
   and never speaks to it again; a wave briefs several already-running workers in one act and waits
   on all of them together. It carries none of dispatch's guards — no arming marker, no classifier —
