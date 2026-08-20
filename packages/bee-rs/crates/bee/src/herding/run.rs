@@ -276,6 +276,11 @@ trait Herdr {
     /// round N+1 brief to an ALREADY-RUNNING agent, never `agent start`
     /// (that would spawn a second agent instead of continuing this one).
     fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String>;
+    /// `herdr agent read <job_id> --source recent-unwrapped` — the agent's
+    /// recent pane text, `None` on any trouble. The delivery receipt for
+    /// `deliver_pointer` (herding-prompt-verify D1): status flags lie about
+    /// input readiness, the pane text is the only honest receipt.
+    fn agent_text(&self, job_id: &str) -> Option<String>;
     /// `herdr pane list`, membership-tested against `pane_id` — the D3
     /// `--continue` "is the pane gone" check. Unlike `pane_rect` (which
     /// fails open to a default direction on ANY trouble), this fails
@@ -388,6 +393,14 @@ impl Herdr for RealHerdr {
 
     fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String> {
         self.call(&["agent", "prompt", job_id, prompt]).map(|_| ())
+    }
+
+    fn agent_text(&self, job_id: &str) -> Option<String> {
+        let v = self.call(&["agent", "read", job_id, "--source", "recent-unwrapped"]).ok()?;
+        v.get("result")
+            .and_then(|r| r.get("text").or_else(|| r.get("transcript")))
+            .and_then(Value::as_str)
+            .map(str::to_string)
     }
 
     fn pane_alive(&self, pane_id: &str) -> bool {
@@ -514,6 +527,40 @@ fn run_poll_loop(
 /// ready-wait ceiling passes. Check-then-sleep: an agent already ready is
 /// accepted with zero sleeps, and a 0-second ceiling with no status is
 /// exhausted immediately — both drive the tests without a real clock.
+/// herding-prompt-verify D1: sends the one-line pointer and treats it as
+/// delivered only when the brief file's name is VISIBLE in the agent's
+/// recent pane text — herdr can report idle/interactive_ready before the
+/// agent's input loop accepts injected text (live smoke 6: prompt "sent",
+/// input empty; the identical line landed on a later resend). Bounded
+/// resends; the pointer is idempotent (read the same file), so a duplicate
+/// delivery is harmless. Injected wait/clock, same seam style as the other
+/// loops.
+const POINTER_DELIVERY_ATTEMPTS: u32 = 5;
+
+fn deliver_pointer(
+    job_id: &str,
+    pointer: &str,
+    receipt_needle: &str,
+    prompt: &mut dyn FnMut(&str) -> Result<(), String>,
+    text: &mut dyn FnMut() -> Option<String>,
+    sleep: &mut dyn FnMut(Duration),
+) -> Result<(), String> {
+    let _ = job_id;
+    for attempt in 1..=POINTER_DELIVERY_ATTEMPTS {
+        prompt(pointer).map_err(|e| format!("agent prompt failed: {e}"))?;
+        sleep(POLL_INTERVAL);
+        if text().is_some_and(|t| t.contains(receipt_needle)) {
+            return Ok(());
+        }
+        if attempt < POINTER_DELIVERY_ATTEMPTS {
+            sleep(POLL_INTERVAL);
+        }
+    }
+    Err(format!(
+        "pointer prompt never became visible in the pane after {POINTER_DELIVERY_ATTEMPTS} sends (delivery verify)"
+    ))
+}
+
 fn wait_for_agent_ready(
     ready_wait_secs: u64,
     poll_interval: Duration,
@@ -844,7 +891,16 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
             closed_pane: false,
         };
     }
-    if let Err(e) = herdr.agent_prompt(&opts.job_id, &mailbox::pointer_prompt(&brief_file)) {
+    let pointer = mailbox::pointer_prompt(&brief_file);
+    let needle = format!("brief-1.txt");
+    if let Err(e) = deliver_pointer(
+        &opts.job_id,
+        &pointer,
+        &needle,
+        &mut |p| herdr.agent_prompt(&opts.job_id, p),
+        &mut || herdr.agent_text(&opts.job_id),
+        &mut |d| std::thread::sleep(d),
+    ) {
         return ExecResult {
             outcome: RunOutcome::SpawnFailed(format!("brief prompt failed after start: {e}")),
             pane_id: Some(new_pane),
@@ -972,7 +1028,16 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
             closed_pane: false,
         };
     }
-    if let Err(e) = herdr.agent_prompt(job_id, &mailbox::pointer_prompt(&brief_file)) {
+    let pointer = mailbox::pointer_prompt(&brief_file);
+    let needle = format!("brief-{next_round}.txt");
+    if let Err(e) = deliver_pointer(
+        job_id,
+        &pointer,
+        &needle,
+        &mut |p| herdr.agent_prompt(job_id, p),
+        &mut || herdr.agent_text(job_id),
+        &mut |d| std::thread::sleep(d),
+    ) {
         return ExecResult {
             outcome: RunOutcome::SpawnFailed(format!("agent prompt failed: {e}")),
             pane_id: Some(pane_id),
@@ -1237,6 +1302,10 @@ mod tests {
         /// `start_calls` stays empty, proving `agent_start` was NOT).
         prompt_calls: RefCell<Vec<(String, String)>>,
         start_calls: RefCell<Vec<String>>,
+        /// How many `agent_text` reads return None (pointer not yet
+        /// visible) before the pane starts echoing the last prompt —
+        /// the delivery-race script (herding-prompt-verify D1).
+        text_blind_reads: RefCell<u32>,
     }
 
     impl FakeHerdr {
@@ -1252,6 +1321,7 @@ mod tests {
                 alive_panes: RefCell::new(vec!["w1:p2".to_string()]),
                 prompt_calls: RefCell::new(Vec::new()),
                 start_calls: RefCell::new(Vec::new()),
+                text_blind_reads: RefCell::new(0),
             }
         }
     }
@@ -1286,6 +1356,14 @@ mod tests {
         fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String> {
             self.prompt_calls.borrow_mut().push((job_id.to_string(), prompt.to_string()));
             self.prompt_result.clone()
+        }
+        fn agent_text(&self, _job_id: &str) -> Option<String> {
+            let mut blind = self.text_blind_reads.borrow_mut();
+            if *blind > 0 {
+                *blind -= 1;
+                return None;
+            }
+            self.prompt_calls.borrow().last().map(|(_, p)| p.clone())
         }
         fn pane_alive(&self, pane_id: &str) -> bool {
             self.alive_panes.borrow().iter().any(|p| p == pane_id)
@@ -1322,6 +1400,9 @@ mod tests {
         }
         fn agent_prompt(&self, _job_id: &str, _prompt: &str) -> Result<(), String> {
             panic!("dry-run must never call Herdr::agent_prompt")
+        }
+        fn agent_text(&self, _job_id: &str) -> Option<String> {
+            panic!("dry-run must never call Herdr::agent_text")
         }
         fn pane_alive(&self, _pane_id: &str) -> bool {
             panic!("dry-run must never call Herdr::pane_alive")
@@ -1423,6 +1504,53 @@ mod tests {
         assert!(matches!(result.outcome, RunOutcome::SpawnFailed(_)), "got {:?}", result.outcome);
         assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
         assert!(result.closed_pane);
+    }
+
+    #[test]
+    fn pointer_delivery_resends_until_the_pane_echoes_it_and_stops_there() {
+        // Script: two blind reads (pane not echoing yet), then the echo.
+        // Expect exactly 3 sends and success. Injected sleep, no clock.
+        let sent = std::cell::RefCell::new(0u32);
+        let reads = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "job-1",
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            "brief-1.txt",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || {
+                *reads.borrow_mut() += 1;
+                if *reads.borrow() <= 2 {
+                    None
+                } else {
+                    Some("> Read the file /x/brief-1.txt and follow its instructions exactly.".to_string())
+                }
+            },
+            &mut |_d| {},
+        );
+        assert!(out.is_ok());
+        assert_eq!(*sent.borrow(), 3, "one send per blind read, stop on the echo");
+    }
+
+    #[test]
+    fn pointer_delivery_exhaustion_is_a_typed_failure() {
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "job-1",
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            "brief-1.txt",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || None,
+            &mut |_d| {},
+        );
+        let err = out.unwrap_err();
+        assert!(err.contains("delivery verify"), "{err}");
+        assert_eq!(*sent.borrow(), POINTER_DELIVERY_ATTEMPTS);
     }
 
     #[test]
