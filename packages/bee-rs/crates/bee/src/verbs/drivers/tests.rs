@@ -500,6 +500,12 @@ use std::time::Instant;
             jsjson::stringify(&Value::Object(e)),
             r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"cli-exec","enforcement":"cli-command"}"#
         );
+        // herding-exec mirrors cli-exec, never prompt-budget.
+        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false);
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
+        );
     }
 
     #[test]
