@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-limit-pause",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"herding-limit-pause\" started at phase \"planning\" (lane).",
-  "next_action": "none — overview.md carries the paused_limit lifecycle",
+  "next_action": "bee close finished \"herding-limit-pause\" — feature is closed.",
   "created_at": "2026-08-20T11:27:11.814Z",
   "run_state": "awaiting-approval",
   "waiting_on": {

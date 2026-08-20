@@ -162,7 +162,18 @@ it, and an absolute `--ceiling` caps it regardless of activity as the busy-loop
 backstop (D5) — there is no fixed short wall-clock timeout, because wall-clock alone
 cannot tell a long cell from a stuck agent. Pane lifecycle follows the result, not the
 clock: a valid result closes the pane, a failure or timeout leaves it open as
-forensics, and `--close-always` overrides both (D6). The verb appends its own
+forensics, and `--close-always` overrides both (D6) — with one carve-out: a worker
+stopped by a USAGE LIMIT is a typed `paused_limit` outcome, never `timed_out_idle`
+(herding-limit-pause D1-D4, 2026-08-20). A stale heartbeat whose pane text matches a
+limit pattern ("hit your session limit" / "usage limit", case-insensitive,
+extensible) ends the wait as `paused_limit`; that pane is NEVER closed, even under
+`--close-always`, and `job.json` is stamped `paused_limit_at` plus
+`limit_reset_hint` (the matched line). `bee herding run --continue <job-id>` on a
+stamped job with a live pane resumes the SAME round — a resume pointer through the
+state-receipt delivery, stamp cleared, wait re-entered; a gone pane refuses typed.
+The control loop's occupancy (unresolved ledger rows × live panes) already counts
+the paused job as occupying its slot, so its work is never re-dispatched — a limit
+stop is a pause, not a death (live case hws-1-r1). The verb appends its own
 `dispatch.jsonl` row and a wave-ledger `record-worker` row for every run it starts, so
 occupancy counts these workers too (D9) — everything else bee-shaped (`cells finish`,
 the proof line, reservations) stays the orchestrator's job, done only after it reads
