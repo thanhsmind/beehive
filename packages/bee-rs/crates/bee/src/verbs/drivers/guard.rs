@@ -58,6 +58,8 @@ pub(crate) fn derive_economics(
 
     let enforcement = if channel == "cli-exec" {
         "cli-command"
+    } else if channel == "herding-exec" {
+        "herding-command"
     } else if is_native_confirmed {
         "native-model-param"
     } else if channel == "codex-native" {
@@ -73,7 +75,7 @@ pub(crate) fn derive_economics(
         "native-requested"
     } else if channel == "codex-native" {
         "inherited-or-unknown"
-    } else if channel == "cli-exec" {
+    } else if channel == "cli-exec" || channel == "herding-exec" {
         "unverified"
     } else if let Some(pm) = param_model {
         effective_model = Value::String(pm.to_string());
@@ -82,7 +84,7 @@ pub(crate) fn derive_economics(
         "unverified"
     };
 
-    let requested_model = if channel == "cli-exec" {
+    let requested_model = if channel == "cli-exec" || channel == "herding-exec" {
         Value::Null
     } else {
         match param_model.map(str::to_string).or(resolved_model) {
@@ -341,4 +343,18 @@ pub(crate) fn locale_cmp(a: &str, b: &str, numeric: bool) -> std::cmp::Ordering 
         j += 1;
     }
     Ordering::Equal
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn derive_economics_herding_exec() {
+        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false);
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
+        );
+    }
 }
