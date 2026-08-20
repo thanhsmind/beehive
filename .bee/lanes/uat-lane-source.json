@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"uat-lane-source\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"uat-lane-source\" (lane).",
+  "next_action": "Merged into main at 7ae5996; capture what settled, then bee close --feature uat-lane-source.",
   "created_at": "2026-08-19T03:00:05.080Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Trước hết tìm chỗ merge tự commit.",
-    "asked_at": "2026-08-19T03:12:07.715Z",
-    "session": "837fbcd4-540d-49a6-a882-7366f6bc3f97"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "small",
