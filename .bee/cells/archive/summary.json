@@ -623,5 +623,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-19T23:39:45.821Z"
+  },
+  "herding-tier": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-20T00:22:12.458Z"
   }
 }
