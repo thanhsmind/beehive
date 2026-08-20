@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-exec-economics",
+  "mode": "feature",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-exec-economics\" started at phase \"planning\".",
+  "next_action": "Continue bee-planning for \"herding-exec-economics\".",
+  "created_at": "2026-08-20T03:37:40.632Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Run vẫn sống, đang trong vòng poll đợi result (idle-timeout 600s). Pointer bị nuốt trong lúc Google xác minh. Giờ agent đã tỉnh — đưa lại br",
+    "asked_at": "2026-08-20T03:43:31.600Z",
+    "session": "1adb69d1-67be-4463-8349-af8832af8a32"
+  }
+}

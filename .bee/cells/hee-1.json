@@ -1,0 +1,60 @@
+{
+  "id": "hee-1",
+  "feature": "herding-exec-economics",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "derive_economics: herding-exec mirrors cli-exec, never prompt-budget",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-exec-economics/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs"
+  ],
+  "action": "Per D1: in derive_economics, channel herding-exec takes enforcement \"herding-command\", effective_model_status \"unverified\", requested_model Null — the cli-exec shape with its own enforcement name. Add/extend the guard tests for the new channel. Executed through bee herding run per D2; the orchestrator verifies, commits, and caps.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers::guard",
+  "must_haves": {
+    "truths": [
+      "herding-exec never yields prompt-budget",
+      "requested_model is Null and status unverified on herding-exec"
+    ]
+  },
+  "decisions": [
+    "herding-exec-economics D1",
+    "herding-exec-economics D2"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hee-1",
+    "outcome": "herding-exec economics mirror cli-exec with herding-command enforcement; written by the agy herding worker, verified by the orchestrator",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T03:48:36.011Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T03:37:41.545Z",
+    "report": {
+      "outcome": "herding-exec = cli-exec shape + herding-command enforcement",
+      "commit": "head",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee drivers:: — green (160 passed) — orchestrator reran the touched module over the worker diff",
+      "deviations": [
+        "worker was an external agy agent via bee herding run (herding-exec-economics D2); orchestrator verified the diff and did all bee bookkeeping per herding-executor D4"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
