@@ -261,6 +261,13 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
 // the Herdr seam — every herdr-shaped operation, real or faked
 // ═══════════════════════════════════════════════════════════════════════════
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Liveness {
+    Alive { pid: u32 },
+    Absent,
+    Unknown,
+}
+
 /// Every herdr operation `bee herding run` needs, isolated behind a trait so
 /// tests inject a fake instead of a real `herdr` on PATH (D7's seam, no
 /// process anywhere in this crate's test suite). `RealHerdr` below is the
@@ -326,6 +333,9 @@ trait Herdr {
     /// `herdr pane read <pane_id>` — raw stdout of the pane capture, or
     /// error if herdr failed.
     fn pane_read(&self, pane_id: &str) -> Result<String, String>;
+    /// `herdr pane process-info --pane <id>` (D1/D2) — liveness of the agent
+    /// process inside the pane. Fails OPEN to `Unknown` on any trouble.
+    fn process_info(&self, pane_id: &str) -> Liveness;
 }
 
 struct RealHerdr;
@@ -484,6 +494,42 @@ impl Herdr for RealHerdr {
         }
         Ok(String::from_utf8_lossy(&out.stdout).to_string())
     }
+
+    fn process_info(&self, pane_id: &str) -> Liveness {
+        // D2 fail-open: any error, non-zero exit, error envelope, or unparseable body returns Unknown.
+        let Ok(v) = self.call(&["pane", "process-info", "--pane", pane_id]) else {
+            return Liveness::Unknown;
+        };
+        parse_process_info(&v)
+    }
+}
+
+fn parse_process_info(v: &Value) -> Liveness {
+    if v.get("error").is_some_and(|e| !e.is_null()) {
+        return Liveness::Unknown;
+    }
+    let Some(result) = v.get("result") else {
+        return Liveness::Unknown;
+    };
+    let info = result.get("process_info").unwrap_or(result);
+    let shell_pid = info.get("shell_pid").and_then(Value::as_u64).map(|p| p as u32);
+    let Some(fg_array) = info.get("foreground_processes").and_then(Value::as_array) else {
+        return Liveness::Unknown;
+    };
+    // AGENT-PRESENT: at least one foreground entry whose pid != shell_pid (never a name match)
+    let active_pid = fg_array.iter().find_map(|p| {
+        let pid = p.get("pid").and_then(Value::as_u64).map(|p| p as u32)?;
+        if shell_pid.map_or(true, |sp| pid != sp) {
+            Some(pid)
+        } else {
+            None
+        }
+    });
+    if let Some(pid) = active_pid {
+        Liveness::Alive { pid }
+    } else {
+        Liveness::Absent
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -507,14 +553,16 @@ enum PollDecision {
     TimedOutIdle,
     TimedOutCeiling,
     PausedLimit,
+    Died { pid: Option<u32> },
 }
 
 /// The whole D5 timing rule, pure: a result already present short-circuits
 /// everything else; otherwise the absolute ceiling caps the wait REGARDLESS
 /// of a fresh heartbeat (checked first, so it wins a tie with the idle
-/// check); a heartbeat gone stale past `idle_timeout_secs` times out (or
-/// pauses on a limit if the pane text matches LIMIT_PATTERNS); a fresh one
-/// lets the wait continue.
+/// check); a died process observation (D1/D3) reports died before idle;
+/// a heartbeat gone stale past `idle_timeout_secs` times out (or pauses on
+/// a limit if the pane text matches LIMIT_PATTERNS); a fresh one lets the
+/// wait continue.
 fn decide_poll(
     now_ms: i64,
     started_at_ms: i64,
@@ -523,12 +571,16 @@ fn decide_poll(
     ceiling_secs: u64,
     result_ready: bool,
     pane_text: Option<&str>,
+    liveness_died: Option<Option<u32>>,
 ) -> PollDecision {
     if result_ready {
         return PollDecision::ResultReady;
     }
     if now_ms.saturating_sub(started_at_ms) >= (ceiling_secs as i64).saturating_mul(1000) {
         return PollDecision::TimedOutCeiling;
+    }
+    if let Some(pid) = liveness_died {
+        return PollDecision::Died { pid };
     }
     if now_ms.saturating_sub(last_heartbeat_ms) >= (idle_timeout_secs as i64).saturating_mul(1000) {
         if let Some(text) = pane_text {
@@ -555,6 +607,7 @@ struct PollTick {
     result_ready: bool,
     heartbeat_fresh: bool,
     pane_text: Option<String>,
+    liveness: Option<Liveness>,
 }
 
 /// The loop `decide_poll` drives: sleep, observe, decide, repeat until a
@@ -566,18 +619,41 @@ fn run_poll_loop(
     idle_timeout_secs: u64,
     ceiling_secs: u64,
     poll_interval: Duration,
-    mut tick: impl FnMut() -> PollTick,
+    mut tick: impl FnMut(bool) -> PollTick,
     mut sleep: impl FnMut(Duration),
     mut now: impl FnMut() -> i64,
 ) -> PollDecision {
     let mut last_heartbeat_ms = started_at_ms;
+    let mut absent_reads = 0u32;
+    let mut last_seen_pid: Option<u32> = None;
     loop {
         sleep(poll_interval);
         let tick_now_ms = now();
-        let observed = tick();
+        let heartbeat_already_stale = tick_now_ms.saturating_sub(last_heartbeat_ms)
+            >= (idle_timeout_secs as i64).saturating_mul(1000);
+        let observed = tick(heartbeat_already_stale);
         if observed.heartbeat_fresh {
             last_heartbeat_ms = tick_now_ms;
         }
+        if let Some(liveness) = observed.liveness {
+            match liveness {
+                Liveness::Alive { pid } => {
+                    last_seen_pid = Some(pid);
+                    absent_reads = 0;
+                }
+                Liveness::Unknown => {
+                    absent_reads = 0;
+                }
+                Liveness::Absent => {
+                    absent_reads += 1;
+                }
+            }
+        }
+        let liveness_died = if absent_reads >= 3 {
+            Some(last_seen_pid)
+        } else {
+            None
+        };
         let decision = decide_poll(
             tick_now_ms,
             started_at_ms,
@@ -586,6 +662,7 @@ fn run_poll_loop(
             ceiling_secs,
             observed.result_ready,
             observed.pane_text.as_deref(),
+            liveness_died,
         );
         if decision != PollDecision::Continue {
             return decision;
@@ -773,6 +850,7 @@ enum RunOutcome {
     TimedOutIdle,
     TimedOutCeiling,
     PausedLimit,
+    Died { pid: Option<u32> },
 }
 
 struct ExecResult {
@@ -898,12 +976,14 @@ fn wait_for_round(
     let log_file_path = mailbox::log_path(bee_dir, job_id);
     let mailbox_path = mailbox::mailbox_dir(bee_dir, job_id);
     let mut last_log_mtime: Option<std::time::SystemTime> = None;
+    let mut tick_index: u64 = 0;
     run_poll_loop(
         started_at_ms,
         idle_timeout_secs,
         ceiling_secs,
         POLL_INTERVAL,
-        || {
+        |heartbeat_already_stale| {
+            tick_index += 1;
             let result_ready = std::fs::read_dir(&mailbox_path)
                 .ok()
                 .map(|rd| {
@@ -924,8 +1004,17 @@ fn wait_for_round(
             if herdr.agent_status(job_id).as_deref() == Some("working") {
                 heartbeat_fresh = true;
             }
-            let pane_text = herdr.pane_read(pane_id).ok();
-            PollTick { result_ready, heartbeat_fresh, pane_text }
+            let liveness = if tick_index % 10 == 0 {
+                Some(herdr.process_info(pane_id))
+            } else {
+                None
+            };
+            let pane_text = if heartbeat_already_stale {
+                herdr.pane_read(pane_id).ok()
+            } else {
+                None
+            };
+            PollTick { result_ready, heartbeat_fresh, pane_text, liveness }
         },
         |d| std::thread::sleep(d),
         now_ms,
@@ -1111,6 +1200,7 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
             stamp_paused_limit(&bee_dir, &opts.job_id, herdr, &new_pane);
             RunOutcome::PausedLimit
         }
+        PollDecision::Died { pid } => RunOutcome::Died { pid },
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
@@ -1260,6 +1350,7 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
                 stamp_paused_limit(&bee_dir, job_id, herdr, &pane_id);
                 RunOutcome::PausedLimit
             }
+            PollDecision::Died { pid } => RunOutcome::Died { pid },
             PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
         };
 
@@ -1383,6 +1474,7 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
             stamp_paused_limit(&bee_dir, job_id, herdr, &pane_id);
             RunOutcome::PausedLimit
         }
+        PollDecision::Died { pid } => RunOutcome::Died { pid },
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
@@ -1416,6 +1508,7 @@ fn outcome_label(o: &RunOutcome) -> &'static str {
         RunOutcome::TimedOutIdle => "timed_out_idle",
         RunOutcome::TimedOutCeiling => "timed_out_ceiling",
         RunOutcome::PausedLimit => "paused_limit",
+        RunOutcome::Died { .. } => "died",
     }
 }
 
@@ -1461,6 +1554,11 @@ fn emit_result(opts: &Options, result: &ExecResult) {
                         mailbox::job_path(&opts.main_root.join(".bee"), &opts.job_id).display().to_string(),
                     ),
                 );
+            }
+            RunOutcome::Died { pid } => {
+                if let Some(p) = pid {
+                    m.insert("pid".into(), Value::from(*p));
+                }
             }
             RunOutcome::TimedOutIdle | RunOutcome::TimedOutCeiling | RunOutcome::PausedLimit => {}
         }
@@ -1513,17 +1611,17 @@ mod tests {
 
     #[test]
     fn decide_poll_reports_result_ready_regardless_of_timers() {
-        assert_eq!(decide_poll(0, 0, 0, 1, 1, true, None), PollDecision::ResultReady);
+        assert_eq!(decide_poll(0, 0, 0, 1, 1, true, None, None), PollDecision::ResultReady);
     }
 
     #[test]
     fn decide_poll_extends_on_a_fresh_heartbeat() {
-        assert_eq!(decide_poll(5_000, 0, 5_000, 60, 3_600, false, None), PollDecision::Continue);
+        assert_eq!(decide_poll(5_000, 0, 5_000, 60, 3_600, false, None, None), PollDecision::Continue);
     }
 
     #[test]
     fn decide_poll_times_out_idle_when_the_heartbeat_goes_stale() {
-        assert_eq!(decide_poll(61_000, 0, 0, 60, 3_600, false, None), PollDecision::TimedOutIdle);
+        assert_eq!(decide_poll(61_000, 0, 0, 60, 3_600, false, None, None), PollDecision::TimedOutIdle);
     }
 
     #[test]
@@ -1531,17 +1629,17 @@ mod tests {
         // last heartbeat one second ago (well inside a 60s idle timeout),
         // but the run has now been alive for the full 3600s ceiling — the
         // ceiling caps regardless of activity.
-        assert_eq!(decide_poll(3_600_000, 0, 3_599_000, 60, 3_600, false, None), PollDecision::TimedOutCeiling);
+        assert_eq!(decide_poll(3_600_000, 0, 3_599_000, 60, 3_600, false, None, None), PollDecision::TimedOutCeiling);
     }
 
     #[test]
     fn decide_poll_pauses_on_limit_when_heartbeat_stale_and_pane_matches_limit_pattern() {
         assert_eq!(
-            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("You've hit your session limit · resets 6:20pm")),
+            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("You've hit your session limit · resets 6:20pm"), None),
             PollDecision::PausedLimit
         );
         assert_eq!(
-            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("warning: usage limit reached")),
+            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("warning: usage limit reached"), None),
             PollDecision::PausedLimit
         );
     }
@@ -1549,7 +1647,7 @@ mod tests {
     #[test]
     fn decide_poll_keeps_waiting_with_fresh_heartbeat_even_if_pane_mentions_limit() {
         assert_eq!(
-            decide_poll(5_000, 0, 5_000, 60, 3_600, false, Some("hit your session limit")),
+            decide_poll(5_000, 0, 5_000, 60, 3_600, false, Some("hit your session limit"), None),
             PollDecision::Continue
         );
     }
@@ -1557,7 +1655,7 @@ mod tests {
     #[test]
     fn decide_poll_times_out_idle_when_heartbeat_stale_and_pane_does_not_match_limit() {
         assert_eq!(
-            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("compilation error: mismatched types")),
+            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("compilation error: mismatched types"), None),
             PollDecision::TimedOutIdle
         );
     }
@@ -1571,9 +1669,9 @@ mod tests {
             60,
             3_600,
             Duration::from_millis(0),
-            || {
+            |_| {
                 ticks += 1;
-                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None }
+                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None }
             },
             |_| {},
             || {
@@ -1593,7 +1691,7 @@ mod tests {
             5,
             3_600,
             Duration::from_millis(0),
-            || PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None },
+            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -1611,7 +1709,7 @@ mod tests {
             3_600,
             5,
             Duration::from_millis(0),
-            || PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None },
+            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -1619,6 +1717,34 @@ mod tests {
             },
         );
         assert_eq!(decision, PollDecision::TimedOutCeiling);
+    }
+
+    #[test]
+    fn run_poll_loop_passes_stale_flag_false_on_fresh_ticks_and_true_when_stale() {
+        let mut flags = Vec::new();
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            5,
+            3_600,
+            Duration::from_millis(0),
+            |stale| {
+                flags.push(stale);
+                PollTick {
+                    result_ready: flags.len() >= 7,
+                    heartbeat_fresh: flags.len() <= 2,
+                    pane_text: None,
+                    liveness: None,
+                }
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert_eq!(flags, vec![false, false, false, false, false, false, true]);
     }
 
     // ─── the Herdr seam ─────────────────────────────────────────────────
@@ -1667,6 +1793,8 @@ mod tests {
         call_log: RefCell<Vec<&'static str>>,
         pane_text: RefCell<Option<String>>,
         pane_read_calls: RefCell<Vec<String>>,
+        liveness_responses: RefCell<Vec<Liveness>>,
+        process_info_calls: RefCell<Vec<String>>,
     }
 
     impl FakeHerdr {
@@ -1690,6 +1818,8 @@ mod tests {
                 call_log: RefCell::new(Vec::new()),
                 pane_text: RefCell::new(None),
                 pane_read_calls: RefCell::new(Vec::new()),
+                liveness_responses: RefCell::new(Vec::new()),
+                process_info_calls: RefCell::new(Vec::new()),
             }
         }
     }
@@ -1745,6 +1875,14 @@ mod tests {
             self.pane_read_calls.borrow_mut().push(pane_id.to_string());
             Ok(self.pane_text.borrow().clone().unwrap_or_default())
         }
+        fn process_info(&self, pane_id: &str) -> Liveness {
+            self.process_info_calls.borrow_mut().push(pane_id.to_string());
+            if !self.liveness_responses.borrow().is_empty() {
+                self.liveness_responses.borrow_mut().remove(0)
+            } else {
+                Liveness::Unknown
+            }
+        }
     }
 
     /// Every method panics — proves a code path never touches `Herdr` at
@@ -1786,6 +1924,9 @@ mod tests {
         }
         fn pane_read(&self, _pane_id: &str) -> Result<String, String> {
             panic!("dry-run must never call Herdr::pane_read")
+        }
+        fn process_info(&self, _pane_id: &str) -> Liveness {
+            panic!("dry-run must never call Herdr::process_info")
         }
     }
 
@@ -2229,6 +2370,23 @@ mod tests {
         *fake.pane_text.borrow_mut() = Some("hit your session limit (in discussion only)".to_string());
         let result = execute(&opts, &fake);
         assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        assert!(fake.pane_read_calls.borrow().is_empty(), "pane_read must not be called when result is ready with fresh heartbeat");
+    }
+
+    #[test]
+    fn pane_read_is_not_called_while_heartbeat_is_fresh_and_polled_when_stale() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.idle_timeout_secs = 1;
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("regular error output".to_string());
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        // Across the fresh-heartbeat ticks before staleness, pane_read was never called.
+        // Once heartbeat went stale, pane_read was called once to check for limit patterns.
+        let reads = fake.pane_read_calls.borrow();
+        assert_eq!(reads.len(), 1, "pane_read should only be called once when heartbeat becomes stale, not on fresh ticks: {:?}", *reads);
+        assert_eq!(reads[0], "w1:p2");
     }
 
     // ─── flag parsing ───────────────────────────────────────────────────
@@ -2922,5 +3080,284 @@ mod tests {
             RunOutcome::Result(r) => assert_eq!(r.summary, "round 2 completed after limit pause"),
             other => panic!("expected Result, got {other:?}"),
         }
+    }
+
+    // ─── liveness signals and died outcome ───────────────────────────────
+
+    #[test]
+    fn decide_poll_reports_died_when_liveness_armed() {
+        assert_eq!(
+            decide_poll(5_000, 0, 5_000, 60, 3_600, false, None, Some(Some(1234))),
+            PollDecision::Died { pid: Some(1234) }
+        );
+        assert_eq!(
+            decide_poll(5_000, 0, 5_000, 60, 3_600, false, None, Some(None)),
+            PollDecision::Died { pid: None }
+        );
+    }
+
+    #[test]
+    fn decide_poll_ceiling_takes_precedence_over_died_in_same_tick() {
+        // Ceiling passed AND armed-died in the same tick yields TimedOutCeiling
+        assert_eq!(
+            decide_poll(3_600_000, 0, 3_599_000, 60, 3_600, false, None, Some(Some(1234))),
+            PollDecision::TimedOutCeiling
+        );
+    }
+
+    #[test]
+    fn decide_poll_result_ready_takes_precedence_over_died_in_same_tick() {
+        // Result present AND armed-died in the same tick yields ResultReady
+        assert_eq!(
+            decide_poll(0, 0, 0, 1, 1, true, None, Some(Some(1234))),
+            PollDecision::ResultReady
+        );
+    }
+
+    #[test]
+    fn decide_poll_died_takes_precedence_over_stale_heartbeat_idle() {
+        // Died check sits before the stale-heartbeat check
+        assert_eq!(
+            decide_poll(61_000, 0, 0, 60, 3_600, false, None, Some(Some(1234))),
+            PollDecision::Died { pid: Some(1234) }
+        );
+    }
+
+    #[test]
+    fn run_poll_loop_reports_died_after_three_consecutive_absent_reads() {
+        let mut ticks = 0u32;
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            60,
+            3_600,
+            Duration::from_millis(0),
+            |_| {
+                ticks += 1;
+                PollTick {
+                    result_ready: false,
+                    heartbeat_fresh: true,
+                    pane_text: None,
+                    liveness: Some(Liveness::Absent),
+                }
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::Died { pid: None });
+        assert_eq!(ticks, 3);
+    }
+
+    #[test]
+    fn run_poll_loop_unknown_resets_absent_counter_preventing_died_on_interleave() {
+        let mut ticks = 0u32;
+        let mut clock = 0i64;
+        // Interleave: Absent -> Absent -> Unknown -> Absent -> Absent -> ResultReady
+        let liveness_sequence = [
+            Some(Liveness::Absent),
+            Some(Liveness::Absent),
+            Some(Liveness::Unknown),
+            Some(Liveness::Absent),
+            Some(Liveness::Absent),
+        ];
+        let decision = run_poll_loop(
+            0,
+            60,
+            3_600,
+            Duration::from_millis(0),
+            |_| {
+                ticks += 1;
+                let liveness = if (ticks as usize) <= liveness_sequence.len() {
+                    liveness_sequence[(ticks - 1) as usize]
+                } else {
+                    None
+                };
+                PollTick {
+                    result_ready: ticks >= 6,
+                    heartbeat_fresh: true,
+                    pane_text: None,
+                    liveness,
+                }
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert_eq!(ticks, 6);
+    }
+
+    #[test]
+    fn run_poll_loop_alive_resets_absent_counter_and_tracks_last_seen_pid() {
+        let mut ticks = 0u32;
+        let mut clock = 0i64;
+        let liveness_sequence = [
+            Some(Liveness::Alive { pid: 4242 }),
+            Some(Liveness::Absent),
+            Some(Liveness::Absent),
+            Some(Liveness::Absent),
+        ];
+        let decision = run_poll_loop(
+            0,
+            60,
+            3_600,
+            Duration::from_millis(0),
+            |_| {
+                ticks += 1;
+                let liveness = liveness_sequence[(ticks - 1) as usize];
+                PollTick {
+                    result_ready: false,
+                    heartbeat_fresh: true,
+                    pane_text: None,
+                    liveness,
+                }
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::Died { pid: Some(4242) });
+        assert_eq!(ticks, 4);
+    }
+
+    #[test]
+    fn run_poll_loop_unknown_fails_open_and_continues_polling() {
+        let mut ticks = 0u32;
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            60,
+            3_600,
+            Duration::from_millis(0),
+            |_| {
+                ticks += 1;
+                PollTick {
+                    result_ready: ticks >= 5,
+                    heartbeat_fresh: true,
+                    pane_text: None,
+                    liveness: Some(Liveness::Unknown),
+                }
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert_eq!(ticks, 5);
+    }
+
+    #[test]
+    fn parse_process_info_identifies_alive_with_non_agent_name_when_pid_not_shell_pid() {
+        let json = serde_json::json!({
+            "result": {
+                "process_info": {
+                    "foreground_processes": [
+                        {"name": "cargo", "pid": 2898247, "cmdline": "cargo test"}
+                    ],
+                    "shell_pid": 5952
+                }
+            }
+        });
+        assert_eq!(parse_process_info(&json), Liveness::Alive { pid: 2898247 });
+    }
+
+    #[test]
+    fn parse_process_info_identifies_absent_when_only_shell_pid_in_foreground() {
+        let json = serde_json::json!({
+            "result": {
+                "process_info": {
+                    "foreground_processes": [
+                        {"name": "bash", "pid": 5952}
+                    ],
+                    "shell_pid": 5952
+                }
+            }
+        });
+        assert_eq!(parse_process_info(&json), Liveness::Absent);
+    }
+
+    #[test]
+    fn parse_process_info_identifies_absent_when_foreground_processes_empty() {
+        let json = serde_json::json!({
+            "result": {
+                "process_info": {
+                    "foreground_processes": [],
+                    "shell_pid": 5952
+                }
+            }
+        });
+        assert_eq!(parse_process_info(&json), Liveness::Absent);
+    }
+
+    #[test]
+    fn parse_process_info_fails_open_to_unknown_on_error_envelope_or_malformed_json() {
+        let error_envelope = serde_json::json!({
+            "error": "daemon unavailable"
+        });
+        assert_eq!(parse_process_info(&error_envelope), Liveness::Unknown);
+
+        let missing_result = serde_json::json!({
+            "status": "ok"
+        });
+        assert_eq!(parse_process_info(&missing_result), Liveness::Unknown);
+
+        let missing_fg = serde_json::json!({
+            "result": {
+                "shell_pid": 5952
+            }
+        });
+        assert_eq!(parse_process_info(&missing_fg), Liveness::Unknown);
+    }
+
+    #[test]
+    fn died_outcome_keeps_the_pane_open_unless_close_always() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.idle_timeout_secs = 60;
+        opts.close_always = false;
+        let fake = FakeHerdr::new();
+        *fake.liveness_responses.borrow_mut() = vec![
+            Liveness::Absent,
+            Liveness::Absent,
+            Liveness::Absent,
+        ];
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Died { .. }), "got {:?}", result.outcome);
+        assert!(!result.closed_pane, "pane must remain open as forensics");
+        assert!(fake.closed.borrow().is_empty());
+    }
+
+    #[test]
+    fn died_outcome_with_close_always_closes_pane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.idle_timeout_secs = 60;
+        opts.close_always = true;
+        let fake = FakeHerdr::new();
+        *fake.liveness_responses.borrow_mut() = vec![
+            Liveness::Absent,
+            Liveness::Absent,
+            Liveness::Absent,
+        ];
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Died { .. }), "got {:?}", result.outcome);
+        assert!(result.closed_pane, "pane must close when close_always is set");
+        assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
+    }
+
+    #[test]
+    fn outcome_label_and_exit_code_for_died() {
+        let died_outcome = RunOutcome::Died { pid: Some(12345) };
+        assert_eq!(outcome_label(&died_outcome), "died");
+        assert_eq!(exit_code_for(&died_outcome), ExitCode::FAILURE);
     }
 }
