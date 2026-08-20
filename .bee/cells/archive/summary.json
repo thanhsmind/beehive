@@ -683,5 +683,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-20T11:32:06.348Z"
+  },
+  "herding-limit-pause": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-20T11:50:03.991Z"
   }
 }
