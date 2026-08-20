@@ -1,0 +1,80 @@
+{
+  "id": "ht-4",
+  "feature": "herding-tier",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Status/onboard display the herding kind; docs + samples document the config route",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "docs/config-reference.md",
+    ".bee/config-sample.json",
+    ".bee/config-sample-cli-executors.json",
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "read_first": [
+    "docs/history/herding-tier/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs"
+  ],
+  "action": "Per D2/D3: (a) status_full store/render and onboard/agents.rs handle {kind:\"herding\"} wherever they branch on kind==cli (store.rs:368,413,710,753; render.rs:30; agents.rs:66) — display it as a herding executor, never a model name, never a crash on the unknown kind. (b) docs/config-reference.md models section: document {\"kind\":\"herding\"} — cell execution routes through bee herding run automatically, gathers on the slot keep the runtime default model, the agent comes from the single global herding.agent_command (D2), pointer to operational-invariants.md for herding.* details. (c) both samples: add a short commented mention in the models _doc (not an active value — the sample must stay copy-paste-safe for repos without herdr). (d) operational-invariants.md: one paragraph — the config route now exists, scope-A manual runs unchanged. wave-barrier regen deferred to orchestrator.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml status_full && python3 -m json.tool .bee/config-sample.json > /dev/null && python3 -m json.tool .bee/config-sample-cli-executors.json > /dev/null",
+  "must_haves": {
+    "truths": [
+      "status/onboard render a herding-shaped slot without crashing and name it as an executor",
+      "config-reference documents kind:herding as cell-only with the global agent_command",
+      "samples stay valid JSON and copy-paste-safe (herding tier mentioned, not active)"
+    ]
+  },
+  "decisions": [
+    "herding-tier D2",
+    "herding-tier D3"
+  ],
+  "deps": [
+    "ht-1"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-ht-4",
+    "outcome": "status/onboard display {kind:herding} as an executor (never a model name/crash); docs+samples document the config route",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "docs/config-reference.md",
+      ".bee/config-sample.json",
+      ".bee/config-sample-cli-executors.json",
+      "skills/bee-herding/references/operational-invariants.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T00:14:21.075Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T00:05:47.641Z",
+    "report": {
+      "outcome": "status/onboard display {kind:herding} as an executor (never a model name/crash); docs+samples document the config route",
+      "commit": "6f71fb3cd3e7d20ea8441c2cd0761d5660014e28",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+        "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+        "docs/config-reference.md",
+        ".bee/config-sample.json",
+        ".bee/config-sample-cli-executors.json",
+        "skills/bee-herding/references/operational-invariants.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml status_full — green — cell-declared verify scope (status_full display paths touched); JSON validated both samples",
+      "deviations": [
+        "status_full/store.rs normalize_tier_value and validate_models_config also needed a herding branch beyond the cited kind==cli lines, since that crate carries its own duplicate of drivers/models.rs normalize/validate logic (not shared code)"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
