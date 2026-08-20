@@ -10,8 +10,8 @@
   "ship_visibility": "on",
   "worktree_first": "on",
   "worktree_cleanup_on_merge": true,
-  "uat_stop": "off",
-  "uat_before_merge": false,
+  "uat_stop": "merge",
+  "uat_before_merge": true,
   "staging_before_merge": false,
   "commands": {
     "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"
@@ -19,8 +19,16 @@
   "gate_bypass": "normal",
   "models": {
     "claude": {
-      "extraction": { "kind": "herding", "agent": "agy-flash", "fallback": "default"},
-      "generation": { "kind": "herding", "agent": "agy-flash", "fallback": "default"},
+      "extraction": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "fallback": "default"
+      },
+      "generation": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "fallback": "default"
+      },
       "review": "opus",
       "advisor": "fable"
     },
@@ -33,7 +41,8 @@
         "promptVia": "stdin"
       }
     }
-  },"herding": {
+  },
+  "herding": {
     "agent_command": "claude-sonnet",
     "control_command": [
       "claude",
