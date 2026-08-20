@@ -235,6 +235,10 @@ enum Slot {
     Cli(String),
     /// {kind:'native',...} or an explicit-fallback composite's native primary.
     Native(String),
+    /// herding-tier D1: `{kind:"herding"}` — the dispatch seam turns this
+    /// into a `bee herding run` Bash payload; an Agent/Task subagent can no
+    /// more be a herding pane than it can be a cli executor (D5).
+    Herding,
 }
 
 #[derive(Clone, Debug)]
@@ -279,6 +283,11 @@ fn normalize_tier_value(value: &Value) -> Option<Slot> {
                 if let Some(model) = str_field("model") {
                     return Some(Slot::Native(model));
                 }
+            }
+            // herding-tier D1: no other field is required — `kind` alone
+            // routes the slot.
+            if kind == Some("herding") {
+                return Some(Slot::Herding);
             }
             // Explicit-fallback composite: {primary:{kind:'native', model}, ...}.
             if let Some(Value::Object(primary)) = obj.get("primary") {
@@ -356,6 +365,10 @@ enum Resolved {
     Budget,
     Refused,
     Native(String),
+    /// herding-tier D5: the slot is `{kind:"herding"}` — an Agent/Task
+    /// subagent cannot BE the herding pane; only the herding-exec Bash
+    /// path (dispatch prepare's Resolved::Herding arm) may run it.
+    Herding,
 }
 
 impl Resolved {
@@ -391,6 +404,7 @@ fn resolve_tier(models: &Models, slot: &str, runtime: &str) -> Resolved {
         Slot::Name(m) => Resolved::Model(m.clone()),
         Slot::Cli(_) => Resolved::Refused,
         Slot::Native(m) => Resolved::Native(m.clone()),
+        Slot::Herding => Resolved::Herding,
     }
 }
 
@@ -406,6 +420,7 @@ fn resolve_advisor(models: &Models, runtime: &str) -> Option<Resolved> {
         Slot::Name(m) => Some(Resolved::Model(m.clone())),
         Slot::Cli(_) => Some(Resolved::Refused), // {type:'cli'} — never a model member
         Slot::Native(m) => Some(Resolved::Native(m.clone())),
+        Slot::Herding => Some(Resolved::Herding), // never a model member either
     }
 }
 
@@ -663,6 +678,21 @@ param; the cli command names its own model."
             );
             return deny(reason, "cli-tier-denied", tier, None, subagent_type);
         }
+        if resolved == Resolved::Herding {
+            // herding-tier D5: mirror of the cli-tier-denied wording just
+            // above — an Agent/Task subagent cannot BE the pane a herding
+            // slot spawns.
+            let reason = format!(
+                "bee-model-guard: [bee-tier: {t}] resolves to a herding-executor pane, which \
+an in-family Agent/Task subagent cannot be — a herding tier runs one bee-ignorant \
+external agent in its own pane, not a spawned subagent.\n\
+FIX: dispatch it through the herding-exec path — a Bash call running \".bee/bin/bee \
+herding run --task-file - --json\" (plus --cwd for a granted worktree) with the \
+prompt on stdin (dispatch prepare already renders this payload for a --kind cell \
+dispatch). Do not attach a model param; the herding worker names its own model."
+            );
+            return deny(reason, "herding-tier-denied", tier, None, subagent_type);
+        }
         return allow("marker", tier, None, subagent_type);
     }
 
@@ -675,7 +705,8 @@ param; the cli command names its own model."
     // used to have nothing to go on, so no dispatch that passes today changes
     // its verdict.
     if let Some(t) = subagent_type.as_deref().and_then(tier_for_pinned_type) {
-        if resolve_tier(models, t, "claude") == Resolved::Refused {
+        let resolved = resolve_tier(models, t, "claude");
+        if resolved == Resolved::Refused {
             let reason = format!(
                 "bee-model-guard: subagent_type \"{}\" stands for the {t} tier, which resolves \
 to a cli executor — an in-family Agent/Task subagent cannot be an external process.\n\
@@ -685,6 +716,21 @@ a model.",
                 subagent_type.as_deref().unwrap_or_default()
             );
             return deny(reason, "cli-tier-denied", Some(t.to_string()), None, subagent_type);
+        }
+        if resolved == Resolved::Herding {
+            // herding-tier D5: same mirror as the marker-only branch above,
+            // reached here when the pinned subagent_type itself implies the
+            // tier instead of an explicit marker.
+            let reason = format!(
+                "bee-model-guard: subagent_type \"{}\" stands for the {t} tier, which resolves \
+to a herding-executor pane — an in-family Agent/Task subagent cannot be an external \
+pane worker.\n\
+FIX: dispatch it through the herding-exec path (a Bash call running \".bee/bin/bee \
+herding run --task-file - --json\" with the prompt on stdin), or name a tier whose \
+slot is a model.",
+                subagent_type.as_deref().unwrap_or_default()
+            );
+            return deny(reason, "herding-tier-denied", Some(t.to_string()), None, subagent_type);
         }
         return allow("pinned-type", Some(t.to_string()), None, subagent_type);
     }
@@ -1292,6 +1338,46 @@ mod tests {
         assert_eq!(d["transport"], "model-param");
         assert_eq!(d["model"], "opus");
         assert_eq!(d["tier"], Value::Null);
+    }
+
+    #[test]
+    fn a_herding_shaped_generation_slot_denies_the_marker_only_path() {
+        // herding-tier D5: mirror of cli_slot_and_empty_and_malformed_model_sets'
+        // marker-only denial, for `{kind:"herding"}` instead of `{kind:"cli"}`.
+        let herding = fixture(&json!({"models": {"claude": {
+            "extraction": "haiku",
+            "generation": {"kind": "herding"},
+            "review": "opus"
+        }}}));
+        let (code, stderr) = run_payload(
+            herding.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go"}}),
+        );
+        assert_eq!(code, 2, "a herding slot cannot be an in-family Agent/Task subagent");
+        assert!(stderr.contains("herding-executor pane") && stderr.contains("herding run --task-file - --json"));
+        let d = last_jsonl(dispatch_log(herding.path())).unwrap();
+        assert_eq!(d["transport"], "herding-tier-denied");
+        assert_eq!(d["tier"], "generation");
+    }
+
+    #[test]
+    fn an_inferred_herding_tier_is_still_denied() {
+        // herding-tier D5: mirror of an_inferred_cli_tier_is_still_refused —
+        // subagent_type alone implies the tier.
+        let herding = fixture(&json!({"models": {"claude": {
+            "extraction": "haiku",
+            "generation": {"kind": "herding"},
+            "review": "opus"
+        }}}));
+        let (code, stderr) = run_payload(
+            herding.path(),
+            json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-gather", "prompt": "gather"}}),
+        );
+        assert_eq!(code, 2, "a herding slot cannot be an in-family subagent");
+        assert!(stderr.contains("bee-gather") && stderr.contains("herding-executor pane"));
+        let d = last_jsonl(dispatch_log(herding.path())).unwrap();
+        assert_eq!(d["transport"], "herding-tier-denied");
+        assert_eq!(d["tier"], "generation");
     }
 
     #[test]
