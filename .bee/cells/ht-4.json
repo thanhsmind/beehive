@@ -35,18 +35,46 @@
     "ht-1"
   ],
   "regen_obligation_ack": "wave-barrier",
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-ht-4",
+    "outcome": "status/onboard display {kind:herding} as an executor (never a model name/crash); docs+samples document the config route",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+      "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+      "docs/config-reference.md",
+      ".bee/config-sample.json",
+      ".bee/config-sample-cli-executors.json",
+      "skills/bee-herding/references/operational-invariants.md"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-20T00:14:21.075Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T00:05:47.641Z",
+    "report": {
+      "outcome": "status/onboard display {kind:herding} as an executor (never a model name/crash); docs+samples document the config route",
+      "commit": "6f71fb3cd3e7d20ea8441c2cd0761d5660014e28",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+        "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+        "docs/config-reference.md",
+        ".bee/config-sample.json",
+        ".bee/config-sample-cli-executors.json",
+        "skills/bee-herding/references/operational-invariants.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml status_full — green — cell-declared verify scope (status_full display paths touched); JSON validated both samples",
+      "deviations": [
+        "status_full/store.rs normalize_tier_value and validate_models_config also needed a herding branch beyond the cited kind==cli lines, since that crate carries its own duplicate of drivers/models.rs normalize/validate logic (not shared code)"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

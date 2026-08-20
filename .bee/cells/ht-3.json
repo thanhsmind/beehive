@@ -31,18 +31,74 @@
   "deps": [
     "ht-1"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-ht-3",
+    "outcome": "prepare emits the herding-exec Bash payload; model guard denies Agent/Task on a herding tier",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-20T00:16:08.726Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T00:05:47.583Z",
+    "report": {
+      "outcome": "prepare emits the herding-exec Bash payload (command + stdin + --cwd for a granted worktree); model guard denies Agent/Task on a herding tier with a fix naming the Bash path",
+      "commit": "0765e69209107ccff2a353771e22fcc6750ddc04",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers && cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard — green — both scoped suites cover the new Resolved::Herding prepare arm and the herding-tier-denied guard branches",
+      "deviations": [
+        "reserved and edited packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs (not in cell.files) since prepare.rs has no inline test module — the shared drivers/tests.rs is the only place prepare_dispatch is exercised (same pattern ht-1 used for models.rs)",
+        "quoted the --cwd path since the payload runs through a shell Bash tool call, unlike run.rs internal Command::new arg list"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "herding-exec-payload",
+            "status": "PASS",
+            "evidence": "prepare.rs:748-770 Bash arm, exact command + quoted --cwd from worktree_location, stdin prompt, channel herding-exec; codex takes it too"
+          },
+          {
+            "id": "guard-denies",
+            "status": "PASS",
+            "evidence": "model_guard.rs:678+717 deny herding-tier-denied with the Bash fix at both marker and pinned paths"
+          },
+          {
+            "id": "cli-untouched",
+            "status": "PASS",
+            "evidence": "cli-tier-denied text unchanged; only a pure hoist refactor"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "0765e692: tests.rs edit was the recorded reserved deviation; nothing else undeclared"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-20T00:19:55.235Z"
+      }
+    ]
   }
 }

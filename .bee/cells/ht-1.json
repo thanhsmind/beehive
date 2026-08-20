@@ -27,18 +27,69 @@
     "herding-tier D3"
   ],
   "deps": [],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-ht-1",
+    "outcome": "normalize_tier_value/resolve_tier/resolve_advisor route {kind:herding} per D1/D3",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-20T00:05:16.903Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T00:01:00.413Z",
+    "report": {
+      "outcome": "normalize_tier_value/resolve_tier/resolve_advisor route {kind:herding} per D1/D3",
+      "commit": "791b02fa",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers — green — cell-declared verify scope, drivers module (156 passed, 0 failed)",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "cell-routes",
+            "status": "PASS",
+            "evidence": "models.rs:326 returns Resolved::Herding when !for_gather; test resolve_tier_routes_herding_by_purpose_..."
+          },
+          {
+            "id": "gather-defaults",
+            "status": "PASS",
+            "evidence": "models.rs:329 default_models(rt) non-null else Budget; codex gather -> Budget asserted"
+          },
+          {
+            "id": "cli-untouched",
+            "status": "PASS",
+            "evidence": "diff insertions-only after the cli branch; no cli line changed"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "791b02fa touches only declared files"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-20T00:19:55.213Z"
+      }
+    ]
   }
 }

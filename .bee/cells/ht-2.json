@@ -27,18 +27,69 @@
   "deps": [
     "ht-1"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-ht-2",
+    "outcome": "bee herding run reads --task-file - from stdin; empty stdin refuses like an empty --task",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-20T00:11:02.965Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T00:05:47.524Z",
+    "report": {
+      "outcome": "bee herding run reads --task-file - from stdin via the crate read_stdin helper; a path keeps prior behavior; empty stdin refuses like an empty --task",
+      "commit": "6ea7f9eaaffe4615154039e9736aa01b5b823f9f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::run — green (30 passed) — cell verify scope; cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch — green (8 passed) — cell verify scope",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "stdin-sentinel",
+            "status": "PASS",
+            "evidence": "run.rs:87-121 resolve_task_with_stdin; '-' reads read_stdin, empty -> same typed refusal as no flag"
+          },
+          {
+            "id": "path-unchanged",
+            "status": "PASS",
+            "evidence": "insertions-only diff; file-path branch untouched"
+          },
+          {
+            "id": "registry-scoped",
+            "status": "PASS",
+            "evidence": "payload diff = one description key; examples[0] byte-identical; registry_dispatch 8 passed"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "6ea7f9ea touches only declared files"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-20T00:19:55.231Z"
+      }
+    ]
   }
 }
