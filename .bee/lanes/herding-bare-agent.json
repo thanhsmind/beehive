@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-bare-agent",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-bare-agent\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"herding-bare-agent\" (lane).",
+  "created_at": "2026-08-20T11:29:48.504Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null
+}
