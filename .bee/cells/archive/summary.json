@@ -688,5 +688,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-20T11:50:03.991Z"
+  },
+  "herding-bare-agent": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-20T12:21:40.108Z"
   }
 }
