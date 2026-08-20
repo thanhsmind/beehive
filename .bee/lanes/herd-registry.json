@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Duyệt đợt herding: 26 stub trong hàng + 11 file proposal của arc này. Thả gather đọc so với bản overview hiện tại:",
-    "asked_at": "2026-08-20T05:41:27.931Z",
+    "subject": "Digest về: 10 nhóm đã có chỗ, **3 thứ thiếu thật trong overview**, phần còn lại là vụn quy trình. Áp 3 phần thêm:",
+    "asked_at": "2026-08-20T05:52:33.131Z",
     "session": "1adb69d1-67be-4463-8349-af8832af8a32"
   }
 }
