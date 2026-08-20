@@ -30,7 +30,8 @@
   },
   "herding": {
     "agent_command": [
-      "agy"
+      "agy",
+      "--dangerously-skip-permissions"
     ]
   }
 }

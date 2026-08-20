@@ -1,0 +1,59 @@
+{
+  "id": "hbf-1",
+  "feature": "herding-brief-file",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Persist the brief as brief-N.txt; prompt is a one-line pointer",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-brief-file/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Per D1: mailbox gains brief_path(bee_dir, job_id, round) and a pointer_prompt(brief_abs_path) helper returning the fixed one-line text. execute_new and execute_continue write the rendered brief to brief-N.txt (atomic) before prompting, then agent_prompt the ONE-LINE pointer instead of the brief body. A brief-file write failure is a typed spawn/continue failure. Tests: brief file exists with the rendered content before the prompt; the prompt sent is single-line and names the absolute brief path; continue writes brief-(N+1).txt.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "The prompt delivered to the agent is one line and names the absolute brief-N.txt path",
+      "brief-N.txt carries the full rendered brief and exists before the prompt",
+      "--continue writes and points at brief-(N+1).txt"
+    ]
+  },
+  "decisions": [
+    "herding-brief-file D1"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hbf-1",
+    "outcome": "Brief persists as brief-N.txt; agent gets a one-line pointer — multi-line drop impossible for every kind",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T03:10:30.378Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T03:04:09.654Z",
+    "report": {
+      "outcome": "brief-N.txt + one-line pointer prompt, spawn and continue",
+      "commit": "9ee689c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run (34) + herding::mailbox (18) — green — touched modules; pointer form live-proven on smoke-agy-5 before coding",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
