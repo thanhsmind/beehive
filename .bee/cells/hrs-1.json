@@ -24,18 +24,32 @@
     "herding-receipt-source D2"
   ],
   "deps": [],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-hrs-1",
+    "outcome": "Receipt reads pane text by pane id; 30x1s delivery window",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-20T03:24:44.005Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T03:22:47.875Z",
+    "report": {
+      "outcome": "pane-read receipt + 30-attempt window",
+      "commit": "head",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run — green (36 passed) — touched module",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
