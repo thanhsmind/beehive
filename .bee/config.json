@@ -27,5 +27,10 @@
         "promptVia": "stdin"
       }
     }
+  },
+  "herding": {
+    "agent_command": [
+      "agy"
+    ]
   }
 }
