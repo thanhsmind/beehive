@@ -28,18 +28,36 @@
   "deps": [
     "hba-1"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "hba-2-worker",
+    "outcome": "Both reader surfaces state the four-step bare-run agent resolution order",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/areas/bee-herding/overview.md"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-20T11:56:00.132Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "b8251975-37ac-4380-a180-97e680aea639",
+    "claimed_at": "2026-08-20T11:50:44.237Z",
+    "report": {
+      "outcome": "The herding run help entry and the bee-herding knowledge overview both state the four-step bare-run resolution order (--agent, then the models.<runtime>.generation herd slot, then a string herding.agent_command, then the array/built-in default), plus the skip rules, the fail-closed unknown-agent arm, and the BEE_RUNTIME/claude runtime fallback; the agent parameter description now says it overrides both the tier slot and agent_command",
+      "commit": "0323bc17",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/knowledge/areas/bee-herding/overview.md"
+      ],
+      "tests": "python3 -m json.tool registry_payload.json && cargo test --release --manifest-path packages/bee-rs/Cargo.toml registry — green: JSON_OK, 22 passed (bee unittests), 7 passed (registry_contracts), 3 passed (registry_dispatch), 0 failed — scope: docs-only change, so the proof is JSON validity plus every registry pin test that reads the edited payload",
+      "deviations": [
+        "worker executed as a herded agy pane (job hba-2-r1, outcome done); orchestrator re-read both surfaces against the shipped resolver before capping"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Muốn mình mở ticket discovery cho việc thay poll bằng socket event trong `bee herding run` không?",
-    "asked_at": "2026-08-20T11:45:02.413Z",
-    "session": "8ca30885-b974-4da5-8327-c60ae9cd5a46"
+    "subject": "Không còn gì chờ bạn. Việc nền duy nhất: `beehive-2c` đang chạy feature của nó — xong nó sẽ báo, và UAT cuối vẫn về tay bạn.",
+    "asked_at": "2026-08-20T11:51:53.969Z",
+    "session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5"
   }
 }

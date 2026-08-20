@@ -27,19 +27,87 @@
   },
   "decisions": [],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "hba-1-worker",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "A bare herding run resolves its agent from the generation tier slot",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-20T11:50:16.904Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "b8251975-37ac-4380-a180-97e680aea639",
-    "claimed_at": "2026-08-20T11:42:25.255Z"
+    "claimed_at": "2026-08-20T11:42:25.255Z",
+    "report": {
+      "outcome": "resolve_agent_command reads the cell-execution tier slot (models.<runtime>.generation with kind herding and a non-empty agent) between the --agent lookup and herding.agent_command; every other slot shape falls through unchanged; an unknown slot agent fails closed as UnknownAgent; the registry entry's env map rides through the new branch; a pure resolve_agent_command_for_runtime helper keeps the BEE_RUNTIME read out of the tests",
+      "commit": "3a8e6c16",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green: lib binary 179 passed, 0 failed, overall exit 0 (the FAILED stream lines are control_loop::tests::quick_exit_helper child re-execs, red by design) — scope: the changed resolver in wave.rs plus every herding test that reaches it, incl. 6 new resolver tests",
+      "deviations": [
+        "worker executed as a herded agy pane (job hba-1-r1, outcome done); orchestrator re-ran the proof and reviewed the diff before capping",
+        "current_runtime() returns BEE_RUNTIME raw and generation_slot_herding_agent applies the known-runtime/claude fallback — same D3 behavior, validation just lives one call deeper"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 206 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "precedence_order",
+            "status": "PASS",
+            "evidence": "wave.rs:344-360 orders explicit `agent` (345), `generation_slot_herding_agent` (348), string `herding.agent_command` (351), then `agent_command_tokens` default (354); mutation swapping 345/348 in a scratchpad copy killed `explicit_agent_name_still_wins_over_the_tier_slot` (wave.rs:1224)"
+          },
+          {
+            "id": "slot_shape_gate",
+            "status": "PASS",
+            "evidence": "wave.rs:292-304 gates on `as_object()` + `kind == \"herding\"` + non-empty `agent.trim()`; test wave.rs:1235-1280 covers kind-herding-without-agent, whitespace agent, plain string slot, kind:\"cli\", and null — all fall through to `herding.agent_command` (absent/non-object also hit the `?` arms at 294-295)"
+          },
+          {
+            "id": "unknown_slot_agent_fails_closed",
+            "status": "PASS",
+            "evidence": "wave.rs:348-349 routes the slot name through `resolve_from_registry`, which returns `UnknownAgent { name, known: registry.keys() }` at wave.rs:272-277; test wave.rs:1283-1304 asserts UnknownAgent with `known` listing built-ins even though `herding.agent_command` is present"
+          },
+          {
+            "id": "runtime_selection",
+            "status": "PASS",
+            "evidence": "wave.rs:306-308 `current_runtime()` reads BEE_RUNTIME else \"claude\"; wave.rs:293 maps anything outside claude/codex/opencode back to \"claude\" (test wave.rs:1331-1357). `git show 386634bd --name-only` lists wave.rs alone — run.rs:978 `resolve_agent_command(&cfg, opts.agent.as_deref())` and wave.rs:495 `resolve_agent_command(cfg, None)` are untouched, so no new CLI flag or call-site change"
+          },
+          {
+            "id": "env_map_intact",
+            "status": "PASS",
+            "evidence": "the slot branch (wave.rs:348-349) calls the same `resolve_from_registry`, which returns `entry.env.clone()` at wave.rs:284; test wave.rs:1307-1328 asserts API_KEY/FOO_2 arrive via the slot path"
+          },
+          {
+            "id": "doc_comment_updated",
+            "status": "PASS",
+            "evidence": "wave.rs:316-330 rewrites the resolver doc to \"four reference spellings\" with the tier-slot bullet at wave.rs:320-323, placed between the `--agent` bullet and the `agent_command` bullet — same order as the code"
+          },
+          {
+            "id": "tests_actually_exercise_the_claims",
+            "status": "PASS",
+            "evidence": "`cargo test -p bee --bins herding::wave` in the worktree: 51 passed, 0 failed. Mutation testing on a scratchpad copy: deleting the branch at wave.rs:348-350 killed 4 tests; loosening the gate at wave.rs:296-302 plus swapping the precedence killed the other two. No new test survives every mutation"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-20T11:59:13.716Z"
+      }
+    ]
   }
 }
