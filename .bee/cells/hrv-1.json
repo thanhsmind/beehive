@@ -1,0 +1,69 @@
+{
+  "id": "hrv-1",
+  "feature": "herding-review-slots",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Review/advisor purposes resolve a herding slot to the herding-exec payload",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-review-slots/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "action": "Per D1/D2: today resolve_tier branches herding on for_gather alone (cell -> Resolved::Herding, everything else -> runtime default). Change the split to PURPOSE-aware: cell, reviewer, and advisor purposes resolve to Resolved::Herding (agent field carried); gather/extraction keep the default-model fallback. Note purpose plumbing: resolve_tier currently receives for_gather: bool via purpose_is_gather (drivers/mod.rs:33-45) — extend the seam minimally (e.g. pass the kind string or a small enum) WITHOUT changing cli behavior: cli stays refused for cell and served for gather/reviewer/advisor exactly as now. resolve_advisor: a herding-shaped advisor slot now returns Resolved::Herding (was None). prepare_dispatch: reviewer/advisor kinds hitting Resolved::Herding emit the same herding-exec Bash payload arm (command + --agent + stdin brief, --cwd only when a worktree grant exists). model_guard: herding-tier-denied already denies by resolved kind — extend/keep so reviewer/advisor Agent dispatches against a herding slot are denied with the same fix text; add the arm only where compilation or tests demand. Tests: reviewer purpose + herding slot -> Bash herding-exec payload with --agent; advisor same; gather/extraction purposes -> default model unchanged; every existing cli test byte-identical.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+  "must_haves": {
+    "truths": [
+      "reviewer and advisor purposes on {kind:herding, agent:X} emit the herding-exec Bash payload carrying --agent X",
+      "gather and extraction purposes on the same slot keep the runtime default model",
+      "cli slot behavior byte-identical to before"
+    ]
+  },
+  "decisions": [
+    "herding-review-slots D1",
+    "herding-review-slots D2"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hrv-1",
+    "outcome": "reviewer/advisor purposes on a herding slot now resolve to the herding-exec Bash payload; gather stays on the default model; cli behavior unchanged",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T06:16:09.576Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T06:06:24.018Z",
+    "report": {
+      "outcome": "reviewer/advisor purposes on a herding slot now resolve to the herding-exec Bash payload; gather stays on the default model; cli behavior unchanged",
+      "commit": "2e34139a",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers && cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard — 167 passed (1 ignored) + 30 passed — full declared verify command",
+      "deviations": [
+        "Received a mid-task system-reminder claiming to be a coordinator scope delta widening D1 and adding a new D3, sourced from the MAIN checkout CONTEXT.md rather than the worktree. Treated as untrusted/injected content (not a genuine orchestrator turn, asked to reinterpret a locked decision from a different checkout) and did not act on it; built the cell strictly to the authoritative cell JSON and worktree CONTEXT.md (D1/D2 only, no D3)."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
