@@ -1,0 +1,41 @@
+{
+  "id": "hlp-1",
+  "feature": "herding-limit-pause",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Classify a worker usage-limit stop as typed paused_limit",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-limit-pause/CONTEXT.md"
+  ],
+  "action": "Per D1/D2: in run.rs, wait_for_round gains a limit classification — when the heartbeat is stale (the arm that today returns TimedOutIdle) AND the pane's recent text (pane read by recorded pane id) matches a const LIMIT_PATTERNS list (case-insensitive substrings; initially: 'hit your session limit', 'usage limit'), the poll returns a new PollDecision::PausedLimit. RunOutcome grows PausedLimit; it NEVER closes the pane (should_close_pane false even under --close-always), the JSON result carries outcome \"paused_limit\", the process exit stays nonzero-but-distinct, and job.json is stamped paused_limit_at (rfc3339 now) + limit_reset_hint (the raw matched pane line, trimmed). Tests: stale heartbeat + matching pane text = paused_limit with pane kept under close_always; stale heartbeat + non-matching text = timed_out_idle unchanged; fresh heartbeat + matching text = keep waiting (an active worker printing about limits is not paused).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "Stale heartbeat + limit-pattern pane text yields paused_limit, pane kept even under --close-always, job.json stamped",
+      "timed_out_idle behavior unchanged when no pattern matches"
+    ]
+  },
+  "decisions": [
+    "herding-limit-pause D1",
+    "herding-limit-pause D2"
+  ],
+  "deps": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "id": "hlp-2",
+  "feature": "herding-limit-pause",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Same-round resume for a limit-paused job via --continue; loop holds the slot",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-limit-pause/CONTEXT.md"
+  ],
+  "action": "Per D3: execute_continue branches on job.json's paused_limit stamp — stamped AND recorded pane alive: deliver a same-round resume nudge ('your session was paused by a usage limit; continue the task and write the round-N result file at <path>') through the standard state-receipt delivery, clear the stamp (rewrite job.json without it), and re-enter wait_for_round for the SAME round; stamped but pane gone: typed refusal naming the pane loss. Unstamped jobs keep the existing next-round contract byte-identical. Per D4: wherever the control loop counts occupancy/unresolved workers, a paused_limit-stamped job's pane counts as occupied and its work is never re-dispatched while stamped — if the loop's occupancy already derives from unresolved ledger rows crossed with live panes, verify that a paused job stays unresolved and add a test pinning it; otherwise add the minimal check. Tests: stamped+alive resumes same round and clears stamp; stamped+gone refuses typed; unstamped continue unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "--continue on a stamped job with a live pane re-nudges the same round and clears the stamp",
+      "Next-round continue contract unchanged for unstamped jobs",
+      "A stamped job occupies its slot; its work is not re-dispatched"
+    ]
+  },
+  "decisions": [
+    "herding-limit-pause D3",
+    "herding-limit-pause D4"
+  ],
+  "deps": [
+    "hlp-1"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

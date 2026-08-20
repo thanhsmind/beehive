@@ -1,0 +1,102 @@
+{
+  "id": "hws-1",
+  "feature": "herding-worker-standalone",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Herded worker is standalone: brief contract, env marker, hook kill-switch",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-worker-standalone/CONTEXT.md"
+  ],
+  "action": "D1 in mailbox.rs render_brief: prepend a '# You are a standalone executor' block BEFORE '# Task': do exactly the task below and nothing else; IGNORE any bee/agent-workflow instructions this repo's AGENTS.md or CLAUDE.md may have loaded into your context; never run any `bee` command; never claim, cap, or write workflow state under .bee/ — writing your mailbox result file (below) is the ONE exception; the result file is your only contract. Update brief tests to pin the block. D2 in run.rs execute_new: the env exported into the pane is the registry entry's env PLUS BEE_HERDING_WORKER=1, and the marker wins over a same-name per-agent value; the export line is now sent whenever the merged map is non-empty (i.e. always on a fresh spawn) — update the order/exactly-when tests accordingly, and assert the marker rides along even for an array-shape (env-less) entry. D3 in hooks/mod.rs try_native: after confirming argv is a hook invocation (name parsed, including empty/--help paths unchanged), if std::env::var(\"BEE_HERDING_WORKER\") is non-empty, return Some(ExitCode::SUCCESS) with no output before any dispatch; add a test using a guarded env set/unset (mirror how neighboring env-dependent tests isolate env, e.g. a mutex or serial pattern if present) proving a hook name that would otherwise dispatch exits 0 silently under the marker and dispatches normally without it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding hooks",
+  "must_haves": {
+    "truths": [
+      "Brief opens with the standalone-executor contract naming the ignore-bee rule and the result-file-only exception",
+      "Fresh spawn always exports BEE_HERDING_WORKER=1; marker beats per-agent env",
+      "Any bee hook exits 0 silently when BEE_HERDING_WORKER is non-empty; behavior unchanged without it"
+    ]
+  },
+  "decisions": [
+    "herding-worker-standalone D1",
+    "herding-worker-standalone D2",
+    "herding-worker-standalone D3"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hws-1",
+    "outcome": "Herded workers stay out of the bee flow: brief contract, always-on env marker, hook kill-switch",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T11:23:31.545Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5",
+    "claimed_at": "2026-08-20T10:36:29.566Z",
+    "report": {
+      "outcome": "Brief opens with a standalone-executor contract; every fresh spawn exports BEE_HERDING_WORKER=1 (marker wins over per-agent env); every bee hook exits 0 silently under the marker via one check in hooks::try_native",
+      "commit": "c35d631b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/hooks/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding; same with hooks — herding 180 passed + hooks 445 passed, 0 real failures (quick_exit_helper child noise only) — the two touched areas: brief render, spawn env order, hook dispatch",
+      "deviations": [
+        "executed via a herded claude-sonnet pane worker (job hws-1-r1); the worker finished edits+tests but its mailbox result write was denied by the write-guard (worktree-rooted session, mailbox in main) and its session hit a usage limit — orchestrator verified fresh, committed, and capped instead"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 169 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "brief-standalone-contract",
+            "status": "PASS",
+            "evidence": "render_brief opens with '# You are a standalone executor' before '# Task'; test pins order and the ignore-bee + never-run-bee wording; herding filter 180 passed"
+          },
+          {
+            "id": "marker-always-exported",
+            "status": "PASS",
+            "evidence": "execute_new merges BEE_HERDING_WORKER=1 over per-agent env; export sent on every fresh spawn before agent_start (order test updated); marker present for array-shape entries"
+          },
+          {
+            "id": "hook-kill-switch-guard-reviewed",
+            "status": "PASS",
+            "evidence": "orchestrator reviewed the hooks/mod.rs diff (judge-required root): marker check sits after name/help parsing, before stdin read and dispatch; usage paths byte-identical; env tests serialized behind a mutex mirroring status_full's session_env_lock; hooks filter 445 passed"
+          },
+          {
+            "id": "worker-independence-live",
+            "status": "PASS",
+            "evidence": "live dogfood: the very worker that built this (job hws-1-r1) was blocked by the write-guard when writing its mailbox result — the exact failure the marker removes; deviation recorded on the cap"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-sonnet-5",
+        "judge_model": "claude-fable-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-20T11:23:58.928Z"
+      }
+    ]
+  }
+}

@@ -13,8 +13,13 @@
   "summary": "Feature \"defaults-and-agent-env\" started at phase \"planning\" (lane).",
   "next_action": "bee close finished \"defaults-and-agent-env\" — feature is closed.",
   "created_at": "2026-08-20T09:47:41.139Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Lưu ý 1 câu: `uat_stop: \"off\"` = tắt hẳn cửa UAT — merge không hỏi ai nữa. Nếu key này bị xóa khỏi config thì default code vẫn là \"close\" (h",
+    "asked_at": "2026-08-20T10:32:34.599Z",
+    "session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",

@@ -370,6 +370,9 @@
     "receipt",
     "defaults",
     "staging",
-    "env"
+    "env",
+    "worker",
+    "limit",
+    "resume"
   ]
 }
