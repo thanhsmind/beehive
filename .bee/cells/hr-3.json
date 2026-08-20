@@ -32,18 +32,40 @@
     "hr-2"
   ],
   "regen_obligation_ack": "wave-barrier",
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-hr-3",
+    "outcome": "operational-invariants.md documents herding.agents (map shape, three reference spellings, unknown-name refusal, herd=pane rule); config-reference.md and both samples point at it, samples stay copy-paste-safe",
+    "files_changed": [
+      "skills/bee-herding/references/operational-invariants.md",
+      "docs/config-reference.md",
+      ".bee/config-sample.json",
+      ".bee/config-sample-cli-executors.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-20T04:39:49.258Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T04:34:28.197Z",
+    "report": {
+      "outcome": "herding.agents registry documented in operational-invariants.md with all three reference spellings; config-reference.md models row and both sample _doc.herding blocks point at it, active herding values untouched",
+      "commit": "7b38ebf1",
+      "files": [
+        "skills/bee-herding/references/operational-invariants.md",
+        "docs/config-reference.md",
+        ".bee/config-sample.json",
+        ".bee/config-sample-cli-executors.json"
+      ],
+      "tests": "python3 -m json.tool .bee/config-sample.json > /dev/null && python3 -m json.tool .bee/config-sample-cli-executors.json > /dev/null && echo parse-ok — parse-ok — cell verify command, both samples still strict JSON; cargo test --test pointer_integrity — 10 passed — operational-invariants.md is skills-tree scanned by the pointer gate",
+      "deviations": [
+        "ran cargo test --test pointer_integrity as an extra scoped proof beyond the cells verify command, since operational-invariants.md is a skills/*.md source the pointer_integrity gate scans"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

@@ -28,18 +28,38 @@
     "herd-registry D2"
   ],
   "deps": [],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-hr-2",
+    "outcome": "kind:herding gains agent; prepare appends --agent when the slot names one, byte-identical otherwise",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-20T04:32:59.695Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T04:24:03.558Z",
+    "report": {
+      "outcome": "kind:herding gains agent; prepare appends --agent when the slot names one, byte-identical otherwise",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers && model_guard — 163+29 passed, 0 failed — scoped to the herding-agent seam in models.rs/prepare.rs/tests.rs, verified in an isolated tmp worktree (HEAD + this diff) since the live worktree carries hr-1's uncommitted, out-of-scope WIP that does not yet compile",
+      "commit": "f1ab4187",
+      "deviations": [
+        "Ran the scoped cargo test in an isolated tmp git worktree (HEAD + this diff applied) instead of the live worktree, because hr-1's uncommitted, in-scope-excluded WIP in herding/wave.rs and herding/run.rs currently leaves the shared crate non-compiling; my three files compile and pass green independent of that WIP."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }

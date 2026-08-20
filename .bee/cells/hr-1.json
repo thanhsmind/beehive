@@ -29,18 +29,40 @@
     "herd-registry D2"
   ],
   "deps": [],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-hr-1",
+    "outcome": "herding.agents registry + named resolution wired into resolve_agent_command and bee herding run --agent",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-20T04:33:55.933Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T04:24:03.471Z",
+    "report": {
+      "outcome": "herding.agents registry + named resolution wired into resolve_agent_command and bee herding run --agent",
+      "commit": "4e41808c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding and --test registry_dispatch — 144 herding tests + 8 registry_dispatch tests, all green — cell verify scope, both declared commands run",
+      "deviations": [
+        "verify command used the absolute cargo path (/home/thanhsmind/.cargo/bin/cargo) instead of a PATH= prefix — write-guard refused the compound PATH= shell form"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 342 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }
