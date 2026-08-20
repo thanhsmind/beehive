@@ -178,10 +178,24 @@ trace. `--close-always` closes the pane on every outcome, overriding both.
 
 **This verb is cell-execution-only (D7)** — the mirror of the `cli` tier
 kind, which is gather/review/advisor-only (`gates-and-delegation.md`'s cli
-gather branch). A gather never dispatches through a herding pane; when the
-backlogged `{kind:"herding"}` tier-kind proposal (scope B) lands, a
-gather-purpose resolution to `kind=herding` falls back to the default
-instead.
+gather branch). A gather never dispatches through a herding pane; a
+gather-purpose resolution against a `{kind:"herding"}` slot falls back to
+the runtime's default model instead.
+
+**The config route now exists (herding-tier D1-D5):** `models.<runtime>.generation`
+(or any configurable slot) accepts `{"kind": "herding"}` as a value —
+a cell dispatch against that slot resolves automatically to the
+`bee herding run` payload this section describes, no per-cell request
+needed, while a gather/review/advisor purpose on the same slot keeps
+serving that runtime's own default model (never `herding`, never a
+refusal). The agent that runs is still always the single global
+`herding.agent_command` above — the tier value is a router, it carries no
+per-slot agent override (D2). Manual, scope-A `bee herding run`/`--continue`
+invocations — everything this reference otherwise describes — are
+unchanged; the config route is one more way to reach the same verb, not a
+replacement for it. Config shape and samples: `docs/config-reference.md`
+(models section), `.bee/config-sample.json`,
+`.bee/config-sample-cli-executors.json`.
 
 ## What actually contains this
 

@@ -745,6 +745,28 @@ pub(crate) fn prepare_dispatch(
             payload.insert("stdin".into(), Value::String(prompt_body.clone()));
             channel = "cli-exec".into();
         }
+        Resolved::Herding => {
+            // herding-tier D4: mirrors the cli-exec Bash arm above
+            // byte-for-byte in shape — argv cannot carry a long brief, so
+            // the prompt travels on stdin, and this arm fires for EVERY
+            // runtime (no codex/claude split): a herding pane is a Bash
+            // subprocess call, never a native spawn_agent. D6: the payload
+            // carries the brief only, never a bee verb for the worker — ALL
+            // bee bookkeeping (claim, cap, close) stays the orchestrator's
+            // after it reads the herding result (herding-executor D4).
+            tool = "Bash".into();
+            let mut command = ".bee/bin/bee herding run --task-file - --json".to_string();
+            if let Some((worktree_root, _control_root)) = &worktree_location {
+                if !worktree_root.is_empty() {
+                    command.push_str(" --cwd \"");
+                    command.push_str(worktree_root);
+                    command.push('"');
+                }
+            }
+            payload.insert("command".into(), Value::String(command));
+            payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+            channel = "herding-exec".into();
+        }
         _ if runtime == "codex" => {
             tool = "spawn_agent".into();
             // Carries the SAME subject as the claude Agent branch below,

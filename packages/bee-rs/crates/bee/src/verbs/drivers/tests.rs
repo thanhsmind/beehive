@@ -357,6 +357,56 @@ use std::time::Instant;
         }
     }
 
+    // herding-tier D1/D3: `{kind:"herding"}` is a router value — a cell
+    // purpose resolves to Resolved::Herding (ht-3 turns that into the
+    // herding-exec Bash payload); a gather purpose keeps serving the
+    // runtime's own default model for that slot, the exact inverse of the
+    // cli branch just above.
+    #[test]
+    fn normalize_tier_value_accepts_and_round_trips_the_herding_shape() {
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding"}))),
+            Some(json!({"kind": "herding"}))
+        );
+        // No other fields are required, and unknown extras are dropped —
+        // same posture as the cli/native shapes above.
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "command": "ignored", "extra": 1}))),
+            Some(json!({"kind": "herding"}))
+        );
+        // A near-miss kind value is not herding — it falls through the
+        // existing rules unchanged (no `model` field either, so None).
+        assert_eq!(normalize_tier_value(Some(&json!({"kind": "hording"}))), None);
+    }
+
+    #[test]
+    fn resolve_tier_routes_herding_by_purpose_and_gathers_keep_the_default_model() {
+        // cell purpose -> Resolved::Herding, never a refusal.
+        let m = models_from(r#"{"claude":{"generation":{"kind":"herding"}}}"#);
+        assert_eq!(resolve_tier(&m, "generation", "claude", false), Resolved::Herding);
+
+        // gather purpose on the same slot -> the runtime's DEFAULT model for
+        // that slot (claude generation -> sonnet), not Herding.
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", true),
+            Resolved::Model { model: "sonnet".into(), effort: None }
+        );
+
+        // A runtime whose default for the slot is null (codex) reads Budget
+        // on the gather purpose — never a refusal, never Herding.
+        let m = models_from(r#"{"codex":{"generation":{"kind":"herding"}}}"#);
+        assert_eq!(resolve_tier(&m, "generation", "codex", true), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "generation", "codex", false), Resolved::Herding);
+    }
+
+    #[test]
+    fn resolve_advisor_treats_a_herding_shaped_slot_as_no_advisor() {
+        assert_eq!(
+            resolve_advisor(&models_from(r#"{"claude":{"advisor":{"kind":"herding"}}}"#), "claude"),
+            None
+        );
+    }
+
     #[test]
     fn resolve_advisor_never_falls_back() {
         // Unset -> None (not budget, not generation).
@@ -789,6 +839,104 @@ use std::time::Instant;
             .as_str()
             .unwrap()
             .starts_with("Gather:"));
+    }
+
+    // ── ht-3: herding-tier D4 — the herding-exec Bash payload ──────────────
+
+    #[test]
+    fn herding_shaped_generation_emits_the_herding_exec_bash_payload_for_a_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let payload = v.get("payload").unwrap();
+        assert_eq!(
+            payload.get("command"),
+            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+        );
+        let stdin = payload.get("stdin").unwrap().as_str().unwrap();
+        assert!(!stdin.is_empty());
+        assert!(stdin.contains("c-1"), "{stdin}");
+        assert_eq!(
+            v.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+    }
+
+    /// D4: the same herding slot on a codex runtime dispatch takes the SAME
+    /// Bash arm — a herding pane is a subprocess call, never a native
+    /// codex spawn_agent (the `_ if runtime == "codex"` catch-all must
+    /// never see a `Resolved::Herding`).
+    #[test]
+    fn herding_shaped_generation_takes_the_bash_arm_on_codex_too() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"codex":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+        );
+    }
+
+    /// D4: a granted worktree adds `--cwd "<worktree_root>"` to the
+    /// command — the same single Location resolution the envelope and
+    /// prompt already read (dp1_worktree_fixture, defined below).
+    #[test]
+    fn herding_shaped_generation_adds_cwd_for_a_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#,
+        )
+        .unwrap();
+        w(
+            &main,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let norm = |p: &str| match dunce::canonicalize(p) {
+            Ok(c) => c.to_string_lossy().into_owned(),
+            Err(_) => p.to_string(),
+        };
+        let granted_s = v.get("worktree_root").unwrap().as_str().unwrap().to_string();
+        assert_eq!(norm(&granted_s), norm(granted.to_str().unwrap()));
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(format!(
+                ".bee/bin/bee herding run --task-file - --json --cwd \"{granted_s}\""
+            )))
+        );
     }
 
     #[test]

@@ -85,12 +85,34 @@ fn absolute_path(p: &Path) -> PathBuf {
 }
 
 fn resolve_task(task: Option<&str>, task_file: Option<&str>) -> Result<String, String> {
+    resolve_task_with_stdin(task, task_file, super::read_stdin)
+}
+
+/// `resolve_task`'s real logic, with the stdin read injected (herding-tier
+/// D4): `--task-file -` reads the whole task text from stdin via the SAME
+/// `super::read_stdin` helper `bee herding wave` already uses for its
+/// worker-specs read. A file path keeps reading from disk exactly as
+/// before. Empty stdin refuses with the SAME message an empty `--task` and
+/// a missing `--task`/`--task-file` both already produce — "empty" is
+/// never a silently-accepted brief.
+fn resolve_task_with_stdin(
+    task: Option<&str>,
+    task_file: Option<&str>,
+    read_stdin: impl FnOnce() -> String,
+) -> Result<String, String> {
     if let Some(t) = task {
         if !t.is_empty() {
             return Ok(t.to_string());
         }
     }
     if let Some(f) = task_file {
+        if f == "-" {
+            let text = read_stdin().trim_end_matches('\n').to_string();
+            if text.is_empty() {
+                return Err("--task or --task-file is required".to_string());
+            }
+            return Ok(text);
+        }
         return std::fs::read_to_string(f)
             .map(|s| s.trim_end_matches('\n').to_string())
             .map_err(|e| format!("could not read --task-file {f}: {e}"));
@@ -1406,6 +1428,47 @@ mod tests {
         std::fs::write(&task_file, "fix the thing\n").unwrap();
         let opts = parse_options(&["--task-file", task_file.to_str().unwrap(), "--main-root", "."]).unwrap();
         assert_eq!(opts.task, "fix the thing");
+    }
+
+    #[test]
+    fn resolve_task_file_dash_reads_the_brief_from_stdin() {
+        let task = resolve_task_with_stdin(None, Some("-"), || "the full brief\n".to_string()).unwrap();
+        assert_eq!(task, "the full brief");
+    }
+
+    #[test]
+    fn resolve_task_file_dash_ignores_an_explicit_task_flag_first() {
+        // `--task` still wins over `--task-file -` when both are given —
+        // the stdin read never fires (proven by a fake that panics).
+        let task = resolve_task_with_stdin(Some("inline task"), Some("-"), || {
+            panic!("stdin should not be read when --task is given")
+        })
+        .unwrap();
+        assert_eq!(task, "inline task");
+    }
+
+    #[test]
+    fn resolve_task_file_path_behavior_is_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let task_file = tmp.path().join("task.txt");
+        std::fs::write(&task_file, "fix the thing\n").unwrap();
+        let task = resolve_task_with_stdin(None, Some(task_file.to_str().unwrap()), || {
+            panic!("stdin should not be read for an ordinary file path")
+        })
+        .unwrap();
+        assert_eq!(task, "fix the thing");
+    }
+
+    #[test]
+    fn resolve_task_file_dash_with_empty_stdin_refuses_like_an_empty_task() {
+        let err = resolve_task_with_stdin(None, Some("-"), || String::new()).unwrap_err();
+        assert_eq!(err, "--task or --task-file is required");
+    }
+
+    #[test]
+    fn resolve_task_file_dash_with_whitespace_only_stdin_refuses() {
+        let err = resolve_task_with_stdin(None, Some("-"), || "\n\n".to_string()).unwrap_err();
+        assert_eq!(err, "--task or --task-file is required");
     }
 
     #[test]

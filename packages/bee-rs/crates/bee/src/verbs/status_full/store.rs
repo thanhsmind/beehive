@@ -400,6 +400,14 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
                     }
                 }
             }
+            // herding-tier D1: { kind: 'herding' } — a router value, no other
+            // fields required; unknown extras are dropped, same as cli/native
+            // (mirrors drivers/models.rs::normalize_tier_value).
+            if str_eq(o.get("kind"), "herding") {
+                let mut out = JMap::new();
+                out.insert("kind".into(), json!("herding"));
+                return Some(Value::Object(out));
+            }
             // Explicit-fallback composite: primary must be a valid native leaf.
             if let Some(primary @ Value::Object(p)) = o.get("primary") {
                 let primary_ok = str_eq(p.get("kind"), "native")
@@ -746,6 +754,14 @@ pub(crate) fn validate_models_config(config: Option<&Value>) -> Vec<Problem> {
                         });
                     }
                 }
+                continue;
+            }
+            // herding-tier D1: { kind: 'herding' } is a valid router value —
+            // no other fields required, never flagged as a malformed cli
+            // executor. D1 also treats a herding-shaped advisor slot as "no
+            // advisor" rather than an error (resolve_advisor), so this stays
+            // silent there too — nothing to fix, nothing to warn about.
+            if str_eq(vobj.get("kind"), "herding") {
                 continue;
             }
             let looks_like_cli = vobj.contains_key("kind") || vobj.contains_key("command");
