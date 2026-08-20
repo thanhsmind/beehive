@@ -673,8 +673,7 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
         let out = prepare_dispatch(
-            &root, "claude", "gather", None, None, false, None, None, false,
-        )
+            &root, "claude", "gather", None, None, false, None, None, false, None)
         .unwrap();
         let Prepared::Value(v) = out else { panic!("expected an envelope") };
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
@@ -704,7 +703,7 @@ use std::time::Instant;
             r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
         );
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -740,7 +739,7 @@ use std::time::Instant;
         cell("c-1", "cap the test scrubber");
         let d = |id: &str| {
             let Prepared::Value(v) =
-                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, None, false)
+                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, None, false, None)
                     .unwrap()
             else {
                 panic!("expected an envelope")
@@ -788,8 +787,7 @@ use std::time::Instant;
             false,
             None,
             Some("scout the auth middleware before the shape gate"),
-            false,
-        )
+            false, None)
         .unwrap() else {
             panic!("expected an envelope")
         };
@@ -814,8 +812,7 @@ use std::time::Instant;
             r#"{"id":"c-1","feature":"f","title":"cap the test scrubber","status":"claimed","trace":{"worker":"w"}}"#,
         );
         let Prepared::Value(v) = prepare_dispatch(
-            &root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false,
-        )
+            &root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
         .unwrap() else {
             panic!("expected an envelope")
         };
@@ -876,8 +873,7 @@ use std::time::Instant;
                     false,
                     None,
                     purpose,
-                    false,
-                )
+                    false, None)
                 .unwrap() else {
                     panic!("{runtime}/{kind}: expected an envelope, not a refusal")
                 };
@@ -926,7 +922,7 @@ use std::time::Instant;
     fn recording_pass_appends_exactly_one_prepare_line() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
-        prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, true).unwrap();
+        prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, true, None).unwrap();
         let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
         assert_eq!(log.lines().count(), 1);
         let line: Value = serde_json::from_str(log.lines().next().unwrap()).unwrap();
@@ -942,7 +938,7 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false).unwrap()
+            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false, None).unwrap()
         else {
             panic!("expected a refusal value")
         };
@@ -966,7 +962,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -976,7 +972,7 @@ use std::time::Instant;
         assert_eq!(v.get("fix"), Some(&json!(CLI_REFUSAL_FIX)));
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false).unwrap()
+            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false, None).unwrap()
         else {
             panic!()
         };
@@ -1005,7 +1001,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1040,7 +1036,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1071,7 +1067,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1107,7 +1103,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1141,7 +1137,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1166,7 +1162,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1192,7 +1188,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1214,7 +1210,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false)
+            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1236,7 +1232,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "reviewer", None, None, false, None, None, false)
+            prepare_dispatch(&root, "claude", "reviewer", None, None, false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1266,7 +1262,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false)
+            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1294,7 +1290,7 @@ use std::time::Instant;
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false)
+            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -1320,7 +1316,7 @@ use std::time::Instant;
         };
         assert_eq!(
             thrown(
-                prepare_dispatch(&root, "claude", "cell", None, Some("w"), false, None, None, false)
+                prepare_dispatch(&root, "claude", "cell", None, Some("w"), false, None, None, false, None)
                     .unwrap()
             ),
             "dispatch prepare: --cell is required when --kind cell."
@@ -1328,8 +1324,7 @@ use std::time::Instant;
         assert_eq!(
             thrown(
                 prepare_dispatch(
-                    &root, "claude", "cell", Some("ghost"), Some("w"), false, None, None, false
-                )
+                    &root, "claude", "cell", Some("ghost"), Some("w"), false, None, None, false, None)
                 .unwrap()
             ),
             "dispatch prepare: cell \"ghost\" not found."
@@ -1342,8 +1337,7 @@ use std::time::Instant;
         assert_eq!(
             thrown(
                 prepare_dispatch(
-                    &root, "claude", "cell", Some("c-1"), Some("   "), false, None, None, false
-                )
+                    &root, "claude", "cell", Some("c-1"), Some("   "), false, None, None, false, None)
                 .unwrap()
             ),
             "dispatch prepare: --worker is required when --kind cell."
@@ -1361,8 +1355,7 @@ use std::time::Instant;
         );
         // Forced past a real conflict.
         let Prepared::Value(v) = prepare_dispatch(
-            &root, "claude", "cell", Some("c-1"), Some("thief"), true, None, None, true,
-        )
+            &root, "claude", "cell", Some("c-1"), Some("thief"), true, None, None, true, None)
         .unwrap() else {
             panic!()
         };
@@ -1373,8 +1366,7 @@ use std::time::Instant;
         assert_eq!(ov.get("transferred"), Some(&json!(false)));
         // Forced with NO conflict still audits (msh-4 mirror).
         let Prepared::Value(v) = prepare_dispatch(
-            &root, "claude", "cell", Some("c-1"), Some("owner"), true, None, None, false,
-        )
+            &root, "claude", "cell", Some("c-1"), Some("owner"), true, None, None, false, None)
         .unwrap() else {
             panic!()
         };
@@ -1403,8 +1395,7 @@ use std::time::Instant;
             false,
             Some(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
             None,
-            false,
-        )
+            false, None)
         .unwrap() else {
             panic!()
         };
@@ -1422,8 +1413,7 @@ use std::time::Instant;
             false,
             Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE),
             None,
-            false,
-        )
+            false, None)
         .unwrap() else {
             panic!()
         };
@@ -1501,7 +1491,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -1567,7 +1557,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -1609,7 +1599,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -1644,7 +1634,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -1798,7 +1788,7 @@ use std::time::Instant;
             r#"{"id":"c-4","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
         );
         let Prepared::Value(_) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-4"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-4"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -3767,4 +3757,108 @@ use std::time::Instant;
         let doors = result.get("doors").unwrap().as_array().unwrap();
         let doc_deferral = doors.iter().find(|d| d.get("door") == Some(&json!("doc-deferral"))).unwrap();
         assert_eq!(doc_deferral.get("blocking"), Some(&json!(true)));
+    }
+
+    #[test]
+    fn dispatch_prepare_with_expertise_renders_expertise_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let expertise_block = "- skills/bee-swarming/SKILL.md — swarming contract. Read it to follow worker protocol.\n- docs/knowledge/index.md — knowledge index. Read it to understand patterns.";
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "claude",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            Some(expertise_block),
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let p = v.get("payload").unwrap();
+        let prompt = p.get("prompt").unwrap().as_str().unwrap();
+        assert!(prompt.contains("Expertise — dispatcher-picked; read/load before implementing:"));
+        assert!(prompt.contains("- skills/bee-swarming/SKILL.md — swarming contract. Read it to follow worker protocol."));
+        assert!(prompt.contains("- docs/knowledge/index.md — knowledge index. Read it to understand patterns."));
+    }
+
+    #[test]
+    fn dispatch_prepare_without_expertise_renders_no_expertise_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "claude",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let p = v.get("payload").unwrap();
+        let prompt = p.get("prompt").unwrap().as_str().unwrap();
+        assert!(!prompt.contains("Expertise — dispatcher-picked"));
+    }
+
+    #[test]
+    fn run_dispatch_prepare_refuses_malformed_expertise_line() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime",
+            "claude",
+            "--kind",
+            "cell",
+            "--cell",
+            "c-1",
+            "--worker",
+            "w",
+            "--expertise",
+            "not a valid three part line",
+        ])
+        .unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let _root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        // keys_known succeeds
+        assert!(crate::verbs::reservations::keys_known(
+            &flags,
+            &[
+                "runtime",
+                "kind",
+                "cell",
+                "worker",
+                "force-ownership",
+                "claim",
+                "session-id",
+                "purpose",
+                "expertise",
+            ],
+        ));
+        let flag_val = flags.get("expertise").unwrap();
+        let raw = match flag_val {
+            FlagV::S(s) => s.as_str(),
+            _ => "",
+        };
+        let err = parse_expertise(raw).unwrap_err();
+        assert!(err.contains("malformed --expertise line"), "got {err}");
     }

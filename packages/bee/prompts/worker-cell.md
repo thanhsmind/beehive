@@ -25,6 +25,11 @@ Inputs — read these; nothing else is provided:
 Learned context (machine-assembled — read before implementing; prefer it over re-deriving):
 {{learned_context}}
 {{/if}}
+{{#if expertise}}
+
+Expertise — dispatcher-picked; read/load before implementing:
+{{expertise}}
+{{/if}}
 
 Contract:
 - Load the bee-swarming skill (Execute section) for the full worker contract.

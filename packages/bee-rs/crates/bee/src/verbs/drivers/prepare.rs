@@ -415,6 +415,35 @@ pub(crate) fn learned_context_lines(root: &Path, cell: &Value) -> D<Vec<String>>
     Ok(lines)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ExpertiseEntry {
+    pub path: String,
+    pub purpose: String,
+    pub read_to: String,
+}
+
+pub(crate) fn parse_expertise(raw: &str) -> Result<Vec<ExpertiseEntry>, String> {
+    let mut entries = Vec::new();
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = line.split(" :: ").collect();
+        if parts.len() != 3 || parts.iter().any(|s| s.trim().is_empty()) {
+            return Err(format!(
+                "malformed --expertise line (want '<path> :: <purpose> :: <read-to>'): {line}"
+            ));
+        }
+        entries.push(ExpertiseEntry {
+            path: parts[0].trim().to_string(),
+            purpose: parts[1].trim().to_string(),
+            read_to: parts[2].trim().to_string(),
+        });
+    }
+    Ok(entries)
+}
+
 /// provenance: dispatch-prepare.mjs cellPromptBody / promptBodyFor.
 pub(crate) fn prompt_body_for(
     root: &Path,
@@ -428,6 +457,7 @@ pub(crate) fn prompt_body_for(
     // before this Location block existed: the `{{#if worktree_root}}` marker
     // strips to nothing when its var is empty.
     worktree_location: Option<(&str, &str)>,
+    expertise: Option<&str>,
 ) -> D<Result<String, String>> {
     if kind != "cell" {
         let Some(template) = load_prompt(kind) else { return Err(Delegate) };
@@ -456,6 +486,7 @@ pub(crate) fn prompt_body_for(
             ("feature", &feature),
             ("cell_json", &cell_json),
             ("learned_context", &learned),
+            ("expertise", expertise.unwrap_or("")),
             ("prior_rounds", &prior),
             ("worktree_root", worktree_root),
             ("control_root", control_root),
@@ -503,6 +534,7 @@ pub(crate) fn prepare_dispatch(
     classification: Option<&str>,
     purpose: Option<&str>,
     record_it: bool,
+    expertise: Option<&str>,
 ) -> D<Prepared> {
     // The runtime/kind gates already fired in the probe (validate() owns those
     // bytes), so both are known-good here.
@@ -625,6 +657,7 @@ pub(crate) fn prepare_dispatch(
         cell.as_ref(),
         resolved_worker.as_deref(),
         worktree_location.as_ref().map(|(w, c)| (w.as_str(), c.as_str())),
+        expertise,
     )? {
         Ok(body) => body,
         Err(msg) => return Ok(Prepared::Thrown(msg)),
@@ -1102,7 +1135,17 @@ pub(crate) fn claim_and_reserve_for_dispatch(
 pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(
         &flags,
-        &["runtime", "kind", "cell", "worker", "force-ownership", "claim", "session-id", "purpose"],
+        &[
+            "runtime",
+            "kind",
+            "cell",
+            "worker",
+            "force-ownership",
+            "claim",
+            "session-id",
+            "purpose",
+            "expertise",
+        ],
     ) {
         return None;
     }
@@ -1145,6 +1188,34 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     let purpose = flags.truthy_str("purpose").map(str::to_string);
     let force_ownership = matches!(flags.get("force-ownership"), Some(FlagV::Present));
 
+    let expertise_flag = match flags.get("expertise") {
+        Some(FlagV::S(s)) => Some(s.as_str()),
+        Some(FlagV::Present) => Some(""),
+        None => None,
+    };
+    let expertise_entries = match expertise_flag {
+        Some(raw) => match parse_expertise(raw) {
+            Ok(entries) => Ok(entries),
+            Err(e) => Err(e),
+        },
+        None => Ok(Vec::new()),
+    };
+    let (expertise_arg_error, expertise_block) = match expertise_entries {
+        Ok(entries) => {
+            let block = if entries.is_empty() {
+                None
+            } else {
+                let lines: Vec<String> = entries
+                    .iter()
+                    .map(|e| format!("- {} — {}. Read it to {}.", e.path, e.purpose, e.read_to))
+                    .collect();
+                Some(lines.join("\n"))
+            };
+            (None, block)
+        }
+        Err(err) => (Some(err), None),
+    };
+
     // ── everything that can still delegate happens BEFORE prelude: its
     //    drift-cache write would otherwise swallow the Node re-run's
     //    manifest_changed line. ─────────────────────────────────────────────
@@ -1185,6 +1256,8 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         None
     };
 
+    let arg_error = expertise_arg_error.or(claim_arg_error);
+
     // Dry-run the whole build to surface every delegate-shaped input before a
     // single byte (or the prepare-time log line) is produced. The build is
     // free of side effects apart from appendPrepareRecord, which is applied on
@@ -1196,7 +1269,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
     // post-claim build produces. Its verdict is discarded; only "would this
     // delegate?" is kept, and it is kept because after the claim's O_EXCL
     // write nothing may delegate at all (campaign rule 2).
-    let prepared = if claim_arg_error.is_some() {
+    let prepared = if arg_error.is_some() {
         Prepared::Value(Value::Null) // unused — the refusal short-circuits below
     } else {
         prepare_dispatch(
@@ -1209,6 +1282,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
             classification,
             purpose.as_deref(),
             false,
+            expertise_block.as_deref(),
         )
         .ok()?
     };
@@ -1227,7 +1301,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
         Pre::Go(c) => c,
         Pre::Emitted(code) => return Some(code),
     };
-    if let Some(message) = claim_arg_error {
+    if let Some(message) = arg_error {
         return finish(&ctx, Ok(Out::Thrown(message)));
     }
 
@@ -1274,6 +1348,7 @@ pub(crate) fn run_dispatch_prepare(flags: Flags, use_json: bool, t0: Instant) ->
                 classification,
                 purpose.as_deref(),
                 true,
+                expertise_block.as_deref(),
             ) {
                 Ok(Prepared::Value(result)) => {
                     // `claimOutcome ? {...out, claimed:true, reserved} : out`
@@ -1639,6 +1714,7 @@ pub(crate) fn run_dispatch_wave(flags: Flags, use_json: bool, t0: Instant) -> Op
                     classification,
                     None,
                     true,
+                    None,
                 ) {
                     Ok(Prepared::Value(result)) => {
                         let mut m = match result {
