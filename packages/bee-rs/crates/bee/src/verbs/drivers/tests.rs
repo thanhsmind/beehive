@@ -357,6 +357,56 @@ use std::time::Instant;
         }
     }
 
+    // herding-tier D1/D3: `{kind:"herding"}` is a router value — a cell
+    // purpose resolves to Resolved::Herding (ht-3 turns that into the
+    // herding-exec Bash payload); a gather purpose keeps serving the
+    // runtime's own default model for that slot, the exact inverse of the
+    // cli branch just above.
+    #[test]
+    fn normalize_tier_value_accepts_and_round_trips_the_herding_shape() {
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding"}))),
+            Some(json!({"kind": "herding"}))
+        );
+        // No other fields are required, and unknown extras are dropped —
+        // same posture as the cli/native shapes above.
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "command": "ignored", "extra": 1}))),
+            Some(json!({"kind": "herding"}))
+        );
+        // A near-miss kind value is not herding — it falls through the
+        // existing rules unchanged (no `model` field either, so None).
+        assert_eq!(normalize_tier_value(Some(&json!({"kind": "hording"}))), None);
+    }
+
+    #[test]
+    fn resolve_tier_routes_herding_by_purpose_and_gathers_keep_the_default_model() {
+        // cell purpose -> Resolved::Herding, never a refusal.
+        let m = models_from(r#"{"claude":{"generation":{"kind":"herding"}}}"#);
+        assert_eq!(resolve_tier(&m, "generation", "claude", false), Resolved::Herding);
+
+        // gather purpose on the same slot -> the runtime's DEFAULT model for
+        // that slot (claude generation -> sonnet), not Herding.
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", true),
+            Resolved::Model { model: "sonnet".into(), effort: None }
+        );
+
+        // A runtime whose default for the slot is null (codex) reads Budget
+        // on the gather purpose — never a refusal, never Herding.
+        let m = models_from(r#"{"codex":{"generation":{"kind":"herding"}}}"#);
+        assert_eq!(resolve_tier(&m, "generation", "codex", true), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "generation", "codex", false), Resolved::Herding);
+    }
+
+    #[test]
+    fn resolve_advisor_treats_a_herding_shaped_slot_as_no_advisor() {
+        assert_eq!(
+            resolve_advisor(&models_from(r#"{"claude":{"advisor":{"kind":"herding"}}}"#), "claude"),
+            None
+        );
+    }
+
     #[test]
     fn resolve_advisor_never_falls_back() {
         // Unset -> None (not budget, not generation).

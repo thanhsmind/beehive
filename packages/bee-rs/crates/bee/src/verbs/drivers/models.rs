@@ -109,6 +109,13 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
             }
         }
     }
+    // { kind: 'herding' } — a router value, no other fields required;
+    // unknown extras (e.g. a stray `command`) are dropped, same as cli/native.
+    if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
+        let mut out = Map::new();
+        out.insert("kind".into(), Value::String("herding".into()));
+        return Some(Value::Object(out));
+    }
     // Explicit-fallback composite: { primary: {kind:'native', model}, ... }
     if let Some(primary) = obj.get("primary") {
         if is_plain_object(primary) {
@@ -224,6 +231,11 @@ pub(crate) enum Resolved {
     Refused {
         slot: String,
     },
+    /// herding-tier D1: `{kind:"herding"}` on a cell-purpose slot — the
+    /// dispatch seam (ht-3) turns this into the `bee herding run` Bash
+    /// payload. Never produced for a gather purpose (D3 routes those to the
+    /// runtime's default model instead) and never a meaningful advisor.
+    Herding,
 }
 
 pub(crate) const CLI_REFUSAL_FIX: &str = "declare {for:\"gather\"} for a read-only gather; cli cell execution stays refused until a cell-execution dogfood is green (plan 2A/W9)";
@@ -306,6 +318,21 @@ pub(crate) fn resolve_tier(
             command: truthy_str(obj.get("command")).unwrap_or_default().to_string(),
         };
     }
+    // herding-tier D1/D3: the exact inverse of the cli branch above — a
+    // cell purpose routes to the herding-exec pane (ht-3 builds that
+    // payload), a gather purpose keeps serving the runtime's own default
+    // model for this slot (never Herding, never a refusal). A runtime
+    // whose default for this slot is null (codex/opencode) reads Budget,
+    // same as an unconfigured slot always does.
+    if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
+        if !for_gather {
+            return Resolved::Herding;
+        }
+        return match default_models(rt).get(s).cloned().filter(|v| !v.is_null()) {
+            Some(Value::String(model)) => Resolved::Model { model, effort: None },
+            _ => Resolved::Budget,
+        };
+    }
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "native") {
         return native_resolved(obj, None);
     }
@@ -336,6 +363,11 @@ pub(crate) fn resolve_advisor(models: &Map<String, Value>, runtime: &str) -> Opt
         return Some(Resolved::Model { model: model.clone(), effort: None });
     }
     let obj = value.as_object()?;
+    // herding-tier D1: an advisor never executes a cell, so a herding-shaped
+    // advisor slot is not meaningful — read as "no advisor", same as unset.
+    if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
+        return None;
+    }
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "cli") {
         return Some(Resolved::Cli {
             command: match obj.get("command") {
