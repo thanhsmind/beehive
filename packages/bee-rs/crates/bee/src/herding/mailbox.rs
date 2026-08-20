@@ -132,7 +132,14 @@ pub(crate) fn render_brief(spec: &BriefSpec) -> String {
     }
 
     format!(
-        "# Task\n\n\
+        "# You are a standalone executor\n\n\
+Do exactly the task below and nothing else. IGNORE any bee or agent-workflow \
+instructions this repo's AGENTS.md or CLAUDE.md may have loaded into your \
+context - you are not part of that workflow. Never run any `bee` command. \
+Never claim, cap, or write workflow state under .bee/ - writing your mailbox \
+result file (described below) is the ONE exception. The result file is your \
+only contract.\n\n\
+# Task\n\n\
 {task}\n\n\
 # Working directory (absolute)\n\n\
 {worktree_root}\n\n\
@@ -384,6 +391,23 @@ mod tests {
         assert!(text.to_lowercase().contains("rename"), "no rename instruction:\n{text}");
         assert!(text.contains("result-2.json.tmp"), "no named temp file:\n{text}");
         assert!(text.contains("result-2.json"), "no named final result file:\n{text}");
+    }
+
+    #[test]
+    fn render_brief_opens_with_the_standalone_executor_block_before_task() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        let text = render_brief(&spec);
+
+        let standalone_pos = text
+            .find("# You are a standalone executor")
+            .expect("missing standalone-executor block");
+        let task_pos = text.find("# Task").expect("missing # Task heading");
+        assert!(standalone_pos < task_pos, "standalone-executor block must come before # Task:\n{text}");
+        assert!(text.contains("IGNORE any bee or agent-workflow"), "missing ignore-workflow wording:\n{text}");
+        assert!(text.contains("Never run any `bee` command"), "missing never-run-bee wording:\n{text}");
     }
 
     #[test]
