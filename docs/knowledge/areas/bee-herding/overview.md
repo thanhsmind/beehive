@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/worktree-parallelism/overview.md]
-  decisions: ["herding-executor D1-D9 (bee herding run: mailbox executor, health-check liveness, pane lifecycle)", "herding-tier D1-D6 (the config tier route)", "herd-registry D1-D2 (the named-agent registry)", herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), i54-closeout D4, "herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", herding-executor D9 (the verb appends its own dispatch and ledger rows)]
-  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", "i54-closeout cell i54-closeout-4 (herding spawn command config-driven templates; trace in .bee/cells/, 2026-07-24)", docs/history/herding-executor/CONTEXT.md, "herding-executor cells hx-1..hx-5 (bee herding run: mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, this doc sync; traces in `.bee/cells/`, 2026-08-19/20)"]
+  decisions: ["herding-executor D1-D9 (bee herding run: mailbox executor, health-check liveness, pane lifecycle)", "herding-tier D1-D6 (the config tier route)", "herd-registry D1-D2 (the named-agent registry)", "herding-bare-agent D1-D5 (four-step bare-run agent resolution order: --agent > tier slot > string agent_command > array fallback)", herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), i54-closeout D4, "herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", herding-executor D9 (the verb appends its own dispatch and ledger rows)]
+  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", "i54-closeout cell i54-closeout-4 (herding spawn command config-driven templates; trace in .bee/cells/, 2026-07-24)", docs/history/herding-executor/CONTEXT.md, "herding-executor cells hx-1..hx-5 (bee herding run: mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, this doc sync; traces in `.bee/cells/`, 2026-08-19/20)", docs/history/herding-bare-agent/CONTEXT.md]
   authoritative_for: "bee-herding: the three-role cockpit, its safety boundaries, and adoption"
 ---
 
@@ -191,24 +191,38 @@ are never joined into one string and re-split or shell-`eval`'d, so a
 config-supplied command cannot smuggle shell injection through a placeholder
 value. The working agent's spawn tail has the matching `herding.agent_command`
 seam. `.bee/config.json`'s `herding.agents` (herd-registry D1/D2) names
-several agents once — a map of name → argv tokens with the same validation —
-and three spellings reference one by name: a tier slot's `agent` field,
-`bee herding run --agent`, or `herding.agent_command` as a plain string; an
-unknown name refuses typed, listing the registry keys, never a silent
-fallback. Since defaults-and-agent-env D3 (2026-08-20) the registry starts
-from two BUILT-IN entries — `claude-sonnet` and `agy-flash` — so those names
-resolve on a repo with no herding block at all; a same-name config entry
-overrides its built-in, and the unknown-name listing includes the built-ins.
-defaults-and-agent-env D4 (same day) adds a second entry shape beside the
-argv array: `{"argv": [...], "env": {"KEY": "value"}}` — the env map is
+several agents once — a map of name → argv tokens with the same validation.
+When picking which external agent a herded pane runs as (`bee herding run` and
+`bee herding wave` use the same resolver, herding-bare-agent D1-D5), resolution
+follows a strict four-step precedence:
+1. An explicit `--agent <name>`, resolved through `herding.agents`;
+2. The cell-execution tier slot `models.<runtime>.generation`, but ONLY when it
+   is an object with `kind: "herding"` and a non-empty `agent` string — that
+   name resolves through `herding.agents`. This is the configured role-to-agent
+   mapping that a bare `bee herding run` obeys;
+3. `herding.agent_command` as a plain string, resolved through `herding.agents`;
+4. `herding.agent_command` as an array (token 0 is the herdr `--kind`, rest
+   are args), or the built-in default array when absent or malformed.
+
+Any other slot shape (`kind: "herding"` with no agent, a plain model name like
+`"sonnet"`, `{"kind":"cli",...}`, null, absent) is skipped and falls through.
+A slot naming an agent not declared in `herding.agents` fails closed with a typed
+`UnknownAgent` error listing every known key — never a silent fallback.
+`<runtime>` resolves to `BEE_RUNTIME` when it names `claude`, `codex`, or
+`opencode`, defaulting to `claude`. Since defaults-and-agent-env D3 (2026-08-20)
+the registry starts from two BUILT-IN entries — `claude-sonnet` and `agy-flash` —
+so those names resolve on a repo with no herding block at all; a same-name config
+entry overrides its built-in, and the unknown-name listing includes the
+built-ins. defaults-and-agent-env D4 (same day) adds a second entry shape beside
+the argv array: `{"argv": [...], "env": {"KEY": "value"}}` — the env map is
 exported into the freshly split pane as one `export K='v'` line BEFORE
 `agent start` (keys `[A-Za-z_][A-Za-z0-9_]*`, values newline-free; any
 violation drops that entry only, the registry's standing fail-open-per-entry
 rule), and a failed env send is a typed spawn failure that closes the pane.
 Only the `bee herding run` spawn path applies env; the wave/control-loop
 caller resolves it but cannot apply it (its `agent start` lives in
-`fleet::backend::herdr`, another crate — noted at the call site). A herd name always means the pane transport; the cli tier kind is
-unrelated. When the key is absent, invalid, or empty, the command built is
+`fleet::backend::herdr`, another crate — noted at the call site). A herd name
+always means the pane transport; the cli tier kind is unrelated. When the key is absent, invalid, or empty, the command built is
 byte-equivalent to the pre-existing hardcoded `claude -p ... --model sonnet
 --max-turns ... --allowedTools ...` invocation — a project with no config
 change sees no behavior change at all. A codex adapter example is documented
