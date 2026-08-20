@@ -64,6 +64,41 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "reviewer-advisor-payload",
+            "status": "PASS",
+            "evidence": "two tests assert Bash payload + exact command with --agent + channel herding-exec; resolve_advisor returns Herding"
+          },
+          {
+            "id": "cli-byte-identical",
+            "status": "PASS",
+            "evidence": "purpose_is_gather(kind)=kind!=cell identical to old bool; cli assertions unchanged"
+          },
+          {
+            "id": "guard-independent-read",
+            "status": "PASS",
+            "evidence": "hrv-1 added ZERO production guard lines — one test-only hunk; guard routes on kind alone, denies at both marker and pinned paths, no allow touched"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "2e34139a: exactly the 4 declared files"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-20T06:44:07.563Z"
+      }
+    ]
   }
 }

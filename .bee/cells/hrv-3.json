@@ -60,6 +60,41 @@
       "deviations": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "full-mapping",
+            "status": "PASS",
+            "evidence": "herding arm has no kind gate; all 4 dispatch kinds emit the herding-exec payload; extraction slot covered for both purposes"
+          },
+          {
+            "id": "fallback-field",
+            "status": "PASS",
+            "evidence": "only literal default survives normalize; payload.fallback == {model: sonnet} from default_models; absent/no-default/advisor all omit the field"
+          },
+          {
+            "id": "cli-untouched",
+            "status": "PASS",
+            "evidence": "cli branch unmodified in 9ab19de8"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "3 files, all declared; catalog 8, registry_dispatch 8, pointer_integrity 10 all green"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-20T06:44:07.580Z"
+      }
+    ]
   }
 }
