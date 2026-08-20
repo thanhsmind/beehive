@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-liveness-signals",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": false,
@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"herding-liveness-signals\" started at phase \"exploring\".",
-  "next_action": "Hang detection stays parked against its registered trigger.",
+  "next_action": "Nothing pending.",
   "created_at": "2026-08-20T12:22:00.698Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "✓ `herding-liveness-signals` khỏi danh sách (13 → 12). Chờ 3 pass đọc proposal.",
-    "asked_at": "2026-08-20T14:00:09.930Z",
-    "session": "8ca30885-b974-4da5-8327-c60ae9cd5a46"
+    "subject": "(turn ended)",
+    "asked_at": "2026-08-20T14:58:21.298Z",
+    "session": "c1eacb78-2dd2-497a-8ea0-8a0c59b5a89d"
   },
   "route": {
     "class": "feature",
