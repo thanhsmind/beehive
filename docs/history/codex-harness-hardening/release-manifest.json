@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "b1057ba64f3b035414725010825fa78cc67d7d902ce4c2e07baaff4853caf653",
+      "sha256": "e38e1d78bd312e1cd99d681f8fbdb0243047785ba4ba5e9cec710b868846ac49",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -262,7 +262,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-herding/references/operational-invariants.md",
-      "sha256": "f5cb98196435f46dd2b256bb3a3cc7e61710fdfd1e5c560c3f772dace8406af8",
+      "sha256": "87f16bdb2055d06be65bac1fd3aa32db2250f1e6e8ca4e3b31336c7c27504de9",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-herding/references/operational-invariants.md"
@@ -647,7 +647,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "8bbc2adeb78b42a598167b891dacffd8b437918a80afa35fa7a07ccb9de031ad",
+      "sha256": "c35cdeea08cde5737c557f984659010f7951207cd7891d711061c1e853326566",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -773,7 +773,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-herding/references/operational-invariants.md",
-      "sha256": "f5cb98196435f46dd2b256bb3a3cc7e61710fdfd1e5c560c3f772dace8406af8",
+      "sha256": "87f16bdb2055d06be65bac1fd3aa32db2250f1e6e8ca4e3b31336c7c27504de9",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-herding/references/operational-invariants.md"
@@ -1488,7 +1488,7 @@
     },
     {
       "path": "skills/bee-herding/references/operational-invariants.md",
-      "sha256": "f5cb98196435f46dd2b256bb3a3cc7e61710fdfd1e5c560c3f772dace8406af8",
+      "sha256": "87f16bdb2055d06be65bac1fd3aa32db2250f1e6e8ca4e3b31336c7c27504de9",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-herding/references/operational-invariants.md"
