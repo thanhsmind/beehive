@@ -227,7 +227,16 @@ resilience").
   surface includes the writes that landing requires, and it runs the project's verify over the
   just-merged tree — so it executes whatever the working agents wrote.
 - **A working agent** runs with its permissions fully open, as a deliberately accepted risk (see
-  Business Rules). It is confined to its own worktree and branch until a merge.
+  Business Rules). It is confined to its own worktree and branch until a merge. Since
+  herding-worker-standalone D1-D3 (2026-08-20) that bee-ignorance is enforced, not just asked for:
+  the brief opens with a standalone-executor contract (do the task only; ignore the repo's
+  AGENTS.md/CLAUDE.md workflow instructions; never run a `bee` command; the mailbox result file is
+  the one permitted `.bee` write), every fresh spawn exports `BEE_HERDING_WORKER=1` into the pane
+  before `agent start` (the marker wins over per-agent env), and every `bee hook <name>` exits 0
+  silently under that marker — checked once in the hook dispatcher, so a worker session gets zero
+  bee preamble, zero guards, zero nudges. Live case that forced it (job hws-1-r1): a worker
+  Claude Code in the repo activated the bee flow via AGENTS.md, and the write-guard denied its
+  own mailbox result write.
 
 ## Business Rules
 
