@@ -542,6 +542,37 @@ fn run_poll_loop(
     }
 }
 
+/// herding-start-retry D1: a freshly split pane's shell may not have
+/// reached its prompt when `agent start` fires — herdr refuses with
+/// `agent_pane_busy` ("not an available shell"; live dogfood hee-1 and the
+/// hsr-1 eval both hit it). Retry the start, bounded, ~1s apart; any error
+/// that is not the busy shape fails immediately as before.
+const START_RETRY_ATTEMPTS: u32 = 10;
+
+fn is_pane_busy_error(e: &str) -> bool {
+    e.contains("agent_pane_busy") || e.contains("not an available shell")
+}
+
+fn start_with_retry(
+    start: &mut dyn FnMut() -> Result<(), String>,
+    sleep: &mut dyn FnMut(Duration),
+) -> Result<(), String> {
+    let mut last = String::new();
+    for attempt in 1..=START_RETRY_ATTEMPTS {
+        match start() {
+            Ok(()) => return Ok(()),
+            Err(e) if is_pane_busy_error(&e) => {
+                last = e;
+                if attempt < START_RETRY_ATTEMPTS {
+                    sleep(POLL_INTERVAL * 5);
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    Err(format!("{last} (after {START_RETRY_ATTEMPTS} start attempts, shell never became available)"))
+}
+
 /// herding-run-ready-wait D1: polls `status()` until the agent reports a
 /// real status (`idle` ready-for-input, or already `working`/`done`) or the
 /// ready-wait ceiling passes. Check-then-sleep: an agent already ready is
@@ -864,7 +895,11 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
     };
 
-    if let Err(e) = herdr.agent_start(&opts.job_id, &kind, &new_pane, &args) {
+    let start_result = start_with_retry(
+        &mut || herdr.agent_start(&opts.job_id, &kind, &new_pane, &args),
+        &mut |d| std::thread::sleep(d),
+    );
+    if let Err(e) = start_result {
         // role-dispatch.md §8's own cleanup rule: a start failure closes the
         // pane THIS call just split, before reporting.
         let closed = herdr.pane_close(&new_pane).is_ok();
@@ -1534,6 +1569,51 @@ mod tests {
         assert!(matches!(result.outcome, RunOutcome::SpawnFailed(_)), "got {:?}", result.outcome);
         assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
         assert!(result.closed_pane);
+    }
+
+    #[test]
+    fn start_retry_survives_a_busy_shell_then_succeeds() {
+        let calls = std::cell::RefCell::new(0u32);
+        let out = start_with_retry(
+            &mut || {
+                *calls.borrow_mut() += 1;
+                if *calls.borrow() <= 2 {
+                    Err("herdr agent start x exited 1: {\"error\":{\"code\":\"agent_pane_busy\",\"message\":\"agent target pane w1:p9 is not an available shell\"}}".to_string())
+                } else {
+                    Ok(())
+                }
+            },
+            &mut |_d| {},
+        );
+        assert!(out.is_ok());
+        assert_eq!(*calls.borrow(), 3, "two busy refusals then success");
+    }
+
+    #[test]
+    fn start_retry_never_retries_a_non_busy_error() {
+        let calls = std::cell::RefCell::new(0u32);
+        let out = start_with_retry(
+            &mut || {
+                *calls.borrow_mut() += 1;
+                Err("herdr agent start x exited 1: unknown kind".to_string())
+            },
+            &mut |_d| {},
+        );
+        assert!(out.is_err());
+        assert_eq!(*calls.borrow(), 1, "a non-busy error fails immediately");
+    }
+
+    #[test]
+    fn start_retry_exhaustion_names_the_attempts_and_keeps_spawn_failure_shape() {
+        let out = start_with_retry(
+            &mut || Err("agent_pane_busy: still booting".to_string()),
+            &mut |_d| {},
+        );
+        let err = out.unwrap_err();
+        assert!(err.contains("start attempts"), "{err}");
+        // the caller's existing failure arm closes the pane — proven by the
+        // pre-existing spawn_failure_closes_the_pane_it_just_split test,
+        // which now flows through start_with_retry with a non-busy error.
     }
 
     #[test]
