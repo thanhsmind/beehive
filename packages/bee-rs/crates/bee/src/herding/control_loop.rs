@@ -1221,4 +1221,70 @@ mod tests {
         let err = Options::parse(&["--role", "dispatch", "--nope"]).unwrap_err();
         assert!(err.contains("unknown argument"), "{err}");
     }
+
+    // ── herding-limit-pause D4: occupancy pin for limit-paused jobs ──────
+    //
+    // The control loop's dispatch role derives slot occupancy and re-dispatch
+    // eligibility via `bee herding occupancy` (backed by `wave_ledger::live_worker_count`).
+    // Occupancy derives purely from unresolved ledger rows (`outcome: None`) crossed
+    // against the backend's live pane list (`herdr pane list`). Because a limit-paused
+    // worker's pane stays alive (hlp-1 never closes it on PausedLimit) and its ledger row
+    // remains unresolved, the intersection in `live_worker_count` already counts the
+    // paused job as OCCUPYING its slot. No new dispatch logic is required in
+    // control_loop.rs; the inference holds directly from the ledger-pane cross-check.
+    #[test]
+    fn paused_limit_job_with_live_pane_counts_as_occupying_slot() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        let bee_dir = main_root.join(".bee");
+        std::fs::create_dir_all(&bee_dir).unwrap();
+
+        // 1. Dispatch recorded worker row with outcome: None
+        let worker = super::super::wave_ledger::WorkerRow {
+            name: "job-paused-1".to_string(),
+            pane_id: "w1:p3".to_string(),
+            worktree: main_root.join("work").display().to_string(),
+            task: "do task".to_string(),
+            outcome: None,
+            evidence: None,
+        };
+        let row = super::super::wave_ledger::WaveRow {
+            wave_id: "job-paused-1".to_string(),
+            started_at: chrono::Utc::now().to_rfc3339(),
+            workers: vec![worker],
+        };
+        super::super::wave_ledger::append_wave(main_root, &row).unwrap();
+
+        // 2. The job is stamped paused_limit in job.json
+        let job_dir = super::super::mailbox::mailbox_dir(&bee_dir, "job-paused-1");
+        std::fs::create_dir_all(&job_dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": "job-paused-1",
+            "task": "do task",
+            "cwd": main_root.join("work").display().to_string(),
+            "round": 1,
+            "pane_id": "w1:p3",
+            "kind": "claude",
+            "paused_limit_at": "2026-08-20T12:00:00Z",
+            "limit_reset_hint": "You've hit your session limit",
+        });
+        std::fs::write(
+            super::super::mailbox::job_path(&bee_dir, "job-paused-1"),
+            serde_json::to_string(&job).unwrap(),
+        )
+        .unwrap();
+
+        // 3. Live panes includes the paused worker's pane
+        let mut live_panes = std::collections::HashSet::new();
+        live_panes.insert("w1:p3".to_string());
+
+        // 4. Verify occupancy counts the paused job as occupied (Live(1))
+        let occ = super::super::wave_ledger::live_worker_count(
+            main_root,
+            Some(&live_panes),
+            0,
+            super::super::wave_ledger::DEFAULT_STALE_AFTER_MS,
+        );
+        assert_eq!(occ, super::super::wave_ledger::Occupancy::Live(1));
+    }
 }
