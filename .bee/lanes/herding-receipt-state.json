@@ -8,11 +8,11 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"herding-receipt-state\" started at phase \"planning\" (lane).",
   "next_action": "Continue bee-planning for \"herding-receipt-state\" (lane).",
   "created_at": "2026-08-20T09:22:40.592Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null
 }
