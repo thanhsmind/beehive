@@ -606,7 +606,7 @@ pub(crate) fn prepare_dispatch(
             }
         }
     } else {
-        let r = resolve_tier(&models, tier_token, runtime, purpose_is_gather(kind));
+        let r = resolve_tier(&models, tier_token, runtime, kind);
         if let Resolved::Refused { slot } = &r {
             let mut refusal = Map::new();
             refusal.insert("ok".into(), Value::Bool(false));
@@ -745,7 +745,7 @@ pub(crate) fn prepare_dispatch(
             payload.insert("stdin".into(), Value::String(prompt_body.clone()));
             channel = "cli-exec".into();
         }
-        Resolved::Herding { agent } => {
+        Resolved::Herding { agent, fallback } => {
             // herding-tier D4: mirrors the cli-exec Bash arm above
             // byte-for-byte in shape — argv cannot carry a long brief, so
             // the prompt travels on stdin, and this arm fires for EVERY
@@ -773,6 +773,30 @@ pub(crate) fn prepare_dispatch(
             }
             payload.insert("command".into(), Value::String(command));
             payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+            // herding-review-slots D3: `fallback:"default"` on the slot
+            // names the runtime's own default model for this slot (the
+            // same table a gather purpose used to fall back to silently,
+            // pre-D1-widening) so the orchestrator can re-dispatch through
+            // the Agent path on a failed herding run. Only CONFIGURABLE_SLOTS
+            // members have a default-model table entry at all (advisor does
+            // not — resolveAdvisor "NEVER a tier fallback" still holds); no
+            // resolvable default leaves the payload byte-identical to a
+            // slot with no `fallback` field.
+            if fallback.is_some() {
+                if let Some(model) = CONFIGURABLE_SLOTS
+                    .contains(&tier_token)
+                    .then(|| default_models(runtime).get(tier_token).cloned())
+                    .flatten()
+                    .and_then(|v| match v {
+                        Value::String(s) => Some(s),
+                        _ => None,
+                    })
+                {
+                    let mut fb = Map::new();
+                    fb.insert("model".into(), Value::String(model));
+                    payload.insert("fallback".into(), Value::Object(fb));
+                }
+            }
             channel = "herding-exec".into();
         }
         _ if runtime == "codex" => {

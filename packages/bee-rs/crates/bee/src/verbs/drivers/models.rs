@@ -109,11 +109,15 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
             }
         }
     }
-    // { kind: 'herding', agent? } — a router value, no other fields
-    // required; unknown extras (e.g. a stray `command`) are dropped, same
-    // as cli/native. herd-registry D2: `agent` names a `herding.agents`
-    // registry entry by name — trimmed, empty/whitespace dropped (same rule
-    // as every other string field on this leaf).
+    // { kind: 'herding', agent?, fallback? } — a router value, no other
+    // fields required; unknown extras (e.g. a stray `command`) are dropped,
+    // same as cli/native. herd-registry D2: `agent` names a
+    // `herding.agents` registry entry by name — trimmed, empty/whitespace
+    // dropped (same rule as every other string field on this leaf).
+    // herding-review-slots D3: `fallback` recognizes exactly one value,
+    // the literal string "default" — anything else (empty, mistyped,
+    // non-string) is dropped, same exact-match posture as `fork_turns`
+    // above.
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
         let mut out = Map::new();
         out.insert("kind".into(), Value::String("herding".into()));
@@ -121,6 +125,9 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
             if !js_trim(a).is_empty() {
                 out.insert("agent".into(), Value::String(js_trim(a).to_string()));
             }
+        }
+        if matches!(obj.get("fallback"), Some(Value::String(f)) if f == "default") {
+            out.insert("fallback".into(), Value::String("default".into()));
         }
         return Some(Value::Object(out));
     }
@@ -239,14 +246,19 @@ pub(crate) enum Resolved {
     Refused {
         slot: String,
     },
-    /// herding-tier D1: `{kind:"herding"}` on a cell-purpose slot — the
-    /// dispatch seam (ht-3) turns this into the `bee herding run` Bash
-    /// payload. Never produced for a gather purpose (D3 routes those to the
-    /// runtime's default model instead) and never a meaningful advisor.
+    /// herding-tier D1/D3, herding-review-slots D1 (widened to the full
+    /// mapping): `{kind:"herding"}` on ANY slot/purpose — cell, gather,
+    /// reviewer, advisor, extraction — turns into the `bee herding run`
+    /// Bash payload (dispatch prepare's herding-exec arm); the operator
+    /// owns the pane cost per slot.
     /// herd-registry D2: `agent` carries the optional `herding.agents` name
     /// named on the slot (`{kind:"herding", agent:"<name>"}`); prepare's
     /// herding-exec arm appends `--agent "<name>"` when present.
-    Herding { agent: Option<String> },
+    /// herding-review-slots D3: `fallback` mirrors the normalized
+    /// `"fallback": "default"` field verbatim (`Some("default".into())`) —
+    /// dispatch prepare reads it to decide whether to add the payload's
+    /// `fallback` object; absent when the slot never named a fallback.
+    Herding { agent: Option<String>, fallback: Option<String> },
 }
 
 pub(crate) const CLI_REFUSAL_FIX: &str = "declare {for:\"gather\"} for a read-only gather; cli cell execution stays refused until a cell-execution dogfood is green (plan 2A/W9)";
@@ -297,12 +309,17 @@ pub(crate) fn composite_resolved(obj: &Map<String, Value>) -> Option<Resolved> {
 
 /// provenance: state.mjs resolveTier(root, slot, runtime, purpose). `slot`
 /// here is always a CONFIGURABLE_SLOTS member or 'advisor' (coerced to
-/// 'generation' exactly like Node); `for_gather` is purposeForKind's verdict.
+/// 'generation' exactly like Node); `kind` is the dispatch-prepare purpose
+/// ("cell" | "gather" | "reviewer" | "advisor" — DISPATCH_KINDS). The cli
+/// branch below still gates on `purpose_is_gather(kind)`, byte-identical to
+/// before; herding-review-slots D1 (widened to the full mapping) drops the
+/// herding branch's own gate on `kind` entirely — every purpose reads the
+/// same herding-shaped slot the same way.
 pub(crate) fn resolve_tier(
     models: &Map<String, Value>,
     slot: &str,
     runtime: &str,
-    for_gather: bool,
+    kind: &str,
 ) -> Resolved {
     if slot == "ceiling" {
         return Resolved::Inherit;
@@ -321,32 +338,31 @@ pub(crate) fn resolve_tier(
         return Resolved::Model { model: model.clone(), effort: None };
     }
     let Some(obj) = value.as_object() else { return Resolved::Budget };
+    // cli purpose gate — unchanged: refused for a cell-execution dispatch,
+    // served for gather/reviewer/advisor exactly as before.
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "cli") {
-        if !for_gather {
+        if !purpose_is_gather(kind) {
             return Resolved::Refused { slot: s.to_string() };
         }
         return Resolved::Cli {
             command: truthy_str(obj.get("command")).unwrap_or_default().to_string(),
         };
     }
-    // herding-tier D1/D3: the exact inverse of the cli branch above — a
-    // cell purpose routes to the herding-exec pane (ht-3 builds that
-    // payload), a gather purpose keeps serving the runtime's own default
-    // model for this slot (never Herding, never a refusal). A runtime
-    // whose default for this slot is null (codex/opencode) reads Budget,
-    // same as an unconfigured slot always does.
+    // herding-review-slots D1 (widened to the full mapping): EVERY purpose
+    // — cell, gather, reviewer, advisor — on a `{kind:"herding"}` slot
+    // routes to the herding-exec pane (ht-3/hrv-1/hrv-3 build that
+    // payload); `kind` no longer branches this arm at all, ending the
+    // gather-default split hrv-1 still carried.
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
-        if !for_gather {
-            let agent = match obj.get("agent") {
-                Some(Value::String(s)) => Some(s.clone()),
-                _ => None,
-            };
-            return Resolved::Herding { agent };
-        }
-        return match default_models(rt).get(s).cloned().filter(|v| !v.is_null()) {
-            Some(Value::String(model)) => Resolved::Model { model, effort: None },
-            _ => Resolved::Budget,
+        let agent = match obj.get("agent") {
+            Some(Value::String(s)) => Some(s.clone()),
+            _ => None,
         };
+        let fallback = match obj.get("fallback") {
+            Some(Value::String(f)) if f == "default" => Some(f.clone()),
+            _ => None,
+        };
+        return Resolved::Herding { agent, fallback };
     }
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "native") {
         return native_resolved(obj, None);
@@ -378,10 +394,21 @@ pub(crate) fn resolve_advisor(models: &Map<String, Value>, runtime: &str) -> Opt
         return Some(Resolved::Model { model: model.clone(), effort: None });
     }
     let obj = value.as_object()?;
-    // herding-tier D1: an advisor never executes a cell, so a herding-shaped
-    // advisor slot is not meaningful — read as "no advisor", same as unset.
+    // herding-review-slots D1/D2: an advisor is one task in, one result out
+    // — the same shape as the herding-exec pane's own read-only job — so a
+    // herding-shaped advisor slot now resolves to Resolved::Herding
+    // (widening herding-tier D1's cell-only scope) instead of reading as
+    // "no advisor".
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
-        return None;
+        let agent = match obj.get("agent") {
+            Some(Value::String(s)) => Some(s.clone()),
+            _ => None,
+        };
+        let fallback = match obj.get("fallback") {
+            Some(Value::String(f)) if f == "default" => Some(f.clone()),
+            _ => None,
+        };
+        return Some(Resolved::Herding { agent, fallback });
     }
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "cli") {
         return Some(Resolved::Cli {

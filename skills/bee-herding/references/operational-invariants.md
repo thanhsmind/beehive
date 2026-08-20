@@ -258,23 +258,44 @@ hardenings, each one bought by a real failure:
   pane: a human keystroke takes the agent's turn and the brief goes
   unanswered (observed live; the run then idles out with the pane kept).
 
-**This verb is cell-execution-only (D7)** — the mirror of the `cli` tier
-kind, which is gather/review/advisor-only (`gates-and-delegation.md`'s cli
-gather branch). A gather never dispatches through a herding pane; a
-gather-purpose resolution against a `{kind:"herding"}` slot falls back to
-the runtime's default model instead.
+**This verb is cell-execution-only (D7) for its own manual invocation** —
+`bee herding run`/`--continue`, called directly (scope A), always executes one
+cell; it never runs a gather, review, or advisor request itself. The `cli`
+tier kind stays the true mirror of that split at the SLOT level: a
+`cli`-shaped model slot is gather/review/advisor-only and always refuses cell
+execution (`gates-and-delegation.md`'s cli gather branch). The tier-slot
+route onto a `{kind:"herding"}` slot no longer mirrors that split —
+herding-review-slots D1 widens herding-tier D1-D5 so EVERY purpose against
+that slot (cell, gather, reviewer, advisor, extraction) resolves to the same
+`bee herding run` payload; see the config-route section below. The two kinds
+now overlap everywhere except cli's own cell refusal: a `cli`-shaped slot
+never serves cell execution, while a `herding`-shaped slot serves every
+purpose, cell included.
 
-**The config route now exists (herding-tier D1-D5):** `models.<runtime>.generation`
-(or any configurable slot) accepts `{"kind": "herding"}` as a value —
-a cell dispatch against that slot resolves automatically to the
-`bee herding run` payload this section describes, no per-cell request
-needed, while a gather/review/advisor purpose on the same slot keeps
-serving that runtime's own default model (never `herding`, never a
-refusal). The agent that runs is the single global `herding.agent_command`
-above by default; herd-registry D2 lets the tier value carry a per-slot
-override too — `{"kind": "herding", "agent": "<name>"}` resolves that name
-through `herding.agents` instead ("`herding.agents` — the named-agent
-registry" above), refusing on an unknown name. Manual, scope-A `bee herding run`/`--continue`
+**The config route now covers every purpose (herding-tier D1-D6, widened by
+herding-review-slots D1):** `models.<runtime>.generation` (or any configurable slot) accepts
+`{"kind": "herding"}` as a value — ANY purpose dispatched against that slot (cell, gather,
+reviewer, advisor, extraction) resolves automatically to the `bee herding run` payload this
+section describes, no per-purpose request needed. The old gather/review/advisor
+default-model fallback is gone: every purpose now pays the same pane cost, and the operator
+who sets `{"kind": "herding"}` on a slot owns that cost for every purpose the slot serves.
+The agent that runs is the single global `herding.agent_command` above by default;
+herd-registry D2 lets the tier value carry a per-slot override too — `{"kind": "herding",
+"agent": "<name>"}` resolves that name through `herding.agents` instead ("`herding.agents` —
+the named-agent registry" above), refusing on an unknown name.
+
+**Optional `"fallback": "default"` degrades a failed run instead of leaving it loud
+(herding-review-slots D3).** Add it to the same shape — `{"kind": "herding", "agent":
+"<name>", "fallback": "default"}` — and a failed herding run (spawn failure, timeout,
+invalid result) re-dispatches through the runtime's own default model path for that slot.
+`"default"` is the only value the field accepts; any other value is dropped. The payload
+`bee herding run`'s prepare step writes carries the fallback through so the caller can act
+on it; the actual re-dispatch move belongs to the orchestrator's own doctrine, not this
+verb. Absent the field — the default state — a failed run stays loud: the pane is kept open
+as forensics (see "Pane lifecycle mirrors the result, not the clock" above) and nothing
+re-dispatches automatically.
+
+Manual, scope-A `bee herding run`/`--continue`
 invocations — everything this reference otherwise describes — are
 unchanged; the config route is one more way to reach the same verb, not a
 replacement for it. Config shape and samples: `docs/config-reference.md`
