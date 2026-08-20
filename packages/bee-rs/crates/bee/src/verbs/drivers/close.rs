@@ -2733,7 +2733,13 @@ mod tests {
         // test sandbox) here; `gpgsign_true_with_a_failing_signer_still_lands_the_bookkeeping_commit`
         // below is the one test that turns `commit.gpgsign` ON and pins
         // the flag directly.
-        w(root, ".bee/config.json", "{}\n");
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — most of this module's tests are
+        // about bookkeeping/commit mechanics, not the uat door, so pin
+        // "off" here; the handful of tests that DO exercise uat_stop
+        // override this seed with their own explicit config.
+        w(root, ".bee/config.json", "{\"uat_stop\": \"off\"}\n");
         git_ok(root, &["add", ".bee/config.json"]);
         // D-P3-1: this SEED commit is fixture setup, not the code under
         // test, so it passes `--no-gpg-sign` directly rather than relying on
@@ -2745,7 +2751,12 @@ mod tests {
     }
 
     fn dirty_tracked_bee_file(root: &Path) {
-        w(root, ".bee/config.json", "{\"seeded\": true}\n");
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — this helper is shared by tests
+        // about the bookkeeping commit itself, not the uat door, so pin
+        // "off" here to keep them exercising what they were about.
+        w(root, ".bee/config.json", "{\"seeded\": true, \"uat_stop\": \"off\"}\n");
     }
 
     #[test]
@@ -2975,7 +2986,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         init_bee_repo(root);
-        w(root, ".bee/config.json", r#"{"close_commit_bookkeeping": null}"#);
+        w(root, ".bee/config.json", r#"{"close_commit_bookkeeping": null, "uat_stop": "off"}"#);
 
         let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
         let Out::Emit(result, _text, code) = out else { panic!("expected Emit, got a refusal") };
@@ -3052,7 +3063,7 @@ mod tests {
     fn non_repo_root_reports_not_a_repo_and_close_stays_green() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        w(root, ".bee/config.json", "{}\n"); // no `git init` — not a repo at all
+        w(root, ".bee/config.json", "{\"uat_stop\": \"off\"}\n"); // no `git init` — not a repo at all
 
         // P3-4: pin the ceiling to the tempdir's own parent for the life of
         // this test — a TMPDIR that happens to sit under a real git
@@ -3265,6 +3276,11 @@ mod tests {
     fn a_green_close_sets_the_lane_phase_to_idle_with_a_next_action() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified lane — this test is about the phase write, not the
+        // uat door, so pin "off".
+        w(root, ".bee/config.json", r#"{"uat_stop": "off"}"#);
         w(root, ".bee/lanes/demo.json", r#"{"feature":"demo","phase":"swarming"}"#);
         let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
         let Out::Emit(_, text, code) = out else { panic!("expected a green close") };
@@ -3325,6 +3341,7 @@ mod tests {
             let tmp = tempfile::tempdir().unwrap();
             let root = tmp.path();
             let before = format!(r#"{{"feature":"demo","phase":"{phase}"}}"#);
+            w(root, ".bee/config.json", r#"{"uat_stop": "off"}"#);
             w(root, ".bee/lanes/demo.json", &before);
             let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
             let Out::Emit(_, text, code) = out else { panic!("expected a green close") };
@@ -3347,6 +3364,10 @@ mod tests {
     fn a_failing_lane_phase_write_warns_and_the_close_still_exits_0() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+        // defaults-and-agent-env D1: this test is about the phase-write
+        // warning, not the uat door — pin "off" so absent uat_stop's new
+        // Close default doesn't also block this close.
+        w(root, ".bee/config.json", r#"{"uat_stop": "off"}"#);
         w(root, ".bee/lanes/demo.json", r#"{"feature":"demo","phase":"frobnicating"}"#);
         let out = close_handler(root, "demo", false, None, None, &HashMap::new()).unwrap();
         let Out::Emit(_, text, code) = out else {
@@ -3392,22 +3413,37 @@ mod tests {
         );
     }
 
-    /// D4.4: under `uat_stop: "merge"` (today's default — no key at all)
-    /// and under `"off"`, the door does not appear in the door list at
-    /// all, even for a standard lane whose uat gate is unapproved.
+    /// D4.4: under `uat_stop: "merge"` (explicit) and under `"off"`, the
+    /// door does not appear in the door list at all, even for a standard
+    /// lane whose uat gate is unapproved.
     #[test]
     fn uat_door_is_absent_under_merge_and_under_off() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_lane_mode(root, "demo", "standard");
 
-        // Default: no `uat_stop` key at all reads as `Merge`.
+        w(root, ".bee/config.json", r#"{"uat_stop":"merge"}"#);
         let doors = build_close_report_doors(root, "demo").unwrap();
-        assert!(doors.iter().find(|d| d.door == "uat").is_none(), "merge (default) must never grow the door");
+        assert!(doors.iter().find(|d| d.door == "uat").is_none(), "merge must never grow the door");
 
         w(root, ".bee/config.json", r#"{"uat_stop":"off"}"#);
         let doors = build_close_report_doors(root, "demo").unwrap();
         assert!(doors.iter().find(|d| d.door == "uat").is_none(), "off must never grow the door");
+    }
+
+    /// defaults-and-agent-env D1: with no `uat_stop`/`uat_before_merge` key
+    /// at all, absent now reads as `Close` — a standard lane whose uat gate
+    /// is unapproved grows a blocking uat door, same as an explicit
+    /// `uat_stop: "close"`.
+    #[test]
+    fn uat_door_blocks_a_standard_lane_feature_when_uat_stop_is_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_lane_mode(root, "demo", "standard");
+
+        let doors = build_close_report_doors(root, "demo").unwrap();
+        let uat_door = doors.iter().find(|d| d.door == "uat").expect("door must exist when uat_stop is absent (default close)");
+        assert!(uat_door.blocking, "an unapproved uat gate must block when uat_stop is absent");
     }
 
     /// D2, D4.4: under `close`, a standard lane whose uat gate is

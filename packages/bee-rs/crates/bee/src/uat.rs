@@ -5,10 +5,10 @@
 use serde_json::Value;
 use std::path::Path;
 
-/// D1: where the uat stop sits for a feature — `Merge` (default, today's
-/// behavior: the door blocks `bee worktree merge`), `Close` (merge first,
-/// accept after — the door moves to `bee close` instead), or `Off` (no uat
-/// stop anywhere).
+/// D1: where the uat stop sits for a feature — `Merge` (the door blocks
+/// `bee worktree merge`), `Close` (default when both `uat_stop` and
+/// `uat_before_merge` are absent: merge first, accept after — the door
+/// moves to `bee close` instead), or `Off` (no uat stop anywhere).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum UatStop {
     Merge,
@@ -24,9 +24,9 @@ pub(crate) enum UatStop {
 /// `None` rather than guessing. Else the back-compat alias
 /// `uat_before_merge` is read: `true` => `Merge`, `false` => `Off`, and any
 /// non-boolean shape fails closed with `None`. Else, with both keys absent,
-/// `Merge` — absent means today's behavior, unchanged for every existing
-/// repo. Reads the merged tracked+overlay config via
-/// `crate::state::read_config_raw`.
+/// `Close` — absent means the merge lands on main and the uat door sits at
+/// `bee close`, the worktree held while uat is pending. Reads the merged
+/// tracked+overlay config via `crate::state::read_config_raw`.
 pub(crate) fn uat_stop_config(main_root: &Path) -> Option<UatStop> {
     let config = crate::state::read_config_raw(main_root);
     match config.get("uat_stop") {
@@ -41,7 +41,7 @@ pub(crate) fn uat_stop_config(main_root: &Path) -> Option<UatStop> {
             Some(Value::Bool(true)) => Some(UatStop::Merge),
             Some(Value::Bool(false)) => Some(UatStop::Off),
             Some(_) => None,
-            None => Some(UatStop::Merge),
+            None => Some(UatStop::Close),
         },
     }
 }
@@ -226,10 +226,10 @@ mod tests {
     }
 
     #[test]
-    fn both_keys_absent_resolves_to_merge() {
+    fn both_keys_absent_resolves_to_close() {
         let tmp = tempfile::tempdir().unwrap();
         write_config(tmp.path(), r#"{}"#);
-        assert_eq!(uat_stop_config(tmp.path()), Some(UatStop::Merge));
+        assert_eq!(uat_stop_config(tmp.path()), Some(UatStop::Close));
     }
 
     #[test]

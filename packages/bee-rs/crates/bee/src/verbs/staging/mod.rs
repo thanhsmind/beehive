@@ -340,16 +340,16 @@ pub(crate) struct AddOutcome {
     pub(crate) build_note: String,
 }
 
-/// staging-optional so-1: `staging_before_merge` in `.bee/config.json` — ON
-/// by default (absent \u{2192} true, so every existing repo keeps today's
-/// behavior until someone opts it off), an explicit `false` disables the
-/// mixing ground repo-wide, and any other shape refuses (`None`) rather
-/// than guessing which way to resolve a typo. Models
+/// staging-optional so-1: `staging_before_merge` in `.bee/config.json` — OFF
+/// by default (absent \u{2192} false, staging is opt-in: a repo sets
+/// `"staging_before_merge": true` to turn on the mixing ground), an
+/// explicit `true` enables it repo-wide, and any other shape refuses
+/// (`None`) rather than guessing which way to resolve a typo. Models
 /// `uat_before_merge_config` (phases.rs:673-679) exactly, one config key
 /// over.
 pub(crate) fn staging_before_merge_config(main_root: &Path) -> Option<bool> {
     match crate::state::read_config_raw(main_root).get("staging_before_merge") {
-        None => Some(true),
+        None => Some(false),
         Some(Value::Bool(b)) => Some(*b),
         Some(_) => None,
     }
@@ -366,7 +366,7 @@ fn staging_enabled_or_refuse(main_root: &Path) -> Result<(), String> {
         )),
         Some(false) => Err(refuse(
             "STAGING_DISABLED",
-            "this repo opted out of the staging mixing ground with \"staging_before_merge\": false in .bee/config.json. Test the feature worktree itself, then land it with \"bee worktree merge\" after the \"uat\" gate. Set \"staging_before_merge\" back to true (or remove the key) to re-enable staging.".to_string(),
+            "this repo has the staging mixing ground off — staging is opt-in, and \"staging_before_merge\" in .bee/config.json is absent or false. Test the feature worktree itself, then land it with \"bee worktree merge\" after the \"uat\" gate. Set \"staging_before_merge\": true in .bee/config.json to enable staging.".to_string(),
         )),
         Some(true) => Ok(()),
     }
@@ -996,6 +996,17 @@ mod tests {
         main
     }
 
+    /// defaults-and-agent-env D2: staging is opt-in now (absent means
+    /// off) — every fixture that exercises staging behavior OTHER than
+    /// the default itself must turn it on explicitly.
+    fn enable_staging(main: &Path) {
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            jsjson::stringify(&json!({"staging_before_merge": true})),
+        )
+        .unwrap();
+    }
+
     /// A real registered feature worktree (creation identity, grant, branch
     /// `wt/<feature>`) — exercises `resolve_feature_branch`'s FIRST source,
     /// not just the `wt/<slug>` fallback.
@@ -1027,6 +1038,7 @@ mod tests {
     fn staging_is_created_only_from_main() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let main_head = js_trim(&worktree::run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "hi\n", "demo work");
@@ -1050,6 +1062,7 @@ mod tests {
     fn add_merges_the_feature_and_records_it() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "hello\n", "demo work");
 
@@ -1070,6 +1083,7 @@ mod tests {
     fn conflict_aborts_clean_and_leaves_staging_usable() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let a = feature_worktree(&main, "a");
         commit_in(&a, "shared.txt", "start\naaa\n", "a edits shared");
         let b = feature_worktree(&main, "b");
@@ -1100,6 +1114,7 @@ mod tests {
     fn readd_after_a_new_commit_updates_last_merged_sha() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "v1\n", "v1");
 
@@ -1124,7 +1139,7 @@ mod tests {
         let marker_rel = "build-marker.txt";
         std::fs::write(
             main.join(".bee").join("config.json"),
-            jsjson::stringify(&json!({"commands": {"staging_build": touch_command(marker_rel)}})),
+            jsjson::stringify(&json!({"staging_before_merge": true, "commands": {"staging_build": touch_command(marker_rel)}})),
         )
         .unwrap();
 
@@ -1140,6 +1155,7 @@ mod tests {
     fn build_hook_skips_visibly_when_absent() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "hi\n", "demo work");
 
@@ -1161,7 +1177,7 @@ mod tests {
         let fail_cmd = if cfg!(windows) { "exit /b 1" } else { "exit 1" };
         std::fs::write(
             main.join(".bee").join("config.json"),
-            jsjson::stringify(&json!({"commands": {"staging_build": fail_cmd}})),
+            jsjson::stringify(&json!({"staging_before_merge": true, "commands": {"staging_build": fail_cmd}})),
         )
         .unwrap();
 
@@ -1198,6 +1214,7 @@ mod tests {
     fn rebuild_refuses_when_no_staging_record_exists() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
 
         let err = staging_rebuild(&main, &[]).unwrap_err();
         assert!(err.contains("STAGING_NO_RECORD"), "{err}");
@@ -1208,6 +1225,7 @@ mod tests {
     fn rebuild_resets_to_moved_main_and_remerges_pending_features() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "hi\n", "demo work");
 
@@ -1237,6 +1255,7 @@ mod tests {
     fn uat_approved_feature_auto_drops_on_rebuild() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "hi\n", "demo work");
         staging_add(&main, "demo").expect("initial add must merge cleanly");
@@ -1259,6 +1278,7 @@ mod tests {
     fn without_flag_skips_a_merge_but_keeps_membership() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let a = feature_worktree(&main, "a");
         commit_in(&a, "a.txt", "hi\n", "a work");
         let b = feature_worktree(&main, "b");
@@ -1285,6 +1305,7 @@ mod tests {
     fn one_conflicting_feature_never_blocks_the_others_on_rebuild() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         std::fs::write(main.join("shared.txt"), "start\n").unwrap();
         git_ok(&main, &["add", "-A"]);
         git_ok(&main, &["commit", "-qm", "add shared.txt"]);
@@ -1325,6 +1346,7 @@ mod tests {
     fn status_flags_a_stale_base_and_reports_uat_gate_state() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "hi\n", "demo work");
         staging_add(&main, "demo").expect("initial add must merge cleanly");
@@ -1354,28 +1376,25 @@ mod tests {
     // ─── staging_before_merge (staging-optional so-1) ──────────────────────
 
     #[test]
-    fn staging_before_merge_absent_key_allows_add_and_rebuild() {
+    fn staging_before_merge_absent_key_refuses_add_with_zero_mutation() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "hi\n", "demo work");
 
-        let outcome = staging_add(&main, "demo").expect("an absent staging_before_merge key must allow add (default ON)");
-        assert_eq!(outcome.staged.len(), 1);
-
-        commit_in(&main, "main2.txt", "later\n", "main moves on");
-        staging_rebuild(&main, &[]).expect("an absent staging_before_merge key must allow rebuild (default ON)");
+        let err = staging_add(&main, "demo").unwrap_err();
+        assert!(err.contains("STAGING_DISABLED"), "{err}");
+        assert!(err.contains("staging_before_merge"), "{err}");
+        assert!(err.contains("bee worktree merge"), "{err}");
+        assert!(!worktree::branch_exists(&main, "staging"), "an absent staging_before_merge key (default OFF) must never create staging");
+        assert!(!staging_file(&main).exists(), "an absent staging_before_merge key (default OFF) must never write a staging record");
     }
 
     #[test]
     fn staging_before_merge_true_allows_add_and_rebuild() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
-        std::fs::write(
-            main.join(".bee").join("config.json"),
-            jsjson::stringify(&json!({"staging_before_merge": true})),
-        )
-        .unwrap();
+        enable_staging(&main);
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "hi\n", "demo work");
 
@@ -1408,6 +1427,7 @@ mod tests {
     fn staging_before_merge_false_refuses_rebuild_with_zero_mutation() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "hi\n", "demo work");
         staging_add(&main, "demo").expect("initial add must merge cleanly while staging is still on");
@@ -1453,6 +1473,7 @@ mod tests {
     fn status_still_reads_record_when_staging_before_merge_is_false() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        enable_staging(&main);
         let feat = feature_worktree(&main, "demo");
         commit_in(&feat, "demo.txt", "hi\n", "demo work");
         staging_add(&main, "demo").expect("initial add must merge cleanly while staging is still on");

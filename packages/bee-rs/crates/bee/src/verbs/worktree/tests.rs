@@ -1330,6 +1330,10 @@ use std::time::Instant;
     fn cleanup_flag_tears_down_and_queues_nothing() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would suppress cleanup while uat is pending — spell
+        // "merge" explicitly since this test is about --cleanup itself.
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
         let mut lock_busy = None;
         let created =
             create_feature_worktree(&main, "demo", None, CompanionSpec::default(), &mut lock_busy)
@@ -3319,6 +3323,10 @@ use std::time::Instant;
         let main = main_repo(tmp.path());
         let created = worktree_with_a_real_commit(&main, "demo");
         write_live_workflow_uat(&main, "demo", "standard", false);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which never blocks at merge — spell "merge" explicitly to
+        // exercise the merge-time door this test is about.
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
 
         let pre_merge_head =
             js_trim(&run_git(&main, &["rev-parse", "HEAD"]).stdout.unwrap_or_default()).to_string();
@@ -3358,6 +3366,10 @@ use std::time::Instant;
     fn merge_refuses_the_staging_branch_by_id_and_by_branch_zero_mutation() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        // defaults-and-agent-env D2: staging is opt-in now (absent means
+        // off) — this fixture is about the merge-side refusal, not the
+        // staging default, so turn staging on explicitly.
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"staging_before_merge": true}"#).unwrap();
         worktree_with_a_real_commit(&main, "demo");
         let add = crate::verbs::staging::staging_add(&main, "demo")
             .unwrap_or_else(|e| panic!("staging add must succeed: {e}"));
@@ -3448,6 +3460,11 @@ use std::time::Instant;
         git_ok(&staged_third.worktree_root, &["config", "user.email", "a@b.c"]);
         git_ok(&staged_third.worktree_root, &["config", "user.name", "t"]);
         git_ok(&staged_third.worktree_root, &["commit", "-qam", "staged work"]);
+        // defaults-and-agent-env D2: staging is opt-in now — turn it on
+        // explicitly right before the first staging_add, so the earlier
+        // "no staging record yet" assertion still exercises a genuinely
+        // staging-off repo.
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"staging_before_merge": true}"#).unwrap();
         crate::verbs::staging::staging_add(&main, "already-staged")
             .unwrap_or_else(|e| panic!("staging add must succeed: {e}"));
 
@@ -3501,6 +3518,11 @@ use std::time::Instant;
     fn a_green_merge_clears_the_merged_features_stranded_lane_mark_and_names_close() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which SETS the uat wait on merge rather than clearing it — spell
+        // "merge" explicitly, since this test is about the clearing
+        // behavior itself, not the placement default.
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
         let created = worktree_with_a_real_commit(&main, "demo");
         write_stranded_lane(&main, "demo", "scribing");
 
@@ -3608,6 +3630,11 @@ use std::time::Instant;
     fn a_green_merge_of_a_tracked_lane_file_emits_no_mutated_tracked_files_warning() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        // defaults-and-agent-env D1: spell "merge" explicitly — this test
+        // is about the tracked-file mutation guard, not the uat-stop
+        // placement default, and the absent-key default (Close) would set
+        // the uat wait instead of clearing it.
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
         let created = worktree_with_a_real_commit(&main, "demo");
         write_stranded_lane(&main, "demo", "scribing");
         git_ok(&main, &["add", "-f", ".bee/lanes/demo.json"]);
@@ -3720,6 +3747,11 @@ use std::time::Instant;
         let main = main_repo(tmp.path());
         let created = worktree_with_a_real_commit(&main, "demo");
         write_live_workflow_uat(&main, "demo", "standard", true);
+        // defaults-and-agent-env D1: spell "merge" explicitly so this stays
+        // a genuine test of the approval read at merge time, not a
+        // trivial pass under the new absent-key default (Close never
+        // blocks at merge regardless of approval).
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
@@ -3739,6 +3771,11 @@ use std::time::Instant;
         let main = main_repo(tmp.path());
         let created = worktree_with_a_real_commit(&main, "demo");
         write_live_workflow_uat(&main, "demo", "standard", false);
+        // defaults-and-agent-env D1: spell "merge" explicitly so
+        // --skip-uat is genuinely exercised against a door that would
+        // otherwise block, rather than a Close default that never blocks
+        // at merge in the first place.
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, true, None)
@@ -3826,6 +3863,10 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
         let created = worktree_with_a_real_commit(&main, "demo");
+        // defaults-and-agent-env D1: spell "merge" explicitly so this stays
+        // a genuine test of the default-state approval fallback, not a
+        // trivial pass under the new absent-key default (Close never
+        // blocks at merge regardless of approval).
         std::fs::write(
             main.join(".bee").join("state.json"),
             jsjson::stringify(&json!({
@@ -3835,6 +3876,7 @@ use std::time::Instant;
             })),
         )
         .unwrap();
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let answer = merge_feature_worktree(&main, &created.id, cleanup, None, false, None)
@@ -3863,6 +3905,10 @@ use std::time::Instant;
             })),
         )
         .unwrap();
+        // defaults-and-agent-env D1: spell "merge" explicitly — the new
+        // absent-key default (Close) never blocks at merge, which would
+        // make this refusal assertion pass for the wrong reason.
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
 
         let cleanup = resolve_cleanup_on_merge(&main, false, true).unwrap();
         let result = merge_feature_worktree(&main, &created.id, cleanup, None, false, None);
@@ -4679,7 +4725,7 @@ use std::time::Instant;
     }
 
     /// Happy path (merge side): a closed-record feature whose lane file
-    /// reads `approved_gates.uat: true` merges under the default
+    /// reads `approved_gates.uat: true` merges under an explicit
     /// `uat_stop: "merge"` placement — the approval the owner recorded now
     /// reaches the door that blocks on it.
     #[test]
@@ -4687,6 +4733,7 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
         let created = worktree_with_a_real_commit(&main, "demo");
+        write_uat_stop_config(&main, "merge");
         write_closed_workflow_uat(&main, "demo", "standard");
         write_lane_approved_gates(&main, "demo", "standard", Some(json!({ "uat": true })));
 
@@ -4725,6 +4772,10 @@ use std::time::Instant;
     fn a_live_workflow_saying_false_beats_a_lane_file_saying_true() {
         let tmp = tempfile::tempdir().unwrap();
         let main = main_repo(tmp.path());
+        // defaults-and-agent-env D1: spell "merge" explicitly — the new
+        // absent-key default (Close) never blocks at merge, which would
+        // make this refusal assertion pass for the wrong reason.
+        std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
         let created = worktree_with_a_real_commit(&main, "demo");
         write_live_workflow_uat(&main, "demo", "standard", false);
         write_lane_approved_gates(&main, "demo", "standard", Some(json!({ "uat": true })));
@@ -4758,6 +4809,10 @@ use std::time::Instant;
         for (label, lane_body) in cases {
             let tmp = tempfile::tempdir().unwrap();
             let main = main_repo(tmp.path());
+            // defaults-and-agent-env D1: spell "merge" explicitly — the
+            // new absent-key default (Close) never blocks at merge, which
+            // would make this refusal assertion pass for the wrong reason.
+            std::fs::write(main.join(".bee").join("config.json"), r#"{"uat_stop": "merge"}"#).unwrap();
             let created = worktree_with_a_real_commit(&main, "demo");
             write_closed_workflow_uat(&main, "demo", "standard");
             match lane_body {

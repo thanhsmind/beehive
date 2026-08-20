@@ -2157,7 +2157,11 @@ use std::time::Instant;
     #[test]
     fn close_dry_run_reports_the_doors_and_runs_nothing() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":["a","b"]}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // the other doors.
+        let root = repo(&tmp, r#"{"commands":{"test":["a","b"]},"uat_stop":"off"}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
             close_handler(&root, "demo", true, declared, None, &HashMap::new()).unwrap()
@@ -2208,7 +2212,9 @@ use std::time::Instant;
     fn close_green_reports_the_capture_checklist() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close —
+        // pin "off" since this test is about the promote/capture doors.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
             close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
@@ -2254,9 +2260,11 @@ use std::time::Instant;
     fn close_green_promote_none_warns_once_and_writes_nothing() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
+        // defaults-and-agent-env D1: pin uat_stop off — this test is about
+        // the promote door's product_root path, not the uat door.
         let root = repo(
             &tmp,
-            r#"{"commands":{"test":"echo suite-green"},"product_root":"elsewhere"}"#,
+            r#"{"commands":{"test":"echo suite-green"},"product_root":"elsewhere","uat_stop":"off"}"#,
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
@@ -2295,7 +2303,11 @@ use std::time::Instant;
     fn close_green_promote_ok_writes_the_proposals_file_and_a_headline() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
         w(
             &root,
@@ -2364,7 +2376,11 @@ use std::time::Instant;
     fn close_green_promote_ok_enqueues_one_capture_stub_pointing_at_it() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
         w(
             &root,
@@ -2410,7 +2426,11 @@ use std::time::Instant;
     fn close_green_promote_skipped_enqueues_nothing() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, _text, code) =
             close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
@@ -2475,9 +2495,11 @@ use std::time::Instant;
     fn close_never_spawns_commands_test_even_with_a_granted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, _granted) = dp1_worktree_fixture(tmp.path());
+        // defaults-and-agent-env D1: pin uat_stop off — this test is about
+        // commands.test never spawning, not the uat door.
         std::fs::write(
             main.join(".bee").join("config.json"),
-            r#"{"commands":{"test":"echo should-not-run"}}"#,
+            r#"{"commands":{"test":"echo should-not-run"},"uat_stop":"off"}"#,
         )
         .unwrap();
         let declared = declared_test_commands(&main).unwrap();
@@ -2505,7 +2527,9 @@ use std::time::Instant;
     #[test]
     fn close_proceeds_when_every_capped_cell_carries_a_valid_proof_line() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, "{}");
+        // defaults-and-agent-env D1: pin uat_stop off — this test is about
+        // the tests door, not the uat door.
+        let root = repo(&tmp, r#"{"uat_stop":"off"}"#);
         w(
             &root,
             ".bee/cells/demo-1.json",
@@ -2534,7 +2558,9 @@ use std::time::Instant;
     #[test]
     fn close_surfaces_pending_capture_reminders() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, "{}");
+        // defaults-and-agent-env D1: pin uat_stop off — this test is about
+        // the capture-reminder doors, not the uat door.
+        let root = repo(&tmp, r#"{"uat_stop":"off"}"#);
         w(&root, ".bee/state.json", r#"{"feature":"demo"}"#);
         w(&root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
         w(&root, ".bee/cells/demo-5.json", r#"{"id":"demo-5","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-02T00:00:00.000Z"}}"#);
@@ -2739,7 +2765,11 @@ use std::time::Instant;
     // ── D1: the refusal itself (red, green-after-capture, green-with-deferral) ─
 
     fn declare_echo_test(tmp: &tempfile::TempDir) -> PathBuf {
-        repo(tmp, r#"{"commands":{"test":"echo suite-green"}}"#)
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — this helper's callers are about
+        // the capture/scribing-debt doors, not the uat door, so pin "off".
+        repo(tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#)
     }
 
     /// RED: a behavior_change cell with no capture recorded and no logged
@@ -3096,7 +3126,11 @@ use std::time::Instant;
     fn close_refuses_at_the_knowledge_freshness_door() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         write_freshness_touch_anchor(&root, "demo");
         write_freshness_dangling(&root, "demo");
         write_freshness_capped_cell(&root, "demo", "src/a.rs");
@@ -3386,7 +3420,11 @@ use std::time::Instant;
     fn close_refuses_at_the_impact_door() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         write_impact_decision(&root, "demo");
         w(&root, "docs/knowledge/areas/other/notes.md", "cites decision aaaaaaaa here\n");
         let declared = declared_test_commands(&root).unwrap();
@@ -3588,7 +3626,11 @@ use std::time::Instant;
     fn close_refuses_at_the_routing_door() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         write_locked_decisions_table(&root, "demo", &["D1"]);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
@@ -3704,7 +3746,11 @@ use std::time::Instant;
     fn close_refuses_at_the_doc_deferral_door() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         w(&root, "docs/history/demo/CONTEXT.md", "# Demo\n\nThis is deferred for now.\n");
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
