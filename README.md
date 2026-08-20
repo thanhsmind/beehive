@@ -274,6 +274,52 @@ Then **Gate 3**: P1 > 0 blocks merge (fix cells run through swarming, review re-
 
 ---
 
+## UAT — your acceptance stop before work lands
+
+Two different things in bee carry the name "UAT" — keep them apart:
+
+1. **The `uat` gate** (this section) — a standing acceptance stop at merge time (or close time). It exists in every feature's life, whether or not a review ever runs.
+2. **Review-session UAT** — step 5 of [How review works](#how-review-works): confirming each SEE/CALL/RUN decision inside a review session *you invoked*. A different mechanism; it only exists when you ask for a review.
+
+### What the `uat` gate is
+
+A feature can be implemented, verified green, even independently reviewed — and still not be *accepted by you*. The `uat` gate is that last word: for a `standard` or `high-risk` feature, `bee worktree merge` refuses with `WORKTREE_MERGE_UAT_PENDING` (a zero-mutation refusal — nothing is touched) until the gate is approved. `tiny`, `small`, and docs lanes are exempt; a missing or unreadable lane classification fails **closed** and is treated as `standard`.
+
+You typically test at **staging** first: `bee staging add` mixes the feature's worktree into a disposable staging checkout — the ground between a feature worktree and main — so you can try the product without touching either.
+
+```mermaid
+flowchart LR
+    W["feature worktree<br/>verified green"] -->|"bee staging add<br/>(optional)"| S["staging<br/>disposable mixing ground"]
+    S -->|you try the product| U{"uat gate<br/>your acceptance"}
+    W --> U
+    U -->|approved| M["bee worktree merge"]
+    U -->|pending| R["WORKTREE_MERGE_UAT_PENDING<br/>merge refuses, zero mutations"]
+    M --> T[(main)]
+```
+
+### Approving it — and why bypass never covers it
+
+When you give the word, the agent records it: `bee gate --name uat --approved true`. There is **no automation path**: `--actor auto` is refused outright, and **gate bypass never covers `uat` at any level — including `total`**. The escape hatches are explicit and scoped instead:
+
+- `--skip-uat` on one `bee worktree merge` call — skips it for *that merge only*;
+- a logged `uat-deferral` decision at `bee close` (when the door sits at close, below);
+- repo-wide opt-out via config (`uat_stop: "off"`).
+
+### Configuration
+
+All keys live in `.bee/config.json` (full reference + sample: [docs/config-reference.md](docs/config-reference.md)):
+
+| Key | Values | Effect |
+|---|---|---|
+| `uat_stop` | `"merge"` (default — absent means this) | `bee worktree merge` enforces the gate for standard/high-risk features |
+| | `"close"` | The merge lands first — the product is testable on main — and the door moves to `bee close`. While `uat` is pending: the lane carries a `waiting_on` mark `uat: <feature>`, and the worktree is **held** (`--cleanup` / `worktree_cleanup_on_merge: true` are ignored, reported as `WORKTREE_MERGE_CLEANUP_SUPPRESSED_UAT_PENDING`) |
+| | `"off"` | No uat stop anywhere |
+| | anything else | Refuses `WORKTREE_MERGE_UAT_CONFIG_INVALID` — never guesses |
+| `uat_before_merge` | `true` / `false` | Back-compat alias, read **only when `uat_stop` is absent**: `true` → `"merge"`, `false` → `"off"` |
+| `staging_before_merge` | `true` (default) / `false` | `false` makes `bee staging add` / `bee staging rebuild` refuse `STAGING_DISABLED` — the repo runs worktree → uat gate → main with no staging step. **Independent of the `uat` gate**: opting out of staging never opts out of uat, and vice versa |
+
+---
+
 ## Lanes: ceremony scales with risk
 
 Every planning pass counts mechanical **risk flags** (auth · authorization · data model · audit/security · external systems · public contracts · cross-platform · changes behavior an existing test asserts (a covered contract must change) · the change requires weakening, deleting, or replacing existing proof · multi-domain) and picks the smallest honest lane. **Lane file caps count product files only** — production source, tests, and runtime config the behavior change itself must touch; never counted are `.bee/**`, `docs/**`, plans/briefs/reports, or generated projections/manifests:
@@ -315,6 +361,91 @@ The orchestrator pattern keeps the strongest model scarce:
 - **Fan-out delegation** (default): run the session on your strong model; it orchestrates all work and dispatches gather-altitude steps (multi-file reads, document rendering, trace mining) down-tier to cheaper workers, collecting digests instead of verbatim output. The Delegation contract (in gates-and-delegation.md) specifies which steps delegate and what a digest must carry. `bee-swarming`'s default.
 
 **To change the worker models**, edit `.bee/config.json` `models.claude.generation` / `extraction`; the ceiling changes by running the session on a different model. Every field + a full sample to copy: **[docs/config-reference.md](docs/config-reference.md)**.
+
+### Model pairs: the full slot set and its five shapes
+
+The two-slot example above is the minimal form. The full slot set under `models.<runtime>` is **`extraction` · `generation` · `review` · `advisor`** (the orchestrator is always the session model and is never configured; `review: null` falls back to `generation`, which otherwise defaults to opus). Each slot takes one of five shapes:
+
+| Shape | Example | Meaning |
+|---|---|---|
+| plain string | `"haiku"` | that model, on the session's own runtime |
+| model + effort | `{ "model": "sonnet", "effort": "medium" }` | effort applies only where the runtime supports per-agent selection |
+| CLI executor | `{ "kind": "cli", "command": "codex exec … -" }` | an **external** CLI runs this slot; the prompt is piped via stdin. **Gather/review/advisor only** — cell execution against a cli-shaped slot is refused |
+| herding pane | `{ "kind": "herding", "agent": "agy-flash", "fallback": "default" }` | every purpose of this slot routes through `bee herding run` as a live pane agent (see [Herding](#herding--the-autonomous-cockpit-and-external-agents)); optional `fallback: "default"` re-dispatches a failed run through the runtime's own default path — absent, a failure stays loud and the pane is kept as forensics |
+| `null` | `null` | the runtime can't switch models — the tier is enforced as a prompt budget instead |
+
+Ready-made pairs to copy — mixing a cheap implementer with an adversarial reviewer from a *different* vendor — live in **[docs/model-presets.md](docs/model-presets.md)**: `all-claude` (default), `all-claude-tuned`, `gpt-adversarial-review` (Codex reviews read-only), `codex-implements`, `antigravity-review` (Gemini/agy), `opencode-review`, `budget`. A runnable external-executor sample sits in `.bee/config-sample-cli-executors.json`. Two constraints never bend: the `review` slot must be read-only, and every `[DONE]` from an external executor is re-verified and judge-checked by the orchestrator — no spot-check exception.
+
+---
+
+## Herding — the autonomous cockpit and external agents
+
+`bee-herding` is the cockpit that runs several coding agents in parallel worktrees, driven by `herdr` (the pane/terminal manager). Its one principle: **starting** work in an isolated worktree runs unattended; **landing** work on main stays a human gesture, every time.
+
+### The roles
+
+| Role | Who runs it | What it does |
+|---|---|---|
+| **bootstrap** | you, once | Builds the full pane layout (including an idle merge pane) and starts only the dispatch loop |
+| **dispatch** | a cold loop, on a fixed interval | Each iteration is fresh, no memory: picks the highest-impact safe backlog candidate, starts a working agent in a fresh worktree — never lands anything. Armed **only** by an owner-created enable-marker file (`touch` to arm, `rm` to disarm — a human gesture, never automated) |
+| **merge** | you, single-shot | Finds a bee-finished worktree, merges it behind the configured verify command, cleans up, stops. A red verify stops cold — no retry |
+| **wave** | the orchestrator | Briefs several *already-running* workers at once and waits on all of them together |
+| **run** | the orchestrator | Starts **one** bee-ignorant external agent (agy, codex, opencode, …) in a fresh pane and hands it a job through the file mailbox — see below |
+
+### How `bee herding run` hands a job to an external agent
+
+The agent being spawned knows nothing about bee. Everything travels through a file mailbox, `.bee/mailbox/<job-id>/`, and every completion signal is a **file appearing**, never a pane screen:
+
+```mermaid
+sequenceDiagram
+    participant B as bee herding run
+    participant P as pane (herdr)
+    participant A as external agent
+    participant M as mailbox .bee/mailbox/&lt;job-id&gt;/
+    B->>P: split pane, agent start (retries while the shell boots)
+    B->>B: wait until the agent reports ready
+    B->>M: write brief-1.txt (the full job)
+    B->>A: one-line pointer: "read brief-1.txt"
+    Note over B,A: delivered only when the agent's STATE says so —<br/>status flips to working/done or the result file appears;<br/>still idle → resend, bounded (pane echo is never trusted)
+    A->>M: works, then writes result-1.json
+    B->>B: zero-token native poll: result file, log.txt mtime, agent status
+    B->>P: valid result closes the pane; failure/timeout keeps it open as forensics
+```
+
+The wait is bounded two ways: `--idle-timeout` ends it when the heartbeat goes stale, `--ceiling` caps it absolutely. Every run appends a `dispatch.jsonl` row and a wave-ledger row, so occupancy counts these workers too.
+
+### Configuration
+
+All under `"herding"` in `.bee/config.json`:
+
+```json
+"herding": {
+  "agent_command": "claude-sonnet",
+  "control_command": [
+    "claude", "-p", "{PROMPT}", "--model", "sonnet",
+    "--max-turns", "{MAX_TURNS}", "--allowedTools", "{ALLOWED_TOOLS}"
+  ],
+  "agents": {
+    "claude-sonnet": ["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"],
+    "agy-flash": ["agy", "--dangerously-skip-permissions"]
+  }
+}
+```
+
+- **`agents`** — the herd registry: a name → argv map. A named entry is referenced in three spellings: a model slot's `"agent"` field, `bee herding run --agent <name>`, or `agent_command` as a plain string. An unknown name refuses **typed**, listing the registry keys — never a silent fallback.
+- **`agent_command`** — the default working-agent spawn: an argv array (token 0 is the herdr agent kind) or a plain string naming an `agents` entry. Absent, the default is `["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"]`.
+- **`control_command`** — how the cold dispatch/merge loop invokes its control agent; `{PROMPT}` / `{MODEL}` / `{MAX_TURNS}` / `{ALLOWED_TOOLS}` are substituted per token and run verbatim — never shell-joined or re-split.
+
+Since **v2.16.0**, any model slot can point at a herd name — `{ "kind": "herding", "agent": "agy-flash", "fallback": "default" }` routes *every* purpose dispatched against that slot (cell, gather, reviewer, advisor) through `bee herding run`, with the declared degradation described in [Model pairs](#model-pairs-the-full-slot-set-and-its-five-shapes).
+
+### Safety rails
+
+- **Four-slot cap**, enforced on the wave ledger crossed with `herdr`'s live pane list; when the live list can't be read, occupancy degrades to a timer and dispatch **refuses to start anything** that iteration rather than guess.
+- **Enable marker** arms dispatch; a **stop marker** halts control loops at the next iteration boundary (it does not kill already-running workers). Both are owner-created files.
+- Working agents run fully open **but confined to their own worktree and branch**; control panes get a narrow enumerated command surface.
+- Loops are bounded: consecutive-failure ceiling, iteration cap, per-invocation turn ceiling.
+
+Skill: `skills/bee-herding/SKILL.md`. Deep dive: `docs/knowledge/areas/bee-herding/overview.md`.
 
 ---
 
@@ -517,7 +648,8 @@ The six core hooks are tabled above; `bee hook model-guard`, `bee hook tools-log
 
 | Doc | Read when |
 |---|---|
-| [config-reference.md](docs/config-reference.md) | You want to configure `.bee/config.json` — models/ceiling, commands, bypass (with a sample to copy) |
+| [config-reference.md](docs/config-reference.md) | You want to configure `.bee/config.json` — models/ceiling, commands, bypass, uat/staging (with a sample to copy) |
+| [model-presets.md](docs/model-presets.md) | Copy-paste model pairs: all-Claude, Codex-reviews, Codex-implements, Gemini/agy, opencode, budget |
 | [00-vision.md](docs/00-vision.md) | You want the principles and non-goals |
 | [01-distillation.md](docs/01-distillation.md) | What bee took from each upstream framework, and what it rejected |
 | [02-architecture.md](docs/02-architecture.md) | Plugin layout, dual-runtime support, runtime files, cell schema, state model |
