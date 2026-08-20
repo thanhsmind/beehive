@@ -25,18 +25,34 @@
     "herding-prompt-verify D1"
   ],
   "deps": [],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-hpv-1",
+    "outcome": "Pointer delivery verified against pane text with bounded resends; silent drop impossible",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-20T03:18:43.204Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T03:14:51.428Z",
+    "report": {
+      "outcome": "deliver_pointer: send, read pane, resend bounded; typed exhaustion",
+      "commit": "head",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run — green (36 passed) — touched module, 2 new tests: resend-until-echo, exhaustion",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 190 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }
