@@ -242,15 +242,18 @@ trait Herdr {
     /// --no-focus` — returns the newly split pane's id.
     fn pane_split(&self, pane_id: &str, direction: &str, cwd: &Path) -> Result<String, String>;
     /// `herdr agent start <job_id> --kind <kind> --pane <pane_id> --timeout
-    /// 60000 -- <args…> <prompt>` — the split pane IS the agent's pane
-    /// (spawn-proof.md), never a second one.
+    /// 60000 -- <args…>` — the split pane IS the agent's pane
+    /// (spawn-proof.md), never a second one. The brief is NEVER an argv
+    /// token here: a multi-line brief cannot be encoded for the target
+    /// shell (live smoke smoke-agy-1, herdr `invalid_agent_argument`) — it
+    /// travels through `agent_prompt` after the start succeeds
+    /// (herding-run-prompt-delivery D1).
     fn agent_start(
         &self,
         job_id: &str,
         kind: &str,
         pane_id: &str,
         args: &[String],
-        prompt: &str,
     ) -> Result<(), String>;
     /// `herdr agent list`'s `agent_status` for `job_id`, or `None` on any
     /// trouble (herdr missing, the target absent, an unparseable body) —
@@ -349,14 +352,15 @@ impl Herdr for RealHerdr {
         kind: &str,
         pane_id: &str,
         args: &[String],
-        prompt: &str,
     ) -> Result<(), String> {
         let mut argv: Vec<&str> =
-            vec!["agent", "start", job_id, "--kind", kind, "--pane", pane_id, "--timeout", "60000", "--"];
-        for a in args {
-            argv.push(a);
+            vec!["agent", "start", job_id, "--kind", kind, "--pane", pane_id, "--timeout", "60000"];
+        if !args.is_empty() {
+            argv.push("--");
+            for a in args {
+                argv.push(a);
+            }
         }
-        argv.push(prompt);
         self.call(&argv).map(|_| ())
     }
 
@@ -759,7 +763,7 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
     };
 
-    if let Err(e) = herdr.agent_start(&opts.job_id, &kind, &new_pane, &args, &brief) {
+    if let Err(e) = herdr.agent_start(&opts.job_id, &kind, &new_pane, &args) {
         // role-dispatch.md §8's own cleanup rule: a start failure closes the
         // pane THIS call just split, before reporting.
         let closed = herdr.pane_close(&new_pane).is_ok();
@@ -770,6 +774,19 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
             outcome: RunOutcome::SpawnFailed(format!("agent start failed: {e}")),
             pane_id: Some(new_pane),
             closed_pane: closed,
+        };
+    }
+
+    // The brief travels through `agent prompt`, never `agent start` argv —
+    // a multi-line brief cannot be encoded for the target shell
+    // (herding-run-prompt-delivery D1). The agent IS running past this
+    // point, so a prompt failure keeps the pane as forensics (the standing
+    // failure rule), unlike the start failure above.
+    if let Err(e) = herdr.agent_prompt(&opts.job_id, &brief) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("brief prompt failed after start: {e}")),
+            pane_id: Some(new_pane),
+            closed_pane: false,
         };
     }
 
@@ -1185,7 +1202,6 @@ mod tests {
             _kind: &str,
             _pane_id: &str,
             _args: &[String],
-            _prompt: &str,
         ) -> Result<(), String> {
             self.start_calls.borrow_mut().push(job_id.to_string());
             self.start_result.clone()
@@ -1225,7 +1241,6 @@ mod tests {
             _kind: &str,
             _pane_id: &str,
             _args: &[String],
-            _prompt: &str,
         ) -> Result<(), String> {
             panic!("dry-run must never call Herdr::agent_start")
         }
@@ -1336,6 +1351,54 @@ mod tests {
         assert!(matches!(result.outcome, RunOutcome::SpawnFailed(_)), "got {:?}", result.outcome);
         assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
         assert!(result.closed_pane);
+    }
+
+    #[test]
+    fn a_new_run_sends_the_brief_via_agent_prompt_and_start_argv_never_carries_it() {
+        // herding-run-prompt-delivery D1: the live smoke proved a multi-line
+        // brief cannot ride `agent start`'s argv (herdr
+        // `invalid_agent_argument`); the brief travels via `agent prompt`.
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        // start happened exactly once, addressed by job id — argv content is
+        // agent_command tokens only by construction (the trait no longer
+        // even accepts a prompt parameter).
+        assert_eq!(fake.start_calls.borrow().as_slice(), ["job-1"]);
+        // the round-1 brief arrived via agent_prompt before polling.
+        let prompts = fake.prompt_calls.borrow();
+        assert_eq!(prompts.len(), 1, "exactly one brief prompt for round 1");
+        assert_eq!(prompts[0].0, "job-1");
+        assert!(prompts[0].1.contains("round 1"), "brief names its round: {}", prompts[0].1);
+        assert!(prompts[0].1.contains("result-1.json"), "brief names the result file");
+    }
+
+    #[test]
+    fn a_failed_brief_prompt_keeps_the_pane_as_forensics() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let mut fake = FakeHerdr::new();
+        fake.prompt_result = Err("send failed".to_string());
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => {
+                assert!(msg.contains("brief prompt failed"), "{msg}")
+            }
+            other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+        // unlike a start failure, the agent is running: pane stays open.
+        assert!(!result.closed_pane);
+        assert!(fake.closed.borrow().is_empty());
     }
 
     #[test]
