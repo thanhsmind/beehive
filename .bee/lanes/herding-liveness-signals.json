@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "(turn ended)",
-    "asked_at": "2026-08-20T14:58:21.298Z",
-    "session": "c1eacb78-2dd2-497a-8ea0-8a0c59b5a89d"
+    "subject": "`uls-1` bị đánh dấu blocked do phiên chết, nhưng worktree sạch và công việc đã commit — chỉ là nợ sổ sách. Chờ khảo sát đầy đủ.",
+    "asked_at": "2026-08-20T15:09:58.095Z",
+    "session": "8ca30885-b974-4da5-8327-c60ae9cd5a46"
   },
   "route": {
     "class": "feature",
