@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"herding-liveness-signals\" started at phase \"exploring\".",
-  "next_action": "Invoke bee-swarming for hls-1.",
+  "next_action": "Merged into main at 76fa42d; capture what settled, then bee close --feature herding-liveness-signals.",
   "created_at": "2026-08-20T12:22:00.698Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: herding-liveness-signals",
-    "asked_at": "2026-08-20T13:35:17.582Z",
-    "session": "8ca30885-b974-4da5-8327-c60ae9cd5a46"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
