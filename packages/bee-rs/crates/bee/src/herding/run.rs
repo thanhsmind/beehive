@@ -41,6 +41,7 @@
 // times out, the ceiling caps regardless of activity — run as fast unit
 // tests with no real sleep.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::time::Duration;
@@ -261,6 +262,17 @@ trait Herdr {
     /// `herdr pane split <id> --direction <dir> --ratio 0.5 --cwd <cwd>
     /// --no-focus` — returns the newly split pane's id.
     fn pane_split(&self, pane_id: &str, direction: &str, cwd: &Path) -> Result<String, String>;
+    /// `herdr pane run <pane_id> <command>` (D4) — runs ONE shell line in
+    /// the pane and returns; used ONLY to send the `export K='v' …` line a
+    /// per-agent-env registry entry carries, AFTER the pane split and
+    /// BEFORE `agent_start` (never after — the agent's own process must
+    /// inherit the exported vars from its spawning shell). Unlike
+    /// `agent_start`'s `agent_pane_busy` retry, this call carries no
+    /// special busy-shell tolerance: `pane run` types text into whatever
+    /// shell is there, it does not gate on "is this shell available for an
+    /// agent" the way `agent start` does, so there is no reported busy
+    /// error shape to retry on.
+    fn pane_run(&self, pane_id: &str, command: &str) -> Result<(), String>;
     /// `herdr agent start <job_id> --kind <kind> --pane <pane_id> --timeout
     /// 60000 -- <args…>` — the split pane IS the agent's pane
     /// (spawn-proof.md), never a second one. The brief is NEVER an argv
@@ -364,6 +376,10 @@ impl Herdr for RealHerdr {
             .and_then(Value::as_str)
             .map(str::to_string)
             .ok_or_else(|| "herdr pane split: missing result.pane.pane_id".to_string())
+    }
+
+    fn pane_run(&self, pane_id: &str, command: &str) -> Result<(), String> {
+        self.call(&["pane", "run", pane_id, command]).map(|_| ())
     }
 
     fn agent_start(
@@ -519,6 +535,21 @@ fn run_poll_loop(
             return decision;
         }
     }
+}
+
+/// D4: single-quotes `value` for a POSIX shell, escaping any embedded
+/// single quote as `'\''` (close the quote, an escaped literal quote,
+/// reopen) — the standard shell-injection-safe spelling.
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+/// D4's one-line env export: `export K='v' K2='v2' …`, keys in `env`'s own
+/// (sorted, `BTreeMap`) order, every value single-quoted. Callers only
+/// invoke this when `env` is non-empty — an empty map is never sent.
+fn build_export_line(env: &BTreeMap<String, String>) -> String {
+    let assignments: Vec<String> = env.iter().map(|(k, v)| format!("{k}={}", shell_single_quote(v))).collect();
+    format!("export {}", assignments.join(" "))
 }
 
 /// herding-start-retry D1: a freshly split pane's shell may not have
@@ -862,8 +893,8 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or(Value::Null);
-    let (kind, args) = match resolve_agent_command(&cfg, opts.agent.as_deref()) {
-        Ok(pair) => pair,
+    let (kind, args, env) = match resolve_agent_command(&cfg, opts.agent.as_deref()) {
+        Ok(triple) => triple,
         Err(e) => {
             return ExecResult { outcome: RunOutcome::SpawnFailed(e.to_string()), pane_id: None, closed_pane: false }
         }
@@ -878,6 +909,25 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         Ok(p) => p,
         Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
     };
+
+    // D4: a registry entry's env, when non-empty, is exported into the
+    // freshly split pane BEFORE the agent starts — so the agent's own
+    // process inherits it — and treated exactly like a start failure: the
+    // agent never started, so the pane this call just split is closed.
+    if !env.is_empty() {
+        let export_line = build_export_line(&env);
+        if let Err(e) = herdr.pane_run(&new_pane, &export_line) {
+            let closed = herdr.pane_close(&new_pane).is_ok();
+            if !closed {
+                eprintln!("bee herding run: could not close pane {new_pane} after a failed env export");
+            }
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(format!("env export failed: {e}")),
+                pane_id: Some(new_pane),
+                closed_pane: closed,
+            };
+        }
+    }
 
     let start_result = start_with_retry(
         &mut || herdr.agent_start(&opts.job_id, &kind, &new_pane, &args),
@@ -1347,12 +1397,28 @@ mod tests {
         /// how a herd-registry test proves a named `--agent` resolution
         /// reached the spawn, not merely that SOME start happened.
         started_kind: RefCell<Option<String>>,
+        /// The trailing args `agent_start` was last called with — how a D3
+        /// override test proves the CONFIG entry's argv reached the spawn,
+        /// not merely that the same-kind built-in did (`started_kind` alone
+        /// cannot tell those apart when both name the same herdr kind).
+        started_args: RefCell<Option<Vec<String>>>,
         /// One status returned (and consumed) by `agent_status` after the
         /// first `agent_prompt` — the delivery receipt's "the agent took
         /// the prompt" flip (herding-receipt-state D1). Steady-state
         /// `status` answers before any prompt and after this is consumed,
         /// so `wait_for_round`'s idle-timeout still sees an idle agent.
         status_once_after_prompt: RefCell<Option<String>>,
+        /// D4: what `pane_run` returns — `Ok(())` unless a test overrides
+        /// it to prove the env-export-failure path.
+        pane_run_result: Result<(), String>,
+        /// Every `pane_run(pane_id, command)` call, in order — a D4 test
+        /// reads this to prove the export line's exact content and that it
+        /// went to the newly split pane.
+        pane_run_calls: RefCell<Vec<(String, String)>>,
+        /// D4: `pane_run` and `agent_start` calls, in order, tagged by
+        /// name — the seam a D4 ordering test reads to prove the export
+        /// line was sent BEFORE `agent_start`, never after.
+        call_log: RefCell<Vec<&'static str>>,
     }
 
     impl FakeHerdr {
@@ -1369,7 +1435,11 @@ mod tests {
                 prompt_calls: RefCell::new(Vec::new()),
                 start_calls: RefCell::new(Vec::new()),
                 started_kind: RefCell::new(None),
+                started_args: RefCell::new(None),
                 status_once_after_prompt: RefCell::new(Some("working".to_string())),
+                pane_run_result: Ok(()),
+                pane_run_calls: RefCell::new(Vec::new()),
+                call_log: RefCell::new(Vec::new()),
             }
         }
     }
@@ -1384,15 +1454,22 @@ mod tests {
         fn pane_split(&self, _pane_id: &str, _direction: &str, _cwd: &Path) -> Result<String, String> {
             self.split_result.clone()
         }
+        fn pane_run(&self, pane_id: &str, command: &str) -> Result<(), String> {
+            self.pane_run_calls.borrow_mut().push((pane_id.to_string(), command.to_string()));
+            self.call_log.borrow_mut().push("pane_run");
+            self.pane_run_result.clone()
+        }
         fn agent_start(
             &self,
             job_id: &str,
             kind: &str,
             _pane_id: &str,
-            _args: &[String],
+            args: &[String],
         ) -> Result<(), String> {
             self.start_calls.borrow_mut().push(job_id.to_string());
+            self.call_log.borrow_mut().push("agent_start");
             *self.started_kind.borrow_mut() = Some(kind.to_string());
+            *self.started_args.borrow_mut() = Some(args.to_vec());
             self.start_result.clone()
         }
         fn agent_status(&self, _job_id: &str) -> Option<String> {
@@ -1428,6 +1505,9 @@ mod tests {
         }
         fn pane_split(&self, _pane_id: &str, _direction: &str, _cwd: &Path) -> Result<String, String> {
             panic!("dry-run must never call Herdr::pane_split")
+        }
+        fn pane_run(&self, _pane_id: &str, _command: &str) -> Result<(), String> {
+            panic!("dry-run must never call Herdr::pane_run")
         }
         fn agent_start(
             &self,
@@ -2018,6 +2098,159 @@ mod tests {
             }
             other => panic!("expected SpawnFailed, got {other:?}"),
         }
+    }
+
+    // ─── D3/D4: built-in registry defaults + per-agent env ─────────────
+
+    fn seeded_result_dir(bee_dir: &Path, job_id: &str) {
+        let dir = mailbox::mailbox_dir(bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn built_in_agents_resolve_and_spawn_with_zero_herding_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        // No config.json at all — resolve_agent_command's cfg falls back
+        // to Value::Null, and the registry still seeds the built-ins.
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("agy-flash".to_string());
+        seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        assert_eq!(fake.started_kind.borrow().as_deref(), Some("agy"));
+        assert_eq!(fake.started_args.borrow().as_deref(), Some(&["--dangerously-skip-permissions".to_string()][..]));
+    }
+
+    #[test]
+    fn a_same_name_config_entry_overrides_the_built_in_agents_argv() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({"herding": {"agents": {"agy-flash": ["agy", "--custom-flag"]}}}).to_string(),
+        )
+        .unwrap();
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("agy-flash".to_string());
+        seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        assert_eq!(fake.started_kind.borrow().as_deref(), Some("agy"));
+        assert_eq!(fake.started_args.borrow().as_deref(), Some(&["--custom-flag".to_string()][..]));
+    }
+
+    #[test]
+    fn an_object_shape_registry_entry_carries_env_into_the_pane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({
+                "herding": {
+                    "agents": {
+                        "codex-envd": {
+                            "argv": ["codex", "--flag"],
+                            "env": {"API_KEY": "it's-a-secret"},
+                        }
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("codex-envd".to_string());
+        seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        let calls = fake.pane_run_calls.borrow();
+        assert_eq!(calls.len(), 1, "exactly one env export line must be sent, got {calls:?}");
+        assert_eq!(calls[0].0, "w1:p2", "the export line must go to the newly split pane");
+        assert_eq!(calls[0].1, r#"export API_KEY='it'\''s-a-secret'"#);
+    }
+
+    #[test]
+    fn a_bad_env_key_drops_the_whole_entry_and_the_spawn_refuses_typed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({
+                "herding": {
+                    "agents": {
+                        "codex-badkey": {"argv": ["codex"], "env": {"1BAD": "v"}},
+                        "codex-badval": {"argv": ["codex"], "env": {"OK": "line1\nline2"}},
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        for bad in ["codex-badkey", "codex-badval"] {
+            let mut opts = test_options(main_root, false);
+            opts.agent = Some(bad.to_string());
+            let fake = FakeHerdr::new();
+            let result = execute(&opts, &fake);
+            match &result.outcome {
+                RunOutcome::SpawnFailed(msg) => assert!(msg.contains(bad), "{msg}"),
+                other => panic!("expected SpawnFailed for {bad}, got {other:?}"),
+            }
+            assert!(fake.pane_run_calls.borrow().is_empty(), "a dropped entry must never reach pane_run");
+            assert!(fake.start_calls.borrow().is_empty(), "a dropped entry must never reach agent_start");
+        }
+    }
+
+    #[test]
+    fn the_export_line_is_sent_before_agent_start_and_never_for_array_shape_entries() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({
+                "herding": {
+                    "agents": {
+                        "codex-envd": {"argv": ["codex", "--flag"], "env": {"K": "v"}},
+                        "codex-plain": ["codex", "--flag"],
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("codex-envd".to_string());
+        seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        let log = fake.call_log.borrow();
+        let pane_run_idx = log.iter().position(|c| *c == "pane_run").expect("pane_run must be called");
+        let agent_start_idx = log.iter().position(|c| *c == "agent_start").expect("agent_start must be called");
+        assert!(pane_run_idx < agent_start_idx, "pane_run must precede agent_start: {log:?}");
+
+        let mut opts2 = test_options(main_root, false);
+        opts2.agent = Some("codex-plain".to_string());
+        opts2.job_id = "job-plain".to_string();
+        seeded_result_dir(&main_root.join(".bee"), &opts2.job_id);
+        let fake2 = FakeHerdr::new();
+        let result2 = execute(&opts2, &fake2);
+        assert!(matches!(result2.outcome, RunOutcome::Result(_)), "got {:?}", result2.outcome);
+        assert!(fake2.pane_run_calls.borrow().is_empty(), "an array-shape entry must never send an export line");
     }
 
     // ─── --continue (D3) ────────────────────────────────────────────────

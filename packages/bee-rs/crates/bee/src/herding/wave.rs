@@ -18,9 +18,11 @@
 // Both verbs are deliberately split into a thin CLI-parsing shell and a pure
 // (or backend-generic) inner function, so every behavioural test below runs
 // with NO real `herdr` on PATH (D7's test seam) and NO herdr server:
-//   - `resolve_agent_command` is pure: config JSON in, (kind, args) or a
-//     typed `AgentCommandError` out. No process, no I/O beyond the caller
-//     having already read the config file.
+//   - `resolve_agent_command` is pure: config JSON in, (kind, args, env) or
+//     a typed `AgentCommandError` out — `env` (D4) is the resolved
+//     registry entry's per-agent env map, empty outside the object shape.
+//     No process, no I/O beyond the caller having already read the config
+//     file.
 //   - `run_wave_and_record` is generic over `WorkerBackend`, so a test
 //     drives it with `fleet::backend::fake::FakeBackend` instead of
 //     `HerdrBackend` — the same seam `fleet`'s own choreography tests use
@@ -130,35 +132,129 @@ fn agent_command_tokens(cfg: &Value) -> Vec<String> {
     out
 }
 
-/// herd-registry D1 — `herding.agents`: a map of name → argv token array,
-/// same shape and per-entry validation `agent_command_tokens` already uses
-/// for `herding.agent_command` (non-empty array of newline-free strings).
-/// A malformed entry is dropped, fail-open per entry — it never poisons
-/// the rest of the registry. `BTreeMap` keeps the key order the
-/// `UnknownAgent` error lists deterministic.
-fn agent_registry(cfg: &Value) -> BTreeMap<String, Vec<String>> {
+/// One `herding.agents` entry, resolved: `argv` is the (unsubstituted)
+/// token array — either the plain array shape or an object shape's
+/// `"argv"` field — and `env` is that object shape's optional `"env"` map
+/// (D4), empty for the array shape, the built-ins, and every entry the
+/// pre-D4 array-only registry ever produced.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct RegistryEntry {
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+}
+
+/// D3 — the two built-in herd names the registry pre-seeds so `--agent
+/// agy-flash` / `--agent claude-sonnet` work with zero `herding.agents`
+/// config: same argv `.bee/config-sample-cli-executors.json` already shows
+/// as a live example, carrying no env.
+fn built_in_agents() -> BTreeMap<String, RegistryEntry> {
     let mut out = BTreeMap::new();
+    out.insert(
+        "claude-sonnet".to_string(),
+        RegistryEntry {
+            argv: ["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+            env: BTreeMap::new(),
+        },
+    );
+    out.insert(
+        "agy-flash".to_string(),
+        RegistryEntry {
+            argv: ["agy", "--dangerously-skip-permissions"].iter().map(|s| s.to_string()).collect(),
+            env: BTreeMap::new(),
+        },
+    );
+    out
+}
+
+/// Validates one argv token array the same way `agent_command_tokens`
+/// already validates `herding.agent_command`'s: non-empty, every element a
+/// newline-free string. `None` on any violation — the caller decides what
+/// "invalid" means for its own shape (fall back for `agent_command`, drop
+/// the entry for the registry).
+fn parse_argv_tokens(tokens: &[Value]) -> Option<Vec<String>> {
+    if tokens.is_empty() {
+        return None;
+    }
+    let mut collected = Vec::with_capacity(tokens.len());
+    for t in tokens {
+        match t.as_str() {
+            Some(s) if !s.contains('\n') => collected.push(s.to_string()),
+            _ => return None,
+        }
+    }
+    Some(collected)
+}
+
+/// D4's env-key rule: `[A-Za-z_][A-Za-z0-9_]*` — a plain shell identifier,
+/// checked by hand (no regex dependency needed for one anchored pattern).
+fn is_valid_env_key(key: &str) -> bool {
+    let mut chars = key.chars();
+    match chars.next() {
+        Some(c) if c == '_' || c.is_ascii_alphabetic() => {}
+        _ => return false,
+    }
+    chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
+}
+
+/// D4's `env` map: every key must pass `is_valid_env_key`, every value a
+/// newline-free string. `None` on any single violation — the caller drops
+/// the WHOLE entry on it (fail-open-per-entry, never a partial env).
+fn parse_env_map(env: &Map<String, Value>) -> Option<BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for (k, v) in env {
+        if !is_valid_env_key(k) {
+            return None;
+        }
+        match v.as_str() {
+            Some(s) if !s.contains('\n') => {
+                out.insert(k.clone(), s.to_string());
+            }
+            _ => return None,
+        }
+    }
+    Some(out)
+}
+
+/// D4's two `herding.agents` entry shapes: the plain argv array (env always
+/// empty), or `{"argv": [...], "env": {...}}` — `argv` validated exactly
+/// like the array shape, `env` optional (absent = empty) and validated by
+/// `parse_env_map`. `None` on any shape mismatch or validation failure —
+/// the caller drops the whole entry, fail-open-per-entry.
+fn parse_registry_entry(value: &Value) -> Option<RegistryEntry> {
+    match value {
+        Value::Array(tokens) => parse_argv_tokens(tokens).map(|argv| RegistryEntry { argv, env: BTreeMap::new() }),
+        Value::Object(obj) => {
+            let Value::Array(tokens) = obj.get("argv")? else { return None };
+            let argv = parse_argv_tokens(tokens)?;
+            let env = match obj.get("env") {
+                None => BTreeMap::new(),
+                Some(Value::Object(env_obj)) => parse_env_map(env_obj)?,
+                Some(_) => return None,
+            };
+            Some(RegistryEntry { argv, env })
+        }
+        _ => None,
+    }
+}
+
+/// herd-registry D1 (+ D3's built-ins, D4's env shape) — `herding.agents`:
+/// starts from `built_in_agents()`, then overlays every config entry that
+/// parses (`parse_registry_entry`), a same-name config entry replacing the
+/// built-in outright. A malformed config entry is dropped, fail-open per
+/// entry — it never poisons the rest of the registry, and never removes a
+/// built-in it failed to override. `BTreeMap` keeps the key order the
+/// `UnknownAgent` error lists deterministic.
+fn agent_registry(cfg: &Value) -> BTreeMap<String, RegistryEntry> {
+    let mut out = built_in_agents();
     let Some(Value::Object(agents)) = cfg.get("herding").and_then(|h| h.get("agents")) else {
         return out;
     };
     for (name, value) in agents {
-        let Value::Array(tokens) = value else { continue };
-        if tokens.is_empty() {
-            continue;
-        }
-        let mut collected = Vec::with_capacity(tokens.len());
-        let mut valid = true;
-        for t in tokens {
-            match t.as_str() {
-                Some(s) if !s.contains('\n') => collected.push(s.to_string()),
-                _ => {
-                    valid = false;
-                    break;
-                }
-            }
-        }
-        if valid {
-            out.insert(name.clone(), collected);
+        if let Some(entry) = parse_registry_entry(value) {
+            out.insert(name.clone(), entry);
         }
     }
     out
@@ -166,25 +262,26 @@ fn agent_registry(cfg: &Value) -> BTreeMap<String, Vec<String>> {
 
 /// The one place a name resolves against `herding.agents` (herd-registry
 /// D2): token 0 becomes the kind, the rest the args, each substituted the
-/// same way a plain `herding.agent_command` array is. An unknown name
-/// lists every registry key.
+/// same way a plain `herding.agent_command` array is; the entry's `env`
+/// (D4) rides along unsubstituted. An unknown name lists every registry
+/// key (built-ins included, since `agent_registry` always seeds them).
 fn resolve_from_registry(
-    registry: &BTreeMap<String, Vec<String>>,
+    registry: &BTreeMap<String, RegistryEntry>,
     name: &str,
-) -> Result<(String, Vec<String>), AgentCommandError> {
-    let Some(tokens) = registry.get(name) else {
+) -> Result<(String, Vec<String>, BTreeMap<String, String>), AgentCommandError> {
+    let Some(entry) = registry.get(name) else {
         return Err(AgentCommandError::UnknownAgent {
             name: name.to_string(),
             known: registry.keys().cloned().collect(),
         });
     };
-    let substituted: Vec<String> = tokens.iter().map(|t| substitute_model(t)).collect();
+    let substituted: Vec<String> = entry.argv.iter().map(|t| substitute_model(t)).collect();
     let Some((kind, args)) = substituted.split_first() else {
         // agent_registry() never inserts an empty entry, but fail closed
         // rather than panic if it ever did.
         return Err(AgentCommandError::Empty { key: "herding.agents" });
     };
-    Ok((kind.clone(), args.to_vec()))
+    Ok((kind.clone(), args.to_vec(), entry.env.clone()))
 }
 
 /// D14's split: token 0 becomes the agent kind (herdr's `--kind`), the
@@ -208,7 +305,7 @@ fn resolve_from_registry(
 pub(crate) fn resolve_agent_command(
     cfg: &Value,
     agent: Option<&str>,
-) -> Result<(String, Vec<String>), AgentCommandError> {
+) -> Result<(String, Vec<String>, BTreeMap<String, String>), AgentCommandError> {
     let registry = agent_registry(cfg);
     if let Some(name) = agent {
         return resolve_from_registry(&registry, name);
@@ -223,7 +320,10 @@ pub(crate) fn resolve_agent_command(
         // non-empty default), but fail closed rather than panic if it ever did.
         return Err(AgentCommandError::Empty { key: "herding.agent_command" });
     };
-    Ok((kind.clone(), args.to_vec()))
+    // D4: the plain `herding.agent_command` array path names no registry
+    // entry, so it carries no env — env is a `herding.agents` object-shape
+    // feature only.
+    Ok((kind.clone(), args.to_vec(), BTreeMap::new()))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -354,7 +454,19 @@ fn build_wave_backend_and_run<B: WorkerBackend + Sync>(
     // `bee herding wave` names no per-worker agent (herd-registry D2 covers
     // only `--agent`, a tier slot's `agent`, and a string `agent_command`) —
     // this caller stays on the `None` arm, unchanged.
-    let (kind, args) = resolve_agent_command(cfg, None)?;
+    let (kind, args, env) = resolve_agent_command(cfg, None)?;
+    // D4's per-agent env is NOT applied on this path, deliberately: this
+    // function never splits a pane — `fleet::backend::herdr::HerdrBackend`
+    // (the backend `construct_backend` builds) starts an agent into a pane
+    // id it is HANDED (`worker.name`), already split by whoever prepared
+    // the wave's workers (see `HerdrBackend`'s own `decide_start_for` doc:
+    // "splitting a pane needs a worktree cwd this generic WorkerSpec does
+    // not carry"). There is no post-split/pre-start point in THIS file to
+    // send an export line into, and the `agent start` call itself lives in
+    // `crates/fleet/src/backend/herdr.rs` — a different crate, out of this
+    // cell's file scope — so env stays unapplied here rather than reaching
+    // past that boundary.
+    let _ = &env;
     let backend = construct_backend(kind, args);
     Ok(run_wave_and_record(&backend, root, wave_id, started_at, inputs, wave))
 }
@@ -794,7 +906,7 @@ mod tests {
 
     #[test]
     fn absent_config_falls_back_to_the_documented_default() {
-        let (kind, args) = resolve_agent_command(&Value::Null, None).unwrap();
+        let (kind, args, _env) = resolve_agent_command(&Value::Null, None).unwrap();
         assert_eq!(kind, "claude");
         assert_eq!(args, vec!["--model", "sonnet", "--permission-mode", "bypassPermissions"]);
     }
@@ -802,7 +914,7 @@ mod tests {
     #[test]
     fn a_configured_command_splits_token_0_from_the_rest() {
         let cfg = serde_json::json!({"herding": {"agent_command": ["codex", "--flag", "value"]}});
-        let (kind, args) = resolve_agent_command(&cfg, None).unwrap();
+        let (kind, args, _env) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag", "value"]);
     }
@@ -810,7 +922,7 @@ mod tests {
     #[test]
     fn model_placeholder_is_substituted_per_token_never_joined() {
         let cfg = serde_json::json!({"herding": {"agent_command": ["claude", "--model", "{MODEL}", "--x={MODEL}"]}});
-        let (kind, args) = resolve_agent_command(&cfg, None).unwrap();
+        let (kind, args, _env) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "claude");
         assert_eq!(args, vec!["--model", "sonnet", "--x=sonnet"]);
     }
@@ -822,7 +934,7 @@ mod tests {
         // like "gemini", a typo, anything) resolves and reaches backend
         // construction unchanged.
         let cfg = serde_json::json!({"herding": {"agent_command": ["gemini", "--x"]}});
-        let (kind, args) = resolve_agent_command(&cfg, None).unwrap();
+        let (kind, args, _env) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "gemini");
         assert_eq!(args, vec!["--x"]);
     }
@@ -854,7 +966,7 @@ mod tests {
     #[test]
     fn a_named_lookup_returns_the_registry_argv() {
         let cfg = registry_cfg();
-        let (kind, args) = resolve_agent_command(&cfg, Some("codex-herd")).unwrap();
+        let (kind, args, _env) = resolve_agent_command(&cfg, Some("codex-herd")).unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag", "value"]);
     }
@@ -886,7 +998,7 @@ mod tests {
     fn a_string_valued_agent_command_aliases_through_the_registry() {
         let mut cfg = registry_cfg();
         cfg["herding"]["agent_command"] = Value::String("gemini-herd".to_string());
-        let (kind, args) = resolve_agent_command(&cfg, None).unwrap();
+        let (kind, args, _env) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "gemini");
         assert_eq!(args, vec!["--x"]);
     }
@@ -909,7 +1021,7 @@ mod tests {
         // consulted, today's split behavior unchanged.
         let mut cfg = registry_cfg();
         cfg["herding"]["agent_command"] = serde_json::json!(["claude", "--flag"]);
-        let (kind, args) = resolve_agent_command(&cfg, None).unwrap();
+        let (kind, args, _env) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "claude");
         assert_eq!(args, vec!["--flag"]);
     }
@@ -926,7 +1038,7 @@ mod tests {
                 }
             }
         });
-        let (kind, _args) = resolve_agent_command(&cfg, Some("good")).unwrap();
+        let (kind, _args, _env) = resolve_agent_command(&cfg, Some("good")).unwrap();
         assert_eq!(kind, "codex");
         for bad in ["bad-empty", "bad-non-string", "bad-newline"] {
             let err = resolve_agent_command(&cfg, Some(bad)).unwrap_err();
@@ -936,6 +1048,116 @@ mod tests {
             assert!(!known.contains(&bad.to_string()), "{known:?} must not carry dropped entry {bad:?}");
             assert!(known.contains(&"good".to_string()));
         }
+    }
+
+    // ─── D3: built-in registry defaults ─────────────────────────────────
+
+    #[test]
+    fn built_in_names_resolve_with_zero_herding_config() {
+        let (kind, args, env) = resolve_agent_command(&Value::Null, Some("claude-sonnet")).unwrap();
+        assert_eq!(kind, "claude");
+        assert_eq!(args, vec!["--model", "sonnet", "--permission-mode", "bypassPermissions"]);
+        assert!(env.is_empty());
+
+        let (kind, args, env) = resolve_agent_command(&Value::Null, Some("agy-flash")).unwrap();
+        assert_eq!(kind, "agy");
+        assert_eq!(args, vec!["--dangerously-skip-permissions"]);
+        assert!(env.is_empty());
+    }
+
+    #[test]
+    fn a_same_name_config_entry_overrides_the_built_in() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "agy-flash": ["agy", "--custom-flag"],
+                }
+            }
+        });
+        let (kind, args, _env) = resolve_agent_command(&cfg, Some("agy-flash")).unwrap();
+        assert_eq!(kind, "agy");
+        assert_eq!(args, vec!["--custom-flag"]);
+    }
+
+    #[test]
+    fn unknown_agent_listing_always_includes_the_built_ins() {
+        let err = resolve_agent_command(&Value::Null, Some("no-such-herd")).unwrap_err();
+        let AgentCommandError::UnknownAgent { known, .. } = &err else {
+            panic!("expected UnknownAgent, got {err:?}");
+        };
+        for key in ["claude-sonnet", "agy-flash"] {
+            assert!(known.contains(&key.to_string()), "{known:?} must list built-in {key:?}");
+        }
+    }
+
+    // ─── D4: per-agent env on the object-shape registry entry ──────────
+
+    #[test]
+    fn an_object_shape_entry_parses_argv_and_carries_env() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "codex-envd": {
+                        "argv": ["codex", "--flag"],
+                        "env": {"API_KEY": "secret-value", "FOO_2": "bar"},
+                    }
+                }
+            }
+        });
+        let (kind, args, env) = resolve_agent_command(&cfg, Some("codex-envd")).unwrap();
+        assert_eq!(kind, "codex");
+        assert_eq!(args, vec!["--flag"]);
+        assert_eq!(env.get("API_KEY").map(String::as_str), Some("secret-value"));
+        assert_eq!(env.get("FOO_2").map(String::as_str), Some("bar"));
+    }
+
+    #[test]
+    fn an_object_shape_entry_with_no_env_key_resolves_with_an_empty_env() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "codex-noenv": { "argv": ["codex"] }
+                }
+            }
+        });
+        let (_kind, _args, env) = resolve_agent_command(&cfg, Some("codex-noenv")).unwrap();
+        assert!(env.is_empty());
+    }
+
+    #[test]
+    fn a_bad_env_key_or_newline_value_drops_the_whole_entry_not_just_env() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "good": { "argv": ["codex"], "env": {"OK": "v"} },
+                    "bad-key": { "argv": ["codex"], "env": {"1BAD": "v"} },
+                    "bad-key-dash": { "argv": ["codex"], "env": {"BAD-KEY": "v"} },
+                    "bad-value-newline": { "argv": ["codex"], "env": {"OK": "line1\nline2"} },
+                }
+            }
+        });
+        let (_kind, _args, env) = resolve_agent_command(&cfg, Some("good")).unwrap();
+        assert_eq!(env.get("OK").map(String::as_str), Some("v"));
+        for bad in ["bad-key", "bad-key-dash", "bad-value-newline"] {
+            let err = resolve_agent_command(&cfg, Some(bad)).unwrap_err();
+            let AgentCommandError::UnknownAgent { known, .. } = &err else {
+                panic!("expected UnknownAgent for dropped entry {bad:?}, got {err:?}");
+            };
+            assert!(!known.contains(&bad.to_string()), "{known:?} must not carry dropped entry {bad:?}");
+        }
+    }
+
+    #[test]
+    fn array_shape_entries_never_carry_env() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "plain-array": ["codex", "--x"],
+                }
+            }
+        });
+        let (_kind, _args, env) = resolve_agent_command(&cfg, Some("plain-array")).unwrap();
+        assert!(env.is_empty());
     }
 
     // ─── the caller: a wave run through a fake backend ─────────────────
@@ -1038,7 +1260,7 @@ mod tests {
         // (e.g. always "claude", vec![]) still fails when the configured
         // command differs, as it does here.
         let cfg = serde_json::json!({"herding": {"agent_command": ["codex", "--flag", "value"]}});
-        let (expected_kind, expected_args) = resolve_agent_command(&cfg, None).unwrap();
+        let (expected_kind, expected_args, _expected_env) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(expected_kind, "codex", "sanity: this test's cfg must not resolve to the default");
 
         let tmp = tempfile::tempdir().unwrap();
