@@ -638,5 +638,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-20T02:49:57.106Z"
+  },
+  "herding-brief-file": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T03:11:18.378Z"
   }
 }
