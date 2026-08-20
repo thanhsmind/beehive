@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-exec-economics",
   "mode": "feature",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,8 +11,13 @@
     "uat": false
   },
   "summary": "Feature \"herding-exec-economics\" started at phase \"planning\".",
-  "next_action": "Merged into main at d618dad; capture what settled, then bee close --feature herding-exec-economics.",
+  "next_action": "bee close finished \"herding-exec-economics\" — feature is closed.",
   "created_at": "2026-08-20T03:37:40.632Z",
-  "run_state": null,
-  "waiting_on": null
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Nhận yêu cầu chuyển tiếp từ session kia: **sổ đăng ký \"herd\" theo tên** — đặt tên agent một chỗ, các slot trỏ theo tên. Ý hay thật (hết lặp",
+    "asked_at": "2026-08-20T04:19:33.610Z",
+    "session": "1adb69d1-67be-4463-8349-af8832af8a32"
+  }
 }

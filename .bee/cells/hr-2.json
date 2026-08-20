@@ -1,0 +1,65 @@
+{
+  "id": "hr-2",
+  "feature": "herd-registry",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Tier slots carry the herd name: kind:herding gains agent; prepare appends --agent",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "docs/history/herd-registry/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs"
+  ],
+  "action": "Per D2: normalize_tier_value keeps a trimmed optional string field agent on the kind:herding shape (empty/whitespace dropped); Resolved::Herding carries agent: Option<String>; resolve_tier passes it through; prepare_dispatch's herding-exec arm appends --agent \"<name>\" to the command when present (quoted, before --json or after — pick one and pin it in the test). model_guard: touch ONLY if the Resolved variant change forces a compile fix — behavior unchanged. Tests: normalize round-trips agent; prepare command string carries --agent exactly when the slot names one; slot without agent emits the unchanged command.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+  "must_haves": {
+    "truths": [
+      "{kind:herding, agent:X} produces a prepare command carrying --agent \"X\"",
+      "A herding slot without agent emits the pre-existing command byte-identically"
+    ]
+  },
+  "decisions": [
+    "herd-registry D2"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hr-2",
+    "outcome": "kind:herding gains agent; prepare appends --agent when the slot names one, byte-identical otherwise",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T04:32:59.695Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T04:24:03.558Z",
+    "report": {
+      "outcome": "kind:herding gains agent; prepare appends --agent when the slot names one, byte-identical otherwise",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers && model_guard — 163+29 passed, 0 failed — scoped to the herding-agent seam in models.rs/prepare.rs/tests.rs, verified in an isolated tmp worktree (HEAD + this diff) since the live worktree carries hr-1's uncommitted, out-of-scope WIP that does not yet compile",
+      "commit": "f1ab4187",
+      "deviations": [
+        "Ran the scoped cargo test in an isolated tmp git worktree (HEAD + this diff applied) instead of the live worktree, because hr-1's uncommitted, in-scope-excluded WIP in herding/wave.rs and herding/run.rs currently leaves the shared crate non-compiling; my three files compile and pass green independent of that WIP."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

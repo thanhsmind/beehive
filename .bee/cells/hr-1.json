@@ -1,0 +1,68 @@
+{
+  "id": "hr-1",
+  "feature": "herd-registry",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "herding.agents registry + named resolution in resolve_agent_command and bee herding run --agent",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "docs/history/herd-registry/CONTEXT.md",
+    "docs/history/herd-registry/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "action": "Per D1/D2: (a) wave.rs reads herding.agents (map name -> argv token array; per-entry validation identical to agent_command_tokens: non-empty array of newline-free strings, malformed ENTRY ignored fail-open). (b) resolve_agent_command gains an optional agent-name parameter: Some(name) resolves through the registry — unknown name returns a typed error whose message LISTS the registry's key names; None keeps today's behavior, EXCEPT herding.agent_command being a plain JSON STRING now resolves that string through the registry the same way. (c) run.rs gains --agent <name>, threading the name to resolve_agent_command for the spawn; --continue ignores --agent (the pane already exists). Registry payload: document the new flag on herding.run; examples[0] stays byte-identical and green. Tests: named lookup returns the registry argv; unknown name error text contains every registry key; string-valued agent_command aliases through the registry; absent agent keeps the default; wave callers unchanged (pass None).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test registry_dispatch",
+  "must_haves": {
+    "truths": [
+      "--agent <name> spawns with the registry argv for that name",
+      "Unknown herd name refuses typed, listing the registry keys",
+      "A string herding.agent_command resolves through the registry; absent config keeps the default"
+    ]
+  },
+  "decisions": [
+    "herd-registry D1",
+    "herd-registry D2"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hr-1",
+    "outcome": "herding.agents registry + named resolution wired into resolve_agent_command and bee herding run --agent",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T04:33:55.933Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T04:24:03.471Z",
+    "report": {
+      "outcome": "herding.agents registry + named resolution wired into resolve_agent_command and bee herding run --agent",
+      "commit": "4e41808c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding and --test registry_dispatch — 144 herding tests + 8 registry_dispatch tests, all green — cell verify scope, both declared commands run",
+      "deviations": [
+        "verify command used the absolute cargo path (/home/thanhsmind/.cargo/bin/cargo) instead of a PATH= prefix — write-guard refused the compound PATH= shell form"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 342 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
