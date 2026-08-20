@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Bare-run agent resolution shaped; CONTEXT locked D1-D5",
   "next_action": "Cells hba-1/hba-2 wait for herding-worker-standalone and herding-limit-pause to land on main",
   "created_at": "2026-08-20T11:29:48.504Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Ghi nhận từ session kia: khi merge sẽ dừng ở cửa UAT chờ user duyệt — tôi **không** dùng `--skip-uat`.",
-    "asked_at": "2026-08-20T11:56:10.335Z",
-    "session": "b8251975-37ac-4380-a180-97e680aea639"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "small",

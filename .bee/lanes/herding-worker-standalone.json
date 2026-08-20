@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Không còn gì chờ bạn. Việc nền duy nhất: `beehive-2c` đang chạy feature của nó — xong nó sẽ báo, và UAT cuối vẫn về tay bạn.",
-    "asked_at": "2026-08-20T11:51:53.969Z",
-    "session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5"
+    "subject": "(turn ended)",
+    "asked_at": "2026-08-20T12:00:02.051Z",
+    "session": "d623fe73-280e-43e5-ae4f-1aae040ce1ea"
   }
 }
