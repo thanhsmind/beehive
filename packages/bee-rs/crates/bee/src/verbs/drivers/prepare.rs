@@ -606,7 +606,7 @@ pub(crate) fn prepare_dispatch(
             }
         }
     } else {
-        let r = resolve_tier(&models, tier_token, runtime, purpose_is_gather(kind));
+        let r = resolve_tier(&models, tier_token, runtime, kind);
         if let Resolved::Refused { slot } = &r {
             let mut refusal = Map::new();
             refusal.insert("ok".into(), Value::Bool(false));

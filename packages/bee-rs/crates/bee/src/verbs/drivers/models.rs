@@ -239,10 +239,11 @@ pub(crate) enum Resolved {
     Refused {
         slot: String,
     },
-    /// herding-tier D1: `{kind:"herding"}` on a cell-purpose slot — the
-    /// dispatch seam (ht-3) turns this into the `bee herding run` Bash
-    /// payload. Never produced for a gather purpose (D3 routes those to the
-    /// runtime's default model instead) and never a meaningful advisor.
+    /// herding-tier D1/D3, herding-review-slots D1/D2: `{kind:"herding"}` on
+    /// a cell, reviewer, or advisor purpose slot — the dispatch seam (ht-3)
+    /// turns this into the `bee herding run` Bash payload for every one of
+    /// those three purposes. Never produced for a gather purpose (D3/D1
+    /// route those to the runtime's default model instead).
     /// herd-registry D2: `agent` carries the optional `herding.agents` name
     /// named on the slot (`{kind:"herding", agent:"<name>"}`); prepare's
     /// herding-exec arm appends `--agent "<name>"` when present.
@@ -297,12 +298,17 @@ pub(crate) fn composite_resolved(obj: &Map<String, Value>) -> Option<Resolved> {
 
 /// provenance: state.mjs resolveTier(root, slot, runtime, purpose). `slot`
 /// here is always a CONFIGURABLE_SLOTS member or 'advisor' (coerced to
-/// 'generation' exactly like Node); `for_gather` is purposeForKind's verdict.
+/// 'generation' exactly like Node); `kind` is the dispatch-prepare purpose
+/// ("cell" | "gather" | "reviewer" | "advisor" — DISPATCH_KINDS). The cli
+/// branch below still gates on `purpose_is_gather(kind)`, byte-identical to
+/// before; herding-review-slots D1/D2 widens the herding branch to route on
+/// `kind` directly, since "cell purpose" and "herding purpose" are no
+/// longer the same question.
 pub(crate) fn resolve_tier(
     models: &Map<String, Value>,
     slot: &str,
     runtime: &str,
-    for_gather: bool,
+    kind: &str,
 ) -> Resolved {
     if slot == "ceiling" {
         return Resolved::Inherit;
@@ -321,22 +327,25 @@ pub(crate) fn resolve_tier(
         return Resolved::Model { model: model.clone(), effort: None };
     }
     let Some(obj) = value.as_object() else { return Resolved::Budget };
+    // cli purpose gate — unchanged: refused for a cell-execution dispatch,
+    // served for gather/reviewer/advisor exactly as before.
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "cli") {
-        if !for_gather {
+        if !purpose_is_gather(kind) {
             return Resolved::Refused { slot: s.to_string() };
         }
         return Resolved::Cli {
             command: truthy_str(obj.get("command")).unwrap_or_default().to_string(),
         };
     }
-    // herding-tier D1/D3: the exact inverse of the cli branch above — a
-    // cell purpose routes to the herding-exec pane (ht-3 builds that
-    // payload), a gather purpose keeps serving the runtime's own default
-    // model for this slot (never Herding, never a refusal). A runtime
-    // whose default for this slot is null (codex/opencode) reads Budget,
-    // same as an unconfigured slot always does.
+    // herding-review-slots D1/D2 (widens herding-tier D1/D3's cell-only
+    // scope): cell, reviewer, and advisor purposes route to the
+    // herding-exec pane (ht-3/hrv-1 build that payload); only a gather
+    // purpose keeps serving the runtime's own default model for this slot
+    // (never Herding, never a refusal). A runtime whose default for this
+    // slot is null (codex/opencode) reads Budget, same as an unconfigured
+    // slot always does.
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
-        if !for_gather {
+        if kind != "gather" {
             let agent = match obj.get("agent") {
                 Some(Value::String(s)) => Some(s.clone()),
                 _ => None,
@@ -378,10 +387,17 @@ pub(crate) fn resolve_advisor(models: &Map<String, Value>, runtime: &str) -> Opt
         return Some(Resolved::Model { model: model.clone(), effort: None });
     }
     let obj = value.as_object()?;
-    // herding-tier D1: an advisor never executes a cell, so a herding-shaped
-    // advisor slot is not meaningful — read as "no advisor", same as unset.
+    // herding-review-slots D1/D2: an advisor is one task in, one result out
+    // — the same shape as the herding-exec pane's own read-only job — so a
+    // herding-shaped advisor slot now resolves to Resolved::Herding
+    // (widening herding-tier D1's cell-only scope) instead of reading as
+    // "no advisor".
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
-        return None;
+        let agent = match obj.get("agent") {
+            Some(Value::String(s)) => Some(s.clone()),
+            _ => None,
+        };
+        return Some(Resolved::Herding { agent });
     }
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "cli") {
         return Some(Resolved::Cli {

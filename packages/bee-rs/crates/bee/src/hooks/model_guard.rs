@@ -1380,6 +1380,30 @@ mod tests {
         assert_eq!(d["tier"], "generation");
     }
 
+    // herding-review-slots D1: this hook has no purpose concept of its own
+    // — it denies an Agent/Task dispatch by the RESOLVED tier alone, so a
+    // herding-shaped review slot was already denied for a reviewer-purpose
+    // dispatch before this feature (the same arm the generation/cell tests
+    // above pin). This test names that coverage explicitly rather than
+    // leaving D1's "reviewer" half unproven by omission.
+    #[test]
+    fn a_herding_shaped_review_slot_denies_the_reviewer_marker_too() {
+        let herding = fixture(&json!({"models": {"claude": {
+            "extraction": "haiku",
+            "generation": "sonnet",
+            "review": {"kind": "herding", "agent": "agy-flash"}
+        }}}));
+        let (code, stderr) = run_payload(
+            herding.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: review] check", "subagent_type": "bee-review"}}),
+        );
+        assert_eq!(code, 2, "a herding-shaped review slot cannot be an in-family Agent/Task subagent");
+        assert!(stderr.contains("herding-executor pane") && stderr.contains("herding run --task-file - --json"));
+        let d = last_jsonl(dispatch_log(herding.path())).unwrap();
+        assert_eq!(d["transport"], "herding-tier-denied");
+        assert_eq!(d["tier"], "review");
+    }
+
     #[test]
     fn an_inferred_cli_tier_is_still_refused() {
         let cli = fixture(&json!({"models": {"claude": {

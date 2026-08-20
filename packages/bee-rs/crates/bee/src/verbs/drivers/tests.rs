@@ -285,23 +285,23 @@ use std::time::Instant;
         let m = models_from("{}");
         // Defaults (DEFAULT_MODELS).
         assert_eq!(
-            resolve_tier(&m, "generation", "claude", false),
+            resolve_tier(&m, "generation", "claude", "cell"),
             Resolved::Model { model: "sonnet".into(), effort: None }
         );
         assert_eq!(
-            resolve_tier(&m, "review", "claude", true),
+            resolve_tier(&m, "review", "claude", "gather"),
             Resolved::Model { model: "opus".into(), effort: None }
         );
         // codex defaults are null -> budget; review falls back to generation
         // (also null) -> budget.
-        assert_eq!(resolve_tier(&m, "generation", "codex", false), Resolved::Budget);
-        assert_eq!(resolve_tier(&m, "review", "codex", true), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "generation", "codex", "cell"), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "review", "codex", "gather"), Resolved::Budget);
         // ceiling is never configured.
-        assert_eq!(resolve_tier(&m, "ceiling", "claude", false), Resolved::Inherit);
+        assert_eq!(resolve_tier(&m, "ceiling", "claude", "cell"), Resolved::Inherit);
         // An unknown slot ('advisor') coerces to generation — the trap
         // resolveAdvisor exists to avoid.
         assert_eq!(
-            resolve_tier(&m, "advisor", "claude", true),
+            resolve_tier(&m, "advisor", "claude", "gather"),
             Resolved::Model { model: "sonnet".into(), effort: None }
         );
 
@@ -310,25 +310,25 @@ use std::time::Instant;
             r#"{"claude":{"generation":{"kind":"cli","command":"glm run"},"review":null}}"#,
         );
         assert_eq!(
-            resolve_tier(&m, "review", "claude", true),
+            resolve_tier(&m, "review", "claude", "gather"),
             Resolved::Cli { command: "glm run".into() }
         );
         // cli + cell purpose -> typed refusal naming the RESOLVED slot.
         assert_eq!(
-            resolve_tier(&m, "review", "claude", false),
+            resolve_tier(&m, "review", "claude", "cell"),
             Resolved::Refused { slot: "review".into() }
         );
 
         // {model, effort}
         let m = models_from(r#"{"claude":{"generation":{"model":"opus","effort":"high"}}}"#);
         assert_eq!(
-            resolve_tier(&m, "generation", "claude", false),
+            resolve_tier(&m, "generation", "claude", "cell"),
             Resolved::Model { model: "opus".into(), effort: Some("high".into()) }
         );
         // An invalid effort is dropped by normalize.
         let m = models_from(r#"{"claude":{"generation":{"model":"opus","effort":"turbo"}}}"#);
         assert_eq!(
-            resolve_tier(&m, "generation", "claude", false),
+            resolve_tier(&m, "generation", "claude", "cell"),
             Resolved::Model { model: "opus".into(), effort: None }
         );
 
@@ -337,7 +337,7 @@ use std::time::Instant;
             r#"{"codex":{"generation":{"primary":{"kind":"native","model":"gpt-5","effort":"high"},"fallback_policy":"explicit-only","fallback":{"kind":"cli","command":"codex exec"}}}}"#,
         );
         assert_eq!(
-            resolve_tier(&m, "generation", "codex", false),
+            resolve_tier(&m, "generation", "codex", "cell"),
             Resolved::Native {
                 model: "gpt-5".into(),
                 effort: Some("high".into()),
@@ -351,17 +351,18 @@ use std::time::Instant;
         let m = models_from(
             r#"{"codex":{"generation":{"primary":{"kind":"native","model":"gpt-5"},"fallback":{"kind":"cli","command":"codex exec"}}}}"#,
         );
-        match resolve_tier(&m, "generation", "codex", false) {
+        match resolve_tier(&m, "generation", "codex", "cell") {
             Resolved::Native { fallback, .. } => assert_eq!(fallback, None),
             other => panic!("expected native, got {other:?}"),
         }
     }
 
-    // herding-tier D1/D3: `{kind:"herding"}` is a router value — a cell
-    // purpose resolves to Resolved::Herding (ht-3 turns that into the
-    // herding-exec Bash payload); a gather purpose keeps serving the
-    // runtime's own default model for that slot, the exact inverse of the
-    // cli branch just above.
+    // herding-review-slots D1/D2 (widens herding-tier D1/D3's cell-only
+    // scope): `{kind:"herding"}` is a router value — cell, reviewer, and
+    // advisor purposes resolve to Resolved::Herding (ht-3/hrv-1 turn that
+    // into the herding-exec Bash payload); only a gather purpose keeps
+    // serving the runtime's own default model for that slot, the exact
+    // inverse of the cli branch just above.
     #[test]
     fn normalize_tier_value_accepts_and_round_trips_the_herding_shape() {
         assert_eq!(
@@ -384,24 +385,45 @@ use std::time::Instant;
         // cell purpose -> Resolved::Herding, never a refusal.
         let m = models_from(r#"{"claude":{"generation":{"kind":"herding"}}}"#);
         assert_eq!(
-            resolve_tier(&m, "generation", "claude", false),
+            resolve_tier(&m, "generation", "claude", "cell"),
             Resolved::Herding { agent: None }
         );
 
         // gather purpose on the same slot -> the runtime's DEFAULT model for
         // that slot (claude generation -> sonnet), not Herding.
         assert_eq!(
-            resolve_tier(&m, "generation", "claude", true),
+            resolve_tier(&m, "generation", "claude", "gather"),
             Resolved::Model { model: "sonnet".into(), effort: None }
         );
 
         // A runtime whose default for the slot is null (codex) reads Budget
         // on the gather purpose — never a refusal, never Herding.
         let m = models_from(r#"{"codex":{"generation":{"kind":"herding"}}}"#);
-        assert_eq!(resolve_tier(&m, "generation", "codex", true), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "generation", "codex", "gather"), Resolved::Budget);
         assert_eq!(
-            resolve_tier(&m, "generation", "codex", false),
+            resolve_tier(&m, "generation", "codex", "cell"),
             Resolved::Herding { agent: None }
+        );
+    }
+
+    // herding-review-slots D1: the widened split — reviewer AND advisor
+    // purposes resolve a herding-shaped slot to Herding exactly like a cell
+    // purpose does; only "gather" keeps the default-model fallback.
+    #[test]
+    fn resolve_tier_routes_reviewer_and_advisor_purposes_to_herding_too() {
+        let m = models_from(r#"{"claude":{"review":{"kind":"herding","agent":"agy-flash"}}}"#);
+        assert_eq!(
+            resolve_tier(&m, "review", "claude", "reviewer"),
+            Resolved::Herding { agent: Some("agy-flash".into()) }
+        );
+        // resolve_tier itself is purpose-agnostic beyond the cell/gather
+        // split it already knew — an "advisor" purpose on the same shape
+        // also resolves to Herding (resolve_advisor is the production path
+        // for a real --kind advisor dispatch; this pins resolve_tier's own
+        // symmetry so the two doors never drift apart).
+        assert_eq!(
+            resolve_tier(&m, "review", "claude", "advisor"),
+            Resolved::Herding { agent: Some("agy-flash".into()) }
         );
     }
 
@@ -436,16 +458,29 @@ use std::time::Instant;
             r#"{"claude":{"generation":{"kind":"herding","agent":"codex-cli"}}}"#,
         );
         assert_eq!(
-            resolve_tier(&m, "generation", "claude", false),
+            resolve_tier(&m, "generation", "claude", "cell"),
             Resolved::Herding { agent: Some("codex-cli".into()) }
         );
     }
 
+    // herding-review-slots D1: a herding-shaped advisor slot now resolves
+    // to Resolved::Herding (widening herding-tier D1's cell-only scope),
+    // never "no advisor" — an advisor consult is one task in, one result
+    // out, the same shape as the herding-exec pane's own read-only job.
     #[test]
-    fn resolve_advisor_treats_a_herding_shaped_slot_as_no_advisor() {
+    fn resolve_advisor_treats_a_herding_shaped_slot_as_herding() {
         assert_eq!(
             resolve_advisor(&models_from(r#"{"claude":{"advisor":{"kind":"herding"}}}"#), "claude"),
-            None
+            Some(Resolved::Herding { agent: None })
+        );
+        // herd-registry D2: `agent` carries through, same as every other
+        // herding-shaped slot.
+        assert_eq!(
+            resolve_advisor(
+                &models_from(r#"{"claude":{"advisor":{"kind":"herding","agent":"named-herd"}}}"#),
+                "claude"
+            ),
+            Some(Resolved::Herding { agent: Some("named-herd".into()) })
         );
     }
 
@@ -478,30 +513,30 @@ use std::time::Instant;
         // no-baked-in-default treatment codex gets — no established model
         // naming convention to assume).
         let m = models_from("{}");
-        assert_eq!(resolve_tier(&m, "generation", "opencode", false), Resolved::Budget);
-        assert_eq!(resolve_tier(&m, "extraction", "opencode", false), Resolved::Budget);
-        assert_eq!(resolve_tier(&m, "review", "opencode", true), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "generation", "opencode", "cell"), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "extraction", "opencode", "cell"), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "review", "opencode", "gather"), Resolved::Budget);
 
         // A configured models.opencode block resolves exactly like claude/codex do.
         let m = models_from(
             r#"{"opencode":{"extraction":"opencode/ling-3.0-tiny-free","generation":"opencode/big-pickle","review":"opencode/nemotron-3-ultra-free"}}"#,
         );
         assert_eq!(
-            resolve_tier(&m, "generation", "opencode", false),
+            resolve_tier(&m, "generation", "opencode", "cell"),
             Resolved::Model { model: "opencode/big-pickle".into(), effort: None }
         );
         assert_eq!(
-            resolve_tier(&m, "extraction", "opencode", false),
+            resolve_tier(&m, "extraction", "opencode", "cell"),
             Resolved::Model { model: "opencode/ling-3.0-tiny-free".into(), effort: None }
         );
         assert_eq!(
-            resolve_tier(&m, "review", "opencode", true),
+            resolve_tier(&m, "review", "opencode", "gather"),
             Resolved::Model { model: "opencode/nemotron-3-ultra-free".into(), effort: None }
         );
         // A sibling claude/codex block in the same config is untouched by
         // opencode's presence (no cross-runtime leakage).
-        assert_eq!(resolve_tier(&m, "generation", "claude", false), Resolved::Model { model: "sonnet".into(), effort: None });
-        assert_eq!(resolve_tier(&m, "generation", "codex", false), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "generation", "claude", "cell"), Resolved::Model { model: "sonnet".into(), effort: None });
+        assert_eq!(resolve_tier(&m, "generation", "codex", "cell"), Resolved::Budget);
     }
 
     // ── economics ──────────────────────────────────────────────────────────
@@ -1014,6 +1049,90 @@ use std::time::Instant;
             Some(&json!(
                 ".bee/bin/bee herding run --task-file - --json --agent \"codex-cli\""
             ))
+        );
+    }
+
+    // ── hrv-1: herding-review-slots D1/D2 — reviewer/advisor purposes ──────
+
+    /// D1: a reviewer purpose on a herding-shaped review slot takes the
+    /// SAME herding-exec Bash arm as a cell purpose — the exact widening
+    /// this cell exists to make.
+    #[test]
+    fn reviewer_purpose_on_a_herding_shaped_review_slot_emits_the_herding_exec_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"review":{"kind":"herding","agent":"agy-flash"}}}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "reviewer", None, None, false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(
+                ".bee/bin/bee herding run --task-file - --json --agent \"agy-flash\""
+            ))
+        );
+        assert_eq!(
+            v.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+    }
+
+    /// D1: an advisor purpose on a herding-shaped advisor slot takes the
+    /// same herding-exec Bash arm — resolve_advisor no longer reads a
+    /// herding-shaped slot as "no advisor".
+    #[test]
+    fn advisor_purpose_on_a_herding_shaped_advisor_slot_emits_the_herding_exec_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"advisor":{"kind":"herding","agent":"named-herd"}}}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(
+                ".bee/bin/bee herding run --task-file - --json --agent \"named-herd\""
+            ))
+        );
+        assert_eq!(
+            v.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+    }
+
+    /// D1: a gather purpose on the SAME herding-shaped generation slot
+    /// keeps serving the runtime's default model — never Herding, the
+    /// exact inverse the two tests above pin.
+    #[test]
+    fn gather_purpose_on_a_herding_shaped_generation_slot_keeps_the_default_model() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Agent")));
+        assert_eq!(v.get("payload").unwrap().get("model"), Some(&json!("sonnet")));
+        assert_eq!(
+            v.get("economics").unwrap().get("channel"),
+            Some(&json!("claude-agent"))
         );
     }
 
