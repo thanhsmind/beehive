@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Bare-run agent resolution shaped; CONTEXT locked D1-D5",
-  "next_action": "Cells hba-1/hba-2 wait for herding-worker-standalone and herding-limit-pause to land on main",
+  "next_action": "Merged into main at 02bbc85; capture what settled, then bee close --feature herding-bare-agent.",
   "created_at": "2026-08-20T11:29:48.504Z",
   "run_state": "done",
   "waiting_on": null,
