@@ -194,7 +194,7 @@ fresh pane, hands it a fully self-contained brief, and waits for a written
 result. It exists to make a foreign agent usable as a cell-execution worker
 the way an in-family subagent is today (herding-executor D1). Flags:
 `--task`/`--task-file`, `--cwd`, `--job-id`, `--idle-timeout`, `--ceiling`,
-`--close-always`, `--main-root`, `--json`, `--dry-run` — the last renders
+`--close-always`, `--main-root`, `--json`, `--expertise`, `--dry-run` — the last renders
 `job.json` and the brief and spawns nothing, the seam this verb's own tests
 drive instead of a real `herdr`.
 
