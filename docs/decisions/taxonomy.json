@@ -365,6 +365,8 @@
     "discovery",
     "platform",
     "public-contracts",
-    "test-doctrine"
+    "test-doctrine",
+    "delivery",
+    "receipt"
   ]
 }

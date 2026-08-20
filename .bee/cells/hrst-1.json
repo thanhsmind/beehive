@@ -1,0 +1,56 @@
+{
+  "id": "hrst-1",
+  "feature": "herding-receipt-state",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Delivery receipt is agent state transition, not pane-text needle",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-receipt-state/CONTEXT.md"
+  ],
+  "action": "Per D1: deliver_pointer's receipt becomes a state check — after each pointer send, poll a status closure (agent_status by job_id) plus a result-present closure (round-1 result file) for up to a short per-attempt window (~5s at POLL_INTERVAL steps); Some(\"working\")|Some(\"done\") or result present = delivered; idle past the window = resend. Drop the pane-text needle receipt (pane_text stays only if another caller needs it; remove if dead). Keep POINTER_DELIVERY_ATTEMPTS=30 bounded attempts, injected sleep/clock seams, exhaustion error message updated to name the state receipt. Update execute_new/continue call sites and tests: echo-false-positive regression test — a status that stays idle while pane text contains the needle must NOT count as delivered; a status flip to working on attempt N delivers.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::run",
+  "must_haves": {
+    "truths": [
+      "Receipt is agent_status working/done or round-result presence, never pane text",
+      "Idle past the per-attempt window resends; 30 bounded attempts"
+    ]
+  },
+  "decisions": [
+    "herding-receipt-state D1"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hrst-1",
+    "outcome": "Delivery receipt reads agent state; pane-text needle receipt removed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T09:30:11.279Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5",
+    "claimed_at": "2026-08-20T09:24:26.909Z",
+    "report": {
+      "outcome": "Delivery receipt reads agent state (working/done or round result present); pane-text needle receipt removed; FakeHerdr models the post-prompt working flip; echo-false-positive regression test added",
+      "commit": "1661dc98",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::run — 45 passed, 0 failed — scope: the changed module suite covers deliver_pointer, execute paths, fakes",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 161 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
