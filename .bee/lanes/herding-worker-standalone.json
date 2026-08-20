@@ -14,5 +14,10 @@
   "next_action": "bee close finished \"herding-worker-standalone\" — feature is closed.",
   "created_at": "2026-08-20T10:35:38.280Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Muốn mình mở ticket discovery cho việc thay poll bằng socket event trong `bee herding run` không?",
+    "asked_at": "2026-08-20T11:45:02.413Z",
+    "session": "8ca30885-b974-4da5-8327-c60ae9cd5a46"
+  }
 }

@@ -24,18 +24,67 @@
     "herding-limit-pause D2"
   ],
   "deps": [],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-hlp-1",
+    "outcome": "Usage-limit stop is a typed paused_limit outcome; pane kept; job.json stamped",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-20T11:41:16.245Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5",
+    "claimed_at": "2026-08-20T11:32:27.035Z",
+    "report": {
+      "outcome": "decide_poll returns PausedLimit on stale heartbeat + limit-pattern pane text; RunOutcome::PausedLimit never closes the pane even under --close-always; stamp_paused_limit writes paused_limit_at + limit_reset_hint atomically; fresh-heartbeat matches keep waiting",
+      "commit": "5cff03fc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — 186 passed, 0 real failures (quick_exit_helper child noise only) — the touched module suite incl. 6 new limit-pause tests",
+      "deviations": [
+        "worker executed as a herded agy pane (job hlp-1-r2, done end-to-end); orchestrator re-verified and committed",
+        "pane_read polled every tick rather than only on stale heartbeat — functional, minor subprocess overhead noted for hlp-2"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 198 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "paused-limit-typed",
+            "status": "PASS",
+            "evidence": "decide_poll returns PausedLimit only on stale heartbeat + LIMIT_PATTERNS match; fresh-heartbeat match keeps waiting; non-matching stale stays TimedOutIdle — pinned by new tests, herding 186 passed"
+          },
+          {
+            "id": "pane-never-closed",
+            "status": "PASS",
+            "evidence": "execute_new/execute_continue force close=false on PausedLimit even under --close-always; test pins it"
+          },
+          {
+            "id": "job-stamp",
+            "status": "PASS",
+            "evidence": "stamp_paused_limit writes paused_limit_at (rfc3339) + limit_reset_hint (matched line) via write_json_atomic; test asserts both fields"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.7-flash",
+        "judge_model": "claude-fable-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-20T11:47:16.832Z"
+      }
+    ]
   }
 }

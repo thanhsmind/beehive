@@ -28,18 +28,73 @@
   "deps": [
     "hlp-1"
   ],
-  "status": "open",
+  "status": "capped",
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
+    "worker": "w-hlp-2",
+    "outcome": "Same-round resume for limit-paused jobs via --continue; control loop holds the paused slot",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-20T11:46:39.459Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
+    "claim_session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5",
+    "claimed_at": "2026-08-20T11:41:37.330Z",
+    "report": {
+      "outcome": "execute_continue branches on the paused_limit stamp: live pane resumes the highest brief round through state-receipt delivery and clears the stamp; gone pane refuses typed; unstamped next-round contract untouched. D4 pinned: occupancy (ledger rows x live panes) already counts a paused job as occupying — test proves it, no new loop logic",
+      "commit": "2ae8c7c5",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — 190 passed, 0 real failures (quick_exit_helper child noise only) — the two touched modules",
+      "deviations": [
+        "worker executed as a herded agy pane (job hlp-2-r1, done end-to-end); orchestrator re-verified and committed"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 364 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "same-round-resume",
+            "status": "PASS",
+            "evidence": "stamped+alive continue resolves the highest brief-N round, delivers the resume pointer through the state-receipt path, clears the stamp, re-enters the same round's wait — tests pin one pointer sent and stamp removal; herding 190 passed"
+          },
+          {
+            "id": "pane-gone-typed-refusal",
+            "status": "PASS",
+            "evidence": "stamped job with dead pane returns the ContinueRefusal::PaneGone shape naming the pane"
+          },
+          {
+            "id": "unstamped-contract-untouched",
+            "status": "PASS",
+            "evidence": "next-round continue path unchanged; pre-existing continue tests pass unmodified"
+          },
+          {
+            "id": "slot-occupancy-pin",
+            "status": "PASS",
+            "evidence": "test paused_limit_job_with_live_pane_counts_as_occupying_slot proves occupancy (unresolved ledger rows x live panes) already holds the paused slot; comment cites D4, no new loop logic needed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.7-flash",
+        "judge_model": "claude-fable-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-20T11:47:22.839Z"
+      }
+    ]
   }
 }
