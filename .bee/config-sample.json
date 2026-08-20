@@ -84,11 +84,11 @@
     }
   ],
   "cells_archive_on_close": true,
-  "ship_visibility": "off",
+  "ship_visibility": "on",
   "worktree_first": "on",
   "worktree_cleanup_on_merge": true,
-  "uat_stop": "close",
-  "uat_before_merge": true,
+  "uat_stop": "off",
+  "uat_before_merge": false,
   "staging_before_merge": false,
   "doc_viewer": {
     "base_url": "http://10.255.255.254:7700",
