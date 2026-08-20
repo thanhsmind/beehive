@@ -11,13 +11,8 @@
     "uat": false
   },
   "summary": "Feature \"herding-worker-standalone\" started at phase \"planning\".",
-  "next_action": "Continue bee-planning for \"herding-worker-standalone\".",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat gate for herding-worker-standalone — hws-1 capped, herding 180 + hooks 445 green",
-    "asked_at": "2026-08-20T11:24:03.936Z",
-    "session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5"
-  },
-  "created_at": "2026-08-20T10:35:38.280Z"
+  "next_action": "Merged into main at 8fbc64d; capture what settled, then bee close --feature herding-worker-standalone.",
+  "created_at": "2026-08-20T10:35:38.280Z",
+  "run_state": null,
+  "waiting_on": null
 }
