@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-liveness-signals",
+  "mode": "feature",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"herding-liveness-signals\" started at phase \"exploring\".",
+  "next_action": "Invoke bee-swarming for hls-1.",
+  "created_at": "2026-08-20T12:22:00.698Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: herding-liveness-signals",
+    "asked_at": "2026-08-20T13:35:17.582Z",
+    "session": "8ca30885-b974-4da5-8327-c60ae9cd5a46"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "external-systems"
+    ],
+    "product_files": 1,
+    "rationale": "slice 3 (hls-2) moves pane_read to on-demand; one product file, herdr subprocess call only",
+    "updated_at": "2026-08-20T13:27:55.240Z",
+    "feature": "herding-liveness-signals"
+  }
+}

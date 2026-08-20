@@ -1,0 +1,124 @@
+{
+  "id": "hls-1",
+  "feature": "herding-liveness-signals",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Report a dead worker agent as a typed died outcome in seconds, not after the idle timeout",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-liveness-signals/CONTEXT.md",
+    "docs/history/herding-liveness-signals/plan.md"
+  ],
+  "action": "Per D1/D2/D3, slice 1 of the plan. (1) Herdr trait (run.rs:268-329) gains `fn process_info(&self, pane_id: &str) -> Liveness`, a new tri-state enum Alive { pid: u32 } | Absent | Unknown. RealHerdr runs `herdr pane process-info --pane <id>` and reads result.process_info.foreground_processes[] plus shell_pid. AGENT-PRESENT MEANS: at least one foreground entry whose pid != shell_pid — NEVER a name match against the agent kind, because an agent that shells out to cargo or git puts a different name in its own foreground group and a name match would read that as a death. Only shell_pid present => Absent. FAIL OPEN (D2): a spawn failure, non-zero exit, error envelope, or unparseable body all return Unknown — the OPPOSITE direction from pane_alive (run.rs:454), which fails closed on purpose; copying its shape here would kill healthy multi-hour jobs on a herdr hiccup. Add the method to FakeHerdr (run.rs:1697) with scriptable per-call responses and to PanicHerdr (run.rs:1753). (2) run_poll_loop (run.rs:564) owns the debounce beside last_heartbeat_ms: read liveness every 10th tick (~2s, since each read spawns a subprocess), N = 3 consecutive Absent reads arm the died verdict; Alive AND Unknown both RESET the counter to zero (D3 — an Absent/Unknown/Absent interleave must never fire died). Carry the armed state plus the last-seen pid into PollTick. (3) decide_poll (run.rs:518) gains a liveness parameter and a new PollDecision::Died { pid: Option<u32> } rung placed BETWEEN the ceiling check (run.rs:530-531) and the stale-heartbeat check (run.rs:533), so result still short-circuits everything and timed_out_ceiling still wins every tie. Its seven existing direct callers (run.rs:1515, 1520, 1525, 1530, 1538, 1550, 1558) and the production caller (run.rs:581) pass the neutral value (Unknown, counter zero); EVERY EXISTING ASSERTION MUST STAY BYTE-IDENTICAL — an assertion you have to change means the rung went in wrong. (4) RunOutcome gains Died, following the hlp-1 precedent for paused_limit: extend the three PollDecision->RunOutcome matches (run.rs:1106, 1255, 1378), outcome_label (run.rs:1406-1420) with the string \"died\", and emit_result's payload match (run.rs:1441-1466, exhaustive with no catch-all) carrying the vanished pid as forensics. VERIFY AND LEAVE ALONE: exit_code_for (run.rs:1422-1428) already lands Died on FAILURE through its catch-all, and the close gating (run.rs:1117-1118) already leaves a died pane OPEN unless --close-always, which is the wanted forensics behaviour. Do NOT touch record_dispatch or the wave ledger — no run outcome reaches them today and this cell does not change that. Do NOT add any /proc read: D6 refused the CPU signal and parked hang detection. Tier 2 keeps its current membership (log.txt mtime OR agent_status working) untouched.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "Three consecutive Absent liveness reads with no result yield outcome died, and the pane stays open unless --close-always",
+      "A liveness read that errors, returns an error envelope, or is unparseable yields Unknown and the poll CONTINUES — never died (D2)",
+      "An Absent/Unknown/Absent interleave resets the counter and does not fire died (D3)",
+      "A foreground process present with a non-agent name and pid != shell_pid counts as ALIVE, so an agent shelling out to a build is never killed",
+      "Ceiling passed AND armed-died in the same tick yields TimedOutCeiling, proving the rung sits below the ceiling check",
+      "Every pre-existing decide_poll and run_poll_loop assertion is unchanged; only the new neutral parameter is threaded through",
+      "No /proc read and no change to tier-2 heartbeat membership"
+    ]
+  },
+  "decisions": [
+    "herding-liveness-signals D1",
+    "herding-liveness-signals D2",
+    "herding-liveness-signals D3",
+    "herding-liveness-signals D6"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hls-1",
+    "outcome": "Dead worker agent now reports a typed died outcome in about six seconds instead of after the 900s idle timeout",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T13:25:57.043Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8ca30885-b974-4da5-8327-c60ae9cd5a46",
+    "claimed_at": "2026-08-20T13:12:34.042Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "died-after-three-absent-pane-kept",
+            "status": "PASS",
+            "evidence": "run.rs:645-651 Liveness::Absent increments absent_reads and arms Died at >= 3; run.rs:1201-1202 Died is not a valid result so should_close_pane leaves the pane open unless --close-always. Verified against the diff by an independent read-only pass, not the worker's word"
+          },
+          {
+            "id": "liveness-fails-open-never-absent-on-error",
+            "status": "PASS",
+            "evidence": "run.rs:498-503 process_info returns Unknown on any call() Err (spawn failure, non-zero exit, non-JSON body, run.rs:344-361); run.rs:507-517 parse_process_info returns Unknown for a non-null error key, a missing result, and a missing or non-array foreground_processes. No error path reaches Absent — the D2 direction, opposite pane_alive's fail-closed gate"
+          },
+          {
+            "id": "unknown-resets-debounce-counter",
+            "status": "PASS",
+            "evidence": "run.rs:638-648 Liveness::Unknown sets absent_reads = 0, a hard reset rather than a skip, and no branch tests != Alive. An Absent/Absent/Unknown/Absent/Absent interleave is pinned by a test and does not fire died (D3)"
+          },
+          {
+            "id": "no-agent-name-matching-in-liveness",
+            "status": "PASS",
+            "evidence": "run.rs:519-527 the only predicate is shell_pid.map_or(true, |sp| pid != sp); name and cmdline are never read in the liveness decision, so an agent that shells out to cargo or git is never read as dead"
+          },
+          {
+            "id": "died-rung-below-ceiling",
+            "status": "PASS",
+            "evidence": "run.rs:576-596 decide_poll branch order is result -> ceiling -> died -> stale-heartbeat, so timed_out_ceiling still wins every tie exactly as CONTEXT.md's outcome table states"
+          },
+          {
+            "id": "no-existing-assertion-changed",
+            "status": "PASS",
+            "evidence": "Test-module diff reviewed in full: every pre-existing assertion gained only a neutral argument (None for decide_poll, liveness: None for PollTick); no expected value changed. FakeHerdr's default process_info returns Unknown so pre-existing execute tests keep their outcomes"
+          },
+          {
+            "id": "d6-scope-respected-no-proc-read",
+            "status": "PASS",
+            "evidence": "rg '/proc' over run.rs: zero matches. run.rs:993-1004 tier-2 heartbeat membership (log.txt mtime OR agent_status working) is untouched by the diff, honouring D6's park of hang detection"
+          },
+          {
+            "id": "tests-green-orchestrator-run",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding, re-run by the orchestrator: 204 passed; 0 failed on the bee unit binary. The FAILED lines are the known quick_exit_helper fixture (control_loop.rs:795, 'intentional failure'), the same child-process noise recorded on hlp-1's cap"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "claude-fable-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-20T13:25:09.946Z"
+      }
+    ],
+    "report": {
+      "outcome": "Herdr::process_info returns tri-state Alive/Absent/Unknown from herdr pane process-info; agent-present is any foreground pid != shell_pid with no name matching; every error path fails OPEN to Unknown; run_poll_loop debounces 3 consecutive Absent reads on a ~2s cadence with Unknown resetting the counter; decide_poll gains a Died rung between the ceiling and stale-heartbeat checks; RunOutcome::Died emits outcome string died carrying the vanished pid and leaves the pane open unless --close-always",
+      "commit": "96eae9b5",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — 204 passed, 0 failed (the FAILED lines are the known quick_exit_helper intentional-failure fixture at control_loop.rs:795, same noise recorded on hlp-1) — scope: the touched module suite, re-run by the orchestrator rather than trusted from the worker report",
+      "deviations": [
+        "worker executed as a herded agy-flash pane (job job-1787231649875, outcome done) and committed, but did not run bee finish itself — the orchestrator verified and capped",
+        "worker commit carried a bare hls-1 line instead of the cell: hls-1 trailer; amended to 96eae9b5 before capping",
+        "bee dispatch prepare refuses the --session-id flag with a misleading unsupported_argument_shape error; prepared without it"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 416 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

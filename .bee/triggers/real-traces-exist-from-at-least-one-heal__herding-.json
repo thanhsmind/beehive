@@ -1,0 +1,11 @@
+{
+  "id": "real-traces-exist-from-at-least-one-heal__herding-",
+  "decision": "herding-",
+  "condition": "Real traces exist from at least one healthy-but-blocked worker and one genuinely hung worker, carrying CPU time, log.txt mtime, and pane revision sampled over the stall — enough to pick a threshold instead of guessing one",
+  "tier": "manual",
+  "predicate": null,
+  "status": "waiting",
+  "created_at": "2026-08-20T13:08:42.228Z",
+  "updated_at": "2026-08-20T13:08:42.228Z",
+  "outcome": null
+}
