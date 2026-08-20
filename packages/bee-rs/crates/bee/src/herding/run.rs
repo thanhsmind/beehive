@@ -379,7 +379,21 @@ impl Herdr for RealHerdr {
     }
 
     fn pane_run(&self, pane_id: &str, command: &str) -> Result<(), String> {
-        self.call(&["pane", "run", pane_id, command]).map(|_| ())
+        // `pane run` emits plain (often empty) stdout, never a JSON
+        // envelope — routing it through `call()` made every env export
+        // "fail" on a successful run (live: job hlp-1-r1, pane w4:p13).
+        // Success is the exit status, exactly like the raw `pane read`
+        // capture style (herding-receipt-source D1).
+        let out = Command::new("herdr")
+            .args(["pane", "run", pane_id, command])
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|e| format!("herdr pane run {pane_id}: {e}"))?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            return Err(format!("herdr pane run {pane_id} exited {}: {}", out.status, stderr.trim()));
+        }
+        Ok(())
     }
 
     fn agent_start(
