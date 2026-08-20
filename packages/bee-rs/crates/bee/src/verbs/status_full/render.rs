@@ -36,6 +36,13 @@ pub(crate) fn format_slot(value: Option<&Value>) -> String {
                 };
                 return format!("cli({first})");
             }
+            // herding-tier D1/D3: a router value, never a model name — the
+            // dispatch seam turns this into the herding-exec Bash payload
+            // for cell purpose; a gather on the same slot keeps the
+            // runtime default (resolved before this display point).
+            if str_eq(vget(v, "kind"), "herding") {
+                return "herding".to_string();
+            }
             if opt_truthy(vget(v, "model")) {
                 let model = tpl(vget(v, "model"));
                 if opt_truthy(vget(v, "effort")) {

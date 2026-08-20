@@ -1,0 +1,52 @@
+{
+  "id": "ht-4",
+  "feature": "herding-tier",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Status/onboard display the herding kind; docs + samples document the config route",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/render.rs",
+    "packages/bee-rs/crates/bee/src/onboard/agents.rs",
+    "docs/config-reference.md",
+    ".bee/config-sample.json",
+    ".bee/config-sample-cli-executors.json",
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "read_first": [
+    "docs/history/herding-tier/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs"
+  ],
+  "action": "Per D2/D3: (a) status_full store/render and onboard/agents.rs handle {kind:\"herding\"} wherever they branch on kind==cli (store.rs:368,413,710,753; render.rs:30; agents.rs:66) — display it as a herding executor, never a model name, never a crash on the unknown kind. (b) docs/config-reference.md models section: document {\"kind\":\"herding\"} — cell execution routes through bee herding run automatically, gathers on the slot keep the runtime default model, the agent comes from the single global herding.agent_command (D2), pointer to operational-invariants.md for herding.* details. (c) both samples: add a short commented mention in the models _doc (not an active value — the sample must stay copy-paste-safe for repos without herdr). (d) operational-invariants.md: one paragraph — the config route now exists, scope-A manual runs unchanged. wave-barrier regen deferred to orchestrator.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml status_full && python3 -m json.tool .bee/config-sample.json > /dev/null && python3 -m json.tool .bee/config-sample-cli-executors.json > /dev/null",
+  "must_haves": {
+    "truths": [
+      "status/onboard render a herding-shaped slot without crashing and name it as an executor",
+      "config-reference documents kind:herding as cell-only with the global agent_command",
+      "samples stay valid JSON and copy-paste-safe (herding tier mentioned, not active)"
+    ]
+  },
+  "decisions": [
+    "herding-tier D2",
+    "herding-tier D3"
+  ],
+  "deps": [
+    "ht-1"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
