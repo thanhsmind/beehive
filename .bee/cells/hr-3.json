@@ -1,0 +1,49 @@
+{
+  "id": "hr-3",
+  "feature": "herd-registry",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Docs + samples: herding.agents registry documented, copy-paste-safe",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-herding/references/operational-invariants.md",
+    "docs/config-reference.md",
+    ".bee/config-sample.json",
+    ".bee/config-sample-cli-executors.json"
+  ],
+  "read_first": [
+    "docs/history/herd-registry/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "action": "Per D1/D2: operational-invariants.md (canonical herding.* home) documents herding.agents — the map shape, the three reference spellings (tier agent field, --agent flag, string agent_command), the typed unknown-name refusal, herd = pane always. config-reference.md models section gets one short note pointing there (no duplicate key guide, hx-5 precedent; cite the reference WITHOUT a skills/ prefix). Both samples add a commented herding.agents example in the herding _doc (not an active value). wave-barrier regen deferred to orchestrator.",
+  "verify": "python3 -m json.tool .bee/config-sample.json > /dev/null && python3 -m json.tool .bee/config-sample-cli-executors.json > /dev/null && echo parse-ok",
+  "must_haves": {
+    "truths": [
+      "operational-invariants.md documents the registry and all three reference spellings",
+      "Samples stay valid JSON with the registry shown, not active"
+    ]
+  },
+  "decisions": [
+    "herd-registry D1",
+    "herd-registry D2"
+  ],
+  "deps": [
+    "hr-1",
+    "hr-2"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

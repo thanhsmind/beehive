@@ -130,6 +130,61 @@ assume a `claude` session underneath (Merge role / Dispatch role in
 SKILL.md). Treat it as a documented starting point for a future adapter, not
 a claim that codex control panes work today.
 
+## `herding.agents` — the named-agent registry
+
+herd-registry D1 adds one more optional key, independent of the two above:
+
+- **`herding.agents`** — a JSON **object**, not an array: name → argv token
+  array. Each entry is validated exactly the way a plain `herding.agent_command`
+  array already is (non-empty, every token a newline-free string); a
+  malformed entry is dropped, fail-open per entry — it never poisons the
+  rest of the registry. Token 0 of an entry becomes the herdr agent kind
+  the same way token 0 of `herding.agent_command` does, and the `{MODEL}`
+  placeholder substitutes the same way, per-token.
+
+```json
+{
+  "herding": {
+    "agents": {
+      "gemini-generation": ["gemini", "--yolo"],
+      "codex-review": ["codex", "exec", "--model", "{MODEL}"]
+    }
+  }
+}
+```
+
+herd-registry D2 — **three reference spellings, one resolver**
+(`resolve_agent_command` in `herding/wave.rs`), all of which look a name up
+against `herding.agents`:
+
+1. A tier slot: `{"kind": "herding", "agent": "<name>"}` — `agent` rides
+   `normalize_tier_value`/`resolve_tier`'s `Resolved::Herding` and prepare's
+   herding-exec arm appends `--agent "<name>"` to the `bee herding run`
+   invocation it builds (config shape: `docs/config-reference.md`, models
+   section).
+2. `bee herding run --agent <name>` — the flag directly, on the
+   cell-execution-worker verb described below.
+3. `herding.agent_command` as a **plain JSON string** (not an array) —
+   that string names a `herding.agents` entry itself, resolved the same way
+   a named lookup is.
+
+**Unknown name → typed refusal, not a silent fallback.** Any of the three
+spellings naming an entry `herding.agents` does not declare returns
+`AgentCommandError::UnknownAgent`, whose message lists every registry key
+(sorted) so the refusal names its own remedy without a second read:
+`unknown herding agent "<name>" (herding.agents declares: <key>, <key>, …)`
+— or, with an empty registry, `(herding.agents declares no entries)`. An
+**absent** name (no `agent` field, no `--agent` flag, `herding.agent_command`
+left as an array or absent) is not an error at all — it falls through to
+today's `herding.agent_command`/default-array split, unchanged.
+
+**A herd name always means the pane transport.** All three spellings above
+resolve into the same `bee herding run` pane dispatch this reference
+describes throughout — naming a herd never touches the `cli` tier kind
+(the external-CLI-executor model-slot shape, gather/review/advisor-only;
+`docs/config-reference.md`, models section) and the `cli` kind can never
+name a herd. The two config routes stay disjoint: `herd = pane`, always.
+
 ## `bee herding run` — one foreign agent as a cell-execution worker
 
 `bee herding run` is a native verb, not a script: give it one task, and it
@@ -188,9 +243,11 @@ a cell dispatch against that slot resolves automatically to the
 `bee herding run` payload this section describes, no per-cell request
 needed, while a gather/review/advisor purpose on the same slot keeps
 serving that runtime's own default model (never `herding`, never a
-refusal). The agent that runs is still always the single global
-`herding.agent_command` above — the tier value is a router, it carries no
-per-slot agent override (D2). Manual, scope-A `bee herding run`/`--continue`
+refusal). The agent that runs is the single global `herding.agent_command`
+above by default; herd-registry D2 lets the tier value carry a per-slot
+override too — `{"kind": "herding", "agent": "<name>"}` resolves that name
+through `herding.agents` instead ("`herding.agents` — the named-agent
+registry" above), refusing on an unknown name. Manual, scope-A `bee herding run`/`--continue`
 invocations — everything this reference otherwise describes — are
 unchanged; the config route is one more way to reach the same verb, not a
 replacement for it. Config shape and samples: `docs/config-reference.md`
