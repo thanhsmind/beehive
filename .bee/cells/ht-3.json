@@ -1,0 +1,48 @@
+{
+  "id": "ht-3",
+  "feature": "herding-tier",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "prepare emits the herding-exec payload; the model guard denies the Agent path",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-tier/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "action": "Per D4/D5/D6: (a) prepare_dispatch gains a Resolved::Herding arm beside the cli arm (prepare.rs:739-747 shape): tool \"Bash\", command exactly `.bee/bin/bee herding run --task-file - --json` plus `--cwd <worktree_path>` when the feature has a granted worktree (read the same grant source other prepare arms use if one exists; otherwise omit --cwd), payload.stdin = the same prompt body the cli arm pipes, channel \"herding-exec\". kind!=cell (gather/reviewer/advisor) never reaches this arm — ht-1 already resolves those to a model. The payload carries the brief only, no bee verbs for the worker (D6). (b) model_guard: a herding-resolved tier on an Agent/Task dispatch denies with transport \"herding-tier-denied\" and a FIX naming the Bash herding-exec path — mirror the cli-tier-denied wording at model_guard.rs:651-665; add the Slot/Resolved variants its local resolver needs. Tests: prepare cell-kind herding slot -> exact command string + stdin present + channel; guard denies with the new transport token; cli paths untouched.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers && PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+  "must_haves": {
+    "truths": [
+      "cell dispatch against a herding slot returns a Bash payload: bee herding run --task-file - --json, prompt on stdin, channel herding-exec",
+      "Agent/Task dispatch against a herding tier is denied with a fix naming the herding-exec Bash path",
+      "cli-exec arm and cli-tier-denied unchanged"
+    ]
+  },
+  "decisions": [
+    "herding-tier D4",
+    "herding-tier D5",
+    "herding-tier D6"
+  ],
+  "deps": [
+    "ht-1"
+  ],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

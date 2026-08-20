@@ -1,0 +1,44 @@
+{
+  "id": "ht-1",
+  "feature": "herding-tier",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Tier resolution accepts kind:herding — cell purpose routes, gather keeps the default model",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-tier/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "action": "Per D1/D3: normalize_tier_value accepts {kind:\"herding\"} (no other required fields; unknown extra fields dropped, same trim rules as cli). Add Resolved::Herding to the Resolved enum. resolve_tier: a herding-shaped slot with cell purpose (for_gather=false) returns Resolved::Herding; with gather purpose (for_gather=true) returns the RUNTIME DEFAULT model for that slot (default_models(runtime), e.g. claude generation -> sonnet; a runtime whose default slot is null returns Budget) — the exact inverse of cli's branch at models.rs:301 which refuses cell and serves gather. resolve_advisor: a herding-shaped advisor slot is not meaningful — treat as None (advisor never executes cells). Tests in drivers/tests.rs: normalize accepts/round-trips the shape; cell purpose -> Herding; gather purpose -> default model value; codex runtime gather -> Budget (null default); malformed ({kind:\"herding\", command:...} etc.) falls through existing rules unchanged; existing cli tests untouched.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers",
+  "must_haves": {
+    "truths": [
+      "{kind:herding} + cell purpose resolves to Resolved::Herding",
+      "{kind:herding} + gather purpose resolves to the runtime default model, never Herding, never a refusal",
+      "cli kind behavior byte-identical to before"
+    ]
+  },
+  "decisions": [
+    "herding-tier D1",
+    "herding-tier D3"
+  ],
+  "deps": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
