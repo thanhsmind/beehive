@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/worktree-parallelism/overview.md]
-  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), i54-closeout D4, "herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", herding-executor D9 (the verb appends its own dispatch and ledger rows)]
+  decisions: ["herding-executor D1-D9 (bee herding run: mailbox executor, health-check liveness, pane lifecycle)", "herding-tier D1-D6 (the config tier route)", "herd-registry D1-D2 (the named-agent registry)", herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), i54-closeout D4, "herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", herding-executor D9 (the verb appends its own dispatch and ledger rows)]
   sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", "i54-closeout cell i54-closeout-4 (herding spawn command config-driven templates; trace in .bee/cells/, 2026-07-24)", docs/history/herding-executor/CONTEXT.md, "herding-executor cells hx-1..hx-5 (bee herding run: mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, this doc sync; traces in `.bee/cells/`, 2026-08-19/20)"]
   authoritative_for: "bee-herding: the three-role cockpit, its safety boundaries, and adoption"
 ---
@@ -28,6 +28,10 @@ isolated copy — is what runs unattended.**
   iteration; every fact it needs is read live from state, the trunk, and the pane workspace.
 - **Merge** is **not a loop.** It is a single-shot the owner runs by hand when they want finished
   work retired.
+- **The config tier route**: setting `{"kind": "herding"}` on a `models.<runtime>.generation`
+  slot routes ordinary cell dispatch through `bee herding run` automatically — no per-cell
+  request needed; a gather/review/advisor purpose on that same slot always falls back to the
+  runtime's own default model instead (herding-tier D1/D3).
 - **A wave is a fourth entry point, and no role calls it.** Dispatch starts one worker per iteration
   and never speaks to it again; a wave briefs several already-running workers in one act and waits
   on all of them together. It carries none of dispatch's guards — no arming marker, no classifier —
@@ -169,13 +173,29 @@ argv-token strings — and, when present, substitutes `{PROMPT}` / `{MODEL}` /
 are never joined into one string and re-split or shell-`eval`'d, so a
 config-supplied command cannot smuggle shell injection through a placeholder
 value. The working agent's spawn tail has the matching `herding.agent_command`
-seam. When the key is absent, invalid, or empty, the command built is
+seam. `.bee/config.json`'s `herding.agents` (herd-registry D1/D2) names
+several agents once — a map of name → argv tokens with the same validation —
+and three spellings reference one by name: a tier slot's `agent` field,
+`bee herding run --agent`, or `herding.agent_command` as a plain string; an
+unknown name refuses typed, listing the registry keys, never a silent
+fallback. A herd name always means the pane transport; the cli tier kind is
+unrelated. When the key is absent, invalid, or empty, the command built is
 byte-equivalent to the pre-existing hardcoded `claude -p ... --model sonnet
 --max-turns ... --allowedTools ...` invocation — a project with no config
 change sees no behavior change at all. A codex adapter example is documented
 purely as an illustration of the seam; full codex-native herding (its own event
 loop and pane protocol) stays out of scope (D4). None of enable/disable/status,
 the dispatch interlock, or the merge owner-gesture change.
+
+**Every step of handing a foreign agent its brief verifies rather than
+trusts a flag (herding-executor arc, live-proven).** The pane start retries
+through a booting shell; the brief travels only as a mailbox file
+(`brief-N.txt`) behind a one-line pointer — never raw argv, never a
+multi-line injected prompt; readiness is observed before the send and
+delivery is confirmed against the pane's own text before the wait begins.
+The operating detail lives in
+`skills/bee-herding/references/operational-invariants.md` ("Spawn
+resilience").
 
 ## Actors & Access
 

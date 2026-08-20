@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "▸ Brief đã vào lại pane — nhìn nó chạy. Lưu ý nhỏ: pane thợ đang làm việc thì đừng gõ tay vào — phím người chen giữa là thợ trả lời người th",
-    "asked_at": "2026-08-20T05:11:59.902Z",
+    "subject": "Duyệt đợt herding: 26 stub trong hàng + 11 file proposal của arc này. Thả gather đọc so với bản overview hiện tại:",
+    "asked_at": "2026-08-20T05:41:27.931Z",
     "session": "1adb69d1-67be-4463-8349-af8832af8a32"
   }
 }
