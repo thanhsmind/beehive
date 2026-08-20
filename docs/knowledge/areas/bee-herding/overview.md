@@ -40,7 +40,10 @@ isolated copy — is what runs unattended.**
   (herding-review-slots D3). Widening the slot to every purpose needed no change in the
   model guard, because the guard routes on the slot's KIND alone and never on which
   purpose asked — a new purpose inherits the routing for free, and no guard rule has to
-  learn its name.
+  learn its name. The routing is enforced, not merely offered: against a herding-kind
+  slot the guard DENIES a native subagent dispatch outright, so the pane payload is the
+  only legal way through and no caller can quietly take the cheaper in-process path the
+  operator opted out of.
 - **A wave is a fourth entry point, and no role calls it.** Dispatch starts one worker per iteration
   and never speaks to it again; a wave briefs several already-running workers in one act and waits
   on all of them together. It carries none of dispatch's guards — no arming marker, no classifier —
@@ -83,7 +86,8 @@ isolated copy — is what runs unattended.**
   unresolved workers against the live pane list, and it carries the SOURCE of its own answer: a real
   crossing, or a degraded timer fallback used when the live list cannot be obtained.
 - **Mailbox** — `.bee/mailbox/<job-id>/`, the file channel `bee herding run` uses to talk to a
-  bee-ignorant worker: `job.json` (the written brief), round-numbered `result-N.json`, and
+  bee-ignorant worker: `job.json` (the written brief), round-numbered `brief-N.txt` (the brief as
+  the worker reads it, persisted rather than injected), round-numbered `result-N.json`, and
   `log.txt`. Every write is staged tmp-then-rename, so a result file's appearance under its final
   name IS the completion signal — never the pane's screen (herding-executor D3).
 
@@ -158,7 +162,10 @@ runtime pane, starts the agent through the same `herding.agent_command` seam the
 working-agent spawn uses, and writes it a fully self-contained brief — task, absolute
 paths, file constraints, the result schema, the tmp-rename write gesture — over the
 mailbox described above, so a worker that has never seen bee can complete it
-(herding-executor D4). Its poll loop is native and health-check based, at zero token
+(herding-executor D4). The task itself may arrive on standard input rather than as an
+argument, and an empty standard input refuses exactly as an empty task argument does —
+a caller piping a generated task never gets a worker started on nothing.
+Its poll loop is native and health-check based, at zero token
 cost, and it decides on a LADDER of signals rather than one
 (herding-liveness-signals D1-D6, 2026-08-20). A `result-N.json` for the round is the
 truth and outranks every other signal. Below it sits AGENT LIVENESS: the pane's
@@ -197,6 +204,13 @@ minutes on a remote call. Pane output counters fail identically, for the same re
 a spinner advances the log. Picking a real discriminator needs calibration traces
 from healthy-but-blocked workers against genuinely hung ones, and the question is
 parked against a registered trigger until those exist.
+
+A job is not always one round. Reusing a finished job continues it: the same
+mailbox is kept, the follow-up brief reaches the agent ALREADY RUNNING in the
+pane rather than starting a second one beside it, and the wait then targets the
+next round's result file. A missing job, a missing prior result, or a pane that
+is gone all refuse with a typed reason — continuing is only meaningful against a
+job that actually got somewhere.
 
 Pane lifecycle follows the result, not the
 clock: a valid result closes the pane, a failure, death, or timeout leaves it open as
@@ -241,6 +255,12 @@ follows a strict four-step precedence:
 3. `herding.agent_command` as a plain string, resolved through `herding.agents`;
 4. `herding.agent_command` as an array (token 0 is the herdr `--kind`, rest
    are args), or the built-in default array when absent or malformed.
+
+bee keeps NO list of which agent kinds exist. The kind token passes straight
+through, and the pane manager is the one that accepts or rejects it. A kind the
+pane manager learns tomorrow works here today with no change on this side — the
+alternative, a second list to maintain, only ever produces a refusal for
+something that would have worked.
 
 Any other slot shape (`kind: "herding"` with no agent, a plain model name like
 `"sonnet"`, `{"kind":"cli",...}`, null, absent) is skipped and falls through.
@@ -287,6 +307,18 @@ check, and only the run that watched for a state change completed end to end.
 The general shape — an echo, a mirror, a write-through cache — is that any
 confirmation an actor can produce by itself is not evidence the other side
 received anything.
+
+Waiting for that receipt is bounded, not hopeful: the pointer is re-sent a fixed
+number of times, each attempt polling the agent's state a few times before the
+next, and the pointer is idempotent so a duplicate send costs nothing. Running
+out of attempts is a typed failure that says the prompt was never accepted — it
+never becomes a silent decision to wait anyway.
+
+Failing to get that receipt splits by WHEN it failed, and the two halves treat
+the pane oppositely. A failure BEFORE the agent starts closes the pane — there
+is nothing to look at. A ready wait that runs out AFTER the agent started keeps
+it: something was running and did not answer, and that screen is the only
+record of why.
 
 The operating detail lives in
 `skills/bee-herding/references/operational-invariants.md` ("Spawn

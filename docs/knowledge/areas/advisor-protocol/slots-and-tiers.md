@@ -84,6 +84,16 @@ bee:
   it; config names the requested model, the log never silently claims it took
   effect.
 
+- **R10 —** **An external executor's economics record claims nothing about the
+  model** (herding-exec-economics D1). When the work leaves through an outside
+  command — a shell executor, or an agent running in its own pane — the record
+  names that command as the enforcement and marks the model `unverified`, with
+  no requested model at all. The pane's agent picks its own model from its own
+  configuration; a budget marker cannot reach it, so recording one would be a
+  claim the dispatcher is in no position to make. Both external channels record
+  identically, because the honesty problem is the same one: the dispatcher
+  chose the executor, not the model.
+
 ## Edge Cases Settled
 
 - **E1 —** External command reporting success while doing nothing →

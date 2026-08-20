@@ -245,12 +245,19 @@ hardenings, each one bought by a real failure:
   silently drops a multi-line injected prompt even when idle. The brief is
   written to `<mailbox>/brief-N.txt` and the agent receives a ONE-LINE
   pointer at that absolute path.
-- **Readiness is observed, then delivery is verified.** After start, the
-  verb waits (up to 60s) for the agent to report ready; then it sends the
-  pointer and counts it delivered only when the pane's own text echoes the
-  brief-file name — resending up to 30 times about a second apart, because
-  herdr's ready flags can fire before the agent's input loop accepts text.
-  The pointer is idempotent, so a duplicate delivery is harmless.
+- **Readiness is observed, then delivery is verified — by a state change,
+  never by pane text.** After start, the verb waits (up to 60s) for the
+  agent to report ready; then it sends the pointer and counts it delivered
+  only when the AGENT'S OWN STATE moves (working or done) or the round's
+  result file appears — resending up to 30 times about a second apart,
+  because herdr's ready flags can fire before the agent's input loop
+  accepts text. The pointer is idempotent, so a duplicate delivery is
+  harmless. Do NOT check whether the pane echoes the brief-file name: a
+  booting pane echoes the keystrokes of the send itself, so that check
+  passes exactly when delivery failed (two live smokes lost their brief
+  this way). If the ready wait is exhausted, that is a typed spawn failure
+  that KEEPS the pane for forensics — unlike a pre-start spawn failure,
+  which closes it.
 - **Operator rules.** Put each kind's auto-approve flag in its herd entry
   (`claude … --permission-mode bypassPermissions`, `agy
   --dangerously-skip-permissions`) — an agent that stops to ask permission

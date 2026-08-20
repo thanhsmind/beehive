@@ -74,6 +74,14 @@ not — content belongs to spec-sync, existence belongs to onboarding. What the
 human observes: "read the spec before the code" and "where does X live" have a
 landing page from day one in every onboarded project.
 
+**Seed the annotated config sample (every apply run).** Trigger: any apply where
+the project has no config sample of its own. What blocks it: nothing. What
+changes: the sample is created from a copy of bee's own, embedded in the binary
+at build time so the seeded file cannot drift from the one the project reads;
+an existing sample is NEVER touched. What the human observes: a new project can
+read every configurable surface, annotated key by key, without going to find
+bee's source.
+
 (The plan action that creates those two landing pages is named in
 [`repo-local-guardrails.md`](repo-local-guardrails.md)'s pointer, which carries the
 same source bullet.)

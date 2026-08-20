@@ -38,6 +38,15 @@ match is untouched by this exemption on purpose: widening it to cover a
 matching key file was considered and rejected as a privacy loss for
 near-zero gain.
 
+**The worker mailbox is exempt from the scratch-shape refusal.** A herded
+worker's only channel back is a file it writes into the mailbox directory, and
+those file names carry the very shapes the scratch heuristic refuses — a log,
+and a staged temporary that is renamed into place. Without the exemption the
+guard denies the worker the one write its whole contract permits, which is how
+it was found: a worker completed its task and then could not report it. The
+exemption is scoped to that directory, so a scratch-named file anywhere else is
+refused exactly as before.
+
 **The idle-gate git check admits a table of safe, non-mutating command forms
 instead of refusing by subcommand alone.** At the terminal, gate-controlled
 phase, a fixed list of read-only subcommands always passes. Beyond that list,
