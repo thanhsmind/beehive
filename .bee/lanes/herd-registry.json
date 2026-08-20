@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "✓ **Checkpoint 2 PASS**: gather cùng slot rơi đúng về Agent/sonnet — quy tắc gương (D7) sống trong flow thật. Checkpoint 3 — chạy payload y",
-    "asked_at": "2026-08-20T04:58:28.029Z",
+    "subject": "▸ Fix retry đã merge (`926770b3`), binary tươi, và **eval chốt** đang chạy — spawn giờ tự gõ lại tới 10 lần khi shell chưa tỉnh. Về là ra ph",
+    "asked_at": "2026-08-20T05:10:54.458Z",
     "session": "1adb69d1-67be-4463-8349-af8832af8a32"
   }
 }

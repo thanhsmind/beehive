@@ -663,5 +663,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-20T04:45:39.480Z"
+  },
+  "herding-start-retry": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T05:11:33.181Z"
   }
 }
