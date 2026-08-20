@@ -288,13 +288,6 @@ trait Herdr {
     /// round N+1 brief to an ALREADY-RUNNING agent, never `agent start`
     /// (that would spawn a second agent instead of continuing this one).
     fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String>;
-    /// `herdr pane read <pane_id>` — the pane's recent text (plain stdout,
-    /// never a JSON envelope), `None` on any trouble. The delivery receipt
-    /// for `deliver_pointer` (herding-prompt-verify D1, source corrected by
-    /// herding-receipt-source D1): `agent read` returns empty for an agy
-    /// pane while `pane read` shows the text — the receipt must be the
-    /// source that sees.
-    fn pane_text(&self, pane_id: &str) -> Option<String>;
     /// `herdr pane list`, membership-tested against `pane_id` — the D3
     /// `--continue` "is the pane gone" check. Unlike `pane_rect` (which
     /// fails open to a default direction on ANY trouble), this fails
@@ -407,20 +400,6 @@ impl Herdr for RealHerdr {
 
     fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String> {
         self.call(&["agent", "prompt", job_id, prompt]).map(|_| ())
-    }
-
-    fn pane_text(&self, pane_id: &str) -> Option<String> {
-        // `pane read` emits plain text on stdout, never a JSON envelope —
-        // a raw capture, not `call` (herding-receipt-source D1).
-        let out = Command::new("herdr")
-            .args(["pane", "read", pane_id])
-            .stdin(Stdio::null())
-            .output()
-            .ok()?;
-        if !out.status.success() {
-            return None;
-        }
-        Some(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 
     fn pane_alive(&self, pane_id: &str) -> bool {
@@ -578,39 +557,44 @@ fn start_with_retry(
 /// ready-wait ceiling passes. Check-then-sleep: an agent already ready is
 /// accepted with zero sleeps, and a 0-second ceiling with no status is
 /// exhausted immediately — both drive the tests without a real clock.
-/// herding-prompt-verify D1: sends the one-line pointer and treats it as
-/// delivered only when the brief file's name is VISIBLE in the agent's
-/// recent pane text — herdr can report idle/interactive_ready before the
-/// agent's input loop accepts injected text (live smoke 6: prompt "sent",
-/// input empty; the identical line landed on a later resend). Bounded
-/// resends; the pointer is idempotent (read the same file), so a duplicate
-/// delivery is harmless. Injected wait/clock, same seam style as the other
-/// loops.
+/// herding-receipt-state D1: sends the one-line pointer and treats it as
+/// delivered only when the AGENT'S STATE says so — `agent_status` flips to
+/// working/done, or the round's result file appears (an ultra-fast round
+/// can finish before a status poll sees "working"). Pane text is no
+/// receipt: the pane echoes the send's own keystrokes during agent boot
+/// (live smoke smoke-agy-delivery-1/-2: the echoed pointer satisfied the
+/// old needle check ~6s after spawn, the booting TUI then discarded the
+/// buffered input, and the run waited on a brief no agent ever saw). An
+/// agent still idle after a per-attempt watch window gets a resend; the
+/// pointer is idempotent (read the same file), so a duplicate delivery is
+/// harmless. Bounded attempts; injected wait seam, same style as the
+/// other loops.
 const POINTER_DELIVERY_ATTEMPTS: u32 = 30;
+/// Status polls after each send before the next resend (~2s at
+/// `POLL_INTERVAL`): live smoke shows a real accepted prompt flips agy to
+/// working ("Generating") within about a second.
+const RECEIPT_POLLS_PER_ATTEMPT: u32 = 10;
 
 fn deliver_pointer(
     job_id: &str,
     pointer: &str,
-    receipt_needle: &str,
     prompt: &mut dyn FnMut(&str) -> Result<(), String>,
-    text: &mut dyn FnMut() -> Option<String>,
+    status: &mut dyn FnMut() -> Option<String>,
+    result_present: &mut dyn FnMut() -> bool,
     sleep: &mut dyn FnMut(Duration),
 ) -> Result<(), String> {
     let _ = job_id;
-    for attempt in 1..=POINTER_DELIVERY_ATTEMPTS {
+    for _ in 1..=POINTER_DELIVERY_ATTEMPTS {
         prompt(pointer).map_err(|e| format!("agent prompt failed: {e}"))?;
-        sleep(POLL_INTERVAL);
-        if text().is_some_and(|t| t.contains(receipt_needle)) {
-            return Ok(());
-        }
-        if attempt < POINTER_DELIVERY_ATTEMPTS {
-            // ~1s between attempts (herding-receipt-source D2): smoke 7
-            // proved the input can stay deaf well past 5 quick sends.
-            sleep(POLL_INTERVAL * 4);
+        for _ in 0..RECEIPT_POLLS_PER_ATTEMPT {
+            if matches!(status().as_deref(), Some("working") | Some("done")) || result_present() {
+                return Ok(());
+            }
+            sleep(POLL_INTERVAL);
         }
     }
     Err(format!(
-        "pointer prompt never became visible in the pane after {POINTER_DELIVERY_ATTEMPTS} sends (delivery verify)"
+        "agent stayed idle through {POINTER_DELIVERY_ATTEMPTS} pointer sends — the prompt was never accepted (state receipt)"
     ))
 }
 
@@ -949,13 +933,13 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         };
     }
     let pointer = mailbox::pointer_prompt(&brief_file);
-    let needle = format!("brief-1.txt");
+    let round1_result = mailbox::result_path(&bee_dir, &opts.job_id, 1);
     if let Err(e) = deliver_pointer(
         &opts.job_id,
         &pointer,
-        &needle,
         &mut |p| herdr.agent_prompt(&opts.job_id, p),
-        &mut || herdr.pane_text(&new_pane),
+        &mut || herdr.agent_status(&opts.job_id),
+        &mut || round1_result.exists(),
         &mut |d| std::thread::sleep(d),
     ) {
         return ExecResult {
@@ -1086,13 +1070,13 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         };
     }
     let pointer = mailbox::pointer_prompt(&brief_file);
-    let needle = format!("brief-{next_round}.txt");
+    let round_result = mailbox::result_path(&bee_dir, job_id, next_round);
     if let Err(e) = deliver_pointer(
         job_id,
         &pointer,
-        &needle,
         &mut |p| herdr.agent_prompt(job_id, p),
-        &mut || herdr.pane_text(&pane_id),
+        &mut || herdr.agent_status(job_id),
+        &mut || round_result.exists(),
         &mut |d| std::thread::sleep(d),
     ) {
         return ExecResult {
@@ -1363,10 +1347,12 @@ mod tests {
         /// how a herd-registry test proves a named `--agent` resolution
         /// reached the spawn, not merely that SOME start happened.
         started_kind: RefCell<Option<String>>,
-        /// How many `agent_text` reads return None (pointer not yet
-        /// visible) before the pane starts echoing the last prompt —
-        /// the delivery-race script (herding-prompt-verify D1).
-        text_blind_reads: RefCell<u32>,
+        /// One status returned (and consumed) by `agent_status` after the
+        /// first `agent_prompt` — the delivery receipt's "the agent took
+        /// the prompt" flip (herding-receipt-state D1). Steady-state
+        /// `status` answers before any prompt and after this is consumed,
+        /// so `wait_for_round`'s idle-timeout still sees an idle agent.
+        status_once_after_prompt: RefCell<Option<String>>,
     }
 
     impl FakeHerdr {
@@ -1383,7 +1369,7 @@ mod tests {
                 prompt_calls: RefCell::new(Vec::new()),
                 start_calls: RefCell::new(Vec::new()),
                 started_kind: RefCell::new(None),
-                text_blind_reads: RefCell::new(0),
+                status_once_after_prompt: RefCell::new(Some("working".to_string())),
             }
         }
     }
@@ -1410,6 +1396,11 @@ mod tests {
             self.start_result.clone()
         }
         fn agent_status(&self, _job_id: &str) -> Option<String> {
+            if !self.prompt_calls.borrow().is_empty() {
+                if let Some(s) = self.status_once_after_prompt.borrow_mut().take() {
+                    return Some(s);
+                }
+            }
             self.status.borrow().clone()
         }
         fn pane_close(&self, pane_id: &str) -> Result<(), String> {
@@ -1419,14 +1410,6 @@ mod tests {
         fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String> {
             self.prompt_calls.borrow_mut().push((job_id.to_string(), prompt.to_string()));
             self.prompt_result.clone()
-        }
-        fn pane_text(&self, _pane_id: &str) -> Option<String> {
-            let mut blind = self.text_blind_reads.borrow_mut();
-            if *blind > 0 {
-                *blind -= 1;
-                return None;
-            }
-            self.prompt_calls.borrow().last().map(|(_, p)| p.clone())
         }
         fn pane_alive(&self, pane_id: &str) -> bool {
             self.alive_panes.borrow().iter().any(|p| p == pane_id)
@@ -1463,9 +1446,6 @@ mod tests {
         }
         fn agent_prompt(&self, _job_id: &str, _prompt: &str) -> Result<(), String> {
             panic!("dry-run must never call Herdr::agent_prompt")
-        }
-        fn pane_text(&self, _pane_id: &str) -> Option<String> {
-            panic!("dry-run must never call Herdr::agent_text")
         }
         fn pane_alive(&self, _pane_id: &str) -> bool {
             panic!("dry-run must never call Herdr::pane_alive")
@@ -1617,50 +1597,77 @@ mod tests {
     }
 
     #[test]
-    fn pointer_delivery_resends_until_the_pane_echoes_it_and_stops_there() {
-        // Script: two blind reads (pane not echoing yet), then the echo.
-        // Expect exactly 3 sends and success. Injected sleep, no clock.
+    fn pointer_delivery_resends_while_the_agent_stays_idle_and_stops_on_working() {
+        // herding-receipt-state D1: idle polls through the first attempt's
+        // whole watch window drive a resend; the first "working" poll is
+        // the receipt. Injected sleep, no clock.
         let sent = std::cell::RefCell::new(0u32);
-        let reads = std::cell::RefCell::new(0u32);
+        let polls = std::cell::RefCell::new(0u32);
         let out = deliver_pointer(
             "job-1",
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
-            "brief-1.txt",
             &mut |_p| {
                 *sent.borrow_mut() += 1;
                 Ok(())
             },
             &mut || {
-                *reads.borrow_mut() += 1;
-                if *reads.borrow() <= 2 {
-                    None
+                *polls.borrow_mut() += 1;
+                if *polls.borrow() <= RECEIPT_POLLS_PER_ATTEMPT {
+                    Some("idle".to_string())
                 } else {
-                    Some("> Read the file /x/brief-1.txt and follow its instructions exactly.".to_string())
+                    Some("working".to_string())
                 }
             },
+            &mut || false,
             &mut |_d| {},
         );
         assert!(out.is_ok());
-        assert_eq!(*sent.borrow(), 3, "one send per blind read, stop on the echo");
+        assert_eq!(*sent.borrow(), 2, "one idle window exhausted, delivered on the resend");
     }
 
     #[test]
-    fn pointer_delivery_exhaustion_is_a_typed_failure() {
+    fn pointer_delivery_never_trusts_an_idle_agent_even_with_the_pointer_on_screen() {
+        // herding-receipt-state D1 regression (live smoke
+        // smoke-agy-delivery-1/-2): during boot the pane ECHOES the send's
+        // own keystrokes, so any text-based receipt false-positives while
+        // the agent stays idle and the input is lost. An agent that never
+        // leaves idle is never "delivered", no matter what the pane shows —
+        // the receipt takes no pane text at all.
         let sent = std::cell::RefCell::new(0u32);
         let out = deliver_pointer(
             "job-1",
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
-            "brief-1.txt",
             &mut |_p| {
                 *sent.borrow_mut() += 1;
                 Ok(())
             },
-            &mut || None,
+            &mut || Some("idle".to_string()),
+            &mut || false,
             &mut |_d| {},
         );
         let err = out.unwrap_err();
-        assert!(err.contains("delivery verify"), "{err}");
+        assert!(err.contains("state receipt"), "{err}");
         assert_eq!(*sent.borrow(), POINTER_DELIVERY_ATTEMPTS);
+    }
+
+    #[test]
+    fn pointer_delivery_accepts_the_round_result_as_receipt() {
+        // An ultra-fast round can finish before any status poll catches
+        // "working" — the result file's presence is an equally hard receipt.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "job-1",
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("idle".to_string()),
+            &mut || true,
+            &mut |_d| {},
+        );
+        assert!(out.is_ok());
+        assert_eq!(*sent.borrow(), 1, "result present on the first poll: one send, no resend");
     }
 
     #[test]
