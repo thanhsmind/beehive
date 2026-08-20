@@ -2,7 +2,7 @@
 //! the whole uat-placement policy, stated once, so the merge side and the
 //! close side never carry two copies of it.
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::path::Path;
 
 /// D1: where the uat stop sits for a feature — `Merge` (the door blocks
@@ -134,43 +134,72 @@ pub(crate) fn uat_gate_approved(main_root: &Path, feature: &str) -> bool {
     lane_approved || default_state_approved
 }
 
-/// uat-stop-placement D4 revision (usp-3): the ONE lane-classification read
-/// for the uat door, lifted verbatim from the merge side's
-/// `uat_merge_precheck` (`verbs/worktree/phases.rs`) so `bee close` and
-/// `bee worktree merge` never disagree on which lane a feature is in.
+/// uls-1 revision (uat-lane-source): `uat_lane_mode` resolves the LANE
+/// classification, not the workflow mode. MEASURED on the live store:
+/// `mode` carries the WORKFLOW vocabulary (`ROUTE_CLASS_VALUES`:
+/// "feature", "release", … — what `state start-feature --mode` writes),
+/// while `route.lane` carries the ROUTE-LANE vocabulary
+/// (`ROUTE_LANE_VALUES`, verbs/state_group/workflows.rs:289-290:
+/// tiny/small/standard/high-risk/docs/spike — what `bee route --set
+/// --lane` writes). Because `mode` is almost never a lane value,
+/// `uat_gate_applies_to_lane`'s tiny/small/docs/spike exemption had
+/// effectively never fired, and every feature was asked for uat
+/// regardless of lane — over-strict, never unsafe, which is exactly why
+/// no test and no user caught it.
 ///
-/// Before this, `close`'s uat door classified through `feature_route`
-/// (which prefers a lane record's `route.lane`) while `merge` classified
-/// through the live workflow's — or the lane record's — `mode`. The two
-/// disagree whenever a record's `route.lane` and `mode` name different lane
-/// classes (12 of 95 real records in `.bee/lanes` at the time of this fix,
-/// e.g. `.bee/lanes/knowledge-loop.json`: `mode` "standard", `route.lane`
-/// "small"): under `uat_stop: "close"` the merge side would set the uat
-/// wait while `bee close` reported the same feature exempt, and the stop
-/// vanished silently.
+/// The prior revision (usp-3) fixed a REAL two-source divergence: the
+/// merge side (`uat_merge_precheck`, `verbs/worktree/phases.rs`) and the
+/// close side (`feature_route`) disagreed whenever a record's
+/// `route.lane` and `mode` named different lane classes (12 of 95 real
+/// records in `.bee/lanes` at the time, e.g.
+/// `.bee/lanes/knowledge-loop.json`: `mode` "standard", `route.lane`
+/// "small"). That divergence was real, and unifying both doors onto ONE
+/// function was the right shape. But usp-3's cell brief named the MERGE
+/// side canonical by instruction rather than by evidence — and the merge
+/// side was reading `mode`, the wrong field. This revision keeps the
+/// one-function shape usp-3 established and corrects which field it
+/// reads.
 ///
-/// Read order, exactly mirroring the merge side: prefer the live workflow
-/// record's own `mode` field, falling back to `.bee/lanes/<feature>.json`'s
-/// `mode` (`read_lane_display`, the same fail-open display read `close`'s
-/// own scoping already reuses) when no live workflow names the feature.
-/// `route.lane` is never consulted here — only `judge-debt` and the other
-/// doors that call `feature_route` directly still read it, unchanged.
-/// Every read is fail-open by construction (`list_workflows`,
-/// `read_lane_display` never throw for an ordinary missing/corrupt shape),
-/// so an unreadable store returns `None`, which `uat_gate_applies_to_lane`
-/// then reads as "standard" (applies) — the safe direction.
+/// Read order: the live workflow record's own `route.lane` first, then
+/// `.bee/lanes/<feature>.json`'s `route.lane` (`read_lane_display`, the
+/// same fail-open display read this file already uses elsewhere) when no
+/// live workflow names the feature, then — ONLY as a legacy fallback for
+/// older records that never got a `route.lane` written — `mode` (live
+/// first, then lane), and ONLY when that value is itself a recognized
+/// member of the route-lane vocabulary. Mirrors `ROUTE_LANE_VALUES`
+/// (verbs/state_group/workflows.rs:289-290) without importing it: that
+/// const is module-private there. A `mode` of "feature", "release", or
+/// anything else outside that set contributes nothing. Every read is
+/// fail-open by construction (`list_workflows`, `read_lane_display` never
+/// throw for an ordinary missing/corrupt shape), so an unreadable store
+/// returns `None`, which `uat_gate_applies_to_lane` then reads as
+/// "standard" (applies) — the safe direction, unchanged.
+const ROUTE_LANE_CLASSES: [&str; 6] = ["docs", "tiny", "small", "spike", "standard", "high-risk"];
+
 pub(crate) fn uat_lane_mode(main_root: &Path, feature: &str) -> Option<String> {
     let workflows = crate::verbs::workflow_store::list_workflows(main_root).unwrap_or_default();
     let live = crate::verbs::workflow_store::find_live_workflow(&workflows, feature);
-    live.and_then(|wf| wf.get("mode"))
-        .and_then(Value::as_str)
-        .map(str::to_string)
-        .or_else(|| {
-            crate::verbs::workflow_store::read_lane_display(main_root, feature)
-                .ok()
-                .flatten()
-                .and_then(|rec| rec.get("mode").and_then(Value::as_str).map(str::to_string))
-        })
+    let lane_record = crate::verbs::workflow_store::read_lane_display(main_root, feature)
+        .ok()
+        .flatten();
+
+    let route_lane = |v: &Map<String, Value>| -> Option<String> {
+        v.get("route")
+            .and_then(|r| r.get("lane"))
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    };
+    let mode_as_lane = |v: &Map<String, Value>| -> Option<String> {
+        v.get("mode")
+            .and_then(Value::as_str)
+            .filter(|m| ROUTE_LANE_CLASSES.contains(m))
+            .map(str::to_string)
+    };
+
+    live.and_then(route_lane)
+        .or_else(|| lane_record.as_ref().and_then(route_lane))
+        .or_else(|| live.and_then(mode_as_lane))
+        .or_else(|| lane_record.as_ref().and_then(mode_as_lane))
 }
 
 #[cfg(test)]
@@ -267,5 +296,92 @@ mod tests {
         assert!(uat_gate_applies_to_lane(Some("high-risk")));
         assert!(uat_gate_applies_to_lane(None));
         assert!(uat_gate_applies_to_lane(Some("bogus-lane")));
+    }
+
+    // ─── uls-1: uat_lane_mode resolves route.lane, not mode ────────────────
+
+    fn write_workflow(root: &Path, id: &str, body: &str) {
+        let dir = crate::verbs::workflow_store::workflows_dir(root).join(id);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("state.json"), body).unwrap();
+    }
+
+    fn write_lane(root: &Path, feature: &str, body: &str) {
+        let dir = crate::verbs::workflow_store::lanes_dir(root);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join(format!("{feature}.json")), body).unwrap();
+    }
+
+    #[test]
+    fn mode_feature_with_route_lane_small_resolves_small_and_is_exempt() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_workflow(
+            tmp.path(),
+            "wf-1",
+            r#"{"id": "wf-1", "feature": "f1", "status": "active", "mode": "feature", "route": {"lane": "small"}}"#,
+        );
+        let lane = uat_lane_mode(tmp.path(), "f1");
+        assert_eq!(lane.as_deref(), Some("small"));
+        assert!(!uat_gate_applies_to_lane(lane.as_deref()));
+    }
+
+    #[test]
+    fn mode_feature_with_route_lane_standard_resolves_standard_and_applies() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_workflow(
+            tmp.path(),
+            "wf-2",
+            r#"{"id": "wf-2", "feature": "f2", "status": "active", "mode": "feature", "route": {"lane": "standard"}}"#,
+        );
+        let lane = uat_lane_mode(tmp.path(), "f2");
+        assert_eq!(lane.as_deref(), Some("standard"));
+        assert!(uat_gate_applies_to_lane(lane.as_deref()));
+    }
+
+    #[test]
+    fn legacy_mode_standard_with_no_route_resolves_standard() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_lane(tmp.path(), "f3", r#"{"feature": "f3", "mode": "standard"}"#);
+        assert_eq!(uat_lane_mode(tmp.path(), "f3").as_deref(), Some("standard"));
+    }
+
+    #[test]
+    fn route_lane_wins_over_a_mode_that_also_looks_like_a_lane() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_workflow(
+            tmp.path(),
+            "wf-4",
+            r#"{"id": "wf-4", "feature": "f4", "status": "active", "mode": "standard", "route": {"lane": "small"}}"#,
+        );
+        assert_eq!(uat_lane_mode(tmp.path(), "f4").as_deref(), Some("small"));
+    }
+
+    #[test]
+    fn mode_feature_with_no_route_yields_none_and_applies() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_workflow(
+            tmp.path(),
+            "wf-5",
+            r#"{"id": "wf-5", "feature": "f5", "status": "active", "mode": "feature"}"#,
+        );
+        let lane = uat_lane_mode(tmp.path(), "f5");
+        assert_eq!(lane, None);
+        assert!(uat_gate_applies_to_lane(lane.as_deref()));
+    }
+
+    #[test]
+    fn live_workflow_route_lane_beats_the_lane_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_workflow(
+            tmp.path(),
+            "wf-6",
+            r#"{"id": "wf-6", "feature": "f6", "status": "active", "mode": "feature", "route": {"lane": "standard"}}"#,
+        );
+        write_lane(
+            tmp.path(),
+            "f6",
+            r#"{"feature": "f6", "mode": "feature", "route": {"lane": "small"}}"#,
+        );
+        assert_eq!(uat_lane_mode(tmp.path(), "f6").as_deref(), Some("standard"));
     }
 }
