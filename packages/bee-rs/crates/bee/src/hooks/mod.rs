@@ -110,6 +110,14 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         print_hook_usage();
         return Some(ExitCode::SUCCESS);
     }
+    // herding-worker-standalone D3: a herded worker pane carries
+    // BEE_HERDING_WORKER=1 (herding/run.rs D2). Every hook invocation in
+    // that pane exits 0 silently, before stdin is read or any hook runs —
+    // the worker's posture is already fully-open (herding-adopt D7), so it
+    // gets zero bee preamble, zero guards, zero nudges.
+    if std::env::var("BEE_HERDING_WORKER").is_ok_and(|v| !v.is_empty()) {
+        return Some(ExitCode::SUCCESS);
+    }
     let rest: Vec<String> = args
         .get(2..)
         .unwrap_or(&[])
@@ -166,5 +174,60 @@ mod tests {
         let args = vec![OsString::from("hook"), OsString::from("-h")];
         let code = try_native(&args).expect("bee hook -h is a hook invocation");
         assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
+    }
+
+    /// `BEE_HERDING_WORKER` is process environment, and cargo runs this
+    /// crate's tests on parallel threads of the same process — every test
+    /// that reads or writes it takes this lock, same shape
+    /// `verbs/status_full/tests.rs`'s `session_env_lock`.
+    fn herding_worker_env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// herding-worker-standalone D3: under the marker, a hook invocation
+    /// exits 0 silently — no dispatch, no output. An unknown hook name
+    /// would otherwise dispatch to `ExitCode::FAILURE` (see the
+    /// `_ =>` arm), so a SUCCESS here proves the marker short-circuited
+    /// before dispatch.
+    #[test]
+    fn under_the_marker_a_hook_invocation_exits_zero_silently() {
+        let _guard = herding_worker_env_lock();
+        let prior = std::env::var_os("BEE_HERDING_WORKER");
+        // SAFETY: `herding_worker_env_lock` serializes every test in this
+        // module that touches this var.
+        unsafe { std::env::set_var("BEE_HERDING_WORKER", "1") };
+
+        let args = vec![OsString::from("hook"), OsString::from("some-unknown-hook")];
+        let code = try_native(&args).expect("bee hook <name> is a hook invocation");
+        assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::SUCCESS));
+
+        // SAFETY: see above.
+        match prior {
+            Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+            None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+        }
+    }
+
+    /// herding-worker-standalone D3: without the marker, the same
+    /// invocation reaches dispatch — an unknown hook name hits the `_ =>`
+    /// arm and exits `FAILURE`, proving dispatch ran rather than the
+    /// marker's early return.
+    #[test]
+    fn without_the_marker_the_same_invocation_reaches_dispatch() {
+        let _guard = herding_worker_env_lock();
+        let prior = std::env::var_os("BEE_HERDING_WORKER");
+        // SAFETY: see `under_the_marker_a_hook_invocation_exits_zero_silently`.
+        unsafe { std::env::remove_var("BEE_HERDING_WORKER") };
+
+        let args = vec![OsString::from("hook"), OsString::from("some-unknown-hook")];
+        let code = try_native(&args).expect("bee hook <name> is a hook invocation");
+        assert_eq!(format!("{code:?}"), format!("{:?}", ExitCode::FAILURE));
+
+        // SAFETY: see above.
+        match prior {
+            Some(v) => unsafe { std::env::set_var("BEE_HERDING_WORKER", v) },
+            None => unsafe { std::env::remove_var("BEE_HERDING_WORKER") },
+        }
     }
 }

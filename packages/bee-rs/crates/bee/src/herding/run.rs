@@ -910,23 +910,27 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
     };
 
-    // D4: a registry entry's env, when non-empty, is exported into the
-    // freshly split pane BEFORE the agent starts — so the agent's own
-    // process inherits it — and treated exactly like a start failure: the
-    // agent never started, so the pane this call just split is closed.
-    if !env.is_empty() {
-        let export_line = build_export_line(&env);
-        if let Err(e) = herdr.pane_run(&new_pane, &export_line) {
-            let closed = herdr.pane_close(&new_pane).is_ok();
-            if !closed {
-                eprintln!("bee herding run: could not close pane {new_pane} after a failed env export");
-            }
-            return ExecResult {
-                outcome: RunOutcome::SpawnFailed(format!("env export failed: {e}")),
-                pane_id: Some(new_pane),
-                closed_pane: closed,
-            };
+    // D4 + herding-worker-standalone D2: the registry entry's env is
+    // exported into the freshly split pane BEFORE the agent starts — so the
+    // agent's own process inherits it — merged with the
+    // `BEE_HERDING_WORKER=1` marker, which wins over any same-name
+    // per-agent value. The marker means this export is sent on EVERY fresh
+    // spawn, not only when the per-agent env is non-empty. Treated exactly
+    // like a start failure: the agent never started, so the pane this call
+    // just split is closed.
+    let mut pane_env = env.clone();
+    pane_env.insert("BEE_HERDING_WORKER".to_string(), "1".to_string());
+    let export_line = build_export_line(&pane_env);
+    if let Err(e) = herdr.pane_run(&new_pane, &export_line) {
+        let closed = herdr.pane_close(&new_pane).is_ok();
+        if !closed {
+            eprintln!("bee herding run: could not close pane {new_pane} after a failed env export");
         }
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("env export failed: {e}")),
+            pane_id: Some(new_pane),
+            closed_pane: closed,
+        };
     }
 
     let start_result = start_with_retry(
@@ -2178,7 +2182,7 @@ mod tests {
         let calls = fake.pane_run_calls.borrow();
         assert_eq!(calls.len(), 1, "exactly one env export line must be sent, got {calls:?}");
         assert_eq!(calls[0].0, "w1:p2", "the export line must go to the newly split pane");
-        assert_eq!(calls[0].1, r#"export API_KEY='it'\''s-a-secret'"#);
+        assert_eq!(calls[0].1, r#"export API_KEY='it'\''s-a-secret' BEE_HERDING_WORKER='1'"#);
     }
 
     #[test]
@@ -2214,7 +2218,7 @@ mod tests {
     }
 
     #[test]
-    fn the_export_line_is_sent_before_agent_start_and_never_for_array_shape_entries() {
+    fn the_export_line_is_always_sent_before_agent_start_marker_present_even_for_array_shape_entries() {
         let tmp = tempfile::tempdir().unwrap();
         let main_root = tmp.path();
         std::fs::create_dir_all(main_root.join(".bee")).unwrap();
@@ -2242,7 +2246,11 @@ mod tests {
         let pane_run_idx = log.iter().position(|c| *c == "pane_run").expect("pane_run must be called");
         let agent_start_idx = log.iter().position(|c| *c == "agent_start").expect("agent_start must be called");
         assert!(pane_run_idx < agent_start_idx, "pane_run must precede agent_start: {log:?}");
+        assert_eq!(fake.pane_run_calls.borrow()[0].1, "export BEE_HERDING_WORKER='1' K='v'");
 
+        // herding-worker-standalone D2: a fresh spawn ALWAYS sends the
+        // export, marker included, even for an array-shape (env-less)
+        // registry entry.
         let mut opts2 = test_options(main_root, false);
         opts2.agent = Some("codex-plain".to_string());
         opts2.job_id = "job-plain".to_string();
@@ -2250,7 +2258,41 @@ mod tests {
         let fake2 = FakeHerdr::new();
         let result2 = execute(&opts2, &fake2);
         assert!(matches!(result2.outcome, RunOutcome::Result(_)), "got {:?}", result2.outcome);
-        assert!(fake2.pane_run_calls.borrow().is_empty(), "an array-shape entry must never send an export line");
+        let calls2 = fake2.pane_run_calls.borrow();
+        assert_eq!(calls2.len(), 1, "an array-shape entry must still send the marker export, got {calls2:?}");
+        assert_eq!(calls2[0].1, "export BEE_HERDING_WORKER='1'");
+    }
+
+    #[test]
+    fn the_marker_wins_over_a_same_name_per_agent_env_value() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({
+                "herding": {
+                    "agents": {
+                        "codex-override": {
+                            "argv": ["codex", "--flag"],
+                            "env": {"BEE_HERDING_WORKER": "0"},
+                        }
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("codex-override".to_string());
+        seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        let calls = fake.pane_run_calls.borrow();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].1, "export BEE_HERDING_WORKER='1'", "the marker must win over a same-name per-agent value");
     }
 
     // ─── --continue (D3) ────────────────────────────────────────────────
