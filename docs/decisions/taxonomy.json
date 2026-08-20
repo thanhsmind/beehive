@@ -367,6 +367,9 @@
     "public-contracts",
     "test-doctrine",
     "delivery",
-    "receipt"
+    "receipt",
+    "defaults",
+    "staging",
+    "env"
   ]
 }

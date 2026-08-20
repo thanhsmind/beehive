@@ -13,8 +13,8 @@
   "gate_bypass": "normal",
   "models": {
     "claude": {
-      "extraction": "haiku",
-      "generation": "sonnet",
+      "extraction": { "kind": "herding", "agent": "agy-flash", "fallback": "default"},
+      "generation": { "kind": "herding", "agent": "agy-flash", "fallback": "default"},
       "review": "opus",
       "advisor": "fable"
     },
@@ -27,9 +27,27 @@
         "promptVia": "stdin"
       }
     }
-  },
-  "herding": {
+  },"herding": {
+    "agent_command": "claude-sonnet",
+    "control_command": [
+      "claude",
+      "-p",
+      "{PROMPT}",
+      "--model",
+      "sonnet",
+      "--max-turns",
+      "{MAX_TURNS}",
+      "--allowedTools",
+      "{ALLOWED_TOOLS}"
+    ],
     "agents": {
+      "claude-sonnet": [
+        "claude",
+        "--model",
+        "sonnet",
+        "--permission-mode",
+        "bypassPermissions"
+      ],
       "agy-flash": [
         "agy",
         "--dangerously-skip-permissions"
