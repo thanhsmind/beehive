@@ -74,6 +74,13 @@ struct Options {
     /// spawning a fresh pane. `job_id` above already carries the target id
     /// in this mode — `execute` branches on this flag alone.
     is_continue: bool,
+    /// Ready-wait ceiling (herding-run-ready-wait D1): how long a fresh
+    /// spawn waits for the started agent to report ready-for-input before
+    /// the round-1 brief is sent. `agent start`'s own success can fire
+    /// before the agent accepts input (live smoke smoke-agy-2: the brief
+    /// landed above the boot banner and was lost), so the prompt waits for
+    /// an observed ready status.
+    ready_wait_secs: u64,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -217,6 +224,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         json,
         dry_run,
         is_continue,
+        ready_wait_secs: 60,
     })
 }
 
@@ -501,6 +509,30 @@ fn run_poll_loop(
     }
 }
 
+/// herding-run-ready-wait D1: polls `status()` until the agent reports a
+/// real status (`idle` ready-for-input, or already `working`/`done`) or the
+/// ready-wait ceiling passes. Check-then-sleep: an agent already ready is
+/// accepted with zero sleeps, and a 0-second ceiling with no status is
+/// exhausted immediately — both drive the tests without a real clock.
+fn wait_for_agent_ready(
+    ready_wait_secs: u64,
+    poll_interval: Duration,
+    mut status: impl FnMut() -> Option<String>,
+    mut sleep: impl FnMut(Duration),
+    mut now: impl FnMut() -> i64,
+) -> bool {
+    let started = now();
+    loop {
+        if matches!(status().as_deref(), Some("idle") | Some("working") | Some("done")) {
+            return true;
+        }
+        if now().saturating_sub(started) >= (ready_wait_secs as i64).saturating_mul(1000) {
+            return false;
+        }
+        sleep(poll_interval);
+    }
+}
+
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
@@ -774,6 +806,27 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
             outcome: RunOutcome::SpawnFailed(format!("agent start failed: {e}")),
             pane_id: Some(new_pane),
             closed_pane: closed,
+        };
+    }
+
+    // herding-run-ready-wait D1: the started agent must REPORT ready before
+    // the brief is sent — `agent start`'s success can precede real input
+    // readiness, and a brief typed into the boot banner is lost.
+    let ready = wait_for_agent_ready(
+        opts.ready_wait_secs,
+        POLL_INTERVAL,
+        || herdr.agent_status(&opts.job_id),
+        |d| std::thread::sleep(d),
+        now_ms,
+    );
+    if !ready {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!(
+                "agent never reported ready within {}s (ready-wait) — pane kept for inspection",
+                opts.ready_wait_secs
+            )),
+            pane_id: Some(new_pane),
+            closed_pane: false,
         };
     }
 
@@ -1177,7 +1230,7 @@ mod tests {
                 split_result: Ok("w1:p2".to_string()),
                 start_result: Ok(()),
                 prompt_result: Ok(()),
-                status: RefCell::new(None),
+                status: RefCell::new(Some("idle".to_string())),
                 closed: RefCell::new(Vec::new()),
                 alive_panes: RefCell::new(vec!["w1:p2".to_string()]),
                 prompt_calls: RefCell::new(Vec::new()),
@@ -1270,6 +1323,7 @@ mod tests {
             json: true,
             dry_run,
             is_continue: false,
+            ready_wait_secs: 60,
         }
     }
 
@@ -1313,6 +1367,7 @@ mod tests {
             json: true,
             dry_run,
             is_continue: true,
+            ready_wait_secs: 60,
         }
     }
 
@@ -1351,6 +1406,51 @@ mod tests {
         assert!(matches!(result.outcome, RunOutcome::SpawnFailed(_)), "got {:?}", result.outcome);
         assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
         assert!(result.closed_pane);
+    }
+
+    #[test]
+    fn ready_wait_accepts_an_agent_once_its_status_flips_and_only_then() {
+        // herding-run-ready-wait D1, injected clock: status None for the
+        // first two polls (booting — the smoke's lost-brief window), idle on
+        // the third. No real sleep.
+        let mut clock = 0i64;
+        let statuses = std::cell::RefCell::new(vec![None, None, Some("idle".to_string())]);
+        let mut polls = 0u32;
+        let ready = wait_for_agent_ready(
+            60,
+            Duration::from_millis(500),
+            || {
+                polls += 1;
+                let mut v = statuses.borrow_mut();
+                if v.is_empty() { Some("idle".to_string()) } else { v.remove(0) }
+            },
+            |_| {},
+            || {
+                clock += 500;
+                clock
+            },
+        );
+        assert!(ready);
+        assert_eq!(polls, 3, "ready only on the third status read");
+    }
+
+    #[test]
+    fn ready_wait_exhaustion_is_a_typed_spawn_failure_that_keeps_the_pane() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        // 0-second ready-wait + an agent that never reports a status:
+        // exhausted on the first check, before any sleep.
+        opts.ready_wait_secs = 0;
+        let mut fake = FakeHerdr::new();
+        fake.status = RefCell::new(None);
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => assert!(msg.contains("ready-wait"), "{msg}"),
+            other => panic!("expected SpawnFailed(ready-wait), got {other:?}"),
+        }
+        assert!(!result.closed_pane, "pane stays for inspection");
+        assert!(fake.closed.borrow().is_empty());
+        assert!(fake.prompt_calls.borrow().is_empty(), "no brief before readiness");
     }
 
     #[test]

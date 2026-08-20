@@ -1,0 +1,41 @@
+{
+  "id": "hrw-1",
+  "feature": "herding-run-ready-wait",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Wait for agent readiness before sending the round-1 brief",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-run-ready-wait/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Per D1: after agent_start succeeds, poll agent readiness (agent_status idle-or-equivalent; honor interactive_ready when the Herdr impl exposes it — extend the trait minimally if needed, updating FakeHerdr/PanicHerdr) with the existing injected-clock seam, bounded by a 60s ready-wait; then agent_prompt the brief. Exhaustion = typed SpawnFailed keeping the pane. Tests: brief prompt happens only after readiness flips; exhaustion path keeps the pane and names ready-wait in the message.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::run",
+  "must_haves": {
+    "truths": [
+      "No brief prompt before the agent reports ready",
+      "Ready-wait exhaustion is a typed failure that keeps the pane"
+    ]
+  },
+  "decisions": [
+    "herding-run-ready-wait D1"
+  ],
+  "deps": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
