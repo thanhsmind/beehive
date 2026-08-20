@@ -7,7 +7,7 @@
 
 ## Feature Boundary
 
-After sending the pointer prompt, `bee herding run` verifies the pointer text is actually visible in the agent's pane and resends it (bounded) when it is not — because herdr reports idle/interactive_ready before the agent's input loop accepts injected text (live smoke 6: brief-1.txt written, prompt "sent", input empty; a later manual resend of the identical line landed). One file plus the trait seam.
+After sending the pointer prompt, `bee herding run` verifies the pointer text is actually visible in the agent's pane and resends it (bounded) when it is not — because herdr reports idle/interactive_ready before the agent's input loop accepts injected text (live smoke 6: brief-1.txt written, prompt "sent", input empty; a follow-up manual resend of the identical line landed). One file plus the trait seam.
 
 ## Locked Decisions
 
