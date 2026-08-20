@@ -7,6 +7,12 @@
     "session-close": true,
     "write-guard": true
   },
+  "ship_visibility": "on",
+  "worktree_first": "on",
+  "worktree_cleanup_on_merge": true,
+  "uat_stop": "off",
+  "uat_before_merge": false,
+  "staging_before_merge": false,
   "commands": {
     "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"
   },

@@ -61,6 +61,36 @@
     "warnings": [
       "advisory: this cap's commit changes 562 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "builtin-registry",
+            "status": "PASS",
+            "evidence": "cargo test herding green — built-in claude-sonnet and agy-flash resolve with empty config, same-name config entry overrides; UnknownAgent listing includes built-ins; live dry-run resolved --agent agy-flash"
+          },
+          {
+            "id": "per-agent-env",
+            "status": "PASS",
+            "evidence": "object-shape {argv, env} parses; export line sent into the pane BEFORE agent start only when env non-empty (order asserted via fake call log); invalid env key or newline value drops that entry only"
+          },
+          {
+            "id": "wave-path-deviation-recorded",
+            "status": "PASS",
+            "evidence": "wave/control-loop caller resolves env but cannot apply it (agent start lives in fleet::backend::herdr, outside cell scope) — documented in a code comment and the cell report deviation"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-fable-5",
+        "judge_model": "claude-fable-5",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-20T10:29:05.071Z"
+      }
+    ]
   }
 }

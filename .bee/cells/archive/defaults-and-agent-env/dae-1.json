@@ -72,6 +72,41 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "absent-uat-reads-close",
+            "status": "PASS",
+            "evidence": "cargo test uat: 60 passed — new test pins both-keys-absent == UatStop::Close; explicit values and the uat_before_merge alias keep prior meanings (assertions unchanged)"
+          },
+          {
+            "id": "staging-opt-in",
+            "status": "PASS",
+            "evidence": "cargo test staging: 25 passed — absent staging_before_merge == false, staging add refuses STAGING_DISABLED with no key; explicit true enables"
+          },
+          {
+            "id": "frozen-test-touch-reviewed",
+            "status": "PASS",
+            "evidence": "orchestrator reviewed git show 7155d8eb — cells_archive_sweep.rs and driver test fixtures only pin uat_stop:off to isolate unrelated tests from the new default, each with an explanatory comment; direct uat_stop tests repinned to explicit values, no assertion weakened"
+          },
+          {
+            "id": "docs-and-sample-flipped",
+            "status": "PASS",
+            "evidence": ".bee/config-sample.json values + _doc strings and docs/config-reference.md rows state the new absent-key defaults"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-fable-5",
+        "judge_model": "claude-fable-5",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-20T10:29:05.068Z"
+      }
+    ]
   }
 }

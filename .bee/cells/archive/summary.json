@@ -673,5 +673,10 @@
     "capped": 3,
     "dropped": 0,
     "archived_at": "2026-08-20T06:45:22.244Z"
+  },
+  "defaults-and-agent-env": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-20T10:29:50.893Z"
   }
 }
