@@ -284,17 +284,43 @@ fn resolve_from_registry(
     Ok((kind.clone(), args.to_vec(), entry.env.clone()))
 }
 
+/// Returns the configured agent name from the cell-execution tier slot
+/// (`models.<runtime>.generation`), but ONLY when it is an object with
+/// `kind == "herding"` and an `agent` field that is a non-empty string.
+/// `<runtime>` is mapped to one of `"claude"`, `"codex"`, `"opencode"`,
+/// defaulting to `"claude"`.
+fn generation_slot_herding_agent<'a>(cfg: &'a Value, runtime: &str) -> Option<&'a str> {
+    let rt = if matches!(runtime, "claude" | "codex" | "opencode") { runtime } else { "claude" };
+    let slot = cfg.get("models")?.get(rt)?.get("generation")?;
+    let obj = slot.as_object()?;
+    if obj.get("kind").and_then(Value::as_str) != Some("herding") {
+        return None;
+    }
+    let agent = obj.get("agent").and_then(Value::as_str)?;
+    if agent.trim().is_empty() {
+        return None;
+    }
+    Some(agent)
+}
+
+fn current_runtime() -> String {
+    std::env::var("BEE_RUNTIME").unwrap_or_else(|_| "claude".to_string())
+}
+
 /// D14's split: token 0 becomes the agent kind (herdr's `--kind`), the
 /// remaining tokens — each substituted per-token — become the agent args
 /// (herdr's trailing argv after `--`). Token 0 passes through UNCHECKED
 /// (D2): `herdr` validates it as a `--kind` and refuses an unrecognised one
 /// itself, after the pane split — never a bee-side allow-list.
 ///
-/// herd-registry D2 — three reference spellings, one resolver:
-///   - `agent = Some(name)`: a named lookup (`--agent <name>` or a tier
-///     slot's `agent`), resolved through `herding.agents` alone. An
-///     unknown name is `AgentCommandError::UnknownAgent`, listing every
-///     registry key.
+/// herd-registry D2 (+ tier slot) — four reference spellings, one resolver:
+///   - `agent = Some(name)`: a named lookup (`--agent <name>`), resolved
+///     through `herding.agents` alone. An unknown name is
+///     `AgentCommandError::UnknownAgent`, listing every registry key.
+///   - `agent = None` and the cell-execution tier slot
+///     (`models.<runtime>.generation`) is an object with `kind == "herding"`
+///     and a non-empty `agent`: resolved through `herding.agents` the same
+///     way (an unknown name refuses typed).
 ///   - `agent = None` and `herding.agent_command` is a plain JSON string:
 ///     that string names a `herding.agents` entry, resolved the SAME way
 ///     (an unknown name refuses the same way a named lookup does).
@@ -306,8 +332,20 @@ pub(crate) fn resolve_agent_command(
     cfg: &Value,
     agent: Option<&str>,
 ) -> Result<(String, Vec<String>, BTreeMap<String, String>), AgentCommandError> {
+    resolve_agent_command_for_runtime(cfg, agent, &current_runtime())
+}
+
+/// Resolves the agent command using the specified runtime name for tier slot lookup.
+pub(crate) fn resolve_agent_command_for_runtime(
+    cfg: &Value,
+    agent: Option<&str>,
+    runtime: &str,
+) -> Result<(String, Vec<String>, BTreeMap<String, String>), AgentCommandError> {
     let registry = agent_registry(cfg);
     if let Some(name) = agent {
+        return resolve_from_registry(&registry, name);
+    }
+    if let Some(name) = generation_slot_herding_agent(cfg, runtime) {
         return resolve_from_registry(&registry, name);
     }
     if let Some(name) = cfg.get("herding").and_then(|h| h.get("agent_command")).and_then(Value::as_str) {
@@ -1158,6 +1196,164 @@ mod tests {
         });
         let (_kind, _args, env) = resolve_agent_command(&cfg, Some("plain-array")).unwrap();
         assert!(env.is_empty());
+    }
+
+    // ─── tier slot resolution: models.<runtime>.generation ────────────
+
+    #[test]
+    fn tier_slot_wins_over_differing_agent_command() {
+        let cfg = serde_json::json!({
+            "models": {
+                "claude": {
+                    "generation": { "kind": "herding", "agent": "agy-flash" }
+                }
+            },
+            "herding": {
+                "agent_command": "claude-sonnet"
+            }
+        });
+        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg, None, "claude").unwrap();
+        assert_eq!(kind, "agy");
+        assert_eq!(args, vec!["--dangerously-skip-permissions"]);
+    }
+
+    #[test]
+    fn explicit_agent_name_still_wins_over_the_tier_slot() {
+        let cfg = serde_json::json!({
+            "models": {
+                "claude": {
+                    "generation": { "kind": "herding", "agent": "agy-flash" }
+                }
+            }
+        });
+        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg, Some("claude-sonnet"), "claude").unwrap();
+        assert_eq!(kind, "claude");
+        assert_eq!(args, vec!["--model", "sonnet", "--permission-mode", "bypassPermissions"]);
+    }
+
+    #[test]
+    fn non_participating_tier_slots_fall_through_to_agent_command() {
+        // 1. kind: herding with no agent
+        let cfg_no_agent = serde_json::json!({
+            "models": { "claude": { "generation": { "kind": "herding" } } },
+            "herding": { "agent_command": ["codex", "--flag"] }
+        });
+        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg_no_agent, None, "claude").unwrap();
+        assert_eq!(kind, "codex");
+        assert_eq!(args, vec!["--flag"]);
+
+        // 2. kind: herding with empty/whitespace agent
+        let cfg_empty_agent = serde_json::json!({
+            "models": { "claude": { "generation": { "kind": "herding", "agent": "   " } } },
+            "herding": { "agent_command": ["codex", "--flag"] }
+        });
+        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg_empty_agent, None, "claude").unwrap();
+        assert_eq!(kind, "codex");
+        assert_eq!(args, vec!["--flag"]);
+
+        // 3. plain model-name slot
+        let cfg_model_str = serde_json::json!({
+            "models": { "claude": { "generation": "sonnet" } },
+            "herding": { "agent_command": ["codex", "--flag"] }
+        });
+        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg_model_str, None, "claude").unwrap();
+        assert_eq!(kind, "codex");
+        assert_eq!(args, vec!["--flag"]);
+
+        // 4. kind: "cli" slot
+        let cfg_cli = serde_json::json!({
+            "models": { "claude": { "generation": { "kind": "cli", "command": "run-cmd" } } },
+            "herding": { "agent_command": ["codex", "--flag"] }
+        });
+        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg_cli, None, "claude").unwrap();
+        assert_eq!(kind, "codex");
+        assert_eq!(args, vec!["--flag"]);
+
+        // 5. null / non-object slot
+        let cfg_null = serde_json::json!({
+            "models": { "claude": { "generation": null } },
+            "herding": { "agent_command": ["codex", "--flag"] }
+        });
+        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg_null, None, "claude").unwrap();
+        assert_eq!(kind, "codex");
+        assert_eq!(args, vec!["--flag"]);
+    }
+
+    #[test]
+    fn tier_slot_naming_unknown_agent_returns_unknown_agent_error() {
+        let cfg = serde_json::json!({
+            "models": {
+                "claude": {
+                    "generation": { "kind": "herding", "agent": "no-such-herd" }
+                }
+            },
+            "herding": {
+                "agent_command": ["codex", "--flag"]
+            }
+        });
+        let err = resolve_agent_command_for_runtime(&cfg, None, "claude").unwrap_err();
+        let AgentCommandError::UnknownAgent { name, known } = &err else {
+            panic!("expected UnknownAgent, got {err:?}");
+        };
+        assert_eq!(name, "no-such-herd");
+        for key in ["claude-sonnet", "agy-flash"] {
+            assert!(known.contains(&key.to_string()), "{known:?} must list {key:?}");
+        }
+        let text = err.to_string();
+        assert!(text.contains("no-such-herd"));
+    }
+
+    #[test]
+    fn tier_slot_resolving_to_object_shape_entry_carries_env() {
+        let cfg = serde_json::json!({
+            "models": {
+                "claude": {
+                    "generation": { "kind": "herding", "agent": "codex-envd" }
+                }
+            },
+            "herding": {
+                "agents": {
+                    "codex-envd": {
+                        "argv": ["codex", "--flag"],
+                        "env": {"API_KEY": "secret-value", "FOO_2": "bar"}
+                    }
+                }
+            }
+        });
+        let (kind, args, env) = resolve_agent_command_for_runtime(&cfg, None, "claude").unwrap();
+        assert_eq!(kind, "codex");
+        assert_eq!(args, vec!["--flag"]);
+        assert_eq!(env.get("API_KEY").map(String::as_str), Some("secret-value"));
+        assert_eq!(env.get("FOO_2").map(String::as_str), Some("bar"));
+    }
+
+    #[test]
+    fn unknown_or_absent_runtime_reads_the_claude_block() {
+        let cfg = serde_json::json!({
+            "models": {
+                "claude": {
+                    "generation": { "kind": "herding", "agent": "agy-flash" }
+                },
+                "codex": {
+                    "generation": { "kind": "herding", "agent": "claude-sonnet" }
+                }
+            }
+        });
+        // unknown runtime name falls back to claude
+        let (kind, _args, _env) = resolve_agent_command_for_runtime(&cfg, None, "unknown-runtime").unwrap();
+        assert_eq!(kind, "agy");
+
+        // empty string runtime falls back to claude
+        let (kind, _args, _env) = resolve_agent_command_for_runtime(&cfg, None, "").unwrap();
+        assert_eq!(kind, "agy");
+
+        // valid codex runtime reads codex block
+        let (kind, _args, _env) = resolve_agent_command_for_runtime(&cfg, None, "codex").unwrap();
+        assert_eq!(kind, "claude");
+
+        // valid claude runtime reads claude block
+        let (kind, _args, _env) = resolve_agent_command_for_runtime(&cfg, None, "claude").unwrap();
+        assert_eq!(kind, "agy");
     }
 
     // ─── the caller: a wave run through a fake backend ─────────────────
