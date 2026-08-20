@@ -1,0 +1,100 @@
+{
+  "id": "hrv-3",
+  "feature": "herding-review-slots",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Full purpose mapping + the fallback:default field (D1 widened, D3)",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-review-slots/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "action": "The worktree CONTEXT.md now carries the human-approved widened record (D1 full mapping, new D3) — this cell IS the fresh cell hrv-1 asked for. (a) D1 full mapping: gather and extraction purposes on a {kind:herding} slot ALSO resolve to Resolved::Herding — remove the default-model fallback branch hrv-1 kept for them; every purpose now emits the herding-exec payload; cli behavior stays byte-identical (cell refused, gather/reviewer/advisor served). (b) D3 fallback field: normalize_tier_value accepts optional fallback whose only recognized value is the string default (else dropped); Resolved::Herding carries it; prepare_dispatch, when the slot has fallback default, adds a payload field fallback = {model: <the runtime default model for that slot>} so the orchestrator can re-dispatch the Agent path on a failed run; absent the field the payload is byte-identical. Tests: gather/extraction purposes -> herding payload now; fallback round-trips and appears in the payload; absent -> unchanged; cli tests untouched.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers",
+  "must_haves": {
+    "truths": [
+      "every purpose on a herding slot emits the herding-exec payload",
+      "fallback:default adds a payload fallback object naming the slot default model; absent = byte-identical",
+      "cli behavior byte-identical"
+    ]
+  },
+  "decisions": [
+    "herding-review-slots D1",
+    "herding-review-slots D3"
+  ],
+  "deps": [
+    "hrv-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hrv-3",
+    "outcome": "Widened herding routing to every purpose (D1) and added the fallback:default payload field (D3)",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T06:29:30.965Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T06:21:13.066Z",
+    "report": {
+      "outcome": "Widened herding routing to every purpose (D1) and added the fallback:default payload field (D3)",
+      "commit": "9ab19de8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml drivers — 173 passed, 1 ignored — full scope: cell only touches the drivers module (models.rs/prepare.rs/tests.rs), no other module depends on the changed Resolved::Herding shape",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "full-mapping",
+            "status": "PASS",
+            "evidence": "herding arm has no kind gate; all 4 dispatch kinds emit the herding-exec payload; extraction slot covered for both purposes"
+          },
+          {
+            "id": "fallback-field",
+            "status": "PASS",
+            "evidence": "only literal default survives normalize; payload.fallback == {model: sonnet} from default_models; absent/no-default/advisor all omit the field"
+          },
+          {
+            "id": "cli-untouched",
+            "status": "PASS",
+            "evidence": "cli branch unmodified in 9ab19de8"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "3 files, all declared; catalog 8, registry_dispatch 8, pointer_integrity 10 all green"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-20T06:44:07.580Z"
+      }
+    ]
+  }
+}

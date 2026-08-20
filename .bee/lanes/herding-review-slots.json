@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-review-slots",
+  "mode": "feature",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"herding-review-slots\" started at phase \"planning\".",
+  "next_action": "Continue bee-planning for \"herding-review-slots\".",
+  "created_at": "2026-08-20T06:04:49.000Z",
+  "run_state": "done",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 4,
+    "rationale": "widen resolver + docs; additive",
+    "updated_at": "2026-08-20T06:32:32.911Z",
+    "feature": "herding-review-slots"
+  }
+}

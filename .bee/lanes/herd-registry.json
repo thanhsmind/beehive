@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Digest về: 10 nhóm đã có chỗ, **3 thứ thiếu thật trong overview**, phần còn lại là vụn quy trình. Áp 3 phần thêm:",
-    "asked_at": "2026-08-20T05:52:33.131Z",
+    "subject": "**`agent_command` — bạn bắt đúng chỗ thừa.** Nó là mặc định khi không nêu tên herd, nhưng sample đang ghi **nguyên argv trùng khớp 100% với",
+    "asked_at": "2026-08-20T06:01:01.946Z",
     "session": "1adb69d1-67be-4463-8349-af8832af8a32"
   }
 }

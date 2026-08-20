@@ -70,8 +70,8 @@
       "extraction": "gpt-5.5",
       "generation": "gpt-5.5",
       "review": {
-        "kind": "cli",
-        "command": "codex exec -m gpt-5.5 -s read-only -c model_reasoning_effort=\"high\" -",
+        "kind": "herdr",
+        "command": "agy-flash",
         "promptVia": "stdin"
       },
       "advisor": null

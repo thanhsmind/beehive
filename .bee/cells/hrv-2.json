@@ -1,0 +1,71 @@
+{
+  "id": "hrv-2",
+  "feature": "herding-review-slots",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Docs + samples: review/advisor slots by herd name",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-herding/references/operational-invariants.md",
+    ".bee/config-sample.json",
+    ".bee/config-sample-cli-executors.json",
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "read_first": [
+    "docs/history/herding-review-slots/CONTEXT.md",
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "action": "Per D1/D2: operational-invariants.md's config-route section and the overview's config-tier-route bullet update from cell-only to cell+reviewer+advisor (gather/extraction keep the default fallback; the cli mirror sentence adjusts: cli remains gather/review/advisor-only and CELL-refusing — the two kinds now overlap on review/advisor and stay disjoint on cell vs gather). Both samples: show a review slot example {\"kind\": \"herding\", \"agent\": \"agy-flash\"} — in the main sample as an active value on models.claude.review is WRONG (repos without herdr would break reviews); keep slot examples in the _doc text only, samples stay copy-paste-safe. Update the object_herding _doc entry accordingly. Run bee knowledge index after the overview edit. wave-barrier regen ack for the skills file.",
+  "verify": "python3 -m json.tool .bee/config-sample.json > /dev/null && python3 -m json.tool .bee/config-sample-cli-executors.json > /dev/null && echo parse-ok",
+  "must_haves": {
+    "truths": [
+      "Guide and overview state the widened purpose set and the adjusted cli-mirror sentence",
+      "Samples document the review-slot spelling in _doc text and stay copy-paste-safe"
+    ]
+  },
+  "decisions": [
+    "herding-review-slots D1",
+    "herding-review-slots D2"
+  ],
+  "deps": [
+    "hrv-1"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hrv-2",
+    "outcome": "Docs+samples now describe the full-purpose herding tier route (cell/gather/reviewer/advisor/extraction) and the optional fallback:default degradation, with copy-paste-safe sample text",
+    "files_changed": [
+      "skills/bee-herding/references/operational-invariants.md",
+      ".bee/config-sample.json",
+      ".bee/config-sample-cli-executors.json",
+      "docs/knowledge/areas/bee-herding/overview.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T06:38:16.628Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T06:32:32.953Z",
+    "report": {
+      "outcome": "Docs+samples now describe the full-purpose herding tier route (cell/gather/reviewer/advisor/extraction) and the optional fallback:default degradation, with copy-paste-safe sample text",
+      "commit": "1d07e521",
+      "files": [
+        "skills/bee-herding/references/operational-invariants.md",
+        ".bee/config-sample.json",
+        ".bee/config-sample-cli-executors.json",
+        "docs/knowledge/areas/bee-herding/overview.md"
+      ],
+      "tests": "python3 -m json.tool .bee/config-sample.json > /dev/null && python3 -m json.tool .bee/config-sample-cli-executors.json > /dev/null && echo parse-ok — parse-ok — docs-only cell, declared verify is the parse check for the two sample JSON files",
+      "deviations": [
+        "wave-barrier regen_obligation_ack acknowledged: did not run bee dev regen / bee knowledge index from the worktree (control-plane); orchestrator owes the regen chain once at wave close",
+        "Worker was not pre-registered by the orchestrator before dispatch; self-registered via bee state worker add --nickname w-hrv-2 --cell hrv-2 --tier generation --status running from the main checkout before finishing"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
