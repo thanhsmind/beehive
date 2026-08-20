@@ -63,6 +63,46 @@
     "warnings": [
       "advisory: this cap's commit changes 342 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
     ],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "named-spawn",
+            "status": "PASS",
+            "evidence": "run.rs:850 resolves opts.agent through the registry; test asserts started_kind==codex over agent_command claude"
+          },
+          {
+            "id": "typed-unknown",
+            "status": "PASS",
+            "evidence": "AgentCommandError::UnknownAgent lists registry keys; two tests pin the text"
+          },
+          {
+            "id": "string-alias-and-default",
+            "status": "PASS",
+            "evidence": "string agent_command routes via resolve_from_registry; absent keeps default - three tests"
+          },
+          {
+            "id": "continue-ignores-agent",
+            "status": "PASS",
+            "evidence": "opts.agent has exactly one non-test reader inside execute_new; execute_continue never reads it"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "4e41808c touches exactly the 3 declared files; catalog 8 passed, registry_dispatch 8 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-20T04:45:38.787Z"
+      }
+    ]
   }
 }

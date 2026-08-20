@@ -60,6 +60,41 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "agent-appended",
+            "status": "PASS",
+            "evidence": "prepare.rs:766 appends --agent <name>; test pins the full command string"
+          },
+          {
+            "id": "no-agent-byte-identical",
+            "status": "PASS",
+            "evidence": "pre-existing command pins untouched and green"
+          },
+          {
+            "id": "guard-untouched-allowed",
+            "status": "PASS",
+            "evidence": "model_guard declared touch-only-if-forced; no fix forced, herding tests pass"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "f1ab4187: 3 of 4 declared files, nothing undeclared"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-20T04:45:38.804Z"
+      }
+    ]
   }
 }
