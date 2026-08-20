@@ -619,7 +619,7 @@ fn run_poll_loop(
     idle_timeout_secs: u64,
     ceiling_secs: u64,
     poll_interval: Duration,
-    mut tick: impl FnMut() -> PollTick,
+    mut tick: impl FnMut(bool) -> PollTick,
     mut sleep: impl FnMut(Duration),
     mut now: impl FnMut() -> i64,
 ) -> PollDecision {
@@ -629,7 +629,9 @@ fn run_poll_loop(
     loop {
         sleep(poll_interval);
         let tick_now_ms = now();
-        let observed = tick();
+        let heartbeat_already_stale = tick_now_ms.saturating_sub(last_heartbeat_ms)
+            >= (idle_timeout_secs as i64).saturating_mul(1000);
+        let observed = tick(heartbeat_already_stale);
         if observed.heartbeat_fresh {
             last_heartbeat_ms = tick_now_ms;
         }
@@ -980,7 +982,7 @@ fn wait_for_round(
         idle_timeout_secs,
         ceiling_secs,
         POLL_INTERVAL,
-        || {
+        |heartbeat_already_stale| {
             tick_index += 1;
             let result_ready = std::fs::read_dir(&mailbox_path)
                 .ok()
@@ -1007,7 +1009,11 @@ fn wait_for_round(
             } else {
                 None
             };
-            let pane_text = herdr.pane_read(pane_id).ok();
+            let pane_text = if heartbeat_already_stale {
+                herdr.pane_read(pane_id).ok()
+            } else {
+                None
+            };
             PollTick { result_ready, heartbeat_fresh, pane_text, liveness }
         },
         |d| std::thread::sleep(d),
@@ -1663,7 +1669,7 @@ mod tests {
             60,
             3_600,
             Duration::from_millis(0),
-            || {
+            |_| {
                 ticks += 1;
                 PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None }
             },
@@ -1685,7 +1691,7 @@ mod tests {
             5,
             3_600,
             Duration::from_millis(0),
-            || PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None },
+            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -1703,7 +1709,7 @@ mod tests {
             3_600,
             5,
             Duration::from_millis(0),
-            || PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None },
+            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -1711,6 +1717,34 @@ mod tests {
             },
         );
         assert_eq!(decision, PollDecision::TimedOutCeiling);
+    }
+
+    #[test]
+    fn run_poll_loop_passes_stale_flag_false_on_fresh_ticks_and_true_when_stale() {
+        let mut flags = Vec::new();
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            5,
+            3_600,
+            Duration::from_millis(0),
+            |stale| {
+                flags.push(stale);
+                PollTick {
+                    result_ready: flags.len() >= 7,
+                    heartbeat_fresh: flags.len() <= 2,
+                    pane_text: None,
+                    liveness: None,
+                }
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::ResultReady);
+        assert_eq!(flags, vec![false, false, false, false, false, false, true]);
     }
 
     // ─── the Herdr seam ─────────────────────────────────────────────────
@@ -2336,6 +2370,23 @@ mod tests {
         *fake.pane_text.borrow_mut() = Some("hit your session limit (in discussion only)".to_string());
         let result = execute(&opts, &fake);
         assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        assert!(fake.pane_read_calls.borrow().is_empty(), "pane_read must not be called when result is ready with fresh heartbeat");
+    }
+
+    #[test]
+    fn pane_read_is_not_called_while_heartbeat_is_fresh_and_polled_when_stale() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.idle_timeout_secs = 1;
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("regular error output".to_string());
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        // Across the fresh-heartbeat ticks before staleness, pane_read was never called.
+        // Once heartbeat went stale, pane_read was called once to check for limit patterns.
+        let reads = fake.pane_read_calls.borrow();
+        assert_eq!(reads.len(), 1, "pane_read should only be called once when heartbeat becomes stale, not on fresh ticks: {:?}", *reads);
+        assert_eq!(reads[0], "w1:p2");
     }
 
     // ─── flag parsing ───────────────────────────────────────────────────
@@ -3081,7 +3132,7 @@ mod tests {
             60,
             3_600,
             Duration::from_millis(0),
-            || {
+            |_| {
                 ticks += 1;
                 PollTick {
                     result_ready: false,
@@ -3117,7 +3168,7 @@ mod tests {
             60,
             3_600,
             Duration::from_millis(0),
-            || {
+            |_| {
                 ticks += 1;
                 let liveness = if (ticks as usize) <= liveness_sequence.len() {
                     liveness_sequence[(ticks - 1) as usize]
@@ -3156,7 +3207,7 @@ mod tests {
             60,
             3_600,
             Duration::from_millis(0),
-            || {
+            |_| {
                 ticks += 1;
                 let liveness = liveness_sequence[(ticks - 1) as usize];
                 PollTick {
@@ -3185,7 +3236,7 @@ mod tests {
             60,
             3_600,
             Duration::from_millis(0),
-            || {
+            |_| {
                 ticks += 1;
                 PollTick {
                     result_ready: ticks >= 5,
