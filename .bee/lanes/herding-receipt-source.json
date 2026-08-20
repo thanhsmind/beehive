@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-receipt-source",
+  "mode": "feature",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"herding-receipt-source\" started at phase \"planning\".",
+  "next_action": "Promote with the herding batch",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "`pane read` là text trần, không JSON. Sửa biên nhận về đúng nguồn + kéo dài cửa sổ resend:",
+    "asked_at": "2026-08-20T03:26:20.386Z",
+    "session": "1adb69d1-67be-4463-8349-af8832af8a32"
+  },
+  "created_at": "2026-08-20T03:22:46.917Z"
+}
