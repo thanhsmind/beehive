@@ -1,0 +1,149 @@
+---
+type: bee.area
+title: "Bee Herding — which agent a pane runs as, and how its command is built"
+description: "The config tier route that sends a whole purpose through a pane, the named-agent registry, the four-step precedence a bare run obeys, per-agent pane environment, and why bee keeps no list of agent kinds."
+timestamp: 2026-08-20
+bee:
+  id: bee-herding-agent-resolution-and-spawn-commands
+  lifecycle: active
+  areas: [bee-herding]
+  required_context: [areas/bee-herding/overview.md]
+  decisions: ["herding-tier D1-D6 (the config tier route)", "herding-review-slots D1 (every purpose on a herding slot)", "herding-review-slots D3 (optional per-slot fallback to default)", "herd-registry D1-D2 (the named-agent registry)", "herding-bare-agent D1-D5 (four-step bare-run agent resolution order: --agent > tier slot > string agent_command > array fallback)", "defaults-and-agent-env D3 (built-in claude-sonnet and agy-flash registry entries)", "defaults-and-agent-env D4 (registry entry carries validated pane env)", "herding-orchestration D12 (starting a worker is two acts)", "herding-orchestration D14 (command tokens are never re-joined into a shell string)", i54-closeout D4]
+  sources: [docs/history/herding-bare-agent/CONTEXT.md, docs/history/herd-registry/CONTEXT.md, docs/history/defaults-and-agent-env/CONTEXT.md, docs/history/herding-tier/CONTEXT.md, "herding-review-slots, herd-registry, herding-tier and defaults-and-agent-env promote proposals (reviewed 2026-08-20)"]
+  authoritative_for: "bee-herding: agent resolution, the named-agent registry, and spawn-command construction"
+---
+
+# Bee Herding — which agent a pane runs as, and how its command is built
+
+A herded pane runs some external coding agent. Two questions decide which one
+and with what command: the ROUTE that sends work to a pane at all, and the
+RESOLUTION that names the agent once the work is going there.
+
+## The route: a configured slot sends a whole purpose through a pane
+
+Setting `{"kind": "herding"}` on a `models.<runtime>.generation` slot (or any
+configurable slot) routes EVERY purpose dispatched against it — cell, gather,
+reviewer, advisor, extraction — through `bee herding run` automatically, with no
+per-purpose request needed. The old gather/review/advisor default-model fallback
+is gone, so the operator who sets the slot owns the pane cost for every purpose
+it serves (herding-tier D1-D6, widened by herding-review-slots D1).
+
+An optional `"fallback": "default"` on the same shape lets a failed herding run
+(spawn failure, timeout, invalid result) re-dispatch through the runtime's own
+default model path for that slot instead. Absent the field, a failed run stays
+loud and keeps its pane open as forensics (herding-review-slots D3).
+
+Widening the slot to every purpose needed no change in the model guard, because
+the guard routes on the slot's KIND alone and never on which purpose asked — a
+new purpose inherits the routing for free, and no guard rule has to learn its
+name. The routing is enforced, not merely offered: against a herding-kind slot
+the guard DENIES a native subagent dispatch outright, so the pane payload is the
+only legal way through and no caller can quietly take the cheaper in-process
+path the operator opted out of.
+
+## The resolution: four steps, in strict order
+
+The working-agent and control-pane spawn commands are config-driven templates,
+byte-equivalent to the hardcoded default (i54-closeout D4). `bee herding
+control-loop` reads an optional `.bee/config.json` `herding.control_command` — a
+JSON array of argv-token strings — and, when present, substitutes `{PROMPT}` /
+`{MODEL}` / `{MAX_TURNS}` / `{ALLOWED_TOOLS}` per token and runs the result
+verbatim: tokens are never joined into one string and re-split or shell-`eval`'d,
+so a config-supplied command cannot smuggle shell injection through a
+placeholder value (herding-orchestration D14). The working agent's spawn tail has
+the matching `herding.agent_command` seam.
+
+`.bee/config.json`'s `herding.agents` (herd-registry D1/D2) names several agents
+once — a map of name → argv tokens with the same validation. When picking which
+external agent a herded pane runs as (`bee herding run` and `bee herding wave`
+use the same resolver, herding-bare-agent D1-D5), resolution follows a strict
+four-step precedence:
+
+1. An explicit `--agent <name>`, resolved through `herding.agents`;
+2. The cell-execution tier slot `models.<runtime>.generation`, but ONLY when it
+   is an object with `kind: "herding"` and a non-empty `agent` string — that
+   name resolves through `herding.agents`. This is the configured role-to-agent
+   mapping that a bare `bee herding run` obeys;
+3. `herding.agent_command` as a plain string, resolved through `herding.agents`;
+4. `herding.agent_command` as an array (token 0 is the herdr `--kind`, rest
+   are args), or the built-in default array when absent or malformed.
+
+Any other slot shape (`kind: "herding"` with no agent, a plain model name like
+`"sonnet"`, `{"kind":"cli",...}`, null, absent) is skipped and falls through.
+A slot naming an agent not declared in `herding.agents` fails closed with a typed
+`UnknownAgent` error listing every known key — never a silent fallback.
+`<runtime>` resolves to `BEE_RUNTIME` when it names `claude`, `codex`, or
+`opencode`, defaulting to `claude`.
+
+When the key is absent, invalid, or empty, the command built is byte-equivalent
+to the pre-existing hardcoded `claude -p ... --model sonnet --max-turns ...
+--allowedTools ...` invocation — a project with no config change sees no
+behavior change at all. A codex adapter example is documented purely as an
+illustration of the seam; full codex-native herding (its own event loop and pane
+protocol) stays out of scope (i54-closeout D4). None of enable/disable/status,
+the dispatch interlock, or the merge owner-gesture change.
+
+## bee keeps no list of agent kinds
+
+The kind token passes straight through, and the pane manager is the one that
+accepts or rejects it. A kind the pane manager learns tomorrow works here today
+with no change on this side — the alternative, a second list to maintain, only
+ever produces a refusal for something that would have worked. A herd name always
+means the pane transport; the `cli` tier kind is unrelated.
+
+## Built-in entries and per-agent pane environment
+
+Since defaults-and-agent-env D3 (2026-08-20) the registry starts from two
+BUILT-IN entries — `claude-sonnet` and `agy-flash` — so those names resolve on a
+repo with no herding block at all. A same-name config entry overrides its
+built-in, and the unknown-name listing includes the built-ins.
+
+defaults-and-agent-env D4 (same day) adds a second entry shape beside the argv
+array: `{"argv": [...], "env": {"KEY": "value"}}`. The env map is exported into
+the freshly split pane as one `export K='v'` line BEFORE `agent start` (keys
+`[A-Za-z_][A-Za-z0-9_]*`, values newline-free; any violation drops that entry
+only — the registry's standing fail-open-per-entry rule), and a failed env send
+is a typed spawn failure that closes the pane.
+
+Only the `bee herding run` spawn path applies env; the wave/control-loop caller
+resolves it but cannot apply it (its `agent start` lives in
+`fleet::backend::herdr`, another crate — noted at the call site).
+
+## Edge Cases Settled
+
+- **Starting a worker is two acts, not one.** The pane is created first, and the
+  agent is started INTO that pane; a single call that both creates and starts no
+  longer exists (herding-orchestration D12). What the agent itself is — which
+  runtime, and the arguments it gets — is configuration, read as separate tokens
+  and never re-joined into a string a shell could reinterpret
+  (herding-orchestration D14).
+- **A worker's agent name is derived from its pane, and the multiplexer will not
+  take it raw.** Panes are numbered 1 to 9 and then A, B, C…, so most panes in a
+  busy workspace carry an uppercase letter — and an agent name may only be
+  lowercase letters, digits, dash and underscore, must begin with a lowercase
+  letter, and may not exceed 32 characters. The derived name is therefore made
+  legal by construction before it is used; the cost is that two panes whose ids
+  differ only by case would collapse onto one name, which is accepted because no
+  such pair exists. This was found by the first live run, not by any test: before
+  the repair, every pane with an uppercase letter was refused and the whole wave
+  aborted before sending anything.
+
+## Open Gaps
+
+- **The dependency on the multiplexer's JSON shapes is still unpinned** — there
+  is no capability or version probe anywhere on the path. What changed is the
+  failure DIRECTION, not the gap: an unrecognised status string now maps to
+  unverifiable, and a live-pane list that cannot be read now returns the tagged
+  fallback that makes dispatch refuse. So an upstream shape change degrades to a
+  loud refusal rather than to a silent stall — but it is still not detected, and
+  nothing names the version this cockpit was proven against.
+
+## Pointers (implementation)
+
+- Resolution and the registry live with the `herding` command group in
+  `packages/bee-rs/crates/bee/src/herding.rs`; the spawn path that applies env is
+  `packages/bee-rs/crates/bee/src/herding/run.rs`.
+- The wave caller that resolves env without applying it reaches
+  `fleet::backend::herdr` in `packages/bee-rs/crates/fleet/src/backend/herdr.rs`.
+- Operating detail for operators:
+  `skills/bee-herding/references/operational-invariants.md`.

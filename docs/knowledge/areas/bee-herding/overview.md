@@ -8,17 +8,22 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/worktree-parallelism/overview.md]
-  decisions: ["herding-executor D1-D9 (bee herding run: mailbox executor, health-check liveness, pane lifecycle)", "herding-tier D1-D6 (the config tier route)", "herd-registry D1-D2 (the named-agent registry)", "herding-bare-agent D1-D5 (four-step bare-run agent resolution order: --agent > tier slot > string agent_command > array fallback)", herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), i54-closeout D4, "herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", herding-executor D9 (the verb appends its own dispatch and ledger rows)]
-  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", "i54-closeout cell i54-closeout-4 (herding spawn command config-driven templates; trace in .bee/cells/, 2026-07-24)", docs/history/herding-executor/CONTEXT.md, "herding-executor cells hx-1..hx-5 (bee herding run: mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, this doc sync; traces in `.bee/cells/`, 2026-08-19/20)", docs/history/herding-bare-agent/CONTEXT.md]
+  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), "herding-orchestration D8 (the control loop is a native command, not a script)", "herding-orchestration D13 (the control and working panes do not share a permission posture)", "herding-orchestration D19 (the live Windows run is an owner-run gap, not a blocker)"]
+  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", docs/history/herding-orchestration/CONTEXT.md]
   authoritative_for: "bee-herding: the three-role cockpit, its safety boundaries, and adoption"
 ---
 
-# Bee Herding — The Three-Role Cockpit, Its Safety Boundaries, and Adoption
+# Bee Herding — the three-role cockpit, its safety boundaries, and adoption
 
-Bee herding runs several working sessions at once and retires them as they finish. It is one
-cockpit with three roles, and the whole design turns on a single principle: **the dangerous act —
-landing work in the shared trunk — stays a human gesture, while the cheap act — starting work in an
-isolated copy — is what runs unattended.**
+This page is the cockpit itself: who may act, what arms it, and what bounds it.
+The machinery it starts is documented beside it:
+
+| Concept | What it covers |
+|---|---|
+| [Agent resolution and spawn commands](agent-resolution-and-spawn-commands.md) | Which agent a pane runs as, the named-agent registry, and how its command is built |
+| [Handing a foreign agent its brief](handing-a-foreign-agent-its-brief.md) | The mailbox channel, the standalone-worker contract, and delivery receipts |
+| [The run verb and worker outcomes](the-run-verb-and-worker-outcomes.md) | The poll's signal ladder, the typed outcomes, and pane lifecycle |
+| [Waves and occupancy](waves-and-occupancy.md) | Fan-out over running workers, the ledger, and slot counting |
 
 ## Entry Points & Triggers
 
@@ -28,34 +33,13 @@ isolated copy — is what runs unattended.**
   iteration; every fact it needs is read live from state, the trunk, and the pane workspace.
 - **Merge** is **not a loop.** It is a single-shot the owner runs by hand when they want finished
   work retired.
-- **The config tier route**: setting `{"kind": "herding"}` on a `models.<runtime>.generation`
-  slot (or any configurable slot) now routes EVERY purpose dispatched against it — cell,
-  gather, reviewer, advisor, extraction — through `bee herding run` automatically, no
-  per-purpose request needed; the old gather/review/advisor default-model fallback is gone,
-  so the operator who sets the slot owns the pane cost for every purpose it serves
-  (herding-tier D1-D6, widened by herding-review-slots D1). An optional `"fallback":
-  "default"` on the same shape lets a failed herding run (spawn failure, timeout, invalid
-  result) re-dispatch through the runtime's own default model path for that slot instead;
-  absent, a failed run stays loud and keeps its pane open as forensics
-  (herding-review-slots D3). Widening the slot to every purpose needed no change in the
-  model guard, because the guard routes on the slot's KIND alone and never on which
-  purpose asked — a new purpose inherits the routing for free, and no guard rule has to
-  learn its name. The routing is enforced, not merely offered: against a herding-kind
-  slot the guard DENIES a native subagent dispatch outright, so the pane payload is the
-  only legal way through and no caller can quietly take the cheaper in-process path the
-  operator opted out of.
-- **A wave is a fourth entry point, and no role calls it.** Dispatch starts one worker per iteration
-  and never speaks to it again; a wave briefs several already-running workers in one act and waits
-  on all of them together. It carries none of dispatch's guards — no arming marker, no classifier —
-  so it is a fan-out over workers that already exist, never the way ordinary backlog work is
-  started. It is invoked directly, by a human or by an agent that was told to.
-- **A herding run is a fifth entry point, and it starts a worker rather than briefing one that
-  already exists.** `bee herding run` starts ONE bee-ignorant external agent (any herdr-supported
-  kind) in a fresh pane, hands it a fully self-contained brief over a file mailbox, and waits on
-  that mailbox with native health-check liveness — no LLM call anywhere on the wait path
-  (herding-executor D1, D3, D5). It carries none of dispatch's guards either. It is
-  **cell-execution-only** (D7) — the mirror of the `cli` tier kind's gather/review/advisor-only
-  boundary: a gather never dispatches through a herding pane.
+- **The config tier route** sends every purpose dispatched against a herding-kind slot through a
+  pane automatically — see
+  [agent resolution and spawn commands](agent-resolution-and-spawn-commands.md).
+- **A wave** is a fourth entry point that briefs several already-running workers at once, and no
+  role calls it — see [waves and occupancy](waves-and-occupancy.md).
+- **A herding run** is a fifth entry point that starts a worker rather than briefing one that
+  already exists — see [the run verb and worker outcomes](the-run-verb-and-worker-outcomes.md).
 
 ## Data Dictionary
 
@@ -74,22 +58,6 @@ isolated copy — is what runs unattended.**
 - **Dispatchable** — a backlog item that is ready, unclaimed, has no worktree yet, and passes the
   work classifier. This is a *candidate* state, not a licence — the interlock still governs whether
   any candidate is acted on.
-- **Wave** — one coordinated run over several workers, described as a single value rather than a
-  sequence of calls: the worker list, the timeouts, and the failure policy (wait-for-all,
-  first-success-cancel-rest, best-effort) all sit in that one value, so a scenario is something you
-  hand over rather than something you perform (herding-orchestration D11).
-- **Wave ledger** — the append-only record of what each wave did: one row per wave, one entry per
-  worker carrying its name, its pane, its worktree, its brief and its outcome. It is the cockpit's
-  memory of who was started, and it is written at the moment of the spawn rather than at the end
-  (herding-orchestration D10).
-- **Occupancy** — how many working slots are actually taken. It is answered by crossing the ledger's
-  unresolved workers against the live pane list, and it carries the SOURCE of its own answer: a real
-  crossing, or a degraded timer fallback used when the live list cannot be obtained.
-- **Mailbox** — `.bee/mailbox/<job-id>/`, the file channel `bee herding run` uses to talk to a
-  bee-ignorant worker: `job.json` (the written brief), round-numbered `brief-N.txt` (the brief as
-  the worker reads it, persisted rather than injected), round-numbered `result-N.json`, and
-  `log.txt`. Every write is staged tmp-then-rename, so a result file's appearance under its final
-  name IS the completion signal — never the pane's screen (herding-executor D3).
 
 ## Behaviors & Operations
 
@@ -125,204 +93,15 @@ binary or a transient error cannot produce an infinite retry, and the control in
 turn ceiling — iterations were bounded in the original design, spend was not.
 
 **The control panes and the working panes do not share a permission posture
-(herding-orchestration D13).** A control agent runs headless under an enumerated command surface; a working agent runs with
-its permissions open inside its own worktree. Keeping the two argv forms separate is what stops the
-narrow one from silently widening.
+(herding-orchestration D13).** A control agent runs headless under an enumerated command surface; a
+working agent runs with its permissions open inside its own worktree. Keeping the two argv forms
+separate is what stops the narrow one from silently widening.
 
 **The control loop is a native command, not a script.** The loop that re-invokes the dispatch role
 on its interval is part of the tool itself. This is what made the cockpit portable: the previous
 form was a shell script that depended on GNU utilities and a modern shell, so it could not run on
 Windows at all. The one-shot cockpit setup is still a shell script and is a recorded gap
 (herding-orchestration D8).
-
-**A wave is run once and recorded once.** The coordination that drives it is deliberately generic —
-it knows nothing about this tool's own vocabulary, and lives behind a boundary a compiler enforces
-rather than a promise (herding-orchestration D2/D5). Workers run beside each other on ordinary
-threads rather than on an event runtime, because a wave is a handful of workers and each waiter is a
-blocking poll (herding-orchestration D9). The entry point takes the worker list on its input, runs
-the whole choreography — resolve and de-duplicate the targets, refuse any target that is not safe to
-disturb, take a baseline, re-check each target immediately before handing it its brief, then wait on
-all of them at the same time and aggregate what came back — and appends exactly ONE ledger row for
-the whole wave. Each worker's outcome is classified into a named bucket (finished, refused at
-pre-flight, changed under us before the send, send failed, timed out, or unverifiable afterwards)
-rather than into a bare pass/fail, because partial failure is the normal case and the caller needs
-to know which kind it got. A worker that fails does not stop the others.
-
-**Occupancy is read, and an unverifiable read refuses.** The dispatch role asks for the occupancy
-count instead of counting panes itself, and it reads WHICH answer it got. On a real crossing it
-compares the count against the four-slot cap as before. On the degraded fallback it cannot know
-occupancy, so it reports one plain line saying so and dispatches nothing that iteration. The
-fallback fires exactly when the live pane list could not be obtained — which is also when counting
-panes would have failed — so refusing is not a lost opportunity, and dispatching on a count nobody
-can verify is the over-spawn the ledger exists to prevent.
-
-**A herding run starts one bee-ignorant worker and waits on a file, not a screen.**
-`bee herding run` is a native verb, not a script: it splits a pane off the caller's own
-runtime pane, starts the agent through the same `herding.agent_command` seam the
-working-agent spawn uses, and writes it a fully self-contained brief — task, absolute
-paths, file constraints, the result schema, the tmp-rename write gesture — over the
-mailbox described above, so a worker that has never seen bee can complete it
-(herding-executor D4). The task itself may arrive on standard input rather than as an
-argument, and an empty standard input refuses exactly as an empty task argument does —
-a caller piping a generated task never gets a worker started on nothing.
-Its poll loop is native and health-check based, at zero token
-cost, and it decides on a LADDER of signals rather than one
-(herding-liveness-signals D1-D6, 2026-08-20). A `result-N.json` for the round is the
-truth and outranks every other signal. Below it sits AGENT LIVENESS: the pane's
-foreground process list, where the agent counts as present when any foreground
-process is not the pane's own shell. Pane liveness is not agent liveness — an agent
-that exits leaves its pane alive at a shell prompt, so a pane-existence check cannot
-see the death. No result plus no agent process is a typed `died` outcome, reported in
-seconds rather than after the whole idle window. Below liveness sits PROGRESS —
-`log.txt` mtime advancing or the reported agent status being `working` — and a stale
-heartbeat past `--idle-timeout` ends the wait. An absolute `--ceiling` caps it
-regardless of activity as the busy-loop backstop (D5) and outranks the `died` rung,
-so a ceiling and a death arriving together still report the ceiling. There is no
-fixed short wall-clock timeout, because wall-clock alone cannot tell a long cell from
-a stuck agent.
-
-Two rules keep the liveness rung from becoming a hazard. **The liveness read fails
-OPEN**: an unreachable or unreadable process list reports "unknown", never "absent" —
-the opposite direction from the pane check that guards `--continue`, which fails
-closed on purpose. A refusal gate may safely refuse on bad information; a kill
-decision may not, because the job it would end may be hours deep. **A death must be
-consecutive**: several successive absent readings are required before `died` is
-declared, and a single "unknown" reading RESETS that count rather than counting
-toward it, so an absent/unknown/absent flicker never ends a healthy job.
-
-Pane text is read only at the moment it is needed — when the heartbeat has already
-gone stale and the stall must be classified — not on every poll tick. The
-classification fires on exactly the tick it always did; what changed is that a quiet
-stall no longer pays for thousands of discarded screen captures.
-
-**Hang detection remains an open gap.** A worker that is stuck but still emitting
-output satisfies every progress source there is. Accumulated CPU time was the
-intended discriminator and was REFUSED on measurement (D6): an interactive agent's
-event loop burns CPU while it sits blocked, so any-delta never goes stale and catches
-nothing; and treating flat CPU as an override kills an agent legitimately waiting
-minutes on a remote call. Pane output counters fail identically, for the same reason
-a spinner advances the log. Picking a real discriminator needs calibration traces
-from healthy-but-blocked workers against genuinely hung ones, and the question is
-parked against a registered trigger until those exist.
-
-A job is not always one round. Reusing a finished job continues it: the same
-mailbox is kept, the follow-up brief reaches the agent ALREADY RUNNING in the
-pane rather than starting a second one beside it, and the wait then targets the
-next round's result file. A missing job, a missing prior result, or a pane that
-is gone all refuse with a typed reason — continuing is only meaningful against a
-job that actually got somewhere.
-
-Pane lifecycle follows the result, not the
-clock: a valid result closes the pane, a failure, death, or timeout leaves it open as
-forensics, and `--close-always` overrides both (D6) — with one carve-out: a worker
-stopped by a USAGE LIMIT is a typed `paused_limit` outcome, never `timed_out_idle`
-(herding-limit-pause D1-D4, 2026-08-20). A stale heartbeat whose pane text matches a
-limit pattern ("hit your session limit" / "usage limit", case-insensitive,
-extensible) ends the wait as `paused_limit`; that pane is NEVER closed, even under
-`--close-always`, and `job.json` is stamped `paused_limit_at` plus
-`limit_reset_hint` (the matched line). `bee herding run --continue <job-id>` on a
-stamped job with a live pane resumes the SAME round — a resume pointer through the
-state-receipt delivery, stamp cleared, wait re-entered; a gone pane refuses typed.
-The control loop's occupancy (unresolved ledger rows × live panes) already counts
-the paused job as occupying its slot, so its work is never re-dispatched — a limit
-stop is a pause, not a death (live case hws-1-r1). The verb appends its own
-`dispatch.jsonl` row and a wave-ledger `record-worker` row for every run it starts, so
-occupancy counts these workers too (D9) — everything else bee-shaped (`cells finish`,
-the proof line, reservations) stays the orchestrator's job, done only after it reads
-the result file back (D4). Unlike wave and dispatch, this entry point is
-**cell-execution-only** (D7): the mirror of the `cli` tier kind's
-gather/review/advisor-only boundary — a gather never dispatches through a herding
-pane.
-
-**The working-agent and control-pane spawn commands are config-driven templates,
-byte-equivalent to the hardcoded default (i54-closeout D4).** `bee herding
-control-loop` reads an optional `.bee/config.json` `herding.control_command` — a JSON array of
-argv-token strings — and, when present, substitutes `{PROMPT}` / `{MODEL}` /
-`{MAX_TURNS}` / `{ALLOWED_TOOLS}` per token and runs the result verbatim: tokens
-are never joined into one string and re-split or shell-`eval`'d, so a
-config-supplied command cannot smuggle shell injection through a placeholder
-value. The working agent's spawn tail has the matching `herding.agent_command`
-seam. `.bee/config.json`'s `herding.agents` (herd-registry D1/D2) names
-several agents once — a map of name → argv tokens with the same validation.
-When picking which external agent a herded pane runs as (`bee herding run` and
-`bee herding wave` use the same resolver, herding-bare-agent D1-D5), resolution
-follows a strict four-step precedence:
-1. An explicit `--agent <name>`, resolved through `herding.agents`;
-2. The cell-execution tier slot `models.<runtime>.generation`, but ONLY when it
-   is an object with `kind: "herding"` and a non-empty `agent` string — that
-   name resolves through `herding.agents`. This is the configured role-to-agent
-   mapping that a bare `bee herding run` obeys;
-3. `herding.agent_command` as a plain string, resolved through `herding.agents`;
-4. `herding.agent_command` as an array (token 0 is the herdr `--kind`, rest
-   are args), or the built-in default array when absent or malformed.
-
-bee keeps NO list of which agent kinds exist. The kind token passes straight
-through, and the pane manager is the one that accepts or rejects it. A kind the
-pane manager learns tomorrow works here today with no change on this side — the
-alternative, a second list to maintain, only ever produces a refusal for
-something that would have worked.
-
-Any other slot shape (`kind: "herding"` with no agent, a plain model name like
-`"sonnet"`, `{"kind":"cli",...}`, null, absent) is skipped and falls through.
-A slot naming an agent not declared in `herding.agents` fails closed with a typed
-`UnknownAgent` error listing every known key — never a silent fallback.
-`<runtime>` resolves to `BEE_RUNTIME` when it names `claude`, `codex`, or
-`opencode`, defaulting to `claude`. Since defaults-and-agent-env D3 (2026-08-20)
-the registry starts from two BUILT-IN entries — `claude-sonnet` and `agy-flash` —
-so those names resolve on a repo with no herding block at all; a same-name config
-entry overrides its built-in, and the unknown-name listing includes the
-built-ins. defaults-and-agent-env D4 (same day) adds a second entry shape beside
-the argv array: `{"argv": [...], "env": {"KEY": "value"}}` — the env map is
-exported into the freshly split pane as one `export K='v'` line BEFORE
-`agent start` (keys `[A-Za-z_][A-Za-z0-9_]*`, values newline-free; any
-violation drops that entry only, the registry's standing fail-open-per-entry
-rule), and a failed env send is a typed spawn failure that closes the pane.
-Only the `bee herding run` spawn path applies env; the wave/control-loop
-caller resolves it but cannot apply it (its `agent start` lives in
-`fleet::backend::herdr`, another crate — noted at the call site). A herd name
-always means the pane transport; the cli tier kind is unrelated. When the key is absent, invalid, or empty, the command built is
-byte-equivalent to the pre-existing hardcoded `claude -p ... --model sonnet
---max-turns ... --allowedTools ...` invocation — a project with no config
-change sees no behavior change at all. A codex adapter example is documented
-purely as an illustration of the seam; full codex-native herding (its own event
-loop and pane protocol) stays out of scope (D4). None of enable/disable/status,
-the dispatch interlock, or the merge owner-gesture change.
-
-**Every step of handing a foreign agent its brief verifies rather than
-trusts a flag (herding-executor arc, live-proven).** The pane start retries
-through a booting shell; the brief travels only as a mailbox file
-(`brief-N.txt`) behind a one-line pointer — never raw argv, never a
-multi-line injected prompt; readiness is observed before the send, and
-delivery is confirmed before the wait begins.
-
-**A delivery receipt is a state transition the agent itself caused, never text
-on the screen.** This is the "state-receipt delivery" named above, and it
-replaced an earlier pane-text check. A pane ECHOES the send's own keystrokes
-while the agent is still booting, so any receipt that looks for the sent text
-coming back confirms nothing but its own typing — it passes exactly when
-delivery failed. The receipt is therefore the agent's own reported state moving
-to working or done, or the round's result file appearing. Proven the hard way in
-live smoke: two runs whose brief was silently lost still satisfied the text
-check, and only the run that watched for a state change completed end to end.
-The general shape — an echo, a mirror, a write-through cache — is that any
-confirmation an actor can produce by itself is not evidence the other side
-received anything.
-
-Waiting for that receipt is bounded, not hopeful: the pointer is re-sent a fixed
-number of times, each attempt polling the agent's state a few times before the
-next, and the pointer is idempotent so a duplicate send costs nothing. Running
-out of attempts is a typed failure that says the prompt was never accepted — it
-never becomes a silent decision to wait anyway.
-
-Failing to get that receipt splits by WHEN it failed, and the two halves treat
-the pane oppositely. A failure BEFORE the agent starts closes the pane — there
-is nothing to look at. A ready wait that runs out AFTER the agent started keeps
-it: something was running and did not answer, and that screen is the only
-record of why.
-
-The operating detail lives in
-`skills/bee-herding/references/operational-invariants.md` ("Spawn
-resilience").
 
 ## Actors & Access
 
@@ -336,16 +115,8 @@ resilience").
   surface includes the writes that landing requires, and it runs the project's verify over the
   just-merged tree — so it executes whatever the working agents wrote.
 - **A working agent** runs with its permissions fully open, as a deliberately accepted risk (see
-  Business Rules). It is confined to its own worktree and branch until a merge. Since
-  herding-worker-standalone D1-D3 (2026-08-20) that bee-ignorance is enforced, not just asked for:
-  the brief opens with a standalone-executor contract (do the task only; ignore the repo's
-  AGENTS.md/CLAUDE.md workflow instructions; never run a `bee` command; the mailbox result file is
-  the one permitted `.bee` write), every fresh spawn exports `BEE_HERDING_WORKER=1` into the pane
-  before `agent start` (the marker wins over per-agent env), and every `bee hook <name>` exits 0
-  silently under that marker — checked once in the hook dispatcher, so a worker session gets zero
-  bee preamble, zero guards, zero nudges. Live case that forced it (job hws-1-r1): a worker
-  Claude Code in the repo activated the bee flow via AGENTS.md, and the write-guard denied its
-  own mailbox result write.
+  R4). What it is confined to, and how its bee-ignorance is enforced rather than requested, is
+  [handing a foreign agent its brief](handing-a-foreign-agent-its-brief.md).
 
 ## Business Rules
 
@@ -380,43 +151,11 @@ resilience").
 
 ## Edge Cases Settled
 
-- **A working agent that fails to name its own pane** used to leave a slot looking free, because the
-  four-slot cap was enforced by the control model counting panes. **That hole is closed** — the cap
-  now rests on the wave ledger, not on a pane count (herding-orchestration D10, D18). §8 records a
-  row the moment it spawns, carrying the worker's pane id, so an agent that never names its own pane
-  is still visible to the next iteration: the ledger knows the pane even when the pane does not know
-  itself. Occupancy is a liveness question — the ledger's unresolved pane ids crossed against herdr's
-  own live pane list — and a one-hour timer survives only as an explicitly tagged FALLBACK for when
-  that list cannot be obtained. §4 refuses to dispatch on a fallback answer rather than guessing,
-  because a count it cannot verify is exactly the over-spawn the ledger exists to remove. The case is
-  still worth knowing, because it names the class: a cap enforced by counting what you can see is
-  only as good as the naming discipline of the things being counted.
 - **Starting an agent steals the owner's view.** Splitting a pane and creating a tab both honour a
   do-not-focus request; starting an agent has no such option and moves the workspace's focus to the
   new agent. For a loop that dispatches unattended on a fixed interval, every single spawn yanks the
   owner away from whatever they were reading — the one thing the do-not-focus option exists to
   prevent everywhere else. Found only by running the spawn for real; no documentation states it.
-- **"Idle" tracks the pane's own focus, not the work.** A worker's runtime status flips to idle or
-  done according to whether that individual pane has been seen, not according to whether the work
-  finished — a pane reported done while never being focused, and the multiplexer's own
-  documentation states a coarser tab-level rule than its behavior actually follows. Any reading of a
-  worker's status must therefore treat "done" as a fact about attention, never as evidence that the
-  work is complete; that is why an explicitly UNVERIFIABLE outcome is a first-class answer rather
-  than an error (herding-orchestration D7, which makes unverifiable one of the five worker states a
-  backend must map its own vocabulary onto).
-- **Starting a worker is two acts, not one.** The pane is created first, and the agent is started
-  INTO that pane; a single call that both creates and starts no longer exists
-  (herding-orchestration D12). What the agent itself is — which runtime, and the arguments it gets —
-  is configuration, read as separate tokens and never re-joined into a string a shell could
-  reinterpret (herding-orchestration D14).
-- **A worker's agent name is derived from its pane, and the multiplexer will not take it raw.**
-  Panes are numbered 1 to 9 and then A, B, C…, so most panes in a busy workspace carry an uppercase
-  letter — and an agent name may only be lowercase letters, digits, dash and underscore, must begin
-  with a lowercase letter, and may not exceed 32 characters. The derived name is therefore made
-  legal by construction before it is used; the cost is that two panes whose ids differ only by case
-  would collapse onto one name, which is accepted because no such pair exists. This was found by the
-  first live run, not by any test: before the repair, every pane with an uppercase letter was
-  refused and the whole wave aborted before sending anything.
 - **A control pane narrowed too far** stalls silently every interval — the exact failure the whole
   cockpit exists to end. This is why the control surface is enumerated against measured actions, and
   why it is documented to grow when a role gains a command, rather than being set to "read-only".
@@ -425,13 +164,6 @@ resilience").
 
 ## Open Gaps
 
-- **A wave cannot confirm that a worker finished.** Proven by the first live run on Linux: two
-  workers were started in their own worktrees, took their briefs and answered correctly, and the
-  wave still reported both as UNVERIFIABLE — which is the honest answer, because the only completion
-  signal available tracks the pane's attention rather than the work (see Edge Cases). The
-  consequence is that a wave over ordinary agent sessions reports overall failure even when every
-  worker did its job, so today the ledger row and the pane's own output are what an owner reads, not
-  the verdict. Closing this needs a completion signal the worker itself emits.
 - **The live D6 scenario has not been run end to end on Windows.** The mechanism is proven there —
   the whole suite runs unexcluded on a Windows CI lane and every behavior that matters is pinned by
   platform-portable tests — but a live run needs a running herdr server, real panes and real agents,
@@ -440,12 +172,6 @@ resilience").
 - **The classifier reads the backlog row, not the work.** It vouches for an item from its one-line
   description, never opening the feature's own context. Reading the real work is the honest form of
   the safety check and is not yet built — the interlock (R3) is the compensating control meanwhile.
-- **The dependency on the multiplexer's JSON shapes is still unpinned** — there is no capability or
-  version probe anywhere on the path. What changed is the failure DIRECTION, not the gap: an
-  unrecognised status string now maps to unverifiable, and a live-pane list that cannot be read now
-  returns the tagged fallback that makes dispatch refuse. So an upstream shape change degrades to a
-  loud refusal rather than to a silent stall — but it is still not detected, and nothing names the
-  version this cockpit was proven against.
 - **The supervised acceptance cycle (R7) is owner-run and outstanding** for this repo.
 
 ## Pointers (implementation)
@@ -464,10 +190,5 @@ resilience").
   not among the ten live verbs and refuse by name; the manual `touch`/`rm` marker
   gesture is their only live form (see Data Dictionary). Test coverage is inline:
   the `#[cfg(test)] mod tests` block in `herding.rs`.
-- `run`'s own module — pane split/start, the native poll loop, and pane-lifecycle
-  decisions, each seam-tested with a fake so no test needs a real `herdr` on PATH —
-  is `packages/bee-rs/crates/bee/src/herding/run.rs`; the mailbox contract it writes
-  and reads (`job.json`, `result-N.json`, `log.txt`) is
-  `packages/bee-rs/crates/bee/src/herding/mailbox.rs`.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.

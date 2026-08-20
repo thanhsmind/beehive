@@ -1,0 +1,132 @@
+---
+type: bee.area
+title: "Bee Herding — the run verb, its signal ladder, and how a worker's wait ends"
+description: "bee herding run as an entry point: the ladder of signals its native poll decides on, the typed outcomes a wait can end in — done, died, paused by a usage limit, timed out — what each does to the pane, and the hang case that is still unsolved."
+timestamp: 2026-08-20
+bee:
+  id: bee-herding-the-run-verb-and-worker-outcomes
+  lifecycle: active
+  areas: [bee-herding]
+  required_context: [areas/bee-herding/overview.md]
+  decisions: ["herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", "herding-executor D9 (the verb appends its own dispatch and ledger rows)", "herding-liveness-signals D1 (the signal ladder and the typed died outcome)", "herding-liveness-signals D2 (the liveness read fails open)", "herding-liveness-signals D3 (a death must be consecutive)", "herding-liveness-signals D4 (pane text is read on demand)", "herding-liveness-signals D6 (CPU refused as a hang signal; hang detection parked)", "herding-limit-pause D1-D4 (a usage-limit stop is a typed paused_limit outcome)", "herding-tier D4 (run gains stdin support via the - sentinel on --task-file)", "herding-executor D2 (agent-kind pass-through; bee keeps no list of kinds)"]
+  sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-liveness-signals/CONTEXT.md, docs/history/herding-limit-pause/CONTEXT.md, "herding-executor cells hx-1..hx-7 (mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, continue rounds; traces in `.bee/cells/`, 2026-08-19/20)", "herding-liveness-signals cells hls-1, hls-2 (the died outcome, on-demand pane read; traces in `.bee/cells/`, 2026-08-20)", "live case job hws-1-r1"]
+  authoritative_for: "bee-herding: the run verb's poll ladder, worker outcomes, and pane lifecycle"
+---
+
+# Bee Herding — the run verb, its signal ladder, and how a worker's wait ends
+
+**A herding run starts one bee-ignorant worker and waits on a file, not a
+screen.** It is the fifth entry point to the cockpit, and unlike a wave it starts
+a worker rather than briefing one that already exists. It carries none of
+dispatch's guards. It is **cell-execution-only** (herding-executor D7) — the
+mirror of the `cli` tier kind's gather/review/advisor-only boundary: a gather
+never dispatches through a herding pane.
+
+`bee herding run` is a native verb, not a script: it splits a pane off the
+caller's own runtime pane, starts the agent through the same spawn seam the
+working-agent spawn uses, and writes it a fully self-contained brief — task,
+absolute paths, file constraints, the result schema, the tmp-rename write gesture
+— over the mailbox, so a worker that has never seen bee can complete it
+(herding-executor D4). The task itself may arrive on standard input rather than
+as an argument, and an empty standard input refuses exactly as an empty task
+argument does — a caller piping a generated task never gets a worker started on
+nothing.
+
+## The poll decides on a ladder of signals, not one signal
+
+The poll loop is native and health-check based, at zero token cost, and it ranks
+its signals (herding-liveness-signals D1-D6, 2026-08-20):
+
+1. **Truth** — a `result-N.json` for the round outranks every other signal.
+2. **Agent liveness** — the pane's foreground process list, where the agent
+   counts as present when any foreground process is not the pane's own shell.
+   Pane liveness is not agent liveness: an agent that exits leaves its pane alive
+   at a shell prompt, so a pane-existence check cannot see the death. No result
+   plus no agent process is a typed `died` outcome, reported in seconds rather
+   than after the whole idle window.
+3. **Progress** — `log.txt` mtime advancing, or the reported agent status being
+   `working`. A stale heartbeat past `--idle-timeout` ends the wait.
+4. **Classification** — reached only when progress has gone stale; see the
+   usage-limit carve-out below.
+
+An absolute `--ceiling` caps the wait regardless of activity as the busy-loop
+backstop (herding-executor D5) and outranks the `died` rung, so a ceiling and a
+death arriving together still report the ceiling. There is no fixed short
+wall-clock timeout, because wall-clock alone cannot tell a long cell from a stuck
+agent.
+
+Two rules keep the liveness rung from becoming a hazard. **The liveness read
+fails OPEN**: an unreachable or unreadable process list reports "unknown", never
+"absent" — the opposite direction from the pane check that guards a continued
+job, which fails closed on purpose. A refusal gate may safely refuse on bad
+information; a kill decision may not, because the job it would end may be hours
+deep. **A death must be consecutive**: several successive absent readings are
+required before `died` is declared, and a single "unknown" reading RESETS that
+count rather than counting toward it, so an absent/unknown/absent flicker never
+ends a healthy job.
+
+Pane text is read only at the moment it is needed — when the heartbeat has
+already gone stale and the stall must be classified — not on every poll tick. The
+classification fires on exactly the tick it always did; what changed is that a
+quiet stall no longer pays for thousands of discarded screen captures.
+
+## A usage-limit stop is a pause, not a death
+
+A worker stopped by a USAGE LIMIT is a typed `paused_limit` outcome, never
+`timed_out_idle` (herding-limit-pause D1-D4, 2026-08-20). A stale heartbeat whose
+pane text matches a limit pattern ("hit your session limit" / "usage limit",
+case-insensitive, extensible) ends the wait as `paused_limit`; that pane is NEVER
+closed, even under `--close-always`, and `job.json` is stamped `paused_limit_at`
+plus `limit_reset_hint` (the matched line).
+
+Continuing a stamped job with a live pane resumes the SAME round — a resume
+pointer through the state-receipt delivery, stamp cleared, wait re-entered; a
+gone pane refuses typed. The control loop's occupancy already counts the paused
+job as occupying its slot, so its work is never re-dispatched (live case
+hws-1-r1).
+
+## A job is not always one round
+
+Reusing a finished job continues it: the same mailbox is kept, the follow-up
+brief reaches the agent ALREADY RUNNING in the pane rather than starting a second
+one beside it, and the wait then targets the next round's result file. A missing
+job, a missing prior result, or a pane that is gone all refuse with a typed
+reason — continuing is only meaningful against a job that actually got
+somewhere.
+
+## Pane lifecycle follows the result, not the clock
+
+A valid result closes the pane; a failure, death, or timeout leaves it open as
+forensics; `--close-always` overrides both (herding-executor D6). The one
+carve-out is `paused_limit`, which keeps its pane under every setting.
+
+The verb appends its own dispatch row and a wave-ledger worker row for every run
+it starts, so occupancy counts these workers too (herding-executor D9).
+Everything else bee-shaped — capping the cell, the proof line, reservations —
+stays the orchestrator's job, done only after it reads the result file back
+(herding-executor D4).
+
+## Open Gaps
+
+- **Hang detection remains an open gap.** A worker that is stuck but still
+  emitting output satisfies every progress source there is. Accumulated CPU time
+  was the intended discriminator and was REFUSED on measurement
+  (herding-liveness-signals D6): an interactive agent's event loop burns CPU
+  while it sits blocked, so any-delta never goes stale and catches nothing; and
+  treating flat CPU as an override kills an agent legitimately waiting minutes on
+  a remote call. Pane output counters fail identically, for the same reason a
+  spinner advances the log. Picking a real discriminator needs calibration traces
+  from healthy-but-blocked workers against genuinely hung ones, and the question
+  is parked against a registered trigger until those exist.
+
+## Pointers (implementation)
+
+- `run`'s own module — pane split/start, the native poll loop, and pane-lifecycle
+  decisions, each seam-tested with a fake so no test needs a real multiplexer on
+  PATH — is `packages/bee-rs/crates/bee/src/herding/run.rs`; the mailbox contract
+  it writes and reads is `packages/bee-rs/crates/bee/src/herding/mailbox.rs`.
+- Spellings this page states in business terms: continuing a job is
+  `bee herding run --continue <job-id>`; the task-on-stdin form is
+  `--task-file -`; the two rows every run appends are one in
+  `.bee/logs/dispatch.jsonl` and one wave-ledger row through the same append path
+  as `bee herding record-worker`.
