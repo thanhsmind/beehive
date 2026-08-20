@@ -1,0 +1,41 @@
+{
+  "id": "hrs-1",
+  "feature": "herding-receipt-source",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Receipt reads pane read text; delivery window 30 attempts",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-receipt-source/CONTEXT.md"
+  ],
+  "action": "Per D1/D2: trait method agent_text(job_id) becomes pane_text(pane_id); real impl shells herdr pane read <pane_id> capturing raw stdout text (new call_text helper — pane read emits plain text, never JSON). deliver_pointer: POINTER_DELIVERY_ATTEMPTS 30, inter-attempt sleep ~1s (POLL_INTERVAL*5). Call sites pass the pane id. Fakes/PanicHerdr renamed. Tests updated; exhaustion test keeps asserting the const.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::run",
+  "must_haves": {
+    "truths": [
+      "Receipt source is pane read raw text by pane id",
+      "30 bounded attempts spaced ~1s"
+    ]
+  },
+  "decisions": [
+    "herding-receipt-source D1",
+    "herding-receipt-source D2"
+  ],
+  "deps": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

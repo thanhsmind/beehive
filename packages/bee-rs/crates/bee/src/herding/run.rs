@@ -276,11 +276,13 @@ trait Herdr {
     /// round N+1 brief to an ALREADY-RUNNING agent, never `agent start`
     /// (that would spawn a second agent instead of continuing this one).
     fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String>;
-    /// `herdr agent read <job_id> --source recent-unwrapped` — the agent's
-    /// recent pane text, `None` on any trouble. The delivery receipt for
-    /// `deliver_pointer` (herding-prompt-verify D1): status flags lie about
-    /// input readiness, the pane text is the only honest receipt.
-    fn agent_text(&self, job_id: &str) -> Option<String>;
+    /// `herdr pane read <pane_id>` — the pane's recent text (plain stdout,
+    /// never a JSON envelope), `None` on any trouble. The delivery receipt
+    /// for `deliver_pointer` (herding-prompt-verify D1, source corrected by
+    /// herding-receipt-source D1): `agent read` returns empty for an agy
+    /// pane while `pane read` shows the text — the receipt must be the
+    /// source that sees.
+    fn pane_text(&self, pane_id: &str) -> Option<String>;
     /// `herdr pane list`, membership-tested against `pane_id` — the D3
     /// `--continue` "is the pane gone" check. Unlike `pane_rect` (which
     /// fails open to a default direction on ANY trouble), this fails
@@ -395,12 +397,18 @@ impl Herdr for RealHerdr {
         self.call(&["agent", "prompt", job_id, prompt]).map(|_| ())
     }
 
-    fn agent_text(&self, job_id: &str) -> Option<String> {
-        let v = self.call(&["agent", "read", job_id, "--source", "recent-unwrapped"]).ok()?;
-        v.get("result")
-            .and_then(|r| r.get("text").or_else(|| r.get("transcript")))
-            .and_then(Value::as_str)
-            .map(str::to_string)
+    fn pane_text(&self, pane_id: &str) -> Option<String> {
+        // `pane read` emits plain text on stdout, never a JSON envelope —
+        // a raw capture, not `call` (herding-receipt-source D1).
+        let out = Command::new("herdr")
+            .args(["pane", "read", pane_id])
+            .stdin(Stdio::null())
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        Some(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 
     fn pane_alive(&self, pane_id: &str) -> bool {
@@ -535,7 +543,7 @@ fn run_poll_loop(
 /// resends; the pointer is idempotent (read the same file), so a duplicate
 /// delivery is harmless. Injected wait/clock, same seam style as the other
 /// loops.
-const POINTER_DELIVERY_ATTEMPTS: u32 = 5;
+const POINTER_DELIVERY_ATTEMPTS: u32 = 30;
 
 fn deliver_pointer(
     job_id: &str,
@@ -553,7 +561,9 @@ fn deliver_pointer(
             return Ok(());
         }
         if attempt < POINTER_DELIVERY_ATTEMPTS {
-            sleep(POLL_INTERVAL);
+            // ~1s between attempts (herding-receipt-source D2): smoke 7
+            // proved the input can stay deaf well past 5 quick sends.
+            sleep(POLL_INTERVAL * 4);
         }
     }
     Err(format!(
@@ -898,7 +908,7 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         &pointer,
         &needle,
         &mut |p| herdr.agent_prompt(&opts.job_id, p),
-        &mut || herdr.agent_text(&opts.job_id),
+        &mut || herdr.pane_text(&new_pane),
         &mut |d| std::thread::sleep(d),
     ) {
         return ExecResult {
@@ -1035,7 +1045,7 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         &pointer,
         &needle,
         &mut |p| herdr.agent_prompt(job_id, p),
-        &mut || herdr.agent_text(job_id),
+        &mut || herdr.pane_text(&pane_id),
         &mut |d| std::thread::sleep(d),
     ) {
         return ExecResult {
@@ -1357,7 +1367,7 @@ mod tests {
             self.prompt_calls.borrow_mut().push((job_id.to_string(), prompt.to_string()));
             self.prompt_result.clone()
         }
-        fn agent_text(&self, _job_id: &str) -> Option<String> {
+        fn pane_text(&self, _pane_id: &str) -> Option<String> {
             let mut blind = self.text_blind_reads.borrow_mut();
             if *blind > 0 {
                 *blind -= 1;
@@ -1401,7 +1411,7 @@ mod tests {
         fn agent_prompt(&self, _job_id: &str, _prompt: &str) -> Result<(), String> {
             panic!("dry-run must never call Herdr::agent_prompt")
         }
-        fn agent_text(&self, _job_id: &str) -> Option<String> {
+        fn pane_text(&self, _pane_id: &str) -> Option<String> {
             panic!("dry-run must never call Herdr::agent_text")
         }
         fn pane_alive(&self, _pane_id: &str) -> bool {
