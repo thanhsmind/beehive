@@ -357,12 +357,11 @@ use std::time::Instant;
         }
     }
 
-    // herding-review-slots D1/D2 (widens herding-tier D1/D3's cell-only
-    // scope): `{kind:"herding"}` is a router value — cell, reviewer, and
-    // advisor purposes resolve to Resolved::Herding (ht-3/hrv-1 turn that
-    // into the herding-exec Bash payload); only a gather purpose keeps
-    // serving the runtime's own default model for that slot, the exact
-    // inverse of the cli branch just above.
+    // herding-review-slots D1 (widened to the full mapping): `{kind:
+    // "herding"}` is a router value — EVERY purpose (cell, gather,
+    // reviewer, advisor, extraction) resolves to Resolved::Herding
+    // (ht-3/hrv-1/hrv-3 turn that into the herding-exec Bash payload);
+    // there is no longer a gather-default split.
     #[test]
     fn normalize_tier_value_accepts_and_round_trips_the_herding_shape() {
         assert_eq!(
@@ -381,49 +380,67 @@ use std::time::Instant;
     }
 
     #[test]
-    fn resolve_tier_routes_herding_by_purpose_and_gathers_keep_the_default_model() {
+    fn resolve_tier_routes_every_purpose_on_a_herding_slot_to_herding() {
         // cell purpose -> Resolved::Herding, never a refusal.
         let m = models_from(r#"{"claude":{"generation":{"kind":"herding"}}}"#);
         assert_eq!(
             resolve_tier(&m, "generation", "claude", "cell"),
-            Resolved::Herding { agent: None }
+            Resolved::Herding { agent: None, fallback: None }
         );
 
-        // gather purpose on the same slot -> the runtime's DEFAULT model for
-        // that slot (claude generation -> sonnet), not Herding.
+        // gather purpose on the SAME slot -> Herding too (D1 widened): the
+        // gather-default-model split hrv-1 still carried is gone.
         assert_eq!(
             resolve_tier(&m, "generation", "claude", "gather"),
-            Resolved::Model { model: "sonnet".into(), effort: None }
+            Resolved::Herding { agent: None, fallback: None }
         );
 
-        // A runtime whose default for the slot is null (codex) reads Budget
-        // on the gather purpose — never a refusal, never Herding.
+        // A runtime with no configured default for the slot (codex) still
+        // reads Herding on both purposes — the herding shape never
+        // consults the runtime's default-model table to resolve itself.
         let m = models_from(r#"{"codex":{"generation":{"kind":"herding"}}}"#);
-        assert_eq!(resolve_tier(&m, "generation", "codex", "gather"), Resolved::Budget);
+        assert_eq!(
+            resolve_tier(&m, "generation", "codex", "gather"),
+            Resolved::Herding { agent: None, fallback: None }
+        );
         assert_eq!(
             resolve_tier(&m, "generation", "codex", "cell"),
-            Resolved::Herding { agent: None }
+            Resolved::Herding { agent: None, fallback: None }
+        );
+
+        // The extraction slot resolves exactly the same way — D1's "full
+        // mapping" covers every CONFIGURABLE_SLOTS member, not just
+        // generation/review.
+        let m = models_from(r#"{"claude":{"extraction":{"kind":"herding"}}}"#);
+        assert_eq!(
+            resolve_tier(&m, "extraction", "claude", "cell"),
+            Resolved::Herding { agent: None, fallback: None }
+        );
+        assert_eq!(
+            resolve_tier(&m, "extraction", "claude", "gather"),
+            Resolved::Herding { agent: None, fallback: None }
         );
     }
 
     // herding-review-slots D1: the widened split — reviewer AND advisor
     // purposes resolve a herding-shaped slot to Herding exactly like a cell
-    // purpose does; only "gather" keeps the default-model fallback.
+    // purpose does — every purpose reads the shape the same way now (D1
+    // widened to the full mapping, no purpose left carrying its own rule).
     #[test]
     fn resolve_tier_routes_reviewer_and_advisor_purposes_to_herding_too() {
         let m = models_from(r#"{"claude":{"review":{"kind":"herding","agent":"agy-flash"}}}"#);
         assert_eq!(
             resolve_tier(&m, "review", "claude", "reviewer"),
-            Resolved::Herding { agent: Some("agy-flash".into()) }
+            Resolved::Herding { agent: Some("agy-flash".into()), fallback: None }
         );
-        // resolve_tier itself is purpose-agnostic beyond the cell/gather
-        // split it already knew — an "advisor" purpose on the same shape
+        // resolve_tier itself is purpose-agnostic beyond the cli-only
+        // gate it already knew — an "advisor" purpose on the same shape
         // also resolves to Herding (resolve_advisor is the production path
         // for a real --kind advisor dispatch; this pins resolve_tier's own
         // symmetry so the two doors never drift apart).
         assert_eq!(
             resolve_tier(&m, "review", "claude", "advisor"),
-            Resolved::Herding { agent: Some("agy-flash".into()) }
+            Resolved::Herding { agent: Some("agy-flash".into()), fallback: None }
         );
     }
 
@@ -459,7 +476,58 @@ use std::time::Instant;
         );
         assert_eq!(
             resolve_tier(&m, "generation", "claude", "cell"),
-            Resolved::Herding { agent: Some("codex-cli".into()) }
+            Resolved::Herding { agent: Some("codex-cli".into()), fallback: None }
+        );
+    }
+
+    // herding-review-slots D3: `"fallback": "default"` on the herding shape
+    // round-trips through normalize (only the literal string "default" is
+    // recognized) and resolve_tier carries it through to Resolved::Herding.
+    #[test]
+    fn normalize_tier_value_round_trips_the_herding_fallback_field() {
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "fallback": "default"}))),
+            Some(json!({"kind": "herding", "fallback": "default"}))
+        );
+        // Any other value is dropped, not carried through — no near-miss
+        // spellings, same exact-match posture as `fork_turns`.
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "fallback": "budget"}))),
+            Some(json!({"kind": "herding"}))
+        );
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "fallback": ""}))),
+            Some(json!({"kind": "herding"}))
+        );
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "fallback": true}))),
+            Some(json!({"kind": "herding"}))
+        );
+        // Absent stays absent.
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding"}))),
+            Some(json!({"kind": "herding"}))
+        );
+    }
+
+    #[test]
+    fn resolve_tier_carries_the_herding_fallback_field_through() {
+        let m = models_from(
+            r#"{"claude":{"generation":{"kind":"herding","agent":"codex-cli","fallback":"default"}}}"#,
+        );
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", "cell"),
+            Resolved::Herding {
+                agent: Some("codex-cli".into()),
+                fallback: Some("default".into())
+            }
+        );
+
+        // Absent -> None, unchanged from before D3.
+        let m = models_from(r#"{"claude":{"generation":{"kind":"herding"}}}"#);
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", "cell"),
+            Resolved::Herding { agent: None, fallback: None }
         );
     }
 
@@ -471,7 +539,7 @@ use std::time::Instant;
     fn resolve_advisor_treats_a_herding_shaped_slot_as_herding() {
         assert_eq!(
             resolve_advisor(&models_from(r#"{"claude":{"advisor":{"kind":"herding"}}}"#), "claude"),
-            Some(Resolved::Herding { agent: None })
+            Some(Resolved::Herding { agent: None, fallback: None })
         );
         // herd-registry D2: `agent` carries through, same as every other
         // herding-shaped slot.
@@ -480,7 +548,7 @@ use std::time::Instant;
                 &models_from(r#"{"claude":{"advisor":{"kind":"herding","agent":"named-herd"}}}"#),
                 "claude"
             ),
-            Some(Resolved::Herding { agent: Some("named-herd".into()) })
+            Some(Resolved::Herding { agent: Some("named-herd".into()), fallback: None })
         );
     }
 
@@ -1052,6 +1120,108 @@ use std::time::Instant;
         );
     }
 
+    // ── hrv-3: herding-review-slots D3 — the fallback:default field ────────
+
+    /// D3: `"fallback": "default"` on a herding-shaped generation slot adds
+    /// a `fallback: {model}` payload field naming the runtime's own default
+    /// model for that slot (claude generation -> sonnet) — the same value
+    /// a gather purpose used to resolve to silently, pre-D1-widening, now
+    /// surfaced for the orchestrator's re-dispatch instead.
+    #[test]
+    fn herding_shaped_generation_with_fallback_default_adds_the_payload_fallback_field() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":{"kind":"herding","fallback":"default"}}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").unwrap().get("fallback"),
+            Some(&json!({"model": "sonnet"}))
+        );
+    }
+
+    /// D3: absent `fallback` leaves the payload byte-identical — no
+    /// `fallback` key at all.
+    #[test]
+    fn herding_shaped_generation_without_fallback_omits_the_payload_field() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("payload").unwrap().get("fallback"), None);
+    }
+
+    /// D3: a runtime whose default for the slot is null (codex generation)
+    /// still recognizes `fallback:"default"` on the shape, but has no
+    /// default model to name — the payload stays byte-identical to a slot
+    /// with no `fallback` field at all, never a `{model: null}`.
+    #[test]
+    fn herding_shaped_generation_with_fallback_default_and_no_runtime_default_omits_the_field() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"codex":{"generation":{"kind":"herding","fallback":"default"}}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("payload").unwrap().get("fallback"), None);
+    }
+
+    /// D3: an advisor purpose recognizes `fallback:"default"` on the shape
+    /// (it round-trips through Resolved::Herding the same as every other
+    /// purpose) but the advisor slot has no default-model table entry at
+    /// all (resolveAdvisor "NEVER a tier fallback") — the payload stays
+    /// byte-identical to no `fallback` field.
+    #[test]
+    fn herding_shaped_advisor_with_fallback_default_has_no_default_model_to_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"advisor":{"kind":"herding","fallback":"default"}}}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("payload").unwrap().get("fallback"), None);
+    }
+
     // ── hrv-1: herding-review-slots D1/D2 — reviewer/advisor purposes ──────
 
     /// D1: a reviewer purpose on a herding-shaped review slot takes the
@@ -1114,11 +1284,12 @@ use std::time::Instant;
         );
     }
 
-    /// D1: a gather purpose on the SAME herding-shaped generation slot
-    /// keeps serving the runtime's default model — never Herding, the
-    /// exact inverse the two tests above pin.
+    /// hrv-3 (D1 widened to the full mapping): a gather purpose on the SAME
+    /// herding-shaped generation slot now ALSO takes the herding-exec Bash
+    /// arm — the gather-default-model split the three tests above used to
+    /// pin against is gone; every purpose reads the shape identically.
     #[test]
-    fn gather_purpose_on_a_herding_shaped_generation_slot_keeps_the_default_model() {
+    fn gather_purpose_on_a_herding_shaped_generation_slot_also_emits_the_herding_exec_payload() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
 
@@ -1128,11 +1299,14 @@ use std::time::Instant;
         else {
             panic!()
         };
-        assert_eq!(v.get("tool"), Some(&json!("Agent")));
-        assert_eq!(v.get("payload").unwrap().get("model"), Some(&json!("sonnet")));
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+        );
         assert_eq!(
             v.get("economics").unwrap().get("channel"),
-            Some(&json!("claude-agent"))
+            Some(&json!("herding-exec"))
         );
     }
 
