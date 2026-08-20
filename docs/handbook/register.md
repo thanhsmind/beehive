@@ -290,6 +290,7 @@ Event-sourced friction + PBI records. Event shapes include `proposal`
 events. Written via `bee backlog add` / `backlog propose` / `backlog pbi.*`.
 Rendered to `docs/backlog.md` (generated — never hand-edited).
 
+<!-- bee:not-a-deferral: this section names and describes the deferred-queue mechanism itself — the add/claim/release/complete event shapes and the work kinds it carries — so the word "deferred" is the subject under description here, not an open promise this doc is making -->
 ### `.bee/deferred-queue.jsonl`
 Event-sourced, last-event-wins fold (add/claim/release/complete), holding
 deferred `capture` / `scribe` / `review` / `promote` work that a session
@@ -300,6 +301,7 @@ ttl_seconds}` or `null`. `claim` follows the same exclusive-append,
 lease-plus-heartbeat reclaim pattern `.bee/claims/` uses, so a parallel agent
 takes exactly one item. Written via `deferred-queue add / list / claim /
 release / complete`.
+<!-- /bee:not-a-deferral -->
 
 ### `.bee/HANDOFF.json`
 **Legacy projection.** The pause/resume artifact — a projection of the live workflow's own mailbox
@@ -315,11 +317,13 @@ release / complete`.
 
 Written via `state handoff write/adopt/show`.
 
+<!-- bee:not-a-deferral: this section names and describes the capture-queue's own stub shape and lifecycle — deferred capture stubs awaiting their spec merge — so "deferred" here is the mechanism being documented, not a deferred obligation of this register entry -->
 ### `.bee/capture-queue.jsonl`
 Deferred capture stubs awaiting their spec merge.
 Shape: `{kind:'stub', id, at, outcome, dids[], area, files[], lane}`. Written via
 `bee capture add`, drained via `capture flush --id <id> --into <spec>`. High-risk
 lane never queues — it merges now.
+<!-- /bee:not-a-deferral -->
 
 ### `.bee/expertise/`
 The vendored craft layer — 10 craft guides and 6 domain guides plus `INDEX.md`,
@@ -469,6 +473,7 @@ reason, never a silent skip — it is written onto the record it excuses.
 | `cells tier` | assigning `ceiling` would put more than 40% of the feature's tiered cells on the ceiling tier (exactly 40% passes) | `--reason "<text>"`, stored on `trace.tier_reason` |
 | `bee close` | the feature has `behavior_change` cells capped since the last scribing stamp and nothing captured them | run `bee-capturing`, or log a `capture-deferral` decision naming the feature |
 | `bee close` (judge-debt, standard/high-risk lanes only) | a `behavior_change` cell capped since the judge-debt door shipped carries no `cells judge-record` verdict | run `bee cells judge` then `bee cells judge-record` for each named cell, or log a `judge-deferral` decision naming the feature |
+| `bee close` (doc-deferral door) | deferral-shaped prose (matching `matches_deferral_prose`) appears outside a fence with no same-line registered trigger citation | register the condition (`bee triggers add --decision <id> --condition "..."`) and cite it inline (backtick `` `<id>` `` or `[[trigger:<id>]]`), log a `doc-deferral` decision naming the feature, or — only for prose that *documents* deferral machinery rather than prose that itself defers — wrap it in a reasoned `<!-- bee:not-a-deferral: <reason> --> ... <!-- /bee:not-a-deferral -->` block; the reason is required, an empty or missing one exempts nothing |
 | `bee route --set` | a re-lane would demote a `high-risk` feature, demote while a hard-gate flag is present, or demote a second time (`demoted_at` already stamped) | **none** — all three are absolute |
 | `state start-feature` | the current phase is neither `idle` nor the terminal alias `compounding-complete` — a prior feature is still in flight | none — finish it, or drop its remaining cells |
 | `state handoff adopt` | the session started from `resume` or `compact`, not a fresh-session boundary; or the record's `kind` is `pause` | **none** — present the handoff and wait for the user. A session with no recorded start source warns and proceeds |

@@ -3707,6 +3707,141 @@ use std::time::Instant;
         assert_eq!(door.detail, "clear");
     }
 
+    #[test]
+    fn doc_deferral_door_exempts_a_reasoned_not_a_deferral_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "prose\n<!-- bee:not-a-deferral: names the queue file, not a promise -->\nThis work is deferred for now.\n<!-- /bee:not-a-deferral -->\nmore prose\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn doc_deferral_door_ignores_a_not_a_deferral_marker_with_an_empty_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "prose\n<!-- bee:not-a-deferral:  -->\nThis work is deferred for now.\n<!-- /bee:not-a-deferral -->\nmore prose\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:3"), "{}", door.detail);
+    }
+
+    #[test]
+    fn doc_deferral_door_ignores_a_not_a_deferral_marker_with_a_missing_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "prose\n<!-- bee:not-a-deferral: -->\nThis work is deferred for now.\n<!-- /bee:not-a-deferral -->\nmore prose\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:3"), "{}", door.detail);
+    }
+
+    #[test]
+    fn doc_deferral_door_blocks_again_after_the_closing_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "<!-- bee:not-a-deferral: names the queue file, not a promise -->\nThis work is deferred for now.\n<!-- /bee:not-a-deferral -->\nThis work is deferred for now, too.\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:4"), "{}", door.detail);
+        assert!(!door.detail.contains(":2 "), "{}", door.detail);
+    }
+
+    #[test]
+    fn doc_deferral_door_unclosed_marker_exempts_to_end_of_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "<!-- bee:not-a-deferral: names the queue file, not a promise -->\nThis work is deferred for now.\nThis is deferred later too.\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn doc_deferral_door_fence_inside_a_marked_block_behaves_independently() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "<!-- bee:not-a-deferral: names the queue file, not a promise -->\n```\nThis is deferred for now inside a fence.\n```\nThis is deferred for now inside the marker.\n<!-- /bee:not-a-deferral -->\nThis is deferred for now outside both.\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:7"), "{}", door.detail);
+        assert!(!door.detail.contains(":3 "), "{}", door.detail);
+        assert!(!door.detail.contains(":5 "), "{}", door.detail);
+    }
+
+    #[test]
+    fn doc_deferral_door_marker_inside_a_fence_behaves_independently() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "```\n<!-- bee:not-a-deferral: names the queue file, not a promise -->\nThis is deferred for now inside the fence and the marker.\n<!-- /bee:not-a-deferral -->\n```\nThis is deferred for now outside both.\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:6"), "{}", door.detail);
+        assert!(!door.detail.contains(":3 "), "{}", door.detail);
+    }
+
+    /// The exact register.md shapes from the real incident: a heading whose
+    /// backtick span is a filename (tried and failing as a trigger id), a
+    /// prose line carrying "deferred", and one carrying "later" — all clear
+    /// once wrapped in a reasoned not-a-deferral block.
+    #[test]
+    fn doc_deferral_door_register_md_incident_shapes_clear_once_wrapped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/handbook/register.md",
+            concat!(
+                "<!-- bee:not-a-deferral: this documents the deferred-queue file, it is not a promise to act later -->\n",
+                "### `.bee/deferred-queue.jsonl`\n",
+                "\n",
+                "Entries deferred here are written by the doc-impact-synthesis door.\n",
+                "The capture queue is flushed later by bee-capturing.\n",
+                "<!-- /bee:not-a-deferral -->\n",
+            ),
+        );
+        write_freshness_capped_cell(root, "demo", "docs/handbook/register.md");
+        let door = build_doc_deferral_door(root, "demo").unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
     /// CONTEXT.md is written at shaping, before any cell exists — the scan
     /// set is the UNION of capped-cell `files_changed` and every file on
     /// disk under `docs/history/<feature>/`, so a feature with ZERO capped
