@@ -34,7 +34,7 @@
 //     test environment) it returns `None` and the ledger's own fallback
 //     path answers instead — never a test dependency on a live herdr.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 use std::process::{Command, ExitCode, Stdio};
 use std::time::Duration;
@@ -74,6 +74,12 @@ const MODEL_VALUE: &str = "sonnet";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AgentCommandError {
     Empty { key: &'static str },
+    /// herd-registry D2: a named lookup — `--agent <name>`, a tier slot's
+    /// `agent`, or a string-valued `herding.agent_command` — named an
+    /// entry `herding.agents` does not declare. `known` carries every
+    /// registry key (sorted) so the refusal names its own remedy without a
+    /// second read.
+    UnknownAgent { name: String, known: Vec<String> },
 }
 
 impl std::fmt::Display for AgentCommandError {
@@ -81,6 +87,17 @@ impl std::fmt::Display for AgentCommandError {
         match self {
             AgentCommandError::Empty { key } => {
                 write!(f, "{key}: resolved to zero tokens")
+            }
+            AgentCommandError::UnknownAgent { name, known } => {
+                if known.is_empty() {
+                    write!(f, "unknown herding agent {name:?} (herding.agents declares no entries)")
+                } else {
+                    write!(
+                        f,
+                        "unknown herding agent {name:?} (herding.agents declares: {})",
+                        known.join(", ")
+                    )
+                }
             }
         }
     }
@@ -113,14 +130,92 @@ fn agent_command_tokens(cfg: &Value) -> Vec<String> {
     out
 }
 
+/// herd-registry D1 — `herding.agents`: a map of name → argv token array,
+/// same shape and per-entry validation `agent_command_tokens` already uses
+/// for `herding.agent_command` (non-empty array of newline-free strings).
+/// A malformed entry is dropped, fail-open per entry — it never poisons
+/// the rest of the registry. `BTreeMap` keeps the key order the
+/// `UnknownAgent` error lists deterministic.
+fn agent_registry(cfg: &Value) -> BTreeMap<String, Vec<String>> {
+    let mut out = BTreeMap::new();
+    let Some(Value::Object(agents)) = cfg.get("herding").and_then(|h| h.get("agents")) else {
+        return out;
+    };
+    for (name, value) in agents {
+        let Value::Array(tokens) = value else { continue };
+        if tokens.is_empty() {
+            continue;
+        }
+        let mut collected = Vec::with_capacity(tokens.len());
+        let mut valid = true;
+        for t in tokens {
+            match t.as_str() {
+                Some(s) if !s.contains('\n') => collected.push(s.to_string()),
+                _ => {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        if valid {
+            out.insert(name.clone(), collected);
+        }
+    }
+    out
+}
+
+/// The one place a name resolves against `herding.agents` (herd-registry
+/// D2): token 0 becomes the kind, the rest the args, each substituted the
+/// same way a plain `herding.agent_command` array is. An unknown name
+/// lists every registry key.
+fn resolve_from_registry(
+    registry: &BTreeMap<String, Vec<String>>,
+    name: &str,
+) -> Result<(String, Vec<String>), AgentCommandError> {
+    let Some(tokens) = registry.get(name) else {
+        return Err(AgentCommandError::UnknownAgent {
+            name: name.to_string(),
+            known: registry.keys().cloned().collect(),
+        });
+    };
+    let substituted: Vec<String> = tokens.iter().map(|t| substitute_model(t)).collect();
+    let Some((kind, args)) = substituted.split_first() else {
+        // agent_registry() never inserts an empty entry, but fail closed
+        // rather than panic if it ever did.
+        return Err(AgentCommandError::Empty { key: "herding.agents" });
+    };
+    Ok((kind.clone(), args.to_vec()))
+}
+
 /// D14's split: token 0 becomes the agent kind (herdr's `--kind`), the
 /// remaining tokens — each substituted per-token — become the agent args
 /// (herdr's trailing argv after `--`). Token 0 passes through UNCHECKED
 /// (D2): `herdr` validates it as a `--kind` and refuses an unrecognised one
 /// itself, after the pane split — never a bee-side allow-list.
-/// `AgentCommandError::Empty` is the fail-closed arm for a split that
-/// leaves zero tokens.
-pub(crate) fn resolve_agent_command(cfg: &Value) -> Result<(String, Vec<String>), AgentCommandError> {
+///
+/// herd-registry D2 — three reference spellings, one resolver:
+///   - `agent = Some(name)`: a named lookup (`--agent <name>` or a tier
+///     slot's `agent`), resolved through `herding.agents` alone. An
+///     unknown name is `AgentCommandError::UnknownAgent`, listing every
+///     registry key.
+///   - `agent = None` and `herding.agent_command` is a plain JSON string:
+///     that string names a `herding.agents` entry, resolved the SAME way
+///     (an unknown name refuses the same way a named lookup does).
+///   - `agent = None` and anything else: today's split — an array resolves
+///     token 0 as the kind, and absent/malformed falls back to the
+///     documented default. `AgentCommandError::Empty` is the fail-closed
+///     arm for a split that leaves zero tokens.
+pub(crate) fn resolve_agent_command(
+    cfg: &Value,
+    agent: Option<&str>,
+) -> Result<(String, Vec<String>), AgentCommandError> {
+    let registry = agent_registry(cfg);
+    if let Some(name) = agent {
+        return resolve_from_registry(&registry, name);
+    }
+    if let Some(name) = cfg.get("herding").and_then(|h| h.get("agent_command")).and_then(Value::as_str) {
+        return resolve_from_registry(&registry, name);
+    }
     let tokens = agent_command_tokens(cfg);
     let substituted: Vec<String> = tokens.iter().map(|t| substitute_model(t)).collect();
     let Some((kind, args)) = substituted.split_first() else {
@@ -256,7 +351,10 @@ fn build_wave_backend_and_run<B: WorkerBackend + Sync>(
     wave: &Wave,
     construct_backend: impl FnOnce(String, Vec<String>) -> B,
 ) -> Result<WaveResult, AgentCommandError> {
-    let (kind, args) = resolve_agent_command(cfg)?;
+    // `bee herding wave` names no per-worker agent (herd-registry D2 covers
+    // only `--agent`, a tier slot's `agent`, and a string `agent_command`) —
+    // this caller stays on the `None` arm, unchanged.
+    let (kind, args) = resolve_agent_command(cfg, None)?;
     let backend = construct_backend(kind, args);
     Ok(run_wave_and_record(&backend, root, wave_id, started_at, inputs, wave))
 }
@@ -696,7 +794,7 @@ mod tests {
 
     #[test]
     fn absent_config_falls_back_to_the_documented_default() {
-        let (kind, args) = resolve_agent_command(&Value::Null).unwrap();
+        let (kind, args) = resolve_agent_command(&Value::Null, None).unwrap();
         assert_eq!(kind, "claude");
         assert_eq!(args, vec!["--model", "sonnet", "--permission-mode", "bypassPermissions"]);
     }
@@ -704,7 +802,7 @@ mod tests {
     #[test]
     fn a_configured_command_splits_token_0_from_the_rest() {
         let cfg = serde_json::json!({"herding": {"agent_command": ["codex", "--flag", "value"]}});
-        let (kind, args) = resolve_agent_command(&cfg).unwrap();
+        let (kind, args) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag", "value"]);
     }
@@ -712,7 +810,7 @@ mod tests {
     #[test]
     fn model_placeholder_is_substituted_per_token_never_joined() {
         let cfg = serde_json::json!({"herding": {"agent_command": ["claude", "--model", "{MODEL}", "--x={MODEL}"]}});
-        let (kind, args) = resolve_agent_command(&cfg).unwrap();
+        let (kind, args) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "claude");
         assert_eq!(args, vec!["--model", "sonnet", "--x=sonnet"]);
     }
@@ -724,7 +822,7 @@ mod tests {
         // like "gemini", a typo, anything) resolves and reaches backend
         // construction unchanged.
         let cfg = serde_json::json!({"herding": {"agent_command": ["gemini", "--x"]}});
-        let (kind, args) = resolve_agent_command(&cfg).unwrap();
+        let (kind, args) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "gemini");
         assert_eq!(args, vec!["--x"]);
     }
@@ -732,9 +830,112 @@ mod tests {
     #[test]
     fn an_empty_or_malformed_array_falls_back_to_the_default_not_an_error() {
         let empty = serde_json::json!({"herding": {"agent_command": []}});
-        assert!(resolve_agent_command(&empty).is_ok());
-        let non_array = serde_json::json!({"herding": {"agent_command": "claude"}});
-        assert!(resolve_agent_command(&non_array).is_ok());
+        assert!(resolve_agent_command(&empty, None).is_ok());
+        // A non-string, non-array value (herd-registry D2 reserves the
+        // string shape for a registry-name alias below) still falls back
+        // to the documented default, fail-open.
+        let non_array = serde_json::json!({"herding": {"agent_command": 42}});
+        assert!(resolve_agent_command(&non_array, None).is_ok());
+    }
+
+    // ─── herd-registry D1/D2: `herding.agents` + named resolution ──────
+
+    fn registry_cfg() -> Value {
+        serde_json::json!({
+            "herding": {
+                "agents": {
+                    "codex-herd": ["codex", "--flag", "value"],
+                    "gemini-herd": ["gemini", "--x"],
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn a_named_lookup_returns_the_registry_argv() {
+        let cfg = registry_cfg();
+        let (kind, args) = resolve_agent_command(&cfg, Some("codex-herd")).unwrap();
+        assert_eq!(kind, "codex");
+        assert_eq!(args, vec!["--flag", "value"]);
+    }
+
+    #[test]
+    fn an_unknown_name_refuses_typed_listing_every_registry_key() {
+        let cfg = registry_cfg();
+        let err = resolve_agent_command(&cfg, Some("no-such-herd")).unwrap_err();
+        let AgentCommandError::UnknownAgent { name, known } = &err else {
+            panic!("expected UnknownAgent, got {err:?}");
+        };
+        assert_eq!(name, "no-such-herd");
+        for key in ["codex-herd", "gemini-herd"] {
+            assert!(known.contains(&key.to_string()), "{known:?} must list {key:?}");
+        }
+        let text = err.to_string();
+        for key in ["codex-herd", "gemini-herd"] {
+            assert!(text.contains(key), "error text {text:?} must list {key:?}");
+        }
+    }
+
+    #[test]
+    fn an_unknown_name_against_an_empty_registry_still_lists_the_name_and_refuses() {
+        let err = resolve_agent_command(&Value::Null, Some("anything")).unwrap_err();
+        assert!(err.to_string().contains("anything"));
+    }
+
+    #[test]
+    fn a_string_valued_agent_command_aliases_through_the_registry() {
+        let mut cfg = registry_cfg();
+        cfg["herding"]["agent_command"] = Value::String("gemini-herd".to_string());
+        let (kind, args) = resolve_agent_command(&cfg, None).unwrap();
+        assert_eq!(kind, "gemini");
+        assert_eq!(args, vec!["--x"]);
+    }
+
+    #[test]
+    fn a_string_valued_agent_command_naming_an_unknown_herd_refuses_typed() {
+        let mut cfg = registry_cfg();
+        cfg["herding"]["agent_command"] = Value::String("no-such-herd".to_string());
+        let err = resolve_agent_command(&cfg, None).unwrap_err();
+        let text = err.to_string();
+        for key in ["codex-herd", "gemini-herd"] {
+            assert!(text.contains(key), "error text {text:?} must list {key:?}");
+        }
+    }
+
+    #[test]
+    fn an_absent_agent_name_and_array_agent_command_keeps_the_default_even_with_a_registry() {
+        // `herding.agents` present but `agent` is None and `agent_command`
+        // is the documented array shape (not a name) — registry never
+        // consulted, today's split behavior unchanged.
+        let mut cfg = registry_cfg();
+        cfg["herding"]["agent_command"] = serde_json::json!(["claude", "--flag"]);
+        let (kind, args) = resolve_agent_command(&cfg, None).unwrap();
+        assert_eq!(kind, "claude");
+        assert_eq!(args, vec!["--flag"]);
+    }
+
+    #[test]
+    fn a_malformed_registry_entry_is_dropped_fail_open_not_poisoning_the_rest() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "good": ["codex", "--x"],
+                    "bad-empty": [],
+                    "bad-non-string": ["codex", 1],
+                    "bad-newline": ["codex\n--x"],
+                }
+            }
+        });
+        let (kind, _args) = resolve_agent_command(&cfg, Some("good")).unwrap();
+        assert_eq!(kind, "codex");
+        for bad in ["bad-empty", "bad-non-string", "bad-newline"] {
+            let err = resolve_agent_command(&cfg, Some(bad)).unwrap_err();
+            let AgentCommandError::UnknownAgent { known, .. } = &err else {
+                panic!("expected UnknownAgent for dropped entry {bad:?}, got {err:?}");
+            };
+            assert!(!known.contains(&bad.to_string()), "{known:?} must not carry dropped entry {bad:?}");
+            assert!(known.contains(&"good".to_string()));
+        }
     }
 
     // ─── the caller: a wave run through a fake backend ─────────────────
@@ -837,7 +1038,7 @@ mod tests {
         // (e.g. always "claude", vec![]) still fails when the configured
         // command differs, as it does here.
         let cfg = serde_json::json!({"herding": {"agent_command": ["codex", "--flag", "value"]}});
-        let (expected_kind, expected_args) = resolve_agent_command(&cfg).unwrap();
+        let (expected_kind, expected_args) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(expected_kind, "codex", "sanity: this test's cfg must not resolve to the default");
 
         let tmp = tempfile::tempdir().unwrap();
