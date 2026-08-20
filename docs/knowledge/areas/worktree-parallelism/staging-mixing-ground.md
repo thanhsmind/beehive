@@ -82,14 +82,18 @@ key `staging_before_merge` states that choice once:
 
 | Value | Behavior |
 |---|---|
-| absent (the default) | staging is ON — everything on this page applies unchanged |
+| `true` | staging is ON — everything on this page applies unchanged |
+| absent (the default since defaults-and-agent-env D2, 2026-08-20) | staging is OFF — it is opt-in, and behaves exactly as an explicit `false` |
 | `false` | `bee staging add` and `bee staging rebuild` refuse `STAGING_DISABLED` as a zero-mutation precondition, before any lock or git work |
 | any non-boolean | refuses `STAGING_CONFIG_INVALID` rather than guessing which way a typo resolves |
 
+An opted-out repo still has somewhere for the user to test: the feature worktree
+itself stands in for the mixing ground.
+
 Three things the key deliberately does NOT touch. `bee staging status` is read-only and
 still reports an existing record in every case. The `uat` gate is independent — it stays
-exactly as `uat_before_merge` configures it, so opting out of staging never opts out of
-user acceptance. And the `staging_rebuild_suggested` nudge needed no change at all: it
+exactly as `uat_stop` configures it (with `uat_before_merge` readable as that key's
+back-compat alias), so opting out of staging never opts out of user acceptance. And the `staging_rebuild_suggested` nudge needed no change at all: it
 was already conditional on a staging record existing, and an opted-out repo never
 creates one.
 

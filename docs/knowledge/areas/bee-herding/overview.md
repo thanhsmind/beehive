@@ -37,7 +37,10 @@ isolated copy — is what runs unattended.**
   "default"` on the same shape lets a failed herding run (spawn failure, timeout, invalid
   result) re-dispatch through the runtime's own default model path for that slot instead;
   absent, a failed run stays loud and keeps its pane open as forensics
-  (herding-review-slots D3).
+  (herding-review-slots D3). Widening the slot to every purpose needed no change in the
+  model guard, because the guard routes on the slot's KIND alone and never on which
+  purpose asked — a new purpose inherits the routing for free, and no guard rule has to
+  learn its name.
 - **A wave is a fourth entry point, and no role calls it.** Dispatch starts one worker per iteration
   and never speaks to it again; a wave briefs several already-running workers in one act and waits
   on all of them together. It carries none of dispatch's guards — no arming marker, no classifier —
@@ -269,8 +272,22 @@ the dispatch interlock, or the merge owner-gesture change.
 trusts a flag (herding-executor arc, live-proven).** The pane start retries
 through a booting shell; the brief travels only as a mailbox file
 (`brief-N.txt`) behind a one-line pointer — never raw argv, never a
-multi-line injected prompt; readiness is observed before the send and
-delivery is confirmed against the pane's own text before the wait begins.
+multi-line injected prompt; readiness is observed before the send, and
+delivery is confirmed before the wait begins.
+
+**A delivery receipt is a state transition the agent itself caused, never text
+on the screen.** This is the "state-receipt delivery" named above, and it
+replaced an earlier pane-text check. A pane ECHOES the send's own keystrokes
+while the agent is still booting, so any receipt that looks for the sent text
+coming back confirms nothing but its own typing — it passes exactly when
+delivery failed. The receipt is therefore the agent's own reported state moving
+to working or done, or the round's result file appearing. Proven the hard way in
+live smoke: two runs whose brief was silently lost still satisfied the text
+check, and only the run that watched for a state change completed end to end.
+The general shape — an echo, a mirror, a write-through cache — is that any
+confirmation an actor can produce by itself is not evidence the other side
+received anything.
+
 The operating detail lives in
 `skills/bee-herding/references/operational-invariants.md` ("Spawn
 resilience").
