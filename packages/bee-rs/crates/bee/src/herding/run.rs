@@ -81,6 +81,12 @@ struct Options {
     /// landed above the boot banner and was lost), so the prompt waits for
     /// an observed ready status.
     ready_wait_secs: u64,
+    /// `--agent <name>` (herd-registry D2): resolve the spawn command
+    /// through the `herding.agents` registry by name instead of the
+    /// default `herding.agent_command` split. `execute_continue` never
+    /// reads this field — the pane already exists, so `--continue`
+    /// ignores `--agent` by construction.
+    agent: Option<String>,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -139,9 +145,14 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut explicit_root: Option<&str> = None;
     let mut json = false;
     let mut dry_run = false;
+    let mut agent: Option<&str> = None;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
+            "--agent" => {
+                agent = flags.get(i + 1).copied();
+                i += 2;
+            }
             "--task" => {
                 task = flags.get(i + 1).copied();
                 i += 2;
@@ -225,6 +236,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         dry_run,
         is_continue,
         ready_wait_secs: 60,
+        agent: agent.map(str::to_string),
     })
 }
 
@@ -835,7 +847,7 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or(Value::Null);
-    let (kind, args) = match resolve_agent_command(&cfg) {
+    let (kind, args) = match resolve_agent_command(&cfg, opts.agent.as_deref()) {
         Ok(pair) => pair,
         Err(e) => {
             return ExecResult { outcome: RunOutcome::SpawnFailed(e.to_string()), pane_id: None, closed_pane: false }
@@ -1312,6 +1324,10 @@ mod tests {
         /// `start_calls` stays empty, proving `agent_start` was NOT).
         prompt_calls: RefCell<Vec<(String, String)>>,
         start_calls: RefCell<Vec<String>>,
+        /// The `kind` (herdr `--kind`) `agent_start` was last called with —
+        /// how a herd-registry test proves a named `--agent` resolution
+        /// reached the spawn, not merely that SOME start happened.
+        started_kind: RefCell<Option<String>>,
         /// How many `agent_text` reads return None (pointer not yet
         /// visible) before the pane starts echoing the last prompt —
         /// the delivery-race script (herding-prompt-verify D1).
@@ -1331,6 +1347,7 @@ mod tests {
                 alive_panes: RefCell::new(vec!["w1:p2".to_string()]),
                 prompt_calls: RefCell::new(Vec::new()),
                 start_calls: RefCell::new(Vec::new()),
+                started_kind: RefCell::new(None),
                 text_blind_reads: RefCell::new(0),
             }
         }
@@ -1349,11 +1366,12 @@ mod tests {
         fn agent_start(
             &self,
             job_id: &str,
-            _kind: &str,
+            kind: &str,
             _pane_id: &str,
             _args: &[String],
         ) -> Result<(), String> {
             self.start_calls.borrow_mut().push(job_id.to_string());
+            *self.started_kind.borrow_mut() = Some(kind.to_string());
             self.start_result.clone()
         }
         fn agent_status(&self, _job_id: &str) -> Option<String> {
@@ -1432,6 +1450,7 @@ mod tests {
             dry_run,
             is_continue: false,
             ready_wait_secs: 60,
+            agent: None,
         }
     }
 
@@ -1476,6 +1495,7 @@ mod tests {
             dry_run,
             is_continue: true,
             ready_wait_secs: 60,
+            agent: None,
         }
     }
 
@@ -1822,6 +1842,95 @@ mod tests {
         let opts = parse_options(&["--task", "round 2", "--main-root", ".", "--continue", "job-9"]).unwrap();
         assert!(opts.is_continue);
         assert_eq!(opts.job_id, "job-9");
+    }
+
+    #[test]
+    fn parse_options_reads_the_agent_flag() {
+        let opts =
+            parse_options(&["--task", "x", "--main-root", ".", "--agent", "codex-herd"]).unwrap();
+        assert_eq!(opts.agent.as_deref(), Some("codex-herd"));
+    }
+
+    #[test]
+    fn parse_options_agent_defaults_to_none() {
+        let opts = parse_options(&["--task", "x", "--main-root", "."]).unwrap();
+        assert_eq!(opts.agent, None);
+    }
+
+    #[test]
+    fn parse_options_continue_still_parses_agent_but_execute_continue_never_reads_it() {
+        // herd-registry D2: `--continue` ignores `--agent` because the pane
+        // already exists — proven below by `execute_continue` running to
+        // completion with `opts.agent` set and never needing to resolve an
+        // agent command at all (a fake `Herdr` with no `agent_start` wiring
+        // would panic if it were ever called on this path).
+        let opts = parse_options(&[
+            "--task",
+            "round 2",
+            "--main-root",
+            ".",
+            "--continue",
+            "job-9",
+            "--agent",
+            "codex-herd",
+        ])
+        .unwrap();
+        assert!(opts.is_continue);
+        assert_eq!(opts.agent.as_deref(), Some("codex-herd"));
+    }
+
+    #[test]
+    fn a_spawn_resolves_the_named_agent_through_the_registry_over_agent_command() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({
+                "herding": {
+                    "agent_command": ["claude", "--model", "sonnet"],
+                    "agents": {"codex-herd": ["codex", "--flag"]}
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("codex-herd".to_string());
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        assert_eq!(fake.started_kind.borrow().as_deref(), Some("codex"));
+    }
+
+    #[test]
+    fn a_spawn_with_an_unknown_agent_name_refuses_typed_listing_registry_keys() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({"herding": {"agents": {"codex-herd": ["codex", "--flag"]}}}).to_string(),
+        )
+        .unwrap();
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("no-such-herd".to_string());
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => {
+                assert!(msg.contains("codex-herd"), "{msg}");
+            }
+            other => panic!("expected SpawnFailed, got {other:?}"),
+        }
     }
 
     // ─── --continue (D3) ────────────────────────────────────────────────

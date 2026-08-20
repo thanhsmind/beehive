@@ -745,7 +745,7 @@ pub(crate) fn prepare_dispatch(
             payload.insert("stdin".into(), Value::String(prompt_body.clone()));
             channel = "cli-exec".into();
         }
-        Resolved::Herding => {
+        Resolved::Herding { agent } => {
             // herding-tier D4: mirrors the cli-exec Bash arm above
             // byte-for-byte in shape — argv cannot carry a long brief, so
             // the prompt travels on stdin, and this arm fires for EVERY
@@ -754,6 +754,9 @@ pub(crate) fn prepare_dispatch(
             // carries the brief only, never a bee verb for the worker — ALL
             // bee bookkeeping (claim, cap, close) stays the orchestrator's
             // after it reads the herding result (herding-executor D4).
+            // herd-registry D2: a slot naming `agent:"<name>"` appends
+            // `--agent "<name>"` after --cwd (quoted, same as --cwd); a slot
+            // without an agent leaves the command byte-identical to before.
             tool = "Bash".into();
             let mut command = ".bee/bin/bee herding run --task-file - --json".to_string();
             if let Some((worktree_root, _control_root)) = &worktree_location {
@@ -762,6 +765,11 @@ pub(crate) fn prepare_dispatch(
                     command.push_str(worktree_root);
                     command.push('"');
                 }
+            }
+            if let Some(agent) = agent {
+                command.push_str(" --agent \"");
+                command.push_str(agent);
+                command.push('"');
             }
             payload.insert("command".into(), Value::String(command));
             payload.insert("stdin".into(), Value::String(prompt_body.clone()));

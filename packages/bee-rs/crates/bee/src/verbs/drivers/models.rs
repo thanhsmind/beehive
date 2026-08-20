@@ -109,11 +109,19 @@ pub(crate) fn normalize_tier_value(value: Option<&Value>) -> Option<Value> {
             }
         }
     }
-    // { kind: 'herding' } — a router value, no other fields required;
-    // unknown extras (e.g. a stray `command`) are dropped, same as cli/native.
+    // { kind: 'herding', agent? } — a router value, no other fields
+    // required; unknown extras (e.g. a stray `command`) are dropped, same
+    // as cli/native. herd-registry D2: `agent` names a `herding.agents`
+    // registry entry by name — trimmed, empty/whitespace dropped (same rule
+    // as every other string field on this leaf).
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
         let mut out = Map::new();
         out.insert("kind".into(), Value::String("herding".into()));
+        if let Some(Value::String(a)) = obj.get("agent") {
+            if !js_trim(a).is_empty() {
+                out.insert("agent".into(), Value::String(js_trim(a).to_string()));
+            }
+        }
         return Some(Value::Object(out));
     }
     // Explicit-fallback composite: { primary: {kind:'native', model}, ... }
@@ -235,7 +243,10 @@ pub(crate) enum Resolved {
     /// dispatch seam (ht-3) turns this into the `bee herding run` Bash
     /// payload. Never produced for a gather purpose (D3 routes those to the
     /// runtime's default model instead) and never a meaningful advisor.
-    Herding,
+    /// herd-registry D2: `agent` carries the optional `herding.agents` name
+    /// named on the slot (`{kind:"herding", agent:"<name>"}`); prepare's
+    /// herding-exec arm appends `--agent "<name>"` when present.
+    Herding { agent: Option<String> },
 }
 
 pub(crate) const CLI_REFUSAL_FIX: &str = "declare {for:\"gather\"} for a read-only gather; cli cell execution stays refused until a cell-execution dogfood is green (plan 2A/W9)";
@@ -326,7 +337,11 @@ pub(crate) fn resolve_tier(
     // same as an unconfigured slot always does.
     if matches!(obj.get("kind"), Some(Value::String(k)) if k == "herding") {
         if !for_gather {
-            return Resolved::Herding;
+            let agent = match obj.get("agent") {
+                Some(Value::String(s)) => Some(s.clone()),
+                _ => None,
+            };
+            return Resolved::Herding { agent };
         }
         return match default_models(rt).get(s).cloned().filter(|v| !v.is_null()) {
             Some(Value::String(model)) => Resolved::Model { model, effort: None },
