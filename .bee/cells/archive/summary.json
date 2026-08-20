@@ -628,5 +628,10 @@
     "capped": 4,
     "dropped": 0,
     "archived_at": "2026-08-20T00:22:12.458Z"
+  },
+  "herding-run-prompt-delivery": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T02:26:39.646Z"
   }
 }
