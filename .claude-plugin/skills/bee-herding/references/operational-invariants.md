@@ -231,6 +231,33 @@ closes the pane (`herdr pane close`); a failure or a timed-out wait leaves
 it open as forensics — a dead foreign agent's pane is the only remaining
 trace. `--close-always` closes the pane on every outcome, overriding both.
 
+**Spawn resilience — every delivery step verifies, none trusts a flag
+(live-proven 2026-08-20, smokes 1-8 + the hee-1/hsr-1 dogfoods).** Four
+hardenings, each one bought by a real failure:
+
+- **Start retries a booting shell (herding-start-retry D1).** A freshly
+  split pane's shell may not have reached its prompt when `agent start`
+  fires; herdr refuses with `agent_pane_busy`. The verb retries the start
+  up to 10 times about a second apart; any other start error still fails
+  immediately, and exhaustion keeps the close-the-pane failure shape.
+- **The brief never rides argv or the prompt channel raw.** A multi-line
+  text cannot be encoded as a start argument, and at least one agent kind
+  silently drops a multi-line injected prompt even when idle. The brief is
+  written to `<mailbox>/brief-N.txt` and the agent receives a ONE-LINE
+  pointer at that absolute path.
+- **Readiness is observed, then delivery is verified.** After start, the
+  verb waits (up to 60s) for the agent to report ready; then it sends the
+  pointer and counts it delivered only when the pane's own text echoes the
+  brief-file name — resending up to 30 times about a second apart, because
+  herdr's ready flags can fire before the agent's input loop accepts text.
+  The pointer is idempotent, so a duplicate delivery is harmless.
+- **Operator rules.** Put each kind's auto-approve flag in its herd entry
+  (`claude … --permission-mode bypassPermissions`, `agy
+  --dangerously-skip-permissions`) — an agent that stops to ask permission
+  mid-run stalls until the idle-timeout. And NEVER type into a live worker
+  pane: a human keystroke takes the agent's turn and the brief goes
+  unanswered (observed live; the run then idles out with the pane kept).
+
 **This verb is cell-execution-only (D7)** — the mirror of the `cli` tier
 kind, which is gather/review/advisor-only (`gates-and-delegation.md`'s cli
 gather branch). A gather never dispatches through a herding pane; a

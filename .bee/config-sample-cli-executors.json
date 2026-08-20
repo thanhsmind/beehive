@@ -14,7 +14,7 @@
       "claude.review": "Claude Opus via the opencode CLI, plan agent.",
       "codex.review": "codex exec read-only with high reasoning effort, prompt from stdin ('-')."
     },
-    "herding": "The cli slots above and herding.agent_command are NOT the same seam: cli-shaped model/tier slots are GATHER-ONLY (file hunts, scans, reviews, advisor consults — never cell execution), while herding.agent_command is the WRITE-WORK executor for `bee herding run` / `--continue` and `bee herding wave` — a real cell-execution worker in its own worktree. Token 0 is the herdr agent kind (21 kinds, no bee-side allow-list), passed straight through; the rest is that agent's own argv — here a non-claude example, codex with its own model flag. A THIRD model-slot shape, `{ \"kind\": \"herding\" }` (CELL-ONLY, the mirror of the cli slots above), routes that slot's cell execution through `bee herding run` automatically — not shown in this sample, and not something a repo without herding.agent_command configured should turn on; an optional \"agent\": \"<name>\" on that same shape (herd-registry D1/D2) looks the name up in an optional herding.agents map (name -> argv token array, same validation as agent_command — e.g. {\"agents\": {\"codex-review\": [\"codex\", \"exec\", \"--model\", \"{MODEL}\"]}}) instead of the global agent_command default; an unknown name refuses, listing every registry key. Also not shown in this sample. A herd name always means the pane transport — it never touches the cli slots above, and a cli slot can never name a herd. Canonical doc: bee-herding/references/operational-invariants.md."
+    "herding": "The cli slots above and herding.agent_command are NOT the same seam: cli-shaped model/tier slots are GATHER-ONLY (file hunts, scans, reviews, advisor consults — never cell execution), while herding.agent_command is the WRITE-WORK executor for `bee herding run` / `--continue` and `bee herding wave` — a real cell-execution worker in its own worktree. Token 0 is the herdr agent kind (21 kinds, no bee-side allow-list), passed straight through; the rest is that agent's own argv — here a non-claude example, codex with its own model flag. A THIRD model-slot shape, `{ \"kind\": \"herding\" }` (CELL-ONLY, the mirror of the cli slots above), routes that slot's cell execution through `bee herding run` automatically — not shown in this sample, and not something a repo without herding.agent_command configured should turn on; an optional \"agent\": \"<name>\" on that same shape (herd-registry D1/D2) looks the name up in an optional herding.agents map (name -> argv token array, same validation as agent_command — shown live in the herding block below: claude-sonnet and agy-flash) instead of the global agent_command default; an unknown name refuses, listing every registry key. The registry is inert until a slot, --agent flag, or string agent_command names an entry — safe to keep in every repo. A herd name always means the pane transport — it never touches the cli slots above, and a cli slot can never name a herd. Canonical doc: bee-herding/references/operational-invariants.md. OPERATIONAL RULES (live-proven 2026-08-20): the spawn survives a booting shell (agent start retries agent_pane_busy up to 10 times ~1s apart); the brief is never typed into the pane — it is written to <mailbox>/brief-N.txt and the agent receives a one-line pointer, resent until the pane text echoes it (30 attempts ~1s; herdr's ready flags fire before some agents accept input); a run that fails keeps its pane as forensics, a run that succeeds closes it. Put each kind's auto-approve flag in its herd entry (claude: --permission-mode bypassPermissions; agy: --dangerously-skip-permissions) — an agent that stops to ask permission mid-run stalls until the idle-timeout. NEVER type into a live worker pane: a human keystroke hijacks the agent's turn and the brief goes unanswered."
   },
   "hooks": {
     "session-init": true,
@@ -63,6 +63,23 @@
     }
   },
   "herding": {
-    "agent_command": ["codex", "--model", "gpt-5.5"]
+    "agent_command": [
+      "codex",
+      "--model",
+      "gpt-5.5"
+    ],
+    "agents": {
+      "claude-sonnet": [
+        "claude",
+        "--model",
+        "sonnet",
+        "--permission-mode",
+        "bypassPermissions"
+      ],
+      "agy-flash": [
+        "agy",
+        "--dangerously-skip-permissions"
+      ]
+    }
   }
 }
