@@ -184,7 +184,19 @@ several agents once — a map of name → argv tokens with the same validation �
 and three spellings reference one by name: a tier slot's `agent` field,
 `bee herding run --agent`, or `herding.agent_command` as a plain string; an
 unknown name refuses typed, listing the registry keys, never a silent
-fallback. A herd name always means the pane transport; the cli tier kind is
+fallback. Since defaults-and-agent-env D3 (2026-08-20) the registry starts
+from two BUILT-IN entries — `claude-sonnet` and `agy-flash` — so those names
+resolve on a repo with no herding block at all; a same-name config entry
+overrides its built-in, and the unknown-name listing includes the built-ins.
+defaults-and-agent-env D4 (same day) adds a second entry shape beside the
+argv array: `{"argv": [...], "env": {"KEY": "value"}}` — the env map is
+exported into the freshly split pane as one `export K='v'` line BEFORE
+`agent start` (keys `[A-Za-z_][A-Za-z0-9_]*`, values newline-free; any
+violation drops that entry only, the registry's standing fail-open-per-entry
+rule), and a failed env send is a typed spawn failure that closes the pane.
+Only the `bee herding run` spawn path applies env; the wave/control-loop
+caller resolves it but cannot apply it (its `agent start` lives in
+`fleet::backend::herdr`, another crate — noted at the call site). A herd name always means the pane transport; the cli tier kind is
 unrelated. When the key is absent, invalid, or empty, the command built is
 byte-equivalent to the pre-existing hardcoded `claude -p ... --model sonnet
 --max-turns ... --allowedTools ...` invocation — a project with no config
