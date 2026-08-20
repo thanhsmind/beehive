@@ -830,12 +830,21 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         };
     }
 
-    // The brief travels through `agent prompt`, never `agent start` argv —
-    // a multi-line brief cannot be encoded for the target shell
-    // (herding-run-prompt-delivery D1). The agent IS running past this
-    // point, so a prompt failure keeps the pane as forensics (the standing
-    // failure rule), unlike the start failure above.
-    if let Err(e) = herdr.agent_prompt(&opts.job_id, &brief) {
+    // The brief body lives in brief-1.txt and the agent receives a ONE-LINE
+    // pointer (herding-brief-file D1): a multi-line prompt is silently
+    // dropped by at least one agent kind even when idle and ready. The
+    // agent IS running past this point, so a failure here keeps the pane
+    // as forensics (the standing failure rule), unlike the start failure
+    // above.
+    let brief_file = mailbox::brief_path(&bee_dir, &opts.job_id, 1);
+    if let Err(e) = crate::fsutil::write_text_atomic(&brief_file, &brief) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not write {}: {e}", brief_file.display())),
+            pane_id: Some(new_pane),
+            closed_pane: false,
+        };
+    }
+    if let Err(e) = herdr.agent_prompt(&opts.job_id, &mailbox::pointer_prompt(&brief_file)) {
         return ExecResult {
             outcome: RunOutcome::SpawnFailed(format!("brief prompt failed after start: {e}")),
             pane_id: Some(new_pane),
@@ -955,7 +964,15 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         }
     };
 
-    if let Err(e) = herdr.agent_prompt(job_id, &brief) {
+    let brief_file = mailbox::brief_path(&bee_dir, job_id, next_round);
+    if let Err(e) = crate::fsutil::write_text_atomic(&brief_file, &brief) {
+        return ExecResult {
+            outcome: RunOutcome::SpawnFailed(format!("could not write {}: {e}", brief_file.display())),
+            pane_id: Some(pane_id),
+            closed_pane: false,
+        };
+    }
+    if let Err(e) = herdr.agent_prompt(job_id, &mailbox::pointer_prompt(&brief_file)) {
         return ExecResult {
             outcome: RunOutcome::SpawnFailed(format!("agent prompt failed: {e}")),
             pane_id: Some(pane_id),
@@ -1475,12 +1492,17 @@ mod tests {
         // agent_command tokens only by construction (the trait no longer
         // even accepts a prompt parameter).
         assert_eq!(fake.start_calls.borrow().as_slice(), ["job-1"]);
-        // the round-1 brief arrived via agent_prompt before polling.
+        // herding-brief-file D1: the agent receives a ONE-LINE pointer at
+        // brief-1.txt; the brief body lives in the file.
         let prompts = fake.prompt_calls.borrow();
-        assert_eq!(prompts.len(), 1, "exactly one brief prompt for round 1");
+        assert_eq!(prompts.len(), 1, "exactly one pointer prompt for round 1");
         assert_eq!(prompts[0].0, "job-1");
-        assert!(prompts[0].1.contains("round 1"), "brief names its round: {}", prompts[0].1);
-        assert!(prompts[0].1.contains("result-1.json"), "brief names the result file");
+        assert!(!prompts[0].1.contains('\n'), "pointer prompt is one line: {}", prompts[0].1);
+        assert!(prompts[0].1.contains("brief-1.txt"), "pointer names the brief file: {}", prompts[0].1);
+        let brief_text =
+            std::fs::read_to_string(mailbox::brief_path(&bee_dir, &opts.job_id, 1)).unwrap();
+        assert!(brief_text.contains("round 1"), "brief file names its round");
+        assert!(brief_text.contains("result-1.json"), "brief file names the result file");
     }
 
     #[test]
@@ -1699,9 +1721,18 @@ mod tests {
         let prompts = fake.prompt_calls.borrow();
         assert_eq!(prompts.len(), 1, "expected exactly one agent_prompt call: {prompts:?}");
         assert_eq!(prompts[0].0, "job-1");
-        assert!(prompts[0].1.contains("round 2: keep going"), "prompt missing the round 2 task:\n{}", prompts[0].1);
-        assert!(prompts[0].1.contains("round 2"), "prompt does not name round 2:\n{}", prompts[0].1);
-        assert!(prompts[0].1.contains("result-2.json"), "prompt does not name result-2.json:\n{}", prompts[0].1);
+        // herding-brief-file D1: the prompt is a one-line pointer at
+        // brief-2.txt; the round-2 brief body lives in the file.
+        assert!(!prompts[0].1.contains('\n'), "pointer prompt is one line:\n{}", prompts[0].1);
+        assert!(prompts[0].1.contains("brief-2.txt"), "pointer names brief-2.txt:\n{}", prompts[0].1);
+        let brief_text = std::fs::read_to_string(mailbox::brief_path(
+            &tmp.path().join(".bee"),
+            "job-1",
+            2,
+        ))
+        .unwrap();
+        assert!(brief_text.contains("round 2: keep going"), "brief file missing the round 2 task");
+        assert!(brief_text.contains("result-2.json"), "brief file does not name result-2.json");
 
         match &result.outcome {
             RunOutcome::Result(r) => assert_eq!(r.summary, "round 2 done"),

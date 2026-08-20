@@ -65,6 +65,22 @@ pub(crate) fn log_path(bee_dir: &Path, job_id: &str) -> PathBuf {
 }
 
 /// `.bee/mailbox/<job-id>/result-N.json` for a given round.
+pub(crate) fn brief_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
+    mailbox_dir(bee_dir, job_id).join(format!("brief-{round}.txt"))
+}
+
+/// herding-brief-file D1: the ONE-LINE prompt actually delivered to the
+/// agent. A multi-line prompt is silently dropped by at least one agent
+/// kind (agy, live smokes 4/5: agent idle and ready, brief lost; a
+/// single-line prompt landed instantly) — so the brief body lives in
+/// `brief-N.txt` and the prompt only points at it.
+pub(crate) fn pointer_prompt(brief_abs_path: &Path) -> String {
+    format!(
+        "Read the file {} and follow its instructions exactly.",
+        brief_abs_path.display()
+    )
+}
+
 pub(crate) fn result_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
     mailbox_dir(bee_dir, job_id).join(result_filename(round))
 }

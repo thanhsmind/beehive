@@ -1,0 +1,43 @@
+{
+  "id": "hbf-1",
+  "feature": "herding-brief-file",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Persist the brief as brief-N.txt; prompt is a one-line pointer",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-brief-file/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Per D1: mailbox gains brief_path(bee_dir, job_id, round) and a pointer_prompt(brief_abs_path) helper returning the fixed one-line text. execute_new and execute_continue write the rendered brief to brief-N.txt (atomic) before prompting, then agent_prompt the ONE-LINE pointer instead of the brief body. A brief-file write failure is a typed spawn/continue failure. Tests: brief file exists with the rendered content before the prompt; the prompt sent is single-line and names the absolute brief path; continue writes brief-(N+1).txt.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "The prompt delivered to the agent is one line and names the absolute brief-N.txt path",
+      "brief-N.txt carries the full rendered brief and exists before the prompt",
+      "--continue writes and points at brief-(N+1).txt"
+    ]
+  },
+  "decisions": [
+    "herding-brief-file D1"
+  ],
+  "deps": [],
+  "status": "open",
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}
