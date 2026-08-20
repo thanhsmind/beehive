@@ -156,12 +156,47 @@ working-agent spawn uses, and writes it a fully self-contained brief — task, a
 paths, file constraints, the result schema, the tmp-rename write gesture — over the
 mailbox described above, so a worker that has never seen bee can complete it
 (herding-executor D4). Its poll loop is native and health-check based, at zero token
-cost: `result-N.json` presence, `log.txt` mtime, worktree diff activity, and `herdr
-agent list` status all extend the wait; a stale heartbeat past `--idle-timeout` ends
-it, and an absolute `--ceiling` caps it regardless of activity as the busy-loop
-backstop (D5) — there is no fixed short wall-clock timeout, because wall-clock alone
-cannot tell a long cell from a stuck agent. Pane lifecycle follows the result, not the
-clock: a valid result closes the pane, a failure or timeout leaves it open as
+cost, and it decides on a LADDER of signals rather than one
+(herding-liveness-signals D1-D6, 2026-08-20). A `result-N.json` for the round is the
+truth and outranks every other signal. Below it sits AGENT LIVENESS: the pane's
+foreground process list, where the agent counts as present when any foreground
+process is not the pane's own shell. Pane liveness is not agent liveness — an agent
+that exits leaves its pane alive at a shell prompt, so a pane-existence check cannot
+see the death. No result plus no agent process is a typed `died` outcome, reported in
+seconds rather than after the whole idle window. Below liveness sits PROGRESS —
+`log.txt` mtime advancing or the reported agent status being `working` — and a stale
+heartbeat past `--idle-timeout` ends the wait. An absolute `--ceiling` caps it
+regardless of activity as the busy-loop backstop (D5) and outranks the `died` rung,
+so a ceiling and a death arriving together still report the ceiling. There is no
+fixed short wall-clock timeout, because wall-clock alone cannot tell a long cell from
+a stuck agent.
+
+Two rules keep the liveness rung from becoming a hazard. **The liveness read fails
+OPEN**: an unreachable or unreadable process list reports "unknown", never "absent" —
+the opposite direction from the pane check that guards `--continue`, which fails
+closed on purpose. A refusal gate may safely refuse on bad information; a kill
+decision may not, because the job it would end may be hours deep. **A death must be
+consecutive**: several successive absent readings are required before `died` is
+declared, and a single "unknown" reading RESETS that count rather than counting
+toward it, so an absent/unknown/absent flicker never ends a healthy job.
+
+Pane text is read only at the moment it is needed — when the heartbeat has already
+gone stale and the stall must be classified — not on every poll tick. The
+classification fires on exactly the tick it always did; what changed is that a quiet
+stall no longer pays for thousands of discarded screen captures.
+
+**Hang detection remains an open gap.** A worker that is stuck but still emitting
+output satisfies every progress source there is. Accumulated CPU time was the
+intended discriminator and was REFUSED on measurement (D6): an interactive agent's
+event loop burns CPU while it sits blocked, so any-delta never goes stale and catches
+nothing; and treating flat CPU as an override kills an agent legitimately waiting
+minutes on a remote call. Pane output counters fail identically, for the same reason
+a spinner advances the log. Picking a real discriminator needs calibration traces
+from healthy-but-blocked workers against genuinely hung ones, and the question is
+parked against a registered trigger until those exist.
+
+Pane lifecycle follows the result, not the
+clock: a valid result closes the pane, a failure, death, or timeout leaves it open as
 forensics, and `--close-always` overrides both (D6) — with one carve-out: a worker
 stopped by a USAGE LIMIT is a typed `paused_limit` outcome, never `timed_out_idle`
 (herding-limit-pause D1-D4, 2026-08-20). A stale heartbeat whose pane text matches a
