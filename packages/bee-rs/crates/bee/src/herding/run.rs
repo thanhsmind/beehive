@@ -56,6 +56,22 @@ const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 900; // 15 minutes of no heartbeat
 const DEFAULT_CEILING_SECS: u64 = 21_600; // 6 hours, the busy-loop backstop
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 
+/// Case-insensitive substrings that signal a usage limit pause in a worker pane.
+/// Extensible per agent kind in future iterations (D1).
+const LIMIT_PATTERNS: &[&str] = &["hit your session limit", "usage limit"];
+
+fn find_limit_match(pane_text: &str) -> Option<String> {
+    for line in pane_text.lines() {
+        let lower = line.to_lowercase();
+        for pattern in LIMIT_PATTERNS {
+            if lower.contains(&pattern.to_lowercase()) {
+                return Some(line.trim().to_string());
+            }
+        }
+    }
+    None
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CLI parsing
 // ═══════════════════════════════════════════════════════════════════════════
@@ -307,6 +323,9 @@ trait Herdr {
     /// read as "not alive" — `--continue` refuses rather than prompting a
     /// pane it cannot confirm still exists.
     fn pane_alive(&self, pane_id: &str) -> bool;
+    /// `herdr pane read <pane_id>` — raw stdout of the pane capture, or
+    /// error if herdr failed.
+    fn pane_read(&self, pane_id: &str) -> Result<String, String>;
 }
 
 struct RealHerdr;
@@ -452,6 +471,19 @@ impl Herdr for RealHerdr {
         };
         panes.iter().any(|p| p.get("pane_id").and_then(Value::as_str) == Some(pane_id))
     }
+
+    fn pane_read(&self, pane_id: &str) -> Result<String, String> {
+        let out = Command::new("herdr")
+            .args(["pane", "read", pane_id])
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|e| format!("herdr pane read {pane_id}: {e}"))?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            return Err(format!("herdr pane read {pane_id} exited {}: {}", out.status, stderr.trim()));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).to_string())
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -474,13 +506,15 @@ enum PollDecision {
     ResultReady,
     TimedOutIdle,
     TimedOutCeiling,
+    PausedLimit,
 }
 
 /// The whole D5 timing rule, pure: a result already present short-circuits
 /// everything else; otherwise the absolute ceiling caps the wait REGARDLESS
 /// of a fresh heartbeat (checked first, so it wins a tie with the idle
-/// check); a heartbeat gone stale past `idle_timeout_secs` times out; a
-/// fresh one lets the wait continue.
+/// check); a heartbeat gone stale past `idle_timeout_secs` times out (or
+/// pauses on a limit if the pane text matches LIMIT_PATTERNS); a fresh one
+/// lets the wait continue.
 fn decide_poll(
     now_ms: i64,
     started_at_ms: i64,
@@ -488,6 +522,7 @@ fn decide_poll(
     idle_timeout_secs: u64,
     ceiling_secs: u64,
     result_ready: bool,
+    pane_text: Option<&str>,
 ) -> PollDecision {
     if result_ready {
         return PollDecision::ResultReady;
@@ -496,6 +531,11 @@ fn decide_poll(
         return PollDecision::TimedOutCeiling;
     }
     if now_ms.saturating_sub(last_heartbeat_ms) >= (idle_timeout_secs as i64).saturating_mul(1000) {
+        if let Some(text) = pane_text {
+            if find_limit_match(text).is_some() {
+                return PollDecision::PausedLimit;
+            }
+        }
         return PollDecision::TimedOutIdle;
     }
     PollDecision::Continue
@@ -510,10 +550,11 @@ fn should_close_pane(valid_result: bool, close_always: bool) -> bool {
 
 /// One poll tick's raw observations, gathered by the caller (real fs +
 /// herdr reads in production, a scripted fake in tests) and handed to
-/// `run_poll_loop` as a pure `bool` pair.
+/// `run_poll_loop` as a pure observation struct.
 struct PollTick {
     result_ready: bool,
     heartbeat_fresh: bool,
+    pane_text: Option<String>,
 }
 
 /// The loop `decide_poll` drives: sleep, observe, decide, repeat until a
@@ -544,6 +585,7 @@ fn run_poll_loop(
             idle_timeout_secs,
             ceiling_secs,
             observed.result_ready,
+            observed.pane_text.as_deref(),
         );
         if decision != PollDecision::Continue {
             return decision;
@@ -730,6 +772,7 @@ enum RunOutcome {
     Malformed(String),
     TimedOutIdle,
     TimedOutCeiling,
+    PausedLimit,
 }
 
 struct ExecResult {
@@ -811,6 +854,29 @@ fn execute(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     }
 }
 
+fn stamp_paused_limit(bee_dir: &Path, job_id: &str, herdr: &dyn Herdr, pane_id: &str) {
+    let raw_text = herdr.pane_read(pane_id).unwrap_or_default();
+    let limit_reset_hint = find_limit_match(&raw_text).unwrap_or_default();
+    let job_file_path = mailbox::job_path(bee_dir, job_id);
+    let mut job_value: Value = match std::fs::read_to_string(&job_file_path)
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+    {
+        Some(v) => v,
+        None => {
+            eprintln!("bee herding run: could not read {} to stamp paused_limit", job_file_path.display());
+            return;
+        }
+    };
+    if let Value::Object(ref mut m) = job_value {
+        m.insert("paused_limit_at".into(), Value::String(chrono::Utc::now().to_rfc3339()));
+        m.insert("limit_reset_hint".into(), Value::String(limit_reset_hint));
+    }
+    if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
+        eprintln!("bee herding run: could not stamp paused_limit into {}: {e}", job_file_path.display());
+    }
+}
+
 /// The `wait_for_round` a fresh spawn and `--continue` share: sleep, poll
 /// the mailbox for a `result-N.json` with `round >= min_round`, and check
 /// heartbeat freshness (`log.txt` mtime, `herdr agent list` status) — the
@@ -822,6 +888,7 @@ fn execute(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
 fn wait_for_round(
     bee_dir: &Path,
     job_id: &str,
+    pane_id: &str,
     min_round: u32,
     started_at_ms: i64,
     idle_timeout_secs: u64,
@@ -857,7 +924,8 @@ fn wait_for_round(
             if herdr.agent_status(job_id).as_deref() == Some("working") {
                 heartbeat_fresh = true;
             }
-            PollTick { result_ready, heartbeat_fresh }
+            let pane_text = herdr.pane_read(pane_id).ok();
+            PollTick { result_ready, heartbeat_fresh, pane_text }
         },
         |d| std::thread::sleep(d),
         now_ms,
@@ -1033,17 +1101,21 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
 
     let started_at_ms = now_ms();
     let decision =
-        wait_for_round(&bee_dir, &opts.job_id, 1, started_at_ms, opts.idle_timeout_secs, opts.ceiling_secs, herdr);
+        wait_for_round(&bee_dir, &opts.job_id, &new_pane, 1, started_at_ms, opts.idle_timeout_secs, opts.ceiling_secs, herdr);
 
     let outcome = match decision {
         PollDecision::ResultReady => read_result(&bee_dir, &opts.job_id),
         PollDecision::TimedOutIdle => RunOutcome::TimedOutIdle,
         PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
+        PollDecision::PausedLimit => {
+            stamp_paused_limit(&bee_dir, &opts.job_id, herdr, &new_pane);
+            RunOutcome::PausedLimit
+        }
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
     let valid_result = matches!(outcome, RunOutcome::Result(_));
-    let close = should_close_pane(valid_result, opts.close_always);
+    let close = !matches!(outcome, RunOutcome::PausedLimit) && should_close_pane(valid_result, opts.close_always);
     let closed_pane = if close {
         match herdr.pane_close(&new_pane) {
             Ok(()) => true,
@@ -1173,6 +1245,7 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     let decision = wait_for_round(
         &bee_dir,
         job_id,
+        &pane_id,
         next_round,
         started_at_ms,
         opts.idle_timeout_secs,
@@ -1184,11 +1257,15 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         PollDecision::ResultReady => read_result(&bee_dir, job_id),
         PollDecision::TimedOutIdle => RunOutcome::TimedOutIdle,
         PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
+        PollDecision::PausedLimit => {
+            stamp_paused_limit(&bee_dir, job_id, herdr, &pane_id);
+            RunOutcome::PausedLimit
+        }
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
     let valid_result = matches!(outcome, RunOutcome::Result(_));
-    let close = should_close_pane(valid_result, opts.close_always);
+    let close = !matches!(outcome, RunOutcome::PausedLimit) && should_close_pane(valid_result, opts.close_always);
     let closed_pane = if close {
         match herdr.pane_close(&pane_id) {
             Ok(()) => true,
@@ -1216,6 +1293,7 @@ fn outcome_label(o: &RunOutcome) -> &'static str {
         RunOutcome::Malformed(_) => "malformed_result",
         RunOutcome::TimedOutIdle => "timed_out_idle",
         RunOutcome::TimedOutCeiling => "timed_out_ceiling",
+        RunOutcome::PausedLimit => "paused_limit",
     }
 }
 
@@ -1262,7 +1340,7 @@ fn emit_result(opts: &Options, result: &ExecResult) {
                     ),
                 );
             }
-            RunOutcome::TimedOutIdle | RunOutcome::TimedOutCeiling => {}
+            RunOutcome::TimedOutIdle | RunOutcome::TimedOutCeiling | RunOutcome::PausedLimit => {}
         }
         println!("{}", Value::Object(m));
     } else {
@@ -1313,17 +1391,17 @@ mod tests {
 
     #[test]
     fn decide_poll_reports_result_ready_regardless_of_timers() {
-        assert_eq!(decide_poll(0, 0, 0, 1, 1, true), PollDecision::ResultReady);
+        assert_eq!(decide_poll(0, 0, 0, 1, 1, true, None), PollDecision::ResultReady);
     }
 
     #[test]
     fn decide_poll_extends_on_a_fresh_heartbeat() {
-        assert_eq!(decide_poll(5_000, 0, 5_000, 60, 3_600, false), PollDecision::Continue);
+        assert_eq!(decide_poll(5_000, 0, 5_000, 60, 3_600, false, None), PollDecision::Continue);
     }
 
     #[test]
     fn decide_poll_times_out_idle_when_the_heartbeat_goes_stale() {
-        assert_eq!(decide_poll(61_000, 0, 0, 60, 3_600, false), PollDecision::TimedOutIdle);
+        assert_eq!(decide_poll(61_000, 0, 0, 60, 3_600, false, None), PollDecision::TimedOutIdle);
     }
 
     #[test]
@@ -1331,7 +1409,35 @@ mod tests {
         // last heartbeat one second ago (well inside a 60s idle timeout),
         // but the run has now been alive for the full 3600s ceiling — the
         // ceiling caps regardless of activity.
-        assert_eq!(decide_poll(3_600_000, 0, 3_599_000, 60, 3_600, false), PollDecision::TimedOutCeiling);
+        assert_eq!(decide_poll(3_600_000, 0, 3_599_000, 60, 3_600, false, None), PollDecision::TimedOutCeiling);
+    }
+
+    #[test]
+    fn decide_poll_pauses_on_limit_when_heartbeat_stale_and_pane_matches_limit_pattern() {
+        assert_eq!(
+            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("You've hit your session limit · resets 6:20pm")),
+            PollDecision::PausedLimit
+        );
+        assert_eq!(
+            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("warning: usage limit reached")),
+            PollDecision::PausedLimit
+        );
+    }
+
+    #[test]
+    fn decide_poll_keeps_waiting_with_fresh_heartbeat_even_if_pane_mentions_limit() {
+        assert_eq!(
+            decide_poll(5_000, 0, 5_000, 60, 3_600, false, Some("hit your session limit")),
+            PollDecision::Continue
+        );
+    }
+
+    #[test]
+    fn decide_poll_times_out_idle_when_heartbeat_stale_and_pane_does_not_match_limit() {
+        assert_eq!(
+            decide_poll(61_000, 0, 0, 60, 3_600, false, Some("compilation error: mismatched types")),
+            PollDecision::TimedOutIdle
+        );
     }
 
     #[test]
@@ -1345,7 +1451,7 @@ mod tests {
             Duration::from_millis(0),
             || {
                 ticks += 1;
-                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false }
+                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None }
             },
             |_| {},
             || {
@@ -1365,7 +1471,7 @@ mod tests {
             5,
             3_600,
             Duration::from_millis(0),
-            || PollTick { result_ready: false, heartbeat_fresh: false },
+            || PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -1383,7 +1489,7 @@ mod tests {
             3_600,
             5,
             Duration::from_millis(0),
-            || PollTick { result_ready: false, heartbeat_fresh: true },
+            || PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None },
             |_| {},
             || {
                 clock += 1_000;
@@ -1437,6 +1543,8 @@ mod tests {
         /// name — the seam a D4 ordering test reads to prove the export
         /// line was sent BEFORE `agent_start`, never after.
         call_log: RefCell<Vec<&'static str>>,
+        pane_text: RefCell<Option<String>>,
+        pane_read_calls: RefCell<Vec<String>>,
     }
 
     impl FakeHerdr {
@@ -1458,6 +1566,8 @@ mod tests {
                 pane_run_result: Ok(()),
                 pane_run_calls: RefCell::new(Vec::new()),
                 call_log: RefCell::new(Vec::new()),
+                pane_text: RefCell::new(None),
+                pane_read_calls: RefCell::new(Vec::new()),
             }
         }
     }
@@ -1509,6 +1619,10 @@ mod tests {
         fn pane_alive(&self, pane_id: &str) -> bool {
             self.alive_panes.borrow().iter().any(|p| p == pane_id)
         }
+        fn pane_read(&self, pane_id: &str) -> Result<String, String> {
+            self.pane_read_calls.borrow_mut().push(pane_id.to_string());
+            Ok(self.pane_text.borrow().clone().unwrap_or_default())
+        }
     }
 
     /// Every method panics — proves a code path never touches `Herdr` at
@@ -1547,6 +1661,9 @@ mod tests {
         }
         fn pane_alive(&self, _pane_id: &str) -> bool {
             panic!("dry-run must never call Herdr::pane_alive")
+        }
+        fn pane_read(&self, _pane_id: &str) -> Result<String, String> {
+            panic!("dry-run must never call Herdr::pane_read")
         }
     }
 
@@ -1939,6 +2056,57 @@ mod tests {
         assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
         assert!(result.closed_pane);
         assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
+    }
+
+    #[test]
+    fn stale_heartbeat_with_matching_pane_text_pauses_limit_keeps_pane_even_with_close_always_and_stamps_job_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.idle_timeout_secs = 1;
+        opts.close_always = true;
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("You've hit your session limit · resets 6:20pm (Asia/Bangkok)\n".to_string());
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::PausedLimit), "got {:?}", result.outcome);
+        assert!(!result.closed_pane, "pane must NOT be closed even with close_always");
+        assert!(fake.closed.borrow().is_empty(), "pane must remain open in herdr");
+
+        let job_file_path = mailbox::job_path(&tmp.path().join(".bee"), &opts.job_id);
+        let job: Value = serde_json::from_str(&std::fs::read_to_string(job_file_path).unwrap()).unwrap();
+        assert_eq!(job["limit_reset_hint"], "You've hit your session limit · resets 6:20pm (Asia/Bangkok)");
+        assert!(job.get("paused_limit_at").is_some());
+    }
+
+    #[test]
+    fn stale_heartbeat_with_non_matching_pane_text_times_out_idle_unchanged() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.idle_timeout_secs = 1;
+        opts.close_always = true;
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("waiting for something else...".to_string());
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(result.closed_pane, "TimedOutIdle closes with close_always");
+        assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
+    }
+
+    #[test]
+    fn fresh_heartbeat_with_matching_pane_text_keeps_waiting_until_result_ready() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, &opts.job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("result-1.json"),
+            r#"{"status":"done","summary":"ok","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("hit your session limit (in discussion only)".to_string());
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
     }
 
     // ─── flag parsing ───────────────────────────────────────────────────
