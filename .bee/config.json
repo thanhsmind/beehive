@@ -14,7 +14,10 @@
   "models": {
     "claude": {
       "extraction": "haiku",
-      "generation": "sonnet",
+      "generation": {
+        "kind": "herding",
+        "agent": "agy-flash"
+      },
       "review": "opus",
       "advisor": "fable"
     },
@@ -29,9 +32,11 @@
     }
   },
   "herding": {
-    "agent_command": [
-      "agy",
-      "--dangerously-skip-permissions"
-    ]
+    "agents": {
+      "agy-flash": [
+        "agy",
+        "--dangerously-skip-permissions"
+      ]
+    }
   }
 }
