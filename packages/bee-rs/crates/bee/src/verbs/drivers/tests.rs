@@ -383,7 +383,10 @@ use std::time::Instant;
     fn resolve_tier_routes_herding_by_purpose_and_gathers_keep_the_default_model() {
         // cell purpose -> Resolved::Herding, never a refusal.
         let m = models_from(r#"{"claude":{"generation":{"kind":"herding"}}}"#);
-        assert_eq!(resolve_tier(&m, "generation", "claude", false), Resolved::Herding);
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", false),
+            Resolved::Herding { agent: None }
+        );
 
         // gather purpose on the same slot -> the runtime's DEFAULT model for
         // that slot (claude generation -> sonnet), not Herding.
@@ -396,7 +399,46 @@ use std::time::Instant;
         // on the gather purpose — never a refusal, never Herding.
         let m = models_from(r#"{"codex":{"generation":{"kind":"herding"}}}"#);
         assert_eq!(resolve_tier(&m, "generation", "codex", true), Resolved::Budget);
-        assert_eq!(resolve_tier(&m, "generation", "codex", false), Resolved::Herding);
+        assert_eq!(
+            resolve_tier(&m, "generation", "codex", false),
+            Resolved::Herding { agent: None }
+        );
+    }
+
+    // herd-registry D2: `agent` on a kind:herding slot round-trips through
+    // normalize and resolve, and prepare's herding-exec arm appends
+    // `--agent "<name>"` when the slot names one.
+    #[test]
+    fn normalize_tier_value_round_trips_the_herding_agent_field() {
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "agent": "codex-cli"}))),
+            Some(json!({"kind": "herding", "agent": "codex-cli"}))
+        );
+        // Trimmed, same as every other string field on this leaf.
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "agent": "  codex-cli  "}))),
+            Some(json!({"kind": "herding", "agent": "codex-cli"}))
+        );
+        // Empty/whitespace-only agent is dropped, not carried as "".
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "agent": "   "}))),
+            Some(json!({"kind": "herding"}))
+        );
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding"}))),
+            Some(json!({"kind": "herding"}))
+        );
+    }
+
+    #[test]
+    fn resolve_tier_carries_the_herding_agent_name_through() {
+        let m = models_from(
+            r#"{"claude":{"generation":{"kind":"herding","agent":"codex-cli"}}}"#,
+        );
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", false),
+            Resolved::Herding { agent: Some("codex-cli".into()) }
+        );
     }
 
     #[test]
@@ -942,6 +984,36 @@ use std::time::Instant;
             Some(&json!(format!(
                 ".bee/bin/bee herding run --task-file - --json --cwd \"{granted_s}\""
             )))
+        );
+    }
+
+    /// herd-registry D2: a slot naming `agent:"<name>"` appends
+    /// `--agent "<name>"` after `--task-file - --json` (and after --cwd,
+    /// when a granted worktree also applies).
+    #[test]
+    fn herding_shaped_generation_appends_agent_when_the_slot_names_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":{"kind":"herding","agent":"codex-cli"}}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(
+                ".bee/bin/bee herding run --task-file - --json --agent \"codex-cli\""
+            ))
         );
     }
 
