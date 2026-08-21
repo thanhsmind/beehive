@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"herding-prompt-stall\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 993ecae; reload the product and test \"herding-prompt-stall\", then either approve uat (\"bee gate --name uat --approved true --lane herding-prompt-stall\") or fix it in the worktree and merge again.",
+  "next_action": "Invoke bee-swarming.",
   "created_at": "2026-08-21T04:33:45.519Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: herding-prompt-stall",
-    "asked_at": "2026-08-21T07:56:14.018Z",
-    "session": "bee-worktree-merge-sessionless"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "bugfix",
     "lane": "standard",
