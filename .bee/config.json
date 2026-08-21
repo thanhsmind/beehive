@@ -21,12 +21,12 @@
     "claude": {
       "extraction": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "pi-opencode-free",
         "fallback": "default"
       },
       "generation": {
         "kind": "herding",
-        "agent": "agy-flash",
+        "agent": "pi-opencode-free",
         "fallback": "default"
       },
       "review": "opus",
@@ -63,6 +63,7 @@
         "--permission-mode",
         "bypassPermissions"
       ],
+      "pi-opencode-free":  ["pi", "-a", "--model", "opencode/x-preview-f-free:high"],
       "agy-flash": {
         "argv": [
           "agy",

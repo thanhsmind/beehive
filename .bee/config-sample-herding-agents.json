@@ -37,6 +37,7 @@
       "pi-auto": ["pi", "-a"],
 
       "pi-sonnet": ["pi", "-a", "--model", "anthropic/claude-sonnet-5"],
+      "pi-opencode-free":  ["pi", "-a", "--model", "opencode/x-preview-f-free:high"],
 
       "pi-thinking": ["pi", "-a", "--model", "anthropic/claude-sonnet-5:high"],
 
