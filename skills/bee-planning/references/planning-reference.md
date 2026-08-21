@@ -243,6 +243,16 @@ is a fix-first cell PLUS a mandatory captured learning on why the chosen
 scope missed — the learning loop is what keeps agent-owned scope safe
 over time.
 
+A cell's `verify` is authored at that same scope, and the worker runs it
+as written — so write the NARROWEST command that proves this cell: a
+test-name or module filter over the tests the cell's own change can
+break, never a copy of the whole declared suite. Pasting the declared
+command into every cell buys nothing the push already buys and makes each
+worker pay a full build of everything; keep the release profile (or any
+other slow flag the suite declares) only where the cell's proof actually
+needs it. A cell whose change is docs or prose carries a parity/pointer
+check as its `verify`, not a test run at all.
+
 ## Greenfield init lane
 
 When the repo has no build and the init-lane offer was accepted at
