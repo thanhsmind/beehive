@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Tiếp theo: 2.18.1 chưa mang các fix Windows này. Nói \"release\" thì tôi cắt 2.18.2.",
-    "asked_at": "2026-08-21T10:54:01.643Z",
-    "session": "50604963-80c5-4cdd-b083-b7ae9072fd54"
+    "subject": "Nói **\"fix\"** thì tôi vào bee chain sửa.",
+    "asked_at": "2026-08-21T11:09:49.501Z",
+    "session": "74f1250e-d2ae-4e56-a44b-0af1d06a2cdc"
   },
   "route": {
     "class": "feature",
