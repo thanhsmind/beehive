@@ -178,11 +178,12 @@ fn unproven_argv_shapes_defer_to_the_catalog() {
 // ─── binary_freshness ───────────────────────────────────────────────────
 
 /// A minimal bee SOURCE checkout: `packages/bee-rs/Cargo.toml` (the
-/// workspace version marker that makes the row exist at all), a `.rs` file
-/// under `crates/` (a freshness input), and a `.md` prompt (another input).
-/// `.bee/bin/bee` is deliberately not written here — each test below
+/// workspace version marker that makes the row exist at all),
+/// `.claude-plugin/plugin.json` (the source of truth for the release version),
+/// a `.rs` file under `crates/` (a freshness input), and a `.md` prompt (another
+/// input). `.bee/bin/bee` is deliberately not written here — each test below
 /// controls its content and mtime itself.
-fn source_checkout(tmp: &Path, workspace_version: &str) -> PathBuf {
+fn source_checkout(tmp: &Path, workspace_version: &str, release_version: &str) -> PathBuf {
     let root = tmp.join("repo");
     std::fs::create_dir_all(root.join(".bee/bin")).unwrap();
     std::fs::create_dir_all(root.join("packages/bee-rs/crates/bee/src")).unwrap();
@@ -195,19 +196,37 @@ fn source_checkout(tmp: &Path, workspace_version: &str) -> PathBuf {
     )
     .unwrap();
     std::fs::write(root.join("packages/bee-rs/crates/bee/src/main.rs"), "fn main() {}\n").unwrap();
+    std::fs::create_dir_all(root.join(".claude-plugin")).unwrap();
+    std::fs::write(
+        root.join(".claude-plugin/plugin.json"),
+        format!("{{\"name\": \"bee\", \"version\": \"{release_version}\"}}\n"),
+    )
+    .unwrap();
     std::fs::create_dir_all(root.join("packages/bee/prompts")).unwrap();
     std::fs::write(root.join("packages/bee/prompts/one.md"), "# one\n").unwrap();
     root
 }
 
-/// A real, executable `.bee/bin/bee` stand-in that answers `rs-info` with a
-/// chosen version — enough for `installed_binary_version` to probe it
-/// exactly the way it probes the real binary.
+/// A real, executable `.bee/bin/bee` stand-in that answers `rs-info` with both
+/// `version` and `bee_version` — enough for `installed_binary_bee_version` to
+/// probe it exactly the way it probes the real binary.
 #[cfg(unix)]
-fn write_executable_binary(path: &Path, rs_info_version: &str) {
+fn write_executable_binary(path: &Path, package_version: &str, bee_version: &str) {
     use std::os::unix::fs::PermissionsExt;
     let script = format!(
-        "#!/bin/sh\nif [ \"$1\" = \"rs-info\" ]; then\n  echo '{{\"version\":\"{rs_info_version}\"}}'\nfi\n"
+        "#!/bin/sh\nif [ \"$1\" = \"rs-info\" ]; then\n  echo '{{\"version\":\"{package_version}\",\"bee_version\":\"{bee_version}\"}}'\nfi\n"
+    );
+    std::fs::write(path, script).unwrap();
+    let mut perms = std::fs::metadata(path).unwrap().permissions();
+    perms.set_mode(0o755);
+    std::fs::set_permissions(path, perms).unwrap();
+}
+
+#[cfg(unix)]
+fn write_executable_binary_raw(path: &Path, stdout_json: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let script = format!(
+        "#!/bin/sh\nif [ \"$1\" = \"rs-info\" ]; then\n  echo '{stdout_json}'\nfi\n"
     );
     std::fs::write(path, script).unwrap();
     let mut perms = std::fs::metadata(path).unwrap().permissions();
@@ -220,9 +239,9 @@ fn write_executable_binary(path: &Path, rs_info_version: &str) {
 #[test]
 fn binary_freshness_is_ok_when_matched_and_newest() {
     let tmp = tempfile::tempdir().unwrap();
-    let root = source_checkout(tmp.path(), "9.9.9");
+    let root = source_checkout(tmp.path(), "0.1.0", "9.9.9");
     let bin = root.join(".bee/bin/bee");
-    write_executable_binary(&bin, "9.9.9");
+    write_executable_binary(&bin, "0.1.0", "9.9.9");
 
     let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
     let older = filetime::FileTime::from_system_time(bin_time - std::time::Duration::from_secs(60));
@@ -240,9 +259,9 @@ fn binary_freshness_is_ok_when_matched_and_newest() {
 #[test]
 fn binary_freshness_reports_not_ok_on_a_newer_source_input() {
     let tmp = tempfile::tempdir().unwrap();
-    let root = source_checkout(tmp.path(), "9.9.9");
+    let root = source_checkout(tmp.path(), "0.1.0", "9.9.9");
     let bin = root.join(".bee/bin/bee");
-    write_executable_binary(&bin, "9.9.9");
+    write_executable_binary(&bin, "0.1.0", "9.9.9");
 
     let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
     let newer = filetime::FileTime::from_system_time(bin_time + std::time::Duration::from_secs(60));
@@ -259,16 +278,45 @@ fn binary_freshness_reports_not_ok_on_a_newer_source_input() {
     assert!(row.detail.contains("cargo build"), "{}", row.detail);
 }
 
-/// A version mismatch is not_ok, naming both versions and the remedy — even
-/// when every source mtime is older than the binary, so the mtime leg alone
+/// A manifest newer than the binary is not_ok, and the detail names
+/// .claude-plugin/plugin.json.
+#[cfg(unix)]
+#[test]
+fn binary_freshness_reports_not_ok_on_a_newer_plugin_manifest() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "0.1.0", "9.9.9");
+    let bin = root.join(".bee/bin/bee");
+    write_executable_binary(&bin, "0.1.0", "9.9.9");
+
+    let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
+    let older = filetime::FileTime::from_system_time(bin_time - std::time::Duration::from_secs(60));
+    for path in source_inputs(&root) {
+        filetime::set_file_mtime(&path, older).unwrap();
+    }
+    let newer = filetime::FileTime::from_system_time(bin_time + std::time::Duration::from_secs(60));
+    let manifest = root.join(".claude-plugin/plugin.json");
+    filetime::set_file_mtime(&manifest, newer).unwrap();
+
+    let row = binary_freshness_row(&root).unwrap();
+    assert_eq!(row.ok, Some(false));
+    assert!(
+        row.detail.contains(".claude-plugin/plugin.json"),
+        "{}",
+        row.detail
+    );
+    assert!(row.detail.contains("cargo build"), "{}", row.detail);
+}
+
+/// A release version mismatch is not_ok, naming both versions and the remedy —
+/// even when every source mtime is older than the binary, so the mtime leg alone
 /// could never have caught it.
 #[cfg(unix)]
 #[test]
 fn binary_freshness_reports_not_ok_on_a_version_mismatch() {
     let tmp = tempfile::tempdir().unwrap();
-    let root = source_checkout(tmp.path(), "9.9.9");
+    let root = source_checkout(tmp.path(), "0.1.0", "2.18.0");
     let bin = root.join(".bee/bin/bee");
-    write_executable_binary(&bin, "1.2.3");
+    write_executable_binary(&bin, "0.1.0", "2.17.1");
 
     let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
     let older = filetime::FileTime::from_system_time(bin_time - std::time::Duration::from_secs(60));
@@ -278,8 +326,69 @@ fn binary_freshness_reports_not_ok_on_a_version_mismatch() {
 
     let row = binary_freshness_row(&root).unwrap();
     assert_eq!(row.ok, Some(false));
-    assert!(row.detail.contains("1.2.3"), "{}", row.detail);
-    assert!(row.detail.contains("9.9.9"), "{}", row.detail);
+    assert!(row.detail.contains("2.17.1"), "{}", row.detail);
+    assert!(row.detail.contains("2.18.0"), "{}", row.detail);
+    assert!(row.detail.contains("cargo build"), "{}", row.detail);
+}
+
+/// A binary whose rs-info omits bee_version is not_ok.
+#[cfg(unix)]
+#[test]
+fn binary_freshness_reports_not_ok_when_binary_omits_bee_version() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "0.1.0", "2.18.0");
+    let bin = root.join(".bee/bin/bee");
+    write_executable_binary_raw(&bin, "{\"version\":\"0.1.0\"}");
+
+    let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
+    let older = filetime::FileTime::from_system_time(bin_time - std::time::Duration::from_secs(60));
+    for path in source_inputs(&root) {
+        filetime::set_file_mtime(&path, older).unwrap();
+    }
+
+    let row = binary_freshness_row(&root).unwrap();
+    assert_eq!(row.ok, Some(false));
+    assert!(row.detail.contains("bee_version"), "{}", row.detail);
+    assert!(row.detail.contains("cargo build"), "{}", row.detail);
+}
+
+/// A checkout with no .claude-plugin/plugin.json is unknown, not ok.
+#[test]
+fn binary_freshness_is_unknown_when_plugin_manifest_is_missing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "0.1.0", "2.18.0");
+    std::fs::remove_file(root.join(".claude-plugin/plugin.json")).unwrap();
+
+    let row = binary_freshness_row(&root).expect("the row exists in a source checkout");
+    assert_eq!(row.ok, None, "{}", row.detail);
+    assert!(row.detail.contains(".claude-plugin/plugin.json"), "{}", row.detail);
+}
+
+/// Regression test pinning the real defect: a binary and a workspace Cargo.toml
+/// that agree on the pinned package version while the release versions differ
+/// must be not_ok, so the tautology can never come back.
+#[cfg(unix)]
+#[test]
+fn binary_freshness_catches_release_drift_when_package_versions_agree() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = source_checkout(tmp.path(), "0.1.0", "2.18.0");
+    let bin = root.join(".bee/bin/bee");
+    write_executable_binary(&bin, "0.1.0", "2.17.1");
+
+    let bin_time = std::fs::metadata(&bin).unwrap().modified().unwrap();
+    let older = filetime::FileTime::from_system_time(bin_time - std::time::Duration::from_secs(60));
+    for path in source_inputs(&root) {
+        filetime::set_file_mtime(&path, older).unwrap();
+    }
+
+    let row = binary_freshness_row(&root).unwrap();
+    assert_eq!(
+        row.ok,
+        Some(false),
+        "tautological package-version agreement must not pass when release versions differ"
+    );
+    assert!(row.detail.contains("2.17.1"), "{}", row.detail);
+    assert!(row.detail.contains("2.18.0"), "{}", row.detail);
     assert!(row.detail.contains("cargo build"), "{}", row.detail);
 }
 
@@ -288,7 +397,7 @@ fn binary_freshness_reports_not_ok_on_a_version_mismatch() {
 #[test]
 fn binary_freshness_is_unknown_without_an_installed_binary() {
     let tmp = tempfile::tempdir().unwrap();
-    let root = source_checkout(tmp.path(), "9.9.9");
+    let root = source_checkout(tmp.path(), "0.1.0", "9.9.9");
     let row = binary_freshness_row(&root).expect("the row exists in a source checkout");
     assert_eq!(row.ok, None, "{}", row.detail);
 }

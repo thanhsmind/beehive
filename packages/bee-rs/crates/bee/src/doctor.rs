@@ -273,9 +273,11 @@ fn mechanical_rows(root: &Path, runtime: Runtime) -> Vec<Row> {
 /// binary that never had source to lag.
 ///
 /// In a source checkout it is not_ok when either (a) the installed binary's
-/// own `rs-info` version disagrees with the source workspace version, or (b)
-/// any source input — `packages/bee-rs/crates/**/*.rs`,
-/// `packages/bee-rs/**/Cargo.toml`, `packages/bee/prompts/*.md` — is newer by
+/// own `rs-info` bee_version disagrees with the source release version in
+/// `.claude-plugin/plugin.json`, (b) the binary's `rs-info` omits bee_version
+/// (the binary predates this check and is stale), or (c) any source input —
+/// `packages/bee-rs/crates/**/*.rs`, `packages/bee-rs/**/Cargo.toml`,
+/// `.claude-plugin/plugin.json`, `packages/bee/prompts/*.md` — is newer by
 /// mtime than the installed binary. Read-only throughout: it only stats and
 /// reads files and spawns the installed binary to ask its own version, never
 /// builds, copies, or writes anything.
@@ -285,9 +287,17 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
         -p bee --bin bee, then copy target/release/bee to .bee/bin/bee.";
 
     let workspace_cargo = root.join("packages/bee-rs/Cargo.toml");
-    let source_version = std::fs::read_to_string(&workspace_cargo)
-        .ok()
-        .and_then(|text| parse_workspace_version(&text))?;
+    if !workspace_cargo.is_file() {
+        return None;
+    }
+
+    let Some(source_version) = read_source_release_version(root) else {
+        return Some(Row {
+            key: KEY,
+            ok: None,
+            detail: ".claude-plugin/plugin.json is missing or unreadable — cannot determine source release version".to_string(),
+        });
+    };
 
     // Missing binary is `hook_handler`'s verdict to give; repeating not_ok
     // here under a second name would just be noise, so this reports unknown.
@@ -299,17 +309,29 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
         });
     };
 
-    if let Some(installed_version) = installed_binary_version(&bin) {
-        if installed_version != source_version {
+    match installed_binary_bee_version(&bin) {
+        ProbedBeeVersion::Missing => {
             return Some(Row {
                 key: KEY,
                 ok: Some(false),
                 detail: format!(
-                    "installed binary reports version {installed_version}, source \
-                     (packages/bee-rs/Cargo.toml) is {source_version}. {REMEDY}"
+                    "installed binary is too old to report its release version (rs-info carries no bee_version field). {REMEDY}"
                 ),
             });
         }
+        ProbedBeeVersion::Present(installed_version) => {
+            if installed_version != source_version {
+                return Some(Row {
+                    key: KEY,
+                    ok: Some(false),
+                    detail: format!(
+                        "installed binary reports release version {installed_version}, source \
+                         (.claude-plugin/plugin.json) is {source_version}. {REMEDY}"
+                    ),
+                });
+            }
+        }
+        ProbedBeeVersion::Failed => {}
     }
 
     if let Ok(bin_mtime) = std::fs::metadata(&bin).and_then(|m| m.modified()) {
@@ -345,46 +367,46 @@ fn binary_freshness_row(root: &Path) -> Option<Row> {
     })
 }
 
-/// `version = "…"` under `[workspace.package]` in `packages/bee-rs/Cargo.toml`
-/// — a deliberately narrow line scanner, the same idiom `version.rs` uses for
-/// the plugin manifest, over a file this repo controls the exact shape of.
-fn parse_workspace_version(cargo_toml_text: &str) -> Option<String> {
-    let mut in_section = false;
-    for line in cargo_toml_text.lines() {
-        let trimmed = line.trim();
-        if let Some(name) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-            in_section = name == "workspace.package";
-            continue;
-        }
-        if !in_section {
-            continue;
-        }
-        let Some(rest) = trimmed.strip_prefix("version") else { continue };
-        let Some(rest) = rest.trim_start().strip_prefix('=') else { continue };
-        return Some(rest.trim().trim_matches('"').to_string());
-    }
-    None
+/// The release version from `<root>/.claude-plugin/plugin.json`.
+fn read_source_release_version(root: &Path) -> Option<String> {
+    let manifest_path = root.join(".claude-plugin/plugin.json");
+    let text = std::fs::read_to_string(manifest_path).ok()?;
+    let parsed: Value = serde_json::from_str(&text).ok()?;
+    parsed.get("version").and_then(Value::as_str).map(str::to_string)
 }
 
-/// The installed binary's own answer to what version it was built from —
-/// `bee rs-info`'s `version` field, which is `env!("CARGO_PKG_VERSION")` at
-/// that binary's build time. A probe, never a mutation: this only spawns and
-/// reads stdout.
-fn installed_binary_version(bin: &Path) -> Option<String> {
-    let out = std::process::Command::new(bin).arg("rs-info").output().ok()?;
+enum ProbedBeeVersion {
+    Present(String),
+    Missing,
+    Failed,
+}
+
+/// The installed binary's answer to what release version it was built from —
+/// `bee rs-info`'s `bee_version` field. A probe, never a mutation: this only
+/// spawns and reads stdout.
+fn installed_binary_bee_version(bin: &Path) -> ProbedBeeVersion {
+    let Ok(out) = std::process::Command::new(bin).arg("rs-info").output() else {
+        return ProbedBeeVersion::Failed;
+    };
     if !out.status.success() {
-        return None;
+        return ProbedBeeVersion::Failed;
     }
-    let value: Value = serde_json::from_slice(&out.stdout).ok()?;
-    value.get("version").and_then(Value::as_str).map(str::to_string)
+    let Ok(value) = serde_json::from_slice::<Value>(&out.stdout) else {
+        return ProbedBeeVersion::Failed;
+    };
+    match value.get("bee_version").and_then(Value::as_str) {
+        Some(ver) => ProbedBeeVersion::Present(ver.to_string()),
+        None => ProbedBeeVersion::Missing,
+    }
 }
 
 /// The freshness inputs: every `.rs` file and `Cargo.toml` under
 /// `packages/bee-rs/crates`, the workspace `packages/bee-rs/Cargo.toml`
-/// itself, and every `.md` prompt directly under `packages/bee/prompts`. The
-/// walk stays inside `crates/` rather than all of `packages/bee-rs` on
-/// purpose — the sibling `target/` build directory lives at the workspace
-/// root, not under `crates/`, and a doctor row must never wander into it.
+/// itself, `.claude-plugin/plugin.json`, and every `.md` prompt directly under
+/// `packages/bee/prompts`. The walk stays inside `crates/` rather than all of
+/// `packages/bee-rs` on purpose — the sibling `target/` build directory lives
+/// at the workspace root, not under `crates/`, and a doctor row must never
+/// wander into it.
 fn source_inputs(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     walk_files(&root.join("packages/bee-rs/crates"), &mut out);
@@ -395,6 +417,11 @@ fn source_inputs(root: &Path) -> Vec<PathBuf> {
     let workspace_cargo = root.join("packages/bee-rs/Cargo.toml");
     if workspace_cargo.is_file() {
         out.push(workspace_cargo);
+    }
+
+    let plugin_manifest = root.join(".claude-plugin/plugin.json");
+    if plugin_manifest.is_file() {
+        out.push(plugin_manifest);
     }
 
     if let Ok(entries) = std::fs::read_dir(root.join("packages/bee/prompts")) {
