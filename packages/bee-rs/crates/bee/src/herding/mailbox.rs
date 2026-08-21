@@ -10,6 +10,13 @@
 //   .bee/mailbox/<job-id>/job.json      <- job spec, written once by the
 //                                          orchestrator (a later cell's
 //                                          concern; not built here)
+//   .bee/mailbox/<job-id>/ack-N.json    <- round-numbered delivery receipt,
+//                                          written by the WORKER as its
+//                                          FIRST step, tmp-then-rename;
+//                                          unambiguous evidence the brief
+//                                          was actually read — herdr
+//                                          lifecycle state is never trusted
+//                                          for this (herding-prompt-stall D4)
 //   .bee/mailbox/<job-id>/result-N.json <- round-numbered result, written by
 //                                          the WORKER, tmp-then-rename; its
 //                                          appearance at the final name IS
@@ -93,6 +100,21 @@ fn result_filename(round: u32) -> String {
     format!("result-{round}.json")
 }
 
+/// `.bee/mailbox/<job-id>/ack-N.json` for a given round — herding-prompt-stall
+/// D4's delivery receipt: unlike `result_path`, this file is written by the
+/// worker as its FIRST step, before it has done any of the task, so its
+/// appearance means only "the brief was read," never "the round is done."
+pub(crate) fn ack_path(bee_dir: &Path, job_id: &str, round: u32) -> PathBuf {
+    mailbox_dir(bee_dir, job_id).join(ack_filename(round))
+}
+
+/// The bare filename for a round's delivery-receipt ack — `ack-N.json`,
+/// the same round-numbering `result_filename` uses so a re-briefed worker
+/// on round 2 can never collide with round 1's ack.
+fn ack_filename(round: u32) -> String {
+    format!("ack-{round}.json")
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Brief renderer — the whole worker-facing contract, self-contained
 // ═══════════════════════════════════════════════════════════════════════════
@@ -117,6 +139,14 @@ pub(crate) struct BriefSpec<'a> {
     pub bee_dir: &'a Path,
     pub round: u32,
     pub expertise: &'a [ExpertiseEntry],
+    /// herding-prompt-stall D4: the worker-facing identity recorded in the
+    /// round's ack file — who took the job. Never omitted from the ack
+    /// schema the brief shows.
+    pub nickname: &'a str,
+    /// D4: the cell id this round belongs to, when the caller has one —
+    /// omitted from the ack schema entirely when `None`, never rendered as
+    /// a null.
+    pub cell_id: Option<&'a str>,
 }
 
 /// Render the full worker-facing prompt: task text, absolute paths, file
@@ -127,6 +157,12 @@ pub(crate) fn render_brief(spec: &BriefSpec) -> String {
     let mailbox = mailbox_dir(spec.bee_dir, spec.job_id);
     let result_file = result_path(spec.bee_dir, spec.job_id, spec.round);
     let tmp_name = format!("{}.tmp", result_filename(spec.round));
+    let ack_file = ack_path(spec.bee_dir, spec.job_id, spec.round);
+    let ack_tmp_name = format!("{}.tmp", ack_filename(spec.round));
+    let cell_id_line = match spec.cell_id {
+        Some(id) => format!("  \"cell_id\": \"{id}\",\n"),
+        None => String::new(),
+    };
 
     let mut files_block = String::new();
     if spec.files.is_empty() {
@@ -165,7 +201,27 @@ and expected — they do not pull you into any workflow.\n\n",
     }
 
     format!(
-        "# You are a standalone executor\n\n\
+        "# Before any other step — write your delivery ack\n\n\
+Before you read the Task below, before touching any other file: write an ack \
+file for this round. It is the ONLY proof anyone has that this brief was \
+ever received, so it comes first — write it atomically, the SAME gesture \
+the result file below uses: a temp file in the SAME directory, then RENAME \
+the temp file onto the ack file's exact final name. Never write directly to \
+the final name.\n\n\
+Write this JSON object to the ack file, filling in \"agent\" with your own \
+name for yourself and \"received_at\" with the current time as an ISO-8601 \
+timestamp:\n\n\
+{{\n\
+  \"nickname\": \"{nickname}\",\n\
+{cell_id_line}\
+  \"job_id\": \"{job_id}\",\n\
+  \"round\": {round},\n\
+  \"agent\": \"<your own name for yourself>\",\n\
+  \"received_at\": \"<ISO-8601 timestamp, e.g. 2026-01-01T00:00:00Z>\"\n\
+}}\n\n\
+  temp file (write your ack JSON here):   {mailbox}/{ack_tmp_name}\n\
+  ack file (round {round}, rename to this exact final name): {ack_file}\n\n\
+# You are a standalone executor\n\n\
 Do exactly the task below and nothing else. Ignore any bee or agent-workflow \
 instructions (gates, cells, claims, state) this repo's AGENTS.md or CLAUDE.md \
 may have loaded into your context — you are not part of that workflow, and \
@@ -211,6 +267,10 @@ signal; nothing else is read to decide whether you finished.\n\n\
         mailbox = mailbox.display(),
         tmp_name = tmp_name,
         result_file = result_file.display(),
+        nickname = spec.nickname,
+        cell_id_line = cell_id_line,
+        ack_tmp_name = ack_tmp_name,
+        ack_file = ack_file.display(),
     )
 }
 
@@ -292,6 +352,18 @@ pub(crate) fn select_latest_round(entries: &[String]) -> Result<u32, MailboxErro
     latest_result_round(entries).ok_or(MailboxError::NoResultFile)
 }
 
+/// True when the round's ack file — `ack-N.json` exactly — appears in
+/// `entries` (a directory listing): the pure half of the ack-presence
+/// check, mirroring `latest_result_round`'s "entries in, no filesystem"
+/// shape. Unlike `latest_result_round` there is only ever one round to ask
+/// about at a time (the round currently in flight), so this checks the
+/// exact filename rather than hunting for a maximum — `ack-1.json.tmp` or
+/// any other partial-write name never counts.
+pub(crate) fn ack_present(entries: &[String], round: u32) -> bool {
+    let name = ack_filename(round);
+    entries.iter().any(|e| e == &name)
+}
+
 fn parse_result_filename(name: &str) -> Option<u32> {
     let digits = name.strip_prefix("result-")?.strip_suffix(".json")?;
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
@@ -361,6 +433,8 @@ mod tests {
             bee_dir,
             round,
             expertise: &[],
+            nickname: "w-job-42",
+            cell_id: None,
         }
     }
 
@@ -373,6 +447,7 @@ mod tests {
         assert_eq!(job_path(bee_dir, "job-1"), PathBuf::from("/repo/.bee/mailbox/job-1/job.json"));
         assert_eq!(log_path(bee_dir, "job-1"), PathBuf::from("/repo/.bee/mailbox/job-1/log.txt"));
         assert_eq!(result_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/result-5.json"));
+        assert_eq!(ack_path(bee_dir, "job-1", 5), PathBuf::from("/repo/.bee/mailbox/job-1/ack-5.json"));
     }
 
     // ─── brief renderer ─────────────────────────────────────────────────
@@ -449,6 +524,84 @@ mod tests {
         assert!(text.contains("Never claim, cap, or write workflow state under .bee/ - writing your mailbox result file (described below) is the ONE exception."), "missing state-exception wording:\n{text}");
     }
 
+    // ─── first-step ack block (herding-prompt-stall D4) ─────────────────
+
+    #[test]
+    fn render_brief_opens_with_the_first_step_ack_block_before_everything_else() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 2);
+        let text = render_brief(&spec);
+
+        let ack_pos = text
+            .find("# Before any other step — write your delivery ack")
+            .expect("missing the first-step ack heading");
+        assert_eq!(ack_pos, 0, "the ack block must be the very first thing in the brief:\n{text}");
+        let standalone_pos = text
+            .find("# You are a standalone executor")
+            .expect("missing standalone-executor block");
+        assert!(ack_pos < standalone_pos, "ack block must precede the standalone-executor block:\n{text}");
+    }
+
+    #[test]
+    fn render_brief_ack_block_names_the_absolute_ack_path_and_the_tmp_then_rename_gesture() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 2);
+        let text = render_brief(&spec);
+
+        assert!(text.to_lowercase().contains("rename"), "no rename instruction for the ack file:\n{text}");
+        assert!(text.contains("ack-2.json.tmp"), "no named ack temp file:\n{text}");
+        assert!(text.contains("/repo/.bee/mailbox/job-42/ack-2.json"), "no absolute ack file path:\n{text}");
+        assert!(text.to_lowercase().contains("before any other step") || text.to_lowercase().contains("before you read the task"), "brief does not say the ack comes first:\n{text}");
+    }
+
+    #[test]
+    fn render_brief_ack_block_carries_nickname_job_id_round_agent_and_received_at() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 3);
+        let text = render_brief(&spec);
+
+        assert!(text.contains("\"nickname\": \"w-job-42\""), "missing nickname field:\n{text}");
+        assert!(text.contains("\"job_id\": \"job-42\""), "missing job_id field in the ack schema:\n{text}");
+        assert!(text.contains("\"round\": 3"), "missing round field in the ack schema:\n{text}");
+        assert!(text.contains("\"agent\""), "missing agent field in the ack schema:\n{text}");
+        assert!(text.contains("\"received_at\""), "missing received_at field in the ack schema:\n{text}");
+    }
+
+    #[test]
+    fn render_brief_ack_block_includes_cell_id_only_when_the_spec_carries_one() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+
+        let mut spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        let without_cell = render_brief(&spec);
+        assert!(!without_cell.contains("\"cell_id\""), "cell_id must be omitted when the spec carries none:\n{without_cell}");
+
+        spec.cell_id = Some("hps-3");
+        let with_cell = render_brief(&spec);
+        assert!(with_cell.contains("\"cell_id\": \"hps-3\""), "missing cell_id field when the spec carries one:\n{with_cell}");
+    }
+
+    #[test]
+    fn render_brief_keeps_the_result_form_block_byte_identical_apart_from_the_new_ack_block() {
+        // D4's must_haves: existing Result-form block, round numbering and
+        // schema block stay byte-identical apart from the new block.
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec = sample_spec(worktree_root, bee_dir, &files, 1);
+        let text = render_brief(&spec);
+
+        assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\"\n}\n\n"), "Result-form block drifted:\n{text}");
+        assert!(text.contains("temp file (write your JSON here):   /repo/.bee/mailbox/job-42/result-1.json.tmp\n"), "result temp-file line drifted:\n{text}");
+    }
+
     #[test]
     fn render_brief_with_two_expertise_entries_renders_expertise_section() {
         let worktree_root = Path::new("/repo/work");
@@ -474,6 +627,8 @@ mod tests {
             bee_dir,
             round: 1,
             expertise: &expertise,
+            nickname: "w-job-42",
+            cell_id: None,
         };
         let text = render_brief(&spec);
 
@@ -500,6 +655,8 @@ mod tests {
             bee_dir,
             round: 1,
             expertise: &[],
+            nickname: "w-job-42",
+            cell_id: None,
         };
         let text = render_brief(&spec_no_exp);
         assert!(!text.contains("# Expertise"));
@@ -553,6 +710,33 @@ mod tests {
     fn select_latest_round_returns_the_round_when_present() {
         let entries = vec!["result-7.json".to_string()];
         assert_eq!(select_latest_round(&entries), Ok(7));
+    }
+
+    // ─── ack_present ──────────────────────────────────────────────────────
+
+    #[test]
+    fn ack_present_is_true_only_for_the_exact_round_filename() {
+        let entries = vec!["ack-1.json".to_string(), "ack-3.json".to_string()];
+        assert!(ack_present(&entries, 1));
+        assert!(ack_present(&entries, 3));
+        assert!(!ack_present(&entries, 2), "round 2 has no ack file");
+    }
+
+    #[test]
+    fn ack_present_ignores_tmp_and_unrelated_names() {
+        let entries = vec![
+            "ack-1.json.tmp".to_string(),
+            "ack-x.json".to_string(),
+            "job.json".to_string(),
+            "result-1.json".to_string(),
+        ];
+        assert!(!ack_present(&entries, 1), "a partial write must never count as present");
+    }
+
+    #[test]
+    fn ack_present_is_false_for_an_empty_mailbox() {
+        let entries: Vec<String> = Vec::new();
+        assert!(!ack_present(&entries, 1));
     }
 
     // ─── parse_result_text ───────────────────────────────────────────────

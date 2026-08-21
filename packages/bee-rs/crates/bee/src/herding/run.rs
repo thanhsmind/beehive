@@ -9,10 +9,18 @@
 //
 //   1. Resolve `herding.agent_command` (D14, `super::wave::resolve_agent_command`
 //      — the SAME split `bee herding wave` already uses) into (kind, args).
-//   2. Split a pane from the caller's OWN runtime pane
-//      (`herdr pane current --current`, then `herdr pane split … --cwd
-//      <worktree>`) — the split-then-start order `spawn-proof.md` records
-//      as the only one herdr 0.8.0 accepts.
+//   2. Split a pane off the ROOMIEST pane in the caller's tab (hps-12:
+//      `herdr pane current --current` locates the caller, `herdr pane
+//      layout` reads every pane's rect, then `herdr pane split … --cwd
+//      <worktree>` targets the largest one — never always the caller's own,
+//      which under fan-out just halves the same pane repeatedly). The width
+//      guard (hps-13) checks the RESULTING CHILD, not the parent — a parent
+//      only clears it when its split-off half would still be wide enough
+//      for a worker to submit into. When no pane in the tab clears it, bee
+//      asks herdr for a fresh tab and hands the worker its root pane
+//      directly, unsplit, at full width — a refusal is the last resort, only
+//      when that tab-create attempt itself fails. The split-then-start order
+//      is the only one `spawn-proof.md` records herdr 0.8.0 accepting.
 //   3. Start the agent into that pane (`herdr agent start … --pane …`),
 //      handing it the rendered brief as its opening prompt. A start failure
 //      closes the pane it just created (role-dispatch.md §8's own cleanup
@@ -49,7 +57,7 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 
 use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxResult, MailboxStatus};
-use super::wave::resolve_agent_command;
+use super::wave::{resolve_agent_command, WorkspaceTrust};
 use super::wave_ledger::{self, WaveRow, WorkerRow};
 
 const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 900; // 15 minutes of no heartbeat
@@ -66,6 +74,56 @@ fn find_limit_match(pane_text: &str) -> Option<String> {
         for pattern in LIMIT_PATTERNS {
             if lower.contains(&pattern.to_lowercase()) {
                 return Some(line.trim().to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Case-insensitive substrings for `find_prompt_diagnosis` — DIAGNOSIS-ONLY
+/// (herding-prompt-stall D3/D5, cell hps-7): this table never decides
+/// whether a wait keeps going, only what a wait that has ALREADY given up
+/// says. It is checked nowhere near `decide_poll`; a false positive here
+/// costs a slightly wrong sentence and nothing else, so it stays entirely
+/// separate from `LIMIT_PATTERNS` (a genuine wait-changing signal) and from
+/// herdr's own `blocked` classification (D3, checked live against herdr,
+/// never guessed from raw pane text).
+///
+/// Tokens are kept SHORT on purpose. The live acceptance probe (D5) put
+/// three concurrent `agy` runs into a genuinely untrusted workspace; all
+/// three sat at Antigravity's "Do you trust this folder?" dialog while
+/// `herdr agent list` reported the agent as `idle`, never `blocked` — the
+/// stall bee had no name for. The SAME probe found that a worker pane split
+/// three deep off the same parent renders at roughly EIGHT COLUMNS wide, and
+/// `herdr pane read` returns that dialog CLIPPED to one short fragment per
+/// line (`Do you t`, `Yes, I`, `No, ex`). A long needle like
+/// "do you trust this folder" cannot match a capture that narrow — the tail
+/// of every long line is exactly what clipping throws away. A short
+/// confirmation cue that lives on ITS OWN line (a `(y/n)` hint, an arrow-key
+/// nav footer, a selection caret) needs no clipping margin at all, so it
+/// still lands inside a narrow capture even when the question text above it
+/// does not.
+const PROMPT_DIAGNOSIS_PATTERNS: &[&str] = &["y/n", "↑/↓", "❯"];
+
+/// Scans `pane_text` for `PROMPT_DIAGNOSIS_PATTERNS` (case-insensitive,
+/// mirroring `find_limit_match`'s own scan) or a line ending in `?` — both
+/// common shapes for an unanswered interactive prompt. Returns the first
+/// matching line, trimmed, or `None` on no match. Pure and diagnosis-only:
+/// this function decides nothing about waiting, only what a give-up message
+/// SAYS once a wait has already ended.
+fn find_prompt_diagnosis(pane_text: &str) -> Option<String> {
+    for line in pane_text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.ends_with('?') {
+            return Some(trimmed.to_string());
+        }
+        let lower = trimmed.to_lowercase();
+        for pattern in PROMPT_DIAGNOSIS_PATTERNS {
+            if lower.contains(&pattern.to_lowercase()) {
+                return Some(trimmed.to_string());
             }
         }
     }
@@ -109,6 +167,14 @@ struct Options {
     expertise: Vec<ExpertiseEntry>,
     /// True when `--expertise` was explicitly passed on the command line.
     has_explicit_expertise: bool,
+    /// `--nickname <name>` (herding-prompt-stall D4): the worker-facing
+    /// identity recorded in the round's ack file. Falls back to `job_id`
+    /// when the caller has no separate reservation identity for this run.
+    nickname: String,
+    /// `--cell-id <id>` (D4): the cell id this round belongs to, when the
+    /// caller has one — carried into the ack schema the brief shows, never
+    /// invented when absent.
+    cell_id: Option<String>,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -191,6 +257,8 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut dry_run = false;
     let mut agent: Option<&str> = None;
     let mut expertise_raw: Option<&str> = None;
+    let mut nickname: Option<&str> = None;
+    let mut cell_id: Option<&str> = None;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
@@ -250,6 +318,14 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 expertise_raw = flags.get(i + 1).copied();
                 i += 2;
             }
+            "--nickname" => {
+                nickname = flags.get(i + 1).copied();
+                i += 2;
+            }
+            "--cell-id" => {
+                cell_id = flags.get(i + 1).copied();
+                i += 2;
+            }
             _ => i += 1,
         }
     }
@@ -277,6 +353,8 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         None => (Vec::new(), false),
     };
 
+    let nickname = nickname.map(str::to_string).unwrap_or_else(|| job_id.clone());
+
     Ok(Options {
         task: task_text,
         cwd: cwd_path,
@@ -292,6 +370,8 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         agent: agent.map(str::to_string),
         expertise,
         has_explicit_expertise,
+        nickname,
+        cell_id: cell_id.map(str::to_string),
     })
 }
 
@@ -306,6 +386,16 @@ enum Liveness {
     Unknown,
 }
 
+/// One entry of `herdr pane layout`'s `panes` array — an id and its
+/// character-cell rect. hps-12: the split-parent choice is a pure function
+/// over a `Vec` of these, never over a live herdr call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PaneGeom {
+    pane_id: String,
+    width: u64,
+    height: u64,
+}
+
 /// Every herdr operation `bee herding run` needs, isolated behind a trait so
 /// tests inject a fake instead of a real `herdr` on PATH (D7's seam, no
 /// process anywhere in this crate's test suite). `RealHerdr` below is the
@@ -314,15 +404,25 @@ trait Herdr {
     /// `herdr pane current --current` — the caller's OWN pane id, the pane
     /// this verb splits from.
     fn pane_current(&self) -> Result<String, String>;
-    /// `herdr pane layout --pane <id>` — best-effort geometry for the
-    /// split-direction rule (`role-dispatch.md` §8); `None` on any trouble
-    /// (herdr missing, unparseable body, the pane absent from the reply) —
-    /// the caller falls back to a default direction rather than failing the
-    /// whole run over a geometry read.
-    fn pane_rect(&self, pane_id: &str) -> Option<(u64, u64)>;
+    /// `herdr pane layout --pane <id>` — geometry for EVERY pane in the
+    /// caller's OWN tab, not just `pane_id`: the split-parent choice
+    /// (hps-12, "roomiest pane") and the split-direction rule
+    /// (`role-dispatch.md` §8) both read it from the same list. `None` on
+    /// any trouble (herdr missing, unparseable body) — the caller falls
+    /// back to its own pane rather than failing the whole run over a
+    /// geometry read.
+    fn pane_layout(&self, pane_id: &str) -> Option<Vec<PaneGeom>>;
     /// `herdr pane split <id> --direction <dir> --ratio 0.5 --cwd <cwd>
     /// --no-focus` — returns the newly split pane's id.
     fn pane_split(&self, pane_id: &str, direction: &str, cwd: &Path) -> Result<String, String>;
+    /// `herdr tab create --workspace <ws> --cwd <cwd> --label <label>`
+    /// (hps-13): the new-tab fallback for a caller's tab with no pane roomy
+    /// enough to split into a usable child — the worker gets a FRESH tab's
+    /// root pane directly, unsplit, so it starts at full width instead of a
+    /// sliver. Returns the new root pane's id. Never passes `--focus`
+    /// (mirrors `pane_split`'s own `--no-focus`): a worker must never steal
+    /// the human's focus.
+    fn tab_create(&self, workspace: &str, cwd: &Path, label: &str) -> Result<String, String>;
     /// `herdr pane run <pane_id> <command>` (D4) — runs ONE shell line in
     /// the pane and returns; used ONLY to send the `export K='v' …` line a
     /// per-agent-env registry entry carries, AFTER the pane split and
@@ -357,13 +457,30 @@ trait Herdr {
     /// `herdr pane close <id>` — best-effort; a failure here is reported,
     /// never allowed to hide the run's own result.
     fn pane_close(&self, pane_id: &str) -> Result<(), String>;
-    /// `herdr agent prompt <job_id> <prompt>` (D3 `--continue`) — sends the
-    /// round N+1 brief to an ALREADY-RUNNING agent, never `agent start`
-    /// (that would spawn a second agent instead of continuing this one).
-    fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String>;
+    /// `herdr agent prompt <job_id> <prompt> --wait --until <state>
+    /// --timeout <ms>` (D3 `--continue`; herding-prompt-stall D1) — sends
+    /// the round N+1 brief (or the initial pointer) to an ALREADY-RUNNING
+    /// agent, never `agent start` (that would spawn a second agent instead
+    /// of continuing this one). `--wait` is herdr's own atomic
+    /// submit-and-observe: a prompt sent from a non-`working` state that
+    /// produces no observed lifecycle change within `timeout_ms` comes back
+    /// `agent_prompt_stalled` (`is_agent_prompt_stalled`) instead of herdr
+    /// waiting indefinitely. A stall no longer ends the run outright (D6,
+    /// hps-14): `deliver_pointer` folds it into the same bounded resend the
+    /// ready-with-no-ack path already uses, rather than treating a booting
+    /// TUI's first miss as final.
+    fn agent_prompt(&self, job_id: &str, prompt: &str, until: &str, timeout_ms: u64) -> Result<(), String>;
+    /// `herdr agent wait <job_id> --until idle --until done --timeout <ms>`
+    /// (herding-prompt-stall D2) — herdr's own settle-aware wait: blocks
+    /// herdr-side up to `timeout_ms` for the agent to settle into `idle`,
+    /// `done`, or `blocked`, then returns whatever it observed. `None` on
+    /// any trouble (herdr missing, an unparseable body, no settle inside
+    /// the window) — same fail-safe shape as `agent_status`: an
+    /// unverifiable status never counts as a ready or heartbeat signal.
+    fn agent_wait(&self, job_id: &str, timeout_ms: u64) -> Option<String>;
     /// `herdr pane list`, membership-tested against `pane_id` — the D3
-    /// `--continue` "is the pane gone" check. Unlike `pane_rect` (which
-    /// fails open to a default direction on ANY trouble), this fails
+    /// `--continue` "is the pane gone" check. Unlike `pane_layout` (which
+    /// fails open to the caller's own pane on ANY trouble), this fails
     /// CLOSED: herdr missing, a non-zero exit, or an unparseable body all
     /// read as "not alive" — `--continue` refuses rather than prompting a
     /// pane it cannot confirm still exists.
@@ -393,10 +510,63 @@ impl RealHerdr {
                 String::from_utf8_lossy(&out.stderr)
             ));
         }
-        serde_json::from_slice(&out.stdout).map_err(|_| {
-            format!("herdr {} returned a body that was not valid JSON: {}", args.join(" "), String::from_utf8_lossy(&out.stdout))
-        })
+        parse_herdr_body(&args.join(" "), &out.stdout)
     }
+}
+
+/// The JSON-decode half of `RealHerdr::call`, split out so a test can drive
+/// it with a captured reply body and no spawned process.
+fn parse_herdr_body(args_desc: &str, stdout: &[u8]) -> Result<Value, String> {
+    serde_json::from_slice(stdout).map_err(|_| {
+        format!("herdr {args_desc} returned a body that was not valid JSON: {}", String::from_utf8_lossy(stdout))
+    })
+}
+
+/// `agent_wait`'s extraction, pure: herdr's `agent wait` reply nests the
+/// status one level deeper than `agent_status`'s `agent list` reply —
+/// `result.agent.agent_status`, not `result.agent_status` — captured live
+/// from `herdr agent wait <job> --until idle --until done --timeout <ms>`.
+/// Split out so a test can feed the captured reply straight through the
+/// same extraction the impl uses.
+fn extract_agent_wait_status(v: &Value) -> Option<String> {
+    v.get("result")?.get("agent")?.get("agent_status").and_then(Value::as_str).map(str::to_string)
+}
+
+/// `pane_layout`'s extraction, pure: herdr's `pane layout` reply nests the
+/// full-tab pane array under `result.layout.panes` — captured live from
+/// `herdr pane layout --pane w4:p4` against a clean tab: `{"result":
+/// {"layout":{"tab_id":"w4:t4","panes":[{"pane_id":"w4:p4","rect":
+/// {"height":43,"width":120,"x":36,"y":1}}],"splits":[]}}}`. With siblings
+/// present, `panes` holds one entry per pane in the tab. A malformed entry
+/// is dropped rather than failing the whole parse; a missing `panes` array
+/// (or an unreadable body) is `None`, same fail-open shape as
+/// `agent_status`. Split out so a test can feed the captured reply straight
+/// through the same extraction the impl uses.
+fn extract_pane_layout(v: &Value) -> Option<Vec<PaneGeom>> {
+    let panes = v.get("result")?.get("layout")?.get("panes")?.as_array()?;
+    Some(
+        panes
+            .iter()
+            .filter_map(|p| {
+                let pane_id = p.get("pane_id")?.as_str()?.to_string();
+                let rect = p.get("rect")?;
+                let width = rect.get("width")?.as_u64()?;
+                let height = rect.get("height")?.as_u64()?;
+                Some(PaneGeom { pane_id, width, height })
+            })
+            .collect(),
+    )
+}
+
+/// `tab_create`'s extraction, pure: herdr's `tab create` reply nests the new
+/// root pane under `result.root_pane.pane_id` — captured live from `herdr
+/// tab create --workspace w4 --cwd <path> --label bee-probe`, trimmed:
+/// `{"id":"cli:tab:create","result":{"root_pane":{"pane_id":"w4:p31","cwd":
+/// "<path>","tab_id":"w4:tE","workspace_id":"w4"},"tab":{...}}}`. Split out
+/// so a test can feed the captured reply straight through the same
+/// extraction the impl uses.
+fn extract_tab_create_root_pane(v: &Value) -> Option<String> {
+    v.get("result")?.get("root_pane")?.get("pane_id")?.as_str().map(str::to_string)
 }
 
 impl Herdr for RealHerdr {
@@ -410,25 +580,9 @@ impl Herdr for RealHerdr {
             .ok_or_else(|| "herdr pane current --current: missing result.pane.pane_id".to_string())
     }
 
-    fn pane_rect(&self, pane_id: &str) -> Option<(u64, u64)> {
+    fn pane_layout(&self, pane_id: &str) -> Option<Vec<PaneGeom>> {
         let v = self.call(&["pane", "layout", "--pane", pane_id]).ok()?;
-        let result = v.get("result")?;
-        let panes = match result {
-            Value::Array(a) => a.clone(),
-            Value::Object(o) => match o.get("panes") {
-                Some(Value::Array(a)) => a.clone(),
-                _ => vec![result.clone()],
-            },
-            _ => return None,
-        };
-        let entry = panes
-            .iter()
-            .find(|p| p.get("pane_id").and_then(Value::as_str) == Some(pane_id))
-            .or_else(|| panes.first())?;
-        let rect = entry.get("rect")?;
-        let w = rect.get("width")?.as_u64()?;
-        let h = rect.get("height")?.as_u64()?;
-        Some((w, h))
+        extract_pane_layout(&v)
     }
 
     fn pane_split(&self, pane_id: &str, direction: &str, cwd: &Path) -> Result<String, String> {
@@ -443,6 +597,13 @@ impl Herdr for RealHerdr {
             .and_then(Value::as_str)
             .map(str::to_string)
             .ok_or_else(|| "herdr pane split: missing result.pane.pane_id".to_string())
+    }
+
+    fn tab_create(&self, workspace: &str, cwd: &Path, label: &str) -> Result<String, String> {
+        let cwd_str = cwd.display().to_string();
+        let v = self.call(&["tab", "create", "--workspace", workspace, "--cwd", &cwd_str, "--label", label])?;
+        extract_tab_create_root_pane(&v)
+            .ok_or_else(|| "herdr tab create: missing result.root_pane.pane_id".to_string())
     }
 
     fn pane_run(&self, pane_id: &str, command: &str) -> Result<(), String> {
@@ -495,8 +656,18 @@ impl Herdr for RealHerdr {
         self.call(&["pane", "close", pane_id]).map(|_| ())
     }
 
-    fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String> {
-        self.call(&["agent", "prompt", job_id, prompt]).map(|_| ())
+    fn agent_prompt(&self, job_id: &str, prompt: &str, until: &str, timeout_ms: u64) -> Result<(), String> {
+        let timeout = timeout_ms.to_string();
+        self.call(&["agent", "prompt", job_id, prompt, "--wait", "--until", until, "--timeout", &timeout])
+            .map(|_| ())
+    }
+
+    fn agent_wait(&self, job_id: &str, timeout_ms: u64) -> Option<String> {
+        let timeout = timeout_ms.to_string();
+        let v = self
+            .call(&["agent", "wait", job_id, "--until", "idle", "--until", "done", "--timeout", &timeout])
+            .ok()?;
+        extract_agent_wait_status(&v)
     }
 
     fn pane_alive(&self, pane_id: &str) -> bool {
@@ -584,6 +755,94 @@ fn split_direction(width: u64, height: u64) -> &'static str {
     }
 }
 
+/// Below this width a submitted prompt never lands, not merely renders
+/// oddly: herdr's own `agent prompt --wait` returns `agent_prompt_stalled`
+/// before the agent ever processes it. hps-13: this guards the pane the
+/// WORKER actually gets — the resulting CHILD of a split, never the parent
+/// being split (hps-12 originally checked the parent, the wrong side of a
+/// `--ratio 0.5` split, where the child is only half the parent's width).
+/// Evidence, not taste — live 2026-08-21, tab root 120x43, three concurrent
+/// `execute_new` spawns: the first split produced a 60-column child that
+/// carried a full `agy` round to a written ack and result file, end to end;
+/// the other two, splitting an already-halved 60-wide sibling, produced
+/// 30-column children and BOTH died mid-submission with herdr's
+/// `agent_prompt_stalled` ("agent prompt produced no observed state change
+/// within 5000 ms; status is idle"). 60 is the last width this evidence
+/// proves works; 30 is the first it proves stalls; the boundary between
+/// them is UNMEASURED, so the minimum takes the known-good value rather
+/// than a guess in that gap.
+const MIN_PANE_WIDTH: u64 = 60;
+
+/// hps-12/hps-13: `None` when `resulting_child_width` is workable,
+/// `Some(message)` naming the parent pane, the width its split-off child
+/// would land at, the minimum, and the remedy when it is not. Pure —
+/// called BEFORE `pane_split`, so a refused split creates no pane and
+/// starts no agent (the caller still has a fresh-tab fallback to try
+/// first, hps-13 — this alone is never the final word).
+fn narrow_pane_refusal(pane_id: &str, resulting_child_width: u64) -> Option<String> {
+    if resulting_child_width >= MIN_PANE_WIDTH {
+        return None;
+    }
+    Some(format!(
+        "splitting pane {pane_id} would leave the new child pane {resulting_child_width} columns wide, below \
+         the {MIN_PANE_WIDTH}-column minimum a worker needs to render its own prompts and accept submissions"
+    ))
+}
+
+/// The resolved split parent: which pane to split, which direction
+/// (`role-dispatch.md` §8), and whether ITS RESULTING CHILD is too narrow
+/// to work (hps-13: the guard moved to the child side of the split).
+struct SplitParent {
+    pane_id: String,
+    direction: &'static str,
+    refusal: Option<String>,
+}
+
+/// hps-12: chooses the ROOMIEST pane in the caller's own tab as the split
+/// parent, not always the caller's own — under fan-out, always splitting
+/// the caller's own pane halves the same pane repeatedly (three concurrent
+/// spawns from one 120-column tab produced 60/30/15, live 2026-08-21).
+/// Picking the largest-area pane instead turns that into 60/30/30 and keeps
+/// degrading gracefully as more spawns land.
+///
+/// hps-13: the width guard now checks the RESULTING CHILD's width, not the
+/// chosen parent's own — with `--ratio 0.5`, a "right" split (wider-than-tall
+/// parent, `split_direction`) halves the width, so the parent needs TWICE
+/// `MIN_PANE_WIDTH` to clear it; a "down" split leaves width unchanged, so
+/// the parent's own width is already the child's.
+///
+/// Pure, over an already-parsed pane list: `panes` is `None` when the
+/// layout could not be read at all, and both the parent choice and the
+/// width refusal fail OPEN to `own_pane` in that case — the same fail-open
+/// habit the geometry read always had. An empty (or candidate-less) list
+/// falls back the same way. Ties over area break toward the LAST entry
+/// (`Iterator::max_by_key`'s own rule) — an arbitrary but deterministic
+/// choice, since herdr's own list order carries no other meaning here.
+fn resolve_split_parent(panes: Option<&[PaneGeom]>, own_pane: &str) -> SplitParent {
+    let chosen = panes.and_then(|list| list.iter().max_by_key(|p| p.width.saturating_mul(p.height)));
+    match chosen {
+        Some(p) => {
+            let direction = split_direction(p.width, p.height);
+            let resulting_child_width = if direction == "right" { p.width / 2 } else { p.width };
+            SplitParent {
+                pane_id: p.pane_id.clone(),
+                direction,
+                refusal: narrow_pane_refusal(&p.pane_id, resulting_child_width),
+            }
+        }
+        None => SplitParent { pane_id: own_pane.to_string(), direction: "right", refusal: None },
+    }
+}
+
+/// The workspace half of a herdr pane id (`"w4:p31"` → `"w4"`, herdr's own
+/// colon-separated shape) — hps-13's `tab_create` fallback hands herdr the
+/// SAME workspace the caller's own pane already reports, never a guessed
+/// one. Falls back to the whole id on the (never-observed) shape without a
+/// colon, rather than panicking over a herdr id format change.
+fn pane_workspace(pane_id: &str) -> &str {
+    pane_id.split(':').next().unwrap_or(pane_id)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PollDecision {
     Continue,
@@ -592,6 +851,9 @@ enum PollDecision {
     TimedOutCeiling,
     PausedLimit,
     Died { pid: Option<u32> },
+    /// D3: herdr reported `blocked` this tick — ends the wait at once,
+    /// ahead of the idle timeout and the ceiling.
+    Blocked,
 }
 
 /// The whole D5 timing rule, pure: a result already present short-circuits
@@ -646,6 +908,8 @@ struct PollTick {
     heartbeat_fresh: bool,
     pane_text: Option<String>,
     liveness: Option<Liveness>,
+    /// D3: this tick observed herdr's `blocked` status.
+    blocked: bool,
 }
 
 /// The loop `decide_poll` drives: sleep, observe, decide, repeat until a
@@ -670,6 +934,9 @@ fn run_poll_loop(
         let heartbeat_already_stale = tick_now_ms.saturating_sub(last_heartbeat_ms)
             >= (idle_timeout_secs as i64).saturating_mul(1000);
         let observed = tick(heartbeat_already_stale);
+        if observed.blocked && !observed.result_ready {
+            return PollDecision::Blocked;
+        }
         if observed.heartbeat_fresh {
             last_heartbeat_ms = tick_now_ms;
         }
@@ -734,6 +1001,30 @@ fn is_pane_busy_error(e: &str) -> bool {
     e.contains("agent_pane_busy") || e.contains("not an available shell")
 }
 
+/// herding-prompt-stall D1: herdr's own five-second stall detector — a
+/// prompt sent from a non-`working` state that produces no observed
+/// lifecycle change within the `--timeout` window comes back
+/// `agent_prompt_stalled` instead of herdr waiting indefinitely. Mirrors
+/// `is_pane_busy_error`'s house style: a small predicate over herdr's error
+/// string, so the caller can branch a stall away from an ordinary transport
+/// error.
+fn is_agent_prompt_stalled(e: &str) -> bool {
+    e.contains("agent_prompt_stalled")
+}
+
+/// herding-prompt-stall D1/D4 (hps-11): herdr's OTHER `agent prompt --wait`
+/// failure shape — the submission itself landed (herdr's own five-second
+/// stall detector did not fire), only the state did not settle inside
+/// bee's `--timeout` window. Distinct from `is_agent_prompt_stalled`: a
+/// stall means no submission was observed at all, a timeout means one WAS
+/// made. Mirrors `is_agent_prompt_stalled`'s house style — a small
+/// substring predicate over herdr's error string — captured live from
+/// `{"error":{"code":"timeout","message":"timed out waiting for agent
+/// status"}}`.
+fn is_agent_prompt_timeout(e: &str) -> bool {
+    e.contains("\"code\":\"timeout\"") || e.contains("timed out waiting for agent status")
+}
+
 fn start_with_retry(
     start: &mut dyn FnMut() -> Result<(), String>,
     sleep: &mut dyn FnMut(Duration),
@@ -754,56 +1045,240 @@ fn start_with_retry(
     Err(format!("{last} (after {START_RETRY_ATTEMPTS} start attempts, shell never became available)"))
 }
 
-/// herding-run-ready-wait D1: polls `status()` until the agent reports
-/// `idle` (ready for input) or the ready-wait ceiling passes. Check-then-sleep:
-/// an agent already idle is accepted with zero sleeps, and a 0-second ceiling
-/// with no status is exhausted immediately — both drive the tests without a
-/// real clock. Ready gate is idle-only: booting or working agents are not ready.
-///
-/// herding-receipt-state D1: sends the one-line pointer and treats it as
-/// delivered only when the AGENT'S STATE confirms receipt — an agent-caused
-/// transition into `working` (baseline != "working" observed transitioning to
-/// "working"), or the round's result file appears (an ultra-fast round can
-/// finish before a status poll sees "working"). 'done' was dropped because a
-/// stale done from a prior round is not evidence this round's pointer arrived.
-/// Pane text is no receipt: the pane echoes the send's own keystrokes during
-/// agent boot (live smoke smoke-agy-delivery-1/-2: the echoed pointer satisfied
-/// the old needle check ~6s after spawn, the booting TUI then discarded the
-/// buffered input, and the run waited on a brief no agent ever saw). An agent
-/// that does not transition to working after a per-attempt watch window gets a
-/// resend; the pointer is idempotent (read the same file), so a duplicate
-/// delivery is harmless. Bounded attempts; injected wait seam, same style as
-/// the other loops.
-const POINTER_DELIVERY_ATTEMPTS: u32 = 30;
-/// Status polls after each send before the next resend (~2s at
-/// `POLL_INTERVAL`): live smoke shows a real accepted prompt flips agy to
-/// working ("Generating") within about a second.
-const RECEIPT_POLLS_PER_ATTEMPT: u32 = 10;
+/// herdr's `agent_prompt --wait --until working --timeout` window
+/// (herding-prompt-stall D1, raised by hps-11): setting this to EXACTLY
+/// herdr's own five-second stall detector gave the wait no room at all —
+/// bee's own client-side deadline and herdr's internal detector raced for
+/// the same instant, so bee's deadline routinely won and bee saw a bare
+/// `{"error":{"code":"timeout",...}}` before herdr's detector ever got to
+/// fire (or the agent got to settle). Captured live on a healthy pane:
+/// `--timeout 5000` returned `timeout`; `--timeout 20000` on the SAME pane
+/// returned a `working` observation and the brief landed. Comfortably
+/// above herdr's 5s window, not padding it further.
+const AGENT_PROMPT_TIMEOUT_MS: u64 = 20_000;
 
+/// herding-prompt-stall D4 (hps-6 narrows the cadence, decisions unchanged):
+/// how many times the idempotent pointer is (re)sent while the agent keeps
+/// returning to a ready state (`idle`/`done`) with neither the round's ack
+/// file nor its result file present — bounded, mirroring
+/// `START_RETRY_ATTEMPTS`'s house style, never an infinite resend loop. This
+/// bound is NEVER consumed by a healthy `working` agent: polling a `working`
+/// agent burns no resend attempts at all, only wall-clock time against
+/// `ACK_WAIT_BUDGET_SECS` below.
+const DELIVERY_RESEND_ATTEMPTS: u32 = 10;
+
+/// hps-6: the wall-clock ceiling on the WHOLE delivery wait, from the first
+/// send to the ack (or result) appearing — about how long a slow first agent
+/// turn takes to read a brief and write its ack, never about how fast the
+/// poll ticks. Deliberately well under `DEFAULT_IDLE_TIMEOUT_SECS` (900s): a
+/// delivery that is still unacked this far in is a stuck submission, not a
+/// slow worker, and should fail as `NeverAcked` long before the round's own
+/// idle timeout would ever fire.
+const ACK_WAIT_BUDGET_SECS: u64 = 180;
+
+/// hps-6: which of `deliver_pointer`'s two independent bounds ran out —
+/// named so `DeliveryError::NeverAcked`'s message tells the two apart
+/// instead of leaving the reader to guess which one fired.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NeverAckedBound {
+    /// The agent kept returning to `idle`/`done` with no ack, and the
+    /// pointer was resent `DELIVERY_RESEND_ATTEMPTS` times.
+    ResendAttempts,
+    /// The wall-clock `ACK_WAIT_BUDGET_SECS` window elapsed — whether the
+    /// agent was still `working`, flapping ready/working, or unreadable.
+    AckWaitBudget,
+}
+
+/// herding-prompt-stall D1/D3: the delivery outcomes `deliver_pointer` can
+/// return, kept distinct because each gets its own message and neither ever
+/// triggers a resend loop.
+#[derive(Debug)]
+enum DeliveryError {
+    /// D3: the pane already reported `blocked` (an approval or question UI)
+    /// before the pointer was ever sent.
+    Blocked,
+    /// An ordinary herdr-call failure, unrelated to the agent's lifecycle
+    /// (herdr missing, a non-zero exit, an unparseable body).
+    Transport(String),
+    /// hps-6: one of the two bounds above ran out and neither the round's
+    /// ack file nor its result file ever appeared — herdr's own lifecycle
+    /// state (a successful "working" observation) is never enough on its
+    /// own any more.
+    NeverAcked { bound: NeverAckedBound, attempts: u32 },
+    /// D6 (hps-14): the resend bound ran out and EVERY send inside it came
+    /// back `agent_prompt_stalled` — herdr never observed so much as a
+    /// lifecycle change, let alone an ack. Kept distinct from `NeverAcked`:
+    /// that variant means the agent took the text and never confirmed it;
+    /// this one means the agent never took the text at all.
+    NeverDelivered { attempts: u32 },
+}
+
+impl std::fmt::Display for DeliveryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DeliveryError::Blocked => write!(
+                f,
+                "pane is blocked (herdr recognized an approval or question UI) before the prompt was ever sent"
+            ),
+            DeliveryError::Transport(e) => write!(f, "{e}"),
+            DeliveryError::NeverAcked { bound: NeverAckedBound::ResendAttempts, attempts } => write!(
+                f,
+                "resent the pointer {attempts} time(s) (the agent kept going ready with no ack) but neither the \
+                 round's ack file nor its result file ever appeared"
+            ),
+            DeliveryError::NeverAcked { bound: NeverAckedBound::AckWaitBudget, attempts } => write!(
+                f,
+                "waited past the {ACK_WAIT_BUDGET_SECS}s ack-wait budget ({attempts} send(s) made) but neither the \
+                 round's ack file nor its result file ever appeared"
+            ),
+            DeliveryError::NeverDelivered { attempts } => write!(
+                f,
+                "resent the pointer {attempts} time(s) and every submission stalled (herdr observed no lifecycle \
+                 change at all) — the agent never took the text, unlike a never-acked submission it did take"
+            ),
+        }
+    }
+}
+
+/// herding-prompt-stall D4 (narrows D1; supersedes herding-pointer-delivery
+/// D1 / herding-receipt-state D1; hps-6 narrows the cadence below, decisions
+/// unchanged): herdr's own atomic submit-and-observe — `herdr agent prompt
+/// <job> <text> --wait --until working --timeout <ms>` — still sends the
+/// pointer. `agent_prompt`'s reply now sorts into THREE outcomes, not two
+/// (hps-11). A pane already `blocked` (checked before the send is even
+/// attempted — there is no point submitting into a pane waiting on an
+/// unrelated question) still fails FAST as a hard delivery error.
+/// `agent_prompt_stalled` (no observed lifecycle change at all within
+/// herdr's own five-second window) no longer does (D6, hps-14): a stall
+/// proves the submission had not landed AT THAT INSTANT, not that it never
+/// will, so it joins the SAME bounded retry the ready-with-no-ack path
+/// below already uses instead of ending the run on the first occurrence —
+/// live evidence: a fresh, full-width pane's `agent_prompt_stalled` reply,
+/// with the IDENTICAL prompt typed by hand seconds later on that same pane
+/// delivered at once (docs/history/herding-prompt-stall/CONTEXT.md). A
+/// `timeout` reply is different: the submission WAS made, only the state did not
+/// settle inside bee's own wait window — that is not a delivery failure,
+/// so it falls straight through into the same ack poll a successful send
+/// enters, exactly like the `Ok(())` branch below with no ack yet. A
+/// successful "working" observation is no longer the receipt either way:
+/// herdr lifecycle state
+/// proved unreliable on its own (a boot flap through
+/// unknown/working/idle/done satisfied the old transition test and
+/// receipted a pointer a booting TUI discarded — live: job trust-par-2,
+/// docs/history/herding-prompt-stall/CONTEXT.md). The receipt is now the
+/// worker's OWN ack file, or the round's result file for an ultra-fast
+/// round that finishes before an ack is ever observed (`result_present()`,
+/// kept as the pre-existing escape, `ack_present()` added beside it).
+///
+/// hps-6's cadence, once a send has gone out: `working` is the HEALTHY
+/// path, so it is polled, never resent — a worker reading a ten-kilobyte
+/// brief must see exactly one send. The pointer is idempotent, so a resend
+/// only fires once the agent has gone back to a READY state (`idle`/`done`,
+/// D2's vocabulary) with STILL no ack — that is the actual signature of a
+/// submission the TUI dropped, not a slow worker. `blocked` still ends the
+/// wait at once, whether observed before the first send or mid-poll, never
+/// swallowed by another attempt; a stall (D6, hps-14) does not — it is
+/// retried under this SAME resend, sleeping the existing `POLL_INTERVAL`
+/// backoff before resending the idempotent pointer, checked against the
+/// ack and result files between attempts exactly as the ready-with-no-ack
+/// path already is, so a worker mid-write on an earlier submission is never
+/// resent into needlessly. The wait is bounded two ways —
+/// `DELIVERY_RESEND_ATTEMPTS` resends and the wall-clock
+/// `ACK_WAIT_BUDGET_SECS` — and exhausting the resend bound ends it as
+/// `NeverAcked` when at least one send got past herdr's stall detector, or
+/// as `NeverDelivered` when EVERY send in the bound stalled — distinct
+/// wording so the reader can tell "the agent never took the text" from
+/// "the agent took it and never acked".
 fn deliver_pointer(
-    job_id: &str,
     pointer: &str,
     prompt: &mut dyn FnMut(&str) -> Result<(), String>,
     status: &mut dyn FnMut() -> Option<String>,
+    ack_present: &mut dyn FnMut() -> bool,
     result_present: &mut dyn FnMut() -> bool,
     sleep: &mut dyn FnMut(Duration),
-) -> Result<(), String> {
-    let _ = job_id;
-    for _ in 1..=POINTER_DELIVERY_ATTEMPTS {
-        let baseline = status();
-        prompt(pointer).map_err(|e| format!("agent prompt failed: {e}"))?;
-        for _ in 0..RECEIPT_POLLS_PER_ATTEMPT {
-            if (baseline.as_deref() != Some("working") && status().as_deref() == Some("working"))
-                || result_present()
-            {
-                return Ok(());
+    now: &mut dyn FnMut() -> i64,
+) -> Result<(), DeliveryError> {
+    let started_ms = now();
+    let mut sends = 0u32;
+    let mut stalls = 0u32;
+    loop {
+        if status().as_deref() == Some("blocked") {
+            return Err(DeliveryError::Blocked);
+        }
+        sends += 1;
+        if sends > DELIVERY_RESEND_ATTEMPTS {
+            return Err(if stalls == DELIVERY_RESEND_ATTEMPTS {
+                DeliveryError::NeverDelivered { attempts: DELIVERY_RESEND_ATTEMPTS }
+            } else {
+                DeliveryError::NeverAcked {
+                    bound: NeverAckedBound::ResendAttempts,
+                    attempts: DELIVERY_RESEND_ATTEMPTS,
+                }
+            });
+        }
+        match prompt(pointer) {
+            Ok(()) => {
+                if ack_present() || result_present() {
+                    return Ok(());
+                }
+            }
+            Err(_) if ack_present() || result_present() => return Ok(()),
+            Err(e) if is_agent_prompt_stalled(&e) => {
+                // D6 (hps-14): a stall proves the submission had not landed
+                // AT THAT INSTANT, not that it never will — sleep the same
+                // backoff the ready-with-no-ack path already sleeps, then
+                // let the outer loop resend under the SAME bounds, never
+                // returning early here.
+                stalls += 1;
+                sleep(POLL_INTERVAL);
+                continue;
+            }
+            Err(e) if is_agent_prompt_timeout(&e) => {
+                // The submission WAS made — herdr's own stall detector
+                // never fired, only bee's wait window ran out before the
+                // state settled. Not a delivery failure: fall through into
+                // the same ack poll a successful send enters below.
+            }
+            Err(e) => return Err(DeliveryError::Transport(e)),
+        }
+
+        // Sent successfully, no ack or result yet: poll (never resend)
+        // until the ack/result appears, the pane goes blocked, the agent
+        // goes back to ready with still no ack (resend), or the wall-clock
+        // budget runs out.
+        loop {
+            if now().saturating_sub(started_ms) >= (ACK_WAIT_BUDGET_SECS as i64).saturating_mul(1000) {
+                return Err(DeliveryError::NeverAcked { bound: NeverAckedBound::AckWaitBudget, attempts: sends });
             }
             sleep(POLL_INTERVAL);
+            if ack_present() || result_present() {
+                return Ok(());
+            }
+            match status().as_deref() {
+                Some("blocked") => return Err(DeliveryError::Blocked),
+                Some("idle") | Some("done") => break, // ready again, still no ack — resend
+                _ => {}                                // working/unknown — healthy, keep polling
+            }
         }
     }
-    Err(format!(
-        "agent stayed idle through {POINTER_DELIVERY_ATTEMPTS} pointer sends — the prompt was never accepted (state receipt)"
-    ))
+}
+
+/// herding-prompt-stall D2 (narrows herding-run-ready-wait D1): polls
+/// `status()` until the agent reports `idle` OR `done` — herdr states
+/// `done` is the same underlying ready-for-input state for a tab that has
+/// not been seen in the focused UI, CLI reads never mark a tab seen, and
+/// every pane this verb splits carries `--no-focus`, so `done` is the
+/// NORMAL resting state of a bee worker pane; idle-only rejected a pane
+/// that was ready. D3: a `blocked` status ends the wait at once — the
+/// ready-wait ceiling and its sleeps are never burned on a question nobody
+/// is going to answer. Check-then-sleep: an agent already idle/done is
+/// accepted with zero sleeps, and a 0-second ceiling with no status is
+/// exhausted immediately — both drive the tests without a real clock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReadyOutcome {
+    Ready,
+    Blocked,
+    TimedOut,
 }
 
 fn wait_for_agent_ready(
@@ -812,14 +1287,16 @@ fn wait_for_agent_ready(
     mut status: impl FnMut() -> Option<String>,
     mut sleep: impl FnMut(Duration),
     mut now: impl FnMut() -> i64,
-) -> bool {
+) -> ReadyOutcome {
     let started = now();
     loop {
-        if status().as_deref() == Some("idle") {
-            return true;
+        match status().as_deref() {
+            Some("idle") | Some("done") => return ReadyOutcome::Ready,
+            Some("blocked") => return ReadyOutcome::Blocked,
+            _ => {}
         }
         if now().saturating_sub(started) >= (ready_wait_secs as i64).saturating_mul(1000) {
-            return false;
+            return ReadyOutcome::TimedOut;
         }
         sleep(poll_interval);
     }
@@ -827,6 +1304,119 @@ fn wait_for_agent_ready(
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
+}
+
+/// The last few lines of a pane's capture, for a blocked-pane error's
+/// remedy text — enough to show WHAT is being asked without dumping a full
+/// screen (reuses `Herdr::pane_read`).
+fn pane_tail(herdr: &dyn Herdr, pane_id: &str) -> String {
+    let text = herdr.pane_read(pane_id).unwrap_or_default();
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.len().saturating_sub(8);
+    lines[start..].join("\n")
+}
+
+/// D3: the one message every blocked wait point returns — names the job,
+/// the pane, shows its tail, and states the remedy. `blocked` is herdr's
+/// whole mechanism for an approval or question UI: bee carries no
+/// agent-specific trust-prompt pattern table.
+fn blocked_message(job_id: &str, pane_id: &str, tail: &str) -> String {
+    format!(
+        "job {job_id} pane {pane_id} is blocked (herdr recognized an approval or question UI) — \
+remedy: answer the prompt in pane {pane_id}, or pre-authorize whatever it is asking so the agent \
+stops asking\npane tail:\n{tail}"
+    )
+}
+
+/// hps-7 (D3, D5): upgrades a give-up wait's GENERIC message once
+/// `find_prompt_diagnosis` names a matching line — same shape as
+/// `blocked_message`: names the job and pane, quotes the matched line
+/// verbatim, states the remedy, and (hps-9) appends the same `pane_tail`
+/// `blocked_message` uses — a clipped narrow-pane capture's matched line can
+/// be a short fragment (an arrow-key nav footer, e.g.) that alone does not
+/// show what the prompt actually asked; the tail does. Diagnosis-only:
+/// called only from a path that has already decided to stop waiting, never
+/// as part of deciding whether to keep waiting.
+fn diagnosis_message(job_id: &str, pane_id: &str, matched_line: &str, generic: &str, tail: &str) -> String {
+    format!(
+        "{generic} — pane {pane_id} (job {job_id}) shows what looks like an unanswered prompt: \
+\"{matched_line}\" — remedy: answer the prompt in pane {pane_id}, or pre-authorize whatever it is \
+asking so the agent stops asking\npane tail:\n{tail}"
+    )
+}
+
+/// hps-7 (D5): the one call every give-up wait point makes on its way out,
+/// through the existing `pane_read` seam. A match upgrades `generic` via
+/// `diagnosis_message`, carrying the same `pane_tail` (hps-9) `blocked_message`
+/// uses; no match, or a failing `pane_read`, returns `generic` UNCHANGED,
+/// byte for byte — a `pane_read` failure must never turn a real timeout into
+/// a different error.
+fn diagnose_giveup(herdr: &dyn Herdr, job_id: &str, pane_id: &str, generic: String) -> String {
+    let Ok(text) = herdr.pane_read(pane_id) else { return generic };
+    match find_prompt_diagnosis(&text) {
+        Some(line) => diagnosis_message(job_id, pane_id, &line, &generic, &pane_tail(herdr, pane_id)),
+        None => generic,
+    }
+}
+
+/// hps-8 (D5): the resolved outcome of one workspace-trust pre-flight
+/// attempt. `execute_new` turns a `Warning` into one eprintln! line naming
+/// the file and what was wrong, then proceeds regardless — tests read this
+/// value directly instead of capturing stderr.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TrustPreflightOutcome {
+    /// `cwd` was already present in the trusted array — no rewrite.
+    AlreadyTrusted,
+    /// `cwd` was appended and the file rewritten.
+    Appended,
+    /// Fail-open: the file could not be read, its contents did not parse
+    /// as JSON, the declared key was missing or not an array, or the
+    /// rewritten file could not be written back.
+    Warning(String),
+}
+
+/// hps-8 (D5): pre-seeds a foreign tool's own workspace-trust store so a
+/// herd agent that gates on it (Antigravity's `agy`, e.g.) never meets its
+/// trust dialog in a brand-new `bee worktree new` directory — `bee` carries
+/// no knowledge of what the file means, only that `trust.key` names an
+/// array of trusted absolute paths inside `trust.file` (already `~`-expanded
+/// by `wave::parse_workspace_trust`). FAIL-OPEN throughout: every branch
+/// that cannot proceed returns `Warning` instead of an error, and the
+/// caller lets the run continue either way — a foreign tool's config being
+/// unreadable or unwritable must never fail a bee run. Never rewrites
+/// anything beyond appending `cwd` to the named array.
+fn preflight_workspace_trust(trust: &WorkspaceTrust, cwd: &Path) -> TrustPreflightOutcome {
+    let file = Path::new(&trust.file);
+    let raw = match std::fs::read_to_string(file) {
+        Ok(s) => s,
+        Err(e) => return TrustPreflightOutcome::Warning(format!("could not read {} ({e})", trust.file)),
+    };
+    let mut value: Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(e) => return TrustPreflightOutcome::Warning(format!("{} is not valid JSON ({e})", trust.file)),
+    };
+    let Some(obj) = value.as_object_mut() else {
+        return TrustPreflightOutcome::Warning(format!("{} is not a JSON object", trust.file));
+    };
+    let cwd_str = cwd.display().to_string();
+    match obj.get_mut(trust.key.as_str()) {
+        Some(Value::Array(paths)) => {
+            if paths.iter().any(|p| p.as_str() == Some(cwd_str.as_str())) {
+                return TrustPreflightOutcome::AlreadyTrusted;
+            }
+            paths.push(Value::String(cwd_str));
+        }
+        _ => {
+            return TrustPreflightOutcome::Warning(format!(
+                "{}: {:?} is missing or not an array",
+                trust.file, trust.key
+            ));
+        }
+    }
+    match crate::fsutil::write_json_atomic(file, &value) {
+        Ok(()) => TrustPreflightOutcome::Appended,
+        Err(e) => TrustPreflightOutcome::Warning(format!("could not write {} ({e})", trust.file)),
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -891,16 +1481,30 @@ enum RunOutcome {
     /// A result file appeared but could not be read or did not pass the
     /// mailbox schema — never a valid result.
     Malformed(String),
-    TimedOutIdle,
+    /// hps-7 (D5): carries the give-up message — `idle_timeout_message`'s
+    /// generic text, or `diagnose_giveup`'s upgrade of it when the pane
+    /// shows a matching line.
+    TimedOutIdle(String),
     TimedOutCeiling,
     PausedLimit,
     Died { pid: Option<u32> },
+    /// D3: herdr reported `blocked` during the round poll — the agent
+    /// started and received its prompt, but the pane now shows an approval
+    /// or question UI. Distinct from `SpawnFailed`: this fires mid-round,
+    /// never before dispatch.
+    PaneBlocked(String),
 }
 
 struct ExecResult {
     outcome: RunOutcome,
     pane_id: Option<String>,
     closed_pane: bool,
+}
+
+/// The round poll's idle-timeout give-up, GENERIC (hps-7): unchanged when
+/// `diagnose_giveup` finds no match on the pane, upgraded when it does.
+fn idle_timeout_message(idle_timeout_secs: u64) -> String {
+    format!("no heartbeat for {idle_timeout_secs}s (idle timeout) — pane kept for inspection")
 }
 
 fn read_result(bee_dir: &Path, job_id: &str) -> RunOutcome {
@@ -1018,8 +1622,10 @@ fn wait_for_round(
     herdr: &dyn Herdr,
 ) -> PollDecision {
     let log_file_path = mailbox::log_path(bee_dir, job_id);
+    let ack_file_path = mailbox::ack_path(bee_dir, job_id, min_round);
     let mailbox_path = mailbox::mailbox_dir(bee_dir, job_id);
     let mut last_log_mtime: Option<std::time::SystemTime> = None;
+    let mut last_ack_mtime: Option<std::time::SystemTime> = None;
     let mut tick_index: u64 = 0;
     run_poll_loop(
         started_at_ms,
@@ -1045,9 +1651,26 @@ fn wait_for_round(
                     }
                 }
             }
-            if herdr.agent_status(job_id).as_deref() == Some("working") {
+            // herding-prompt-stall D4: the worker's ack file counts as a
+            // heartbeat too, the SAME "mtime advanced since last observed"
+            // rule as log.txt above — a worker that acked and is now
+            // thinking for a long time is never read as dead off the ack
+            // alone appearing once.
+            if let Ok(meta) = std::fs::metadata(&ack_file_path) {
+                if let Ok(modified) = meta.modified() {
+                    if last_ack_mtime.map_or(true, |prev| modified > prev) {
+                        last_ack_mtime = Some(modified);
+                        heartbeat_fresh = true;
+                    }
+                }
+            }
+            // One status read serves both the heartbeat check and the
+            // blocked check (D3) — never two herdr calls for one tick.
+            let status = herdr.agent_status(job_id);
+            if status.as_deref() == Some("working") {
                 heartbeat_fresh = true;
             }
+            let blocked = status.as_deref() == Some("blocked");
             let liveness = if tick_index % 10 == 0 {
                 Some(herdr.process_info(pane_id))
             } else {
@@ -1058,7 +1681,7 @@ fn wait_for_round(
             } else {
                 None
             };
-            PollTick { result_ready, heartbeat_fresh, pane_text, liveness }
+            PollTick { result_ready, heartbeat_fresh, pane_text, liveness, blocked }
         },
         |d| std::thread::sleep(d),
         now_ms,
@@ -1078,6 +1701,8 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         bee_dir: &bee_dir,
         round: 1,
         expertise: &opts.expertise,
+        nickname: &opts.nickname,
+        cell_id: opts.cell_id.as_deref(),
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -1110,21 +1735,55 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or(Value::Null);
-    let (kind, args, env) = match resolve_agent_command(&cfg, opts.agent.as_deref()) {
-        Ok(triple) => triple,
+    let (kind, args, env, workspace_trust) = match resolve_agent_command(&cfg, opts.agent.as_deref()) {
+        Ok(quad) => quad,
         Err(e) => {
             return ExecResult { outcome: RunOutcome::SpawnFailed(e.to_string()), pane_id: None, closed_pane: false }
         }
     };
 
+    // hps-8 (D5): pre-flight BEFORE the pane split and `agent_start`, never
+    // after — a herd agent that gates on a per-workspace trust prompt
+    // (Antigravity's `agy`, e.g.) must find its own workspace already
+    // trusted the moment it boots into the freshly split pane. Fail-open:
+    // a `Warning` is reported and the run proceeds regardless.
+    if let Some(trust) = &workspace_trust {
+        if let TrustPreflightOutcome::Warning(msg) = preflight_workspace_trust(trust, &opts.cwd) {
+            eprintln!("bee herding run: workspace-trust pre-flight failed ({msg}) — proceeding anyway");
+        }
+    }
+
     let own_pane = match herdr.pane_current() {
         Ok(p) => p,
         Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
     };
-    let direction = herdr.pane_rect(&own_pane).map(|(w, h)| split_direction(w, h)).unwrap_or("right");
-    let new_pane = match herdr.pane_split(&own_pane, direction, &opts.cwd) {
-        Ok(p) => p,
-        Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
+    let layout = herdr.pane_layout(&own_pane);
+    let parent = resolve_split_parent(layout.as_deref(), &own_pane);
+    let new_pane = match parent.refusal {
+        None => match herdr.pane_split(&parent.pane_id, parent.direction, &opts.cwd) {
+            Ok(p) => p,
+            Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
+        },
+        // hps-13: no pane in the caller's tab clears the child-width guard
+        // — a refusal here would still be a sliver's fault, not a fresh
+        // tab's, so try a fresh tab FIRST and refuse only if that fails too.
+        // The new tab's root pane is used directly, with no split call at
+        // all, so the worker starts at full width.
+        Some(width_msg) => {
+            let workspace = pane_workspace(&own_pane);
+            match herdr.tab_create(workspace, &opts.cwd, &opts.job_id) {
+                Ok(p) => p,
+                Err(create_err) => {
+                    return ExecResult {
+                        outcome: RunOutcome::SpawnFailed(format!(
+                            "{width_msg}; tried opening a fresh tab instead and that failed too: {create_err}"
+                        )),
+                        pane_id: None,
+                        closed_pane: false,
+                    };
+                }
+            }
+        }
     };
 
     // D4 + herding-worker-standalone D2: the registry entry's env is
@@ -1174,19 +1833,31 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     let ready = wait_for_agent_ready(
         opts.ready_wait_secs,
         POLL_INTERVAL,
-        || herdr.agent_status(&opts.job_id),
+        || herdr.agent_wait(&opts.job_id, POLL_INTERVAL.as_millis() as u64),
         |d| std::thread::sleep(d),
         now_ms,
     );
-    if !ready {
-        return ExecResult {
-            outcome: RunOutcome::SpawnFailed(format!(
+    match ready {
+        ReadyOutcome::Ready => {}
+        ReadyOutcome::Blocked => {
+            let tail = pane_tail(herdr, &new_pane);
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(blocked_message(&opts.job_id, &new_pane, &tail)),
+                pane_id: Some(new_pane),
+                closed_pane: false,
+            };
+        }
+        ReadyOutcome::TimedOut => {
+            let generic = format!(
                 "agent never reported ready within {}s (ready-wait) — pane kept for inspection",
                 opts.ready_wait_secs
-            )),
-            pane_id: Some(new_pane),
-            closed_pane: false,
-        };
+            );
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(diagnose_giveup(herdr, &opts.job_id, &new_pane, generic)),
+                pane_id: Some(new_pane),
+                closed_pane: false,
+            };
+        }
     }
 
     // The brief body lives in brief-1.txt and the agent receives a ONE-LINE
@@ -1205,19 +1876,24 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     }
     let pointer = mailbox::pointer_prompt(&brief_file);
     let round1_result = mailbox::result_path(&bee_dir, &opts.job_id, 1);
+    let round1_ack = mailbox::ack_path(&bee_dir, &opts.job_id, 1);
     if let Err(e) = deliver_pointer(
-        &opts.job_id,
         &pointer,
-        &mut |p| herdr.agent_prompt(&opts.job_id, p),
+        &mut |p| herdr.agent_prompt(&opts.job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
         &mut || herdr.agent_status(&opts.job_id),
+        &mut || round1_ack.exists(),
         &mut || round1_result.exists(),
         &mut |d| std::thread::sleep(d),
+        &mut || now_ms(),
     ) {
-        return ExecResult {
-            outcome: RunOutcome::SpawnFailed(format!("brief prompt failed after start: {e}")),
-            pane_id: Some(new_pane),
-            closed_pane: false,
+        let msg = match &e {
+            DeliveryError::Blocked => blocked_message(&opts.job_id, &new_pane, &pane_tail(herdr, &new_pane)),
+            DeliveryError::NeverAcked { .. } | DeliveryError::NeverDelivered { .. } => {
+                diagnose_giveup(herdr, &opts.job_id, &new_pane, format!("brief prompt failed after start: {e}"))
+            }
+            _ => format!("brief prompt failed after start: {e}"),
         };
+        return ExecResult { outcome: RunOutcome::SpawnFailed(msg), pane_id: Some(new_pane), closed_pane: false };
     }
 
     record_dispatch(&opts.main_root, opts, &kind, &new_pane);
@@ -1240,13 +1916,20 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
 
     let outcome = match decision {
         PollDecision::ResultReady => read_result(&bee_dir, &opts.job_id),
-        PollDecision::TimedOutIdle => RunOutcome::TimedOutIdle,
+        PollDecision::TimedOutIdle => {
+            let generic = idle_timeout_message(opts.idle_timeout_secs);
+            RunOutcome::TimedOutIdle(diagnose_giveup(herdr, &opts.job_id, &new_pane, generic))
+        }
         PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
         PollDecision::PausedLimit => {
             stamp_paused_limit(&bee_dir, &opts.job_id, herdr, &new_pane);
             RunOutcome::PausedLimit
         }
         PollDecision::Died { pid } => RunOutcome::Died { pid },
+        PollDecision::Blocked => {
+            let tail = pane_tail(herdr, &new_pane);
+            RunOutcome::PaneBlocked(blocked_message(&opts.job_id, &new_pane, &tail))
+        }
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
@@ -1350,19 +2033,24 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         };
 
         // 1b. Deliver resume nudge through standard deliver_pointer path
+        let round_ack = mailbox::ack_path(&bee_dir, job_id, resume_round);
         if let Err(e) = deliver_pointer(
-            job_id,
             &pointer,
-            &mut |p| herdr.agent_prompt(job_id, p),
+            &mut |p| herdr.agent_prompt(job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
             &mut || herdr.agent_status(job_id),
+            &mut || round_ack.exists(),
             &mut || round_result.exists(),
             &mut |d| std::thread::sleep(d),
+            &mut || now_ms(),
         ) {
-            return ExecResult {
-                outcome: RunOutcome::SpawnFailed(format!("agent prompt failed: {e}")),
-                pane_id: Some(pane_id),
-                closed_pane: false,
+            let msg = match &e {
+                DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
+                DeliveryError::NeverAcked { .. } | DeliveryError::NeverDelivered { .. } => {
+                    diagnose_giveup(herdr, job_id, &pane_id, format!("agent prompt failed: {e}"))
+                }
+                _ => format!("agent prompt failed: {e}"),
             };
+            return ExecResult { outcome: RunOutcome::SpawnFailed(msg), pane_id: Some(pane_id), closed_pane: false };
         }
 
         // On delivered: rewrite job.json WITHOUT paused_limit_at/limit_reset_hint (atomic)
@@ -1390,13 +2078,20 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
 
         let outcome = match decision {
             PollDecision::ResultReady => read_result(&bee_dir, job_id),
-            PollDecision::TimedOutIdle => RunOutcome::TimedOutIdle,
+            PollDecision::TimedOutIdle => {
+                let generic = idle_timeout_message(opts.idle_timeout_secs);
+                RunOutcome::TimedOutIdle(diagnose_giveup(herdr, job_id, &pane_id, generic))
+            }
             PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
             PollDecision::PausedLimit => {
                 stamp_paused_limit(&bee_dir, job_id, herdr, &pane_id);
                 RunOutcome::PausedLimit
             }
             PollDecision::Died { pid } => RunOutcome::Died { pid },
+            PollDecision::Blocked => {
+                let tail = pane_tail(herdr, &pane_id);
+                RunOutcome::PaneBlocked(blocked_message(job_id, &pane_id, &tail))
+            }
             PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
         };
 
@@ -1454,6 +2149,8 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         bee_dir: &bee_dir,
         round: next_round,
         expertise: &expertise,
+        nickname: &opts.nickname,
+        cell_id: opts.cell_id.as_deref(),
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -1481,19 +2178,24 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     }
     let pointer = mailbox::pointer_prompt(&brief_file);
     let round_result = mailbox::result_path(&bee_dir, job_id, next_round);
+    let round_ack = mailbox::ack_path(&bee_dir, job_id, next_round);
     if let Err(e) = deliver_pointer(
-        job_id,
         &pointer,
-        &mut |p| herdr.agent_prompt(job_id, p),
+        &mut |p| herdr.agent_prompt(job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
         &mut || herdr.agent_status(job_id),
+        &mut || round_ack.exists(),
         &mut || round_result.exists(),
         &mut |d| std::thread::sleep(d),
+        &mut || now_ms(),
     ) {
-        return ExecResult {
-            outcome: RunOutcome::SpawnFailed(format!("agent prompt failed: {e}")),
-            pane_id: Some(pane_id),
-            closed_pane: false,
+        let msg = match &e {
+            DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
+            DeliveryError::NeverAcked { .. } | DeliveryError::NeverDelivered { .. } => {
+                diagnose_giveup(herdr, job_id, &pane_id, format!("agent prompt failed: {e}"))
+            }
+            _ => format!("agent prompt failed: {e}"),
         };
+        return ExecResult { outcome: RunOutcome::SpawnFailed(msg), pane_id: Some(pane_id), closed_pane: false };
     }
 
     let kind = job_value.get("kind").and_then(Value::as_str).unwrap_or("unknown").to_string();
@@ -1528,13 +2230,20 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
 
     let outcome = match decision {
         PollDecision::ResultReady => read_result(&bee_dir, job_id),
-        PollDecision::TimedOutIdle => RunOutcome::TimedOutIdle,
+        PollDecision::TimedOutIdle => {
+            let generic = idle_timeout_message(opts.idle_timeout_secs);
+            RunOutcome::TimedOutIdle(diagnose_giveup(herdr, job_id, &pane_id, generic))
+        }
         PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
         PollDecision::PausedLimit => {
             stamp_paused_limit(&bee_dir, job_id, herdr, &pane_id);
             RunOutcome::PausedLimit
         }
         PollDecision::Died { pid } => RunOutcome::Died { pid },
+        PollDecision::Blocked => {
+            let tail = pane_tail(herdr, &pane_id);
+            RunOutcome::PaneBlocked(blocked_message(job_id, &pane_id, &tail))
+        }
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
@@ -1565,10 +2274,11 @@ fn outcome_label(o: &RunOutcome) -> &'static str {
             MailboxStatus::Blocked => "blocked",
         },
         RunOutcome::Malformed(_) => "malformed_result",
-        RunOutcome::TimedOutIdle => "timed_out_idle",
+        RunOutcome::TimedOutIdle(_) => "timed_out_idle",
         RunOutcome::TimedOutCeiling => "timed_out_ceiling",
         RunOutcome::PausedLimit => "paused_limit",
         RunOutcome::Died { .. } => "died",
+        RunOutcome::PaneBlocked(_) => "pane_blocked",
     }
 }
 
@@ -1600,7 +2310,7 @@ fn emit_result(opts: &Options, result: &ExecResult) {
                 );
                 m.insert("proof".into(), Value::String(r.proof.clone()));
             }
-            RunOutcome::SpawnFailed(msg) | RunOutcome::Malformed(msg) => {
+            RunOutcome::SpawnFailed(msg) | RunOutcome::Malformed(msg) | RunOutcome::PaneBlocked(msg) => {
                 m.insert("error".into(), Value::String(msg.clone()));
             }
             RunOutcome::ContinueRefused(refusal) => {
@@ -1620,7 +2330,10 @@ fn emit_result(opts: &Options, result: &ExecResult) {
                     m.insert("pid".into(), Value::from(*p));
                 }
             }
-            RunOutcome::TimedOutIdle | RunOutcome::TimedOutCeiling | RunOutcome::PausedLimit => {}
+            RunOutcome::TimedOutIdle(msg) => {
+                m.insert("error".into(), Value::String(msg.clone()));
+            }
+            RunOutcome::TimedOutCeiling | RunOutcome::PausedLimit => {}
         }
         println!("{}", Value::Object(m));
     } else {
@@ -1659,6 +2372,138 @@ mod tests {
         assert_eq!(split_direction(173, 50), "right");
         assert_eq!(split_direction(50, 50), "right");
         assert_eq!(split_direction(40, 100), "down");
+    }
+
+    // ─── hps-12/hps-13: roomiest-pane split parent + child-side width guard ───
+
+    #[test]
+    fn resolve_split_parent_chooses_the_largest_area_pane_even_when_its_child_would_be_too_narrow() {
+        // Shaped like the live 60/30/15 measurement: caller's own pane
+        // (w1:p1) has already been halved down to 30, a sibling (w1:p2) is
+        // still the roomiest at 60 — but hps-13's live probe proved a
+        // 60-wide parent's "right" split (a 30-wide child) stalls every
+        // submission, so the CHOSEN parent is still w1:p2, only now it
+        // refuses (the child-width guard, not the old parent-width one).
+        let panes = vec![
+            PaneGeom { pane_id: "w1:p1".to_string(), width: 30, height: 43 },
+            PaneGeom { pane_id: "w1:p2".to_string(), width: 60, height: 43 },
+            PaneGeom { pane_id: "w1:p3".to_string(), width: 15, height: 43 },
+        ];
+        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        assert_eq!(parent.pane_id, "w1:p2");
+        assert_eq!(parent.direction, "right");
+        let msg = parent.refusal.expect("a 60-wide parent's right-split child is only 30 columns, below the minimum");
+        assert!(msg.contains("w1:p2"), "{msg}");
+        assert!(msg.contains("30"), "{msg}");
+    }
+
+    #[test]
+    fn resolve_split_parent_accepts_a_parent_roomy_enough_that_its_right_split_child_still_clears_the_minimum() {
+        // The live D5 shape: a 120x43 tab root. A "right" split halves the
+        // width to exactly 60 — the minimum, workable.
+        let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 120, height: 43 }];
+        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        assert_eq!(parent.direction, "right");
+        assert!(parent.refusal.is_none(), "a 60-column right-split child is workable: {:?}", parent.refusal);
+    }
+
+    #[test]
+    fn resolve_split_parent_a_down_split_never_narrows_so_the_parents_own_width_is_the_guard() {
+        // Taller-than-wide: `split_direction` picks "down", which leaves
+        // width unchanged — the child is exactly as wide as the parent, so
+        // a 60-wide-but-tall parent is workable with no halving penalty.
+        let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 60, height: 90 }];
+        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        assert_eq!(parent.direction, "down");
+        assert!(parent.refusal.is_none(), "a down split keeps width unchanged: {:?}", parent.refusal);
+    }
+
+    #[test]
+    fn resolve_split_parent_falls_back_to_own_pane_when_the_layout_is_unreadable() {
+        let parent = resolve_split_parent(None, "w1:p1");
+        assert_eq!(parent.pane_id, "w1:p1");
+        assert_eq!(parent.direction, "right");
+        assert!(parent.refusal.is_none(), "an unreadable layout must never refuse: {:?}", parent.refusal);
+    }
+
+    #[test]
+    fn resolve_split_parent_falls_back_to_own_pane_when_the_layout_names_no_candidate() {
+        let parent = resolve_split_parent(Some(&[]), "w1:p1");
+        assert_eq!(parent.pane_id, "w1:p1");
+        assert!(parent.refusal.is_none());
+    }
+
+    #[test]
+    fn resolve_split_parent_refuses_a_parent_below_the_minimum_width_naming_it() {
+        let panes = vec![PaneGeom { pane_id: "w1:p3".to_string(), width: 15, height: 43 }];
+        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        assert_eq!(parent.pane_id, "w1:p3");
+        let msg = parent.refusal.expect("15 columns is below the minimum and must refuse");
+        assert!(msg.contains("w1:p3"), "{msg}");
+        assert!(msg.contains("15"), "{msg}");
+        assert!(msg.contains("60"), "{msg}");
+    }
+
+    #[test]
+    fn narrow_pane_refusal_is_none_at_and_above_the_minimum() {
+        assert!(narrow_pane_refusal("w1:p1", 60).is_none());
+        assert!(narrow_pane_refusal("w1:p1", 120).is_none());
+    }
+
+    #[test]
+    fn extract_pane_layout_reads_the_captured_live_reply() {
+        // Captured from `herdr pane layout --pane w4:p4` against a clean
+        // tab whose only pane was 120x43.
+        let body = r#"{"result":{"layout":{"tab_id":"w4:t4","panes":[{"pane_id":"w4:p4","rect":{"height":43,"width":120,"x":36,"y":1}}],"splits":[]}}}"#;
+        let v: Value = serde_json::from_str(body).unwrap();
+        let panes = extract_pane_layout(&v).expect("captured reply parses");
+        assert_eq!(panes, vec![PaneGeom { pane_id: "w4:p4".to_string(), width: 120, height: 43 }]);
+    }
+
+    #[test]
+    fn extract_pane_layout_reads_multiple_sibling_panes() {
+        let body = r#"{"result":{"layout":{"tab_id":"w4:t4","panes":[
+            {"pane_id":"w4:p1","rect":{"height":43,"width":30,"x":0,"y":1}},
+            {"pane_id":"w4:p2","rect":{"height":43,"width":60,"x":30,"y":1}}
+        ],"splits":[]}}}"#;
+        let v: Value = serde_json::from_str(body).unwrap();
+        let panes = extract_pane_layout(&v).expect("captured reply parses");
+        assert_eq!(panes.len(), 2);
+        assert_eq!(panes[1].pane_id, "w4:p2");
+        assert_eq!(panes[1].width, 60);
+    }
+
+    #[test]
+    fn extract_pane_layout_is_none_on_the_old_shallow_path_without_the_layout_wrapper() {
+        // Guards against regressing to the shape this cell fixed: `panes`
+        // sitting straight under `result` (one level too shallow) must not
+        // be picked up.
+        let v: Value = serde_json::from_str(
+            r#"{"result":{"panes":[{"pane_id":"w4:p4","rect":{"height":43,"width":120}}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(extract_pane_layout(&v), None);
+    }
+
+    #[test]
+    fn extract_tab_create_root_pane_reads_the_captured_live_reply() {
+        // Captured from `herdr tab create --workspace w4 --cwd <path>
+        // --label bee-probe`, trimmed.
+        let body = r#"{"id":"cli:tab:create","result":{"root_pane":{"pane_id":"w4:p31","cwd":"<path>","tab_id":"w4:tE","workspace_id":"w4"},"tab":{"tab_id":"w4:tE"}}}"#;
+        let v: Value = serde_json::from_str(body).unwrap();
+        assert_eq!(extract_tab_create_root_pane(&v), Some("w4:p31".to_string()));
+    }
+
+    #[test]
+    fn extract_tab_create_root_pane_is_none_when_root_pane_is_missing() {
+        let v: Value = serde_json::from_str(r#"{"result":{"tab":{"tab_id":"w4:tE"}}}"#).unwrap();
+        assert_eq!(extract_tab_create_root_pane(&v), None);
+    }
+
+    #[test]
+    fn pane_workspace_splits_at_the_first_colon() {
+        assert_eq!(pane_workspace("w4:p31"), "w4");
+        assert_eq!(pane_workspace("no-colon"), "no-colon");
     }
 
     #[test]
@@ -1731,7 +2576,7 @@ mod tests {
             Duration::from_millis(0),
             |_| {
                 ticks += 1;
-                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None }
+                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false }
             },
             |_| {},
             || {
@@ -1751,7 +2596,7 @@ mod tests {
             5,
             3_600,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None },
+            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false },
             |_| {},
             || {
                 clock += 1_000;
@@ -1769,7 +2614,7 @@ mod tests {
             3_600,
             5,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None },
+            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None, blocked: false },
             |_| {},
             || {
                 clock += 1_000;
@@ -1795,6 +2640,7 @@ mod tests {
                     heartbeat_fresh: flags.len() <= 2,
                     pane_text: None,
                     liveness: None,
+                    blocked: false,
                 }
             },
             |_| {},
@@ -1807,12 +2653,165 @@ mod tests {
         assert_eq!(flags, vec![false, false, false, false, false, false, true]);
     }
 
+    #[test]
+    fn run_poll_loop_ends_at_once_on_a_blocked_tick_without_burning_the_idle_timeout() {
+        // D3: a blocked observation ends the round poll immediately — a
+        // huge idle timeout and ceiling are never burned on a question
+        // nobody is going to answer.
+        let mut ticks = 0u32;
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            900,
+            21_600,
+            Duration::from_millis(0),
+            |_| {
+                ticks += 1;
+                PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true }
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::Blocked);
+        assert_eq!(ticks, 1, "blocked ends the wait on the very first tick");
+    }
+
+    #[test]
+    fn run_poll_loop_lets_a_same_tick_result_win_over_blocked() {
+        // A completed round already trumps a stale/simultaneous blocked
+        // read — the work finished, so ResultReady wins.
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            900,
+            21_600,
+            Duration::from_millis(0),
+            |_| PollTick { result_ready: true, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::ResultReady);
+    }
+
+    // ─── hps-7: prompt diagnosis, pure (D5) ────────────────────────────
+
+    #[test]
+    fn find_prompt_diagnosis_finds_a_short_hint_line_that_survives_clipping_where_the_question_would_not() {
+        // The live acceptance probe's exact shape: an eight-column-wide
+        // capture clips the question itself down to unmatchable fragments,
+        // but a short confirmation hint on its OWN line needs no clipping
+        // margin at all and still lands whole.
+        let clipped_pane = "Do you t\nrust wor\n(y/n)\n";
+        assert!(
+            !clipped_pane.to_lowercase().contains("do you trust this folder"),
+            "the clipped capture must not contain the long needle — that is the whole premise"
+        );
+        assert_eq!(find_prompt_diagnosis(clipped_pane), Some("(y/n)".to_string()));
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_matches_the_navigation_arrows() {
+        assert_eq!(find_prompt_diagnosis("choose one:\n↑/↓ to move, enter to select\n"), Some("↑/↓ to move, enter to select".to_string()));
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_matches_a_selection_caret() {
+        assert_eq!(find_prompt_diagnosis("  yes\n❯ no\n"), Some("❯ no".to_string()));
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_matches_a_line_ending_in_a_question_mark() {
+        assert_eq!(find_prompt_diagnosis("some banner\nContinue anyway?\n"), Some("Continue anyway?".to_string()));
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_is_case_insensitive_on_its_pattern_table() {
+        assert_eq!(find_prompt_diagnosis("Overwrite the file [Y/n]\n"), Some("Overwrite the file [Y/n]".to_string()));
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_returns_none_on_ordinary_output() {
+        assert_eq!(find_prompt_diagnosis("compiling…\nrunning tests\nall green\n"), None);
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_returns_none_on_empty_text() {
+        assert_eq!(find_prompt_diagnosis(""), None);
+    }
+
+    // ─── hps-10: real herdr reply parsing, no process spawned ───────────
+    //
+    // These feed bodies captured live from a real `herdr` binary through
+    // the exact extraction `RealHerdr` uses, so a parse bug (like the one
+    // that shipped here — `agent_wait` reading `result.agent_status`
+    // instead of `result.agent.agent_status`) fails a test instead of
+    // hanging every `bee herding run` for 60s. `FakeHerdr::agent_wait`
+    // below returns whatever a test configures, so it exercises the seam,
+    // never the parse — these are the only tests that do.
+
+    #[test]
+    fn extract_agent_wait_status_reads_the_captured_live_reply() {
+        // Captured from `herdr agent wait accept-solo-1 --until idle
+        // --until done --timeout 200` against a real, healthy pane.
+        let body = r#"{"id":"cli:agent:wait","result":{"agent":{"agent":"agy","agent_status":"done","interactive_ready":true,"name":"accept-solo-1","pane_id":"w4:p2J"},"type":"agent_info"}}"#;
+        let v: Value = serde_json::from_str(body).expect("captured reply is valid JSON");
+        assert_eq!(extract_agent_wait_status(&v), Some("done".to_string()));
+    }
+
+    #[test]
+    fn extract_agent_wait_status_is_none_when_the_status_is_missing() {
+        let v: Value = serde_json::from_str(r#"{"id":"cli:agent:wait","result":{"agent":{"name":"accept-solo-1"}}}"#).unwrap();
+        assert_eq!(extract_agent_wait_status(&v), None);
+    }
+
+    #[test]
+    fn extract_agent_wait_status_is_none_on_the_old_wrong_shallow_path() {
+        // Guards against regressing to the shape this cell fixed: a status
+        // sitting at `result.agent_status` (one level too shallow) must
+        // NOT be picked up by the real extraction.
+        let v: Value = serde_json::from_str(r#"{"result":{"agent_status":"done"}}"#).unwrap();
+        assert_eq!(extract_agent_wait_status(&v), None);
+    }
+
+    #[test]
+    fn parse_herdr_body_accepts_the_captured_agent_prompt_success_envelope() {
+        // Captured from `herdr agent prompt <job> <text> --wait --until
+        // working --timeout 5000` against a real, healthy pane.
+        let body = br#"{"id":"cli:agent:prompt","result":{"agent":{"agent":"agy","agent_status":"working","name":"accept-solo-1"},"type":"agent_info"}}"#;
+        assert!(parse_herdr_body("agent prompt", body).is_ok());
+    }
+
+    #[test]
+    fn parse_herdr_body_rejects_non_json() {
+        assert!(parse_herdr_body("agent wait", b"not json").is_err());
+    }
+
     // ─── the Herdr seam ─────────────────────────────────────────────────
 
     struct FakeHerdr {
         own_pane: &'static str,
-        rect: Option<(u64, u64)>,
+        /// hps-12: `pane_layout`'s stand-in — the full tab's pane list, or
+        /// `None` for "layout unreadable". Defaults to a single entry for
+        /// `own_pane`, matching the old fixed-rect default.
+        layout: Option<Vec<PaneGeom>>,
         split_result: Result<String, String>,
+        /// Every `pane_split(pane_id, direction, _)` call, in order — the
+        /// seam hps-12's "split call receives the chosen parent" test reads.
+        split_calls: RefCell<Vec<(String, String)>>,
+        /// hps-13: what `tab_create` returns — the new tab's root pane id,
+        /// or an error to prove the "refuse only when the fresh tab ALSO
+        /// fails" path.
+        tab_create_result: Result<String, String>,
+        /// Every `tab_create(workspace, cwd, label)` call, in order — the
+        /// seam an hps-13 test reads to prove the fallback fired (and, on
+        /// the happy path, that no `pane_split` call went with it).
+        tab_create_calls: RefCell<Vec<(String, String, String)>>,
         start_result: Result<(), String>,
         prompt_result: Result<(), String>,
         status: RefCell<Option<String>>,
@@ -1834,12 +2833,12 @@ mod tests {
         /// not merely that the same-kind built-in did (`started_kind` alone
         /// cannot tell those apart when both name the same herdr kind).
         started_args: RefCell<Option<Vec<String>>>,
-        /// One status returned (and consumed) by `agent_status` after the
-        /// first `agent_prompt` — the delivery receipt's "the agent took
-        /// the prompt" flip (herding-receipt-state D1). Steady-state
-        /// `status` answers before any prompt and after this is consumed,
-        /// so `wait_for_round`'s idle-timeout still sees an idle agent.
-        status_once_after_prompt: RefCell<Option<String>>,
+        /// Every `agent_wait(job_id, timeout_ms)` call, in order — proves
+        /// the ready gate uses herdr's settle-aware wait (herding-prompt-stall
+        /// D2), not a raw `agent_status` read. Its RETURN VALUE proxies
+        /// `status` (below) unless a test wants a different value, since
+        /// `agent_wait`'s fail-safe shape mirrors `agent_status`'s.
+        agent_wait_calls: RefCell<Vec<(String, u64)>>,
         /// D4: what `pane_run` returns — `Ok(())` unless a test overrides
         /// it to prove the env-export-failure path.
         pane_run_result: Result<(), String>,
@@ -1852,6 +2851,10 @@ mod tests {
         /// line was sent BEFORE `agent_start`, never after.
         call_log: RefCell<Vec<&'static str>>,
         pane_text: RefCell<Option<String>>,
+        /// hps-7: when set, every `pane_read` call returns this error
+        /// instead of `pane_text` — the seam a "pane_read failure keeps the
+        /// generic message" test uses.
+        pane_read_err: RefCell<Option<String>>,
         pane_read_calls: RefCell<Vec<String>>,
         liveness_responses: RefCell<Vec<Liveness>>,
         process_info_calls: RefCell<Vec<String>>,
@@ -1861,8 +2864,14 @@ mod tests {
         fn new() -> Self {
             FakeHerdr {
                 own_pane: "w1:p1",
-                rect: Some((100, 50)),
+                // hps-13: 120x43 — the same roomy tab shape the live D5
+                // probe measured, whose "right" split yields a 60-column
+                // child (the minimum, workable) rather than a refusal.
+                layout: Some(vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 120, height: 43 }]),
                 split_result: Ok("w1:p2".to_string()),
+                split_calls: RefCell::new(Vec::new()),
+                tab_create_result: Ok("w9:p1".to_string()),
+                tab_create_calls: RefCell::new(Vec::new()),
                 start_result: Ok(()),
                 prompt_result: Ok(()),
                 status: RefCell::new(Some("idle".to_string())),
@@ -1872,11 +2881,12 @@ mod tests {
                 start_calls: RefCell::new(Vec::new()),
                 started_kind: RefCell::new(None),
                 started_args: RefCell::new(None),
-                status_once_after_prompt: RefCell::new(Some("working".to_string())),
+                agent_wait_calls: RefCell::new(Vec::new()),
                 pane_run_result: Ok(()),
                 pane_run_calls: RefCell::new(Vec::new()),
                 call_log: RefCell::new(Vec::new()),
                 pane_text: RefCell::new(None),
+                pane_read_err: RefCell::new(None),
                 pane_read_calls: RefCell::new(Vec::new()),
                 liveness_responses: RefCell::new(Vec::new()),
                 process_info_calls: RefCell::new(Vec::new()),
@@ -1888,11 +2898,20 @@ mod tests {
         fn pane_current(&self) -> Result<String, String> {
             Ok(self.own_pane.to_string())
         }
-        fn pane_rect(&self, _pane_id: &str) -> Option<(u64, u64)> {
-            self.rect
+        fn pane_layout(&self, _pane_id: &str) -> Option<Vec<PaneGeom>> {
+            self.layout.clone()
         }
-        fn pane_split(&self, _pane_id: &str, _direction: &str, _cwd: &Path) -> Result<String, String> {
+        fn pane_split(&self, pane_id: &str, direction: &str, _cwd: &Path) -> Result<String, String> {
+            self.split_calls.borrow_mut().push((pane_id.to_string(), direction.to_string()));
             self.split_result.clone()
+        }
+        fn tab_create(&self, workspace: &str, cwd: &Path, label: &str) -> Result<String, String> {
+            self.tab_create_calls.borrow_mut().push((
+                workspace.to_string(),
+                cwd.display().to_string(),
+                label.to_string(),
+            ));
+            self.tab_create_result.clone()
         }
         fn pane_run(&self, pane_id: &str, command: &str) -> Result<(), String> {
             self.pane_run_calls.borrow_mut().push((pane_id.to_string(), command.to_string()));
@@ -1913,26 +2932,28 @@ mod tests {
             self.start_result.clone()
         }
         fn agent_status(&self, _job_id: &str) -> Option<String> {
-            if !self.prompt_calls.borrow().is_empty() {
-                if let Some(s) = self.status_once_after_prompt.borrow_mut().take() {
-                    return Some(s);
-                }
-            }
             self.status.borrow().clone()
         }
         fn pane_close(&self, pane_id: &str) -> Result<(), String> {
             self.closed.borrow_mut().push(pane_id.to_string());
             Ok(())
         }
-        fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String> {
+        fn agent_prompt(&self, job_id: &str, prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
             self.prompt_calls.borrow_mut().push((job_id.to_string(), prompt.to_string()));
             self.prompt_result.clone()
+        }
+        fn agent_wait(&self, job_id: &str, timeout_ms: u64) -> Option<String> {
+            self.agent_wait_calls.borrow_mut().push((job_id.to_string(), timeout_ms));
+            self.status.borrow().clone()
         }
         fn pane_alive(&self, pane_id: &str) -> bool {
             self.alive_panes.borrow().iter().any(|p| p == pane_id)
         }
         fn pane_read(&self, pane_id: &str) -> Result<String, String> {
             self.pane_read_calls.borrow_mut().push(pane_id.to_string());
+            if let Some(err) = self.pane_read_err.borrow().clone() {
+                return Err(err);
+            }
             Ok(self.pane_text.borrow().clone().unwrap_or_default())
         }
         fn process_info(&self, pane_id: &str) -> Liveness {
@@ -1952,11 +2973,14 @@ mod tests {
         fn pane_current(&self) -> Result<String, String> {
             panic!("dry-run must never call Herdr::pane_current")
         }
-        fn pane_rect(&self, _pane_id: &str) -> Option<(u64, u64)> {
-            panic!("dry-run must never call Herdr::pane_rect")
+        fn pane_layout(&self, _pane_id: &str) -> Option<Vec<PaneGeom>> {
+            panic!("dry-run must never call Herdr::pane_layout")
         }
         fn pane_split(&self, _pane_id: &str, _direction: &str, _cwd: &Path) -> Result<String, String> {
             panic!("dry-run must never call Herdr::pane_split")
+        }
+        fn tab_create(&self, _workspace: &str, _cwd: &Path, _label: &str) -> Result<String, String> {
+            panic!("dry-run must never call Herdr::tab_create")
         }
         fn pane_run(&self, _pane_id: &str, _command: &str) -> Result<(), String> {
             panic!("dry-run must never call Herdr::pane_run")
@@ -1976,8 +3000,11 @@ mod tests {
         fn pane_close(&self, _pane_id: &str) -> Result<(), String> {
             panic!("dry-run must never call Herdr::pane_close")
         }
-        fn agent_prompt(&self, _job_id: &str, _prompt: &str) -> Result<(), String> {
+        fn agent_prompt(&self, _job_id: &str, _prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
             panic!("dry-run must never call Herdr::agent_prompt")
+        }
+        fn agent_wait(&self, _job_id: &str, _timeout_ms: u64) -> Option<String> {
+            panic!("dry-run must never call Herdr::agent_wait")
         }
         fn pane_alive(&self, _pane_id: &str) -> bool {
             panic!("dry-run must never call Herdr::pane_alive")
@@ -2006,6 +3033,8 @@ mod tests {
             agent: None,
             expertise: Vec::new(),
             has_explicit_expertise: false,
+            nickname: "job-1".to_string(),
+            cell_id: None,
         }
     }
 
@@ -2037,6 +3066,18 @@ mod tests {
         .unwrap();
     }
 
+    /// Writes an empty round-N ack file into the job's mailbox — enough for
+    /// `deliver_pointer`'s `ack_present()` check to see delivery as already
+    /// confirmed in a single send, so a test exercising `wait_for_round`'s
+    /// OWN timing (not delivery) never trips the bounded-resend loop's real
+    /// sleep (herding-prompt-stall D4).
+    fn seed_ack(main_root: &Path, job_id: &str, round: u32) {
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(mailbox::ack_path(&bee_dir, job_id, round), "{}").unwrap();
+    }
+
     fn continue_options(main_root: &Path, dry_run: bool) -> Options {
         Options {
             task: "round 2: keep going".to_string(),
@@ -2053,6 +3094,8 @@ mod tests {
             agent: None,
             expertise: Vec::new(),
             has_explicit_expertise: false,
+            nickname: "job-1".to_string(),
+            cell_id: None,
         }
     }
 
@@ -2091,6 +3134,77 @@ mod tests {
         assert!(matches!(result.outcome, RunOutcome::SpawnFailed(_)), "got {:?}", result.outcome);
         assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
         assert!(result.closed_pane);
+    }
+
+    #[test]
+    fn a_fresh_spawn_splits_the_roomiest_sibling_pane_not_the_callers_own() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let mut fake = FakeHerdr::new();
+        // Caller's own pane has already been halved to 30; a sibling is
+        // still the roomiest, and wide enough (130) that its "right" split
+        // child (65) still clears the minimum — hps-13's roomy-tab case.
+        fake.layout = Some(vec![
+            PaneGeom { pane_id: "w1:p1".to_string(), width: 30, height: 43 },
+            PaneGeom { pane_id: "w1:p9".to_string(), width: 130, height: 43 },
+        ]);
+        seeded_result_dir(&tmp.path().join(".bee"), &opts.job_id);
+
+        let result = execute(&opts, &fake);
+
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        assert_eq!(
+            fake.split_calls.borrow().as_slice(),
+            [("w1:p9".to_string(), "right".to_string())],
+            "the split must target the roomiest sibling, not the caller's own w1:p1"
+        );
+        assert!(fake.tab_create_calls.borrow().is_empty(), "a roomy tab must never open a fresh one");
+    }
+
+    #[test]
+    fn a_fresh_spawn_with_no_roomy_pane_opens_a_fresh_tab_and_uses_its_root_pane_unsplit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let mut fake = FakeHerdr::new();
+        // Every pane in the tab is too narrow to split into a usable
+        // child — the fresh-tab fallback fires instead of a refusal.
+        fake.layout = Some(vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 30, height: 43 }]);
+        fake.tab_create_result = Ok("w9:p1".to_string());
+        seeded_result_dir(&tmp.path().join(".bee"), &opts.job_id);
+
+        let result = execute(&opts, &fake);
+
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+        assert_eq!(
+            fake.tab_create_calls.borrow().as_slice(),
+            [("w1".to_string(), opts.cwd.display().to_string(), opts.job_id.clone())],
+            "tab_create must get the caller's own workspace, the run's --cwd, and a label naming the job"
+        );
+        assert!(fake.split_calls.borrow().is_empty(), "the fresh tab's root pane is used with no split call");
+        assert_eq!(result.pane_id.as_deref(), Some("w9:p1"), "the new tab's root pane becomes the worker's pane");
+    }
+
+    #[test]
+    fn a_fresh_spawn_refuses_only_when_the_fresh_tab_attempt_also_fails() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let mut fake = FakeHerdr::new();
+        fake.layout = Some(vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 15, height: 43 }]);
+        fake.tab_create_result = Err("herdr: no free workspace slot".to_string());
+
+        let result = execute(&opts, &fake);
+
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => {
+                assert!(msg.contains("w1:p1") && msg.contains("15") && msg.contains("60"), "{msg}");
+                assert!(msg.contains("no free workspace slot"), "must name why the fresh tab failed too: {msg}");
+            }
+            other => panic!("expected SpawnFailed(narrow pane + failed fresh tab), got {other:?}"),
+        }
+        assert!(!fake.tab_create_calls.borrow().is_empty(), "a fresh tab must be attempted before refusing");
+        assert!(fake.split_calls.borrow().is_empty(), "a refused parent must never be split");
+        assert!(fake.start_calls.borrow().is_empty(), "a refused parent must never start an agent");
+        assert!(result.pane_id.is_none());
     }
 
     #[test]
@@ -2139,88 +3253,12 @@ mod tests {
     }
 
     #[test]
-    fn pointer_delivery_resends_while_the_agent_stays_idle_and_stops_on_working() {
-        // herding-receipt-state D1: idle polls through the first attempt's
-        // whole watch window drive a resend; the first "working" poll is
-        // the receipt. Injected sleep, no clock.
-        let sent = std::cell::RefCell::new(0u32);
-        let polls = std::cell::RefCell::new(0u32);
-        let out = deliver_pointer(
-            "job-1",
-            "Read the file /x/brief-1.txt and follow its instructions exactly.",
-            &mut |_p| {
-                *sent.borrow_mut() += 1;
-                Ok(())
-            },
-            &mut || {
-                *polls.borrow_mut() += 1;
-                if *polls.borrow() <= RECEIPT_POLLS_PER_ATTEMPT + 2 {
-                    Some("idle".to_string())
-                } else {
-                    Some("working".to_string())
-                }
-            },
-            &mut || false,
-            &mut |_d| {},
-        );
-        assert!(out.is_ok());
-        assert_eq!(*sent.borrow(), 2, "one idle window exhausted, delivered on the resend");
-    }
-
-    #[test]
-    fn pointer_delivery_never_trusts_an_idle_agent_even_with_the_pointer_on_screen() {
-        // herding-receipt-state D1 regression (live smoke
-        // smoke-agy-delivery-1/-2): during boot the pane ECHOES the send's
-        // own keystrokes, so any text-based receipt false-positives while
-        // the agent stays idle and the input is lost. An agent that never
-        // leaves idle is never "delivered", no matter what the pane shows —
-        // the receipt takes no pane text at all.
+    fn deliver_pointer_succeeds_in_one_send_when_the_ack_already_shows() {
+        // herding-prompt-stall D4: the worker's ack file is the receipt
+        // now, not herdr's own "working" transition — an ack already
+        // present right after the send needs no resend.
         let sent = std::cell::RefCell::new(0u32);
         let out = deliver_pointer(
-            "job-1",
-            "Read the file /x/brief-1.txt and follow its instructions exactly.",
-            &mut |_p| {
-                *sent.borrow_mut() += 1;
-                Ok(())
-            },
-            &mut || Some("idle".to_string()),
-            &mut || false,
-            &mut |_d| {},
-        );
-        let err = out.unwrap_err();
-        assert!(err.contains("state receipt"), "{err}");
-        assert_eq!(*sent.borrow(), POINTER_DELIVERY_ATTEMPTS);
-    }
-
-    #[test]
-    fn pointer_delivery_never_trusts_a_booting_working_status_as_receipt() {
-        // A booting or pre-existing "working" status (pre-send baseline already
-        // "working") must not be counted as a receipt for a new prompt. Receipt
-        // requires a transition into "working" or result file presence.
-        let sent = std::cell::RefCell::new(0u32);
-        let out = deliver_pointer(
-            "job-1",
-            "Read the file /x/brief-1.txt and follow its instructions exactly.",
-            &mut |_p| {
-                *sent.borrow_mut() += 1;
-                Ok(())
-            },
-            &mut || Some("working".to_string()),
-            &mut || false,
-            &mut |_d| {},
-        );
-        let err = out.unwrap_err();
-        assert!(err.contains("state receipt"), "{err}");
-        assert_eq!(*sent.borrow(), POINTER_DELIVERY_ATTEMPTS);
-    }
-
-    #[test]
-    fn pointer_delivery_accepts_the_round_result_as_receipt() {
-        // An ultra-fast round can finish before any status poll catches
-        // "working" — the result file's presence is an equally hard receipt.
-        let sent = std::cell::RefCell::new(0u32);
-        let out = deliver_pointer(
-            "job-1",
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
             &mut |_p| {
                 *sent.borrow_mut() += 1;
@@ -2228,14 +3266,370 @@ mod tests {
             },
             &mut || Some("idle".to_string()),
             &mut || true,
+            &mut || false,
             &mut |_d| {},
+            &mut || 0,
         );
-        assert!(out.is_ok());
-        assert_eq!(*sent.borrow(), 1, "result present on the first poll: one send, no resend");
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 1, "exactly one send when the ack already shows");
     }
 
     #[test]
-    fn ready_wait_accepts_an_agent_once_its_status_flips_and_only_then() {
+    fn deliver_pointer_retries_a_stall_and_delivers_on_the_next_send() {
+        // D6 (hps-14): a stall proves the submission had not landed AT THAT
+        // INSTANT, not that it never will — it joins the same bounded retry
+        // the ready-with-no-ack path already uses instead of ending the run
+        // on the first occurrence.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                if *sent.borrow() == 1 {
+                    Err("herdr agent prompt job-1 exited 1: agent_prompt_stalled: no observed change within \
+                         5000ms"
+                        .to_string())
+                } else {
+                    Ok(())
+                }
+            },
+            &mut || Some("idle".to_string()),
+            &mut || *sent.borrow() >= 2, // ack shows once the resend lands
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 2, "the stall is retried, not fatal — one resend then delivered");
+    }
+
+    #[test]
+    fn is_agent_prompt_stalled_matches_the_captured_live_stalled_body() {
+        // hps-11: parse-level pin over the exact body captured live
+        // (docs/history/herding-prompt-stall/CONTEXT.md) — no process spawned.
+        let body = r#"{"error":{"code":"agent_prompt_stalled","message":"agent prompt produced no observed state change within 5000 ms; status is idle and state_change_seq remained 771"},"id":"cli:agent:prompt"}"#;
+        assert!(is_agent_prompt_stalled(body));
+        assert!(!is_agent_prompt_timeout(body));
+    }
+
+    #[test]
+    fn is_agent_prompt_timeout_matches_the_captured_live_timeout_body() {
+        // hps-11: parse-level pin over the exact body captured live —
+        // `--timeout 5000` on a healthy pane — no process spawned.
+        let body = r#"{"error":{"code":"timeout","message":"timed out waiting for agent status"}}"#;
+        assert!(is_agent_prompt_timeout(body));
+        assert!(!is_agent_prompt_stalled(body));
+    }
+
+    #[test]
+    fn deliver_pointer_falls_through_to_the_ack_poll_on_a_herdr_timeout_reply() {
+        // hps-11: a `timeout` reply means the submission WAS made — unlike
+        // agent_prompt_stalled it must NOT abort delivery. It polls for the
+        // ack exactly as a successful send would, never resending blind.
+        let sent = std::cell::RefCell::new(0u32);
+        let polls = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Err(r#"{"error":{"code":"timeout","message":"timed out waiting for agent status"}}"#.to_string())
+            },
+            &mut || Some("working".to_string()),
+            &mut || {
+                *polls.borrow_mut() += 1;
+                *polls.borrow() >= 2
+            },
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 1, "exactly one send — a timeout reply is never resent blind");
+    }
+
+    #[test]
+    fn deliver_pointer_rescues_a_stalled_send_when_the_result_already_landed() {
+        // The result_present() escape survives D4: an ultra-fast round can
+        // write its result before herdr ever observes the "working"
+        // transition.
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| Err("agent_prompt_stalled: no observed change".to_string()),
+            &mut || Some("idle".to_string()),
+            &mut || false,
+            &mut || true,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+    }
+
+    #[test]
+    fn deliver_pointer_rescues_a_stalled_send_when_the_ack_already_landed() {
+        // D4: the ack file is its own escape for a stalled send, the same
+        // shape as the pre-existing result_present() escape.
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| Err("agent_prompt_stalled: no observed change".to_string()),
+            &mut || Some("idle".to_string()),
+            &mut || true,
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+    }
+
+    #[test]
+    fn deliver_pointer_surfaces_a_transport_error_distinctly_from_a_stall() {
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| Err("could not spawn herdr: No such file or directory".to_string()),
+            &mut || Some("idle".to_string()),
+            &mut || false,
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        match out {
+            Err(DeliveryError::Transport(e)) => assert!(e.contains("could not spawn herdr"), "{e}"),
+            other => panic!("expected DeliveryError::Transport, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deliver_pointer_refuses_fast_when_the_pane_is_already_blocked() {
+        // D3: blocked ends the delivery wait at once — never sent into a
+        // pane that is waiting on an unrelated question.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("blocked".to_string()),
+            &mut || false,
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(matches!(out, Err(DeliveryError::Blocked)), "{out:?}");
+        assert_eq!(*sent.borrow(), 0, "never sends into an already-blocked pane");
+    }
+
+    #[test]
+    fn deliver_pointer_resends_bounded_while_neither_ack_nor_result_appears() {
+        // D4: the send is idempotent — herdr keeps observing "working" but
+        // neither the ack nor the result ever shows, so the pointer is
+        // resent, bounded, never infinite.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("idle".to_string()),
+            &mut || false,
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(
+            matches!(
+                out,
+                Err(DeliveryError::NeverAcked { bound: NeverAckedBound::ResendAttempts, attempts: DELIVERY_RESEND_ATTEMPTS })
+            ),
+            "{out:?}"
+        );
+        assert_eq!(*sent.borrow(), DELIVERY_RESEND_ATTEMPTS, "bounded, not infinite");
+    }
+
+    #[test]
+    fn deliver_pointer_succeeds_once_the_ack_appears_after_a_resend() {
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("idle".to_string()),
+            &mut || *sent.borrow() >= 3, // ack shows on the 3rd send
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 3, "stops resending the moment the ack shows");
+    }
+
+    #[test]
+    fn deliver_pointer_stops_resending_the_instant_the_pane_goes_blocked_mid_resend() {
+        // D3/D4: a blocked observation mid-resend must not be swallowed by
+        // another attempt — it ends the wait at once, same as on the very
+        // first check.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || if *sent.borrow() >= 1 { Some("blocked".to_string()) } else { Some("idle".to_string()) },
+            &mut || false,
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(matches!(out, Err(DeliveryError::Blocked)), "{out:?}");
+        assert_eq!(*sent.borrow(), 1, "must not send again once blocked shows up between attempts");
+    }
+
+    #[test]
+    fn deliver_pointer_retries_past_a_stall_appearing_mid_resend() {
+        // D6 (hps-14): a stall mid-resend is retried like any other — it
+        // must not end the run early, unlike `blocked` which still does.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                if *sent.borrow() == 3 {
+                    Err("agent_prompt_stalled: no observed change".to_string())
+                } else {
+                    Ok(())
+                }
+            },
+            &mut || Some("idle".to_string()),
+            &mut || *sent.borrow() >= 4, // ack shows only after the send past the stall
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 4, "the stall does not end the run — it is retried like any other resend");
+    }
+
+    #[test]
+    fn deliver_pointer_exhausts_the_resend_bound_when_every_send_stalls() {
+        // D6 (hps-14): a stall every single time still ends as a terminal
+        // error once the resend bound is spent — but its wording says every
+        // submission stalled, distinct from `NeverAcked`'s "kept going
+        // ready with no ack": the reader can tell "the agent never took the
+        // text" from "the agent took it and never acked".
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Err("agent_prompt_stalled: no observed change".to_string())
+            },
+            &mut || Some("idle".to_string()),
+            &mut || false,
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        match &out {
+            Err(DeliveryError::NeverDelivered { attempts }) => {
+                assert_eq!(*attempts, DELIVERY_RESEND_ATTEMPTS);
+            }
+            other => panic!("expected DeliveryError::NeverDelivered, got {other:?}"),
+        }
+        let msg = out.unwrap_err().to_string();
+        assert!(msg.contains("every submission stalled"), "{msg}");
+        assert!(!msg.contains("kept going ready with no ack"), "{msg}");
+        assert_eq!(*sent.borrow(), DELIVERY_RESEND_ATTEMPTS, "bounded, not infinite");
+    }
+
+    #[test]
+    fn deliver_pointer_polls_a_working_agent_to_ack_with_exactly_one_send() {
+        // hps-6: a worker that is `working` and has not acked yet is
+        // healthy — it gets polled, never resent, no matter how many ticks
+        // it takes to write its ack.
+        let sent = std::cell::RefCell::new(0u32);
+        let polls = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("working".to_string()),
+            &mut || {
+                *polls.borrow_mut() += 1;
+                *polls.borrow() >= 5 // ack shows only after a few poll ticks
+            },
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 1, "a working agent is polled, never resent");
+    }
+
+    #[test]
+    fn deliver_pointer_resends_only_once_the_agent_goes_ready_with_still_no_ack() {
+        // hps-6: `working` is healthy and burns no resend; the pointer is
+        // resent only once the agent settles back to `idle`/`done` with the
+        // ack still missing — the actual signature of a dropped submission.
+        let sent = std::cell::RefCell::new(0u32);
+        let poll = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || {
+                *poll.borrow_mut() += 1;
+                if *poll.borrow() < 3 { Some("working".to_string()) } else { Some("idle".to_string()) }
+            },
+            &mut || *sent.borrow() >= 2, // ack shows only after the resend
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 2, "exactly one resend, triggered only by the return to ready with no ack");
+    }
+
+    #[test]
+    fn deliver_pointer_expires_the_ack_wait_budget_distinct_from_the_resend_bound() {
+        // hps-6: the agent stays `working` forever (healthy — never
+        // triggers a resend), so only the wall-clock ack-wait budget, not
+        // the resend bound, can end this wait.
+        let sent = std::cell::RefCell::new(0u32);
+        let calls = std::cell::RefCell::new(0i64);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("working".to_string()),
+            &mut || false,
+            &mut || false,
+            &mut |_d| {},
+            &mut || {
+                let mut c = calls.borrow_mut();
+                *c += 1;
+                if *c == 1 { 0 } else { (ACK_WAIT_BUDGET_SECS as i64) * 1000 + 1 }
+            },
+        );
+        match out {
+            Err(DeliveryError::NeverAcked { bound: NeverAckedBound::AckWaitBudget, attempts }) => {
+                assert_eq!(attempts, 1, "the budget expires after the single healthy send")
+            }
+            other => panic!("expected NeverAcked{{AckWaitBudget}}, got {other:?}"),
+        }
+        assert_eq!(*sent.borrow(), 1, "never resends while status stays working — only the budget ends it");
+    }
+
+    #[test]
+    fn ready_wait_accepts_idle_and_only_then() {
         // herding-run-ready-wait D1, injected clock: status None for the
         // first two polls (booting — the smoke's lost-brief window), idle on
         // the third. No real sleep.
@@ -2256,20 +3650,38 @@ mod tests {
                 clock
             },
         );
-        assert!(ready);
+        assert_eq!(ready, ReadyOutcome::Ready);
         assert_eq!(polls, 3, "ready only on the third status read");
     }
 
     #[test]
-    fn ready_wait_rejects_booting_working_status_until_idle() {
+    fn ready_wait_accepts_done_the_same_as_idle() {
+        // herding-prompt-stall D2: `done` is the normal resting state of a
+        // never-focused, --no-focus-split bee worker pane — not a rejection.
+        let mut clock = 0i64;
+        let ready = wait_for_agent_ready(
+            60,
+            Duration::from_millis(500),
+            || Some("done".to_string()),
+            |_| {},
+            || {
+                clock += 500;
+                clock
+            },
+        );
+        assert_eq!(ready, ReadyOutcome::Ready);
+    }
+
+    #[test]
+    fn ready_wait_rejects_working_status_until_idle_or_done() {
         // When an agent process is booting or updating, herdr may report
-        // "working". Ready-wait must not accept "working" as ready for input;
-        // it must wait until the agent reports "idle" at its prompt.
+        // "working". Ready-wait must not accept "working" as ready for
+        // input; it must wait until the agent settles into idle or done.
         let mut clock = 0i64;
         let statuses = std::cell::RefCell::new(vec![
             Some("working".to_string()),
             Some("working".to_string()),
-            Some("idle".to_string()),
+            Some("done".to_string()),
         ]);
         let mut polls = 0u32;
         let ready = wait_for_agent_ready(
@@ -2286,30 +3698,28 @@ mod tests {
                 clock
             },
         );
-        assert!(ready);
-        assert_eq!(polls, 3, "ready only when status reaches idle, not while working");
+        assert_eq!(ready, ReadyOutcome::Ready);
+        assert_eq!(polls, 3, "ready only when status reaches idle or done, not while working");
     }
 
     #[test]
-    fn pointer_delivery_never_trusts_done_status_as_receipt() {
-        // A quiescent agent from a prior round in an unfocused pane may
-        // report "done". Pointer delivery must not treat stale "done" as a
-        // receipt for the new prompt — it requires "working" or result file.
-        let sent = std::cell::RefCell::new(0u32);
-        let out = deliver_pointer(
-            "job-1",
-            "Read the file /x/brief-1.txt and follow its instructions exactly.",
-            &mut |_p| {
-                *sent.borrow_mut() += 1;
-                Ok(())
+    fn ready_wait_fails_fast_on_blocked_without_burning_the_ceiling() {
+        // D3: a blocked pane ends the ready wait at once — the 60s ceiling
+        // and its sleeps are never burned on a question nobody will answer.
+        let mut clock = 0i64;
+        let mut sleeps = 0u32;
+        let ready = wait_for_agent_ready(
+            60,
+            Duration::from_millis(500),
+            || Some("blocked".to_string()),
+            |_| sleeps += 1,
+            || {
+                clock += 500;
+                clock
             },
-            &mut || Some("done".to_string()),
-            &mut || false,
-            &mut |_d| {},
         );
-        let err = out.unwrap_err();
-        assert!(err.contains("state receipt"), "{err}");
-        assert_eq!(*sent.borrow(), POINTER_DELIVERY_ATTEMPTS);
+        assert_eq!(ready, ReadyOutcome::Blocked);
+        assert_eq!(sleeps, 0, "blocked is observed on the first check, before any sleep");
     }
 
     #[test]
@@ -2439,9 +3849,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 1; // no heartbeat ever arrives; trips fast
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         let result = execute(&opts, &fake);
-        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle(_)), "got {:?}", result.outcome);
         assert!(!result.closed_pane);
         assert!(fake.closed.borrow().is_empty());
     }
@@ -2452,9 +3863,10 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 1;
         opts.close_always = true;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         let result = execute(&opts, &fake);
-        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle(_)), "got {:?}", result.outcome);
         assert!(result.closed_pane);
         assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
     }
@@ -2465,6 +3877,7 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 1;
         opts.close_always = true;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         *fake.pane_text.borrow_mut() = Some("You've hit your session limit · resets 6:20pm (Asia/Bangkok)\n".to_string());
         let result = execute(&opts, &fake);
@@ -2484,10 +3897,11 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 1;
         opts.close_always = true;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         *fake.pane_text.borrow_mut() = Some("waiting for something else...".to_string());
         let result = execute(&opts, &fake);
-        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle(_)), "got {:?}", result.outcome);
         assert!(result.closed_pane, "TimedOutIdle closes with close_always");
         assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
     }
@@ -2516,15 +3930,146 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 1;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         *fake.pane_text.borrow_mut() = Some("regular error output".to_string());
         let result = execute(&opts, &fake);
-        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle(_)), "got {:?}", result.outcome);
         // Across the fresh-heartbeat ticks before staleness, pane_read was never called.
-        // Once heartbeat went stale, pane_read was called once to check for limit patterns.
+        // Once heartbeat went stale, pane_read was called once to check for limit patterns,
+        // then once more by `diagnose_giveup` (hps-7) on the way out of the give-up path.
         let reads = fake.pane_read_calls.borrow();
-        assert_eq!(reads.len(), 1, "pane_read should only be called once when heartbeat becomes stale, not on fresh ticks: {:?}", *reads);
+        assert_eq!(reads.len(), 2, "pane_read should be called once for the limit check and once for hps-7's diagnosis, never on fresh ticks: {:?}", *reads);
         assert_eq!(reads[0], "w1:p2");
+        assert_eq!(reads[1], "w1:p2");
+    }
+
+    // ─── hps-7: diagnosis wired into the three give-up paths (D5) ───────
+
+    #[test]
+    fn diagnose_giveup_upgrades_the_generic_message_on_a_match() {
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        let msg = diagnose_giveup(&fake, "job-1", "w1:p2", "generic timeout text".to_string());
+        assert!(msg.contains("generic timeout text"), "generic prefix dropped: {msg}");
+        assert!(msg.contains("w1:p2"), "pane id missing: {msg}");
+        assert!(msg.contains("job-1"), "job id missing: {msg}");
+        assert!(msg.contains("Trust this folder?"), "matched line not quoted: {msg}");
+        assert!(msg.contains("remedy"), "remedy missing: {msg}");
+        assert!(msg.contains("pane tail:"), "pane tail missing: {msg}");
+    }
+
+    #[test]
+    fn diagnose_giveup_carries_the_pane_tail_on_a_clipped_narrow_pane_capture() {
+        // The live acceptance probe's exact shape: an eight-column clipped
+        // pane leaves only a short arrow-key nav footer for
+        // `find_prompt_diagnosis` to match — nothing in that fragment names
+        // the workspace-trust dialog above it. The pane tail must carry
+        // that context, or the give-up message stays as unreadable as the
+        // bare matched line.
+        let clipped_pane = "Trust th\nis works\npace\n\n↑/↓ Na\n";
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some(clipped_pane.to_string());
+        let msg = diagnose_giveup(&fake, "job-1", "w1:p2", "generic timeout text".to_string());
+        assert!(msg.contains("\"↑/↓ Na\""), "matched line not quoted: {msg}");
+        assert!(msg.contains("pane tail:"), "pane tail missing: {msg}");
+        assert!(msg.contains("Trust th"), "clipped trust-dialog line dropped from tail: {msg}");
+    }
+
+    #[test]
+    fn diagnose_giveup_leaves_the_generic_message_byte_for_byte_on_no_match() {
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("compiling…\nall green\n".to_string());
+        let generic = "generic timeout text".to_string();
+        let msg = diagnose_giveup(&fake, "job-1", "w1:p2", generic.clone());
+        assert_eq!(msg, generic);
+    }
+
+    #[test]
+    fn diagnose_giveup_leaves_the_generic_message_byte_for_byte_on_a_failing_pane_read() {
+        let fake = FakeHerdr::new();
+        // Even a pane whose text WOULD match if it could be read must never
+        // change which message comes back once `pane_read` itself fails.
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        *fake.pane_read_err.borrow_mut() = Some("herdr: pane gone".to_string());
+        let generic = "generic timeout text".to_string();
+        let msg = diagnose_giveup(&fake, "job-1", "w1:p2", generic.clone());
+        assert_eq!(msg, generic, "a pane_read failure must not change which error is returned");
+    }
+
+    #[test]
+    fn ready_gate_timeout_names_the_question_on_screen() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.ready_wait_secs = 0; // exhausted on the first check, no sleep
+        let fake = FakeHerdr::new();
+        *fake.status.borrow_mut() = Some("working".to_string()); // never idle/done/blocked
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => {
+                assert!(msg.contains("ready-wait"), "generic ready-wait text dropped: {msg}");
+                assert!(msg.contains("Trust this folder?"), "question not named: {msg}");
+            }
+            other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ready_gate_blocked_still_wins_over_a_diagnosis_match_in_the_same_pane_text() {
+        // D3's fast path is untouched by hps-7: `blocked` is checked first
+        // and produces `blocked_message`, never the diagnosis pass, even
+        // when the pane text would also match `find_prompt_diagnosis`.
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let fake = FakeHerdr::new();
+        *fake.status.borrow_mut() = Some("blocked".to_string());
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => {
+                assert!(msg.contains("is blocked"), "expected D3's blocked_message shape, got: {msg}");
+            }
+            other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn round_poll_idle_timeout_names_the_question_on_screen() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.idle_timeout_secs = 1;
+        seed_ack(tmp.path(), &opts.job_id, 1);
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::TimedOutIdle(msg) => {
+                assert!(msg.contains("idle timeout"), "generic idle-timeout text dropped: {msg}");
+                assert!(msg.contains("Trust this folder?"), "question not named: {msg}");
+            }
+            other => panic!("expected TimedOutIdle, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn delivery_never_acked_names_the_question_on_screen() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let fake = FakeHerdr::new();
+        // idle/done with no ack ever written: `deliver_pointer` resends
+        // until `DELIVERY_RESEND_ATTEMPTS` is exhausted (NeverAcked's
+        // ResendAttempts bound).
+        *fake.status.borrow_mut() = Some("idle".to_string());
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => {
+                assert!(msg.contains("brief prompt failed after start"), "generic delivery text dropped: {msg}");
+                assert!(msg.contains("Trust this folder?"), "question not named: {msg}");
+            }
+            other => panic!("expected SpawnFailed, got {other:?}"),
+        }
     }
 
     // ─── flag parsing ───────────────────────────────────────────────────
@@ -2863,6 +4408,171 @@ mod tests {
         assert_eq!(calls2[0].1, "export BEE_HERDING_WORKER='1'");
     }
 
+    // ─── hps-8 (D5): workspace-trust pre-flight ─────────────────────────
+
+    #[test]
+    fn preflight_appends_the_cwd_when_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let trust_file = tmp.path().join("settings.json");
+        std::fs::write(&trust_file, r#"{"trustedWorkspaces": ["/already/trusted"], "other": "kept"}"#).unwrap();
+        let trust = WorkspaceTrust { file: trust_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        let cwd = Path::new("/some/fresh/worktree");
+
+        let outcome = preflight_workspace_trust(&trust, cwd);
+        assert_eq!(outcome, TrustPreflightOutcome::Appended);
+
+        let written: Value = serde_json::from_str(&std::fs::read_to_string(&trust_file).unwrap()).unwrap();
+        let arr = written["trustedWorkspaces"].as_array().unwrap();
+        assert!(arr.iter().any(|v| v.as_str() == Some("/already/trusted")));
+        assert!(arr.iter().any(|v| v.as_str() == Some("/some/fresh/worktree")));
+        assert_eq!(written["other"], "kept", "fields outside the named array must survive untouched");
+    }
+
+    #[test]
+    fn preflight_leaves_an_already_present_path_untouched_no_rewrite() {
+        let tmp = tempfile::tempdir().unwrap();
+        let trust_file = tmp.path().join("settings.json");
+        let original = r#"{"trustedWorkspaces": ["/some/fresh/worktree"]}"#;
+        std::fs::write(&trust_file, original).unwrap();
+        let trust = WorkspaceTrust { file: trust_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        let cwd = Path::new("/some/fresh/worktree");
+
+        let outcome = preflight_workspace_trust(&trust, cwd);
+        assert_eq!(outcome, TrustPreflightOutcome::AlreadyTrusted);
+        assert_eq!(std::fs::read_to_string(&trust_file).unwrap(), original, "no rewrite when cwd is already present");
+    }
+
+    #[test]
+    fn preflight_warns_and_proceeds_on_a_missing_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let trust_file = tmp.path().join("does-not-exist.json");
+        let trust = WorkspaceTrust { file: trust_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        let outcome = preflight_workspace_trust(&trust, Path::new("/cwd"));
+        assert!(matches!(outcome, TrustPreflightOutcome::Warning(_)), "got {outcome:?}");
+    }
+
+    #[test]
+    fn preflight_warns_and_proceeds_on_unparsable_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let trust_file = tmp.path().join("settings.json");
+        std::fs::write(&trust_file, "not json at all").unwrap();
+        let trust = WorkspaceTrust { file: trust_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        let outcome = preflight_workspace_trust(&trust, Path::new("/cwd"));
+        assert!(matches!(outcome, TrustPreflightOutcome::Warning(_)), "got {outcome:?}");
+    }
+
+    #[test]
+    fn preflight_warns_and_proceeds_on_a_missing_or_non_array_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let missing_key_file = tmp.path().join("missing-key.json");
+        std::fs::write(&missing_key_file, r#"{"other": "field"}"#).unwrap();
+        let trust =
+            WorkspaceTrust { file: missing_key_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        assert!(matches!(preflight_workspace_trust(&trust, Path::new("/cwd")), TrustPreflightOutcome::Warning(_)));
+
+        let non_array_file = tmp.path().join("non-array.json");
+        std::fs::write(&non_array_file, r#"{"trustedWorkspaces": "not-an-array"}"#).unwrap();
+        let trust =
+            WorkspaceTrust { file: non_array_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        assert!(matches!(preflight_workspace_trust(&trust, Path::new("/cwd")), TrustPreflightOutcome::Warning(_)));
+    }
+
+    #[test]
+    fn preflight_warns_and_proceeds_when_the_file_is_unwritable() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        // A read-only DIRECTORY, not just a read-only file, so the atomic
+        // write's tmp-then-rename (which needs to create a file in the
+        // parent dir) fails regardless of the target file's own mode.
+        let trust_file = tmp.path().join("settings.json");
+        std::fs::write(&trust_file, r#"{"trustedWorkspaces": []}"#).unwrap();
+        std::fs::set_permissions(tmp.path(), std::fs::Permissions::from_mode(0o500)).unwrap();
+        let trust = WorkspaceTrust { file: trust_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+
+        let outcome = preflight_workspace_trust(&trust, Path::new("/cwd"));
+
+        // Restore write permission so tempdir cleanup can remove the file.
+        std::fs::set_permissions(tmp.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(matches!(outcome, TrustPreflightOutcome::Warning(_)), "got {outcome:?}");
+    }
+
+    #[test]
+    fn a_fresh_spawn_pre_flights_workspace_trust_before_the_pane_split() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        let trust_file = main_root.join("antigravity-settings.json");
+        std::fs::write(&trust_file, r#"{"trustedWorkspaces": []}"#).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({
+                "herding": {
+                    "agents": {
+                        "agy-flash": {
+                            "argv": ["agy", "--dangerously-skip-permissions"],
+                            "workspace_trust": {
+                                "file": trust_file.display().to_string(),
+                                "key": "trustedWorkspaces",
+                            },
+                        }
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("agy-flash".to_string());
+        seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+
+        let written: Value = serde_json::from_str(&std::fs::read_to_string(&trust_file).unwrap()).unwrap();
+        let arr = written["trustedWorkspaces"].as_array().unwrap();
+        assert!(
+            arr.iter().any(|v| v.as_str() == Some(opts.cwd.display().to_string().as_str())),
+            "the run's cwd must be appended to the trust store, got {written}"
+        );
+    }
+
+    #[test]
+    fn a_fresh_spawn_proceeds_when_the_workspace_trust_file_is_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({
+                "herding": {
+                    "agents": {
+                        "agy-flash": {
+                            "argv": ["agy", "--dangerously-skip-permissions"],
+                            "workspace_trust": {
+                                "file": main_root.join("no-such-file.json").display().to_string(),
+                                "key": "trustedWorkspaces",
+                            },
+                        }
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("agy-flash".to_string());
+        seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(
+            matches!(result.outcome, RunOutcome::Result(_)),
+            "a missing trust file must never fail the run, got {:?}",
+            result.outcome
+        );
+    }
+
     #[test]
     fn the_marker_wins_over_a_same_name_per_agent_env_value() {
         let tmp = tempfile::tempdir().unwrap();
@@ -2901,6 +4611,11 @@ mod tests {
     fn continue_sends_a_prompt_to_the_recorded_pane_and_never_calls_agent_start() {
         let tmp = tempfile::tempdir().unwrap();
         seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        // Round 2's ack is seeded up front, distinct from round 2's result
+        // below — delivery (the ack) and completion (the result) are
+        // separate concerns (herding-prompt-stall D4); the result still
+        // lands later from the background writer thread, unaffected.
+        seed_ack(tmp.path(), "job-1", 2);
         let opts = continue_options(tmp.path(), false);
         let fake = FakeHerdr::new();
 
@@ -2958,13 +4673,14 @@ mod tests {
         // immediately with round 1's stale result. This test proves it
         // instead times out waiting specifically for round 2.
         seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        seed_ack(tmp.path(), "job-1", 2);
         let mut opts = continue_options(tmp.path(), false);
         opts.idle_timeout_secs = 1; // no round-2 result ever arrives; trips fast
         let fake = FakeHerdr::new();
 
         let result = execute(&opts, &fake);
 
-        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle(_)), "got {:?}", result.outcome);
     }
 
     #[test]
@@ -3073,6 +4789,10 @@ mod tests {
         // Write brief-1.txt
         let brief_file = mailbox::brief_path(&bee_dir, "job-1", 1);
         std::fs::write(&brief_file, "round 1 brief text").unwrap();
+        // Round 1's ack already exists from the original delivery, before
+        // this pause ever happened — the resume nudge re-points at the
+        // SAME round, so its receipt is already on disk (herding-prompt-stall D4).
+        seed_ack(tmp.path(), "job-1", 1);
 
         let opts = continue_options(tmp.path(), false);
         let fake = FakeHerdr::new();
@@ -3187,6 +4907,9 @@ mod tests {
 
         let brief_file = mailbox::brief_path(&bee_dir, "job-1", 2);
         std::fs::write(&brief_file, "round 2 brief text").unwrap();
+        // Round 2's ack already exists from the original delivery, before
+        // this pause ever happened (herding-prompt-stall D4).
+        seed_ack(tmp.path(), "job-1", 2);
 
         let opts = continue_options(tmp.path(), false);
         let fake = FakeHerdr::new();
@@ -3277,6 +5000,7 @@ mod tests {
                     heartbeat_fresh: true,
                     pane_text: None,
                     liveness: Some(Liveness::Absent),
+                    blocked: false,
                 }
             },
             |_| {},
@@ -3318,6 +5042,7 @@ mod tests {
                     heartbeat_fresh: true,
                     pane_text: None,
                     liveness,
+                    blocked: false,
                 }
             },
             |_| {},
@@ -3353,6 +5078,7 @@ mod tests {
                     heartbeat_fresh: true,
                     pane_text: None,
                     liveness,
+                    blocked: false,
                 }
             },
             |_| {},
@@ -3381,6 +5107,7 @@ mod tests {
                     heartbeat_fresh: true,
                     pane_text: None,
                     liveness: Some(Liveness::Unknown),
+                    blocked: false,
                 }
             },
             |_| {},
@@ -3462,6 +5189,7 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 60;
         opts.close_always = false;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         *fake.liveness_responses.borrow_mut() = vec![
             Liveness::Absent,
@@ -3480,6 +5208,7 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 60;
         opts.close_always = true;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         *fake.liveness_responses.borrow_mut() = vec![
             Liveness::Absent,

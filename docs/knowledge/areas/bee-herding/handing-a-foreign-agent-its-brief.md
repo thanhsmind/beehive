@@ -1,15 +1,15 @@
 ---
 type: bee.area
 title: "Bee Herding — handing a foreign agent its brief, and knowing it arrived"
-description: "The mailbox channel a bee-ignorant worker is briefed over, the standalone-executor contract that keeps it bee-ignorant, and the delivery receipt rule: only a state transition the agent itself caused counts as evidence it received anything."
+description: "The mailbox channel a bee-ignorant worker is briefed over, the standalone-executor contract that keeps it bee-ignorant, and the delivery receipt rule: the worker's own ack file is the only evidence the brief was ever received — herdr lifecycle state is a failure detector, never the receipt."
 timestamp: 2026-08-20
 bee:
   id: bee-herding-handing-a-foreign-agent-its-brief
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/the-run-verb-and-worker-outcomes.md]
-  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)"]
-  sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-brief-file/CONTEXT.md, docs/history/herding-worker-standalone/CONTEXT.md, "live smoke smoke-agy-delivery-1/-2/-3", "live case job hws-1-r1"]
+  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)", "herding-prompt-stall D5 (corrects D3: blocked does not cover a trust dialog; a give-up wait reads the pane for a confirmation cue instead)"]
+  sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-brief-file/CONTEXT.md, docs/history/herding-worker-standalone/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, "live smoke smoke-agy-delivery-1/-2/-3", "live case job hws-1-r1"]
   authoritative_for: "bee-herding: the brief mailbox, the standalone-worker contract, and delivery receipts"
 ---
 
@@ -55,44 +55,111 @@ not expertise-denial. The same entry shape reaches Task-tool workers through
 `bee dispatch prepare --expertise` and the worker-cell prompt's conditional
 Expertise block (D4).
 
-## A delivery receipt is a state transition the agent itself caused
+## A delivery receipt is an artifact the receiver wrote
 
-This is the "state-receipt delivery", and it replaced an earlier pane-text check.
+This is the "receipt-as-artifact" rule. It retired two earlier detection
+strategies in turn: first a pane-text echo check, then a herdr lifecycle-state
+transition.
 
 A pane ECHOES the send's own keystrokes while the agent is still booting, so any
 receipt that looks for the sent text coming back confirms nothing but its own
-typing — it passes exactly when delivery failed. The receipt is therefore the
-agent's own reported state moving into working — as a TRANSITION off a per-send
-baseline, never a level read — or the round's result file appearing.
+typing — it passes exactly when delivery failed. The fix that followed chased
+the same self-confirmation trap one layer down: it took the receipt as the
+agent's own reported state moving into `working`, as a TRANSITION off a
+per-send baseline. That claim is now retired (herding-prompt-stall D1):
+sampled right after `agent start`, the baseline reads the agent's boot window,
+where a pane flaps through unknown/working/idle/done before it is actually
+ready to accept input, so the boot flap itself satisfies the transition test.
+Proven live on 2026-08-21, job `trust-par-2`: bee stamped `pane_id` into
+`job.json` — a field written only after the pointer was declared delivered —
+while the pane still sat at an empty, unrendered prompt.
 
-A status LEVEL is not a transition (herding-pointer-delivery D1, narrowing
-herding-receipt-state D1, tripled live 2026-08-21): a booting agent flaps
-`working` before it accepts input, so a receipt that merely reads
-`working` — or a stale `done` from a prior round — receipts a swallowed
-pointer, the bounded re-send loop concludes falsely, and the run sits to
-ceiling on a brief no agent ever saw. The ready gate is idle-only for the same
-reason. The fix samples the status immediately before EACH send and counts only
-`not-working → working` (or the result file) as delivery.
+The receipt is now an ACK FILE THE WORKER WRITES (herding-prompt-stall D4):
+the rendered brief's first instruction is to write
+`<mailbox>/ack-<round>.json` atomically — tmp
+then rename, the same gesture the result file already uses — before any other
+step, carrying who took the job (worker nickname, cell id when there is one,
+job id, round, the agent's own name, a `received_at` timestamp). Delivery is
+that ack file appearing, or the round's result file appearing for an
+ultra-fast round. herdr lifecycle state is no longer the success signal at
+all: a file the worker wrote cannot be faked by a boot flap, and it names WHO
+took the job — something no lifecycle state carries.
 
-Proven the hard way in live smoke: two runs whose brief was silently lost still
-satisfied the text check, and only the run that watched for a state change
-completed end to end.
+The ready gate is not idle-only either — that claim is also retired
+(herding-prompt-stall D2). herdr defines `idle` as ready-for-input AND the
+tab has been seen in the focused Herdr UI, and `done` as the same underlying
+ready state for a tab nobody has looked at. CLI reads never mark a tab seen,
+so a `--no-focus` bee
+worker pane normally reports `done`, never `idle` — and `done` is that pane's
+NORMAL resting state, not a failure. The gate accepts `idle` OR `done`.
 
-The general shape — an echo, a mirror, a write-through cache — is that any
-confirmation an actor can produce by itself is not evidence the other side
-received anything.
+What ends the wait EARLY, before any ceiling, is now two herdr-native failure
+detectors — never success signals: `agent_prompt_stalled` (D1), when a
+submission from a non-working state produces no observed lifecycle change
+within five seconds, and `blocked` (herding-prompt-stall D3), herdr
+recognizing a stuck approval or question UI, checked at every wait point —
+the ready gate, pointer delivery, and the round poll. Both end the wait with
+a typed failure the moment they
+fire; neither one confirms the brief arrived.
 
-Waiting for that receipt is bounded, not hopeful: the pointer is re-sent a fixed
-number of times, each attempt polling the agent's state a few times before the
-next, and the pointer is idempotent so a duplicate send costs nothing. Running
-out of attempts is a typed failure that says the prompt was never accepted — it
-never becomes a silent decision to wait anyway.
+The general shape survives, and reads sharper for the retirement: any
+confirmation an actor can produce BY ITSELF — an echoed keystroke, its own
+boot transition, a status level nobody else wrote — is not evidence the other
+side received anything. Only an artifact the receiver wrote is.
+
+Waiting for that receipt is bounded, not hopeful — but it is not a resend
+loop either. The pointer goes out ONCE through herdr's own atomic
+submit-and-observe, `herdr agent prompt <job> <text> --wait --until working
+--timeout <ms>` (herding-prompt-stall D1), and delivery is confirmed by the
+worker's ack file appearing, or by the round's result file appearing for an
+ultra-fast round that finishes before an ack is ever observed. A `blocked`
+pane or herdr's own `agent_prompt_stalled` ends the wait at once, ahead of
+any resend. The pointer is idempotent, so a RESEND fires only once the agent
+has gone back to a ready state (`idle` or `done`) with STILL no ack — never
+on a timer while the agent is still `working` (herding-prompt-stall D4). That
+resend path is itself bounded two ways — a fixed count of ready-with-no-ack
+resends, and a separate wall-clock ack-wait budget — and exhausting either is
+a typed failure that says the prompt was never accepted; it never becomes a
+silent decision to wait anyway.
 
 Failing to get that receipt splits by WHEN it failed, and the two halves treat
 the pane oppositely. A failure BEFORE the agent starts closes the pane — there is
 nothing to look at. A ready wait that runs out AFTER the agent started keeps it:
 something was running and did not answer, and that screen is the only record of
 why.
+
+## A give-up diagnosis reads the pane, and the trust-prompt theory is retired
+
+A first working theory for a 2026-08-21 parallel-dispatch stall was a
+per-workspace trust question the herd entry's auto-approve flag does not
+reach. **That diagnosis was WRONG for the incident it was raised against.**
+Reproduced live: the stall happened again with no trust prompt anywhere on
+the pane — the actual mechanism was bee reading the herd agent's lifecycle
+state during its BOOT window, where it is not yet stable, covered above (the
+receipt-as-artifact rule and the `idle`-or-`done` ready gate). A later reader
+should not re-derive the trust-prompt theory; it does not explain that
+stall.
+
+A related fact turned out true anyway, on a separate probe: a trust dialog
+is a real stall shape, and `blocked` — the failure detector that was
+supposed to catch any approval-or-question UI — does NOT reliably cover it.
+Live proof: three concurrent runs into a genuinely untrusted workspace all
+sat at a trust dialog while the herd tool reported the agent `idle`, never
+`blocked`, and bee burned its full ready-wait ceiling before failing with a
+generic timeout message that named nothing on screen.
+
+Two consequences followed. First, a herd entry may declare and pre-seed the
+foreign tool's own trust store so the question never appears at all — the
+declaration lives in `agent-resolution-and-spawn-commands.md` ("A herd
+entry may declare the foreign tool's own trust store"). Second, every wait
+that gives up — the ready gate, the ack budget, the delivery bound — now
+reads the pane on its way out, and when the text shows a confirmation cue (a
+short yes/no hint, an arrow-key nav footer, a selection caret, or a line
+ending in a question mark) it names the matched line and the remedy in its
+error instead of generic timeout wording. This diagnosis pass runs only on
+an already-failed wait, so a false positive costs nothing and it is never
+load-bearing for whether a wait keeps going (herding-prompt-stall D5,
+corrects D3's reach).
 
 ## The worker is kept bee-ignorant, not merely asked to be
 
@@ -116,8 +183,9 @@ permit.
 ## Pointers (implementation)
 
 - The mailbox contract it writes and reads is
-  `packages/bee-rs/crates/bee/src/herding/mailbox.rs`; the delivery path, receipt
-  and resend ceiling are in `packages/bee-rs/crates/bee/src/herding/run.rs`.
+  `packages/bee-rs/crates/bee/src/herding/mailbox.rs`; the delivery path
+  (`deliver_pointer`), the ack-wait budget, and the stall/blocked errors are in
+  `packages/bee-rs/crates/bee/src/herding/run.rs`.
 - The worker marker is the environment variable `BEE_HERDING_WORKER=1`, exported
   into the pane before `agent start`; the mailbox directory is
   `.bee/mailbox/<job-id>/`. The repo instructions the contract tells the worker to

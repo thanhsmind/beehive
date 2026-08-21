@@ -9,7 +9,7 @@ bee:
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
   decisions: ["herding-executor D1 (bee herding run ships first, scope A)", "herding-executor D5 (native health-check liveness, idle-timeout plus ceiling)", "herding-executor D6 (pane lifecycle follows the result, not the clock)", "herding-executor D7 (cell-execution-only, mirrors the cli tier kind)", "herding-executor D9 (the verb appends its own dispatch and ledger rows)", "herding-liveness-signals D1 (the signal ladder and the typed died outcome)", "herding-liveness-signals D2 (the liveness read fails open)", "herding-liveness-signals D3 (a death must be consecutive)", "herding-liveness-signals D4 (pane text is read on demand)", "herding-liveness-signals D6 (CPU refused as a hang signal; hang detection parked)", "herding-limit-pause D1-D4 (a usage-limit stop is a typed paused_limit outcome)", "herding-tier D4 (run gains stdin support via the - sentinel on --task-file)", "herding-executor D2 (agent-kind pass-through; bee keeps no list of kinds)"]
-  sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-liveness-signals/CONTEXT.md, docs/history/herding-limit-pause/CONTEXT.md, "herding-executor cells hx-1..hx-7 (mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, continue rounds; traces in `.bee/cells/`, 2026-08-19/20)", "herding-liveness-signals cells hls-1, hls-2 (the died outcome, on-demand pane read; traces in `.bee/cells/`, 2026-08-20)", "live case job hws-1-r1"]
+  sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-liveness-signals/CONTEXT.md, docs/history/herding-limit-pause/CONTEXT.md, "herding-executor cells hx-1..hx-7 (mailbox contract, agent-kind pass-through, write-guard carve, the verb itself, continue rounds; traces in `.bee/cells/`, 2026-08-19/20)", "herding-liveness-signals cells hls-1, hls-2 (the died outcome, on-demand pane read; traces in `.bee/cells/`, 2026-08-20)", "live case job hws-1-r1", "live commit-split counts across herding-prompt-stall cells hps-1..hps-14 (worker vs. orchestrator commit ownership, 2026-08-21)"]
   authoritative_for: "bee-herding: the run verb's poll ladder, worker outcomes, and pane lifecycle"
 ---
 
@@ -80,9 +80,10 @@ closed, even under `--close-always`, and `job.json` is stamped `paused_limit_at`
 plus `limit_reset_hint` (the matched line).
 
 Continuing a stamped job with a live pane resumes the SAME round — a resume
-pointer through the state-receipt delivery, stamp cleared, wait re-entered; a
-gone pane refuses typed. The control loop's occupancy already counts the paused
-job as occupying its slot, so its work is never re-dispatched (live case
+pointer through the pointer-delivery path (herding-prompt-stall D1/D4), stamp
+cleared, wait re-entered; a gone pane refuses typed. The control loop's
+occupancy already counts the paused job as occupying its slot, so its work
+is never re-dispatched (live case
 hws-1-r1).
 
 ## A job is not always one round
@@ -106,8 +107,25 @@ Everything else bee-shaped — capping the cell, the proof line, reservations �
 stays the orchestrator's job, done only after it reads the result file back
 (herding-executor D4).
 
+## The commit split, as observed
+
+The worker owns the edit and the result file; the orchestrator owns the cell
+commit and the cap. That split is now backed by observation, not just
+design: across this feature's fourteen dispatches the worker committed with
+the required commit-trailer form exactly ONCE, used a bare (id-only) trailer
+FIVE times, and made no commit at all THREE times — and every time, the
+orchestrator made the path-scoped cell commit itself. A bee-ignorant worker
+does not reliably carry bee's commit conventions, trailer form included,
+even when the brief states the rule.
+
 ## Open Gaps
 
+- **Whether the brief should even ask the worker to commit is unresolved.**
+  Given the observed split above, either the brief drops the commit step
+  for a herding worker entirely and the orchestrator always makes the cell
+  commit, or the trailer rule gets restated in a form a bee-ignorant agent
+  can follow verbatim instead of assumed known. The counts above (1 correct,
+  5 bare, 3 none, out of 14) are the evidence; no direction has been chosen.
 - **Hang detection remains an open gap.** A worker that is stuck but still
   emitting output satisfies every progress source there is. Accumulated CPU time
   was the intended discriminator and was REFUSED on measurement

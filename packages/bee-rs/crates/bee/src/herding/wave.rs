@@ -18,11 +18,12 @@
 // Both verbs are deliberately split into a thin CLI-parsing shell and a pure
 // (or backend-generic) inner function, so every behavioural test below runs
 // with NO real `herdr` on PATH (D7's test seam) and NO herdr server:
-//   - `resolve_agent_command` is pure: config JSON in, (kind, args, env) or
-//     a typed `AgentCommandError` out — `env` (D4) is the resolved
-//     registry entry's per-agent env map, empty outside the object shape.
-//     No process, no I/O beyond the caller having already read the config
-//     file.
+//   - `resolve_agent_command` is pure: config JSON in, (kind, args, env,
+//     workspace_trust) or a typed `AgentCommandError` out — `env` (D4) is
+//     the resolved registry entry's per-agent env map, and
+//     `workspace_trust` (D5) its optional trust-store declaration, both
+//     empty/None outside the object shape. No process, no I/O beyond the
+//     caller having already read the config file.
 //   - `run_wave_and_record` is generic over `WorkerBackend`, so a test
 //     drives it with `fleet::backend::fake::FakeBackend` instead of
 //     `HerdrBackend` — the same seam `fleet`'s own choreography tests use
@@ -132,15 +133,45 @@ fn agent_command_tokens(cfg: &Value) -> Vec<String> {
     out
 }
 
+/// D5 — a `herding.agents` object-shape entry's optional workspace-trust
+/// declaration: `file` names a foreign tool's own trust-store JSON file
+/// (a leading `~` expanded to `$HOME` at parse time), and `key` names the
+/// array field inside it that holds trusted absolute paths. Nothing here
+/// names Antigravity specifically — the declaration is config-driven, not
+/// hard-coded (D5's own requirement).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WorkspaceTrust {
+    pub(crate) file: String,
+    pub(crate) key: String,
+}
+
 /// One `herding.agents` entry, resolved: `argv` is the (unsubstituted)
 /// token array — either the plain array shape or an object shape's
 /// `"argv"` field — and `env` is that object shape's optional `"env"` map
 /// (D4), empty for the array shape, the built-ins, and every entry the
-/// pre-D4 array-only registry ever produced.
+/// pre-D4 array-only registry ever produced. `workspace_trust` (D5) is the
+/// same object shape's optional workspace-trust declaration, empty for the
+/// array shape and every entry that declares none.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct RegistryEntry {
     argv: Vec<String>,
     env: BTreeMap<String, String>,
+    workspace_trust: Option<WorkspaceTrust>,
+}
+
+/// Expands a leading `~` (or `~/...`) to `$HOME`, same shape as every
+/// shell's own tilde expansion. Anything else (no leading `~`, `$HOME`
+/// unset) is returned unchanged — the caller's fail-open read of the
+/// resulting path names its own "file not found" warning either way.
+fn expand_tilde(path: &str) -> String {
+    let Some(rest) = path.strip_prefix('~') else { return path.to_string() };
+    if !rest.is_empty() && !rest.starts_with('/') {
+        // `~bob/...` names another user's home — outside this expansion's
+        // scope, left unchanged rather than guessed at.
+        return path.to_string();
+    }
+    let Ok(home) = std::env::var("HOME") else { return path.to_string() };
+    format!("{home}{rest}")
 }
 
 /// D3 — the two built-in herd names the registry pre-seeds so `--agent
@@ -156,14 +187,14 @@ fn built_in_agents() -> BTreeMap<String, RegistryEntry> {
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
-            env: BTreeMap::new(),
+            ..Default::default()
         },
     );
     out.insert(
         "agy-flash".to_string(),
         RegistryEntry {
             argv: ["agy", "--dangerously-skip-permissions"].iter().map(|s| s.to_string()).collect(),
-            env: BTreeMap::new(),
+            ..Default::default()
         },
     );
     out
@@ -218,14 +249,33 @@ fn parse_env_map(env: &Map<String, Value>) -> Option<BTreeMap<String, String>> {
     Some(out)
 }
 
+/// D5's `workspace_trust` object: `{"file": "<path>", "key": "<array
+/// field>"}`, both required, non-empty, newline-free strings. `file`'s
+/// leading `~` is expanded here, once, at parse time. `None` on any shape
+/// mismatch — the caller drops the whole entry on it, fail-open-per-entry,
+/// exactly like a bad env key.
+fn parse_workspace_trust(value: &Value) -> Option<WorkspaceTrust> {
+    let obj = value.as_object()?;
+    let file = obj.get("file")?.as_str()?;
+    let key = obj.get("key")?.as_str()?;
+    if file.trim().is_empty() || file.contains('\n') || key.trim().is_empty() || key.contains('\n') {
+        return None;
+    }
+    Some(WorkspaceTrust { file: expand_tilde(file), key: key.to_string() })
+}
+
 /// D4's two `herding.agents` entry shapes: the plain argv array (env always
-/// empty), or `{"argv": [...], "env": {...}}` — `argv` validated exactly
-/// like the array shape, `env` optional (absent = empty) and validated by
-/// `parse_env_map`. `None` on any shape mismatch or validation failure —
-/// the caller drops the whole entry, fail-open-per-entry.
+/// empty, workspace_trust always absent), or `{"argv": [...], "env": {...},
+/// "workspace_trust": {...}}` — `argv` validated exactly like the array
+/// shape, `env` optional (absent = empty) and validated by `parse_env_map`,
+/// `workspace_trust` (D5) optional (absent = none) and validated by
+/// `parse_workspace_trust`. `None` on any shape mismatch or validation
+/// failure — the caller drops the whole entry, fail-open-per-entry.
 fn parse_registry_entry(value: &Value) -> Option<RegistryEntry> {
     match value {
-        Value::Array(tokens) => parse_argv_tokens(tokens).map(|argv| RegistryEntry { argv, env: BTreeMap::new() }),
+        Value::Array(tokens) => {
+            parse_argv_tokens(tokens).map(|argv| RegistryEntry { argv, env: BTreeMap::new(), workspace_trust: None })
+        }
         Value::Object(obj) => {
             let Value::Array(tokens) = obj.get("argv")? else { return None };
             let argv = parse_argv_tokens(tokens)?;
@@ -234,7 +284,11 @@ fn parse_registry_entry(value: &Value) -> Option<RegistryEntry> {
                 Some(Value::Object(env_obj)) => parse_env_map(env_obj)?,
                 Some(_) => return None,
             };
-            Some(RegistryEntry { argv, env })
+            let workspace_trust = match obj.get("workspace_trust") {
+                None => None,
+                Some(v) => Some(parse_workspace_trust(v)?),
+            };
+            Some(RegistryEntry { argv, env, workspace_trust })
         }
         _ => None,
     }
@@ -263,12 +317,13 @@ fn agent_registry(cfg: &Value) -> BTreeMap<String, RegistryEntry> {
 /// The one place a name resolves against `herding.agents` (herd-registry
 /// D2): token 0 becomes the kind, the rest the args, each substituted the
 /// same way a plain `herding.agent_command` array is; the entry's `env`
-/// (D4) rides along unsubstituted. An unknown name lists every registry
-/// key (built-ins included, since `agent_registry` always seeds them).
+/// (D4) and `workspace_trust` (D5) ride along unsubstituted. An unknown
+/// name lists every registry key (built-ins included, since
+/// `agent_registry` always seeds them).
 fn resolve_from_registry(
     registry: &BTreeMap<String, RegistryEntry>,
     name: &str,
-) -> Result<(String, Vec<String>, BTreeMap<String, String>), AgentCommandError> {
+) -> Result<(String, Vec<String>, BTreeMap<String, String>, Option<WorkspaceTrust>), AgentCommandError> {
     let Some(entry) = registry.get(name) else {
         return Err(AgentCommandError::UnknownAgent {
             name: name.to_string(),
@@ -281,7 +336,7 @@ fn resolve_from_registry(
         // rather than panic if it ever did.
         return Err(AgentCommandError::Empty { key: "herding.agents" });
     };
-    Ok((kind.clone(), args.to_vec(), entry.env.clone()))
+    Ok((kind.clone(), args.to_vec(), entry.env.clone(), entry.workspace_trust.clone()))
 }
 
 /// Returns the configured agent name from the cell-execution tier slot
@@ -331,7 +386,7 @@ fn current_runtime() -> String {
 pub(crate) fn resolve_agent_command(
     cfg: &Value,
     agent: Option<&str>,
-) -> Result<(String, Vec<String>, BTreeMap<String, String>), AgentCommandError> {
+) -> Result<(String, Vec<String>, BTreeMap<String, String>, Option<WorkspaceTrust>), AgentCommandError> {
     resolve_agent_command_for_runtime(cfg, agent, &current_runtime())
 }
 
@@ -340,7 +395,7 @@ pub(crate) fn resolve_agent_command_for_runtime(
     cfg: &Value,
     agent: Option<&str>,
     runtime: &str,
-) -> Result<(String, Vec<String>, BTreeMap<String, String>), AgentCommandError> {
+) -> Result<(String, Vec<String>, BTreeMap<String, String>, Option<WorkspaceTrust>), AgentCommandError> {
     let registry = agent_registry(cfg);
     if let Some(name) = agent {
         return resolve_from_registry(&registry, name);
@@ -358,10 +413,10 @@ pub(crate) fn resolve_agent_command_for_runtime(
         // non-empty default), but fail closed rather than panic if it ever did.
         return Err(AgentCommandError::Empty { key: "herding.agent_command" });
     };
-    // D4: the plain `herding.agent_command` array path names no registry
-    // entry, so it carries no env — env is a `herding.agents` object-shape
-    // feature only.
-    Ok((kind.clone(), args.to_vec(), BTreeMap::new()))
+    // D4/D5: the plain `herding.agent_command` array path names no registry
+    // entry, so it carries no env and no workspace-trust declaration —
+    // both are `herding.agents` object-shape features only.
+    Ok((kind.clone(), args.to_vec(), BTreeMap::new(), None))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -492,7 +547,7 @@ fn build_wave_backend_and_run<B: WorkerBackend + Sync>(
     // `bee herding wave` names no per-worker agent (herd-registry D2 covers
     // only `--agent`, a tier slot's `agent`, and a string `agent_command`) —
     // this caller stays on the `None` arm, unchanged.
-    let (kind, args, env) = resolve_agent_command(cfg, None)?;
+    let (kind, args, env, _wt) = resolve_agent_command(cfg, None)?;
     // D4's per-agent env is NOT applied on this path, deliberately: this
     // function never splits a pane — `fleet::backend::herdr::HerdrBackend`
     // (the backend `construct_backend` builds) starts an agent into a pane
@@ -944,7 +999,7 @@ mod tests {
 
     #[test]
     fn absent_config_falls_back_to_the_documented_default() {
-        let (kind, args, _env) = resolve_agent_command(&Value::Null, None).unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command(&Value::Null, None).unwrap();
         assert_eq!(kind, "claude");
         assert_eq!(args, vec!["--model", "sonnet", "--permission-mode", "bypassPermissions"]);
     }
@@ -952,7 +1007,7 @@ mod tests {
     #[test]
     fn a_configured_command_splits_token_0_from_the_rest() {
         let cfg = serde_json::json!({"herding": {"agent_command": ["codex", "--flag", "value"]}});
-        let (kind, args, _env) = resolve_agent_command(&cfg, None).unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag", "value"]);
     }
@@ -960,7 +1015,7 @@ mod tests {
     #[test]
     fn model_placeholder_is_substituted_per_token_never_joined() {
         let cfg = serde_json::json!({"herding": {"agent_command": ["claude", "--model", "{MODEL}", "--x={MODEL}"]}});
-        let (kind, args, _env) = resolve_agent_command(&cfg, None).unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "claude");
         assert_eq!(args, vec!["--model", "sonnet", "--x=sonnet"]);
     }
@@ -972,7 +1027,7 @@ mod tests {
         // like "gemini", a typo, anything) resolves and reaches backend
         // construction unchanged.
         let cfg = serde_json::json!({"herding": {"agent_command": ["gemini", "--x"]}});
-        let (kind, args, _env) = resolve_agent_command(&cfg, None).unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "gemini");
         assert_eq!(args, vec!["--x"]);
     }
@@ -1004,7 +1059,7 @@ mod tests {
     #[test]
     fn a_named_lookup_returns_the_registry_argv() {
         let cfg = registry_cfg();
-        let (kind, args, _env) = resolve_agent_command(&cfg, Some("codex-herd")).unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command(&cfg, Some("codex-herd")).unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag", "value"]);
     }
@@ -1036,7 +1091,7 @@ mod tests {
     fn a_string_valued_agent_command_aliases_through_the_registry() {
         let mut cfg = registry_cfg();
         cfg["herding"]["agent_command"] = Value::String("gemini-herd".to_string());
-        let (kind, args, _env) = resolve_agent_command(&cfg, None).unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "gemini");
         assert_eq!(args, vec!["--x"]);
     }
@@ -1059,7 +1114,7 @@ mod tests {
         // consulted, today's split behavior unchanged.
         let mut cfg = registry_cfg();
         cfg["herding"]["agent_command"] = serde_json::json!(["claude", "--flag"]);
-        let (kind, args, _env) = resolve_agent_command(&cfg, None).unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(kind, "claude");
         assert_eq!(args, vec!["--flag"]);
     }
@@ -1076,7 +1131,7 @@ mod tests {
                 }
             }
         });
-        let (kind, _args, _env) = resolve_agent_command(&cfg, Some("good")).unwrap();
+        let (kind, _args, _env, _wt) = resolve_agent_command(&cfg, Some("good")).unwrap();
         assert_eq!(kind, "codex");
         for bad in ["bad-empty", "bad-non-string", "bad-newline"] {
             let err = resolve_agent_command(&cfg, Some(bad)).unwrap_err();
@@ -1092,12 +1147,12 @@ mod tests {
 
     #[test]
     fn built_in_names_resolve_with_zero_herding_config() {
-        let (kind, args, env) = resolve_agent_command(&Value::Null, Some("claude-sonnet")).unwrap();
+        let (kind, args, env, _wt) = resolve_agent_command(&Value::Null, Some("claude-sonnet")).unwrap();
         assert_eq!(kind, "claude");
         assert_eq!(args, vec!["--model", "sonnet", "--permission-mode", "bypassPermissions"]);
         assert!(env.is_empty());
 
-        let (kind, args, env) = resolve_agent_command(&Value::Null, Some("agy-flash")).unwrap();
+        let (kind, args, env, _wt) = resolve_agent_command(&Value::Null, Some("agy-flash")).unwrap();
         assert_eq!(kind, "agy");
         assert_eq!(args, vec!["--dangerously-skip-permissions"]);
         assert!(env.is_empty());
@@ -1112,7 +1167,7 @@ mod tests {
                 }
             }
         });
-        let (kind, args, _env) = resolve_agent_command(&cfg, Some("agy-flash")).unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command(&cfg, Some("agy-flash")).unwrap();
         assert_eq!(kind, "agy");
         assert_eq!(args, vec!["--custom-flag"]);
     }
@@ -1142,7 +1197,7 @@ mod tests {
                 }
             }
         });
-        let (kind, args, env) = resolve_agent_command(&cfg, Some("codex-envd")).unwrap();
+        let (kind, args, env, _wt) = resolve_agent_command(&cfg, Some("codex-envd")).unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag"]);
         assert_eq!(env.get("API_KEY").map(String::as_str), Some("secret-value"));
@@ -1158,7 +1213,7 @@ mod tests {
                 }
             }
         });
-        let (_kind, _args, env) = resolve_agent_command(&cfg, Some("codex-noenv")).unwrap();
+        let (_kind, _args, env, _wt) = resolve_agent_command(&cfg, Some("codex-noenv")).unwrap();
         assert!(env.is_empty());
     }
 
@@ -1174,7 +1229,7 @@ mod tests {
                 }
             }
         });
-        let (_kind, _args, env) = resolve_agent_command(&cfg, Some("good")).unwrap();
+        let (_kind, _args, env, _wt) = resolve_agent_command(&cfg, Some("good")).unwrap();
         assert_eq!(env.get("OK").map(String::as_str), Some("v"));
         for bad in ["bad-key", "bad-key-dash", "bad-value-newline"] {
             let err = resolve_agent_command(&cfg, Some(bad)).unwrap_err();
@@ -1194,8 +1249,107 @@ mod tests {
                 }
             }
         });
-        let (_kind, _args, env) = resolve_agent_command(&cfg, Some("plain-array")).unwrap();
+        let (_kind, _args, env, _wt) = resolve_agent_command(&cfg, Some("plain-array")).unwrap();
         assert!(env.is_empty());
+    }
+
+    // ─── D5: workspace-trust declaration on the object-shape entry ─────
+
+    #[test]
+    fn an_object_shape_entry_parses_a_workspace_trust_declaration() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "agy-flash": {
+                        "argv": ["agy", "--dangerously-skip-permissions"],
+                        "workspace_trust": {
+                            "file": "~/.gemini/antigravity-cli/settings.json",
+                            "key": "trustedWorkspaces",
+                        },
+                    }
+                }
+            }
+        });
+        let (kind, args, _env, wt) = resolve_agent_command(&cfg, Some("agy-flash")).unwrap();
+        assert_eq!(kind, "agy");
+        assert_eq!(args, vec!["--dangerously-skip-permissions"]);
+        let wt = wt.expect("workspace_trust must be Some");
+        assert_eq!(wt.key, "trustedWorkspaces");
+        assert!(!wt.file.starts_with('~'), "leading ~ must be expanded, got {:?}", wt.file);
+        assert!(wt.file.ends_with("/.gemini/antigravity-cli/settings.json"), "{:?}", wt.file);
+    }
+
+    #[test]
+    fn an_object_shape_entry_with_no_workspace_trust_key_resolves_with_none() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "codex-noenv": { "argv": ["codex"] }
+                }
+            }
+        });
+        let (_kind, _args, _env, wt) = resolve_agent_command(&cfg, Some("codex-noenv")).unwrap();
+        assert!(wt.is_none());
+    }
+
+    #[test]
+    fn a_malformed_workspace_trust_drops_the_whole_entry_not_just_the_declaration() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "good": {
+                        "argv": ["agy"],
+                        "workspace_trust": {"file": "~/trust.json", "key": "trustedWorkspaces"},
+                    },
+                    "bad-not-object": {"argv": ["agy"], "workspace_trust": ["not", "an", "object"]},
+                    "bad-missing-file": {"argv": ["agy"], "workspace_trust": {"key": "trustedWorkspaces"}},
+                    "bad-missing-key": {"argv": ["agy"], "workspace_trust": {"file": "~/trust.json"}},
+                    "bad-empty-file": {"argv": ["agy"], "workspace_trust": {"file": "", "key": "trustedWorkspaces"}},
+                    "bad-newline-file": {
+                        "argv": ["agy"],
+                        "workspace_trust": {"file": "line1\nline2", "key": "trustedWorkspaces"},
+                    },
+                }
+            }
+        });
+        let (_kind, _args, _env, wt) = resolve_agent_command(&cfg, Some("good")).unwrap();
+        assert!(wt.is_some());
+        for bad in [
+            "bad-not-object",
+            "bad-missing-file",
+            "bad-missing-key",
+            "bad-empty-file",
+            "bad-newline-file",
+        ] {
+            let err = resolve_agent_command(&cfg, Some(bad)).unwrap_err();
+            let AgentCommandError::UnknownAgent { known, .. } = &err else {
+                panic!("expected UnknownAgent for dropped entry {bad:?}, got {err:?}");
+            };
+            assert!(!known.contains(&bad.to_string()), "{known:?} must not carry dropped entry {bad:?}");
+            assert!(known.contains(&"good".to_string()));
+        }
+    }
+
+    #[test]
+    fn array_shape_entries_never_carry_workspace_trust() {
+        let cfg = serde_json::json!({
+            "herding": {
+                "agents": {
+                    "plain-array": ["agy", "--x"],
+                }
+            }
+        });
+        let (_kind, _args, _env, wt) = resolve_agent_command(&cfg, Some("plain-array")).unwrap();
+        assert!(wt.is_none());
+    }
+
+    #[test]
+    fn tilde_expansion_only_applies_to_a_bare_home_relative_path() {
+        let home = std::env::var("HOME").expect("HOME must be set in the test environment");
+        assert_eq!(expand_tilde("~/foo/bar.json"), format!("{home}/foo/bar.json"));
+        assert_eq!(expand_tilde("~"), home);
+        assert_eq!(expand_tilde("/already/absolute.json"), "/already/absolute.json");
+        assert_eq!(expand_tilde("~otheruser/bar.json"), "~otheruser/bar.json");
     }
 
     // ─── tier slot resolution: models.<runtime>.generation ────────────
@@ -1212,7 +1366,7 @@ mod tests {
                 "agent_command": "claude-sonnet"
             }
         });
-        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg, None, "claude").unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg, None, "claude").unwrap();
         assert_eq!(kind, "agy");
         assert_eq!(args, vec!["--dangerously-skip-permissions"]);
     }
@@ -1226,7 +1380,7 @@ mod tests {
                 }
             }
         });
-        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg, Some("claude-sonnet"), "claude").unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg, Some("claude-sonnet"), "claude").unwrap();
         assert_eq!(kind, "claude");
         assert_eq!(args, vec!["--model", "sonnet", "--permission-mode", "bypassPermissions"]);
     }
@@ -1238,7 +1392,7 @@ mod tests {
             "models": { "claude": { "generation": { "kind": "herding" } } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
-        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg_no_agent, None, "claude").unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_no_agent, None, "claude").unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag"]);
 
@@ -1247,7 +1401,7 @@ mod tests {
             "models": { "claude": { "generation": { "kind": "herding", "agent": "   " } } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
-        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg_empty_agent, None, "claude").unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_empty_agent, None, "claude").unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag"]);
 
@@ -1256,7 +1410,7 @@ mod tests {
             "models": { "claude": { "generation": "sonnet" } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
-        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg_model_str, None, "claude").unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_model_str, None, "claude").unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag"]);
 
@@ -1265,7 +1419,7 @@ mod tests {
             "models": { "claude": { "generation": { "kind": "cli", "command": "run-cmd" } } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
-        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg_cli, None, "claude").unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_cli, None, "claude").unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag"]);
 
@@ -1274,7 +1428,7 @@ mod tests {
             "models": { "claude": { "generation": null } },
             "herding": { "agent_command": ["codex", "--flag"] }
         });
-        let (kind, args, _env) = resolve_agent_command_for_runtime(&cfg_null, None, "claude").unwrap();
+        let (kind, args, _env, _wt) = resolve_agent_command_for_runtime(&cfg_null, None, "claude").unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag"]);
     }
@@ -1320,7 +1474,7 @@ mod tests {
                 }
             }
         });
-        let (kind, args, env) = resolve_agent_command_for_runtime(&cfg, None, "claude").unwrap();
+        let (kind, args, env, _wt) = resolve_agent_command_for_runtime(&cfg, None, "claude").unwrap();
         assert_eq!(kind, "codex");
         assert_eq!(args, vec!["--flag"]);
         assert_eq!(env.get("API_KEY").map(String::as_str), Some("secret-value"));
@@ -1340,19 +1494,19 @@ mod tests {
             }
         });
         // unknown runtime name falls back to claude
-        let (kind, _args, _env) = resolve_agent_command_for_runtime(&cfg, None, "unknown-runtime").unwrap();
+        let (kind, _args, _env, _wt) = resolve_agent_command_for_runtime(&cfg, None, "unknown-runtime").unwrap();
         assert_eq!(kind, "agy");
 
         // empty string runtime falls back to claude
-        let (kind, _args, _env) = resolve_agent_command_for_runtime(&cfg, None, "").unwrap();
+        let (kind, _args, _env, _wt) = resolve_agent_command_for_runtime(&cfg, None, "").unwrap();
         assert_eq!(kind, "agy");
 
         // valid codex runtime reads codex block
-        let (kind, _args, _env) = resolve_agent_command_for_runtime(&cfg, None, "codex").unwrap();
+        let (kind, _args, _env, _wt) = resolve_agent_command_for_runtime(&cfg, None, "codex").unwrap();
         assert_eq!(kind, "claude");
 
         // valid claude runtime reads claude block
-        let (kind, _args, _env) = resolve_agent_command_for_runtime(&cfg, None, "claude").unwrap();
+        let (kind, _args, _env, _wt) = resolve_agent_command_for_runtime(&cfg, None, "claude").unwrap();
         assert_eq!(kind, "agy");
     }
 
@@ -1456,7 +1610,7 @@ mod tests {
         // (e.g. always "claude", vec![]) still fails when the configured
         // command differs, as it does here.
         let cfg = serde_json::json!({"herding": {"agent_command": ["codex", "--flag", "value"]}});
-        let (expected_kind, expected_args, _expected_env) = resolve_agent_command(&cfg, None).unwrap();
+        let (expected_kind, expected_args, _expected_env, _wt) = resolve_agent_command(&cfg, None).unwrap();
         assert_eq!(expected_kind, "codex", "sanity: this test's cfg must not resolve to the default");
 
         let tmp = tempfile::tempdir().unwrap();

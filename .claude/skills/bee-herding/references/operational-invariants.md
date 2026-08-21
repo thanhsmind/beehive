@@ -153,6 +153,51 @@ herd-registry D1 adds one more optional key, independent of the two above:
 }
 ```
 
+An entry may also be an **object**, `{"argv": [...], "env": {...},
+"workspace_trust": {...}}` — `argv` validated exactly like the plain array
+shape; `env` (optional) is a per-agent environment map exported into the
+freshly split pane before the agent starts; `workspace_trust` (optional,
+herding-prompt-stall D5) is covered just below. A malformed object entry —
+a bad `env` key, a bad `workspace_trust` shape — drops the WHOLE entry,
+fail-open per entry, same as a malformed argv array.
+
+**`workspace_trust` (herding-prompt-stall D5)** pre-seeds a foreign agent's
+OWN per-workspace trust store so it never meets a first-time-workspace
+trust dialog in a freshly minted `bee worktree new` directory — proven
+live 2026-08-21: three concurrent `agy` runs into one fresh worktree all
+sat at "Do you trust this folder?", and the herd entry's auto-approve flag
+does not cover it (`agy --dangerously-skip-permissions` gates TOOL
+permissions only; `agy --help` has no trust flag or subcommand). The
+declaration names the file and the array key inside it, config-driven —
+bee's source carries no hard-coded path for any specific tool:
+
+```json
+{
+  "herding": {
+    "agents": {
+      "agy-flash": {
+        "argv": ["agy", "--dangerously-skip-permissions"],
+        "workspace_trust": {
+          "file": "~/.gemini/antigravity-cli/settings.json",
+          "key": "trustedWorkspaces"
+        }
+      }
+    }
+  }
+}
+```
+
+`file`'s leading `~` is expanded to `$HOME` once, at config-parse time.
+Before the pane split and `agent start` (`bee herding run`'s `execute_new`),
+if the entry declares `workspace_trust`, bee reads `file`, and — unless the
+run's absolute `--cwd` is already present in the array named by `key` — 
+appends it and writes the file back atomically. This is FAIL-OPEN and
+loud: a missing file, unparsable JSON, a missing or non-array `key`, or an
+unwritable file all emit one warning line naming the file and what was
+wrong, then let the run proceed unchanged — a foreign tool's config being
+unreadable or unwritable must never fail a bee run. Nothing in that file is
+ever rewritten beyond appending one absolute path to the named array.
+
 herd-registry D2 — **three reference spellings, one resolver**
 (`resolve_agent_command` in `herding/wave.rs`), all of which look a name up
 against `herding.agents`:
@@ -245,19 +290,44 @@ hardenings, each one bought by a real failure:
   silently drops a multi-line injected prompt even when idle. The brief is
   written to `<mailbox>/brief-N.txt` and the agent receives a ONE-LINE
   pointer at that absolute path.
-- **Readiness is observed, then delivery is verified — by a state change,
-  never by pane text.** After start, the verb waits (up to 60s) for the
-  agent to report ready; then it sends the pointer and counts it delivered
-  only when the AGENT'S OWN STATE moves (working or done) or the round's
-  result file appears — resending up to 30 times about a second apart,
-  because herdr's ready flags can fire before the agent's input loop
-  accepts text. The pointer is idempotent, so a duplicate delivery is
-  harmless. Do NOT check whether the pane echoes the brief-file name: a
-  booting pane echoes the keystrokes of the send itself, so that check
-  passes exactly when delivery failed (two live smokes lost their brief
-  this way). If the ready wait is exhausted, that is a typed spawn failure
-  that KEEPS the pane for forensics — unlike a pre-start spawn failure,
-  which closes it.
+- **Readiness defers to herdr's own lifecycle contract; delivery's receipt is
+  the worker's own ack file, and herdr lifecycle state is a FAILURE detector
+  only, never the success signal (herding-prompt-stall D1-D4).** The ready
+  gate accepts `idle` OR `done` — not `idle` alone (herding-prompt-stall D2
+  narrows herding-run-ready-wait D1, retiring the earlier idle-alone rule):
+  `done` is the SAME underlying ready-for-input state for a pane nobody has
+  focused, and since bee splits every worker pane with `--no-focus` and reads
+  it only via CLI reads — which never mark a tab seen — `done` is the NORMAL
+  resting state of a bee worker pane. Delivery no longer counts a pointer
+  received by watching the agent's own state move to `working`
+  (herding-prompt-stall D1 supersedes herding-pointer-delivery D1, retiring
+  that receipt rule): a lifecycle sample taken inside the agent's boot
+  window is not trustworthy — an agy pane flaps through
+  unknown/working/idle/done while its TUI initializes, so a boot flap could
+  have satisfied the old test and receipted a pointer the booting TUI had
+  actually discarded. The send itself is still herdr's own atomic
+  submit-and-observe, `herdr agent prompt <job> <text> --wait --until working
+  --timeout <ms>`; herdr's `agent_prompt_stalled` is one of two things that
+  can end the wait early as a typed failure — never as a success signal. The
+  RECEIPT is the worker's own ack file, written as the brief's first
+  instruction, or the round's result file for an ultra-fast round that
+  finishes before an ack is ever observed (herding-prompt-stall D4). Once a
+  send has gone out, an observed `working` status is the HEALTHY path — bee
+  keeps polling for the ack, it never resends into a pane that is actively
+  working; a resend fires only once the agent has returned to `idle` or
+  `done` with still no ack, bounded by a fixed resend count and a separate
+  wall-clock ack-wait budget. At every one of these wait points — the ready
+  gate, pointer delivery, and the round poll — `blocked` ends the wait
+  immediately as a typed, fast, loud failure naming the pane id, the tail of
+  its text, and the remedy (herding-prompt-stall D3): this is how a
+  per-workspace trust or approval prompt is covered without bee carrying an
+  agent-specific pattern table. The pointer stays idempotent, so a duplicate
+  send is harmless. Do NOT check whether the pane echoes the brief-file name:
+  a booting pane echoes the keystrokes of the send itself, so that check
+  passes exactly when delivery failed (two live smokes lost their brief this
+  way). If the ready wait is exhausted without a `blocked` verdict, that is a
+  typed spawn failure that KEEPS the pane for forensics — unlike a pre-start
+  spawn failure, which closes it.
 - **Operator rules.** Put each kind's auto-approve flag in its herd entry
   (`claude … --permission-mode bypassPermissions`, `agy
   --dangerously-skip-permissions`) — an agent that stops to ask permission
