@@ -754,23 +754,26 @@ fn start_with_retry(
     Err(format!("{last} (after {START_RETRY_ATTEMPTS} start attempts, shell never became available)"))
 }
 
-/// herding-run-ready-wait D1: polls `status()` until the agent reports a
-/// real status (`idle` ready-for-input, or already `working`/`done`) or the
-/// ready-wait ceiling passes. Check-then-sleep: an agent already ready is
-/// accepted with zero sleeps, and a 0-second ceiling with no status is
-/// exhausted immediately — both drive the tests without a real clock.
+/// herding-run-ready-wait D1: polls `status()` until the agent reports
+/// `idle` (ready for input) or the ready-wait ceiling passes. Check-then-sleep:
+/// an agent already idle is accepted with zero sleeps, and a 0-second ceiling
+/// with no status is exhausted immediately — both drive the tests without a
+/// real clock. Ready gate is idle-only: booting or working agents are not ready.
+///
 /// herding-receipt-state D1: sends the one-line pointer and treats it as
-/// delivered only when the AGENT'S STATE says so — `agent_status` flips to
-/// working/done, or the round's result file appears (an ultra-fast round
-/// can finish before a status poll sees "working"). Pane text is no
-/// receipt: the pane echoes the send's own keystrokes during agent boot
-/// (live smoke smoke-agy-delivery-1/-2: the echoed pointer satisfied the
-/// old needle check ~6s after spawn, the booting TUI then discarded the
-/// buffered input, and the run waited on a brief no agent ever saw). An
-/// agent still idle after a per-attempt watch window gets a resend; the
-/// pointer is idempotent (read the same file), so a duplicate delivery is
-/// harmless. Bounded attempts; injected wait seam, same style as the
-/// other loops.
+/// delivered only when the AGENT'S STATE confirms receipt — an agent-caused
+/// transition into `working` (baseline != "working" observed transitioning to
+/// "working"), or the round's result file appears (an ultra-fast round can
+/// finish before a status poll sees "working"). 'done' was dropped because a
+/// stale done from a prior round is not evidence this round's pointer arrived.
+/// Pane text is no receipt: the pane echoes the send's own keystrokes during
+/// agent boot (live smoke smoke-agy-delivery-1/-2: the echoed pointer satisfied
+/// the old needle check ~6s after spawn, the booting TUI then discarded the
+/// buffered input, and the run waited on a brief no agent ever saw). An agent
+/// that does not transition to working after a per-attempt watch window gets a
+/// resend; the pointer is idempotent (read the same file), so a duplicate
+/// delivery is harmless. Bounded attempts; injected wait seam, same style as
+/// the other loops.
 const POINTER_DELIVERY_ATTEMPTS: u32 = 30;
 /// Status polls after each send before the next resend (~2s at
 /// `POLL_INTERVAL`): live smoke shows a real accepted prompt flips agy to
@@ -787,9 +790,12 @@ fn deliver_pointer(
 ) -> Result<(), String> {
     let _ = job_id;
     for _ in 1..=POINTER_DELIVERY_ATTEMPTS {
+        let baseline = status();
         prompt(pointer).map_err(|e| format!("agent prompt failed: {e}"))?;
         for _ in 0..RECEIPT_POLLS_PER_ATTEMPT {
-            if status().as_deref() == Some("working") || result_present() {
+            if (baseline.as_deref() != Some("working") && status().as_deref() == Some("working"))
+                || result_present()
+            {
                 return Ok(());
             }
             sleep(POLL_INTERVAL);
@@ -2148,7 +2154,7 @@ mod tests {
             },
             &mut || {
                 *polls.borrow_mut() += 1;
-                if *polls.borrow() <= RECEIPT_POLLS_PER_ATTEMPT {
+                if *polls.borrow() <= RECEIPT_POLLS_PER_ATTEMPT + 2 {
                     Some("idle".to_string())
                 } else {
                     Some("working".to_string())
@@ -2178,6 +2184,28 @@ mod tests {
                 Ok(())
             },
             &mut || Some("idle".to_string()),
+            &mut || false,
+            &mut |_d| {},
+        );
+        let err = out.unwrap_err();
+        assert!(err.contains("state receipt"), "{err}");
+        assert_eq!(*sent.borrow(), POINTER_DELIVERY_ATTEMPTS);
+    }
+
+    #[test]
+    fn pointer_delivery_never_trusts_a_booting_working_status_as_receipt() {
+        // A booting or pre-existing "working" status (pre-send baseline already
+        // "working") must not be counted as a receipt for a new prompt. Receipt
+        // requires a transition into "working" or result file presence.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "job-1",
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("working".to_string()),
             &mut || false,
             &mut |_d| {},
         );
