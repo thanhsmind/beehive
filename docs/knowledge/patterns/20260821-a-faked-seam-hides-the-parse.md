@@ -8,7 +8,7 @@ bee:
   id: pattern-20260821-a-faked-seam-hides-the-parse
   lifecycle: active
   areas: [herding, rust-runtime]
-  decisions: ["9391e9e8 (herding-prompt-stall D1, 2026-08-21: the RealHerdr misread this pattern generalizes from)"]
+  decisions: ["9391e9e8 (herding-prompt-stall D1, 2026-08-21: the RealHerdr misread this pattern generalizes from; narrowed within the same feature by D4 — the receipt is the worker's ack file — and by D6 — a stalled submission is retried, not fatal. Neither narrowing touches this pattern, which is about the parse behind a faked seam, not about what counts as a receipt.)"]
   sources: ["packages/bee-rs/crates/bee/src/herding/run.rs (RealHerdr::agent_wait, extract_agent_wait_status)", "live 2026-08-21: 2261 unit tests green, every live bee herding run died at the readiness gate"]
   polarity: pitfall
   critical: true
