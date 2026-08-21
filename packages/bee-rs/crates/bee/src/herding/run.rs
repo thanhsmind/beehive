@@ -57,6 +57,7 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 
 use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxResult, MailboxStatus};
+use super::split_lock;
 use super::wave::{resolve_agent_command, WorkspaceTrust};
 use super::wave_ledger::{self, WaveRow, WorkerRow};
 
@@ -405,16 +406,17 @@ trait Herdr {
     /// this verb splits from.
     fn pane_current(&self) -> Result<String, String>;
     /// `herdr pane layout --pane <id>` — geometry for EVERY pane in the
-    /// caller's OWN tab, not just `pane_id`: the split-parent choice
-    /// (hps-12, "roomiest pane") and the split-direction rule
-    /// (`role-dispatch.md` §8) both read it from the same list. `None` on
-    /// any trouble (herdr missing, unparseable body) — the caller falls
-    /// back to its own pane rather than failing the whole run over a
-    /// geometry read.
+    /// caller's OWN tab, not just `pane_id`: the split-parent choice, the
+    /// direction and the ratio (herding-split-serialize D2) all read it
+    /// from the same list. `None` on any trouble (herdr missing,
+    /// unparseable body) — the caller falls back to its own pane rather
+    /// than failing the whole run over a geometry read.
     fn pane_layout(&self, pane_id: &str) -> Option<Vec<PaneGeom>>;
-    /// `herdr pane split <id> --direction <dir> --ratio 0.5 --cwd <cwd>
-    /// --no-focus` — returns the newly split pane's id.
-    fn pane_split(&self, pane_id: &str, direction: &str, cwd: &Path) -> Result<String, String>;
+    /// `herdr pane split <id> --direction <dir> --ratio <r> --cwd <cwd>
+    /// --no-focus` — returns the newly split pane's id. `ratio` is the
+    /// share the PARENT KEEPS (measured live, `first_split_geometry`), so
+    /// D2's one-third worker column travels as a ratio ABOVE 0.5.
+    fn pane_split(&self, pane_id: &str, direction: &str, ratio: f64, cwd: &Path) -> Result<String, String>;
     /// `herdr tab create --workspace <ws> --cwd <cwd> --label <label>`
     /// (hps-13): the new-tab fallback for a caller's tab with no pane roomy
     /// enough to split into a usable child — the worker gets a FRESH tab's
@@ -585,10 +587,11 @@ impl Herdr for RealHerdr {
         extract_pane_layout(&v)
     }
 
-    fn pane_split(&self, pane_id: &str, direction: &str, cwd: &Path) -> Result<String, String> {
+    fn pane_split(&self, pane_id: &str, direction: &str, ratio: f64, cwd: &Path) -> Result<String, String> {
         let cwd_str = cwd.display().to_string();
+        let ratio_str = ratio.to_string();
         let v = self.call(&[
-            "pane", "split", pane_id, "--direction", direction, "--ratio", "0.5", "--cwd", &cwd_str,
+            "pane", "split", pane_id, "--direction", direction, "--ratio", &ratio_str, "--cwd", &cwd_str,
             "--no-focus",
         ])?;
         v.get("result")
@@ -745,22 +748,26 @@ fn parse_process_info(v: &Value) -> Liveness {
 // pure decisions — split direction, poll timing, pane lifecycle
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// `role-dispatch.md` §8's FIXED split rule, and deliberately not a
-/// geometry one any more: a tab's FIRST split goes `right` — one worker
-/// gets the whole full-height column — and every later split goes `down`,
-/// stacking the extra workers as full-width bands.
+/// herding-split-serialize D2's split rule: the direction follows WHICH
+/// pane was chosen as the parent, not how many panes the tab holds.
+/// Splitting the caller's OWN pane goes `right` — that one split creates
+/// the worker column on the main pane's right. Splitting any other pane
+/// goes `down` — the worker column grows, stacking each new worker under
+/// the previous one, and the main pane is never touched again.
 ///
-/// The old rule read the parent's own rect (wider-or-square → right, else
-/// down) and, on a wide tab, that answer stays "right" for every split in
-/// a row: a 120-column tab went 60/30/15 live, and the 30- and 15-column
-/// children both died in submission (`agent_prompt_stalled`, the evidence
-/// `MIN_PANE_WIDTH` records). A `down` split leaves width UNTOUCHED, so
-/// under this rule width halves at most once, for the first worker only,
-/// and no later split can ever walk a pane below the minimum.
+/// D2 supersedes herding-pane-slides D1, whose rule answered from the
+/// tab's pane count alone. That rule kept the main pane in the candidate
+/// set, so five spawns on a 173x50 tab cut the human's own pane from 50
+/// rows to 13 while every worker kept 25. The human needs their pane
+/// readable at all times; a worker only needs enough width to accept a
+/// submission.
 ///
-/// Pure: takes the pane count of the caller's own tab, touches no process.
-fn split_direction(pane_count: usize) -> &'static str {
-    if pane_count <= 1 {
+/// A `down` split still leaves width UNTOUCHED, so width narrows at most
+/// once — for the first worker only (`MIN_PANE_WIDTH`'s evidence).
+///
+/// Pure: takes one already-made comparison, touches no process.
+fn split_direction(parent_is_own_pane: bool) -> &'static str {
+    if parent_is_own_pane {
         "right"
     } else {
         "down"
@@ -772,7 +779,8 @@ fn split_direction(pane_count: usize) -> &'static str {
 /// before the agent ever processes it. hps-13: this guards the pane the
 /// WORKER actually gets — the resulting CHILD of a split, never the parent
 /// being split (hps-12 originally checked the parent, the wrong side of a
-/// `--ratio 0.5` split, where the child is only half the parent's width).
+/// narrowing split, where the child is only a fraction of the parent's
+/// width — `first_split_geometry` computes which fraction).
 /// Evidence, not taste — live 2026-08-21, tab root 120x43, three concurrent
 /// `execute_new` spawns: the first split produced a 60-column child that
 /// carried a full `agy` round to a written ack and result file, end to end;
@@ -801,55 +809,116 @@ fn narrow_pane_refusal(pane_id: &str, resulting_child_width: u64) -> Option<Stri
     ))
 }
 
+/// herding-split-serialize D2's first-split geometry, pure: for the ONE
+/// `right` split that carves the worker column out of the caller's own
+/// pane, the columns the child actually lands at, plus the `--ratio` herdr
+/// needs to produce them.
+///
+/// Columns first, ratio second — the width is the thing D2 constrains and
+/// the thing `narrow_pane_refusal` measures; the ratio is only the wire
+/// encoding. The child takes one third of the parent, floored at
+/// `MIN_PANE_WIDTH` (a worker below it cannot accept a submission at all)
+/// and capped at half (the main pane stays strictly the larger share
+/// whenever the parent is wide enough for both). Floor before cap: on a
+/// parent too narrow for a 60-column child the cap wins, the child lands
+/// under the minimum, and `narrow_pane_refusal` refuses it into the
+/// `tab_create` fresh-tab path (hps-13) instead of handing a worker a
+/// sliver.
+///
+/// herdr's `--ratio` is the share the PARENT KEEPS, not the share the
+/// child gets — measured live 2026-08-21 against herdr 0.8.0 on a fresh
+/// 173x50 tab: `pane split --direction right --ratio 0.25` left the parent
+/// 43 columns and handed the child 130. So the ratio is
+/// `(parent - child) / parent`; a re-split of that 130-column pane with
+/// the ratio this function computes for a 60-column child
+/// (`70/130 = 0.5384615…`) landed the child at exactly 60. `0.5` was
+/// symmetric and could never tell the two readings apart, which is why
+/// this had to be measured rather than assumed.
+fn first_split_geometry(parent_width: u64) -> (u64, f64) {
+    let child = (parent_width / 3).max(MIN_PANE_WIDTH).min(parent_width / 2);
+    if parent_width == 0 {
+        // Never observed (herdr always reports a real rect); an even split
+        // is the harmless answer, and the 0-column child refuses anyway.
+        return (child, DOWN_SPLIT_RATIO);
+    }
+    (child, (parent_width - child) as f64 / parent_width as f64)
+}
+
+/// A `down` split divides the parent's HEIGHT and leaves its width alone,
+/// so D2 puts no constraint on it: workers stack evenly inside the column
+/// they share, exactly as before.
+const DOWN_SPLIT_RATIO: f64 = 0.5;
+
 /// The resolved split parent: which pane to split, which direction
-/// (`role-dispatch.md` §8), and whether ITS RESULTING CHILD is too narrow
-/// to work (hps-13: the guard moved to the child side of the split).
+/// (herding-split-serialize D2), the `--ratio` that split takes, and
+/// whether ITS RESULTING CHILD is too narrow to work (hps-13: the guard
+/// moved to the child side of the split).
 struct SplitParent {
     pane_id: String,
     direction: &'static str,
+    ratio: f64,
     refusal: Option<String>,
 }
 
-/// hps-12: chooses the ROOMIEST pane in the caller's own tab as the split
-/// parent, not always the caller's own — under fan-out, always splitting
-/// the caller's own pane halves the same pane repeatedly (three concurrent
-/// spawns from one 120-column tab produced 60/30/15, live 2026-08-21).
-/// Picking the largest-area pane instead turns that into 60/30/30 and keeps
-/// degrading gracefully as more spawns land.
+/// herding-split-serialize D2: the caller's pane is the MAIN pane and stays
+/// the largest. It is split EXACTLY ONCE — the first spawn takes a column on
+/// its right — and never again. So the parent is the roomiest pane EXCLUDING
+/// `own_pane`; only when the tab holds nothing but the caller's own pane is
+/// that pane the parent, and that one split is what creates the worker
+/// column. Every later spawn therefore lands on a worker pane and splits
+/// `down` inside the column (`split_direction`).
 ///
-/// hps-13: the width guard now checks the RESULTING CHILD's width, not the
-/// chosen parent's own — with `--ratio 0.5`, a "right" split (a tab's first
-/// split, `split_direction`) halves the width, so the parent needs TWICE
-/// `MIN_PANE_WIDTH` to clear it; a "down" split leaves width unchanged, so
-/// the parent's own width is already the child's. The parent choice and the
-/// direction are now separate reads of the SAME list: which pane (roomiest)
-/// from the rects, which direction (`split_direction`) from how many panes
-/// the tab already holds.
+/// D2 supersedes hps-12's "roomiest pane overall". That rule kept the main
+/// pane in the candidate set, so it kept winning on area and kept being
+/// split: five spawns on a 173x50 tab left the human's own pane 13 rows tall
+/// while every worker held 25.
+///
+/// hps-13 still holds, now over D2's ratio: the width guard checks the
+/// RESULTING CHILD's width, never the chosen parent's own. A `right` split
+/// hands the child `first_split_geometry`'s columns; a `down` split leaves
+/// width unchanged, so the parent's own width is already the child's.
 ///
 /// Pure, over an already-parsed pane list: `panes` is `None` when the
-/// layout could not be read at all, and both the parent choice and the
-/// width refusal fail OPEN to `own_pane` in that case — the same fail-open
-/// habit the geometry read always had. An empty (or candidate-less) list
-/// falls back the same way. Ties over area break toward the LAST entry
-/// (`Iterator::max_by_key`'s own rule) — an arbitrary but deterministic
-/// choice, since herdr's own list order carries no other meaning here.
+/// layout could not be read at all, and the parent choice, the direction
+/// and the width refusal all fail OPEN to `own_pane`/`right`/no-refusal in
+/// that case — the same fail-open habit the geometry read always had. An
+/// empty (or candidate-less) list falls back the same way, carrying the
+/// old unconditional `0.5`, since a fallback with no readable rect has no
+/// width to compute a share from. Ties over area break toward the LAST
+/// entry (`Iterator::max_by_key`'s own rule) — an arbitrary but
+/// deterministic choice, since herdr's own list order carries no other
+/// meaning here.
 fn resolve_split_parent(panes: Option<&[PaneGeom]>, own_pane: &str) -> SplitParent {
     let chosen = panes.and_then(|list| {
-        list.iter()
-            .max_by_key(|p| p.width.saturating_mul(p.height))
-            .map(|p| (p, list.len()))
+        // D2: the caller's own pane is a candidate ONLY while it is alone
+        // in the tab — that is the one split it ever takes.
+        let mut candidates: Vec<&PaneGeom> = list.iter().filter(|p| p.pane_id != own_pane).collect();
+        if candidates.is_empty() {
+            candidates = list.iter().collect();
+        }
+        candidates.into_iter().max_by_key(|p| p.width.saturating_mul(p.height))
     });
     match chosen {
-        Some((p, pane_count)) => {
-            let direction = split_direction(pane_count);
-            let resulting_child_width = if direction == "right" { p.width / 2 } else { p.width };
+        Some(p) => {
+            let direction = split_direction(p.pane_id == own_pane);
+            let (resulting_child_width, ratio) = if direction == "right" {
+                first_split_geometry(p.width)
+            } else {
+                (p.width, DOWN_SPLIT_RATIO)
+            };
             SplitParent {
                 pane_id: p.pane_id.clone(),
                 direction,
+                ratio,
                 refusal: narrow_pane_refusal(&p.pane_id, resulting_child_width),
             }
         }
-        None => SplitParent { pane_id: own_pane.to_string(), direction: "right", refusal: None },
+        None => SplitParent {
+            pane_id: own_pane.to_string(),
+            direction: "right",
+            ratio: DOWN_SPLIT_RATIO,
+            refusal: None,
+        },
     }
 }
 
@@ -860,6 +929,80 @@ fn resolve_split_parent(panes: Option<&[PaneGeom]>, own_pane: &str) -> SplitPare
 /// colon, rather than panicking over a herdr id format change.
 fn pane_workspace(pane_id: &str) -> &str {
     pane_id.split(':').next().unwrap_or(pane_id)
+}
+
+/// How long a queued spawn waits for the pane-split lock before it gives up
+/// and splits unserialized. Generous ON PURPOSE: the ack wait a worker is
+/// judged by is 180s, so a budget well under that lets several queued spawns
+/// take their turn one after another and still ack in time, while a budget
+/// at or above it would turn a slow queue into the very timeout this lock
+/// exists to prevent.
+const SPLIT_LOCK_WAIT: Duration = Duration::from_secs(120);
+
+/// hss-2: the whole pane-split decision — read the tab's layout, choose the
+/// parent and direction, then create the pane — under ONE cross-process
+/// lock, returning the new worker pane's id.
+///
+/// The lock is the point. Every spawn is its own process, and the layout
+/// read is what makes them disagree: five concurrent spawns from one tab
+/// (live 2026-08-21) each read a layout still showing the caller's pane
+/// ALONE, each answered "right" from `split_direction`, and all five
+/// right-split — panes p3R p3S p3T p3V p3W, with worker 5 dying on the 180s
+/// ack wait. Reading the layout under the lock and releasing only once the
+/// pane EXISTS means the next spawn's read already counts this pane, so it
+/// picks that worker pane as the parent (D2) and answers "down".
+///
+/// Fail OPEN, the same habit the layout read (`resolve_split_parent`'s
+/// `None` arm) and the hps-8 workspace-trust pre-flight already follow: a
+/// busy budget or a broken lock file warns and splits anyway. A spawn that
+/// never happens is worse than a mis-directed one.
+///
+/// `lock_wait` is the acquire budget — `SPLIT_LOCK_WAIT` at the one
+/// production call site. It is a parameter, not a read of the const, so the
+/// budget-spent fail-open branch is provable in a test that takes
+/// milliseconds instead of two minutes.
+fn split_worker_pane(
+    herdr: &dyn Herdr,
+    own_pane: &str,
+    cwd: &Path,
+    job_id: &str,
+    main_root: &Path,
+    lock_wait: Duration,
+) -> Result<String, String> {
+    // Held for the whole body: the guard releases in `Drop`, at the return
+    // below, by which point the new pane already exists.
+    let _split_lock = match split_lock::acquire(main_root, job_id, lock_wait) {
+        Ok(held) => {
+            if held.is_none() {
+                eprintln!(
+                    "bee herding run: the herding pane-split lock stayed busy for {}s — splitting anyway",
+                    lock_wait.as_secs()
+                );
+            }
+            held
+        }
+        Err(e) => {
+            eprintln!("bee herding run: could not take the herding pane-split lock ({e}) — splitting anyway");
+            None
+        }
+    };
+
+    let layout = herdr.pane_layout(own_pane);
+    let parent = resolve_split_parent(layout.as_deref(), own_pane);
+    match parent.refusal {
+        None => herdr.pane_split(&parent.pane_id, parent.direction, parent.ratio, cwd),
+        // hps-13: no pane in the caller's tab clears the child-width guard
+        // — a refusal here would still be a sliver's fault, not a fresh
+        // tab's, so try a fresh tab FIRST and refuse only if that fails too.
+        // The new tab's root pane is used directly, with no split call at
+        // all, so the worker starts at full width.
+        Some(width_msg) => {
+            let workspace = pane_workspace(own_pane);
+            herdr.tab_create(workspace, cwd, job_id).map_err(|create_err| {
+                format!("{width_msg}; tried opening a fresh tab instead and that failed too: {create_err}")
+            })
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1776,33 +1919,19 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         Ok(p) => p,
         Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
     };
-    let layout = herdr.pane_layout(&own_pane);
-    let parent = resolve_split_parent(layout.as_deref(), &own_pane);
-    let new_pane = match parent.refusal {
-        None => match herdr.pane_split(&parent.pane_id, parent.direction, &opts.cwd) {
-            Ok(p) => p,
-            Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
-        },
-        // hps-13: no pane in the caller's tab clears the child-width guard
-        // — a refusal here would still be a sliver's fault, not a fresh
-        // tab's, so try a fresh tab FIRST and refuse only if that fails too.
-        // The new tab's root pane is used directly, with no split call at
-        // all, so the worker starts at full width.
-        Some(width_msg) => {
-            let workspace = pane_workspace(&own_pane);
-            match herdr.tab_create(workspace, &opts.cwd, &opts.job_id) {
-                Ok(p) => p,
-                Err(create_err) => {
-                    return ExecResult {
-                        outcome: RunOutcome::SpawnFailed(format!(
-                            "{width_msg}; tried opening a fresh tab instead and that failed too: {create_err}"
-                        )),
-                        pane_id: None,
-                        closed_pane: false,
-                    };
-                }
-            }
-        }
+    // hss-2: the layout read and the split itself run under one
+    // cross-process lock, so concurrent spawns from one tab see each other's
+    // panes instead of all reading `pane_count` 1 and all splitting `right`.
+    let new_pane = match split_worker_pane(
+        herdr,
+        &own_pane,
+        &opts.cwd,
+        &opts.job_id,
+        &opts.main_root,
+        SPLIT_LOCK_WAIT,
+    ) {
+        Ok(p) => p,
+        Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
     };
 
     // D4 + herding-worker-standalone D2: the registry entry's env is
@@ -2387,27 +2516,85 @@ mod tests {
     // ─── pure decisions ─────────────────────────────────────────────────
 
     #[test]
-    fn split_direction_is_right_only_for_a_tabs_first_split() {
-        // An unreadable/empty layout counts as a first split, and so does a
-        // tab still holding only its own root pane.
-        assert_eq!(split_direction(0), "right");
-        assert_eq!(split_direction(1), "right");
-        // Every later split stacks a band instead of halving the width again.
-        assert_eq!(split_direction(2), "down");
-        assert_eq!(split_direction(3), "down");
-        assert_eq!(split_direction(9), "down");
+    fn split_direction_is_right_only_when_the_parent_is_the_callers_own_pane() {
+        // D2: the caller's own pane is the MAIN pane. Splitting it is what
+        // creates the worker column, and it happens exactly once.
+        assert_eq!(split_direction(true), "right");
+        // Every other parent is already inside the worker column, so the
+        // column grows downward instead of eating into the main pane.
+        assert_eq!(split_direction(false), "down");
     }
 
-    // ─── hps-12/hps-13: roomiest-pane split parent + child-side width guard ───
+    // ─── D2: the worker column's width — floor, cap, and the ratio ───────
 
     #[test]
-    fn resolve_split_parent_stacks_a_band_instead_of_halving_a_populated_tab_again() {
-        // Shaped like the live 60/30/15 measurement, and the exact case the
-        // fixed rule exists to remove: three panes already, so this is not a
-        // first split — the direction is "down", which leaves the roomiest
-        // parent's 60 columns untouched in its child. Under the old
-        // aspect-ratio rule this same layout answered "right", handed the
-        // worker a 30-column child, and stalled every submission.
+    fn first_split_gives_the_worker_a_third_of_a_wide_parent_not_half() {
+        // The live tab the decision was measured on: 173 columns. A third
+        // is 57, under the 60-column floor, so the floor wins — and the
+        // main pane keeps 113, far the larger share.
+        let (child, ratio) = first_split_geometry(173);
+        assert_eq!(child, 60);
+        assert!((ratio - (113.0 / 173.0)).abs() < 1e-12, "ratio is the parent's keep-share: {ratio}");
+
+        // A genuinely wide tab, where a third clears the floor on its own:
+        // 240 columns hands the worker 80 and keeps 160.
+        let (child, ratio) = first_split_geometry(240);
+        assert_eq!(child, 80, "a third of 240, not half");
+        assert!((ratio - (160.0 / 240.0)).abs() < 1e-12, "{ratio}");
+    }
+
+    #[test]
+    fn the_sixty_column_floor_wins_where_a_third_would_be_too_thin() {
+        // 150 columns: a third is 50, below the minimum a worker needs to
+        // accept a submission at all, so the child is floored up to 60 and
+        // the main pane still keeps the larger 90.
+        let (child, ratio) = first_split_geometry(150);
+        assert_eq!(child, MIN_PANE_WIDTH);
+        assert!((ratio - (90.0 / 150.0)).abs() < 1e-12, "{ratio}");
+        assert!(narrow_pane_refusal("w1:p1", child).is_none(), "a floored 60-column child is workable");
+    }
+
+    #[test]
+    fn the_half_cap_holds_where_a_third_and_a_half_converge() {
+        // 120 columns: a third is 40, floored to 60 — which is also exactly
+        // half. The cap keeps the child from ever exceeding half, so the
+        // two converge and neither side is starved.
+        let (child, ratio) = first_split_geometry(120);
+        assert_eq!(child, 60);
+        assert!((ratio - 0.5).abs() < 1e-12, "an even split is the narrowest D2 ever allows: {ratio}");
+        assert!(narrow_pane_refusal("w1:p1", child).is_none());
+
+        // Below that, the cap wins over the floor and the child lands under
+        // the minimum — the refusal fires and the fresh-tab path takes over.
+        let (child, _) = first_split_geometry(100);
+        assert_eq!(child, 50, "half of 100, capped — never the 60 the floor asked for");
+        assert!(narrow_pane_refusal("w1:p1", child).is_some(), "a 50-column child must refuse");
+    }
+
+    // ─── D2/hps-13: main-pane-excluding parent + child-side width guard ──
+
+    #[test]
+    fn resolve_split_parent_never_picks_the_callers_own_pane_once_another_exists() {
+        // D2's core: the caller's own pane is the LARGEST here by area, and
+        // the retired hps-12 rule would have split it again. It is excluded
+        // outright, so the roomiest WORKER pane takes the split instead.
+        let panes = vec![
+            PaneGeom { pane_id: "w1:p1".to_string(), width: 113, height: 50 },
+            PaneGeom { pane_id: "w1:p2".to_string(), width: 60, height: 25 },
+            PaneGeom { pane_id: "w1:p3".to_string(), width: 60, height: 12 },
+        ];
+        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        assert_eq!(parent.pane_id, "w1:p2", "the main pane is never split twice");
+        assert_eq!(parent.direction, "down");
+        assert!((parent.ratio - 0.5).abs() < 1e-12, "a down split stays even: {}", parent.ratio);
+        assert!(parent.refusal.is_none(), "a down split keeps the parent's 60 columns: {:?}", parent.refusal);
+    }
+
+    #[test]
+    fn resolve_split_parent_stacks_a_band_instead_of_narrowing_a_populated_tab_again() {
+        // Shaped like the live 60/30/15 measurement: the caller's own pane
+        // is excluded, so the roomiest of the rest takes a "down" split,
+        // which leaves its 60 columns untouched in the child.
         let panes = vec![
             PaneGeom { pane_id: "w1:p1".to_string(), width: 30, height: 43 },
             PaneGeom { pane_id: "w1:p2".to_string(), width: 60, height: 43 },
@@ -2420,26 +2607,43 @@ mod tests {
     }
 
     #[test]
-    fn resolve_split_parent_accepts_a_parent_roomy_enough_that_its_right_split_child_still_clears_the_minimum() {
-        // The live D5 shape: a 120x43 tab root. A "right" split halves the
-        // width to exactly 60 — the minimum, workable.
+    fn resolve_split_parent_splits_the_callers_own_pane_only_when_it_is_alone() {
+        // The live D5 shape: a 120x43 tab root, the caller's own and the
+        // only pane. This is the one split it ever takes — "right", and its
+        // child lands at exactly the 60-column minimum, workable.
         let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 120, height: 43 }];
         let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
+        assert!((parent.ratio - 0.5).abs() < 1e-12, "{}", parent.ratio);
         assert!(parent.refusal.is_none(), "a 60-column right-split child is workable: {:?}", parent.refusal);
     }
 
     #[test]
+    fn resolve_split_parent_carries_the_one_third_ratio_on_the_first_split_of_a_wide_tab() {
+        // The uat tab: 173x50, one pane. The worker column is 60 wide and
+        // the human keeps 113 — the whole point of D2.
+        let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 173, height: 50 }];
+        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        assert_eq!(parent.pane_id, "w1:p1");
+        assert_eq!(parent.direction, "right");
+        assert!((parent.ratio - (113.0 / 173.0)).abs() < 1e-12, "the main pane keeps 113: {}", parent.ratio);
+        assert!(parent.ratio > 0.5, "the main pane must keep MORE than half: {}", parent.ratio);
+        assert!(parent.refusal.is_none(), "{:?}", parent.refusal);
+    }
+
+    #[test]
     fn resolve_split_parent_a_down_split_never_narrows_so_the_parents_own_width_is_the_guard() {
-        // A tab that already holds two panes: `split_direction` picks
-        // "down", which leaves width unchanged — the child is exactly as
-        // wide as the parent, so a 60-wide parent is workable with no
-        // halving penalty.
+        // A tab that already holds a worker pane: the parent is that worker
+        // and the direction is "down", which leaves width unchanged — the
+        // child is exactly as wide as the parent, so a 60-wide worker is
+        // workable with no narrowing penalty.
         let panes = vec![
             PaneGeom { pane_id: "w1:p1".to_string(), width: 60, height: 90 },
             PaneGeom { pane_id: "w1:p2".to_string(), width: 60, height: 40 },
         ];
         let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        assert_eq!(parent.pane_id, "w1:p2");
         assert_eq!(parent.direction, "down");
         assert!(parent.refusal.is_none(), "a down split keeps width unchanged: {:?}", parent.refusal);
     }
@@ -2449,6 +2653,7 @@ mod tests {
         let parent = resolve_split_parent(None, "w1:p1");
         assert_eq!(parent.pane_id, "w1:p1");
         assert_eq!(parent.direction, "right");
+        assert!((parent.ratio - 0.5).abs() < 1e-12, "a widthless fallback keeps the old even split");
         assert!(parent.refusal.is_none(), "an unreadable layout must never refuse: {:?}", parent.refusal);
     }
 
@@ -2456,15 +2661,16 @@ mod tests {
     fn resolve_split_parent_falls_back_to_own_pane_when_the_layout_names_no_candidate() {
         let parent = resolve_split_parent(Some(&[]), "w1:p1");
         assert_eq!(parent.pane_id, "w1:p1");
+        assert_eq!(parent.direction, "right");
         assert!(parent.refusal.is_none());
     }
 
     #[test]
     fn resolve_split_parent_refuses_a_parent_below_the_minimum_width_naming_it() {
-        // One pane, so this is a first split: "right", and 15 columns halve
-        // to a 7-column child — the width the refusal must name.
+        // The caller's own pane, alone: a "right" split, and 15 columns cap
+        // at a 7-column child — the width the refusal must name.
         let panes = vec![PaneGeom { pane_id: "w1:p3".to_string(), width: 15, height: 43 }];
-        let parent = resolve_split_parent(Some(&panes), "w1:p1");
+        let parent = resolve_split_parent(Some(&panes), "w1:p3");
         assert_eq!(parent.pane_id, "w1:p3");
         let msg = parent.refusal.expect("a 7-column child is below the minimum and must refuse");
         assert!(msg.contains("w1:p3"), "{msg}");
@@ -2829,9 +3035,10 @@ mod tests {
         /// `own_pane`, matching the old fixed-rect default.
         layout: Option<Vec<PaneGeom>>,
         split_result: Result<String, String>,
-        /// Every `pane_split(pane_id, direction, _)` call, in order — the
-        /// seam hps-12's "split call receives the chosen parent" test reads.
-        split_calls: RefCell<Vec<(String, String)>>,
+        /// Every `pane_split(pane_id, direction, ratio, _)` call, in
+        /// order — the seam the "split call receives the chosen parent"
+        /// tests read (hps-12's parent choice, D2's ratio).
+        split_calls: RefCell<Vec<(String, String, f64)>>,
         /// hps-13: what `tab_create` returns — the new tab's root pane id,
         /// or an error to prove the "refuse only when the fresh tab ALSO
         /// fails" path.
@@ -2929,8 +3136,8 @@ mod tests {
         fn pane_layout(&self, _pane_id: &str) -> Option<Vec<PaneGeom>> {
             self.layout.clone()
         }
-        fn pane_split(&self, pane_id: &str, direction: &str, _cwd: &Path) -> Result<String, String> {
-            self.split_calls.borrow_mut().push((pane_id.to_string(), direction.to_string()));
+        fn pane_split(&self, pane_id: &str, direction: &str, ratio: f64, _cwd: &Path) -> Result<String, String> {
+            self.split_calls.borrow_mut().push((pane_id.to_string(), direction.to_string(), ratio));
             self.split_result.clone()
         }
         fn tab_create(&self, workspace: &str, cwd: &Path, label: &str) -> Result<String, String> {
@@ -2994,6 +3201,286 @@ mod tests {
         }
     }
 
+    // ─── hss-2: the pane split, serialized across processes ─────────────
+
+    /// A `Herdr` whose pane list is SHARED and MUTABLE — the stand-in for
+    /// the one real terminal layout that concurrent `bee herding run`
+    /// processes all read and all change. `pane_split` pushes the pane it
+    /// creates into that list, so the NEXT `pane_layout` read counts it;
+    /// the short sleep before the push is the race window an unserialized
+    /// split falls into (both racers read `pane_count` 1, both answer
+    /// "right"). Everything sits behind a `Mutex` instead of `FakeHerdr`'s
+    /// `RefCell` so the fake is `Sync` and two threads can share it.
+    struct SharedLayoutHerdr {
+        panes: std::sync::Mutex<Vec<PaneGeom>>,
+        /// The direction of every completed split, in the order the new
+        /// pane actually appeared.
+        directions: std::sync::Mutex<Vec<String>>,
+        next_pane: std::sync::atomic::AtomicUsize,
+    }
+
+    impl SharedLayoutHerdr {
+        fn new(root_width: u64, root_height: u64) -> Self {
+            SharedLayoutHerdr {
+                panes: std::sync::Mutex::new(vec![PaneGeom {
+                    pane_id: "w1:p1".to_string(),
+                    width: root_width,
+                    height: root_height,
+                }]),
+                directions: std::sync::Mutex::new(Vec::new()),
+                next_pane: std::sync::atomic::AtomicUsize::new(2),
+            }
+        }
+
+        fn directions(&self) -> Vec<String> {
+            self.directions.lock().expect("directions").clone()
+        }
+
+        fn pane(&self, pane_id: &str) -> PaneGeom {
+            self.panes
+                .lock()
+                .expect("panes")
+                .iter()
+                .find(|p| p.pane_id == pane_id)
+                .cloned()
+                .unwrap_or_else(|| panic!("no such pane {pane_id}"))
+        }
+
+        fn panes(&self) -> Vec<PaneGeom> {
+            self.panes.lock().expect("panes").clone()
+        }
+    }
+
+    impl Herdr for SharedLayoutHerdr {
+        fn pane_current(&self) -> Result<String, String> {
+            Ok("w1:p1".to_string())
+        }
+        fn pane_layout(&self, _pane_id: &str) -> Option<Vec<PaneGeom>> {
+            Some(self.panes.lock().expect("panes").clone())
+        }
+        fn pane_split(&self, pane_id: &str, direction: &str, ratio: f64, _cwd: &Path) -> Result<String, String> {
+            // Creating a pane takes real time, and only once herdr returns
+            // does the new pane show up in a layout read. Without the lock,
+            // both racers spend this window on the SAME stale read.
+            std::thread::sleep(Duration::from_millis(120));
+            let id = format!(
+                "w1:p{}",
+                self.next_pane.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            );
+            let mut panes = self.panes.lock().expect("panes");
+            let idx = panes
+                .iter()
+                .position(|p| p.pane_id == pane_id)
+                .ok_or_else(|| format!("no such pane {pane_id}"))?;
+            // herdr's own arithmetic, measured live against 0.8.0: `ratio`
+            // is the share the PARENT KEEPS, rounded to whole cells, and
+            // the child takes the remainder. A `right` split divides the
+            // width, a `down` split the height; the other dimension is
+            // untouched.
+            let split_cells = |dim: u64| -> (u64, u64) {
+                let kept = (dim as f64 * ratio).round() as u64;
+                let kept = kept.min(dim);
+                (kept, dim - kept)
+            };
+            let child = if direction == "right" {
+                let (kept, given) = split_cells(panes[idx].width);
+                panes[idx].width = kept;
+                PaneGeom { pane_id: id.clone(), width: given, height: panes[idx].height }
+            } else {
+                let (kept, given) = split_cells(panes[idx].height);
+                panes[idx].height = kept;
+                PaneGeom { pane_id: id.clone(), width: panes[idx].width, height: given }
+            };
+            panes.push(child);
+            self.directions.lock().expect("directions").push(direction.to_string());
+            Ok(id)
+        }
+        fn tab_create(&self, _workspace: &str, _cwd: &Path, _label: &str) -> Result<String, String> {
+            panic!("the hss-2 fake tab is roomy enough that no width refusal can fire")
+        }
+        fn pane_run(&self, _pane_id: &str, _command: &str) -> Result<(), String> {
+            unreachable!("split_worker_pane never runs a command")
+        }
+        fn agent_start(
+            &self,
+            _job_id: &str,
+            _kind: &str,
+            _pane_id: &str,
+            _args: &[String],
+        ) -> Result<(), String> {
+            unreachable!("split_worker_pane never starts an agent")
+        }
+        fn agent_status(&self, _job_id: &str) -> Option<String> {
+            unreachable!("split_worker_pane never reads a status")
+        }
+        fn pane_close(&self, _pane_id: &str) -> Result<(), String> {
+            unreachable!("split_worker_pane never closes a pane")
+        }
+        fn agent_prompt(&self, _job_id: &str, _prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
+            unreachable!("split_worker_pane never prompts")
+        }
+        fn agent_wait(&self, _job_id: &str, _timeout_ms: u64) -> Option<String> {
+            unreachable!("split_worker_pane never waits on an agent")
+        }
+        fn pane_alive(&self, _pane_id: &str) -> bool {
+            unreachable!("split_worker_pane never probes pane liveness")
+        }
+        fn pane_read(&self, _pane_id: &str) -> Result<String, String> {
+            unreachable!("split_worker_pane never reads a pane")
+        }
+        fn process_info(&self, _pane_id: &str) -> Liveness {
+            unreachable!("split_worker_pane never reads process info")
+        }
+    }
+
+    /// A private temp main root per test — the split lock lives under
+    /// `<root>/.bee/locks`, so each test needs its own.
+    fn hss_temp_root(tag: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!(
+            "bee-herding-split-serialize-{}-{}-{}",
+            tag,
+            std::process::id(),
+            nanos
+        ));
+        std::fs::create_dir_all(&dir).expect("temp root");
+        dir
+    }
+
+    /// The exact live regression (2026-08-21): five concurrent spawns from
+    /// one tab ALL split `right` (panes p3R p3S p3T p3V p3W) and worker 5
+    /// died on the 180s ack wait, because every process read a layout still
+    /// showing `pane_count` 1. Two threads over one shared layout and one
+    /// shared main root: with the lock held across the layout read AND the
+    /// split, the second thread's read already counts the first thread's
+    /// pane, so the directions are `right` then `down`. Drop the lock and
+    /// this asserts `["right", "right"]` instead, and fails.
+    #[test]
+    fn concurrent_splits_are_serialized_so_the_second_one_stacks_a_band() {
+        let root = hss_temp_root("concurrent");
+        let herdr = SharedLayoutHerdr::new(240, 40);
+        let budget = Duration::from_secs(20);
+        std::thread::scope(|s| {
+            let a = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-a", &root, budget));
+            let b = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-b", &root, budget));
+            a.join().expect("thread a").expect("first split must succeed");
+            b.join().expect("thread b").expect("second split must succeed");
+        });
+        assert_eq!(
+            herdr.directions(),
+            vec!["right".to_string(), "down".to_string()],
+            "two concurrent splits must be one right and one down, never two rights"
+        );
+        assert!(
+            !root.join(".bee").join("locks").join("herding-pane-split.lock").exists(),
+            "both guards must have released the lock file"
+        );
+        // hss-3/D2, on top of the hss-2 serialization: the caller's own pane
+        // keeps its FULL height through both spawns, and the second worker
+        // landed inside the first worker's column, not beside the human.
+        let own = herdr.pane("w1:p1");
+        assert_eq!(own.height, 40, "the main pane is never split downward");
+        assert_eq!(own.width, 160, "the main pane keeps two thirds of 240");
+        for worker in herdr.panes().iter().filter(|p| p.pane_id != "w1:p1") {
+            assert_eq!(worker.width, 80, "every worker sits in the one 80-column column: {worker:?}");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// The uat regression this cell exists for (herding-split-serialize D2):
+    /// five spawns over one 173x50 tab. Before D2 the human's own pane fell
+    /// from 50 rows to 13 while every worker kept 25. Now the main pane is
+    /// split exactly once — a 60-column worker column on its right — and
+    /// every later worker stacks DOWN inside that column, so the caller's
+    /// pane stays 113x50 from first spawn to last.
+    #[test]
+    fn five_spawns_leave_the_callers_pane_whole_and_stack_every_worker_in_one_column() {
+        let root = hss_temp_root("five-spawns");
+        let herdr = SharedLayoutHerdr::new(173, 50);
+        let budget = Duration::from_secs(20);
+        for n in 1..=5 {
+            split_worker_pane(&herdr, "w1:p1", &root, &format!("job-{n}"), &root, budget)
+                .unwrap_or_else(|e| panic!("spawn {n} must succeed: {e}"));
+        }
+
+        assert_eq!(
+            herdr.directions(),
+            vec![
+                "right".to_string(),
+                "down".to_string(),
+                "down".to_string(),
+                "down".to_string(),
+                "down".to_string(),
+            ],
+            "the main pane is split exactly once; every later worker stacks down"
+        );
+        let own = herdr.pane("w1:p1");
+        assert_eq!(own.height, 50, "the caller's pane keeps its FULL height through all five spawns");
+        assert_eq!(own.width, 113, "and the larger share of the width");
+
+        let workers: Vec<PaneGeom> = herdr.panes().into_iter().filter(|p| p.pane_id != "w1:p1").collect();
+        assert_eq!(workers.len(), 5, "five spawns, five worker panes");
+        for worker in &workers {
+            assert_eq!(worker.width, MIN_PANE_WIDTH, "every worker lands in the 60-column right-hand column: {worker:?}");
+        }
+        // The column's heights partition the tab's 50 rows exactly — the
+        // workers stack, they never overlap the main pane.
+        assert_eq!(workers.iter().map(|w| w.height).sum::<u64>(), 50);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Fail OPEN on a busy budget: a lock the caller cannot take inside its
+    /// wait budget warns and splits anyway. A spawn that never happens is
+    /// worse than a mis-directed one.
+    #[test]
+    fn a_busy_split_lock_still_splits_once_the_budget_is_spent() {
+        let root = hss_temp_root("busy");
+        // A live-pid, fresh-mtime holder: never stale, so the budget runs
+        // out with the lock still held.
+        let held = split_lock::acquire(&root, "job-holder", Duration::from_millis(50))
+            .expect("holder acquire")
+            .expect("holder holds");
+        let herdr = SharedLayoutHerdr::new(240, 40);
+        let pane = split_worker_pane(
+            &herdr,
+            "w1:p1",
+            &root,
+            "job-queued",
+            &root,
+            Duration::from_millis(150),
+        )
+        .expect("a busy lock must never fail the spawn");
+        assert_eq!(pane, "w1:p2");
+        assert_eq!(herdr.directions(), vec!["right".to_string()]);
+        drop(held);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Fail OPEN on a broken lock: a main root whose `.bee` is a FILE means
+    /// the locks directory can never be created, so `acquire` returns
+    /// `Err`. The split still happens.
+    #[test]
+    fn an_unusable_lock_directory_still_splits() {
+        let root = hss_temp_root("unusable");
+        std::fs::write(root.join(".bee"), b"not a directory").expect("write .bee as a file");
+        let herdr = SharedLayoutHerdr::new(240, 40);
+        let pane = split_worker_pane(
+            &herdr,
+            "w1:p1",
+            &root,
+            "job-broken",
+            &root,
+            Duration::from_millis(150),
+        )
+        .expect("a broken lock must never fail the spawn");
+        assert_eq!(pane, "w1:p2");
+        assert_eq!(herdr.directions(), vec!["right".to_string()]);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     /// Every method panics — proves a code path never touches `Herdr` at
     /// all (used for `--dry-run`: D1's "spawns no process" claim).
     struct PanicHerdr;
@@ -3004,7 +3491,7 @@ mod tests {
         fn pane_layout(&self, _pane_id: &str) -> Option<Vec<PaneGeom>> {
             panic!("dry-run must never call Herdr::pane_layout")
         }
-        fn pane_split(&self, _pane_id: &str, _direction: &str, _cwd: &Path) -> Result<String, String> {
+        fn pane_split(&self, _pane_id: &str, _direction: &str, _ratio: f64, _cwd: &Path) -> Result<String, String> {
             panic!("dry-run must never call Herdr::pane_split")
         }
         fn tab_create(&self, _workspace: &str, _cwd: &Path, _label: &str) -> Result<String, String> {
@@ -3169,11 +3656,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let opts = test_options(tmp.path(), false);
         let mut fake = FakeHerdr::new();
-        // Caller's own pane has already been halved to 30; a sibling is
-        // still the roomiest at 130. The tab already holds two panes, so
-        // this is not a first split: the direction is "down", and the child
-        // keeps all 130 columns — hps-13's roomy-tab case, now proved
-        // without any halving at all.
+        // Caller's own pane is down to 30; a sibling worker pane holds 130.
+        // D2 excludes the caller's own pane outright, so the split targets
+        // the sibling and goes "down", and the child keeps all 130
+        // columns — hps-13's roomy-tab case, with no narrowing at all.
         fake.layout = Some(vec![
             PaneGeom { pane_id: "w1:p1".to_string(), width: 30, height: 43 },
             PaneGeom { pane_id: "w1:p9".to_string(), width: 130, height: 43 },
@@ -3185,7 +3671,7 @@ mod tests {
         assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
         assert_eq!(
             fake.split_calls.borrow().as_slice(),
-            [("w1:p9".to_string(), "down".to_string())],
+            [("w1:p9".to_string(), "down".to_string(), DOWN_SPLIT_RATIO)],
             "the split must target the roomiest sibling, not the caller's own w1:p1"
         );
         assert!(fake.tab_create_calls.borrow().is_empty(), "a roomy tab must never open a fresh one");

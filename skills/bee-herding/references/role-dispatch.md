@@ -326,24 +326,35 @@ In order, from the MAIN checkout:
    Choose the runtime pane to split from the runtime tab's geometry, and the
    direction from a FIXED rule, not from that geometry: run `herdr pane
    layout --pane <any runtime pane_id from §4>` (there is no `--tab` form,
-   and `pane list` carries no `rect`), take the pane with the largest
-   `rect.width * rect.height` as the parent, then pass **`--direction right`
-   when that layout lists exactly one pane** (the untouched runtime root —
-   this tab's first split, and the one worker gets the full-height column)
-   **and `--direction down` when it lists two or more** (every later worker
-   lands as a full-width band under the last). There is always a runtime
+   and `pane list` carries no `rect`). **The caller's own runtime pane is
+   the MAIN pane: it is split exactly once and never again** (D2). So take
+   the pane with the largest `rect.width * rect.height` **excluding the
+   caller's own pane** as the parent, falling back to the caller's own pane
+   only when the layout lists it alone. The direction follows from which
+   pane that picked: **`--direction right` when the parent IS the caller's
+   own pane** (the first spawn, which creates the worker column beside it)
+   **and `--direction down` for any other parent** (every subsequent worker
+   stacks under the last one inside that column). There is always a runtime
    root pane to split — `bootstrap-cockpit.sh` creates it — so there is no
    "no panes yet" case. Why the rule is fixed rather than read off the
-   rects: a `down` split leaves the pane's width untouched, so width halves
+   rects: a `down` split leaves the pane's width untouched, so width narrows
    at most once no matter how many workers the tab collects, and no worker
    pane can be walked below the width herdr needs to accept a submitted
    prompt. Choosing by aspect ratio answered `right` again and again on a
    wide tab — measured live, a 120-column tab went 60/30/15 and both the 30-
    and 15-column children died mid-submission with `agent_prompt_stalled`.
-   The rule above computes only the split *direction*; the ratio to pass is
-   `--ratio 0.5`, unconditionally — confirmed live in
-   `references/spawn-proof.md`, where 0.5 produced a normal, readable split.
-   Read the new pane's id from the response's `.result.pane.pane_id`.
+   Choosing the roomiest pane overall then chewed the human's own pane
+   instead — five spawns on a 173x50 tab cut it from 50 rows to 13 — which
+   is why the caller's pane is now excluded (D2).
+
+   **The ratio is the share the PARENT keeps, not the child's** — measured
+   live against herdr 0.8.0, where `--ratio 0.25` on a 173-column pane left
+   the parent 43 columns and gave the child 130. A `down` split passes
+   `--ratio 0.5`. The one `right` split sizes the worker column at a third
+   of the parent's width, floored at the 60-column worker minimum and capped
+   at half, so the main pane always keeps the larger share; the ratio to
+   pass is then `(parent_width - child_columns) / parent_width`. Read the
+   new pane's id from the response's `.result.pane.pane_id`.
 
    **Settle before starting the agent.** `agent start` requires its target
    pane to already be at its interactive shell prompt; `pane split` returns
@@ -479,7 +490,7 @@ or in the herdr workspace changes as a result.
 | Lane safety (two-key: both required) | Key 1: `.bee/bin/bee herding classify-lane <PBI-ID>` → `lane_safe` (fail-open on unmatched keywords). Key 2: your own reading — refuse and announce if unsure. |
 | Announce / report | `herdr pane send-text <chat_pane_id> "..."` |
 | Create the worktree | `bee worktree new --feature <slug> --json` |
-| Split the runtime pane | `herdr pane split <roomiest runtime pane> --direction right\|down --ratio 0.5 --cwd <path> --no-focus` → `right` only when the layout lists ONE pane, `down` from two up; read `.result.pane.pane_id` (§8) |
+| Split the runtime pane | `herdr pane split <roomiest pane EXCLUDING the caller's own> --direction right\|down --ratio <r> --cwd <path> --no-focus` → `right` only when the parent IS the caller's own pane (the one time it is ever split), `down` for every other parent; `<r>` is the share the PARENT keeps — 0.5 for `down`, `(w - child)/w` for the `right` split whose child is `(w/3)` floored at 60 and capped at `w/2`; read `.result.pane.pane_id` (§8) |
 | Start the working agent | `herdr agent start <slug> --kind <kind> --pane <new_pane_id> --timeout 60000 -- <agent args>` — `<kind>` and `<agent args>` are `herding.agent_command`-driven; pane must exist first (split, then start), never `-p` (§8) |
 | Record the spawn (closes the occupancy loop) | `.bee/bin/bee herding record-worker --name <slug> --pane-id <new_pane_id> --path <worktree_path> --task <PBI-ID>` — only after the confirm step; failure is reported loudly, never silently passed over (§8) |
 | Give the human their view back after a spawn | `herdr pane current --pane <your own pane_id>` for its `tab_id`, then `herdr tab focus <tab_id>` — `agent start` has no `--no-focus`; never `--current` (§3) |
