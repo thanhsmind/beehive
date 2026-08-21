@@ -24,11 +24,13 @@
 //     to the dispatcher's "unsupported command shape" — which read as
 //     "bee backlog add does not exist".
 //   - within accepted shapes, most refusal paths still return None so Node's
-//     byte-exact error text was preserved. Two of them — an unknown PBI id in
-//     `pbi status` / `pbi amend` — no longer do: after the cutover, returning
-//     None for a mistyped id told the caller the VERB was missing. Those emit
-//     natively now (see run_pbi_status / run_pbi_amend). The rest are pinned
-//     by tests/registry_dispatch.rs, which walks every registry example.
+//     byte-exact error text was preserved. Three groups no longer do, because
+//     after the cutover a None told the caller the VERB was missing rather
+//     than naming their mistake: an unknown PBI id in `pbi status` /
+//     `pbi amend` (see run_pbi_status / run_pbi_amend), and every `add`
+//     validation miss — missing/out-of-enum/over-length flags plus a failed
+//     append (see add_refusal / run_add). The rest are pinned by
+//     tests/registry_dispatch.rs, which walks every registry example.
 //
 // Additional delegation triggers (None before any output/write):
 //   - linked-worktree roots, corrupt manifest-hash cache/config
@@ -728,26 +730,70 @@ fn is_queue_submit(arg: &OsString) -> bool {
         .is_some_and(|s| s == "--queue-submit" || s.starts_with("--queue-submit="))
 }
 
-fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCode> {
-    // requireFlags batch (ce-1): every missing/enum/length problem is a
-    // Node-owned refusal — delegate on the first one seen.
-    let ty = require_flag(&parsed, "type")?;
-    if !backlog_allowed_type(ty) {
-        return None;
-    }
-    let title = require_flag(&parsed, "title")?;
-    let severity = require_flag(&parsed, "severity")?;
-    if !BACKLOG_SEVERITIES.contains(&severity) {
-        return None;
-    }
-    let layer = require_flag(&parsed, "layer")?;
-    if char_len(title) > BACKLOG_MAX_TITLE || char_len(layer) > BACKLOG_MAX_LAYER {
-        return None;
-    }
-    // `flags.detail !== undefined && !== true ? String(flags.detail) : ''`.
-    let detail = parsed.flags.get("detail").cloned().unwrap_or_default();
-    let feature = parsed.flags.get("feature").cloned().unwrap_or_default();
+const BACKLOG_ADD_REQUIRED: [&str; 4] = ["type", "title", "severity", "layer"];
 
+/// The one validation problem `bee backlog add` refuses this argv for, already
+/// worded for the caller — or None when the argv is good.
+///
+/// WHY THIS IS A PURE FUNCTION. Every one of these misses used to
+/// `return None`, the old "delegate to Node" signal. Node is gone, so None fell
+/// through to the router's generic `unsupported_argument_shape` diagnosis,
+/// which reads the argv from the outside and gets it wrong twice: it claims the
+/// required arguments are all present (they are not — the registry entry
+/// declares `required: []`), and it blames "an optional flag, a flag value, or
+/// a target that does not exist". Only this function knows which flag is
+/// actually at fault, so the message is built here and emitted by run_add.
+fn add_refusal(parsed: &ParsedArgs) -> Option<String> {
+    const HELP: &str = "`bee backlog add --help` for every accepted flag and its type.";
+    let missing: Vec<String> = BACKLOG_ADD_REQUIRED
+        .iter()
+        .filter(|name| require_flag(parsed, name).is_none())
+        .map(|name| format!("--{name}"))
+        .collect();
+    if !missing.is_empty() {
+        let word = if missing.len() == 1 { "flag" } else { "flags" };
+        return Some(format!(
+            "bee backlog add: missing required {word} {}. All four of --type, --title, --severity \
+             and --layer are required. Nothing was written. FIX: {HELP}",
+            missing.join(", ")
+        ));
+    }
+    let ty = require_flag(parsed, "type")?;
+    let title = require_flag(parsed, "title")?;
+    let severity = require_flag(parsed, "severity")?;
+    let layer = require_flag(parsed, "layer")?;
+    if !backlog_allowed_type(ty) {
+        return Some(format!(
+            "bee backlog add: --type \"{ty}\" is not a backlog row type. Nothing was written. \
+             FIX: {HELP}"
+        ));
+    }
+    if !BACKLOG_SEVERITIES.contains(&severity) {
+        return Some(format!(
+            "bee backlog add: --severity \"{severity}\" is not one of P1|P2|P3. Nothing was \
+             written. FIX: re-run with --severity P1, --severity P2 or --severity P3."
+        ));
+    }
+    for (flag, value, limit) in [
+        ("--title", title, BACKLOG_MAX_TITLE),
+        ("--layer", layer, BACKLOG_MAX_LAYER),
+    ] {
+        let len = char_len(value);
+        if len > limit {
+            return Some(format!(
+                "bee backlog add: {flag} is {len} characters, over the {limit}-character limit. \
+                 Nothing was written. FIX: shorten {flag} to {limit} characters or fewer and \
+                 re-run; put the long version in --detail, which has no limit."
+            ));
+        }
+    }
+    None
+}
+
+fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCode> {
+    // The root comes FIRST: emit_error needs it, and a caller standing outside
+    // a bee repo must hear about the missing/unsupported root before hearing
+    // anything about their flags.
     let ctx = match preamble("backlog add", parsed.pre_json, t0) {
         Err(code) => return Some(code),
         Ok(c) => c?,
@@ -765,6 +811,19 @@ fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCo
             .to_string();
         return Some(emit_error(&ctx.root, "backlog add", parsed.json, &msg, t0));
     }
+    // Every validation refusal below the root: named by the caller's own flag,
+    // and always BEFORE the append, so `.bee/backlog.jsonl` is byte-identical
+    // afterwards — exactly what the help text promises.
+    if let Some(msg) = add_refusal(&parsed) {
+        return Some(emit_error(&ctx.root, "backlog add", parsed.json, &msg, t0));
+    }
+    let ty = require_flag(&parsed, "type")?;
+    let title = require_flag(&parsed, "title")?;
+    let severity = require_flag(&parsed, "severity")?;
+    let layer = require_flag(&parsed, "layer")?;
+    // `flags.detail !== undefined && !== true ? String(flags.detail) : ''`.
+    let detail = parsed.flags.get("detail").cloned().unwrap_or_default();
+    let feature = parsed.flags.get("feature").cloned().unwrap_or_default();
     // Row key order: ts, type, title, detail, severity, layer, feature.
     let mut line = Map::new();
     line.insert("ts".into(), Value::String(now_iso()));
@@ -774,8 +833,17 @@ fn run_add(parsed: ParsedArgs, queue_submit: bool, t0: Instant) -> Option<ExitCo
     line.insert("severity".into(), Value::String(severity.to_string()));
     line.insert("layer".into(), Value::String(layer.to_string()));
     line.insert("feature".into(), Value::String(feature));
-    if append_jsonl(&backlog_jsonl_path(&ctx.root), &Value::Object(line.clone())).is_err() {
-        return None;
+    let path = backlog_jsonl_path(&ctx.root);
+    if append_jsonl(&path, &Value::Object(line.clone())).is_err() {
+        // The one refusal that cannot promise "nothing was written": the write
+        // itself is what failed, and a partial line may be on disk.
+        let msg = format!(
+            "bee backlog add: could not write the row to {}. FIX: check that the file and its \
+             .bee/ directory are writable, read the last line of the file to see whether a \
+             partial row landed, then re-run.",
+            path.display()
+        );
+        return Some(emit_error(&ctx.root, "backlog add", parsed.json, &msg, t0));
     }
     // No --queue-submit in the accepted shapes, so commitBacklogRow returns
     // {committed:false, sha:null} without ever invoking git.
@@ -2162,5 +2230,209 @@ mod tests {
         );
         let legacy = feature_backlog_rank(root).unwrap();
         assert_eq!(legacy.get("z"), Some(&0));
+    }
+
+    // ── backlog add: honest refusals ───────────────────────────────────────
+
+    /// Build the ParsedArgs `try_native` would hand `run_add`, minus the
+    /// lifted-out `--queue-submit`.
+    fn add_args(tokens: &[&str]) -> ParsedArgs {
+        let owned: Vec<OsString> = tokens.iter().map(OsString::from).collect();
+        parse_shape(&owned, &["type", "title", "severity", "layer", "detail", "feature"])
+            .expect("well-formed fixture argv")
+    }
+
+    #[test]
+    fn backlog_add_refusal_names_the_missing_required_flag() {
+        // The reproduction that opened this cell: the router answered "its
+        // required arguments are all present" for an argv missing --type.
+        let msg = add_refusal(&add_args(&["--title", "smoketitle"])).expect("a refusal");
+        assert!(msg.starts_with("bee backlog add: missing required flags "), "{msg}");
+        assert!(msg.contains("--type"), "{msg}");
+        assert!(msg.contains("--severity"), "{msg}");
+        assert!(msg.contains("--layer"), "{msg}");
+        assert!(msg.contains("Nothing was written."), "{msg}");
+
+        // One miss is named on its own, in the singular.
+        let one = add_refusal(&add_args(&["--title", "t", "--severity", "P3", "--layer", "cli"]))
+            .expect("a refusal");
+        assert!(one.starts_with("bee backlog add: missing required flag --type."), "{one}");
+
+        // An empty value is a miss too (requireFlag rejects ''), and the
+        // complete argv is not refused at all.
+        assert!(add_refusal(&add_args(&[
+            "--type", "friction", "--title", "", "--severity", "P3", "--layer", "cli",
+        ]))
+        .expect("a refusal")
+        .contains("--title"));
+        assert_eq!(
+            add_refusal(&add_args(&[
+                "--type", "friction", "--title", "t", "--severity", "P3", "--layer", "cli",
+            ])),
+            None
+        );
+    }
+
+    #[test]
+    fn backlog_add_refusal_names_the_out_of_enum_value() {
+        let sev = add_refusal(&add_args(&[
+            "--type", "friction", "--title", "t", "--severity", "P9", "--layer", "cli",
+        ]))
+        .expect("a refusal");
+        assert!(sev.contains("--severity \"P9\" is not one of P1|P2|P3"), "{sev}");
+        assert!(sev.contains("Nothing was written."), "{sev}");
+
+        let ty = add_refusal(&add_args(&[
+            "--type", "bogus", "--title", "t", "--severity", "P3", "--layer", "cli",
+        ]))
+        .expect("a refusal");
+        assert!(ty.contains("--type \"bogus\" is not a backlog row type"), "{ty}");
+        assert!(ty.contains("bee backlog add --help"), "{ty}");
+    }
+
+    #[test]
+    fn backlog_add_refusal_names_the_over_length_field() {
+        let long_title = "t".repeat(BACKLOG_MAX_TITLE + 1);
+        let title = add_refusal(&add_args(&[
+            "--type", "friction", "--title", &long_title, "--severity", "P3", "--layer", "cli",
+        ]))
+        .expect("a refusal");
+        assert!(
+            title.contains(&format!("--title is {} characters", BACKLOG_MAX_TITLE + 1)),
+            "{title}"
+        );
+        assert!(
+            title.contains(&format!("over the {BACKLOG_MAX_TITLE}-character limit")),
+            "{title}"
+        );
+
+        // The limit itself is not over it, and --layer is named as --layer.
+        let at_limit = "t".repeat(BACKLOG_MAX_TITLE);
+        assert_eq!(
+            add_refusal(&add_args(&[
+                "--type", "friction", "--title", &at_limit, "--severity", "P3", "--layer", "cli",
+            ])),
+            None
+        );
+        let long_layer = "l".repeat(BACKLOG_MAX_LAYER + 1);
+        let layer = add_refusal(&add_args(&[
+            "--type", "friction", "--title", "t", "--severity", "P3", "--layer", &long_layer,
+        ]))
+        .expect("a refusal");
+        assert!(layer.contains("--layer is"), "{layer}");
+        assert!(!layer.contains("--title is"), "{layer}");
+    }
+
+    const BACKLOG_ADD_CHILD: &str = "verbs::backlog::tests::backlog_add_child";
+
+    /// Runs ONLY as a child of the test below — drives the REAL
+    /// `bee backlog add` door with the argv in `BEE_TEST_ADD_ARGV`, resolving
+    /// its store root off its own (process-global) cwd.
+    #[test]
+    #[ignore = "spawned by backlog_add_refuses_without_touching_the_store"]
+    fn backlog_add_child() {
+        let raw = std::env::var("BEE_TEST_ADD_ARGV").expect("BEE_TEST_ADD_ARGV");
+        let args: Vec<OsString> = raw.split('\u{1f}').map(OsString::from).collect();
+        try_native(&args, Instant::now()).expect("`backlog add` must be served natively");
+    }
+
+    fn backlog_add_run(root: &Path, args: &[&str]) -> String {
+        let exe = std::env::current_exe().expect("test binary path");
+        let out = std::process::Command::new(&exe)
+            .args([
+                "--exact",
+                BACKLOG_ADD_CHILD,
+                "--ignored",
+                "--test-threads",
+                "1",
+                "--nocapture",
+            ])
+            .current_dir(root)
+            .env("BEE_TEST_ADD_ARGV", args.join("\u{1f}"))
+            .output()
+            .expect("spawn the test binary");
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+    }
+
+    /// The end-to-end half of the three tests above: the refusal the caller
+    /// actually sees names the real problem, is never the router's generic
+    /// argument-shape line, and leaves `.bee/backlog.jsonl` byte-identical —
+    /// while the same door still appends exactly one row for a valid call.
+    #[test]
+    fn backlog_add_refuses_without_touching_the_store() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee/onboarding.json"), r#"{"version":1,"completed":true}"#)
+            .unwrap();
+        let store = backlog_jsonl_path(root);
+        let seed = "{\"ts\":\"2020-01-01T00:00:00.000Z\",\"type\":\"debt\",\"title\":\"seed\"}\n";
+        std::fs::write(&store, seed).unwrap();
+
+        let long_title = "t".repeat(BACKLOG_MAX_TITLE + 1);
+        let cases: Vec<(&str, Vec<&str>, Vec<String>)> = vec![
+            (
+                "missing --type",
+                vec!["backlog", "add", "--json", "--title", "smoketitle"],
+                vec!["missing required flags".into(), "--type".into()],
+            ),
+            (
+                "out-of-enum --severity",
+                vec![
+                    "backlog", "add", "--json", "--type", "friction", "--title", "smoketitle",
+                    "--severity", "P9", "--layer", "cli",
+                ],
+                vec!["--severity".into(), "is not one of P1|P2|P3".into()],
+            ),
+            (
+                "over-length --title",
+                vec![
+                    "backlog", "add", "--json", "--type", "friction", "--title", &long_title,
+                    "--severity", "P3", "--layer", "cli",
+                ],
+                vec![
+                    format!("--title is {} characters", BACKLOG_MAX_TITLE + 1),
+                    format!("over the {BACKLOG_MAX_TITLE}-character limit"),
+                ],
+            ),
+        ];
+        for (what, argv, wants) in cases {
+            let out = backlog_add_run(root, &argv);
+            for want in &wants {
+                assert!(out.contains(want.as_str()), "{what}: {out}");
+            }
+            assert!(
+                !out.contains("unsupported argument shape"),
+                "{what}: still the router's generic diagnosis: {out}"
+            );
+            assert_eq!(
+                std::fs::read(&store).unwrap(),
+                seed.as_bytes(),
+                "{what}: the store must be byte-identical after a refusal"
+            );
+        }
+
+        // The success path is unchanged: exactly one row, appended.
+        let out = backlog_add_run(
+            root,
+            &[
+                "backlog", "add", "--json", "--type", "friction", "--title", "smoketitle",
+                "--severity", "P3", "--layer", "probe",
+            ],
+        );
+        assert!(!out.contains("\"error\""), "{out}");
+        let rows = std::fs::read_to_string(&store).unwrap();
+        let lines: Vec<&str> = rows.lines().collect();
+        assert_eq!(lines.len(), 2, "{rows}");
+        assert!(lines[0].contains("\"title\":\"seed\""), "{rows}");
+        let row: Value = serde_json::from_str(lines[1]).expect("the appended row is JSON");
+        assert_eq!(row["type"], "friction");
+        assert_eq!(row["title"], "smoketitle");
+        assert_eq!(row["severity"], "P3");
+        assert_eq!(row["layer"], "probe");
     }
 }
