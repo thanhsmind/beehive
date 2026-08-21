@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "guard-herding-fallback",
   "mode": "feature",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"guard-herding-fallback\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"guard-herding-fallback\" (lane).",
+  "next_action": "bee close finished \"guard-herding-fallback\" — feature is closed.",
   "created_at": "2026-08-21T13:45:35.412Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
