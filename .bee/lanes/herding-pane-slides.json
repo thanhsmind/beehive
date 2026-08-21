@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "herding-pane-slides",
   "mode": "feature",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"herding-pane-slides\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"herding-pane-slides\" (lane).",
+  "next_action": "bee close finished \"herding-pane-slides\" — feature is closed.",
   "created_at": "2026-08-21T10:06:46.756Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
