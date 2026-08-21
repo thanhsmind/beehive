@@ -1,0 +1,96 @@
+{
+  "id": "hpd-1",
+  "feature": "herding-pointer-delivery",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Fix round-1 pointer delivery loss under parallel herding spawns",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "skills/bee-herding/references/spawn-proof.md",
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+  ],
+  "action": "Investigate the bee-bin-refresh incident (round-1 pointer never reached the agy pane spawned in parallel with bhv-1-r1; keystrokes echoed above the boot banner; run waited toward ceiling with an undelivered brief) and fix the delivery/receipt defect in run.rs, keeping the contracts: one-line pointer, bounded re-sends, agent-caused-state-transition receipt, typed failure when attempts run out. Tests in existing run.rs style cover the found failure mode.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "An undelivered brief can no longer ride silently to ceiling",
+      "Receipt still requires an agent-caused state transition"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "hpd-w1",
+    "outcome": "Pointer delivery: ready gate idle-only, receipt an agent-caused transition into working with per-send baseline, or result presence",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T02:09:38.600Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c1eacb78-2dd2-497a-8ea0-8a0c59b5a89d",
+    "claimed_at": "2026-08-21T01:44:07.915Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "pre-fix ready gate accepted idle|working|done and receipt accepted working|done — boot-flap working both passed ready and false-receipted; incident sequence fully explained; pre-fix code was wider than herding-run-ready-wait D1"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "run.rs:792-802 per-send baseline inside the attempt loop; receipt = baseline!=working && observed working, or result file; covers the --continue nudge (1350) and next-round send (1479) since the check lives inside deliver_pointer; ready gate idle-only (818); 30 bounded sends and typed state-receipt run-out preserved"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "new test pointer_delivery_never_trusts_a_booting_working_status_as_receipt (run.rs:2195) — constant working never receipts, all 30 sends attempted; would fail pre-fix; ready_wait_rejects_booting_working_status_until_idle and 4 sibling receipt tests green (8 targeted pass)"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "doc block rewritten to idle-only ready + transition receipt + why done dropped; decision 57a22bfd (herding-pointer-delivery D1 narrowing herding-receipt-state D1) recorded; pointer still one line; receipt still reads no pane text; herding:: 192 passed"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "both commits touch run.rs only; tree clean at 87e1b2b1"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.7-flash",
+        "judge_model": "claude-review-tier",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-21T02:09:30.829Z"
+      }
+    ],
+    "report": {
+      "outcome": "Pointer delivery: ready gate idle-only, receipt an agent-caused transition into working with per-send baseline, or result presence",
+      "commit": "e4e3c858 + 87e1b2b1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding:: — green (192 passed) — cell touches only the herding run delivery path",
+      "deviations": [
+        "fix landed over two rounds: judge NEEDS_REVISION on round 1 (level-check receipt), repaired round 2 with the transition baseline",
+        "two residual suspects (pane_current focus-steal, start_with_retry duplicate keystrokes) recorded as backlog p-2858afbb, not fixed here"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

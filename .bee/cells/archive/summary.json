@@ -708,5 +708,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-21T01:50:00.776Z"
+  },
+  "herding-pointer-delivery": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-21T02:21:15.027Z"
   }
 }
