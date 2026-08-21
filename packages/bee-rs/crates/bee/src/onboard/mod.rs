@@ -279,6 +279,15 @@ fn error_exit(message: &str) -> ExitCode {
 /// rather than prose a caller has to regex.
 pub(crate) const NO_ENGINE_KIND: &str = "engine_not_found";
 
+/// The one host-repo remedy that actually runs there: `scripts/install.sh`
+/// is not vendored into a target repo (it writes only `$TARGET_DIR/.bee/bin`,
+/// see scripts/install.sh:583), so the fetchable one-liner is the only path
+/// that works outside a bee checkout. Shared by this refusal and
+/// status_full's agent-file-drift remedies so the two strings can never
+/// drift apart.
+pub(crate) const HOST_REPO_INSTALL_ONE_LINER: &str =
+    "curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y";
+
 /// The refusal's prose — a pure function so the test suite can assert both
 /// the invocation root and the missing template path are named, without
 /// capturing stdout/stderr. B-P2-3: when the caller passed `--repo-root`,
@@ -294,8 +303,7 @@ fn no_engine_message(err: &source::LocateError) -> String {
 vendors its files FROM that checkout — the skills, the expertise layer, the AGENTS.md block. \
 Searched upward from the invocation root ({}) for {} and found none.{repo_root_clause} FIX: run \
 this from inside a bee checkout (`cd <bee>` first), or re-run the installer, which brings its \
-own: curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | \
-bash -s -- -y",
+own: {HOST_REPO_INSTALL_ONE_LINER}",
         err.invocation_root.display(),
         err.missing_template.display()
     )

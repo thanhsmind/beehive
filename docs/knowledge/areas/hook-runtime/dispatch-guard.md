@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: [0023, 72f3d6dd (AO5 config is the authority — tier/model agreement and membership at dispatch), "codex-native-transport D3-D5 (3ceba8f5, D3a c0cba64e, Δ2-amended 760e9b05)", "f6606f4d (execution tier renders a second identity; a catch-all dispatch at that tier is refused naming both, 2026-08-04)", "2d36afc0 (extraction and review keep the 2026-08-03 repair behaviour, hook-runtime dispatch-guard B16a/B18, 2026-08-04)"]
-  sources: ["advisor-and-orchestration Slice 2A-iii cell ao-2aiii-1 (declared-tier-first dispatch guard, 12 verification rows, 2026-07-17)", "advisor-and-orchestration Slice 3B cells ao-3b-1/ao-3b-2 (config-rendered pinned helper types + flat agents sync + generic-type dispatch refusal + drift advisory, 2026-07-17)", "codex-native-transport cell cnt-7 (Claude model-param guard allowlist folds a configured model-shaped adviser's own model, closing a live adviser-dispatch refusal, allow-only-widening; trace in .bee/cells/, report docs/history/codex-native-transport/reports/cnt-7.md, 2026-07-19)", "docs/specs/hook-runtime.md#B16", "docs/specs/hook-runtime.md#B18", "docs/specs/hook-runtime.md#R5", "docs/specs/hook-runtime.md#E17", "docs/specs/hook-runtime.md#P18"]
+  decisions: [0023, 72f3d6dd (AO5 config is the authority — tier/model agreement and membership at dispatch), "codex-native-transport D3-D5 (3ceba8f5, D3a c0cba64e, Δ2-amended 760e9b05)", "f6606f4d (execution tier renders a second identity; a catch-all dispatch at that tier is refused naming both, 2026-08-04)", "2d36afc0 (extraction and review keep the 2026-08-03 repair behaviour, hook-runtime dispatch-guard B16a/B18, 2026-08-04)", "dispatch-one-door D1 (every helper dispatch resolves its transport from configuration through one preparation verb; refusals name that verb; a pane-worker slot is named honestly, 2026-08-21)"]
+  sources: ["advisor-and-orchestration Slice 2A-iii cell ao-2aiii-1 (declared-tier-first dispatch guard, 12 verification rows, 2026-07-17)", "advisor-and-orchestration Slice 3B cells ao-3b-1/ao-3b-2 (config-rendered pinned helper types + flat agents sync + generic-type dispatch refusal + drift advisory, 2026-07-17)", "codex-native-transport cell cnt-7 (Claude model-param guard allowlist folds a configured model-shaped adviser's own model, closing a live adviser-dispatch refusal, allow-only-widening; trace in .bee/cells/, report docs/history/codex-native-transport/reports/cnt-7.md, 2026-07-19)", "docs/specs/hook-runtime.md#B16", "docs/specs/hook-runtime.md#B18", "docs/specs/hook-runtime.md#R5", "docs/specs/hook-runtime.md#E17", "docs/specs/hook-runtime.md#P18", "dispatch-one-door cells dod-1/dod-4 (behavior delta merged into hook-runtime dispatch-guard B16a/B18, 2026-08-21)"]
   authoritative_for: "hook-runtime: pre-spawn dispatch judgement of tier, model, and helper type"
 ---
 
@@ -100,8 +100,20 @@ caller — and charged a round trip for every guess.
   enforcing (config wins), applied instead of announced.
 - What stays refused: a wholly bare dispatch, an unconfigured model name, an
   explicit model on a tier that names none, any tier resolving to an
-  external command, and a catch-all-type dispatch declaring the execution
-  tier. Each is either unknowable or genuinely ambiguous.
+  external command or a pane worker, and a catch-all-type dispatch declaring
+  the execution tier. Each is either unknowable or genuinely ambiguous.
+- **Every refusal names the one verb that resolves the transport.** A tier
+  backed by an external command or a pane worker is not a helper at all; the
+  guard evaluates a helper dispatch and can only permit or refuse it, never
+  turn it into the shell call such a tier actually needs. So each of those
+  refusals hands back the single preparation verb that reads the configured
+  slot and returns the tool plus the exact payload to run, and shows the
+  hand-written shell shape only as an illustration of what that verb
+  returns; an actor that reads nothing but the refusal recovers on its next
+  attempt. And the bare refusal states the actual kind of the work tier's
+  slot — pane worker, external command, or unconfigured — instead of a
+  fixed phrase, because naming a pane-worker slot an external command sent
+  readers to a remedy that could not work.
 - Every repair is announced twice — to the actor next to the tool call, to the
   human as a one-line note — and the audit line's transport label says a
   repair happened and records the value that will actually run. A repair
@@ -143,8 +155,15 @@ this time naming both identities — took its place; before 2026-08-03 it was
 refused with a corrective message that named neither identity. The
 session-model tier is exempt — it has no pinned type by definition. Drift
 between a rendered helper file's model and the configured slot is surfaced
-as an **advisory** by the status snapshot and the configuration check (never
-a refusal — the dispatch-time agreement rules already protect the dispatch
+as an **advisory** by the status snapshot and the configuration check, now
+across all four rendered identities — before, only three were drift-checked,
+so a stale copy of the execution tier's writing identity could sit
+unreported beside a changed slot. The advisory names the slot's actual kind
+— pane worker, external command, or unconfigured — rather than one fixed
+phrase, and its remedy names a command that runs in the repo the advisory is
+printed for: a project that is not itself a bee checkout cannot run the
+onboarding verb directly and is pointed at the installer instead (never a
+refusal — the dispatch-time agreement rules already protect the dispatch
 itself). No claim is made that any of this reduces cost; it makes the tier
 decision auditable.
 

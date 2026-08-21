@@ -108,11 +108,13 @@ single worker — never wave analysis or multi-cell assignment.
    bee's own rendered agent definitions (`.claude/agents/bee-*.md`,
    config-sourced at onboarding), never another plugin's type. `ceiling` has
    no rendered agent (it IS the session model) — spawn it as the runtime's
-   default/general subagent type; the same default applies when the tier's
-   slot is cli-shaped or otherwise has no rendered file. NEVER pair a
-   `[bee-tier: generation|extraction|review]` marker with `subagent_type:
-   "general-purpose"` — `bee-model-guard` denies it (`generic-type-denied`)
-   precisely so this rule cannot be skipped by habit.
+   default/general subagent type. A slot that resolves to no model (a cli- or
+   herding-shaped slot) is not a subagent at all — resolve the transport with
+   `.bee/bin/bee dispatch prepare --runtime claude --kind
+   <cell|gather|reviewer|advisor> --json` and run the Bash payload it returns
+   (per D1). NEVER pair a `[bee-tier: generation|extraction|review]` marker with
+   `subagent_type: "general-purpose"` — `bee-model-guard` denies it
+   (`generic-type-denied`) precisely so this rule cannot be skipped by habit.
 <!-- bee:end -->
 <!-- bee:only codex -->
    Codex has no per-agent `subagent_type` equivalent — its tier is
@@ -297,7 +299,7 @@ that acceptance, not on an ordinary wave.
 | Follow-up / rescue | `SendMessage` to the same agent id continues it with context intact; a new `Agent` call starts fresh |
 | Harness assist | `bee-chain-nudge` hook fires on SubagentStop: collect the status, update the cell, check reservations |
 | Isolation guarantee | Fresh context per Agent call; include only the contract fields |
-| Subagent type | `subagent_type: "bee-build"` (generation, executes a cell) or `"bee-gather"` (generation, reads only) · `"bee-extract"` (extraction) · `"bee-review"` (review), when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling`, and any tier whose slot is cli-shaped or otherwise unrendered, use the runtime default (`general-purpose`). The guard repairs a generic type for extraction and review; at generation it refuses, because the tier alone does not say whether the work writes |
+| Subagent type | `subagent_type: "bee-build"` (generation, executes a cell) or `"bee-gather"` (generation, reads only) · `"bee-extract"` (extraction) · `"bee-review"` (review), when the rendered agent exists (`.claude/agents/bee-*.md`); `ceiling` uses the runtime default (`general-purpose`); a cli- or herding-shaped slot goes through `bee dispatch prepare` (per D1). The guard repairs a generic type for extraction and review; at generation it refuses, because the tier alone does not say whether the work writes |
 <!-- bee:end -->
 <!-- bee:only codex -->
 | | Codex |
@@ -372,16 +374,17 @@ while `resolveTier` refuses a cli-shaped tier for anything but a gather.
 `bee herding run` (herding-executor D1, D4) is a THIRD transport, distinct
 from both the native subagent dispatch above and the cli gather branch: a
 long-lived foreign agent (any herdr-supported kind) started in its own
-pane, doing write work against a worktree. It exists for scope A only —
-running the verb by hand against ONE cell the user names — and is
-**user-requested per cell, never the default dispatch path**. The
-default for `standard`/`high-risk` cell execution stays the wave protocol
-above; reach for herding only when the user asks for a specific cell to
-run through an external agent. Scope B (a `{kind:"herding"}` tier kind in
-`models.*`, picked automatically the way `subagent`/`cli` are today) is a
-separate, trigger-gated backlog item — it does not exist yet, and this
-reference never treats herding as something the tier judgment step (4,
-above) can select on its own.
+pane, doing write work against a worktree. It supports two scopes:
+
+- **Scope A (user-requested per cell)**: running the verb by hand against ONE
+  cell the user names, when an external agent is explicitly requested.
+- **Scope B (automatic tier dispatch)**: a `{kind:"herding"}` tier slot in
+  `models.*` (herding-tier D1-D6, widened by herding-review-slots D1), which is
+  selected automatically by `.bee/bin/bee dispatch prepare` (per D1) whenever
+  the configured tier slot is herding-shaped.
+
+For model-shaped slots, the default for `standard`/`high-risk` cell execution
+stays the wave protocol above.
 
 **The pane worker is bee-ignorant (D4): it never runs a `bee` verb.** Its
 whole contract is the self-contained brief `bee herding run` renders —
