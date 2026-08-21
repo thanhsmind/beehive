@@ -3,7 +3,7 @@
   "feature": "guard-herding-fallback",
   "title": "Admit a herding slot's fallback:\"default\" model into the guard's configured set",
   "lane": "standard",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "files": [
     "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
@@ -39,16 +39,85 @@
   "decisions": [],
   "trace": {
     "worker": "w-hgf-1",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "The model-guard now admits exactly the models dispatch prepare can publish for a herding slot carrying fallback:default - generation and review only - so the two doors no longer contradict each other.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [
+      "Cell lane raised from small to standard at creation time so the judge-required hooks/ root took a real independent read instead of a lane-small acknowledgement."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-21T14:10:30.318Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "2a7f3cd2-3cf9-4540-9d24-8a9b64594486",
-    "claimed_at": "2026-08-21T13:48:19.542Z"
+    "claimed_at": "2026-08-21T13:48:19.542Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "review-repoint-condition-exact",
+            "status": "PASS",
+            "evidence": "model_guard.rs:466 `if matches!(raw, Slot::Null | Slot::Unset) && slot == \"review\"` is the same predicate as resolve_tier's model_guard.rs:396 — identical variants, identical slot guard. Not wider: probe with review={kind:cli,command:\"codex exec -\"} beside a herding generation slot carrying fallback:\"default\", payload {\"model\":\"opus\"} -> exit 2, `configured models (haiku, sonnet)`. A Native/Name/already-Herding review slot never re-points."
+          },
+          {
+            "id": "review-fallback-reads-generation-inserts-review-default",
+            "status": "PASS",
+            "evidence": "model_guard.rs:471 re-points only to &models.claude.generation; the default_models key stays the loop's slot (model_guard.rs:475-476), so \"review\" -> \"opus\" per verbs/drivers/models.rs:43-55. Probe (extraction \"haiku\", generation herding fallback:\"default\", review null) with payload {\"model\":\"opus\"} -> exit 0, where 21796e79 gave exit 2. Matches prepare.rs:818-830, which publishes default_models(runtime)[tier_token] with tier_token=\"review\"."
+          },
+          {
+            "id": "no-unpublishable-model-remains",
+            "status": "PASS",
+            "evidence": "Re-derived from prepare.rs:33-39 (slot_for_kind: cell|gather -> generation, reviewer -> review, everything else -> advisor), prepare.rs:641 (the only resolve_tier call site) and the prepare.rs:820 CONFIGURABLE_SLOTS gate: prepare can publish only generation -> sonnet and review -> opus for claude, nothing for advisor and nothing for codex/opencode. The herding loop at model_guard.rs:461 is exactly [generation, review] over models.claude.* with default_models(\"claude\"). Probe on the verbatim repo .bee/config.json: {\"model\":\"haiku\"} -> exit 2, `configured models (fable, opus, sonnet)`; a codex-herding probe with {\"model\":\"sonnet\"} -> exit 2, `configured models (haiku)` — no codex leak."
+          },
+          {
+            "id": "new-tests-observable-and-mutation-sensitive",
+            "status": "PASS",
+            "evidence": "a_herding_review_slots_fallback_default_is_allowed_as_a_param (model_guard.rs:1692-1707) asserts exit 0 plus dispatch transport model-param and model opus. an_explicitly_null_review_slot_inherits_the_generation_herding_fallback (model_guard.rs:1709-1731) asserts exit 0 on the real payload as well as the member set, and fails if the :466 re-point is removed. a_herding_extraction_slots_fallback_admits_nothing (model_guard.rs:1733-1752) asserts exit 2, the exact refusal text, member list (opus, sonnet) and transport param-not-configured, and fails if extraction is re-added to the loop. All three assert the guard verdict, not the implementation."
+          },
+          {
+            "id": "amend-scope-and-prohibitions",
+            "status": "PASS",
+            "evidence": "git show f58aa91f --stat -> 1 file changed, 220 insertions, 5 deletions, hooks/model_guard.rs only. git diff 21796e79 f58aa91f is confined to configured_model_set (model_guard.rs:444-483) and the three new tests; no refusal-string line appears in the diff. verbs/drivers/prepare.rs and verbs/drivers/models.rs untouched; the only model-name source is crate::verbs::drivers::default_models (model_guard.rs:476), so there is no second table. Transport refusal probed live: {\"subagent_type\":\"bee-gather\"} -> exit 2, wording unchanged. cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard -> 40 passed, 0 failed."
+          },
+          {
+            "id": "no-new-panic-advisor-or-runtime-leak",
+            "status": "PASS",
+            "evidence": "The added code is only matches!/reference re-binding (model_guard.rs:465-472) plus a guarded if-let with !m.trim().is_empty() (model_guard.rs:475-479) — no unwrap, no indexing, no arithmetic. Malformed slot objects were already reduced by normalize_tier_value (model_guard.rs:296), which cannot panic. Advisor never enters the herding loop (model_guard.rs:461) and the advisor arm at :484 still requires Resolved::Model; default_models has no advisor key. The raw reads are models.claude.review and models.claude.generation only."
+          },
+          {
+            "id": "pre-existing-unrelated-red",
+            "status": "PASS",
+            "evidence": "cargo test --release --test opencode_plugin_contracts -> 4 passed, 1 failed: every_registered_write_or_read_capable_opencode_tool_is_mapped_or_named_as_a_gap panics at crates/bee/tests/opencode_plugin_contracts.rs:1567 with `opencode binary: additional tool anchor for \"invalid\" not found`. It reads an installed external opencode binary; this diff touches no opencode code path. Unrelated to hgf-1."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-21T14:09:58.079Z"
+      }
+    ],
+    "report": {
+      "outcome": "configured_model_set contributes a herding slot fallback:default model for the generation and review slots only, sourced from verbs/drivers default_models; tier and transport refusals unchanged.",
+      "commit": "f58aa91f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard — green (40 passed, 0 failed) — the cell changes one hook file and its own tests; also proved end to end by running the freshly built binary hook against the live .bee/config.json: model=sonnet exit 0, model=haiku exit 2, subagent_type=bee-gather exit 2 with the refusal text unchanged",
+      "deviations": [
+        "Brief said to loop all three configurable slots; corrected to generation and review only, because prepare slot_for_kind maps cell|gather to generation and reviewer to review and never reaches extraction, so an extraction fallback model can never be published. Raised by the independent judge read.",
+        "Brief named the call path crate::verbs::drivers::models::default_models, which does not compile - drivers/mod.rs keeps mod models private and re-exports its items, so the call is crate::verbs::drivers::default_models. Same function, same table.",
+        "The execution worker w-hgf-1 was registered in state.workers after its dispatch rather than before it; the dispatch itself was a real subagent run, so the entry is accurate but late."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
