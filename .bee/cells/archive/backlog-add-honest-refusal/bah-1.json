@@ -1,0 +1,75 @@
+{
+  "id": "bah-1",
+  "feature": "backlog-add-honest-refusal",
+  "title": "Refuse bee backlog add by naming the real problem",
+  "lane": "small",
+  "status": "capped",
+  "deps": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+    "packages/bee-rs/crates/bee/src/router.rs"
+  ],
+  "action": "Make `bee backlog add` refuse honestly instead of emitting the router's generic `unsupported_argument_shape`. Reproduce first: `bee backlog add --json --title smoketitle` today answers \"unsupported argument shape ... Its required arguments are all present, so what it refused is an optional flag, a flag value, or a target that does not exist\" - which is false; what it refused was the MISSING --type. Root cause, in `fn run_add` (find it with `rg -n 'fn run_add' packages/bee-rs/crates/bee/src/verbs/backlog.rs`): every validation miss returns `None`, the old \"delegate to Node\" signal, and Node was deleted, so `try_native` falls through to the router's generic shape diagnosis in `packages/bee-rs/crates/bee/src/router.rs` (`rg -n 'unsupported_argument_shape' packages/bee-rs/crates/bee/src/router.rs`). The decisive lines in run_add: `let ty = require_flag(&parsed, \"type\")?;`, `if !backlog_allowed_type(ty) { return None; }`, `let title = require_flag(&parsed, \"title\")?;`, `let severity = require_flag(&parsed, \"severity\")?;`, `if !BACKLOG_SEVERITIES.contains(&severity) { return None; }`, `let layer = require_flag(&parsed, \"layer\")?;`, `if char_len(title) > BACKLOG_MAX_TITLE || char_len(layer) > BACKLOG_MAX_LAYER { return None; }`, and the append failure `if append_jsonl(...).is_err() { return None; }`. Replace each with a typed refusal that names the actual problem and the fix, reusing the emit shape run_add ALREADY uses for --queue-submit a few lines below (`return Some(emit_error(&ctx.root, \"backlog add\", parsed.json, &msg, t0));`). Two constraints follow from that: emit_error needs the root, so the `preamble` call must move ABOVE the validation block - keep its existing Err/Ok(None) handling byte-identical, and keep the no-root and unsupported-root paths winning over a validation message, since a caller outside a bee repo must still hear about the root first. Message content, one per problem: a missing --type/--title/--severity/--layer names which flag is missing and that all four are required; an out-of-enum --type names the value and points at `bee backlog add --help`; an out-of-enum --severity names the value and lists P1|P2|P3; an over-length --title or --layer names which one, its length and the limit. Every refusal must leave .bee/backlog.jsonl untouched, as the help text already promises. Do NOT change the success path, the row key order, the --queue-submit refusal, or any other verb in this file. Tests in the file's own #[cfg(test)] block if it has one, otherwise in the crate's existing CLI-surface test file (find where sibling verbs are tested with `rg -rn 'backlog add' packages/bee-rs/crates/bee/tests packages/bee-rs/crates/bee/src --glob '*.rs'`): cover a missing --type, an out-of-enum --severity, an over-length --title, and one full valid call that still appends exactly one row - each asserting the refusal text names the real problem and that no row was written.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml backlog",
+  "must_haves": {
+    "truths": [
+      "A bee backlog add call missing --type names --type, never a generic argument-shape message",
+      "Every refusal leaves .bee/backlog.jsonl byte-identical"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+        "substantive": "run_add refuses with per-problem messages, no dead delegate-to-Node None returns left in it"
+      }
+    ],
+    "key_links": [
+      "run_add resolves the store root before validating so emit_error can be used"
+    ],
+    "prohibitions": [
+      "No change to the success path or the appended row's key order",
+      "No change to the --queue-submit refusal wording",
+      "No change to run_propose, run_pbi_add, run_counts, run_findings or any other verb in this cell"
+    ]
+  },
+  "trace": {
+    "worker": "w-bah-1",
+    "outcome": "bee backlog add now refuses by naming the missing/out-of-enum/over-length flag instead of the router's generic argument-shape line, and every refusal leaves .bee/backlog.jsonl byte-identical",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+    ],
+    "deviations": [
+      "Tests spawn a child test process (the cells.rs --exact/--ignored pattern) because run_add resolves its root from process cwd; the four pure-message cases stay in-process via a new add_refusal() helper. Also confirmed out of scope: run_propose, run_pbi_add, run_findings and add_pbi's PbiAdd::Delegate still carry the dead delegate-to-Node 'return None' pattern, and the registry entry for backlog.add declares required:[] which is why the router claimed the required arguments were all present."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T14:56:20.634Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1083b691-2617-4369-95d8-5204003a5b9d",
+    "claimed_at": "2026-08-21T14:47:58.088Z",
+    "tier_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier",
+    "report": {
+      "outcome": "bee backlog add refuses honestly: per-problem messages naming the real flag, no store write on any refusal",
+      "commit": "9880250",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/backlog.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml backlog — green — 28 passed, 1 ignored (the spawned child); backlog.rs is the only changed file. Full-suite run: 2316 passed, 2 pre-existing failures in devtools::skill_trees / onboard::skills (committed skill-tree projection drift, untouched by this cell).",
+      "deviations": [
+        "Message-shape cases test a new pure add_refusal() helper in-process; the store-untouched and appends-one-row cases spawn a child test process, since run_add reads its root from process cwd",
+        "run_propose, run_pbi_add, run_findings and add_pbi PbiAdd::Delegate still carry the same dead delegate-to-Node return-None pattern - out of this cell",
+        "The registry entry backlog.add declares required:[], which is why the router claimed all required arguments were present - out of this cell"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 314 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "decisions": [],
+  "tier": "ceiling"
+}

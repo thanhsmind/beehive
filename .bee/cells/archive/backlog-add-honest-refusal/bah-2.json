@@ -1,0 +1,77 @@
+{
+  "id": "bah-2",
+  "feature": "backlog-add-honest-refusal",
+  "title": "Declare backlog add's four required flags in the command registry",
+  "lane": "small",
+  "status": "capped",
+  "deps": [
+    "bah-1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "action": "The registry entry for `backlog.add` declares `\"required\": []` while `run_add` hard-requires --type, --title, --severity and --layer. Two things follow from that lie: `bee backlog add --help` prints those four flags without the `*` marker every other required flag carries (compare `bee backlog pbi add --help`, whose entry declares `\"required\": [\"title\"]` and renders `--id* (str)`), and the router's `missing_required_argument` branch can never fire for them, which is what leaves the generic `unsupported_argument_shape` as the only answer. Fix the declaration: in packages/bee-rs/crates/bee/src/generated/registry_payload.json find the command whose `name` is `backlog.add` (it is one entry in the top-level `commands` array - the file is one long line, so edit it programmatically with a small python script rather than by hand) and set its `parameters.required` to the four flag names, matching the ordering convention the sibling entries use. Change nothing else in the file: no reformatting, no key reordering, no whitespace change to any other entry - the whole file is sha256'd as the manifest hash (`packages/bee-rs/crates/bee/src/registry.rs`, `manifest_hash`), so an incidental reformat is a repo-wide drift event. This file is a GENERATED tree: before editing, check whether a write guard denies it and whether a regen path exists (`bee dev regen`, `bee dev release-manifest --check`); if a guard denies the write, follow the remedy its message names, and if no regen path can produce this file, say so in your deviations and edit it directly. After the edit, re-run the registry contract suite AND confirm by hand that `bee backlog add --help` now marks the four flags with `*` and that a missing-flag call now answers `missing_required_argument` rather than `unsupported_argument_shape` - the bah-1 messages stay the answer for out-of-enum and over-length problems, which the router cannot see.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml registry",
+  "must_haves": {
+    "truths": [
+      "bee backlog add --help marks --type, --title, --severity and --layer as required",
+      "A call missing one of them answers missing_required_argument naming it"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "backlog.add entry declares its four required flags; no other byte changed"
+      }
+    ],
+    "key_links": [
+      "The registry contract suite still passes over the edited payload"
+    ],
+    "prohibitions": [
+      "No reformatting or reordering of any other registry entry",
+      "No change to any other command's required list"
+    ]
+  },
+  "trace": {
+    "worker": "w-bah-2",
+    "outcome": "backlog.add declares its four required flags: bee backlog add --help now stars --type, --title, --severity and --layer, and a source-derived contract test locks the declaration to run_add's own const",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+      "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T15:08:45.107Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1083b691-2617-4369-95d8-5204003a5b9d",
+    "claimed_at": "2026-08-21T14:56:46.583Z",
+    "tier_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier",
+    "report": {
+      "outcome": "backlog.add now declares its four required flags, so --help stars them and the schema stops lying; a source-derived contract test locks the declaration to run_add own const",
+      "commit": "c37058e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/verbs/backlog.rs",
+        "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+      ],
+      "tests": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml registry — green (25 passed, 0 failed) — the cell own verify scope; plus cargo test ... backlog green (29 passed) because the comment fix touched backlog.rs, and a hand run of the freshly built binary against a throwaway root confirming the four * markers and the by-name refusal",
+      "deviations": [
+        "No regen path exists for this generated file: registry_contracts.rs names `node scripts/export_registry_payload.mjs` as the regen command, but scripts/ holds only install.sh, install.ps1 and release.sh — the exporter was deleted with the Node port. Edited the payload directly with a byte-precise python script; proved afterwards that only a 33-character insertion inside the backlog.add entry changed (common prefix 102443 bytes, common suffix 111691 bytes) and that backlog.add is the only entry whose parsed value differs. No write guard denied the path.",
+        "The router missing_required_argument branch does NOT fire for a missing backlog add flag, and that is the intended layering: emit_unsupported_shape is the end of the line, reached only when every probe returns None, and bah-1 made run_add return Some with its own per-flag refusal. So the caller hears the verb message (names all missing flags at once plus \"Nothing was written\"), never the router generic line — which is what bah-1 own e2e test backlog_add_refuses_without_touching_the_store already pins. The registry fix is what makes --help, --help --json and any schema consumer tell the truth, and it makes the router fallback correct if it is ever reached.",
+        "Reserved and touched two files beyond the cell single declared file: backlog.rs (bah-1 doc comment asserted \"the registry entry declares required: []\", which this cell makes false — reworded, comment only, no behavior) and registry_contracts.rs (added backlog_add_declares_every_flag_run_add_hard_requires, which derives the expected list from run_add own BACKLOG_ADD_REQUIRED const using the same include_str! + parse idiom as the existing set_gate flag-drift test). Proven red first: with the payload toggled back to required:[] the new test fails with \"the registry declares required [] but run_add hard-requires [type, title, severity, layer]\".",
+        "Pre-existing red on main not touched: devtools::skill_trees and onboard::skills (committed skill-tree projection drift). Not run, not fixed, not mine."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  },
+  "decisions": [],
+  "tier": "ceiling"
+}

@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "feature": "backlog-add-honest-refusal",
+  "mode": "feature",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"backlog-add-honest-refusal\" started at phase \"exploring\" (lane).",
+  "next_action": "Present the uat gate, then merge the worktree.",
+  "created_at": "2026-08-21T14:47:05.113Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "public-contracts"
+    ],
+    "product_files": 2,
+    "rationale": "bee backlog add returns the dead delegate-to-Node None on every validation miss, so the router prints a generic shape error naming the wrong problem; the registry also declares required:[] while the code requires four flags. 2 product files; 1 flag (the CLI refusal shape is a caller-facing contract).",
+    "updated_at": "2026-08-21T14:47:18.215Z",
+    "feature": "backlog-add-honest-refusal"
+  },
+  "last_scribing_run": {
+    "feature": "backlog-add-honest-refusal",
+    "date": "2026-08-21",
+    "at": "2026-08-21T15:12:07.469Z",
+    "areas_synced": [
+      "rust-runtime"
+    ],
+    "next_action": "Present the uat gate, then merge the worktree."
+  }
+}
