@@ -1,7 +1,7 @@
 {
   "name": "bee",
-  "version": "2.17.1",
-  "description": "bee: validate-first agentic development for Claude Code and Codex — staged workflow with three human gates, evidence-based validation, bounded swarms over verified cells, and a compounding knowledge loop.",
+  "version": "2.18.0",
+  "description": "bee: validate-first agentic development for Claude Code and Codex \u2014 staged workflow with three human gates, evidence-based validation, bounded swarms over verified cells, and a compounding knowledge loop.",
   "author": {
     "name": "bee"
   },
