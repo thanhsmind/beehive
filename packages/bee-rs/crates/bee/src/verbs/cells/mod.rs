@@ -107,6 +107,7 @@
 use crate::jsjson;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, Roots};
+use crate::verbs::reservations as rsv;
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
 use serde_json::{Map, Value};
 use std::ffi::OsString;
@@ -288,7 +289,17 @@ enum Handled {
 /// handleCellsList (bee.mjs): listCells with the two truthiness-normalized
 /// filters; text is one summarizeCell line per cell or "No cells.".
 fn handle_list(root: &Path, feature: Option<&str>, status: Option<&str>) -> Result<Handled, Delegate> {
-    let cells = list_cells(root, feature, status)?;
+    let mut cells = list_cells(root, feature, status)?;
+    let now = rsv::now_ms();
+    for cell in &mut cells {
+        if let Value::Object(map) = cell {
+            if let Some(Value::String(id)) = map.get("id") {
+                if let Some(ann) = claim_annotation(root, id, now).map_err(|_| Delegate)? {
+                    map.insert("claim".into(), ann);
+                }
+            }
+        }
+    }
     let text = if cells.is_empty() {
         "No cells.".to_string()
     } else {
@@ -299,6 +310,7 @@ fn handle_list(root: &Path, feature: Option<&str>, status: Option<&str>) -> Resu
 
 /// handleCellsReady (bee.mjs): readyCells = listCells({status:'open'})
 /// filtered to cells whose depsAllCapped list is empty.
+// status "open" cells have no claim file, so ready cells never carry claim annotations.
 fn handle_ready(root: &Path, feature: Option<&str>) -> Result<Handled, Delegate> {
     let mut ready = Vec::new();
     for cell in list_cells(root, feature, Some("open"))? {
@@ -325,7 +337,12 @@ fn handle_show(root: &Path, id: &str) -> Result<Handled, Delegate> {
     // A truthy non-object cell file (number/string/bool/array JSON) takes
     // Object.entries()/! coercion paths whose renders are JS-exotic — Node's.
     let Value::Object(map) = cell else { return Err(Delegate) };
-    let annotated = Value::Object(with_verify_owner(&map));
+    let mut annotated_map = with_verify_owner(&map);
+    let now = rsv::now_ms();
+    if let Some(ann) = claim_annotation(root, id, now).map_err(|_| Delegate)? {
+        annotated_map.insert("claim".into(), ann);
+    }
+    let annotated = Value::Object(annotated_map);
     let text = jsjson::stringify_pretty(&annotated);
     Ok(Handled::Emit { result: annotated, text })
 }
@@ -353,17 +370,75 @@ fn with_verify_owner(cell: &Map<String, Value>) -> Map<String, Value> {
     out
 }
 
+/// Derived annotation for `bee cells list` and `bee cells show` (claim-owner-visible D1-D3).
+/// Returns Ok(None) when no claim file exists. When present, joins claim and session liveness.
+fn claim_annotation(control: &Path, id: &str, now: f64) -> MR<Option<Value>> {
+    let Some(claim) = read_claim(control, id)? else {
+        return Ok(None);
+    };
+
+    let session = nullish(claim.get("session"));
+    let workspace_id = nullish(claim.get("workspace_id"));
+    let claimed_at = nullish(claim.get("claimed_at"));
+    let expiry = claim_expiry(Some(&claim))?;
+    let expired = claim_expired(&claim, now)?;
+    let holder_session = read_session_of_claim(control, &claim)?;
+    let holder_alive = !heartbeat_stale(holder_session.as_ref(), now)?;
+
+    // `expired && !holder_alive` is EXACTLY the two gates `sweep_expired_claims`
+    // (handlers_select.rs:117-121) applies before it removes a claim file: the
+    // TTL reading and the heartbeat reading. Stated here so the verdict this
+    // annotation reports and the sweep's own verdict stay visibly one rule — a
+    // cell that reads "sweepable" is precisely one the next sweep would take.
+    let verdict = if expired && !holder_alive {
+        "sweepable"
+    } else {
+        "held"
+    };
+
+    let mut map = Map::new();
+    map.insert("session".into(), session);
+    map.insert("workspace_id".into(), workspace_id);
+    map.insert("claimed_at".into(), claimed_at);
+    map.insert("expiry".into(), Value::String(expiry));
+    map.insert("expired".into(), Value::Bool(expired));
+    map.insert("holder_alive".into(), Value::Bool(holder_alive));
+    map.insert("verdict".into(), Value::String(verdict.into()));
+
+    Ok(Some(Value::Object(map)))
+}
+
 /// bee.mjs summarizeCell: `${cell.id} [${cell.status}] (${cell.lane})
 /// ${cell.title}` — template-literal coercion, so an absent field renders
 /// "undefined", an object "[object Object]", an array its comma-join.
 fn summarize_cell(cell: &Value) -> String {
-    format!(
+    let mut line = format!(
         "{} [{}] ({}) {}",
         js_string_or_undefined(cell.get("id")),
         js_string_or_undefined(cell.get("status")),
         js_string_or_undefined(cell.get("lane")),
         js_string_or_undefined(cell.get("title"))
-    )
+    );
+    if let Some(Value::Object(claim)) = cell.get("claim") {
+        let verdict = claim.get("verdict").and_then(Value::as_str).unwrap_or("");
+        if verdict == "sweepable" {
+            line.push_str(" — claim expired and holder not alive (sweepable)");
+        } else {
+            let holder_part = match claim.get("session") {
+                Some(Value::String(s)) => format!("held by session {s}"),
+                _ => "held by sessionless claim".to_string(),
+            };
+            let holder_alive = claim.get("holder_alive").and_then(Value::as_bool).unwrap_or(true);
+            let expiry = claim.get("expiry").and_then(Value::as_str).unwrap_or("no expiry");
+            let liveness_part = if !holder_alive {
+                format!(" (holder not alive, claim still valid until {expiry})")
+            } else {
+                String::new()
+            };
+            line.push_str(&format!(" — {holder_part}{liveness_part}"));
+        }
+    }
+    line
 }
 
 #[cfg(test)]
