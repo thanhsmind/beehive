@@ -238,7 +238,11 @@ enum Slot {
     /// herding-tier D1: `{kind:"herding"}` — the dispatch seam turns this
     /// into a `bee herding run` Bash payload; an Agent/Task subagent can no
     /// more be a herding pane than it can be a cli executor (D5).
-    Herding,
+    /// hgf-1: `fallback` is true only for the literal `fallback:"default"`,
+    /// the flag `dispatch prepare` reads to publish this slot's default model
+    /// as the failed-herding re-dispatch target — so the guard must admit that
+    /// same model into `configured_model_set`.
+    Herding { fallback: bool },
 }
 
 #[derive(Clone, Debug)]
@@ -285,9 +289,13 @@ fn normalize_tier_value(value: &Value) -> Option<Slot> {
                 }
             }
             // herding-tier D1: no other field is required — `kind` alone
-            // routes the slot.
+            // routes the slot. hgf-1: `fallback` recognizes exactly one
+            // value, the literal string "default" — same exact-match posture
+            // drivers/models.rs normalize_tier_value uses when it round-trips
+            // the field; absent, empty, mistyped, or non-string is false.
             if kind == Some("herding") {
-                return Some(Slot::Herding);
+                let fallback = obj.get("fallback").and_then(Value::as_str) == Some("default");
+                return Some(Slot::Herding { fallback });
             }
             // Explicit-fallback composite: {primary:{kind:'native', model}, ...}.
             if let Some(Value::Object(primary)) = obj.get("primary") {
@@ -404,7 +412,7 @@ fn resolve_tier(models: &Models, slot: &str, runtime: &str) -> Resolved {
         Slot::Name(m) => Resolved::Model(m.clone()),
         Slot::Cli(_) => Resolved::Refused,
         Slot::Native(m) => Resolved::Native(m.clone()),
-        Slot::Herding => Resolved::Herding,
+        Slot::Herding { .. } => Resolved::Herding,
     }
 }
 
@@ -420,17 +428,56 @@ fn resolve_advisor(models: &Models, runtime: &str) -> Option<Resolved> {
         Slot::Name(m) => Some(Resolved::Model(m.clone())),
         Slot::Cli(_) => Some(Resolved::Refused), // {type:'cli'} — never a model member
         Slot::Native(m) => Some(Resolved::Native(m.clone())),
-        Slot::Herding => Some(Resolved::Herding), // never a model member either
+        Slot::Herding { .. } => Some(Resolved::Herding), // never a model member either
     }
 }
 
 /// The configurable-slot models plus the advisor slot's own resolved model.
+///
+/// hgf-1: a herding slot carrying `fallback:"default"` also contributes its
+/// runtime default model. `dispatch prepare`'s Resolved::Herding arm publishes
+/// exactly that model as `payload.fallback.model` — bee telling the
+/// orchestrator to re-dispatch through the Agent path on a failed herding run
+/// — so refusing it here would deny a dispatch bee itself prepared. The name
+/// comes from drivers::models::default_models, the same table prepare reads;
+/// a second copy in this hook would drift the moment either door moved.
 fn configured_model_set(models: &Models) -> BTreeSet<String> {
     let mut set = BTreeSet::new();
     for slot in ["extraction", "generation", "review"] {
         if let Resolved::Model(m) = resolve_tier(models, slot, "claude") {
             if !m.trim().is_empty() {
                 set.insert(m.trim().to_string());
+            }
+        }
+    }
+    // hgf-1: the herding-fallback contribution covers `generation` and
+    // `review` only — prepare.rs's slot_for_kind maps cell|gather ->
+    // generation and reviewer -> review, and everything else to advisor, so
+    // `extraction` is never a tier_token at prepare's single resolve_tier
+    // call site. No prepared dispatch ever publishes an extraction fallback
+    // (this hook's own FIX text says as much: "dispatch prepare has no --kind
+    // for the {t} tier yet"), so admitting one would widen the guard past the
+    // door it is mirroring.
+    for slot in ["generation", "review"] {
+        // The raw slot, not the resolved one: Resolved::Herding is a unit
+        // variant on purpose (the transport refusals read it and must not
+        // change), so the fallback flag is only legible here.
+        let mut raw = if slot == "review" { &models.claude.review } else { &models.claude.generation };
+        if matches!(raw, Slot::Null | Slot::Unset) && slot == "review" {
+            // Same review-falls-back-to-generation rule resolve_tier applies,
+            // and only for an explicitly null/absent review slot. The lookup
+            // key stays "review": prepare resolves the reviewer purpose to
+            // the review tier_token, so the model it publishes is
+            // default_models("claude")["review"], not the generation one.
+            raw = &models.claude.generation;
+        }
+        if matches!(raw, Slot::Herding { fallback: true }) {
+            if let Some(Value::String(m)) =
+                crate::verbs::drivers::default_models("claude").get(slot)
+            {
+                if !m.trim().is_empty() {
+                    set.insert(m.trim().to_string());
+                }
             }
         }
     }
@@ -1559,6 +1606,174 @@ mod tests {
         let d = last_jsonl(dispatch_log(herding.path())).unwrap();
         assert_eq!(d["transport"], "herding-tier-denied");
         assert_eq!(d["tier"], "review");
+    }
+
+    // hgf-1: the two doors used to disagree. `dispatch prepare`'s
+    // Resolved::Herding arm reads `fallback:"default"` and publishes
+    // `payload.fallback = {model: <default_models(runtime)[slot]>}` — the
+    // model the orchestrator re-dispatches on when the herding run fails —
+    // while this hook's member set collected only Resolved::Model slots and
+    // denied that very model. The flag now widens the membership check, and
+    // nothing else.
+    fn herding_generation(fallback: Option<Value>) -> Value {
+        let mut slot = json!({"kind": "herding", "agent": "agy-flash"});
+        if let Some(fb) = fallback {
+            slot["fallback"] = fb;
+        }
+        json!({"models": {"claude": {
+            "extraction": "haiku",
+            "generation": slot,
+            "review": "opus"
+        }}})
+    }
+
+    #[test]
+    fn a_herding_slots_default_fallback_model_is_a_member() {
+        let fx = fixture(&herding_generation(Some(json!("default"))));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"model": "sonnet", "prompt": "re-dispatch after a failed herding run"}}),
+        );
+        assert_eq!(code, 0, "prepare publishes sonnet as this slot's fallback: {stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "model-param");
+        assert_eq!(d["model"], "sonnet");
+        // The flag reads off the raw slot, so the set is directly checkable.
+        let models = normalize_models(herding_generation(Some(json!("default"))).get("models"));
+        assert!(configured_model_set(&models).contains("sonnet"));
+    }
+
+    #[test]
+    fn a_herding_slot_without_fallback_admits_no_model() {
+        let fx = fixture(&herding_generation(None));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"model": "sonnet"}}),
+        );
+        assert_eq!(code, 2, "no fallback field, no membership");
+        assert!(stderr.contains("model: \"sonnet\" is not a model configured for any claude tier"), "{stderr}");
+        assert!(stderr.contains("(haiku, opus)"), "{stderr}");
+        assert!(stderr.contains("[bee-tier: ceiling]"), "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "param-not-configured");
+    }
+
+    #[test]
+    fn only_the_literal_default_fallback_admits_a_model() {
+        // Same exact-match posture drivers/models.rs uses when it round-trips
+        // the field: anything but the literal string "default" is dropped.
+        for fallback in [json!("Default"), json!("sonnet"), json!(""), json!("  default  "), json!(true), json!({"model": "sonnet"})] {
+            let fx = fixture(&herding_generation(Some(fallback.clone())));
+            let (code, stderr) = run_payload(
+                fx.path(),
+                json!({"tool_name": "Agent", "tool_input": {"model": "sonnet"}}),
+            );
+            assert_eq!(code, 2, "fallback {fallback} must not admit a model: {stderr}");
+            assert!(stderr.contains("is not a model configured for any claude tier"), "{stderr}");
+            assert!(stderr.contains("(haiku, opus)"), "{stderr}");
+        }
+    }
+
+    #[test]
+    fn a_herding_review_slots_fallback_default_is_opus() {
+        // A herding review slot resolves on its own (no review→generation
+        // fallback fires), so its default-model table entry is "opus".
+        let raw = json!({"claude": {
+            "extraction": "haiku",
+            "generation": "sonnet",
+            "review": {"kind": "herding", "agent": "agy-flash", "fallback": "default"}
+        }});
+        let models = normalize_models(Some(&raw));
+        let set = configured_model_set(&models);
+        assert!(set.contains("opus"), "{set:?}");
+        assert_eq!(set.iter().cloned().collect::<Vec<_>>(), vec!["haiku", "opus", "sonnet"]);
+    }
+
+    #[test]
+    fn a_herding_review_slots_fallback_default_is_allowed_as_a_param() {
+        // The observable half of the row above: the verdict, not the set.
+        let fx = fixture(&json!({"models": {"claude": {
+            "extraction": "haiku",
+            "generation": "sonnet",
+            "review": {"kind": "herding", "agent": "agy-flash", "fallback": "default"}
+        }}}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"model": "opus", "prompt": "re-review after a failed herding run"}}),
+        );
+        assert_eq!(code, 0, "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "model-param");
+        assert_eq!(d["model"], "opus");
+    }
+
+    #[test]
+    fn an_explicitly_null_review_slot_inherits_the_generation_herding_fallback() {
+        // resolve_tier makes a null review slot fall back to generation, so a
+        // reviewer dispatch resolves to the herding slot and prepare publishes
+        // default_models("claude")["review"] = "opus". The member set must
+        // follow that same fallback, or the original bug survives in this one
+        // config shape.
+        let raw = json!({"claude": {
+            "extraction": "haiku",
+            "generation": {"kind": "herding", "agent": "agy-flash", "fallback": "default"},
+            "review": null
+        }});
+        let models = normalize_models(Some(&raw));
+        assert!(configured_model_set(&models).contains("opus"), "{:?}", configured_model_set(&models));
+        let fx = fixture(&json!({"models": raw}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"model": "opus", "prompt": "re-review after a failed herding run"}}),
+        );
+        assert_eq!(code, 0, "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "model-param");
+    }
+
+    #[test]
+    fn a_herding_extraction_slots_fallback_admits_nothing() {
+        // The live repo config shape. prepare.rs's slot_for_kind never yields
+        // "extraction", so no prepared dispatch publishes an extraction
+        // fallback and the guard must not admit one — this is the fence that
+        // keeps the membership check from widening past the door it mirrors.
+        let fx = fixture(&json!({"models": {"claude": {
+            "extraction": {"kind": "herding", "agent": "agy-flash", "fallback": "default"},
+            "generation": {"kind": "herding", "agent": "agy-flash", "fallback": "default"},
+            "review": "opus"
+        }}}));
+        let (code, stderr) = run_payload(
+            fx.path(),
+            json!({"tool_name": "Agent", "tool_input": {"model": "haiku"}}),
+        );
+        assert_eq!(code, 2, "the extraction default is not a prepared fallback");
+        assert!(stderr.contains("model: \"haiku\" is not a model configured for any claude tier"), "{stderr}");
+        assert!(stderr.contains("(opus, sonnet)"), "{stderr}");
+        let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+        assert_eq!(d["transport"], "param-not-configured");
+    }
+
+    #[test]
+    fn the_fallback_flag_does_not_widen_the_tier_or_transport_check() {
+        // hgf-1 widens the model-membership check ONLY. An Agent/Task
+        // subagent still cannot BE a herding pane (herding-tier D5), whether
+        // the tier arrives as a marker or as a pinned subagent_type.
+        let fx = fixture(&herding_generation(Some(json!("default"))));
+        for tool_input in [
+            json!({"subagent_type": "bee-gather", "prompt": "gather"}),
+            json!({"prompt": "[bee-tier: generation] go"}),
+        ] {
+            let (code, stderr) = run_payload(
+                fx.path(),
+                json!({"tool_name": "Agent", "tool_input": tool_input.clone()}),
+            );
+            assert_eq!(code, 2, "still denied: {tool_input}");
+            assert!(stderr.contains("herding-executor pane"), "{stderr}");
+            assert!(stderr.contains("herding run --task-file - --json"), "{stderr}");
+            let d = last_jsonl(dispatch_log(fx.path())).unwrap();
+            assert_eq!(d["transport"], "herding-tier-denied");
+            assert_eq!(d["tier"], "generation");
+        }
     }
 
     #[test]
