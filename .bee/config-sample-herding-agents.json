@@ -1,0 +1,62 @@
+{
+  "_doc": {
+    "what": "Variant of config-sample.json showing a HERD REGISTRY with three vendors side by side: agy (Antigravity/Gemini), opencode, and pi. Read config-sample.json first for the full key guide, and config-sample-cli-executors.json for the different `cli` seam. Copy the `herding` block into your own .bee/config.json; the `models` block below is one example of pointing a tier slot at one of these herds.",
+    "seam": "`herding.agents` is the WRITE-WORK executor registry: a named entry is what `bee herding run` / `--continue` / `bee herding wave` spawns into a herdr pane as a real cell-execution worker in its own worktree. It is NOT the `cli` tier shape (that one is gather-only and pipes a prompt through stdin). A herd name always means the pane transport.",
+    "entry_shape": "Each entry is either a plain argv token array, or {\"argv\": [...], \"env\": {...}, \"workspace_trust\": {...}}. TOKEN 0 IS THE HERDR AGENT KIND, passed straight through to `herdr agent start --kind <token0>` with no bee-side allow-list; every remaining token becomes that agent's own argv after `--`. herdr 0.8.2 accepts these kinds: pi, claude, codex, gemini, cursor, devin, agy, cline, omp, mastracode, opencode, copilot, kimi, kiro, droid, amp, grok, hermes, kilo, qodercli, qwen, maki. So `opencode` and `pi` need no bee change at all — they only need an entry here.",
+    "the_one_rule": "Put each vendor's DO-NOT-ASK flag in its entry. An agent that stops to ask anything mid-run — a permission prompt, a trust prompt — stalls the pane until the idle timeout, and a human keystroke into a live worker pane hijacks the agent's turn. Per vendor: claude `--permission-mode bypassPermissions`; agy `--dangerously-skip-permissions`; opencode `--auto` (auto-approve permissions not explicitly denied); pi `-a` / `--approve` (pi has no permission popups at all — it runs with the user's own permissions — but an interactive session in a project holding project-local settings, packages, or extensions asks whether to TRUST them, and `-a` answers that for the run).",
+    "env": "`env` (herd-registry D4) is exported into the freshly split pane as one `export K='v'` line, after the split and before the agent starts, so the agent process inherits it. Keys must match [A-Za-z_][A-Za-z0-9_]* and values must be newline-free; ANY violation drops the WHOLE entry. Use it for a provider key you do not want in your shell profile — never commit a real key into a repo.",
+    "workspace_trust": "`workspace_trust` (herd-registry D5) is for a vendor whose trust decision lives in a JSON file holding an ARRAY of trusted directories: bee pre-seeds the fresh worktree path into that array before the spawn, so the agent never meets a trust dialog. agy is the live case. opencode needs nothing here. pi keeps its decisions in ~/.pi/agent/trust.json keyed BY DIRECTORY, not as a flat array, so it does not fit this shape — that is exactly why the pi entries below carry `-a` instead.",
+    "models_example": "`{\"kind\": \"herding\", \"agent\": \"<name>\"}` on a tier slot routes that slot's work through a pane running that herd. `\"fallback\": \"default\"` re-dispatches a failed run (spawn failure, timeout, invalid result) through the runtime's own default model path; without it a failure stays loud and the pane is kept as forensics. The registry is inert until a slot, a `--agent` flag, or a string `herding.agent_command` names an entry — safe to keep in every repo.",
+    "models_are_placeholders": "The `-m` / `--model` values below are EXAMPLES. Run `opencode models` and `pi --list-models` and replace them with ids your own accounts actually carry.",
+    "try_one": "bee herding run --agent opencode-auto --task 'say PONG and stop' --cwd <a worktree path> --json"
+  },
+
+  "herding": {
+    "agent_command": "agy-flash",
+
+    "agents": {
+      "agy-flash": {
+        "argv": ["agy", "--dangerously-skip-permissions"],
+        "workspace_trust": {
+          "file": "~/.gemini/antigravity-cli/settings.json",
+          "key": "trustedWorkspaces"
+        }
+      },
+
+      "opencode-auto": ["opencode", "--auto"],
+
+      "opencode-sonnet": ["opencode", "--auto", "-m", "anthropic/claude-sonnet-5"],
+
+      "opencode-keyed": {
+        "argv": ["opencode", "--auto", "-m", "anthropic/claude-sonnet-5"],
+        "env": {
+          "ANTHROPIC_API_KEY": "replace-with-a-real-key"
+        }
+      },
+
+      "pi-auto": ["pi", "-a"],
+
+      "pi-sonnet": ["pi", "-a", "--model", "anthropic/claude-sonnet-5"],
+
+      "pi-thinking": ["pi", "-a", "--model", "anthropic/claude-sonnet-5:high"],
+
+      "claude-sonnet": ["claude", "--model", "sonnet", "--permission-mode", "bypassPermissions"]
+    }
+  },
+
+  "models": {
+    "claude": {
+      "extraction": "haiku",
+      "generation": {
+        "kind": "herding",
+        "agent": "opencode-auto",
+        "fallback": "default"
+      },
+      "review": {
+        "kind": "herding",
+        "agent": "pi-auto"
+      },
+      "advisor": null
+    }
+  }
+}

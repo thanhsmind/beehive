@@ -170,6 +170,12 @@ Muốn một file `.bee/config.json` hoàn chỉnh thay vì ghép từng khối:
 
 Đã kiểm 2026-07-14: `resolveTier` đọc file này ra `generation -> cli`, `review -> cli` với command nguyên vẹn, và đúng lệnh `generation` trong đó chạy qua transport stdin của bee trả về kết quả thật. Chỉ copy khi máy đã cài `agy`/`opencode` — thiếu CLI thì mọi dispatch worker sẽ fail.
 
+## Herd registry: agy + opencode + pi
+
+Seam khác: [`.bee/config-sample-herding-agents.json`](../.bee/config-sample-herding-agents.json) — không phải tier `cli` (gather-only) mà là `herding.agents`, tức worker **ghi code thật** trong pane herdr. Sample đặt ba nhà cung cấp cạnh nhau: `agy-flash`, `opencode-auto` / `opencode-sonnet`, `pi-auto` / `pi-sonnet`.
+
+Token 0 của mỗi entry chính là `--kind` của herdr; herdr 0.8.2 nhận cả `opencode` lẫn `pi`, nên không cần sửa bee. Cờ "đừng hỏi" theo từng hãng: `claude --permission-mode bypassPermissions`, `agy --dangerously-skip-permissions`, `opencode --auto`, `pi -a` (pi không có popup quyền; `-a` là để trust file project-local). Một agent dừng lại hỏi giữa chừng sẽ treo pane tới khi hết idle timeout.
+
 ## Đổi preset
 
 Sửa `.bee/config.json` → chạy `.bee/bin/bee status` xem dòng `Models (claude): ...` xác nhận. Không cần onboard lại.
