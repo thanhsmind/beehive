@@ -758,5 +758,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-21T15:22:36.790Z"
+  },
+  "claim-owner-visible": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-21T22:35:50.800Z"
   }
 }

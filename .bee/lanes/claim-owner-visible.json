@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"claim-owner-visible\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at 012740e; capture what settled, then bee close --feature claim-owner-visible.",
+  "next_action": "Continue bee-exploring for \"claim-owner-visible\" (lane).",
   "created_at": "2026-08-21T16:05:05.593Z",
-  "run_state": null,
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Tiếp theo: bạn test trên worktree `/home/thanhsmind/projects/goglbe/beehive--wt--claim-owner-visible`, rồi nói **\"merge\"** thì tôi đưa về ma",
+    "asked_at": "2026-08-21T22:34:25.969Z",
+    "session": "9d62803d-578e-471a-a4ad-312c69c3a4b6"
+  },
   "route": {
     "class": "feature",
     "lane": "small",
