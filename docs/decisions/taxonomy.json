@@ -374,6 +374,11 @@
     "worker",
     "limit",
     "resume",
-    "brief"
+    "brief",
+    "model-guard",
+    "readiness",
+    "herdr",
+    "blocked",
+    "mailbox"
   ]
 }

@@ -1,0 +1,74 @@
+{
+  "id": "dod-2",
+  "feature": "dispatch-one-door",
+  "title": "Delegation contract points at bee dispatch prepare",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "files": [
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "read_first": [
+    "docs/history/dispatch-one-door/CONTEXT.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "action": "Two edits in the Delegation contract section, per D1(a) and D1(b). FIRST, the Transport bullet — line 130, opening `- **Transport** — \\`subagent_type: bee-build|bee-gather|bee-extract|bee-review\\` (the rendered agent file already IS its tier — generation/extraction/review — so naming it declares the tier and needs nothing else; prefer this shape)`. Rewrite its opening so the door is `.bee/bin/bee dispatch prepare --runtime <rt> --kind <cell|gather|reviewer|advisor> --json`: prepare reads the tier slot out of .bee/config.json and returns the tool plus the payload — a model-shaped slot returns an Agent/Task payload naming the rendered bee agent, a `{kind:\"herding\"}` slot returns a Bash `bee herding run` payload, a `{kind:\"cli\"}` slot returns a Bash external-executor payload. `subagent_type: bee-*` survives in the bullet only as what prepare RETURNS for a model-shaped slot and as a spelling the guard still accepts (per D2) — delete the words 'prefer this shape'. Keep the rest of the bullet (the tier-word list, the disagreement-repair sentence, the intent-sentence requirement, the no-worker-registration rule) intact. SECOND, the herding execution branch — lines 133-146, the bullet opening `- **herding execution branch** — \\`bee herding run\\` is the cell-execution mirror of the cli gather`. Its sentence `Boundary held exactly like \\`cli\\`'s: cell-execution-only, never a gather transport — a gather never dispatches through a herding pane (herding-executor D7, the mirror of the \\`for_gather\\` branch this same boundary already draws for \\`cli\\`).` is stale and must be retired: herding-tier D1-D6 (widened by herding-review-slots D1) routes every purpose against a `{kind:\"herding\"}` slot through `bee herding run`, and `bee dispatch prepare --kind gather` against such a slot returns a herding-exec Bash payload today. Replace it with the current rule and cite herding-tier D1-D6, naming herding-executor D7 as superseded so a later reader does not resurrect it. Do not restructure the section, renumber anything, or touch any other bullet.",
+  "verify": "rg -n 'prefer this shape|a gather never dispatches through a herding pane' skills/bee-hive/references/gates-and-delegation.md; rg -n 'dispatch prepare' skills/bee-hive/references/gates-and-delegation.md",
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "The Transport bullet names `bee dispatch prepare` as the door and no longer tells the reader to prefer a subagent_type",
+      "The herding execution branch no longer claims a gather never dispatches through a herding pane, and cites herding-tier D1-D6"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-hive/references/gates-and-delegation.md",
+        "substantive": "rewritten Transport bullet and retired D7 gather boundary, both citing the live decisions"
+      }
+    ],
+    "key_links": [
+      "the retired D7 sentence names its superseding decision inline"
+    ],
+    "prohibitions": [
+      "No change to the gate, bypass, headless, judgment-contract or judge-tier sections",
+      "No renumbering or restructuring of the Delegation contract bullets",
+      "Do not remove subagent_type: bee-* from the bullet — D2 keeps it legal"
+    ]
+  },
+  "trace": {
+    "worker": "w-dod-2",
+    "outcome": "Transport bullet names bee dispatch prepare as the door; D7 gather boundary retired, herding-tier D1-D6 cited",
+    "files_changed": [
+      "skills/bee-hive/references/gates-and-delegation.md"
+    ],
+    "deviations": [
+      "Herding worker emitted a bare cell-id commit trailer instead of the required cell: <id> form - the trailer rule did not survive the bee-ignorant pane contract."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T04:17:17.775Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2775e641-e691-4b3f-bfce-9e88933651d7",
+    "claimed_at": "2026-08-21T04:12:36.024Z",
+    "commit_pending": "Work IS committed as 66cf6ab6 on wt/dispatch-one-door; the herding worker wrote a bare cell-id trailer instead of the cell: dod-2 form, and the commit sits one behind HEAD so amending it would rewrite under a live sibling worker.",
+    "report": {
+      "outcome": "Transport bullet names bee dispatch prepare as the door; the stale D7 gather-never-dispatches boundary is retired and cites herding-tier D1-D6",
+      "commit": "66cf6ab6",
+      "files": [
+        "skills/bee-hive/references/gates-and-delegation.md"
+      ],
+      "tests": "rg -n stale-phrase-check over skills/bee-hive/references/gates-and-delegation.md — green (0 stale matches, 2 dispatch-prepare pointers) — docs change: a pointer/parity check is the proof this change type needs",
+      "deviations": [
+        "bare cell-id commit trailer instead of cell: <id>"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

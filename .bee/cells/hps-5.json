@@ -1,0 +1,75 @@
+{
+  "id": "hps-5",
+  "feature": "herding-prompt-stall",
+  "title": "Sweep the last retired delivery-rule statements out of docs, skills and README",
+  "lane": "standard",
+  "status": "open",
+  "deps": [
+    "hps-3"
+  ],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+    "skills/bee-herding/references/operational-invariants.md",
+    "README.md"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "An independent review of the hps-2 and hps-4 docs commits found retired rules still stated as live in six places, plus two precision defects. hps-3 has landed the ack receipt by the time this cell runs, so every statement below is written in plain present tense about shipped behavior — verify against the actual code in run.rs and mailbox.rs before writing, never against this list alone. Fix each: (a) `handing-a-foreign-agent-its-brief.md` around lines 107-110 still says the pointer 'is re-sent a fixed number of times, each attempt polling for the ack'. run.rs retired that: delivery is ONE `agent prompt --wait --until working --timeout` send, with `agent_prompt_stalled` as the typed failure, and its own tests assert 'exactly one send, no resend'. Replace the paragraph with the single-send shape and cite herding-prompt-stall D1. (b) Same file, around line 143: the pointer list still names a 'resend ceiling' in `herding/run.rs`. That ceiling is gone — name the delivery path and the stall/blocked errors instead. (c) Same file, frontmatter around lines 4 and 11-12: the `description` still carries the retired rule verbatim ('only a state transition the agent itself caused counts as evidence it received anything'), `sources` does not list `docs/history/herding-prompt-stall/CONTEXT.md`, and `decisions` still lists `herding-prompt-verify D1 (bounded resends...)` and `herding-run-ready-wait D1 (readiness is observed before the send)` with no narrowing note. Fix the frontmatter, then REGENERATE the area index rather than hand-editing `docs/knowledge/areas/bee-herding/index.md` — its line 14 mirrors the description and is generated from it. (d) `the-run-verb-and-worker-outcomes.md` around line 83 keeps 'the state-receipt delivery' as a live term; rename it to the pointer-delivery path and cite D1/D4. (e) `skills/bee-herding/references/operational-invariants.md` around lines 248-275 frames delivery entirely as lifecycle state ('Readiness and delivery both defer to herdr's own lifecycle contract', 'The send is now herdr's own atomic submit-and-observe'). Keep the D1 stall and D3 blocked detectors, but state the receipt itself is D4's ack file and that lifecycle state is a FAILURE detector only — today this file and the sibling knowledge page contradict each other. (f) `README.md` around line 412: the flow diagram states all three retired rules at once ('delivered only when the agent's STATE says so — status flips to working/done or the result file appears; still idle → resend, bounded'). Rewrite to ack-or-result receipt with the stall/blocked failures. (g) PRECISION, two places. `agent-resolution-and-spawn-commands.md` around line 144 says 'Five states' and enumerates `working` as if quoted from herdr; the quoted contract names four (`idle`, `done`, `blocked`, `unknown`) and mentions `working` only as 'a non-working state' — say so honestly. And in that file around lines 150-151 and in `operational-invariants.md` around lines 254-255, 'only ever reads over the CLI, which never marks a tab seen' overstates the contract: a focus command is also CLI and DOES mark a tab seen; only CLI reads do not. Use the phrasing the sibling page already gets right: 'CLI reads never mark a tab seen'. (h) In `handing-a-foreign-agent-its-brief.md`, citations degrade to bare `(D4)`, `(D2)`, `(D1)`, `(D3)` after the first full one; give the full feature-qualified id on first use in each section. Do not restructure or renumber any document, and do not touch the `herding.agents` registry sections.",
+  "verify": "rg -n 'state transition the agent itself caused|resend ceiling|state-receipt delivery|Five states|which never marks a tab seen|re-sent a fixed number of times' docs/knowledge/areas/bee-herding/ skills/bee-herding/references/operational-invariants.md README.md",
+  "must_haves": {
+    "truths": [
+      "No live statement anywhere in the listed files that delivery is a bounded resend loop or a lifecycle-state success signal",
+      "The area index no longer carries the retired rule, and it was regenerated rather than hand-edited",
+      "operational-invariants.md and the knowledge pages agree on what the receipt is",
+      "README's flow line states the ack-or-result receipt with the stall and blocked failures"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+        "substantive": "single-send delivery paragraph, corrected pointer list, corrected frontmatter, full citations"
+      },
+      {
+        "path": "skills/bee-herding/references/operational-invariants.md",
+        "substantive": "receipt stated as the ack file, lifecycle state demoted to failure detector, tab-seen phrasing corrected"
+      },
+      {
+        "path": "README.md",
+        "substantive": "flow line rewritten to the ack-or-result receipt"
+      }
+    ],
+    "key_links": [
+      "the area index is regenerated from the corrected frontmatter description, not hand-edited"
+    ],
+    "prohibitions": [
+      "No restructuring or renumbering of any document",
+      "No change to the herding.agents registry sections",
+      "No code changes in this cell",
+      "Do not describe behavior the binary does not have — verify each claim against run.rs and mailbox.rs first"
+    ]
+  },
+  "trace": {
+    "worker": null,
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": null
+  }
+}

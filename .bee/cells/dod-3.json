@@ -1,0 +1,74 @@
+{
+  "id": "dod-3",
+  "feature": "dispatch-one-door",
+  "title": "Swarming reference stops contradicting the guard on tier transport",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "files": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "read_first": [
+    "docs/history/dispatch-one-door/CONTEXT.md",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "action": "Three stale spots, per D1(a) and D1(c). (1) Lines 104-115, inside the `<!-- bee:only claude -->` block opening `**Spawn the tier-matched pinned type when its rendered agent exists**:`. Its sentence `\\`ceiling\\` has no rendered agent (it IS the session model) — spawn it as the runtime's default/general subagent type; the same default applies when the tier's slot is cli-shaped or otherwise has no rendered file.` is wrong for a cli- or herding-shaped slot: the guard denies such a dispatch outright (cli-tier-denied / herding-tier-denied), and at `generation` it denies `general-purpose` too (`generic-type-denied`). Keep the `ceiling` half — ceiling really is the runtime default type — and replace the 'same default applies' half with the real rule: a slot that resolves to no model is not a subagent at all, so resolve the transport with `.bee/bin/bee dispatch prepare --runtime claude --kind <cell|gather|reviewer|advisor> --json` and run the Bash payload it returns (per D1). (2) Line 300, the `| Subagent type |` table row, containing `\\`ceiling\\`, and any tier whose slot is cli-shaped or otherwise unrendered, use the runtime default (\\`general-purpose\\`)`. Same correction in table-cell form: ceiling uses the runtime default; a cli- or herding-shaped slot goes through `bee dispatch prepare`. Keep the row's existing final clause about the guard repairing a generic type for extraction and review and refusing at generation. (3) Lines 370-384, the `## Herding Execution — A Foreign Agent In A Pane` section. The sentences `Scope B (a \\`{kind:\"herding\"}\\` tier kind in \\`models.*\\`, picked automatically the way \\`subagent\\`/\\`cli\\` are today) is a separate, trigger-gated backlog item — it does not exist yet, and this reference never treats herding as something the tier judgment step (4, above) can select on its own.` are false: scope B shipped (herding-tier D1-D6, widened by herding-review-slots D1) and is what a host repo with `generation: {kind:\"herding\"}` runs. Rewrite that passage to say scope B exists and is selected automatically by `bee dispatch prepare` when the slot is herding-shaped, keeping scope A (the user naming one cell to run by hand) as the separate, still-accurate case. Leave the bee-ignorant-worker paragraph and the orchestrator loop that follow unchanged. Do not restructure sections or renumber the orchestrator steps.",
+  "verify": "rg -n 'does not exist yet|use the runtime default \\(`general-purpose`\\)|the same default applies when the tier' skills/bee-swarming/references/swarming-reference.md; rg -n 'dispatch prepare' skills/bee-swarming/references/swarming-reference.md",
+  "regen_obligation_ack": "wave-barrier",
+  "must_haves": {
+    "truths": [
+      "No passage still routes a cli- or herding-shaped slot to `general-purpose` or the runtime default type",
+      "The Herding Execution section states that a {kind:\"herding\"} tier slot exists and is selected automatically",
+      "`ceiling` still documents the runtime default subagent type"
+    ],
+    "artifacts": [
+      {
+        "path": "skills/bee-swarming/references/swarming-reference.md",
+        "substantive": "three corrected passages citing D1 and herding-tier D1-D6"
+      }
+    ],
+    "key_links": [
+      "all three passages point at `bee dispatch prepare` as the resolver"
+    ],
+    "prohibitions": [
+      "No change to the worker status-token protocol or the wave protocol",
+      "No change to the bee-ignorant-worker contract or the herding orchestrator loop steps",
+      "No renumbering of the numbered dispatch steps"
+    ]
+  },
+  "trace": {
+    "worker": "w-dod-3",
+    "outcome": "Three stale passages in swarming-reference now route cli/herding slots through bee dispatch prepare; scope B documented as shipped",
+    "files_changed": [
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [
+      "Herding worker reported done without committing; orchestrator made the path-scoped cell commit b4992e2."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T04:17:24.715Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2775e641-e691-4b3f-bfce-9e88933651d7",
+    "claimed_at": "2026-08-21T04:12:37.481Z",
+    "report": {
+      "outcome": "The pinned-type block, the Subagent type table row and the Herding Execution section all name bee dispatch prepare for a slot that resolves to no model; scope B is documented as shipped per herding-tier D1-D6",
+      "commit": "b4992e2",
+      "files": [
+        "skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": "rg -n stale-phrase-check over skills/bee-swarming/references/swarming-reference.md — green (0 stale matches, 5 dispatch-prepare pointers) — docs change: a pointer/parity check is the proof this change type needs",
+      "deviations": [
+        "worker left the edit uncommitted; the orchestrator made the path-scoped cell commit"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "feature": "dispatch-one-door",
+  "mode": "feature",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"dispatch-one-door\" started at phase \"exploring\".",
+  "next_action": "Merge the worktree, then present the uat gate.",
+  "created_at": "2026-08-21T04:02:40.659Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Nếu tôi chỉ đọc chữ `FAILED` thì đã báo sai cho bạn.",
+    "asked_at": "2026-08-21T05:13:59.772Z",
+    "session": "2775e641-e691-4b3f-bfce-9e88933651d7"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change",
+      "multi-domain"
+    ],
+    "product_files": 4,
+    "rationale": "Guard FIX strings are asserted by existing model_guard tests (covered contract change); work spans Rust hook code, Rust status-drift code, and two vendored skill references.",
+    "updated_at": "2026-08-21T04:12:29.999Z",
+    "feature": "dispatch-one-door"
+  },
+  "last_scribing_run": {
+    "feature": "dispatch-one-door",
+    "date": "2026-08-21",
+    "at": "2026-08-21T05:11:38.276Z",
+    "areas_synced": [
+      "hook-runtime"
+    ],
+    "next_action": "Merge the worktree, then present the uat gate."
+  }
+}

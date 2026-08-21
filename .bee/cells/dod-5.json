@@ -1,0 +1,74 @@
+{
+  "id": "dod-5",
+  "feature": "dispatch-one-door",
+  "title": "Sync the dispatch-guard area spec with the one-door refusal behavior",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "docs/knowledge/areas/hook-runtime/dispatch-guard.md"
+  ],
+  "read_first": [
+    "docs/history/dispatch-one-door/CONTEXT.md",
+    "docs/knowledge/areas/hook-runtime/dispatch-guard.md"
+  ],
+  "action": "Merge the behavior delta of the capped behavior_change cells dod-1 and dod-4 into the area spec. The synthesis is already done — apply it as written, in the spec's own business vocabulary (no file, function, command, or crate names outside the Pointers section; the spec calls a herding slot a PANE WORKER and a cli slot an EXTERNAL COMMAND, keep that vocabulary). THREE EDITS. (1) In B16a, the bullet that begins `- What stays refused: a wholly bare dispatch, an unconfigured model name, an`: extend `any tier resolving to an external command` to `any tier resolving to an external command or a pane worker`. Then add one new bullet immediately after that bullet, titled in bold `Every refusal names the one verb that resolves the transport.` Its content: a tier backed by an external command or a pane worker is not a helper at all; the guard evaluates a helper dispatch and can only permit or refuse it, never turn it into the shell call such a tier actually needs; so each of those refusals hands back the single preparation verb that reads the configured slot and returns the tool plus the exact payload to run, and shows the hand-written shell shape only as an illustration of what that verb returns; an actor that reads nothing but the refusal recovers on its next attempt; and the bare refusal states the ACTUAL kind of the work tier's slot — pane worker, external command, or unconfigured — instead of a fixed phrase, because naming a pane-worker slot an external command sent readers to a remedy that could not work. (2) In B18, the sentence beginning `Drift between a rendered helper file's model and the configured slot is surfaced as an **advisory** by the status snapshot and the configuration check`: the advisory now covers ALL FOUR rendered identities. It previously checked only three — the execution tier's writing identity was rendered but never drift-checked, so a stale copy of it sat unreported beside a changed slot. Also state that the advisory names the slot's actual kind (pane worker, external command, or unconfigured) rather than one fixed phrase, and that its remedy names a command that runs in the repo the advisory is printed for: a project that is not itself a bee checkout cannot run the onboarding verb directly and is pointed at the installer instead. Keep the rest of that sentence — advisory never a refusal, the dispatch-time agreement rules already protect the dispatch — unchanged. (3) Frontmatter: append to `bee.decisions` an entry naming dispatch-one-door D1 (every helper dispatch resolves its transport from configuration through one preparation verb; refusals name that verb; a pane-worker slot is named honestly, 2026-08-21), and append to `bee.sources` an entry naming the dispatch-one-door cells dod-1 and dod-4 with the date 2026-08-21. Do not touch `timestamp`, `bee.id`, `bee.lifecycle`, `bee.areas`, `bee.required_context` or `bee.authoritative_for`. Do not restructure the document, do not renumber any behavior, and do not add a Pointers entry.",
+  "verify": ".bee/bin/bee knowledge check --json",
+  "must_haves": {
+    "truths": [
+      "B16a states that every external-command or pane-worker refusal hands back the resolving preparation verb",
+      "B16a states that the bare refusal names the slot's actual kind instead of a fixed phrase",
+      "B18 states the drift advisory covers all four rendered identities and names a remedy that runs in the repo it is printed for"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/hook-runtime/dispatch-guard.md",
+        "substantive": "merged behavior delta plus updated decisions and sources frontmatter"
+      }
+    ],
+    "key_links": [
+      "bee.decisions and bee.sources cite dispatch-one-door D1 and cells dod-1/dod-4"
+    ],
+    "prohibitions": [
+      "No file, function, command or crate name outside the Pointers section",
+      "No renumbering or restructuring of behaviors",
+      "No change to timestamp, bee.id, bee.lifecycle, bee.areas, bee.required_context or bee.authoritative_for"
+    ]
+  },
+  "trace": {
+    "worker": "w-dod-5",
+    "outcome": "dispatch-guard area spec carries the one-door refusal behavior and the four-identity drift advisory",
+    "files_changed": [
+      "docs/knowledge/areas/hook-runtime/dispatch-guard.md"
+    ],
+    "deviations": [
+      "Worker could not run the declared verify (no bee binary inside the worktree, and a bee-ignorant pane worker is forbidden bee verbs anyway); the orchestrator ran bee knowledge check itself."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T04:33:49.486Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2775e641-e691-4b3f-bfce-9e88933651d7",
+    "claimed_at": "2026-08-21T04:31:58.080Z",
+    "commit_pending": "Work IS committed as d0e4ffb1 on wt/dispatch-one-door; the herding worker wrote a bare cell-id trailer instead of the cell: dod-5 form, fourth occurrence in this feature.",
+    "report": {
+      "outcome": "B16a gains the pane-worker refusal wording and the every-refusal-names-the-resolving-verb bullet; B18 states the drift advisory covers all four rendered identities and names a remedy that runs in the repo it is printed for; frontmatter decisions and sources cite dispatch-one-door D1 and cells dod-1/dod-4",
+      "commit": "d0e4ffb1",
+      "files": [
+        "docs/knowledge/areas/hook-runtime/dispatch-guard.md"
+      ],
+      "tests": "bee knowledge check --json — green (0 OKF errors, 0 profile errors; dispatch-guard.md carries no warning; the 32 pre-existing not_canonical warnings are on other areas and unchanged) — docs change: the bundle validator is the parity check this change type needs",
+      "deviations": [
+        "worker could not run bee knowledge check; orchestrator ran it",
+        "bare cell-id commit trailer instead of cell: <id>"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

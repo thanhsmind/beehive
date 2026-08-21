@@ -1,0 +1,82 @@
+{
+  "id": "hps-2",
+  "feature": "herding-prompt-stall",
+  "title": "Herding knowledge and config docs carry herdr's lifecycle contract",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+    "skills/bee-herding/references/operational-invariants.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Record herdr's agent lifecycle contract in the knowledge layer and retire every statement of the behavior herding-prompt-stall D1 and D2 replace. CONTEXT.md quotes the contract verbatim from `herdr --skill`; cite it, do not paraphrase it loosely. What must land: (a) the five states and what each one means to bee — `idle` is ready-for-input AND the tab has been seen in the focused Herdr UI; `done` is the SAME underlying ready state for a tab nobody has looked at, and since bee splits every worker pane with `--no-focus` and only ever reads over the CLI (which never marks a tab seen), `done` is the normal resting state of a bee worker pane; `blocked` means herdr recognized an approval or question UI; `unknown` does not prove completion. (b) That a lifecycle sample taken inside the agent's boot window is not trustworthy — an agy pane flaps through several states while its TUI initializes — which is why bee now uses herdr's own settle-aware verbs (`agent prompt --wait --until … --timeout`, `agent wait --until …`) instead of polling raw samples, and why herdr's `agent_prompt_stalled` is the delivery failure. (c) That `blocked` is bee's fast, loud failure at every wait point, and that this is what covers a per-workspace trust or approval prompt without bee carrying an agent-specific pattern table. Search both files for any surviving claim that the ready gate is idle-only or that the delivery receipt is a transition into `working`, and replace each with the new rule naming the superseding decision inline so a later reader does not resurrect it. Do not restructure either document, renumber anything, or touch the agent-registry (`herding.agents`) sections — those are correct and out of scope.",
+  "verify": "rg -n 'idle-only|transition into working|idle only' docs/knowledge/areas/bee-herding/ skills/bee-herding/references/operational-invariants.md; rg -n 'blocked|agent_prompt_stalled|done' skills/bee-herding/references/operational-invariants.md",
+  "must_haves": {
+    "truths": [
+      "Both documents state that done is a ready state for an unfocused pane and that bee panes normally report done",
+      "Both documents state that blocked is a fast, loud failure and what it covers",
+      "No surviving claim that the ready gate is idle-only or that the receipt is a bee-observed transition into working"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+        "substantive": "herdr lifecycle-state contract recorded with the boot-window caveat and the blocked rule"
+      },
+      {
+        "path": "skills/bee-herding/references/operational-invariants.md",
+        "substantive": "retired idle-only and transition-receipt statements, each naming its superseding decision"
+      }
+    ],
+    "key_links": [
+      "each retired statement names herding-prompt-stall D1 or D2 inline"
+    ],
+    "prohibitions": [
+      "No change to the herding.agents registry sections",
+      "No restructuring or renumbering of either document",
+      "No code changes in this cell"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-2",
+    "outcome": "Herding knowledge and skill reference record herdr's lifecycle contract and retire the idle-only gate and transition receipt",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+      "skills/bee-herding/references/operational-invariants.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T05:02:01.653Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T04:37:45.742Z",
+    "commit_pending": "worker committed with a bare 'hps-2' trailer instead of the required 'cell: hps-2' form - known bee-ignorant-herding-worker gap",
+    "report": {
+      "outcome": "Recorded herdrs five-state lifecycle contract in both documents and retired the idle-only ready gate and transition-into-working receipt claims",
+      "commit": "f0903500",
+      "files": [
+        "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+        "skills/bee-herding/references/operational-invariants.md"
+      ],
+      "tests": "rg -n over both edited files for the retired rules — green — docs cell: pointer/parity check is the proof its change type needs; an independent review pass also read both diffs and its findings are queued as hps-5",
+      "deviations": [
+        "review found residue this cells file list did not cover; queued as hps-5 rather than widened here"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

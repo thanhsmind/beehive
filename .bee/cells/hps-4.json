@@ -1,0 +1,76 @@
+{
+  "id": "hps-4",
+  "feature": "herding-prompt-stall",
+  "title": "The brief-delivery knowledge page carries the ack receipt, not the transition receipt",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "This page is the canonical narrative of how a foreign agent gets its brief, and its delivery-receipt section is now wrong end to end. Rewrite that section under herding-prompt-stall D1-D4; CONTEXT.md quotes herdr's published contract verbatim and locks all four, so cite it rather than re-deriving. The stale text runs from the line `This is the \"state-receipt delivery\", and it replaced an earlier pane-text check.` through the paragraph ending `it never becomes a silent decision to wait anyway.` — roughly lines 60-90. What it claims today and what is now true: (a) it says the receipt is the agent's own reported state moving into `working` as a TRANSITION off a per-send baseline. That is retired. The transition is satisfied by the agent's own BOOT flap when the baseline is sampled before the boot's working window — proven live on 2026-08-21, job trust-par-2, where bee stamped pane_id into job.json while the pane still sat at an empty prompt. The receipt is now an ACK FILE THE WORKER WRITES (D4): the brief's first instruction is to write `ack-<round>.json` atomically before any other step, carrying who took the job, and delivery is that file appearing — or the round's result file appearing for an ultra-fast round. herdr lifecycle state is no longer the success signal at all. (b) it says `The ready gate is idle-only for the same reason.` That is retired by D2: herdr defines `idle` as ready-for-input AND the tab has been seen in the focused UI, `done` as the same underlying ready state for an unseen tab, and CLI reads never mark a tab seen — so a `--no-focus` bee worker pane normally reports `done`, and the gate accepts `idle` or `done`. (c) the bounded re-send paragraph must now say what ends the wait EARLY: herdr's `agent_prompt_stalled` when a submission from a non-working state produces no observed lifecycle change within five seconds (D1), and herdr's `blocked` state — a recognized approval or question UI — at every wait point (D3). Both are failure detectors, never success signals. Keep and sharpen the page's general lesson, which is still right and now stronger: any confirmation an actor can produce BY ITSELF — an echoed keystroke, its own boot transition — is not evidence the other side received anything; only an artifact the receiver wrote is. Name each retired claim's superseding decision inline so a later reader does not resurrect it. Do not restructure the page, renumber anything, or touch sections outside the delivery-receipt narrative.",
+  "verify": "rg -n 'idle-only|idle only|transition into working|TRANSITION off a per-send baseline' docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md; rg -n 'ack-|agent_prompt_stalled|blocked' docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+  "must_haves": {
+    "truths": [
+      "The page states the receipt is an ack file the worker writes, or the result file",
+      "No surviving claim that the receipt is a transition into working or that the ready gate is idle-only",
+      "The page names agent_prompt_stalled and blocked as the early failure detectors",
+      "The general lesson survives, sharpened: only an artifact the receiver wrote is evidence of receipt"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+        "substantive": "rewritten delivery-receipt narrative under D1-D4, each retired claim naming its superseding decision"
+      }
+    ],
+    "key_links": [
+      "each retired claim names herding-prompt-stall D1, D2, D3 or D4 inline"
+    ],
+    "prohibitions": [
+      "No restructuring or renumbering of the page",
+      "No edits outside the delivery-receipt narrative",
+      "No code changes in this cell"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-4",
+    "outcome": "The brief-delivery knowledge page states the ack receipt and the stall/blocked failure detectors instead of the transition receipt",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T05:02:08.624Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T04:51:38.100Z",
+    "commit_pending": "worker committed with a bare 'hps-4' trailer instead of the required 'cell: hps-4' form - known bee-ignorant-herding-worker gap",
+    "report": {
+      "outcome": "Rewrote the delivery-receipt narrative under D1-D4: ack-file receipt, idle-or-done ready gate, agent_prompt_stalled and blocked as early failure detectors",
+      "commit": "50b45c3c",
+      "files": [
+        "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+      ],
+      "tests": "rg -n over the edited page for the retired rules — green — docs cell: pointer/parity check is the proof its change type needs; an independent review pass found residue in the frontmatter and neighbouring files, queued as hps-5",
+      "deviations": [
+        "frontmatter description and the generated area index still carry the retired rule; out of this cells bounds, queued as hps-5"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
