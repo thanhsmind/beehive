@@ -36,6 +36,25 @@ kind silently drops a multi-line injected prompt even when idle.
 The pane start retries through a booting shell, and readiness is observed before
 the send.
 
+## The Expertise section — briefed like a leader, still outside the workflow
+
+The dispatcher may hand the worker an **Expertise section** in the brief
+(worker-brief-expertise D1–D3): `bee herding run --expertise` takes one entry
+per line, `<path> :: <purpose> :: <read-to>`, and `render_brief` renders each as
+"read this file, here is why" between the Task and Working-directory sections.
+Zero entries render nothing — the brief stays byte-identical. Entries point at
+bee's own skill references and knowledge files, picked by the dispatcher's
+judgment per task, never auto-derived (D2). `job.json` persists the entries so a
+`--continue` round keeps them; a fresh flag wins.
+
+This forced a rescope of the opening clause: the worker ignores **workflow
+participation** (gates, cells, claims, state) — it still never runs a bee
+command and never writes under `.bee/` beyond its result file — but the
+Expertise-listed files are explicitly its to read (D3). Workflow-ignorance is
+not expertise-denial. The same entry shape reaches Task-tool workers through
+`bee dispatch prepare --expertise` and the worker-cell prompt's conditional
+Expertise block (D4).
+
 ## A delivery receipt is a state transition the agent itself caused
 
 This is the "state-receipt delivery", and it replaced an earlier pane-text check.
