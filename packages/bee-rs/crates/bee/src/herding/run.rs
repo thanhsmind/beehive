@@ -465,7 +465,10 @@ trait Herdr {
     /// submit-and-observe: a prompt sent from a non-`working` state that
     /// produces no observed lifecycle change within `timeout_ms` comes back
     /// `agent_prompt_stalled` (`is_agent_prompt_stalled`) instead of herdr
-    /// waiting indefinitely — bee never resends blind into a booting TUI.
+    /// waiting indefinitely. A stall no longer ends the run outright (D6,
+    /// hps-14): `deliver_pointer` folds it into the same bounded resend the
+    /// ready-with-no-ack path already uses, rather than treating a booting
+    /// TUI's first miss as final.
     fn agent_prompt(&self, job_id: &str, prompt: &str, until: &str, timeout_ms: u64) -> Result<(), String>;
     /// `herdr agent wait <job_id> --until idle --until done --timeout <ms>`
     /// (herding-prompt-stall D2) — herdr's own settle-aware wait: blocks
@@ -1094,9 +1097,6 @@ enum DeliveryError {
     /// D3: the pane already reported `blocked` (an approval or question UI)
     /// before the pointer was ever sent.
     Blocked,
-    /// D1: herdr's own `agent_prompt_stalled` — the submit produced no
-    /// observed lifecycle change within the wait window.
-    Stalled(String),
     /// An ordinary herdr-call failure, unrelated to the agent's lifecycle
     /// (herdr missing, a non-zero exit, an unparseable body).
     Transport(String),
@@ -1105,6 +1105,12 @@ enum DeliveryError {
     /// state (a successful "working" observation) is never enough on its
     /// own any more.
     NeverAcked { bound: NeverAckedBound, attempts: u32 },
+    /// D6 (hps-14): the resend bound ran out and EVERY send inside it came
+    /// back `agent_prompt_stalled` — herdr never observed so much as a
+    /// lifecycle change, let alone an ack. Kept distinct from `NeverAcked`:
+    /// that variant means the agent took the text and never confirmed it;
+    /// this one means the agent never took the text at all.
+    NeverDelivered { attempts: u32 },
 }
 
 impl std::fmt::Display for DeliveryError {
@@ -1114,7 +1120,6 @@ impl std::fmt::Display for DeliveryError {
                 f,
                 "pane is blocked (herdr recognized an approval or question UI) before the prompt was ever sent"
             ),
-            DeliveryError::Stalled(e) => write!(f, "herdr reported agent_prompt_stalled: {e}"),
             DeliveryError::Transport(e) => write!(f, "{e}"),
             DeliveryError::NeverAcked { bound: NeverAckedBound::ResendAttempts, attempts } => write!(
                 f,
@@ -1125,6 +1130,11 @@ impl std::fmt::Display for DeliveryError {
                 f,
                 "waited past the {ACK_WAIT_BUDGET_SECS}s ack-wait budget ({attempts} send(s) made) but neither the \
                  round's ack file nor its result file ever appeared"
+            ),
+            DeliveryError::NeverDelivered { attempts } => write!(
+                f,
+                "resent the pointer {attempts} time(s) and every submission stalled (herdr observed no lifecycle \
+                 change at all) — the agent never took the text, unlike a never-acked submission it did take"
             ),
         }
     }
@@ -1137,10 +1147,16 @@ impl std::fmt::Display for DeliveryError {
 /// pointer. `agent_prompt`'s reply now sorts into THREE outcomes, not two
 /// (hps-11). A pane already `blocked` (checked before the send is even
 /// attempted — there is no point submitting into a pane waiting on an
-/// unrelated question) and `agent_prompt_stalled` (no observed lifecycle
-/// change at all within herdr's own five-second window — the submission
-/// never landed) both still fail FAST as hard delivery errors. A `timeout`
-/// reply is different: the submission WAS made, only the state did not
+/// unrelated question) still fails FAST as a hard delivery error.
+/// `agent_prompt_stalled` (no observed lifecycle change at all within
+/// herdr's own five-second window) no longer does (D6, hps-14): a stall
+/// proves the submission had not landed AT THAT INSTANT, not that it never
+/// will, so it joins the SAME bounded retry the ready-with-no-ack path
+/// below already uses instead of ending the run on the first occurrence —
+/// live evidence: a fresh, full-width pane's `agent_prompt_stalled` reply,
+/// with the IDENTICAL prompt typed by hand seconds later on that same pane
+/// delivered at once (docs/history/herding-prompt-stall/CONTEXT.md). A
+/// `timeout` reply is different: the submission WAS made, only the state did not
 /// settle inside bee's own wait window — that is not a delivery failure,
 /// so it falls straight through into the same ack poll a successful send
 /// enters, exactly like the `Ok(())` branch below with no ack yet. A
@@ -1159,12 +1175,20 @@ impl std::fmt::Display for DeliveryError {
 /// brief must see exactly one send. The pointer is idempotent, so a resend
 /// only fires once the agent has gone back to a READY state (`idle`/`done`,
 /// D2's vocabulary) with STILL no ack — that is the actual signature of a
-/// submission the TUI dropped, not a slow worker. `blocked` and a stall
-/// still end the wait at once, whether observed before the first send or
-/// mid-poll, never swallowed by another attempt. The wait is bounded two
-/// ways — `DELIVERY_RESEND_ATTEMPTS` resends and the wall-clock
-/// `ACK_WAIT_BUDGET_SECS` — and exhausting either ends it as `NeverAcked`,
-/// naming which bound ran out.
+/// submission the TUI dropped, not a slow worker. `blocked` still ends the
+/// wait at once, whether observed before the first send or mid-poll, never
+/// swallowed by another attempt; a stall (D6, hps-14) does not — it is
+/// retried under this SAME resend, sleeping the existing `POLL_INTERVAL`
+/// backoff before resending the idempotent pointer, checked against the
+/// ack and result files between attempts exactly as the ready-with-no-ack
+/// path already is, so a worker mid-write on an earlier submission is never
+/// resent into needlessly. The wait is bounded two ways —
+/// `DELIVERY_RESEND_ATTEMPTS` resends and the wall-clock
+/// `ACK_WAIT_BUDGET_SECS` — and exhausting the resend bound ends it as
+/// `NeverAcked` when at least one send got past herdr's stall detector, or
+/// as `NeverDelivered` when EVERY send in the bound stalled — distinct
+/// wording so the reader can tell "the agent never took the text" from
+/// "the agent took it and never acked".
 fn deliver_pointer(
     pointer: &str,
     prompt: &mut dyn FnMut(&str) -> Result<(), String>,
@@ -1176,15 +1200,20 @@ fn deliver_pointer(
 ) -> Result<(), DeliveryError> {
     let started_ms = now();
     let mut sends = 0u32;
+    let mut stalls = 0u32;
     loop {
         if status().as_deref() == Some("blocked") {
             return Err(DeliveryError::Blocked);
         }
         sends += 1;
         if sends > DELIVERY_RESEND_ATTEMPTS {
-            return Err(DeliveryError::NeverAcked {
-                bound: NeverAckedBound::ResendAttempts,
-                attempts: DELIVERY_RESEND_ATTEMPTS,
+            return Err(if stalls == DELIVERY_RESEND_ATTEMPTS {
+                DeliveryError::NeverDelivered { attempts: DELIVERY_RESEND_ATTEMPTS }
+            } else {
+                DeliveryError::NeverAcked {
+                    bound: NeverAckedBound::ResendAttempts,
+                    attempts: DELIVERY_RESEND_ATTEMPTS,
+                }
             });
         }
         match prompt(pointer) {
@@ -1194,7 +1223,16 @@ fn deliver_pointer(
                 }
             }
             Err(_) if ack_present() || result_present() => return Ok(()),
-            Err(e) if is_agent_prompt_stalled(&e) => return Err(DeliveryError::Stalled(e)),
+            Err(e) if is_agent_prompt_stalled(&e) => {
+                // D6 (hps-14): a stall proves the submission had not landed
+                // AT THAT INSTANT, not that it never will — sleep the same
+                // backoff the ready-with-no-ack path already sleeps, then
+                // let the outer loop resend under the SAME bounds, never
+                // returning early here.
+                stalls += 1;
+                sleep(POLL_INTERVAL);
+                continue;
+            }
             Err(e) if is_agent_prompt_timeout(&e) => {
                 // The submission WAS made — herdr's own stall detector
                 // never fired, only bee's wait window ran out before the
@@ -1850,7 +1888,7 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     ) {
         let msg = match &e {
             DeliveryError::Blocked => blocked_message(&opts.job_id, &new_pane, &pane_tail(herdr, &new_pane)),
-            DeliveryError::NeverAcked { .. } => {
+            DeliveryError::NeverAcked { .. } | DeliveryError::NeverDelivered { .. } => {
                 diagnose_giveup(herdr, &opts.job_id, &new_pane, format!("brief prompt failed after start: {e}"))
             }
             _ => format!("brief prompt failed after start: {e}"),
@@ -2007,7 +2045,7 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         ) {
             let msg = match &e {
                 DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
-                DeliveryError::NeverAcked { .. } => {
+                DeliveryError::NeverAcked { .. } | DeliveryError::NeverDelivered { .. } => {
                     diagnose_giveup(herdr, job_id, &pane_id, format!("agent prompt failed: {e}"))
                 }
                 _ => format!("agent prompt failed: {e}"),
@@ -2152,7 +2190,7 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     ) {
         let msg = match &e {
             DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
-            DeliveryError::NeverAcked { .. } => {
+            DeliveryError::NeverAcked { .. } | DeliveryError::NeverDelivered { .. } => {
                 diagnose_giveup(herdr, job_id, &pane_id, format!("agent prompt failed: {e}"))
             }
             _ => format!("agent prompt failed: {e}"),
@@ -3237,28 +3275,32 @@ mod tests {
     }
 
     #[test]
-    fn deliver_pointer_surfaces_agent_prompt_stalled_as_a_typed_stall_not_a_resend() {
-        // D1: herdr's own agent_prompt_stalled IS the delivery failure,
-        // returned at once — never blind resends into a booting TUI.
+    fn deliver_pointer_retries_a_stall_and_delivers_on_the_next_send() {
+        // D6 (hps-14): a stall proves the submission had not landed AT THAT
+        // INSTANT, not that it never will — it joins the same bounded retry
+        // the ready-with-no-ack path already uses instead of ending the run
+        // on the first occurrence.
         let sent = std::cell::RefCell::new(0u32);
         let out = deliver_pointer(
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
             &mut |_p| {
                 *sent.borrow_mut() += 1;
-                Err("herdr agent prompt job-1 exited 1: agent_prompt_stalled: no observed change within 5000ms"
-                    .to_string())
+                if *sent.borrow() == 1 {
+                    Err("herdr agent prompt job-1 exited 1: agent_prompt_stalled: no observed change within \
+                         5000ms"
+                        .to_string())
+                } else {
+                    Ok(())
+                }
             },
             &mut || Some("idle".to_string()),
-            &mut || false,
+            &mut || *sent.borrow() >= 2, // ack shows once the resend lands
             &mut || false,
             &mut |_d| {},
             &mut || 0,
         );
-        match out {
-            Err(DeliveryError::Stalled(e)) => assert!(e.contains("agent_prompt_stalled"), "{e}"),
-            other => panic!("expected DeliveryError::Stalled, got {other:?}"),
-        }
-        assert_eq!(*sent.borrow(), 1, "exactly one send, never a resend");
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 2, "the stall is retried, not fatal — one resend then delivered");
     }
 
     #[test]
@@ -3446,18 +3488,43 @@ mod tests {
     }
 
     #[test]
-    fn deliver_pointer_stops_resending_the_instant_a_stall_appears_mid_resend() {
-        // D4: a stall mid-resend must not be swallowed either.
+    fn deliver_pointer_retries_past_a_stall_appearing_mid_resend() {
+        // D6 (hps-14): a stall mid-resend is retried like any other — it
+        // must not end the run early, unlike `blocked` which still does.
         let sent = std::cell::RefCell::new(0u32);
         let out = deliver_pointer(
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
             &mut |_p| {
                 *sent.borrow_mut() += 1;
-                if *sent.borrow() < 3 {
-                    Ok(())
-                } else {
+                if *sent.borrow() == 3 {
                     Err("agent_prompt_stalled: no observed change".to_string())
+                } else {
+                    Ok(())
                 }
+            },
+            &mut || Some("idle".to_string()),
+            &mut || *sent.borrow() >= 4, // ack shows only after the send past the stall
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 4, "the stall does not end the run — it is retried like any other resend");
+    }
+
+    #[test]
+    fn deliver_pointer_exhausts_the_resend_bound_when_every_send_stalls() {
+        // D6 (hps-14): a stall every single time still ends as a terminal
+        // error once the resend bound is spent — but its wording says every
+        // submission stalled, distinct from `NeverAcked`'s "kept going
+        // ready with no ack": the reader can tell "the agent never took the
+        // text" from "the agent took it and never acked".
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Err("agent_prompt_stalled: no observed change".to_string())
             },
             &mut || Some("idle".to_string()),
             &mut || false,
@@ -3465,8 +3532,16 @@ mod tests {
             &mut |_d| {},
             &mut || 0,
         );
-        assert!(matches!(out, Err(DeliveryError::Stalled(_))), "{out:?}");
-        assert_eq!(*sent.borrow(), 3, "stops resending the instant a stall appears");
+        match &out {
+            Err(DeliveryError::NeverDelivered { attempts }) => {
+                assert_eq!(*attempts, DELIVERY_RESEND_ATTEMPTS);
+            }
+            other => panic!("expected DeliveryError::NeverDelivered, got {other:?}"),
+        }
+        let msg = out.unwrap_err().to_string();
+        assert!(msg.contains("every submission stalled"), "{msg}");
+        assert!(!msg.contains("kept going ready with no ack"), "{msg}");
+        assert_eq!(*sent.borrow(), DELIVERY_RESEND_ATTEMPTS, "bounded, not infinite");
     }
 
     #[test]
