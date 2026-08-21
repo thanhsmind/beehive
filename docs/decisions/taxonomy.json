@@ -391,6 +391,7 @@
     "pane-split",
     "pane-layout",
     "ergonomics",
-    "refusals"
+    "refusals",
+    "cli-flags"
   ]
 }

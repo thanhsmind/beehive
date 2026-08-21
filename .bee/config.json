@@ -13,9 +13,9 @@
   "gate_bypass": "normal",
   "ship_visibility": "off",
   "worktree_first": "on",
-  "worktree_cleanup_on_merge": true,
-  "uat_stop": "close",
-  "uat_before_merge": false,
+  "worktree_cleanup_on_merge": false,
+  "uat_stop": "merge",
+  "uat_before_merge": true,
   "staging_before_merge": false,
   "models": {
     "claude": {
@@ -63,7 +63,12 @@
         "--permission-mode",
         "bypassPermissions"
       ],
-      "pi-opencode-free":  ["pi", "-a", "--model", "opencode/x-preview-f-free:high"],
+      "pi-opencode-free": [
+        "pi",
+        "-a",
+        "--model",
+        "opencode/x-preview-f-free:high"
+      ],
       "agy-flash": {
         "argv": [
           "agy",

@@ -1,0 +1,120 @@
+{
+  "id": "srg-2",
+  "feature": "store-reach-gaps",
+  "title": "Carry the bee binary into a freshly bootstrapped worktree store",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs"
+  ],
+  "action": "Reproduced live on 2026-08-21: `bee worktree new --feature <slug>` created and granted the worktree, copied `onboarding.json` and `config.json`, and synced skills — but `.bee/bin/` in the new worktree held no `bee` binary at all, so every `.bee/bin/bee ...` call from inside it died with `No such file or directory`. AGENTS.md tells agents to run bee as `.bee/bin/bee`, and the worktree is where feature work is supposed to happen, so a fresh worktree is unusable until someone copies the binary by hand. The binary is gitignored, so `git worktree add` cannot carry it and the bootstrap does not either.\n\nFix in `bootstrap_worktree_store` (packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs:811-916), beside the existing `copy_if_absent(\"onboarding.json\")` / `copy_if_absent(\"config.json\")` pair at :838-839.\n\nShape — LINK FIRST, COPY AS FALLBACK. Add a sibling helper (do NOT widen `copy_if_absent`, which is file-in-store-root shaped and returns a different report) that provisions `<worktree>/.bee/bin/bee` from `<main_store_root>/bin/bee`:\n1. Source resolution: prefer `bin/bee`, and on Windows `bin/bee.exe` — probe both and take whichever exists, exactly the way the repo's own hook shim probes the pair. Absent source: report `{provisioned:false, reason:\"main store has no bin/bee\"}` and DO NOT fail the bootstrap — a host that never installed a binary must still get its worktree.\n2. Destination already exists: report `{provisioned:false, reason:\"bin/bee already exists\"}` and leave it alone, matching `copy_if_absent`'s idempotence. `bootstrap_worktree_store` re-runs on `worktree register` against an already-adopted worktree, so this MUST be idempotent.\n3. Create `<worktree>/.bee/bin/` when absent.\n4. Try a symlink first: `std::os::unix::fs::symlink` under `#[cfg(unix)]`, `std::os::windows::fs::symlink_file` under `#[cfg(windows)]`. A symlink cannot go stale — a rebuilt main binary is instantly live in every worktree, which a copy cannot promise and which `bee doctor`'s binary_freshness row would otherwise start reporting per worktree.\n5. If the symlink call fails for ANY reason — Windows without Developer Mode or admin privileges is the real case, but treat every error the same — fall back to `std::fs::copy` and, on unix, restore the source's executable permission bit on the destination (a plain `fs::copy` preserves mode on unix, but assert it rather than assume: read the source metadata's mode and set it). A copy that also fails reports `{provisioned:false, reason:<the io error>}` and still does not fail the bootstrap.\n6. Report which happened: add one `\"binary\"` key to the returned map on BOTH return paths — the early `state.json already exists` return at :908-913 and the fresh-state return at :909-915 — carrying `{provisioned:bool, method:\"symlink\"|\"copy\"|null, reason?:string}`. Both paths already carry `onboarding`, `config` and `identity`; the new key rides beside them so `worktree new`'s and `worktree register`'s own output shows it.\n\nTests in the module's existing test style, using a temp directory (see the fixture at prune.rs:852 for how a main store is seeded):\n(a) a main store holding `bin/bee` bootstraps a worktree whose `.bee/bin/bee` exists and resolves to the same content;\n(b) the report's `binary.provisioned` is true and `method` is one of symlink|copy;\n(c) a second bootstrap over the same worktree leaves the existing entry untouched and reports `provisioned:false` with the already-exists reason — the idempotence `worktree register` depends on;\n(d) a main store with NO `bin/bee` still bootstraps green, with `binary.provisioned:false` and a named reason — the bootstrap must never fail on a missing binary;\n(e) on unix, when the fallback copy path is taken, the destination is executable. Drive the fallback directly through the helper rather than by breaking symlink support, if that is what the code shape allows; if it is not reachable without contorting the code, say so in the deviation rather than inventing a seam.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree",
+  "must_haves": {
+    "truths": [
+      "A worktree created by bee worktree new can run .bee/bin/bee with no hand-copying",
+      "A main store with no bin/bee still bootstraps a worktree green",
+      "A second bootstrap over the same worktree never replaces an existing .bee/bin/bee"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+        "substantive": "the binary-provisioning helper with symlink-then-copy, the binary key on both bootstrap return paths, and the five tests; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "bootstrap_worktree_store reports the binary provisioning beside onboarding/config/identity on both return paths"
+    ],
+    "prohibitions": [
+      "No change to copy_if_absent's own shape or its two existing callers",
+      "No change to the fresh state.json contents or to the cells sync",
+      "The bootstrap must never fail because the binary could not be provisioned"
+    ]
+  },
+  "tier": "ceiling",
+  "decisions": [],
+  "trace": {
+    "worker": "w-srg-2",
+    "outcome": "A freshly bootstrapped worktree now carries .bee/bin/bee, symlinked to main so it can never go stale, with a mode-preserving copy fallback where symlinks are unavailable.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+    ],
+    "deviations": [
+      "Judge read raised four gaps after the first commit (loose method assertion, no test for the symlink_metadata guard, a comment naming an unreachable scenario, a comment contradicted by the commit); all four were closed in 98675cb6 and re-verified."
+    ],
+    "friction": "The cell's verify string as written was not runnable — cargo test takes one positional TESTNAME, so a two-name invocation fails argument parsing before any test runs. Orchestrator error in authoring the cell.",
+    "capped_at": "2026-08-21T16:03:34.973Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2a7f3cd2-3cf9-4540-9d24-8a9b64594486",
+    "claimed_at": "2026-08-21T15:33:00.732Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "fence-is-real",
+            "status": "PASS",
+            "evidence": "Parent dir genuinely created at registry.rs:1115 before the link at :1117-1118, dangle asserted at :1119. Reproduced out of tree: copied packages/bee-rs to a scratchpad root and symlink-mirrored the repo root (the crate include_str!s files above the crate). CONTROL: 5 passed, 0 failed. Patched ONLY the copy's guard to dest.exists() -> a_dangling_destination_link_is_refused_and_never_written_through FAILED, panic at registry.rs:1124 with {\"provisioned\": true, \"method\": \"copy\"}. The other 4 tests still passed under the broken guard, so this test is the sole fence. method:\"copy\" is itself proof the write-through succeeded (fs::copy returned Ok), only possible with the parent dir present — the test observes a real clobber, not an unrelated ENOENT."
+          },
+          {
+            "id": "guard-restored-and-nothing-else-mutated",
+            "status": "PASS",
+            "evidence": "registry.rs:894 at HEAD is `if std::fs::symlink_metadata(&dest).is_ok() {` — not exists(). Whole function read at registry.rs:860-912: refused/provisioned closures, the bee/bee.exe probe at :881, create_dir_all, canonicalize(&src).unwrap_or(src) at :903, link-then-copy fallback — all byte-identical to 983bbd91; git diff 983bbd91 98675cb6 renders every code line in that function as unchanged context, only the 6-line comment block replaced. Working tree clean after the experiment: git status --porcelain empty, git diff HEAD --stat empty."
+          },
+          {
+            "id": "test-a-unix-assertions",
+            "status": "PASS",
+            "evidence": "registry.rs:1087 assert_eq!(method, \"symlink\") and :1089 symlink_metadata(&dest).unwrap().file_type().is_symlink() both passed in the control run on x86_64-unknown-linux-gnu. The either/or survives only at :1093 under #[cfg(not(unix))]. HONEST GAP: the not(unix) arm could not be compile-checked — only the linux target is installed. Statically sound: #[cfg] on an expression-statement is valid, method is bound outside both arms so it stays used either way, and the assert body is the exact literal that compiled at 983bbd91."
+          },
+          {
+            "id": "comments-match-the-code",
+            "status": "PASS",
+            "evidence": "Guard comment at registry.rs:885-890 now names a dest link whose target is gone — an earlier link into a main checkout since moved or rebuilt elsewhere, while the current main still has its binary. Reachability proved empirically, not argued: the fixture gives main_store a live bin/bee (so the probe at :881 finds it) and points dest at an absent old-main path, and under the reverted guard execution reached the copy and clobbered. No unreachable example was substituted. Test-module header at registry.rs:1031-1035 no longer claims a sibling hold on worktree/tests.rs and correctly states that file took the exact-key-order edit the new binary key forces."
+          },
+          {
+            "id": "scope-and-original-tests-intact",
+            "status": "PASS",
+            "evidence": "git show 98675cb6 --stat = registry.rs only, 65 insertions / 8 deletions. The 8 deletions reconcile exactly: 3 guard-comment lines, 4 test-module-header lines, 1 relocated reason assertion within test (a). No hunks touch tests (c), (d) or (e) — all three appear only as context and still assert what they did at 983bbd91. The other files in the range come from the sibling's eb769d70, excluded per instruction."
+          },
+          {
+            "id": "overall-combined-state",
+            "status": "PASS",
+            "evidence": "Combined HEAD state of registry.rs is correct and properly fenced. Five tests, all real: the two weak ones from the first pass are closed (method pinned to symlink on unix at :1087; the symlink_metadata guard fenced at :1104-1132 with a proven-red-on-revert test). Verify green: orchestrator 221 passed 0 failed; judge's out-of-tree control 5/5 on the registry module. ONE CORRECTION to the author's self-report: they claimed the first cut would have PASSED for the wrong reason; tested broken-guard-plus-no-parent-dir and it FAILS, at a different assertion (registry.rs:1125, \"No such file or directory (os error 2)\" vs \"bin/bee already exists\"). It would have gone red either way — the parent dir is load-bearing for what the fence PROVES, not for whether it fails. CARRIED FORWARD, not a blocker: a symlinked .bee/bin/bee realpaths into main (hook_local.rs:391-424, :439-446, :549-555), so doctor's printed FIX at doctor.rs:286-287 is containment-denied inside a worktree. Logged as a separate follow-up."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-21T16:03:19.478Z"
+      }
+    ],
+    "report": {
+      "outcome": "bootstrap_worktree_store provisions <worktree>/.bee/bin/bee from the main store (symlink first, mode-preserving copy fallback), reports it under a new binary key on both return paths, and refuses idempotently on any existing destination including a dangling link.",
+      "commit": "983bbd91 + 98675cb6",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/worktree/registry.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — green (221 passed, 0 failed) — the cell changes one product file plus one assertion in the worktree test module; the independent judge additionally reproduced the safety fence out of tree by reverting the guard and observing the clobber",
+      "deviations": [
+        "Stacked a second commit (98675cb6) instead of amending 983bbd91: the sibling worker on srg-1 committed eb769d70 on top while srg-2 was being revised, so amending would have rewritten a live sibling commit hash inside a shared worktree. Both commits carry the srg-2 trailer.",
+        "Tests live in a new #[cfg(test)] mod inside registry.rs rather than worktree/tests.rs, which a sibling reservation held; one line of worktree/tests.rs still had to move because the new binary key is mandated on the fresh return path.",
+        "Hardened beyond the brief: the destination check uses fs::symlink_metadata, not exists(). exists() follows symlinks, so a stale-target link would read as absent and the fallback fs::copy would write THROUGH it into main s own bin/, destroying the real binary from a worktree bootstrap. The judge reproduced that clobber.",
+        "Test (e) drives copy_worktree_binary directly rather than through a faked symlink refusal — unix never takes the fallback and the helper is already a clean seam."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

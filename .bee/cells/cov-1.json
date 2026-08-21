@@ -1,0 +1,72 @@
+{
+  "id": "cov-1",
+  "feature": "claim-owner-visible",
+  "title": "Name the holding session on a claimed cell in bee cells list and bee cells show",
+  "lane": "small",
+  "status": "capped",
+  "deps": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/claim-owner-visible/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/claims.rs",
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_select.rs"
+  ],
+  "action": "READ docs/history/claim-owner-visible/CONTEXT.md FIRST — D1-D4 there are locked and this cell implements exactly them, nothing more.\n\nThe defect: `bee cells list` and `bee cells show` emit the raw `.bee/cells/<id>.json` record. That record says `status: \"claimed\"` but its `claimed_by`/`claimed_at`/`session` fields are ALWAYS null — the owner lives only in `.bee/claims/<id>.json`. So a live sibling session's claim reads as an idle cell. Reproduced live on 2026-08-21 against cells srg-1/srg-2.\n\nEverything needed already exists. Do NOT write new liveness or expiry rules; call the crate's own:\n- `read_claim(control, cell_id) -> MR<Option<Map<String,Value>>>` (claims.rs:78) — `None` when the file is absent OR holds a JSON primitive; `Err(Fail::Delegate)` on a JSON array. Preserve that delegate.\n- `claim_expired(&claim, now) -> MR<bool>` (claims.rs:90) — a non-finite/non-positive TTL and an unparseable `claimed_at` both read as NOT expired.\n- `claim_expiry(Some(&claim)) -> MR<String>` (claims.rs:112) — returns `\"no expiry\"` or `\"expires <iso>\"`.\n- `read_session_of_claim(control, &claim) -> MR<Option<Map<String,Value>>>` (handlers_select.rs:240).\n- `heartbeat_stale(session, now) -> MR<bool>` (claims.rs:601) — a `closed`/`dead` status, a missing session, an unparseable or old `last_heartbeat` all read stale.\n- `nullish(Option<&Value>) -> Value` (handlers_select.rs:230) for `?? null`.\nUse `rsv::now_ms()` for `now`, once per call, and thread that ONE value through every cell in a list so a batch cannot straddle a tick.\n\n**1. The derived annotation (mod.rs).** Add a private helper beside `with_verify_owner` (mod.rs:339):\n\n```rust\nfn claim_annotation(control: &Path, id: &str, now: f64) -> MR<Option<Value>>\n```\n\nReturn `Ok(None)` when `read_claim` returns `None` — that is the whole reason unclaimed output stays byte-identical (D2). When a claim IS present, build an object with exactly these keys, in this order:\n- `session` — `nullish(claim.get(\"session\"))`; a sessionless claim keeps a literal `null`, never a fabricated id.\n- `workspace_id` — `nullish(claim.get(\"workspace_id\"))`.\n- `claimed_at` — `nullish(claim.get(\"claimed_at\"))`.\n- `expiry` — the `claim_expiry` string.\n- `expired` — the `claim_expired` bool.\n- `holder_alive` — `!heartbeat_stale(read_session_of_claim(...)?.as_ref(), now)?`.\n- `verdict` — the string `\"sweepable\"` when `expired && !holder_alive`, else `\"held\"`. That pair is EXACTLY `sweep_expired_claims`'s own two gates (handlers_select.rs:117-121); a comment must say so and name that function, so the two readings are visibly one rule.\n\n**2. Wire it into `handle_show` (mod.rs:320).** After `with_verify_owner`, append a `claim` key to the annotated map when `claim_annotation` returns `Some`. Append at the END — do not disturb the existing key order, which tests.rs:296 asserts. When it returns `None`, emit the map exactly as today.\n\n**3. Wire it into `handle_list` (mod.rs:290).** For each cell, look up its `id` (a non-string or absent `id` yields no annotation — never panic, never index) and, when `claim_annotation` returns `Some`, insert the `claim` key at the end of that cell object. A cell that is not an object passes through untouched. Compute `now` ONCE before the loop.\n\n**4. The text line (mod.rs:356, `summarize_cell`, D4).** It currently renders `${id} [${status}] (${lane}) ${title}` by template-literal coercion — preserve that coercion exactly for every existing field. Because step 3 already annotated the values, `summarize_cell` reads `cell.get(\"claim\")` and needs no new parameter. When the annotation is present, append ONE suffix after the title:\n- verdict `held`, session a string: ` — held by session <session>` and, when `holder_alive` is false, ` (holder not alive, claim still valid until <expiry>)`.\n- verdict `sweepable`: ` — claim expired and holder not alive (sweepable)`.\n- a null session: say `sessionless claim` in place of `session <id>`.\nWhen there is no annotation the line must be byte-identical to today's. `handle_ready` (mod.rs:300) also calls `summarize_cell`; it filters to `status: \"open\"`, which has no claim file, so leave `handle_ready` UNCHANGED and put a one-line comment there saying why.\n\n**5. Do NOT** touch `packages/bee-rs/crates/bee/src/generated/registry_payload.json` — this adds no CLI flag (CONTEXT.md Non-goals). Do NOT write `claimed_by` onto the cell record; claim ownership keeps its single home in `.bee/claims/`.\n\nTests (in verbs/cells/tests.rs, beside the existing `show_inserts_verify_owner_*` block):\n(a) a cell with NO claim file emits from `handle_show` exactly the key list it emits today — assert the existing `[\"id\",\"title\",\"status\",\"verify\",\"verify_owner\",\"trace\"]` list still holds, proving D2 by construction;\n(b) a claimed cell whose claim names a session with a FRESH `last_heartbeat` annotates `verdict: \"held\"`, `holder_alive: true`, and the right session id;\n(c) the same claim whose session record has `status: \"closed\"` reads `holder_alive: false` even with a fresh heartbeat (the claims.rs:603 special case);\n(d) an EXPIRED claim (small `ttl_seconds`, old `claimed_at`) with a stale holder reads `verdict: \"sweepable\"`; the same expired claim with a LIVE holder still reads `\"held\"`;\n(e) a claim with no `session` key at all annotates `session: null` and does not panic;\n(f) `handle_list` annotates the claimed row and leaves an unclaimed row byte-identical;\n(g) `summarize_cell` renders the holder suffix for a claimed row and the exact old line for an unclaimed one;\n(h) a claim file holding a JSON ARRAY still returns `Fail::Delegate` from the list/show path — the pre-existing Node-delegate escape must survive.\n\nWatch out: `handle_show` returns `Err(Delegate)` for a truthy non-object cell (mod.rs:325) and `Handled::Error` for not-found/archived — none of those paths may start reading claims. Annotate only after the cell is known to be a readable object.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml cells",
+  "must_haves": {
+    "truths": [
+      "A cell with no claim file emits byte-identical list and show output to before this change",
+      "A claimed cell always names its holding session, or says sessionless, in both JSON and text output",
+      "The held-versus-sweepable verdict uses the same two gates the claim sweep itself uses, never a second rule",
+      "The cell record on disk is unchanged: claim ownership keeps its single home in .bee/claims/"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "substantive": "a claim_annotation helper returning None when no claim file exists, wired into handle_show and handle_list, plus the summarize_cell holder suffix; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs",
+        "substantive": "tests (a)-(h) from the action, including the unclaimed-output-unchanged proof and the JSON-array delegate escape"
+      }
+    ]
+  },
+  "decisions": [],
+  "trace": {
+    "worker": "w-cov-1",
+    "outcome": "cells list and cells show now name the session holding a claimed cell, with a held/sweepable verdict read from the same two gates the claim sweep uses",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "Rewrote one comment the worker had copied verbatim from the cell action text (it read as an instruction, not a statement) and amended it into the cell's own commit."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T16:15:56.192Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "9d62803d-578e-471a-a4ad-312c69c3a4b6",
+    "claimed_at": "2026-08-21T16:07:44.249Z",
+    "report": {
+      "outcome": "cells list and cells show name the holding session on a claimed cell, with a held/sweepable verdict",
+      "commit": "c038e37d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/mod.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml cells — green — 225 passed, 0 failed; the cells suite is the only suite these two files feed",
+      "deviations": [
+        "Rewrote one comment the worker copied verbatim from the cell action text and amended it into the cell commit."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

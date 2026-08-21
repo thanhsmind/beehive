@@ -11,14 +11,14 @@
     "uat": true
   },
   "summary": "Feature \"dispatch-one-door\" started at phase \"exploring\".",
-  "next_action": "Merge the worktree, then present the uat gate.",
+  "next_action": "guard-herding-fallback is closed and its worktree is gone. Live work is store-reach-gaps in beehive--wt--store-reach-gaps (cells srg-1, srg-2 claimed).",
   "created_at": "2026-08-21T04:02:40.659Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Which one?",
-    "asked_at": "2026-08-21T13:42:51.759Z",
-    "session": "2a7f3cd2-3cf9-4540-9d24-8a9b64594486"
+    "subject": "Tiếp theo: để agent kia chạy tiếp. Bạn muốn tôi làm việc khác gì thì nói.",
+    "asked_at": "2026-08-21T15:49:02.590Z",
+    "session": "9d62803d-578e-471a-a4ad-312c69c3a4b6"
   },
   "route": {
     "class": "feature",

@@ -1,0 +1,152 @@
+{
+  "id": "srg-1",
+  "feature": "store-reach-gaps",
+  "title": "Refuse a blind route --set from an unbound session, and give route --no-lane",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/registry_contracts.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/flags.rs",
+    "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs"
+  ],
+  "action": "Reproduced live on 2026-08-21. A session that had NOT yet run `bee state session bind` ran `bee route --set` while two lane records were live. `run_route` resolves its target with a hardcoded `None`/`false` (workflows.rs:704, :744, :747), so it fell through to the default record, `.bee/state.json` — which named a DIFFERENT feature. The write landed silently: it stamped `route.feature` with state.json's own feature and overwrote that feature's recorded triage (lane/flags/files/rationale) with the caller's. The original values were only recoverable because a sibling lane record happened to hold a copy. `bee gate` cannot lose a route this way: it takes `--lane`/`--no-lane` and threads them through (set_gate.rs:684-707).\n\nIMPORTANT — do NOT copy gate's flag pair verbatim. `bee route` ALREADY has a `--lane`, and it means something else entirely: the triage class, validated against ROUTE_LANE_VALUES = [docs, tiny, small, spike, standard, high-risk] (workflows.rs:288-289, required for --set at :506-514, written as `route.lane` at :565). Gate's `--lane` names a lane RECORD (a feature slug). Two vocabularies, one flag name. The decision taken (see CONTEXT) is: route gets `--no-lane` ONLY, plus a refusal that makes the ambiguous case impossible. No `--lane` is added and route's existing `--lane` keeps its exact current meaning.\n\nThree changes.\n\n**1. `--no-lane` on route.** In `run_route` (workflows.rs:687), add `\"no-lane\"` to the `keys_known` list at :688, and check `bool_flag_ok(&flags, \"no-lane\")` beside the existing `set`/`show` loop at :690-694 (same shape, same early `return None`). Do NOT call `mutation_lane_selector` — it exists to reconcile `--lane` with `--no-lane`, and route's `--lane` is not that flag; reading `no-lane` directly is the honest call here, and a one-line comment must say so, naming the collision. Thread the resulting bool into all three resolution calls in place of the literal `false`: `resolve_mutation_target(&ctx.root, None, \"route show\", no_lane)` at :704, `resolve_mutation_lock_scope(&ctx.root, None, no_lane)` at :744, and `resolve_mutation_target(&ctx.root, None, \"route\", no_lane)` at :747. The first positional stays `None` on all three — route has no lane-record selector, by decision.\n\n**2. The guard.** In the `--set` path only, after `resolve_mutation_target` at :747 and BEFORE the existing no-active-feature check, refuse when ALL of these hold: `no_lane` is false; the resolved target is the default record (`target.lane().is_none()`); and at least one lane record is live (the `workflows` listing from :745 is already in hand — use it, do not list again). That combination is exactly \"a session that never bound itself is about to write to the shared default record while lanes are in flight\", and it is unresolvable from the caller's intent. Message shape, following set_gate.rs:360-368's voice — name what was refused, what the default record currently holds, and BOTH exits:\n\n`route --set: refused — this session is not bound to a lane, but N lane record(s) are live, and the default record (.bee/state.json) carries feature \"<f>\". Writing here would overwrite that feature's own triage. FIX: bind this session to its lane (bee state session bind --lane <feature>), or pass --no-lane to write the default record on purpose.`\n\nUse the real count and the real feature name; list up to three live lane feature names inline and elide the rest. Zero mutation on the refusal — it must land before any lock is written or any field is set. `--show` is never refused: reading the default record is harmless.\n\n**3. Declare it, and grow the drift net.** (a) `packages/bee-rs/crates/bee/src/generated/registry_payload.json` is hand-maintained (the old generator is gone — docs/history/gate-help-drift/CONTEXT.md:9-14), and `route` is a flow-verb alias with its OWN entry beside `state.route` (router.rs:146-151, :183-190). Add a `no-lane` property to BOTH entries' `parameters.properties`, `{\"type\": \"boolean\", \"description\": ...}`. Mirror gate's own wording, adapted — gate's reads: \"Force the default state.json even when the calling session is bound to a lane. Cannot be combined with --lane.\" Route's must NOT claim the --lane pairing, since route's --lane is the triage class; say instead that it forces the default state.json even when the calling session is bound to a lane, and that it is the sanctioned way past the unbound-session refusal. (b) `packages/bee-rs/crates/bee/tests/registry_contracts.rs:263-296` holds `state_gate_and_gate_list_every_flag_set_gate_rs_actually_accepts`, which parses `run_gate`'s own `keys_known([...])` literal out of `set_gate.rs` and asserts every flag is a declared registry property — but it is hard-wired to gate, so route has no such net today. Extend it (or add its twin) to cover `[\"state.route\", \"route\"]` against `run_route`'s `keys_known` literal in `workflows.rs`, which needs a SECOND `include_str!` — `SET_GATE_SOURCE` at :223 points at a different file. Keep the existing gate assertions working unchanged.\n\nTests: (a) an unbound session with live lane records is refused, zero mutation, and the message names both fixes; (b) the same call with `--no-lane` writes the default record and succeeds; (c) a session BOUND to a lane still writes its lane record and is never refused — today's working path, unchanged; (d) no live lane records at all means no refusal, so a single-lane repo behaves exactly as before; (e) `--show` is never refused under any of the above; (f) `--no-lane=garbage` is refused by `bool_flag_ok`; (g) the extended registry-contract test fails if `no-lane` is added to `keys_known` but not to both payload entries — prove the net by construction if the harness allows it, else assert both entries declare it.\n\nWatch out: `registry_contracts.rs:101-136` requires every entry's `examples[]` to start with a declared `invoke`, and `registry_dispatch.rs:19-34` actually RUNS `examples[0]` against the built binary in a scratch repo. If you touch route's examples, that example gets executed — safest is to leave the existing examples alone.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml route registry_contracts",
+  "must_haves": {
+    "truths": [
+      "An unbound session cannot silently overwrite another feature's route in the default record",
+      "--no-lane makes writing the default record an explicit, allowed act",
+      "A session bound to a lane behaves exactly as it does today",
+      "A repo with no live lane records behaves exactly as it does today"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "substantive": "no-lane accepted and threaded into all three resolution calls, plus the zero-mutation unbound-session refusal on the --set path; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "substantive": "a no-lane boolean property on BOTH the state.route and route entries"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+        "substantive": "the flag-declaration drift test extended to cover state.route and route against run_route's keys_known literal"
+      }
+    ],
+    "key_links": [
+      "run_route threads no_lane into resolve_mutation_lock_scope and both resolve_mutation_target calls"
+    ],
+    "prohibitions": [
+      "No --lane flag added to route, and route's existing --lane keeps its ROUTE_LANE_VALUES meaning untouched",
+      "No change to set_gate.rs or to gate's behaviour",
+      "No change to route's existing examples[] entries",
+      "The refusal must mutate nothing, and --show must never be refused"
+    ]
+  },
+  "tier": "ceiling",
+  "decisions": [],
+  "trace": {
+    "worker": "w-srg-1",
+    "outcome": "An unbound session can no longer silently overwrite another feature's triage in the default record: route --set refuses with both exits named, --no-lane makes the default write explicit, and the flag-declaration drift net now covers route as well as gate.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+      "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs"
+    ],
+    "deviations": [
+      "Judge read raised one issue after the first commit — with live lanes and a featureless default record the refusal printed a literally false sentence about overwriting a feature that does not exist; fixed in 303ac98e by branching the middle clause, with the has-feature wording proven byte-identical."
+    ],
+    "friction": "The cell verify string as authored was not a runnable command: cargo test takes one positional TESTNAME, so a two-name invocation fails argument parsing before any test runs. Orchestrator error, caught by the worker.",
+    "capped_at": "2026-08-21T16:09:53.750Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2a7f3cd2-3cf9-4540-9d24-8a9b64594486",
+    "claimed_at": "2026-08-21T15:35:23.907Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "three-claims-present",
+            "status": "PASS",
+            "evidence": "workflows.rs:745-748 adds no-lane to run_route's keys_known literal and to the bool_flag_ok loop; no_lane read at :762; threaded into all three calls — resolve_mutation_target(...,\"route show\", no_lane) at :776, resolve_mutation_lock_scope(...,no_lane) at :816, resolve_mutation_target(...,\"route\", no_lane) at :819. First positional stays None on all three, so no lane-record selector was added. Guard at :820-826."
+          },
+          {
+            "id": "refusal-predicate",
+            "status": "PASS",
+            "evidence": "unbound_default_route_refusal returns None unless all four hold: called only from the --set branch, and its own guard is `if no_lane || target.lane().is_some() || live_lanes.is_empty() { return None }` (workflows.rs:733-735). Bound session: resolve_mutation_target (ledger.rs:334-341) takes the session_binding branch and yields Target::Lane, so target.lane() is Some — no refusal. No live lanes: live_lane_features returns empty — no refusal. Integration coverage in route_lane_targeting.rs."
+          },
+          {
+            "id": "zero-mutation-on-refusal",
+            "status": "PASS",
+            "evidence": "Order: resolve_mutation_lock_scope :829 (pure read), list_workflows :830, acquire_mutation_locks :831 (RAII guards only), resolve_mutation_target :832 (strict read), then the refusal :836-840 returning Out::Thrown. First record mutation is at :885 / :889, after. Lock guards drop on return, so no lock file survives. Confirmed empirically for the featureless path too: route_lane_targeting.rs:284 captures state.json before and :313 asserts byte equality after."
+          },
+          {
+            "id": "liveness-deviation",
+            "status": "PASS",
+            "evidence": "The brief said to read liveness from the in-hand workflows listing; the author refused and used the lane store instead. Claim verified: a workflow record carries no lane marker — ensure_workflow_record_for_feature (feature.rs:349-396) is called identically for the legacy DEFAULT record (:445-453) and for each lane (:467-475), and mode is the user's --mode value, not lane-vs-default. The substitute predicate live_lane_features (workflows.rs:694-707) skips falsy phase, idle and compounding-complete — byte-identical to feature.rs:461-463 and TERMINAL_LANE_PHASES — so a closed lane never counts as live."
+          },
+          {
+            "id": "route-lane-untouched",
+            "status": "PASS",
+            "evidence": "ROUTE_LANE_VALUES, validate_route_set_flags, the --set requirement and the route.lane write are outside every hunk and unchanged. \"lane\" remains in run_route's keys_known list with its original triage-class meaning. No gate-sense --lane was added: the guard takes no lane-feature argument and every resolve_* call passes None as the lane_feature positional."
+          },
+          {
+            "id": "registry-declarations",
+            "status": "PASS",
+            "evidence": "jq -S diff of the payload shows exactly two added blocks — a no-lane boolean on the route entry and on the state.route entry, nothing else. The description explicitly says it is not a pairing for --lane, since route's --lane is the triage classification. examples[] identical on both entries, so registry_contracts.rs:101-136 and registry_dispatch.rs:19-34 execute the same example as before."
+          },
+          {
+            "id": "drift-net-not-weakened",
+            "status": "PASS",
+            "evidence": "Both pre-existing gate tests are byte-identical old vs new (diff prints no differences). parse_known_flags_from_source is now a wrapper passing the same anchor and label; the parse body is unchanged, only panic strings parameterized. Teeth reproduced on a full repo copy with no-lane jq-deleted from both entries: cargo test --test registry_contracts -> 9 passed, 1 failed, panic at registry_contracts.rs:391 'state.route: workflows.rs accepts --no-lane but the registry payload does not declare it as a parameter'. Working tree untouched."
+          },
+          {
+            "id": "integration-tests-real",
+            "status": "PASS",
+            "evidence": "route_lane_targeting.rs runs the built binary against tempdir repos. Fix-detecting: the unbound refusal test, the --no-lane test, and part 2 of the --show test all require --no-lane to exist, which pre-fix fails keys_known. By design also-pass-pre-fix (anti-widening guards): bound-session, no-live-lanes, part 1 of --show, and the bool type-check. The zero-mutation assertion inspects the store, capturing state.json before and asserting byte equality after, plus a no-route-substring check."
+          },
+          {
+            "id": "featureless-refusal-tells-the-truth",
+            "status": "PASS",
+            "evidence": "Follow-up round. The has-feature literal is byte-identical to eb769d70 including the space at the triage./FIX: seam (extracted from source and compared in python, not transcribed). workflows.rs:744 filters the feature through truthy (jsval.rs:35-43), so absent, null and \"\" all take the new branch: 'the default record (.bee/state.json) holds no active feature at all, so this route would have no feature to belong to.' A whitespace-only feature stays on the has-feature branch, matching the feature_set predicate the older no-active-feature refusal uses at :842 — nothing inside run_route disagrees about what has a feature means. Guard position and predicate unmoved; the shadowing was kept deliberately, not reordered away. New test proven red against PRE-FIX source: a scratchpad copy holding eb769d70's workflows.rs with only the post-fix test file dropped in gives 6 passed, 1 failed, failing at route_lane_targeting.rs:299 on the NEGATIVE assertion and printing the old false sentence — so absence of the old wording, not presence of the new, is what fires. Six pre-existing tests untouched (append-only after line 275); the author's report said five, a miscount in the safe direction."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-21T16:09:37.825Z"
+      }
+    ],
+    "report": {
+      "outcome": "route --set from an unbound session is refused while lane records are live, with a message that stays true when the default record carries no feature; route gains --no-lane threaded into all three resolution calls; both registry entries declare it and the drift net now covers route.",
+      "commit": "eb769d70 + 303ac98e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/state_group/workflows.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/tests/registry_contracts.rs",
+        "packages/bee-rs/crates/bee/tests/route_lane_targeting.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --test route_lane_targeting (7 passed) and --test registry_contracts (10 passed) — green — the two suites that own the refusal wording and the flag-declaration net; the drift net was additionally proven to have teeth by deleting no-lane from both payload entries on a repo copy and observing the named red",
+      "deviations": [
+        "Lane liveness is read from the lane store (list_lanes plus the lane_live phase predicate), not from the in-hand workflows listing the cell named: workflow records carry no lane marker at all — one is created per live FEATURE, default record and lane alike — so they cannot answer whether a lane record is live. The cell brief was wrong on this point.",
+        "Tests live in a new file tests/route_lane_targeting.rs rather than an existing declared file: run_route is cwd-rooted with no run_route_body split, so end-to-end coverage needs the built-binary harness.",
+        "Stacked commits instead of one per cell: a live sibling worker was committing into the same worktree, so amending would have rewritten its commit hash. Both commits carry the srg-1 trailer."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

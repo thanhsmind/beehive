@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "claim-owner-visible",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"claim-owner-visible\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"claim-owner-visible\" (lane).",
+  "created_at": "2026-08-21T16:05:05.593Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 2,
+    "rationale": "bee cells list/show emit the raw cell record, whose claimed_by/session fields are always null, so a live sibling claim reads as idle. Every helper the fix needs already exists in verbs/cells/claims.rs and handlers_select.rs (read_claim, read_session_of_claim, heartbeat_stale, claim_expiry) — the change is a derived annotation in verbs/cells/mod.rs plus its tests, following the with_verify_owner precedent already in that file. covered-contract-change: tests.rs:296 asserts the exact key list of cells show output, so the annotation must be claim-only to keep unclaimed cells byte-identical.",
+    "updated_at": "2026-08-21T16:05:16.256Z",
+    "feature": "claim-owner-visible"
+  }
+}

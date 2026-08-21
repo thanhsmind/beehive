@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "feature": "store-reach-gaps",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"store-reach-gaps\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"store-reach-gaps\" (lane).",
+  "created_at": "2026-08-21T15:25:22.880Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: store-reach-gaps",
+    "asked_at": "2026-08-21T16:11:49.293Z",
+    "session": "2a7f3cd2-3cf9-4540-9d24-8a9b64594486"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change",
+      "public-contracts"
+    ],
+    "product_files": 2,
+    "rationale": "Two control-plane defects found live in this session, one theme: a command must reach the store its calling session belongs to. (1) bee route (set/show) hardcodes resolve_mutation_target(root, None, ..., false) at workflows.rs:704,744,747 where gate passes lane_feature/no_lane (set_gate.rs:691,707), so a lane-bound session records its route onto state.json and silently overwrites a sibling lane's triage. public-contracts: route grows the same lane/no-lane flag pair gate documents. (2) worktree new/register bootstraps onboarding.json and config.json into the new worktree store (registry.rs:838) but never the .bee/bin/bee binary, so every bee command inside a fresh worktree dies. covered-contract-change: existing state_group and worktree tests assert the current target-resolution and bootstrap report shapes.",
+    "updated_at": "2026-08-21T15:25:34.954Z",
+    "feature": "store-reach-gaps"
+  }
+}
