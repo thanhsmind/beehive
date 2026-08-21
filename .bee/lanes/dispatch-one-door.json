@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "**Còn 2 stub capture** — 1 agent đang soi. Xong tôi làm nốt rồi báo.",
-    "asked_at": "2026-08-21T09:52:03.750Z",
-    "session": "7dcda44f-e90a-4291-af12-cb3b603d9acf"
+    "subject": "Tiếp theo: nói \"go\" thì tôi mở lane sửa 11 test Windows đó.",
+    "asked_at": "2026-08-21T10:21:13.916Z",
+    "session": "50604963-80c5-4cdd-b083-b7ae9072fd54"
   },
   "route": {
     "class": "feature",
