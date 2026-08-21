@@ -917,7 +917,7 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
                     code: "agent-file-malformed",
                     runtime: None,
                     slot: Some(slot),
-                    message: format!("{rel_prefix}/{agent_name}.md has no readable \"model:\" frontmatter line — cannot check drift; run `bee onboard --apply` from a bee checkout, or re-run the installer (`scripts/install.sh`) in a host repo, to re-render it."),
+                    message: format!("{rel_prefix}/{agent_name}.md has no readable \"model:\" frontmatter line — cannot check drift; run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to re-render it.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                     agent: Some(agent_name),
                 });
                 continue;
@@ -955,7 +955,7 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
                         code: "agent-file-drift",
                         runtime: None,
                         slot: Some(slot),
-                        message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the {slot} slot is now {slot_desc} (no model name) — run `bee onboard --apply` from a bee checkout, or re-run the installer (`scripts/install.sh`) in a host repo, to remove the stale file."),
+                        message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the {slot} slot is now {slot_desc} (no model name) — run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to remove the stale file.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                         agent: Some(agent_name),
                     })
                 }
@@ -963,7 +963,7 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
                     code: "agent-file-drift",
                     runtime: None,
                     slot: Some(slot),
-                    message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — run `bee onboard --apply` from a bee checkout, or re-run the installer (`scripts/install.sh`) in a host repo, to re-render it."),
+                    message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to re-render it.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                     agent: Some(agent_name),
                 }),
                 _ => {}
