@@ -553,6 +553,19 @@ FIX: begin the spawn message with the marker, e.g. \
     deny(reason, "codex-spawn-unmarked", None, None, None)
 }
 
+/// D1(d): the `--kind` a FIX message hands to `dispatch prepare` so it reads
+/// the same slot the guard just resolved by tier name. `slot_for_kind` only
+/// goes kind -> tier; this is its practical inverse for FIX text (extraction
+/// has no dedicated kind, so it falls to the `advisor` catch-all, same as
+/// `slot_for_kind`'s own default arm).
+fn dispatch_kind_for_tier(tier: &str) -> &'static str {
+    match tier {
+        "review" => "reviewer",
+        "generation" => "gather",
+        _ => "advisor",
+    }
+}
+
 fn evaluate_claude_dispatch(tool_input: &Value, models: &Models) -> Verdict {
     let Value::Object(obj) = tool_input else { return no_opinion() };
 
@@ -667,14 +680,15 @@ prompt/description; or add this model to a configured tier slot in .bee/config.j
     if let Some(t) = &tier {
         let resolved = resolve_tier(models, t, "claude");
         if resolved == Resolved::Refused {
+            let kind = dispatch_kind_for_tier(t);
             let reason = format!(
                 "bee-model-guard: [bee-tier: {t}] resolves to a cli executor, which an \
 in-family Agent/Task subagent cannot be — a cli tier runs as an external process, \
 not a spawned subagent.\n\
-FIX: dispatch it through the external-executor gather path — a Bash call running \
-the configured command verbatim with the prompt on stdin (resolveTier(root, slot, \
-runtime, {{for:'gather'}}) returns {{type:'cli', command}}). Do not attach a model \
-param; the cli command names its own model."
+FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
+reads .bee/config.json for this slot and returns the tool and exact payload to run \
+(here, a Bash call running the configured command verbatim with the prompt on \
+stdin). Do not attach a model param; the cli command names its own model."
             );
             return deny(reason, "cli-tier-denied", tier, None, subagent_type);
         }
@@ -682,14 +696,16 @@ param; the cli command names its own model."
             // herding-tier D5: mirror of the cli-tier-denied wording just
             // above — an Agent/Task subagent cannot BE the pane a herding
             // slot spawns.
+            let kind = dispatch_kind_for_tier(t);
             let reason = format!(
                 "bee-model-guard: [bee-tier: {t}] resolves to a herding-executor pane, which \
 an in-family Agent/Task subagent cannot be — a herding tier runs one bee-ignorant \
 external agent in its own pane, not a spawned subagent.\n\
-FIX: dispatch it through the herding-exec path — a Bash call running \".bee/bin/bee \
-herding run --task-file - --json\" (plus --cwd for a granted worktree) with the \
-prompt on stdin (dispatch prepare already renders this payload for a --kind cell \
-dispatch). Do not attach a model param; the herding worker names its own model."
+FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
+reads .bee/config.json for this slot and returns the tool and exact payload to run \
+(here, a Bash call running \".bee/bin/bee herding run --task-file - --json\", plus \
+--cwd for a granted worktree, with the prompt on stdin). Do not attach a model \
+param; the herding worker names its own model."
             );
             return deny(reason, "herding-tier-denied", tier, None, subagent_type);
         }
@@ -707,12 +723,14 @@ dispatch). Do not attach a model param; the herding worker names its own model."
     if let Some(t) = subagent_type.as_deref().and_then(tier_for_pinned_type) {
         let resolved = resolve_tier(models, t, "claude");
         if resolved == Resolved::Refused {
+            let kind = dispatch_kind_for_tier(t);
             let reason = format!(
                 "bee-model-guard: subagent_type \"{}\" stands for the {t} tier, which resolves \
 to a cli executor — an in-family Agent/Task subagent cannot be an external process.\n\
-FIX: dispatch it through the external-executor gather path (a Bash call running the \
-configured command verbatim with the prompt on stdin), or name a tier whose slot is \
-a model.",
+FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
+reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
+running the configured command verbatim with the prompt on stdin), or name a tier \
+whose slot is a model.",
                 subagent_type.as_deref().unwrap_or_default()
             );
             return deny(reason, "cli-tier-denied", Some(t.to_string()), None, subagent_type);
@@ -721,13 +739,15 @@ a model.",
             // herding-tier D5: same mirror as the marker-only branch above,
             // reached here when the pinned subagent_type itself implies the
             // tier instead of an explicit marker.
+            let kind = dispatch_kind_for_tier(t);
             let reason = format!(
                 "bee-model-guard: subagent_type \"{}\" stands for the {t} tier, which resolves \
 to a herding-executor pane — an in-family Agent/Task subagent cannot be an external \
 pane worker.\n\
-FIX: dispatch it through the herding-exec path (a Bash call running \".bee/bin/bee \
-herding run --task-file - --json\" with the prompt on stdin), or name a tier whose \
-slot is a model.",
+FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
+reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
+running \".bee/bin/bee herding run --task-file - --json\" with the prompt on stdin), \
+or name a tier whose slot is a model.",
                 subagent_type.as_deref().unwrap_or_default()
             );
             return deny(reason, "herding-tier-denied", Some(t.to_string()), None, subagent_type);
@@ -745,13 +765,20 @@ Otherwise pass model: \"{gen_model}\" for the generation tier, or open the \
 prompt/description with [bee-tier: ceiling] (or generation/extraction/review)."
         )
     } else {
-        "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
+        let slot_kind = match gen_resolved {
+            Resolved::Herding => "a herding executor",
+            Resolved::Refused => "a cli executor",
+            _ => "unconfigured",
+        };
+        format!(
+            "FIX: name one of bee's rendered agents in subagent_type (bee-gather = generation, \
 bee-extract = extraction, bee-review = review) — that alone declares the tier. \
 Otherwise open the prompt/description with [bee-tier: ceiling] (or another tier: \
-generation/extraction/review); the generation tier is a cli executor or unconfigured, \
-so run it through the external-executor gather path (a Bash call with the command \
-verbatim and the prompt on stdin) rather than a model param."
-            .to_string()
+generation/extraction/review). The generation tier is {slot_kind}: run \
+\".bee/bin/bee dispatch prepare --runtime claude --kind gather --json\" — it reads \
+.bee/config.json and returns the tool and exact payload to run (a Bash call, either \
+the configured cli command or a herding-pane invocation) rather than a model param."
+        )
     };
     let reason = format!(
         "bee-model-guard: every Agent/Task dispatch needs an explicit tier — a rendered \
@@ -1086,6 +1113,28 @@ mod tests {
     }
 
     #[test]
+    fn bare_dispatch_under_a_herding_generation_slot_names_a_herding_executor() {
+        // D1(d): the bare-denied FIX reads gen_resolved instead of asserting
+        // a fixed "cli executor or unconfigured" — a herding-shaped
+        // generation slot is named a herding executor, never a cli one.
+        let herding = fixture(&json!({"models": {"claude": {
+            "extraction": "haiku",
+            "generation": {"kind": "herding"},
+            "review": "opus"
+        }}}));
+        let (code, stderr) = run_payload(
+            herding.path(),
+            json!({"tool_name": "Agent", "tool_input": {"prompt": "implement the widget", "description": "some description"}}),
+        );
+        assert_eq!(code, 2);
+        assert!(stderr.contains("a herding executor"), "{stderr}");
+        assert!(!stderr.contains("cli executor"), "{stderr}");
+        assert!(stderr.contains("dispatch prepare"), "{stderr}");
+        let d = last_jsonl(dispatch_log(herding.path())).unwrap();
+        assert_eq!(d["transport"], "bare-denied");
+    }
+
+    #[test]
     fn marker_allows_anchored_only() {
         let fx = fixture(&repo_config());
         for (payload, expect) in [
@@ -1210,7 +1259,7 @@ mod tests {
         }}}));
         let (code, stderr) = run_payload(cli.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] gather"}}));
         assert_eq!(code, 2);
-        assert!(stderr.contains("{for:'gather'}") && stderr.contains("stdin"));
+        assert!(stderr.contains("dispatch prepare --runtime claude --kind gather") && stderr.contains("stdin"));
         assert!(!stderr.contains("model: \"") && !stderr.contains("gpt-5.5"));
         let d = last_jsonl(dispatch_log(cli.path())).unwrap();
         assert_eq!(d["transport"], "cli-tier-denied");
@@ -1354,7 +1403,7 @@ mod tests {
             json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: generation] go"}}),
         );
         assert_eq!(code, 2, "a herding slot cannot be an in-family Agent/Task subagent");
-        assert!(stderr.contains("herding-executor pane") && stderr.contains("herding run --task-file - --json"));
+        assert!(stderr.contains("herding-executor pane") && stderr.contains("herding run --task-file - --json") && stderr.contains("dispatch prepare"));
         let d = last_jsonl(dispatch_log(herding.path())).unwrap();
         assert_eq!(d["transport"], "herding-tier-denied");
         assert_eq!(d["tier"], "generation");
@@ -1398,7 +1447,7 @@ mod tests {
             json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: review] check", "subagent_type": "bee-review"}}),
         );
         assert_eq!(code, 2, "a herding-shaped review slot cannot be an in-family Agent/Task subagent");
-        assert!(stderr.contains("herding-executor pane") && stderr.contains("herding run --task-file - --json"));
+        assert!(stderr.contains("herding-executor pane") && stderr.contains("herding run --task-file - --json") && stderr.contains("dispatch prepare"));
         let d = last_jsonl(dispatch_log(herding.path())).unwrap();
         assert_eq!(d["transport"], "herding-tier-denied");
         assert_eq!(d["tier"], "review");
@@ -1413,7 +1462,7 @@ mod tests {
         }}}));
         let (code, stderr) = run_payload(cli.path(), json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-gather", "prompt": "gather"}}));
         assert_eq!(code, 2, "a cli slot cannot be an in-family subagent");
-        assert!(stderr.contains("bee-gather") && stderr.contains("cli executor"));
+        assert!(stderr.contains("bee-gather") && stderr.contains("cli executor") && stderr.contains("dispatch prepare"));
         let d = last_jsonl(dispatch_log(cli.path())).unwrap();
         assert_eq!(d["transport"], "cli-tier-denied");
         assert_eq!(d["tier"], "generation");
