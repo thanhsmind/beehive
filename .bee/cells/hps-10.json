@@ -1,0 +1,73 @@
+{
+  "id": "hps-10",
+  "feature": "herding-prompt-stall",
+  "title": "RealHerdr::agent_wait reads herdr's actual reply shape, and every new real parse is pinned to a captured reply",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "SHIP-BLOCKING. `RealHerdr::agent_wait` (run.rs:590) reads the WRONG JSON path, so it returns `None` for every real herdr reply, the ready gate never sees `idle` or `done`, and EVERY `bee herding run` now dies after 60s with `agent never reported ready within 60s (ready-wait)`. Reproduced live three times against a healthy agy pane sitting at its prompt, solo and in parallel. The whole herding path is broken on this branch right now. The code does `v.get(\"result\").and_then(|r| r.get(\"agent_status\").or_else(|| r.get(\"status\")))`. Here is the ACTUAL reply, captured live from `herdr agent wait accept-solo-1 --until idle --until done --timeout 200`, trimmed: `{\"id\":\"cli:agent:wait\",\"result\":{\"agent\":{\"agent\":\"agy\",\"agent_status\":\"done\",\"interactive_ready\":true,\"name\":\"accept-solo-1\",\"pane_id\":\"w4:p2J\",...},\"type\":\"agent_info\"}}`. The status lives at `result.agent.agent_status`, one level deeper than the code looks. Fix the parse. Keep the fail-safe contract exactly as the doc comment states — `None` on herdr missing, an unparseable body, or no settle inside the window — and keep the same shape as `RealHerdr::agent_status` (run.rs:570-578), which parses `result.agents[]` correctly and is the model to follow. WHY THIS SURVIVED THE SUITE, and what to do about it: `FakeHerdr::agent_wait` returns a value the test configured, so every test exercised the SEAM and none exercised the PARSE. Add parse-level unit tests that feed the real captured JSON text through the same extraction the impl uses — for `agent_wait` the reply above, and for `agent_prompt`'s success envelope this captured reply from `herdr agent prompt <job> <text> --wait --until working --timeout 5000`: `{\"id\":\"cli:agent:prompt\",\"result\":{\"agent\":{\"agent\":\"agy\",\"agent_status\":\"working\",\"name\":\"accept-solo-1\",...},\"type\":\"agent_info\"}}`. Structure it so the extraction is a small pure function the impl calls and the test can call with a `&str` of JSON — do not spawn any process in a test. Do the same for any OTHER parse this feature added against a live herdr reply; `agent_status`, `pane_rect`, `pane_alive` and `pane_read` predate it and already work, so leave them alone. Also re-read `is_agent_prompt_stalled` (run.rs:733 area) and make sure it matches the string herdr actually returns on a stalled submission, not a guessed one — if it cannot be verified from herdr's own documented wording, say so in a comment rather than asserting it silently.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "agent_wait extracts the status from result.agent.agent_status and returns it",
+      "A parse-level test feeds the captured live agent wait reply through the real extraction, not through FakeHerdr",
+      "A parse-level test covers the captured agent prompt success envelope the same way",
+      "The None-on-any-trouble contract is unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "corrected agent_wait extraction as a pure function, plus parse-level tests over the captured replies; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the extraction is a pure function so a test can drive it with a JSON string and no process"
+    ],
+    "prohibitions": [
+      "No process spawned in any test",
+      "No change to agent_status, pane_rect, pane_alive or pane_read",
+      "Do not weaken the None-on-any-trouble fail-safe into a guess"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-10",
+    "outcome": "RealHerdr::agent_wait reads result.agent.agent_status through a pure extractor, with parse-level tests pinned to captured live herdr replies",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T06:29:52.225Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T06:23:30.076Z",
+    "commit_pending": "worker committed with a bare trailer instead of the required 'cell: hps-10' form",
+    "report": {
+      "outcome": "agent_wait extraction corrected to result.agent.agent_status as a pure function, plus parse-level tests over captured live agent-wait and agent-prompt replies",
+      "commit": "658366d4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — full suite 2266 passed 0 failed 11 ignored, re-run by the orchestrator after the wave-barrier regen",
+      "deviations": [
+        "found by the live acceptance probe, not by the suite: FakeHerdr made every test exercise the seam and none the parse"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

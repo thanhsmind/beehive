@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Main sạch, không nợ gì từ vụ conflict.",
-    "asked_at": "2026-08-21T03:07:32.838Z",
-    "session": "c1eacb78-2dd2-497a-8ea0-8a0c59b5a89d"
+    "subject": "Muốn tôi sửa file config đó theo cách 1 không?",
+    "asked_at": "2026-08-21T03:58:52.237Z",
+    "session": "2775e641-e691-4b3f-bfce-9e88933651d7"
   }
 }

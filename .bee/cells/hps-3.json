@@ -1,0 +1,88 @@
+{
+  "id": "hps-3",
+  "feature": "herding-prompt-stall",
+  "title": "The worker writes an ack file and that ack is the delivery receipt",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "hps-1"
+  ],
+  "decisions": [
+    "D1",
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Make the delivery receipt something the worker WRITES instead of something bee infers from herdr state (D4, which narrows D1). Two files. (1) mailbox.rs. Beside `result_path` (line 67) and `result_filename` (line 88) add the round's ack path — `.bee/mailbox/<job-id>/ack-<round>.json` — plus a presence reader in the same style as the result-file readers, and extend the module header map at line 13 that lists the mailbox's files. Then `render_brief` (line 126): the brief gains a FIRST-STEP block, ahead of everything else it currently says, instructing the worker that before any other step it must write its ack file atomically — write `ack-<N>.json.tmp` then rename, the exact tmp-then-rename gesture the brief already teaches for the result file (see the existing test `render_brief_includes_the_tmp_then_rename_gesture`, line 421) — carrying a JSON object with the worker nickname, the cell id when the brief carries one, the job id, the round number, the agent's own name for itself, and a `received_at` ISO-8601 timestamp. Name the absolute path in the brief exactly as the result path is named, so a worker with no bee knowledge can follow it verbatim. Keep the brief's existing Result-form block, round numbering and schema block byte-identical apart from the new block. (2) run.rs. `deliver_pointer` — as hps-1 left it — takes its receipt from herdr's observation of the submission. Replace that receipt with the ack: delivery is confirmed when the round's ack file appears, or when the round's result file appears (an ultra-fast round that finishes before an ack is observed still counts — keep the existing `result_present()` escape and add an `ack_present()` beside it). herdr lifecycle state stops being the SUCCESS signal entirely. What stays exactly as hps-1 built it: herdr's `agent_prompt_stalled` and the `blocked` state remain the fast FAILURE detectors, ending the wait at once with their named errors. A bounded resend of the idempotent pointer while neither ack nor result has appeared is still correct — the pointer just re-points at the same brief — but it must be bounded and it must not swallow a stall or a blocked observation. Also let the ack count as a heartbeat wherever the round poll counts `log.txt` activity, so a worker that acked and then thinks for a long time is not read as dead. Tests: cover the ack path and filename, the brief carrying the first-step ack block with the tmp-then-rename gesture, delivery confirmed by an ack file, delivery still confirmed by a result file with no ack, a stall and a blocked observation still failing fast, and a bounded resend while neither file has appeared.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "The rendered brief tells the worker to write ack-<round>.json atomically before any other step, naming its absolute path",
+      "The ack file carries who took the job: worker nickname, cell id when present, job id, round, agent name, received_at",
+      "Delivery is confirmed by the ack file or the result file, never by a herdr lifecycle state",
+      "agent_prompt_stalled and blocked still end the wait at once"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "substantive": "ack path, filename, presence reader, and the brief's first-step ack block with tests; no TODO stubs"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "ack-or-result delivery receipt, ack counted as a heartbeat, stall and blocked failure paths untouched, with tests"
+      }
+    ],
+    "key_links": [
+      "the ack file also counts as a heartbeat in the round poll"
+    ],
+    "prohibitions": [
+      "Do not reintroduce a herdr lifecycle state as the delivery success signal",
+      "Do not drop the result_present() escape for an ultra-fast round",
+      "Do not weaken the agent_prompt_stalled or blocked fast-fail paths hps-1 added",
+      "No change to the brief's existing Result-form block, round numbering or result schema"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-3",
+    "outcome": "The worker-written ack file is the delivery receipt; deliver_pointer confirms on ack or result, never on a herdr lifecycle state, and the ack counts as a heartbeat",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "The worker never committed - it returned a result with no commit field at all. The orchestrator made the path-scoped commit 0418c68 with the required 'cell: hps-3' trailer. Second instance this wave of a herding worker not carrying bee's commit bookkeeping."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T05:26:04.099Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T05:02:17.188Z",
+    "report": {
+      "outcome": "Worker-written ack-N.json is the delivery receipt; deliver_pointer confirms via ack or result file, never herdr lifecycle state, and the ack counts as a wait_for_round heartbeat",
+      "commit": "0418c68",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green — 233 passed 0 failed in herding::run, re-run by the orchestrator; the FAILED lines are control_loop quick_exit_helper self-exec children, an intentional fixture in a file this branch never touched",
+      "deviations": [
+        "worker returned no commit; orchestrator committed path-scoped as 0418c68"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 479 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

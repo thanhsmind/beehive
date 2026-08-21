@@ -7,16 +7,25 @@
     "session-close": true,
     "write-guard": true
   },
+  "commands": {
+    "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"
+  },
+  "gate_bypass": "normal",
   "ship_visibility": "on",
   "worktree_first": "on",
   "worktree_cleanup_on_merge": true,
   "uat_stop": "close",
   "uat_before_merge": false,
   "staging_before_merge": false,
-  "commands": {
-    "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"
+  "advisor": {
+    "enabled": false,
+    "at": [
+      "shape",
+      "execution",
+      "blocked"
+    ],
+    "model": "fable"
   },
-  "gate_bypass": "normal",
   "models": {
     "claude": {
       "extraction": {
@@ -63,10 +72,16 @@
         "--permission-mode",
         "bypassPermissions"
       ],
-      "agy-flash": [
-        "agy",
-        "--dangerously-skip-permissions"
-      ]
+      "agy-flash": {
+        "argv": [
+          "agy",
+          "--dangerously-skip-permissions"
+        ],
+        "workspace_trust": {
+          "file": "~/.gemini/antigravity-cli/settings.json",
+          "key": "trustedWorkspaces"
+        }
+      }
     }
   }
 }

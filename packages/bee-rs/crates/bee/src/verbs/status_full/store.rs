@@ -881,17 +881,18 @@ pub(crate) fn read_agent_file_model(file: &Path) -> (bool, Option<String>) {
 /// state.mjs validateAgentFilesDrift. opencode-support oc-13/oc-14: a second
 /// runtime root joins `.claude/agents/` — `.opencode/agent/` (singular
 /// "agent", per discovery.md's verified on-disk layout), checked against
-/// `models.opencode` instead of `models.claude`. Same three read-only agents
-/// on both roots; `bee-build` carries no tier check on either (AGENT_FILE_TIER's
-/// existing scope, unchanged). Before oc-14 the two roots needed different
-/// verdict wording — opencode's files were hand-authored, so "re-run
-/// onboarding" was a promise bee could not keep. oc-14 renders
+/// `models.opencode` instead of `models.claude`. Same four rendered agents
+/// on both roots, `bee-build` included (dod-4: it renders at the generation
+/// tier alongside `bee-gather` and drifts the same way). Before oc-14 the two
+/// roots needed different verdict wording — opencode's files were
+/// hand-authored, so "re-run onboarding" was a promise bee could not keep. oc-14 renders
 /// `.opencode/agent/` from the same template source `.claude/agents/` uses
 /// (`onboard::agents::compute_opencode_agent_file_plan`), so both roots now
 /// share one verdict shape below.
 pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) -> Vec<Problem> {
-    const AGENT_FILE_TIER: [(&str, &str); 3] = [
+    const AGENT_FILE_TIER: [(&str, &str); 4] = [
         ("bee-gather", "generation"),
+        ("bee-build", "generation"),
         ("bee-extract", "extraction"),
         ("bee-review", "review"),
     ];
@@ -916,7 +917,7 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
                     code: "agent-file-malformed",
                     runtime: None,
                     slot: Some(slot),
-                    message: format!("{rel_prefix}/{agent_name}.md has no readable \"model:\" frontmatter line — cannot check drift; re-run onboarding to re-render it."),
+                    message: format!("{rel_prefix}/{agent_name}.md has no readable \"model:\" frontmatter line — cannot check drift; run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to re-render it.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                     agent: Some(agent_name),
                 });
                 continue;
@@ -926,6 +927,10 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
             if nullish(value) && slot == "review" {
                 value = rt_models.and_then(|c| c.get("generation"));
             }
+            let slot_kind: Option<&str> = match value {
+                Some(Value::Object(o)) => o.get("kind").and_then(|k| k.as_str()),
+                _ => None,
+            };
             let expected: Option<String> = match value {
                 Some(Value::String(s)) => Some(s.clone()),
                 Some(Value::Object(o)) => o.get("model").and_then(|m| m.as_str()).map(str::to_string),
@@ -934,21 +939,31 @@ pub(crate) fn validate_agent_files_drift(ctx: &Ctx, raw_config: Option<&Value>) 
             // Both roots are onboarding-rendered now (oc-14), so both carry a
             // non-null built-in default and share one verdict shape: `None`
             // only happens when config explicitly opted the slot OUT (a
-            // cli-shaped or literal-null-with-no-fallback override) — a real
-            // "this file should not exist" signal on either runtime.
+            // herding-shaped, cli-shaped, or literal-null-with-no-fallback
+            // override) — a real "this file should not exist" signal on
+            // either runtime. `slot_kind` reads the already-normalized value
+            // (dod-4) so the wording names what the slot actually is instead
+            // of guessing "cli-shaped" for every non-model shape.
             match expected {
-                None => problems.push(Problem {
-                    code: "agent-file-drift",
-                    runtime: None,
-                    slot: Some(slot),
-                    message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the {slot} slot is now cli-shaped or unconfigured (no model name) — re-run onboarding to remove the stale file."),
-                    agent: Some(agent_name),
-                }),
+                None => {
+                    let slot_desc = match slot_kind {
+                        Some("herding") => "a herding executor",
+                        Some("cli") => "a cli executor",
+                        _ => "unconfigured",
+                    };
+                    problems.push(Problem {
+                        code: "agent-file-drift",
+                        runtime: None,
+                        slot: Some(slot),
+                        message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the {slot} slot is now {slot_desc} (no model name) — run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to remove the stale file.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
+                        agent: Some(agent_name),
+                    })
+                }
                 Some(expected) if expected != file_model => problems.push(Problem {
                     code: "agent-file-drift",
                     runtime: None,
                     slot: Some(slot),
-                    message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — re-run onboarding to re-render it."),
+                    message: format!("{rel_prefix}/{agent_name}.md declares model: \"{file_model}\" but the configured {slot} model is \"{expected}\" — run `bee onboard --apply` from a bee checkout, or run `{}` in a host repo, to re-render it.", crate::onboard::HOST_REPO_INSTALL_ONE_LINER),
                     agent: Some(agent_name),
                 }),
                 _ => {}

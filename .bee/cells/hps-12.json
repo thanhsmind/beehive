@@ -1,0 +1,75 @@
+{
+  "id": "hps-12",
+  "feature": "herding-prompt-stall",
+  "title": "A worker pane is split off the roomiest pane, and a pane too narrow to work is refused",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "hps-11"
+  ],
+  "decisions": [
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "`execute_new` always splits the CALLER'S OWN pane: `pane_current()` at run.rs:1120-ish, then `pane_split(own_pane, dir, cwd)` at `--ratio 0.5`. Under fan-out that halves the same pane over and over. Measured live on 2026-08-21 from a CLEAN tab whose only pane was 120x43: three concurrent runs produced 60, 30 and 15 columns, and the caller's own pane ended at 15 too. An agent TUI cannot render its own prompts that narrow — a captured `pane read` of a 3-column pane returned one or two characters per line (`●`, `Cre`, `ate`), and even the diagnosis patterns hps-7 added had to be chosen short to survive it. From outside this looks exactly like 'parallel dispatch serializes': the first spawn gets a usable pane and later ones do not. Two changes, both in the pane-acquisition step, and nothing else about the run may change. (1) SPLIT THE ROOMIEST PANE, NOT ALWAYS YOUR OWN. `pane_rect` (trait run.rs:322, real impl run.rs:413-432) already parses `herdr pane layout`, whose reply carries EVERY pane in the tab with its rect — a live capture is `{\"result\":{\"layout\":{\"tab_id\":\"w4:t4\",\"panes\":[{\"pane_id\":\"w4:p4\",\"rect\":{\"height\":43,\"width\":120,\"x\":36,\"y\":1}}],\"splits\":[]}}}`, and with siblings present the `panes` array holds one entry each. Choose the pane with the largest area in the caller's own tab as the split parent, falling back to the caller's own pane whenever the layout cannot be read or names no candidate — the existing fail-open habit of `pane_rect`, kept. This alone turns 60/30/15 into 60/30/30 for three spawns and keeps degrading gracefully. Make the choice a pure function over the parsed pane list so it is testable with no process. (2) REFUSE A PANE TOO NARROW TO WORK. Below a named minimum width the split is refused BEFORE anything is spawned, with a typed error that names the parent pane, its measured width, the minimum, and the remedy — close finished worker panes, or open another tab and run from there. Pick the minimum from the evidence, not from taste, and state the evidence in the doc comment: 60 columns rendered agy correctly, 15 did not. A refusal is honest here; spawning into a pane the agent cannot draw in wastes a whole model turn and then fails as something else entirely. Refuse before the split, so no pane and no agent is ever created. If the layout cannot be read at all, do NOT refuse — fall open, exactly like the parent choice. Tests: the parent choice over a captured multi-pane layout body; the fallback when the layout is unreadable; the refusal firing under the minimum with the width in the message; no refusal when the layout is unknown; and the split call receiving the chosen parent id rather than the caller's own.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "The split parent is the roomiest pane in the caller's tab, not always the caller's own",
+      "An unreadable layout falls back to the caller's own pane and never refuses",
+      "A parent below the named minimum width refuses before any pane or agent is created, naming the width, the minimum and the remedy",
+      "The minimum's doc comment cites the measured evidence, not taste"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "pure roomiest-pane chooser over the parsed layout, width refusal before the split, and tests over a captured multi-pane layout body; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the refusal happens before pane_split, so a refused run creates nothing"
+    ],
+    "prohibitions": [
+      "No change to the split direction rule, the ratio, or --no-focus",
+      "No refusal when the layout cannot be read — fail open to the caller's own pane",
+      "No change to delivery, the ready gate, the ack receipt or the poll loop",
+      "No process spawned in any test"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-12",
+    "outcome": "A worker pane is split off the roomiest pane in the caller's tab, and a parent too narrow for an agent TUI is refused before anything is created",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T06:48:00.579Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T06:36:21.987Z",
+    "commit_pending": "worker committed with a bare trailer instead of the required 'cell: hps-12' form",
+    "report": {
+      "outcome": "execute_new chooses the roomiest pane in the callers tab as the split parent, falls back to its own pane when the layout is unreadable, and refuses a parent under 60 columns before any pane or agent exists",
+      "commit": "75cacb6b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — full suite 2279 passed 0 failed 11 ignored, re-run by the orchestrator; the workers own report hedged on two sibling tests, both clean in this full run",
+      "deviations": [
+        "worker hedged its proof on two sibling-module tests; the orchestrator re-ran the whole suite and both are green"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

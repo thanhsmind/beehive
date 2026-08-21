@@ -1,0 +1,78 @@
+{
+  "id": "hps-1",
+  "feature": "herding-prompt-stall",
+  "title": "bee herding run reads herdr lifecycle state the way herdr defines it",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "docs/history/herding-prompt-stall/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Fix the three places run.rs misreads herdr's agent lifecycle state. Read CONTEXT.md first — it quotes herdr's published contract verbatim and locks D1, D2 and D3; do not re-derive them. (1) TRAIT SEAM. `Herdr::agent_prompt` at line 363 is `fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String>` and `RealHerdr`'s impl at lines 498-500 shells `herdr agent prompt <job_id> <prompt>` with no wait flags. Widen it so the caller can ask herdr to observe the submission: pass an `until` state and a timeout in milliseconds, and have `RealHerdr` emit `herdr agent prompt <job_id> <prompt> --wait --until <state> --timeout <ms>`. herdr refuses a submission that produces no observed lifecycle change within 5000ms with `agent_prompt_stalled`; classify that reply into a distinct typed outcome the caller can branch on (mirror the shape of `is_pane_busy_error` at lines 733-735 — a small predicate over herdr's error string is the house style here), separate from an ordinary transport error. Add a `Herdr` method for herdr's own settled-state wait, `herdr agent wait <job_id> --until idle --until done --timeout <ms>`, and give `FakeHerdr` (line 1812) and `PanicHerdr` (line 1950) their matching impls; `FakeHerdr` needs configurable results for both so the tests can drive stalled, blocked and ready outcomes without a process. (2) READY GATE — D2. `wait_for_agent_ready` at line 811 returns true only on `Some(\"idle\")`. Accept `idle` OR `done`: herdr states that `done` is the same underlying ready-for-input state for a tab that has not been seen in the focused UI, that CLI reads never mark a tab seen, and every pane this verb splits carries `--no-focus` — so `done` is the normal resting state of a bee worker pane and idle-only rejects a pane that is ready. Keep the check-then-sleep shape, the injected `now`/`sleep` seams, and the 60s `ready_wait_secs` at line 291 exactly as they are. (3) DELIVERY — D1. `deliver_pointer` at line 783 sends the pointer up to `POINTER_DELIVERY_ATTEMPTS` (30) times and treats an agent-caused transition into `working` as the receipt. That transition test is satisfied by the agent's own BOOT flap, which is how job trust-par-2 recorded a delivery into a pane that never rendered the pointer. Retire the baseline/transition poll: send once through the widened `agent_prompt` with `--wait --until working` and a timeout, and let herdr's `agent_prompt_stalled` BE the delivery failure, returned at once with a message that names the job, the pane and what stalled. KEEP the `result_present()` escape — an ultra-fast round that writes its result before any status observation still counts as delivered. A bounded retry may stay for a transport error, but never for a stall and never 30 blind sends into a booting TUI. Update the three call sites at lines 1208-1215, 1353-1360 and 1484-1491 and leave their `SpawnFailed` mapping and pane-lifecycle rules alone. (4) BLOCKED — D3. herdr's `blocked` means it recognized an approval or question UI. Today run.rs never reads that state anywhere. Make it a fast, loud failure at all three wait points: the ready gate, the delivery, and `decide_poll` at line 604 (which today only escapes the idle timeout through `find_limit_match`/`LIMIT_PATTERNS` at lines 61-73 and 624-627). A `blocked` observation ends the wait immediately with a typed error naming the pane id, the tail of its pane text (reuse `pane_read`, line 373), and the remedy — answer the prompt in that pane, or pre-authorize whatever it is asking so the agent stops asking. Never burn the 60s ready wait, the resends, or the idle timeout on a question nobody is going to answer. Do not add any agent-specific pattern table for trust prompts: `blocked` is the whole mechanism. Leave `LIMIT_PATTERNS` and the paused-limit path working as they are.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "The ready gate accepts a pane reporting done, not only idle",
+      "A blocked pane ends the ready wait, the pointer delivery and the round poll at once, with an error naming the pane and the remedy",
+      "Pointer delivery is one herdr-observed submission whose stall herdr reports, not a bee-observed transition into working",
+      "An ultra-fast round whose result file appears before any status observation still counts as delivered"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "widened agent_prompt seam with a typed stall outcome, an agent-wait seam, idle-or-done ready gate, herdr-observed delivery, blocked fast-fail at three wait points, and the FakeHerdr/PanicHerdr impls plus rewritten and new tests; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "RealHerdr::agent_prompt emits --wait --until --timeout and classifies agent_prompt_stalled distinctly from a transport error"
+    ],
+    "prohibitions": [
+      "No agent-specific trust-prompt or approval-prompt pattern table — blocked is the mechanism",
+      "No change to LIMIT_PATTERNS, find_limit_match, or the paused-limit path",
+      "No change to the pane-close rules, the dispatch/wave-ledger rows, or the --dry-run path",
+      "Do not drop the result_present() delivery escape"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-1",
+    "outcome": "run.rs reads herdr lifecycle state per herdr's contract: idle-or-done ready gate, one herdr-observed pointer submit whose agent_prompt_stalled is the failure, blocked fails fast at all three wait points",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "bee dispatch prepare resolved the transport to --agent agy-flash; pinned claude-sonnet instead because this cell's subject IS the defect in the agy dispatch path and running the repair through the path under repair risks losing the work. Transport shape, channel and brief were prepare's, verbatim."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T05:01:53.850Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T04:37:22.826Z",
+    "commit_pending": "worker committed with a bare 'hps-1' trailer instead of the required 'cell: hps-1' form - the known bee-ignorant-herding-worker gap already captured under area herding",
+    "report": {
+      "outcome": "run.rs reads herdr lifecycle state the way herdr defines it: idle-or-done ready gate, single herdr-observed pointer submit, blocked fast-fail at three wait points",
+      "commit": "2cf51dfdfcb1624cf658cffca5d0bd38c2f54950",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green — 220 passed 0 failed in herding::run; the only FAILED lines are control_loop quick_exit_helper self-exec child runs, an intentional panic-on-env helper in a file this branch never touched",
+      "deviations": [
+        "transport agent pinned to claude-sonnet over prepare-resolved agy-flash"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

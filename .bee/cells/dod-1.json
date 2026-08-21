@@ -1,0 +1,196 @@
+{
+  "id": "dod-1",
+  "feature": "dispatch-one-door",
+  "title": "Model-guard refusals name bee dispatch prepare",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "docs/history/dispatch-one-door/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "action": "REWORK ROUND 2 — the previous round landed as commit 0d6801cd and is GOOD except for one FAIL. Do not redo it; make one focused correction on top. FAILING CHECK (goal-check judge, high confidence): `fn dispatch_kind_for_tier` at packages/bee-rs/crates/bee/src/hooks/model_guard.rs:560-566 maps `\"review\" => \"reviewer\"`, `\"generation\" => \"gather\"` and everything else to `\"advisor\"`. The extraction tier is a real, reachable case — CLAUDE_TIERS at :192 accepts `extraction` and PINNED_AGENT_TYPE at :511 maps `bee-extract` to it, so a repo whose `models.claude.extraction` is `{kind:\"herding\"}` or `{kind:\"cli\"}` (this repo IS such a repo) refuses an `Agent(bee-extract)` dispatch at :731/:748 and hands the caller `dispatch prepare --runtime claude --kind advisor --json`. That invocation does NOT resolve the extraction slot: verbs/drivers/prepare.rs:627 routes `advisor` to `resolve_advisor`, and :630-636 returns `{ok:false, reason:\"advisor_not_configured\"}` when the advisor slot is unset; where the advisor slot IS set, prepare returns the advisor slot's payload — a different tier than the one just refused. `slot_for_kind` at prepare.rs:33-39 has no extraction arm at all, so NO --kind value resolves that slot today. The doc comment at :555-556 claiming the kind reads the same slot the guard just resolved is therefore false for extraction. FIX IT THIS WAY, and no wider: changing `bee dispatch prepare` is out of scope for this feature (docs/history/dispatch-one-door/plan.md, Out of scope) and the gap is already filed as a backlog finding. Make `dispatch_kind_for_tier` return an Option (or equivalent) that is None for any tier prepare cannot resolve, instead of falling through to `advisor`; keep `generation -> gather`, `review -> reviewer`, and `advisor -> advisor` exactly as they are. Where the tier HAS a resolving kind, the FIX text stays byte-identical to round 1. Where it does not — extraction today — the FIX must not print a `--kind` at all: instead name the transport the refused slot actually needs (the herding-exec command for a herding slot, the configured command verbatim on stdin for a cli slot, exactly as the pre-round-1 messages did) and state in one clause that `dispatch prepare` has no kind for this tier yet. Correct the now-false doc comment at :555-556 to say what the function really promises. Add a test that an `Agent(bee-extract)` dispatch under a herding-shaped extraction slot is denied with a FIX that does NOT contain the string `--kind advisor`. SECOND, SMALLER ITEM the judge flagged as a nit, fix it in the same round: the `param-on-nameless-tier` denial at :649-656 fires when a marker plus a model param meet a cli- or herding-shaped slot, and its FIX (`drop the model param (the marker alone selects the tier), or drop the marker and declare the tier whose configured model equals the param`) makes the caller reach the real door only on a second attempt. Add the resolving verb to that FIX too, using the same Option-aware helper. Everything else about the cell's original contract still holds unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+  "must_haves": {
+    "truths": [
+      "Every tier-refusal FIX string names bee dispatch prepare, or — for a tier prepare cannot resolve — names the transport the slot actually needs and says prepare has no kind for it yet",
+      "No FIX ever prints a --kind that resolves a different slot than the one just refused",
+      "A bare dispatch under a {kind:\"herding\"} generation slot is described as a herding executor, never as 'a cli executor or unconfigured'",
+      "The param-on-nameless-tier FIX reaches the resolving verb without a second hop",
+      "Deny codes, verdicts and allow branches behave identically to before"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "substantive": "Option-returning tier-to-kind helper, corrected doc comment, extraction-tier FIX with no --kind, param-on-nameless-tier FIX carrying the verb, plus a bee-extract-under-herding denial test"
+      }
+    ],
+    "key_links": [
+      "the extraction-tier FIX path is exercised by a test asserting the absence of --kind advisor"
+    ],
+    "prohibitions": [
+      "No change to any deny code string (cli-tier-denied, herding-tier-denied, bare-denied, param-on-nameless-tier)",
+      "No change to which dispatches are allowed, repaired, or denied",
+      "No change to the direct subagent_type: bee-* allow branch (D2)",
+      "No change to packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs — adding an extraction kind is out of scope and already filed as a backlog finding"
+    ]
+  },
+  "trace": {
+    "worker": "w-dod-1r2",
+    "outcome": "Tier-to-kind helper is Option-shaped; no FIX hands a --kind that resolves a different slot, and the extraction tier gets its own transport instead",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [
+      "Worker reported an integration test as pre-existing red twice; the orchestrator and the judge both observe 32 passed, 0 failed - the claim does not reproduce and was not taken at face value."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T04:58:29.926Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2775e641-e691-4b3f-bfce-9e88933651d7",
+    "claimed_at": "2026-08-21T04:42:01.157Z",
+    "commit_pending": "Round-2 work IS committed as d5ca8583 on wt/dispatch-one-door; the herding worker again wrote a bare cell-id trailer instead of the cell: dod-1 form.",
+    "report": {
+      "outcome": "dispatch_kind_for_tier returns Option and is None for any tier prepare cannot resolve; the extraction tier FIX names the herding or cli transport directly and says prepare has no kind for it yet; the param-on-nameless-tier FIX reaches a door in one hop; a herding-shaped extraction slot denial is pinned by a new negative-assertion test; round-2 judge verdict PASS on all nine checks",
+      "commit": "d5ca8583",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard — green (32 passed, 0 failed across 22 suites; re-run by the orchestrator and independently by the judge) — code change to the guard: the model_guard suite is the coverage that pins these strings",
+      "deviations": [
+        "bare cell-id commit trailer instead of cell: <id>",
+        "worker misreported a green integration test as pre-existing red, twice"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "All five tier-transport denials carry the verb: model_guard.rs:689 (cli-tier-denied, marker), :705 (herding-tier-denied, marker), :731 (cli-tier-denied, pinned-type), :748 (herding-tier-denied, pinned-type), :778 (bare-denied). cargo test model_guard - 31 passed.",
+            "id": "every-tier-refusal-FIX-names-dispatch-prepare"
+          },
+          {
+            "status": "PASS",
+            "evidence": "model_guard.rs:553, :598, :657, :676 do not name dispatch prepare but none is a tier-transport refusal and each chains into one. Nit: :649-656 param-on-nameless-tier reaches the door only on a second hop.",
+            "id": "all-deny-sites-walked-no-dead-end"
+          },
+          {
+            "status": "PASS",
+            "evidence": "model_guard.rs:768-772 matches gen_resolved to a herding executor / a cli executor / unconfigured, used at :777. No fixed phrase remains.",
+            "id": "bare-FIX-derives-slot-kind-from-gen_resolved"
+          },
+          {
+            "status": "PASS",
+            "evidence": "model_guard.rs:757-763: a model-shaped generation slot takes the separate Resolved::Model arm and never reaches slot_kind.",
+            "id": "bare-FIX-model-shaped-slot-reads-naturally"
+          },
+          {
+            "status": "FAIL",
+            "evidence": "model_guard.rs:560-566 dispatch_kind_for_tier maps review to reviewer, generation to gather, and everything else to advisor. An extraction-tier refusal (CLAUDE_TIERS at :192 accepts extraction; PINNED_AGENT_TYPE at :511 maps bee-extract to extraction) therefore prints --kind advisor at :731/:748. verbs/drivers/prepare.rs:627 routes advisor to resolve_advisor and :630-636 returns advisor_not_configured when unset, never the extraction slot; slot_for_kind (prepare.rs:33-39) has no extraction arm.",
+            "id": "FIX---kind-resolves-the-refused-slot"
+          },
+          {
+            "status": "PASS",
+            "evidence": "git show 0d6801cd touches only reason format strings; every deny(..) code literal at :693, :710, :736, :753, :789 is outside the changed hunks.",
+            "id": "deny-code-strings-unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "No predicate, match arm or early return changed; cargo test model_guard - 31 passed, 0 failed.",
+            "id": "allow-repair-deny-sets-unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "model_guard.rs:755 allow(\"pinned-type\", ..) still terminates branch 3b unchanged.",
+            "id": "D2-direct-bee-star-allow-branch-intact"
+          }
+        ],
+        "failure_signature": "dispatch_kind_for_tier maps every non-generation/non-review tier to --kind advisor; an extraction-tier cli/herding refusal (model_guard.rs:731,:748) hands a prepare invocation that resolves the advisor slot or refuses advisor_not_configured, never the extraction slot.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-21T04:40:37.942Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "no-fix-hands-a-misresolving-kind",
+            "status": "PASS",
+            "evidence": "prepare.rs:33-39 slot_for_kind maps cell|gather to generation, reviewer to review, everything else to advisor. model_guard.rs:563-569 dispatch_kind_for_tier yields Some only for review->reviewer, generation->gather, advisor->advisor, None otherwise. The one hardcoded kind at :843 is --kind gather inside the bare-denied FIX, which resolves generation. Rendered from the built binary: a cli-shaped generation slot prints --kind gather; a cli-shaped extraction slot prints no --kind at all. Advisory: CLAUDE_TIERS at :192 has no advisor and pinned_type_for yields only generation/extraction/review, so the advisor arm at :567 is unreachable from evaluate_claude_dispatch - dead as written, cannot mis-resolve."
+          },
+          {
+            "id": "extraction-tier-fix-is-correct-and-actionable",
+            "status": "PASS",
+            "evidence": "Rendered from the built binary. Extraction slot {kind:cli}, marker path (model_guard.rs:716-721): FIX names that prepare has no --kind for the extraction tier yet and to run the configured command verbatim with the prompt on stdin. Herding-shaped extraction, marker path (:743-748): same clause plus the bee herding run --task-file - --json transport with --cwd for a granted worktree. Pinned-subagent_type mirrors at :780-783 and :805-809 render the same two forms."
+          },
+          {
+            "id": "helper-is-option-shaped-and-mappings-unchanged",
+            "status": "PASS",
+            "evidence": "model_guard.rs:563-570 fn dispatch_kind_for_tier(tier) -> Option<&'static str> with review->Some(reviewer), generation->Some(gather), advisor->Some(advisor), _->None. The round-1 catch-all to advisor is gone."
+          },
+          {
+            "id": "doc-comment-now-true",
+            "status": "PASS",
+            "evidence": "model_guard.rs:556-562 states that slot_for_kind has no extraction arm, so None means a FIX for that tier must name the refused slot's own transport instead of a --kind that would resolve a different slot. Cross-checked against prepare.rs:33-39."
+          },
+          {
+            "id": "resolving-kind-fix-text-unchanged-from-round-1",
+            "status": "PASS",
+            "evidence": "Extracted every dispatch-prepare FIX literal from git show 0d6801cd and d5ca8583, applied Rust backslash-continuation rendering, compared: 4 in each, all four round-1 literals present in round 2, no new literal. The Some(kind) arms at :710-714, :736-741, :774-778, :799-803 are byte-identical."
+          },
+          {
+            "id": "param-on-nameless-tier-fix-carries-the-verb",
+            "status": "PASS",
+            "evidence": "model_guard.rs:658-673 adds the door clause; the deny code string at :681 is unchanged (count 2 in both revisions). Rendered: a cli-shaped generation slot plus param reaches the prepare verb in one hop; a cli-shaped extraction slot plus param reaches the direct transport in one hop. WART (advisory, not failing): the _ fallback at :672 also fires for ceiling (resolve_tier at :385-387 returns Inherit), so a ceiling-plus-param denial ends with a dangling clause offering no remedy, where round 1 stopped cleanly."
+          },
+          {
+            "id": "new-extraction-test-exists-and-is-meaningful",
+            "status": "PASS",
+            "evidence": "model_guard.rs:1497-1519 a_herding_shaped_extraction_slot_denies_bee_extract_without_a_wrong_kind builds a herding-shaped extraction slot, dispatches subagent_type bee-extract, then asserts exit 2, NOT contains --kind advisor, presence of the herding transport and the no-kind-yet clause, and jsonl transport herding-tier-denied with tier extraction. A real negative assertion on the exact round-1 defect string."
+          },
+          {
+            "id": "prohibitions-held",
+            "status": "PASS",
+            "evidence": "git show --stat d5ca8583 lists exactly one file, model_guard.rs (+119/-30) - prepare.rs untouched. Deny-code census identical across revisions for bare-denied 4, cli-tier-denied 4, codex-spawn-unmarked 2, generic-type-denied 1, param-on-nameless-tier 2; herding-tier-denied 5 to 6 where the extra is the new test's assertion, not a new deny site. No allow/repair/deny predicate moved; the pinned bee-* allow at :820 has no diff hunk."
+          },
+          {
+            "id": "test-run-observed",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard printed 32 passed, 0 failed across 22 suites. --list under the same filter yields 32 names and a_model_guard_deny_reaches_the_host_as_exit_two_on_stderr is among them, so it ran inside that 32; run alone it also passes. The worker's claim that this integration test fails pre-existing does not reproduce - zero failures observed, matching the orchestrator's own run."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-21T04:58:20.041Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-21T04:40:37.942Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  }
+}

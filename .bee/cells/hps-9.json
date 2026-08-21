@@ -1,0 +1,74 @@
+{
+  "id": "hps-9",
+  "feature": "herding-prompt-stall",
+  "title": "The prompt-diagnosis message carries the pane tail, like the blocked message does",
+  "lane": "tiny",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    ".bee/config-sample.json"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Two small repairs, both leftovers the sweep missed. (1) hps-7's `diagnosis_message` quotes only the ONE matched line. `blocked_message`, right above it, quotes its match AND appends a `pane tail:` block. On the case that motivated the whole diagnosis pass — an eight-column clipped pane — the matched line is the arrow-key nav footer, so the message reads `shows what looks like an unanswered prompt: \"↑/↓ Na\"` and the reader still cannot see the question was a workspace-trust dialog. Give `diagnosis_message` the same pane tail, reusing the helper `blocked_message` already uses rather than writing a second one, so both give-up messages have one shape. Keep the matched line, pane id, job id and remedy sentence exactly as they are; the tail is added, nothing removed. Update the hps-7 assertions on that message text and add one case proving a clipped narrow-pane capture's tail reaches the message. (2) `.bee/config-sample.json`'s `herding` note still teaches two retired rules in its OPERATIONAL RULES sentence: that the pointer is `resent until the pane text echoes it (30 attempts ~1s; herdr's ready flags fire before some agents accept input)` — pane-text echo AND the 30-resend loop are both gone — and that `an agent that stops to ask permission mid-run stalls until the idle-timeout`, which hps-7's diagnosis pass now names instead of silently burning. Rewrite just that sentence pair to the shipped shape: the pointer is submitted once through herdr's own observed submit, the receipt is the worker's ack file (or the round result), a resend fires only when the agent returns to ready with no ack, and a pane sitting on a question is named in the give-up message. Change nothing else in the sample.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "The prompt-diagnosis message carries a pane tail as well as the matched line",
+      "It reuses the tail helper blocked_message already uses, not a second one",
+      "The config sample no longer teaches pane-text echo, the 30-resend loop, or a silent permission stall"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "diagnosis_message gains the shared pane tail, assertions updated, one new clipped-capture case"
+      },
+      {
+        "path": ".bee/config-sample.json",
+        "substantive": "the herding note's operational-rules sentence rewritten to the shipped delivery shape"
+      }
+    ],
+    "key_links": [
+      "both give-up messages build their tail through the same helper"
+    ],
+    "prohibitions": [
+      "Nothing removed from the existing diagnosis message",
+      "No change to the pattern table or to where diagnose_giveup is called",
+      "No other edit anywhere in the config sample"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-9",
+    "outcome": "The prompt-diagnosis give-up message carries the same pane tail as the blocked message, and the config sample stops teaching the retired pointer-echo and resend rules",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      ".bee/config-sample.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T06:17:45.102Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T06:11:36.438Z",
+    "report": {
+      "outcome": "diagnosis_message appends the shared pane tail with a clipped-capture test, and the config samples herding note now states the shipped submit-once/ack/gated-resend shape",
+      "commit": "fd535f84",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        ".bee/config-sample.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green — 264 passed 0 failed in herding::run, re-run by the orchestrator; first worker this wave to use the required cell trailer unprompted",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "id": "dod-6",
+  "feature": "dispatch-one-door",
+  "title": "Drop the dangling remedy clause on a ceiling-tier param denial",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "action": "One message regression introduced by cell dod-1 round 2 (commit d5ca8583), found by the goal-check judge as an advisory wart. In the `param-on-nameless-tier` denial the door clause was added around packages/bee-rs/crates/bee/src/hooks/model_guard.rs:658-673. Its `_ =>` fallback at roughly :672 also fires for the `ceiling` tier — `resolve_tier` (around :385-387) returns `Resolved::Inherit` for ceiling — so a ceiling-plus-model-param denial now ends with a dangling clause of the form `...you intended; or dispatch prepare has no --kind for the ceiling tier yet.` That clause offers the reader no remedy at all: it opens with `or` and then names nothing to do. Before dod-1 the message stopped cleanly at `you intended.` FIX: the clause is appended ONLY when there is a remedy to name — a resolving `--kind`, or a slot-own transport (herding-exec, or the configured cli command on stdin). For a tier that resolves to the session model (ceiling, and anything else that resolves to `Resolved::Inherit`), append nothing: the message ends exactly as it did before dod-1. Keep the generation and extraction renderings from dod-1 byte-identical — they are correct and judged PASS. Do not change the `param-on-nameless-tier` deny code string, and do not change which dispatches are allowed, repaired or denied. SECOND, in the same round, delete the dead `\"advisor\" => Some(\"advisor\")` arm from `dispatch_kind_for_tier` (around :563-570) IF you can first confirm it is genuinely unreachable — `CLAUDE_TIERS` (around :192) carries no `advisor`, and `pinned_type_for` yields only generation/extraction/review, so no caller inside `evaluate_claude_dispatch` can pass `advisor`. If your own reading finds ANY reachable caller, leave the arm alone and say so in the outcome instead of deleting it. Add a test that a ceiling-tier dispatch carrying a model param is denied with a message that does NOT end in a dangling `or` clause — assert the absence of the `has no --kind for the ceiling tier` string.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+  "must_haves": {
+    "truths": [
+      "A ceiling-tier dispatch carrying a model param is denied with no dangling remedy clause",
+      "The generation-tier and extraction-tier param-denial renderings are byte-identical to commit d5ca8583"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "substantive": "conditional door clause plus a ceiling-param denial test; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the door clause is appended only when a remedy exists to name"
+    ],
+    "prohibitions": [
+      "No change to the param-on-nameless-tier deny code string",
+      "No change to which dispatches are allowed, repaired, or denied",
+      "No change to the generation or extraction renderings"
+    ]
+  },
+  "trace": {
+    "worker": "w-dod-6",
+    "outcome": "Ceiling-tier param denial ends cleanly again; the door clause is appended only when a remedy exists, and the unreachable advisor arm is gone",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T05:11:09.752Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2775e641-e691-4b3f-bfce-9e88933651d7",
+    "claimed_at": "2026-08-21T04:59:19.167Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "ceiling-param-denial-has-no-dangling-clause",
+            "status": "PASS",
+            "evidence": "Ran the HEAD-built hook binary on a scratch fixture with prompt [bee-tier: ceiling] go and model sonnet: exit 2, message ends at 'you intended.' with no trailing or-clause. Source model_guard.rs:689-695 (None branch)."
+          },
+          {
+            "id": "no-other-inherit-tier-regressed",
+            "status": "PASS",
+            "evidence": "model_guard.rs:669-679 keys the suppression off the resolved value (None => match resolved { Herding => Some(..), Refused => Some(..), _ => None }); no ceiling string literal in the branch. resolve_tier at :384-387 returns Inherit only for ceiling. Consistent side effect: the _ arm also covers Resolved::Native, so a native-shaped slot plus a param now also ends at 'you intended.' instead of an equally remedy-less clause; verdict and deny code unchanged."
+          },
+          {
+            "id": "generation-and-extraction-renderings-unchanged",
+            "status": "PASS",
+            "evidence": "Extracted and unescaped every Rust string literal from d5ca8583 and from HEAD and compared byte-for-byte: all cli-tier and herding-tier FIX literals identical at :724-735, :750-763, :788-798, :813-824. The only literal-set diff is the param-on-nameless template, where the old text survives byte-identically as the new Some branch at :682-688 plus one new variant ending 'you intended.'. Live renders confirm the generation and extraction wording is unchanged."
+          },
+          {
+            "id": "advisor-arm-removal-was-justified",
+            "status": "PASS",
+            "evidence": "All five call sites of dispatch_kind_for_tier (:664, :723, :749, :787, :812) lie inside evaluate_claude_dispatch (:571 to :874). Its tier comes only from marker_tier (:218-224 against CLAUDE_TIERS at :192) or tier_for_pinned_type (:527-532 over PINNED_AGENT_TYPE at :508-513) - neither carries advisor. The only advisor-carrying path is evaluate_codex_spawn (:534-553), which never calls the helper. rg finds no other caller. Live: a spawn_agent with [bee-tier: advisor] plus a model param still exits 0 with empty stderr."
+          },
+          {
+            "id": "new-ceiling-test-is-meaningful",
+            "status": "PASS",
+            "evidence": "model_guard.rs:1313-1319 inside marker_plus_param_agreement_rules runs a real end-to-end payload with a ceiling marker and a model param, then asserts exit 2, NOT contains 'has no --kind for the ceiling tier', ends_with 'you intended.', and transport param-on-nameless-tier. It would fail on d5ca8583, whose catch-all emitted that text for ceiling."
+          },
+          {
+            "id": "prohibitions-held",
+            "status": "PASS",
+            "evidence": "git diff --name-only d5ca8583 7ab48a00 prints exactly one path, model_guard.rs. A diff filtered for deny/allow/repair call lines and the param-on-nameless-tier code string prints nothing. The four hunks are the advisor-arm removal at :564-568, the door Option rewrite at :657-696, and the test assertions at :1307-1319. cargo test model_guard: 32 passed, 0 failed across 22 suites, exit 0."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-21T05:11:01.029Z"
+      }
+    ],
+    "commit_pending": "Work IS committed as 7ab48a00 on wt/dispatch-one-door; the herding worker again wrote a bare cell-id trailer instead of the cell: dod-6 form.",
+    "report": {
+      "outcome": "The param-on-nameless-tier door clause is appended only when a remedy exists to name, keyed off the resolved value rather than a tier string; a ceiling-tier param denial ends at you intended as it did before dod-1; the unreachable advisor arm is removed after verifying no caller can reach it; a negative-assertion regression test pins the wording; judge verdict PASS on all six checks",
+      "commit": "7ab48a00",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard — green (32 passed, 0 failed across 22 suites; re-run by the orchestrator and independently by the judge) — code change to the guard: the model_guard suite is the coverage that pins these strings",
+      "deviations": [
+        "bare cell-id commit trailer instead of cell: <id>"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

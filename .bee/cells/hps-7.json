@@ -1,0 +1,74 @@
+{
+  "id": "hps-7",
+  "feature": "herding-prompt-stall",
+  "title": "A wait that gives up reads the pane and names the question on screen",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D3",
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "D3 made herdr's `blocked` state bee's prompt detector. The live acceptance probe falsified its reach (D5): three concurrent agy runs into a genuinely untrusted workspace all sat at Antigravity's 'Do you trust this folder?' dialog while `herdr agent list` reported the agent as `idle`, never `blocked`. bee burned its whole 60s ready wait and failed with `agent never reported ready within 60s (ready-wait) — pane kept for inspection`, which says nothing about a question being on screen and sends the reader hunting the agent instead of the dialog. Add a DIAGNOSIS pass, and keep `blocked` exactly as it is for the fast path. (1) A pattern table beside `LIMIT_PATTERNS` (run.rs:61) — same house style, its own name, and a doc comment stating plainly that it is diagnosis-only and never load-bearing: it never decides whether to wait, only what to SAY once a wait has already given up, so a false positive costs a slightly wrong sentence and nothing else. (2) CRITICAL constraint on the patterns, learned from the live pane: a worker pane split three deep off the same parent came out about EIGHT COLUMNS wide, and `herdr pane read` returned the dialog clipped to `Do you t`, `Yes, I`, `No, ex`, one fragment per line. A long needle like `do you trust this folder` matches NOTHING there. Choose short, distinctive tokens that survive column clipping — the navigation hint `↑/↓`, `y/n`, `[y/N]`, `[Y/n]`, a selection caret, a line ending in a question mark — and say in the comment WHY they are short. (3) Wire the pass into every wait that gives up: the ready-gate timeout, delivery's `NeverAcked` (both bounds), and the round poll's idle timeout. Each reads the pane on its way out via the existing `pane_read` seam (run.rs:373) and, on a match, replaces its generic message with one that names the pane id, quotes the matched line verbatim, and states the remedy — answer the prompt in that pane, or pre-authorize whatever it is asking so the agent stops asking. On no match, the existing message is kept unchanged. A `pane_read` failure must never turn a real timeout into a different error: fall back to the generic message. (4) Do not touch `LIMIT_PATTERNS`, `find_limit_match`, or the paused-limit path — a usage-limit pause keeps its own behaviour and its own message. Tests: a clipped narrow-pane dialog capture producing the question-named error at the ready gate; the same at delivery's NeverAcked and at the round poll's idle timeout; a pane whose text matches nothing keeping the generic message byte-for-byte; a failing `pane_read` keeping the generic message; and the `blocked` fast paths still firing before any of this.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "A ready-gate timeout against a pane showing a question names the question and the remedy, not just the timeout",
+      "The same diagnosis runs at delivery's NeverAcked and at the round poll's idle timeout",
+      "The patterns survive an eight-column clipped pane capture",
+      "A non-matching pane or a failing pane_read leaves the existing message unchanged"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "diagnosis-only pattern table with the clipping rationale, wired into three give-up paths, plus the tests above; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the diagnosis pass runs only after a wait has already failed, never as a wait condition"
+    ],
+    "prohibitions": [
+      "The pattern table must never decide whether to keep waiting",
+      "No change to LIMIT_PATTERNS, find_limit_match, or the paused-limit path",
+      "No change to the blocked fast paths D3 added",
+      "A pane_read failure must not change which error is returned"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-7",
+    "outcome": "A wait that gives up reads the pane and, when the text shows a confirmation cue, names the unanswered prompt and the remedy instead of a bare timeout",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T05:54:12.565Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T05:41:39.233Z",
+    "commit_pending": "worker committed with a bare 'hps-7' trailer instead of the required 'cell: hps-7' form - fourth instance this wave of the bee-ignorant-herding-worker gap",
+    "report": {
+      "outcome": "Diagnosis-only pattern table wired into the ready-gate timeout, deliverys NeverAcked and the round-poll idle timeout, with short clip-safe tokens and an unchanged message on no match or a failing pane_read",
+      "commit": "ead512fa",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green — 250 passed 0 failed in herding::run, re-run by the orchestrator; the FAILED lines are control_loop quick_exit_helper self-exec children, an intentional fixture in a file this branch never touched",
+      "deviations": [
+        "worker was dispatched with docs/history/herding-prompt-stall/CONTEXT.md in read_first before commit a6613b0 brought that file into the worktree, so it worked from decisions.jsonl and the code"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

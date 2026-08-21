@@ -1,0 +1,196 @@
+{
+  "id": "dod-4",
+  "feature": "dispatch-one-door",
+  "title": "Agent-file drift check covers bee-build and names a herding slot honestly",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs"
+  ],
+  "read_first": [
+    "docs/history/dispatch-one-door/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs"
+  ],
+  "action": "REWORK ROUND 2 — the previous round landed as commit 44ca1065 and is GOOD except for one FAIL. Do not redo it; make one focused correction on top. FAILING CHECK (goal-check judge, high confidence): packages/bee-rs/crates/bee/src/verbs/status_full/store.rs at lines 920, 959 and 966 each end their remedy with `re-run the installer (\\`scripts/install.sh\\`) in a host repo`. That path does not exist in a host repo: the installer writes `$TARGET_DIR/.bee/bin` (scripts/install.sh:583) and copies no `scripts/` tree into the target, so the message names a file the reader cannot run — the same defect the cell was written to remove. bee already spells the host-repo remedy correctly in its own no-engine refusal at packages/bee-rs/crates/bee/src/onboard/mod.rs:296-298, as the fetchable one-liner `curl -fsSL https://raw.githubusercontent.com/thanhsmind/beehive/main/scripts/install.sh | bash -s -- -y`. Replace the host-repo half of all three remedies with that one-liner, keeping the bee-checkout half (`bee onboard --apply`) exactly as it is. Prefer taking the string from the existing constant or helper that mod.rs:296-298 uses rather than re-typing the URL, so the two can never drift; if it is a bare inline literal there, lift it to one shared constant and use it in both places. Update any test that pins the old `scripts/install.sh` wording. Everything else about the cell's original contract still holds unchanged.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml status_full",
+  "must_haves": {
+    "truths": [
+      "A stale .claude/agents/bee-build.md is reported as agent-file-drift",
+      "A {kind:\"herding\"} slot is described as a herding executor, never as cli-shaped",
+      "Every drift remedy names a command that actually runs in the repo it is printed for: bee onboard --apply inside a bee checkout, the fetchable installer one-liner in a host repo",
+      "The host-repo remedy string cannot drift from the one bee's own no-engine refusal prints"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "substantive": "all three remedies name a runnable host-repo command, sharing one source of truth with the no-engine refusal"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/status_full/tests.rs",
+        "substantive": "assertions updated to the corrected remedy wording"
+      }
+    ],
+    "key_links": [
+      "the host-repo installer one-liner has exactly one definition, used by both the drift remedies and the no-engine refusal"
+    ],
+    "prohibitions": [
+      "No change to the agent-file-drift or agent-file-malformed problem codes",
+      "No change to the Problem struct or to the expected != file_model arm's condition and shape",
+      "No auto-removal of any agent file — the check stays advisory"
+    ]
+  },
+  "trace": {
+    "worker": "w-dod-4r2",
+    "outcome": "Host-repo drift remedies name the fetchable installer one-liner, shared with onboard's no-engine refusal via one constant",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+      "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+    ],
+    "deviations": [
+      "Round 2 also edited packages/bee-rs/crates/bee/src/onboard/mod.rs, outside the cell's declared files - lifting the shared HOST_REPO_INSTALL_ONE_LINER constant required it and the rework brief asked for exactly that; judged harmless (scope-widening-harmless PASS)."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T04:52:38.377Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2775e641-e691-4b3f-bfce-9e88933651d7",
+    "claimed_at": "2026-08-21T04:42:02.776Z",
+    "commit_pending": "Round-2 work IS committed as 7685039b on wt/dispatch-one-door; the herding worker again wrote a bare cell-id trailer instead of the cell: dod-4 form.",
+    "report": {
+      "outcome": "All three agent-file remedies name bee onboard --apply for a bee checkout and HOST_REPO_INSTALL_ONE_LINER for a host repo; the one-liner is defined once in onboard/mod.rs and read by both the drift remedies and the no-engine refusal; no scripts/install.sh path survives in store.rs; round-2 judge verdict PASS on all six checks",
+      "commit": "7685039b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/status_full/store.rs",
+        "packages/bee-rs/crates/bee/src/onboard/mod.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml status_full — green (94 passed, 0 failed) and onboard — green (136 passed, 0 failed after the wave-barrier regen); both re-run by the orchestrator — code change spanning the drift check and the onboard remedy constant, so both suites are the coverage that pins it",
+      "deviations": [
+        "scope widened to onboard/mod.rs to share the constant",
+        "bare cell-id commit trailer instead of cell: <id>"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "status": "PASS",
+            "evidence": "status_full/store.rs:893-898 AGENT_FILE_TIER is now length 4 and carries (bee-build, generation) at :895; tests.rs asserts agent-file-drift with agent bee-build, slot generation. cargo test status_full - 94 passed.",
+            "id": "stale-bee-build-md-reported-as-agent-file-drift"
+          },
+          {
+            "status": "PASS",
+            "evidence": "onboard/templates.rs:222-230 AGENT_TIER_BY_NAME carries the same four pairs; four .md.tmpl files exist, no fifth; model_guard.rs:508-513 PINNED_AGENT_TYPE agrees.",
+            "id": "AGENT_FILE_TIER-matches-what-onboarding-renders"
+          },
+          {
+            "status": "PASS",
+            "evidence": "store.rs:949-953 slot_desc matches herding to a herding executor, cli to a cli executor, else unconfigured, from the normalized value at :928-931. No cli-shaped-or-unconfigured string survives.",
+            "id": "herding-slot-named-a-herding-executor"
+          },
+          {
+            "status": "PASS",
+            "evidence": "bee onboard --apply is a real flag: onboard/mod.rs:163 parses it, :439 applies the plan.",
+            "id": "remedy-runs-in-a-bee-checkout"
+          },
+          {
+            "status": "PASS",
+            "evidence": "onboard/source.rs:118-152 locate_from breaks at the first .git boundary and returns LocateError; mod.rs:559 and :310 produce status blocked_no_engine. A host repo that is not a bee checkout cannot run bee onboard.",
+            "id": "blocked_no_engine-claim-verified"
+          },
+          {
+            "status": "FAIL",
+            "evidence": "store.rs:920, :959 and :966 print re-run the installer (scripts/install.sh) in a host repo. scripts/install.sh exists only in a bee checkout - the installer writes $TARGET_DIR/.bee/bin (scripts/install.sh:583) and copies no scripts/ tree into the target, so the path is absent where the message is printed. bee's own no-engine refusal spells it as the fetchable one-liner at onboard/mod.rs:296-298.",
+            "id": "remedy-runs-in-a-host-repo"
+          },
+          {
+            "status": "PASS",
+            "evidence": "store.rs:917 agent-file-malformed, :955 and :963 agent-file-drift - all identical to pre-commit.",
+            "id": "problem-codes-unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "store.rs:599-606 struct Problem untouched by git show 44ca1065.",
+            "id": "Problem-struct-unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "store.rs:962 guard, code, runtime, slot and agent fields byte-identical; only the message remedy tail changed at :966. Prohibition read as covering the arm's condition and shape, which is intact.",
+            "id": "expected-neq-file_model-arm-unchanged"
+          },
+          {
+            "status": "PASS",
+            "evidence": "No remove_file or fs::remove in the diff; validate_agent_files_drift only pushes problems and returns the Vec.",
+            "id": "check-stays-advisory-no-auto-removal"
+          }
+        ],
+        "failure_signature": "status_full/store.rs:920,:959,:966 point a host repo at scripts/install.sh, a path the installer never places there (scripts/install.sh:583 creates only $TARGET_DIR/.bee/bin). Replace the host-repo half with the fetchable installer one-liner already used at onboard/mod.rs:296-298.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-21T04:40:38.716Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "host-repo-remedy-is-runnable",
+            "status": "PASS",
+            "evidence": "All three remedies interpolate crate::onboard::HOST_REPO_INSTALL_ONE_LINER (onboard/mod.rs:288-289), a fetchable command that runs in any host repo: store.rs:920 (agent-file-malformed), :958 (drift no-model arm), :966 (drift mismatch arm)."
+          },
+          {
+            "id": "no-stale-installer-path",
+            "status": "PASS",
+            "evidence": "rg for scripts/install.sh in status_full/store.rs returns nothing; the only Rust occurrence is inside the constant's URL at onboard/mod.rs:289 and its doc comment."
+          },
+          {
+            "id": "one-liner-has-a-single-definition",
+            "status": "PASS",
+            "evidence": "One definition at onboard/mod.rs:289; four reference sites - no_engine_message at mod.rs:306 (used by no_engine_refusal at :311-312 for both JSON and text paths) and store.rs:920, :958, :966."
+          },
+          {
+            "id": "bee-checkout-half-unchanged",
+            "status": "PASS",
+            "evidence": "git show 7685039b shows each changed line keeps the identical prefix run bee onboard --apply from a bee checkout, or ...; only the text after or changed."
+          },
+          {
+            "id": "round-1-passing-checks-still-hold",
+            "status": "PASS",
+            "evidence": "AGENT_FILE_TIER length 4 still carries bee-build at store.rs:895; slot_desc at :949-953 still maps herding to a herding executor; struct Problem at :599-606, codes at :917/:955/:963 and the expected != file_model arm at :964 all unchanged; no remove_file anywhere - the check only pushes rows and returns them at :975."
+          },
+          {
+            "id": "scope-widening-harmless",
+            "status": "PASS",
+            "evidence": "The onboard/mod.rs half of 7685039b is +10/-2: an additive doc-commented constant at :282-289 plus one substitution inside no_engine_message. The old literal used a backslash-newline continuation that rendered byte-identically to the constant, so the refusal text is unchanged. no_engine_refusal, its blocked_no_engine JSON body at :311-330 and NO_ENGINE_KIND at :279 are untouched. No test pinned the old wording. status_full 94 passed exit 0; onboard 138 passed, 1 ignored, exit 0."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-21T04:52:24.979Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-21T04:40:38.716Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  }
+}

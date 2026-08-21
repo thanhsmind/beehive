@@ -1,0 +1,98 @@
+{
+  "id": "hps-8",
+  "feature": "herding-prompt-stall",
+  "title": "A herd agent can declare its workspace-trust store and bee pre-flights it",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [
+    "hps-7",
+    "hps-5"
+  ],
+  "decisions": [
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "skills/bee-herding/references/operational-invariants.md",
+    ".bee/config-sample.json"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "D5 brings workspace trust back into scope, and the reason is structural: `bee worktree new` mints a brand-new directory every time, so a first herding run into a fresh worktree meets an untrusted-workspace dialog every time. Proven live 2026-08-21 — three concurrent agy runs into a fresh worktree all sat at 'Do you trust this folder?'. The herd entry's auto-approve flag does not reach it: `agy --dangerously-skip-permissions` covers TOOL permissions only, and `agy --help` shows no trust flag and no trust subcommand. The store is a plain JSON file: `~/.gemini/antigravity-cli/settings.json`, key `trustedWorkspaces`, an array of absolute paths. Make it declarable, not hard-coded. (1) `wave.rs`: the named-agent registry already accepts either a bare argv array or `{argv, env}` — `parse_registry_entry` at wave.rs:226-241, entry struct at wave.rs:140-144, registry at wave.rs:250-261. Follow that exact house style and add one more OPTIONAL object field, a workspace-trust declaration naming the JSON file to read and the array key inside it that holds trusted absolute paths. Expand a leading `~` in the file path. Keep the array shape, built-in entries and the plain `agent_command` path working byte-identically, and keep the existing fail-open rule: a malformed declaration drops the entry rather than poisoning the registry, exactly as a bad env key already does (wave.rs:205-219). Carry it through `resolve_agent_command` (wave.rs:331-343) alongside the env map. (2) `run.rs`: in `execute_new`, after the command is resolved (around run.rs:1108-1118) and BEFORE the pane split and `agent_start`, run the pre-flight when the resolved entry declares one — read the file, and if the run's absolute `--cwd` is not already in the array, append it and write the file back atomically with the crate's existing atomic-write helper. This is FAIL-OPEN and must be loud: a missing file, unparsable JSON, a missing or non-array key, or an unwritable file all emit one warning line naming the file and what was wrong, then let the run proceed — hps-7's diagnosis pass will name the dialog if the agent then stalls on it. Never fail a run because a foreign tool's config could not be pre-seeded, and never rewrite anything in that file except appending one absolute path to the named array. (3) Document the new field where the registry entry is already specified: the `herding.agents` section of `skills/bee-herding/references/operational-invariants.md`, and a live example in `.bee/config-sample.json` next to the existing agent entries — the sample must show `agy-flash` declaring the Antigravity store, since that is the case that motivated it. Tests: the object form parsing with and without the declaration; a malformed declaration dropping the entry; `~` expansion; the pre-flight appending an absent path; the pre-flight leaving an already-present path untouched (no rewrite); and each fail-open branch warning and proceeding.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "A herd agent entry can declare a workspace-trust JSON file and array key, and the bare-array form still works unchanged",
+      "The pre-flight runs before the pane split and appends the run's cwd only when absent",
+      "Every failure mode warns and lets the run proceed — a foreign tool's config never fails a bee run",
+      "The config sample shows agy-flash declaring the Antigravity trust store"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "substantive": "optional workspace-trust field on the registry entry, parsed in the existing fail-open style, carried through resolve_agent_command"
+      },
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "fail-open pre-flight before the pane split, atomic append, one warning line per failure mode"
+      },
+      {
+        "path": ".bee/config-sample.json",
+        "substantive": "agy-flash entry declaring the Antigravity trust store"
+      }
+    ],
+    "key_links": [
+      "the pre-flight runs before pane_split, not after agent_start"
+    ],
+    "prohibitions": [
+      "Never fail a run because the trust store could not be read or written",
+      "Never modify anything in the foreign config beyond appending one absolute path to the named array",
+      "No hard-coded Antigravity path in bee's source — the path is config-declared",
+      "No change to the bare-array registry form or to the built-in entries"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-8",
+    "outcome": "A herding.agents entry can declare a foreign tool's workspace-trust store, and bee appends the run's cwd to it before the pane split, fail-open",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "skills/bee-herding/references/operational-invariants.md",
+      ".bee/config-sample.json"
+    ],
+    "deviations": [
+      "The worker again returned no commit; the orchestrator made the path-scoped commit acd5945 with the required trailer. Fifth instance this wave."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T06:11:13.763Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T05:54:35.280Z",
+    "report": {
+      "outcome": "Optional workspace_trust declaration on herding.agents object entries, a fail-open pre-flight in run.rs before the pane split, documented in the invariants and shown live on agy-flash in the config sample",
+      "commit": "acd5945",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "skills/bee-herding/references/operational-invariants.md",
+        ".bee/config-sample.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green — 263 passed 0 failed, re-run by the orchestrator; the FAILED lines are control_loop quick_exit_helper self-exec children, an intentional fixture in a file this branch never touched",
+      "deviations": [
+        "worker returned no commit; orchestrator committed path-scoped as acd5945"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 563 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}
