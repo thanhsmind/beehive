@@ -153,6 +153,51 @@ herd-registry D1 adds one more optional key, independent of the two above:
 }
 ```
 
+An entry may also be an **object**, `{"argv": [...], "env": {...},
+"workspace_trust": {...}}` — `argv` validated exactly like the plain array
+shape; `env` (optional) is a per-agent environment map exported into the
+freshly split pane before the agent starts; `workspace_trust` (optional,
+herding-prompt-stall D5) is covered just below. A malformed object entry —
+a bad `env` key, a bad `workspace_trust` shape — drops the WHOLE entry,
+fail-open per entry, same as a malformed argv array.
+
+**`workspace_trust` (herding-prompt-stall D5)** pre-seeds a foreign agent's
+OWN per-workspace trust store so it never meets a first-time-workspace
+trust dialog in a freshly minted `bee worktree new` directory — proven
+live 2026-08-21: three concurrent `agy` runs into one fresh worktree all
+sat at "Do you trust this folder?", and the herd entry's auto-approve flag
+does not cover it (`agy --dangerously-skip-permissions` gates TOOL
+permissions only; `agy --help` has no trust flag or subcommand). The
+declaration names the file and the array key inside it, config-driven —
+bee's source carries no hard-coded path for any specific tool:
+
+```json
+{
+  "herding": {
+    "agents": {
+      "agy-flash": {
+        "argv": ["agy", "--dangerously-skip-permissions"],
+        "workspace_trust": {
+          "file": "~/.gemini/antigravity-cli/settings.json",
+          "key": "trustedWorkspaces"
+        }
+      }
+    }
+  }
+}
+```
+
+`file`'s leading `~` is expanded to `$HOME` once, at config-parse time.
+Before the pane split and `agent start` (`bee herding run`'s `execute_new`),
+if the entry declares `workspace_trust`, bee reads `file`, and — unless the
+run's absolute `--cwd` is already present in the array named by `key` — 
+appends it and writes the file back atomically. This is FAIL-OPEN and
+loud: a missing file, unparsable JSON, a missing or non-array `key`, or an
+unwritable file all emit one warning line naming the file and what was
+wrong, then let the run proceed unchanged — a foreign tool's config being
+unreadable or unwritable must never fail a bee run. Nothing in that file is
+ever rewritten beyond appending one absolute path to the named array.
+
 herd-registry D2 — **three reference spellings, one resolver**
 (`resolve_agent_command` in `herding/wave.rs`), all of which look a name up
 against `herding.agents`:

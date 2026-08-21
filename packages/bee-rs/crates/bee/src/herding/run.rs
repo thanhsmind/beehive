@@ -49,7 +49,7 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 
 use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxResult, MailboxStatus};
-use super::wave::resolve_agent_command;
+use super::wave::{resolve_agent_command, WorkspaceTrust};
 use super::wave_ledger::{self, WaveRow, WorkerRow};
 
 const DEFAULT_IDLE_TIMEOUT_SECS: u64 = 900; // 15 minutes of no heartbeat
@@ -1128,6 +1128,66 @@ fn diagnose_giveup(herdr: &dyn Herdr, job_id: &str, pane_id: &str, generic: Stri
     }
 }
 
+/// hps-8 (D5): the resolved outcome of one workspace-trust pre-flight
+/// attempt. `execute_new` turns a `Warning` into one eprintln! line naming
+/// the file and what was wrong, then proceeds regardless — tests read this
+/// value directly instead of capturing stderr.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TrustPreflightOutcome {
+    /// `cwd` was already present in the trusted array — no rewrite.
+    AlreadyTrusted,
+    /// `cwd` was appended and the file rewritten.
+    Appended,
+    /// Fail-open: the file could not be read, its contents did not parse
+    /// as JSON, the declared key was missing or not an array, or the
+    /// rewritten file could not be written back.
+    Warning(String),
+}
+
+/// hps-8 (D5): pre-seeds a foreign tool's own workspace-trust store so a
+/// herd agent that gates on it (Antigravity's `agy`, e.g.) never meets its
+/// trust dialog in a brand-new `bee worktree new` directory — `bee` carries
+/// no knowledge of what the file means, only that `trust.key` names an
+/// array of trusted absolute paths inside `trust.file` (already `~`-expanded
+/// by `wave::parse_workspace_trust`). FAIL-OPEN throughout: every branch
+/// that cannot proceed returns `Warning` instead of an error, and the
+/// caller lets the run continue either way — a foreign tool's config being
+/// unreadable or unwritable must never fail a bee run. Never rewrites
+/// anything beyond appending `cwd` to the named array.
+fn preflight_workspace_trust(trust: &WorkspaceTrust, cwd: &Path) -> TrustPreflightOutcome {
+    let file = Path::new(&trust.file);
+    let raw = match std::fs::read_to_string(file) {
+        Ok(s) => s,
+        Err(e) => return TrustPreflightOutcome::Warning(format!("could not read {} ({e})", trust.file)),
+    };
+    let mut value: Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(e) => return TrustPreflightOutcome::Warning(format!("{} is not valid JSON ({e})", trust.file)),
+    };
+    let Some(obj) = value.as_object_mut() else {
+        return TrustPreflightOutcome::Warning(format!("{} is not a JSON object", trust.file));
+    };
+    let cwd_str = cwd.display().to_string();
+    match obj.get_mut(trust.key.as_str()) {
+        Some(Value::Array(paths)) => {
+            if paths.iter().any(|p| p.as_str() == Some(cwd_str.as_str())) {
+                return TrustPreflightOutcome::AlreadyTrusted;
+            }
+            paths.push(Value::String(cwd_str));
+        }
+        _ => {
+            return TrustPreflightOutcome::Warning(format!(
+                "{}: {:?} is missing or not an array",
+                trust.file, trust.key
+            ));
+        }
+    }
+    match crate::fsutil::write_json_atomic(file, &value) {
+        Ok(()) => TrustPreflightOutcome::Appended,
+        Err(e) => TrustPreflightOutcome::Warning(format!("could not write {} ({e})", trust.file)),
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // the run itself
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1444,12 +1504,23 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         .ok()
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or(Value::Null);
-    let (kind, args, env) = match resolve_agent_command(&cfg, opts.agent.as_deref()) {
-        Ok(triple) => triple,
+    let (kind, args, env, workspace_trust) = match resolve_agent_command(&cfg, opts.agent.as_deref()) {
+        Ok(quad) => quad,
         Err(e) => {
             return ExecResult { outcome: RunOutcome::SpawnFailed(e.to_string()), pane_id: None, closed_pane: false }
         }
     };
+
+    // hps-8 (D5): pre-flight BEFORE the pane split and `agent_start`, never
+    // after — a herd agent that gates on a per-workspace trust prompt
+    // (Antigravity's `agy`, e.g.) must find its own workspace already
+    // trusted the moment it boots into the freshly split pane. Fail-open:
+    // a `Warning` is reported and the run proceeds regardless.
+    if let Some(trust) = &workspace_trust {
+        if let TrustPreflightOutcome::Warning(msg) = preflight_workspace_trust(trust, &opts.cwd) {
+            eprintln!("bee herding run: workspace-trust pre-flight failed ({msg}) — proceeding anyway");
+        }
+    }
 
     let own_pane = match herdr.pane_current() {
         Ok(p) => p,
@@ -3700,6 +3771,171 @@ mod tests {
         let calls2 = fake2.pane_run_calls.borrow();
         assert_eq!(calls2.len(), 1, "an array-shape entry must still send the marker export, got {calls2:?}");
         assert_eq!(calls2[0].1, "export BEE_HERDING_WORKER='1'");
+    }
+
+    // ─── hps-8 (D5): workspace-trust pre-flight ─────────────────────────
+
+    #[test]
+    fn preflight_appends_the_cwd_when_absent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let trust_file = tmp.path().join("settings.json");
+        std::fs::write(&trust_file, r#"{"trustedWorkspaces": ["/already/trusted"], "other": "kept"}"#).unwrap();
+        let trust = WorkspaceTrust { file: trust_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        let cwd = Path::new("/some/fresh/worktree");
+
+        let outcome = preflight_workspace_trust(&trust, cwd);
+        assert_eq!(outcome, TrustPreflightOutcome::Appended);
+
+        let written: Value = serde_json::from_str(&std::fs::read_to_string(&trust_file).unwrap()).unwrap();
+        let arr = written["trustedWorkspaces"].as_array().unwrap();
+        assert!(arr.iter().any(|v| v.as_str() == Some("/already/trusted")));
+        assert!(arr.iter().any(|v| v.as_str() == Some("/some/fresh/worktree")));
+        assert_eq!(written["other"], "kept", "fields outside the named array must survive untouched");
+    }
+
+    #[test]
+    fn preflight_leaves_an_already_present_path_untouched_no_rewrite() {
+        let tmp = tempfile::tempdir().unwrap();
+        let trust_file = tmp.path().join("settings.json");
+        let original = r#"{"trustedWorkspaces": ["/some/fresh/worktree"]}"#;
+        std::fs::write(&trust_file, original).unwrap();
+        let trust = WorkspaceTrust { file: trust_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        let cwd = Path::new("/some/fresh/worktree");
+
+        let outcome = preflight_workspace_trust(&trust, cwd);
+        assert_eq!(outcome, TrustPreflightOutcome::AlreadyTrusted);
+        assert_eq!(std::fs::read_to_string(&trust_file).unwrap(), original, "no rewrite when cwd is already present");
+    }
+
+    #[test]
+    fn preflight_warns_and_proceeds_on_a_missing_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let trust_file = tmp.path().join("does-not-exist.json");
+        let trust = WorkspaceTrust { file: trust_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        let outcome = preflight_workspace_trust(&trust, Path::new("/cwd"));
+        assert!(matches!(outcome, TrustPreflightOutcome::Warning(_)), "got {outcome:?}");
+    }
+
+    #[test]
+    fn preflight_warns_and_proceeds_on_unparsable_json() {
+        let tmp = tempfile::tempdir().unwrap();
+        let trust_file = tmp.path().join("settings.json");
+        std::fs::write(&trust_file, "not json at all").unwrap();
+        let trust = WorkspaceTrust { file: trust_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        let outcome = preflight_workspace_trust(&trust, Path::new("/cwd"));
+        assert!(matches!(outcome, TrustPreflightOutcome::Warning(_)), "got {outcome:?}");
+    }
+
+    #[test]
+    fn preflight_warns_and_proceeds_on_a_missing_or_non_array_key() {
+        let tmp = tempfile::tempdir().unwrap();
+        let missing_key_file = tmp.path().join("missing-key.json");
+        std::fs::write(&missing_key_file, r#"{"other": "field"}"#).unwrap();
+        let trust =
+            WorkspaceTrust { file: missing_key_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        assert!(matches!(preflight_workspace_trust(&trust, Path::new("/cwd")), TrustPreflightOutcome::Warning(_)));
+
+        let non_array_file = tmp.path().join("non-array.json");
+        std::fs::write(&non_array_file, r#"{"trustedWorkspaces": "not-an-array"}"#).unwrap();
+        let trust =
+            WorkspaceTrust { file: non_array_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+        assert!(matches!(preflight_workspace_trust(&trust, Path::new("/cwd")), TrustPreflightOutcome::Warning(_)));
+    }
+
+    #[test]
+    fn preflight_warns_and_proceeds_when_the_file_is_unwritable() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        // A read-only DIRECTORY, not just a read-only file, so the atomic
+        // write's tmp-then-rename (which needs to create a file in the
+        // parent dir) fails regardless of the target file's own mode.
+        let trust_file = tmp.path().join("settings.json");
+        std::fs::write(&trust_file, r#"{"trustedWorkspaces": []}"#).unwrap();
+        std::fs::set_permissions(tmp.path(), std::fs::Permissions::from_mode(0o500)).unwrap();
+        let trust = WorkspaceTrust { file: trust_file.display().to_string(), key: "trustedWorkspaces".to_string() };
+
+        let outcome = preflight_workspace_trust(&trust, Path::new("/cwd"));
+
+        // Restore write permission so tempdir cleanup can remove the file.
+        std::fs::set_permissions(tmp.path(), std::fs::Permissions::from_mode(0o700)).unwrap();
+        assert!(matches!(outcome, TrustPreflightOutcome::Warning(_)), "got {outcome:?}");
+    }
+
+    #[test]
+    fn a_fresh_spawn_pre_flights_workspace_trust_before_the_pane_split() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        let trust_file = main_root.join("antigravity-settings.json");
+        std::fs::write(&trust_file, r#"{"trustedWorkspaces": []}"#).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({
+                "herding": {
+                    "agents": {
+                        "agy-flash": {
+                            "argv": ["agy", "--dangerously-skip-permissions"],
+                            "workspace_trust": {
+                                "file": trust_file.display().to_string(),
+                                "key": "trustedWorkspaces",
+                            },
+                        }
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("agy-flash".to_string());
+        seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
+
+        let written: Value = serde_json::from_str(&std::fs::read_to_string(&trust_file).unwrap()).unwrap();
+        let arr = written["trustedWorkspaces"].as_array().unwrap();
+        assert!(
+            arr.iter().any(|v| v.as_str() == Some(opts.cwd.display().to_string().as_str())),
+            "the run's cwd must be appended to the trust store, got {written}"
+        );
+    }
+
+    #[test]
+    fn a_fresh_spawn_proceeds_when_the_workspace_trust_file_is_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_root = tmp.path();
+        std::fs::create_dir_all(main_root.join(".bee")).unwrap();
+        std::fs::write(
+            main_root.join(".bee/config.json"),
+            serde_json::json!({
+                "herding": {
+                    "agents": {
+                        "agy-flash": {
+                            "argv": ["agy", "--dangerously-skip-permissions"],
+                            "workspace_trust": {
+                                "file": main_root.join("no-such-file.json").display().to_string(),
+                                "key": "trustedWorkspaces",
+                            },
+                        }
+                    }
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let mut opts = test_options(main_root, false);
+        opts.agent = Some("agy-flash".to_string());
+        seeded_result_dir(&main_root.join(".bee"), &opts.job_id);
+        let fake = FakeHerdr::new();
+        let result = execute(&opts, &fake);
+        assert!(
+            matches!(result.outcome, RunOutcome::Result(_)),
+            "a missing trust file must never fail the run, got {:?}",
+            result.outcome
+        );
     }
 
     #[test]
