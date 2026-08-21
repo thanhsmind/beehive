@@ -388,6 +388,8 @@
     "freshness",
     "rust-runtime",
     "prompts",
-    "pane-split"
+    "pane-split",
+    "pane-layout",
+    "ergonomics"
   ]
 }
