@@ -4477,6 +4477,7 @@ mod tests {
         assert!(matches!(preflight_workspace_trust(&trust, Path::new("/cwd")), TrustPreflightOutcome::Warning(_)));
     }
 
+    #[cfg(unix)]
     #[test]
     fn preflight_warns_and_proceeds_when_the_file_is_unwritable() {
         use std::os::unix::fs::PermissionsExt;
