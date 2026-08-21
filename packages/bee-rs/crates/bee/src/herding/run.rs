@@ -3226,7 +3226,9 @@ mod tests {
 
         match &result.outcome {
             RunOutcome::SpawnFailed(msg) => {
-                assert!(msg.contains("w1:p1") && msg.contains("15") && msg.contains("60"), "{msg}");
+                // One pane, so a first split: 15 columns halve to the
+                // 7-column child the refusal names.
+                assert!(msg.contains("w1:p1") && msg.contains("7") && msg.contains("60"), "{msg}");
                 assert!(msg.contains("no free workspace slot"), "must name why the fresh tab failed too: {msg}");
             }
             other => panic!("expected SpawnFailed(narrow pane + failed fresh tab), got {other:?}"),
