@@ -554,15 +554,18 @@ FIX: begin the spawn message with the marker, e.g. \
 }
 
 /// D1(d): the `--kind` a FIX message hands to `dispatch prepare` so it reads
-/// the same slot the guard just resolved by tier name. `slot_for_kind` only
-/// goes kind -> tier; this is its practical inverse for FIX text (extraction
-/// has no dedicated kind, so it falls to the `advisor` catch-all, same as
-/// `slot_for_kind`'s own default arm).
-fn dispatch_kind_for_tier(tier: &str) -> &'static str {
+/// the same slot the guard just resolved by tier name. `slot_for_kind`
+/// (prepare.rs:33-39) only goes kind -> tier and has no extraction arm, so
+/// there is no `--kind` value that resolves the extraction slot today —
+/// `None` here means exactly that: a FIX for this tier must name the
+/// refused slot's own transport instead of a `--kind` that would silently
+/// resolve a different slot (e.g. `advisor`) than the one just refused.
+fn dispatch_kind_for_tier(tier: &str) -> Option<&'static str> {
     match tier {
-        "review" => "reviewer",
-        "generation" => "gather",
-        _ => "advisor",
+        "review" => Some("reviewer"),
+        "generation" => Some("gather"),
+        "advisor" => Some("advisor"),
+        _ => None,
     }
 }
 
@@ -647,12 +650,34 @@ model: \"{param}\" → \"{resolved_model}\" (AO5: config is the authority)"
             );
         }
         let cli_note = if resolved == Resolved::Refused { " (the slot is a cli executor)" } else { "" };
+        // param-on-nameless-tier nit (round 2): the first two options both
+        // demand a second dispatch attempt before the caller reaches a
+        // working door. Naming the resolving verb directly closes that gap
+        // in the same message, using the same Option-aware helper the
+        // tier-transport denials below use.
+        let door = match dispatch_kind_for_tier(t) {
+            Some(kind) => format!(
+                "run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" \
+for the {t} tier's own transport"
+            ),
+            None => match resolved {
+                Resolved::Herding => format!(
+                    "dispatch prepare has no --kind for the {t} tier yet — run \".bee/bin/bee \
+herding run --task-file - --json\" directly with the prompt on stdin"
+                ),
+                Resolved::Refused => format!(
+                    "dispatch prepare has no --kind for the {t} tier yet — run the configured \
+command verbatim with the prompt on stdin"
+                ),
+                _ => format!("dispatch prepare has no --kind for the {t} tier yet"),
+            },
+        };
         let reason = format!(
             "bee-model-guard: [bee-tier: {t}] resolves to no model name{cli_note}\
 , but the dispatch carries model: \"{param}\". The marker would record one \
 thing in dispatch.jsonl while the subagent actually runs on the param.\n\
 FIX: drop the model param (the marker alone selects the tier), or drop the marker \
-and declare the tier whose configured model equals the param you intended."
+and declare the tier whose configured model equals the param you intended; or {door}."
         );
         return deny(reason, "param-on-nameless-tier", tier, model_param, subagent_type);
     }
@@ -680,15 +705,25 @@ prompt/description; or add this model to a configured tier slot in .bee/config.j
     if let Some(t) = &tier {
         let resolved = resolve_tier(models, t, "claude");
         if resolved == Resolved::Refused {
-            let kind = dispatch_kind_for_tier(t);
+            let fix = match dispatch_kind_for_tier(t) {
+                Some(kind) => format!(
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
+reads .bee/config.json for this slot and returns the tool and exact payload to run \
+(here, a Bash call running the configured command verbatim with the prompt on \
+stdin). Do not attach a model param; the cli command names its own model."
+                ),
+                None => format!(
+                    "FIX: dispatch prepare has no --kind for the {t} tier yet — run the cli \
+slot's own transport directly instead: a Bash call running the configured command \
+verbatim with the prompt on stdin. Do not attach a model param; the cli command \
+names its own model."
+                ),
+            };
             let reason = format!(
                 "bee-model-guard: [bee-tier: {t}] resolves to a cli executor, which an \
 in-family Agent/Task subagent cannot be — a cli tier runs as an external process, \
 not a spawned subagent.\n\
-FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
-reads .bee/config.json for this slot and returns the tool and exact payload to run \
-(here, a Bash call running the configured command verbatim with the prompt on \
-stdin). Do not attach a model param; the cli command names its own model."
+{fix}"
             );
             return deny(reason, "cli-tier-denied", tier, None, subagent_type);
         }
@@ -696,16 +731,27 @@ stdin). Do not attach a model param; the cli command names its own model."
             // herding-tier D5: mirror of the cli-tier-denied wording just
             // above — an Agent/Task subagent cannot BE the pane a herding
             // slot spawns.
-            let kind = dispatch_kind_for_tier(t);
-            let reason = format!(
-                "bee-model-guard: [bee-tier: {t}] resolves to a herding-executor pane, which \
-an in-family Agent/Task subagent cannot be — a herding tier runs one bee-ignorant \
-external agent in its own pane, not a spawned subagent.\n\
-FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
+            let fix = match dispatch_kind_for_tier(t) {
+                Some(kind) => format!(
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" — it \
 reads .bee/config.json for this slot and returns the tool and exact payload to run \
 (here, a Bash call running \".bee/bin/bee herding run --task-file - --json\", plus \
 --cwd for a granted worktree, with the prompt on stdin). Do not attach a model \
 param; the herding worker names its own model."
+                ),
+                None => format!(
+                    "FIX: dispatch prepare has no --kind for the {t} tier yet — run the \
+herding slot's own transport directly instead: a Bash call running \".bee/bin/bee \
+herding run --task-file - --json\" (plus --cwd for a granted worktree) with the \
+prompt on stdin. Do not attach a model param; the herding worker names its own \
+model."
+                ),
+            };
+            let reason = format!(
+                "bee-model-guard: [bee-tier: {t}] resolves to a herding-executor pane, which \
+an in-family Agent/Task subagent cannot be — a herding tier runs one bee-ignorant \
+external agent in its own pane, not a spawned subagent.\n\
+{fix}"
             );
             return deny(reason, "herding-tier-denied", tier, None, subagent_type);
         }
@@ -723,14 +769,23 @@ param; the herding worker names its own model."
     if let Some(t) = subagent_type.as_deref().and_then(tier_for_pinned_type) {
         let resolved = resolve_tier(models, t, "claude");
         if resolved == Resolved::Refused {
-            let kind = dispatch_kind_for_tier(t);
+            let fix = match dispatch_kind_for_tier(t) {
+                Some(kind) => format!(
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
+reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
+running the configured command verbatim with the prompt on stdin), or name a tier \
+whose slot is a model."
+                ),
+                None => format!(
+                    "FIX: dispatch prepare has no --kind for the {t} tier yet — run the cli \
+slot's own transport directly instead (a Bash call running the configured command \
+verbatim with the prompt on stdin), or name a tier whose slot is a model."
+                ),
+            };
             let reason = format!(
                 "bee-model-guard: subagent_type \"{}\" stands for the {t} tier, which resolves \
 to a cli executor — an in-family Agent/Task subagent cannot be an external process.\n\
-FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
-reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
-running the configured command verbatim with the prompt on stdin), or name a tier \
-whose slot is a model.",
+{fix}",
                 subagent_type.as_deref().unwrap_or_default()
             );
             return deny(reason, "cli-tier-denied", Some(t.to_string()), None, subagent_type);
@@ -739,15 +794,25 @@ whose slot is a model.",
             // herding-tier D5: same mirror as the marker-only branch above,
             // reached here when the pinned subagent_type itself implies the
             // tier instead of an explicit marker.
-            let kind = dispatch_kind_for_tier(t);
+            let fix = match dispatch_kind_for_tier(t) {
+                Some(kind) => format!(
+                    "FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
+reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
+running \".bee/bin/bee herding run --task-file - --json\" with the prompt on stdin), \
+or name a tier whose slot is a model."
+                ),
+                None => format!(
+                    "FIX: dispatch prepare has no --kind for the {t} tier yet — run the \
+herding slot's own transport directly instead (a Bash call running \".bee/bin/bee \
+herding run --task-file - --json\" with the prompt on stdin), or name a tier whose \
+slot is a model."
+                ),
+            };
             let reason = format!(
                 "bee-model-guard: subagent_type \"{}\" stands for the {t} tier, which resolves \
 to a herding-executor pane — an in-family Agent/Task subagent cannot be an external \
 pane worker.\n\
-FIX: run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" (it \
-reads .bee/config.json and returns the tool and exact payload — here, a Bash call \
-running \".bee/bin/bee herding run --task-file - --json\" with the prompt on stdin), \
-or name a tier whose slot is a model.",
+{fix}",
                 subagent_type.as_deref().unwrap_or_default()
             );
             return deny(reason, "herding-tier-denied", Some(t.to_string()), None, subagent_type);
@@ -1427,6 +1492,30 @@ mod tests {
         let d = last_jsonl(dispatch_log(herding.path())).unwrap();
         assert_eq!(d["transport"], "herding-tier-denied");
         assert_eq!(d["tier"], "generation");
+    }
+
+    #[test]
+    fn a_herding_shaped_extraction_slot_denies_bee_extract_without_a_wrong_kind() {
+        // D1(d) round 2: dispatch_kind_for_tier has no --kind that resolves
+        // the extraction slot (slot_for_kind in prepare.rs has no extraction
+        // arm), so this FIX must not print --kind advisor — that would
+        // resolve the advisor slot, never the refused extraction one.
+        let herding = fixture(&json!({"models": {"claude": {
+            "extraction": {"kind": "herding"},
+            "generation": "sonnet",
+            "review": "opus"
+        }}}));
+        let (code, stderr) = run_payload(
+            herding.path(),
+            json!({"tool_name": "Agent", "tool_input": {"subagent_type": "bee-extract", "prompt": "extract"}}),
+        );
+        assert_eq!(code, 2, "a herding-shaped extraction slot cannot be an in-family subagent");
+        assert!(!stderr.contains("--kind advisor"), "{stderr}");
+        assert!(stderr.contains("herding-executor pane") && stderr.contains("herding run --task-file - --json"));
+        assert!(stderr.contains("dispatch prepare has no --kind for the extraction tier yet"), "{stderr}");
+        let d = last_jsonl(dispatch_log(herding.path())).unwrap();
+        assert_eq!(d["transport"], "herding-tier-denied");
+        assert_eq!(d["tier"], "extraction");
     }
 
     // herding-review-slots D1: this hook has no purpose concept of its own
