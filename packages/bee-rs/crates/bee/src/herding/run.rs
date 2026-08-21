@@ -827,11 +827,37 @@ fn start_with_retry(
 /// stall detector without padding it further.
 const AGENT_PROMPT_TIMEOUT_MS: u64 = 5_000;
 
-/// herding-prompt-stall D4: how many times the idempotent pointer is
-/// resent while neither the round's ack file nor its result file has
-/// appeared — bounded, mirroring `START_RETRY_ATTEMPTS`'s house style,
-/// never an infinite resend loop.
+/// herding-prompt-stall D4 (hps-6 narrows the cadence, decisions unchanged):
+/// how many times the idempotent pointer is (re)sent while the agent keeps
+/// returning to a ready state (`idle`/`done`) with neither the round's ack
+/// file nor its result file present — bounded, mirroring
+/// `START_RETRY_ATTEMPTS`'s house style, never an infinite resend loop. This
+/// bound is NEVER consumed by a healthy `working` agent: polling a `working`
+/// agent burns no resend attempts at all, only wall-clock time against
+/// `ACK_WAIT_BUDGET_SECS` below.
 const DELIVERY_RESEND_ATTEMPTS: u32 = 10;
+
+/// hps-6: the wall-clock ceiling on the WHOLE delivery wait, from the first
+/// send to the ack (or result) appearing — about how long a slow first agent
+/// turn takes to read a brief and write its ack, never about how fast the
+/// poll ticks. Deliberately well under `DEFAULT_IDLE_TIMEOUT_SECS` (900s): a
+/// delivery that is still unacked this far in is a stuck submission, not a
+/// slow worker, and should fail as `NeverAcked` long before the round's own
+/// idle timeout would ever fire.
+const ACK_WAIT_BUDGET_SECS: u64 = 180;
+
+/// hps-6: which of `deliver_pointer`'s two independent bounds ran out —
+/// named so `DeliveryError::NeverAcked`'s message tells the two apart
+/// instead of leaving the reader to guess which one fired.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NeverAckedBound {
+    /// The agent kept returning to `idle`/`done` with no ack, and the
+    /// pointer was resent `DELIVERY_RESEND_ATTEMPTS` times.
+    ResendAttempts,
+    /// The wall-clock `ACK_WAIT_BUDGET_SECS` window elapsed — whether the
+    /// agent was still `working`, flapping ready/working, or unreadable.
+    AckWaitBudget,
+}
 
 /// herding-prompt-stall D1/D3: the delivery outcomes `deliver_pointer` can
 /// return, kept distinct because each gets its own message and neither ever
@@ -847,11 +873,11 @@ enum DeliveryError {
     /// An ordinary herdr-call failure, unrelated to the agent's lifecycle
     /// (herdr missing, a non-zero exit, an unparseable body).
     Transport(String),
-    /// D4: the pointer was resent up to the bound and neither the round's
+    /// hps-6: one of the two bounds above ran out and neither the round's
     /// ack file nor its result file ever appeared — herdr's own lifecycle
     /// state (a successful "working" observation) is never enough on its
     /// own any more.
-    NeverAcked { attempts: u32 },
+    NeverAcked { bound: NeverAckedBound, attempts: u32 },
 }
 
 impl std::fmt::Display for DeliveryError {
@@ -863,35 +889,49 @@ impl std::fmt::Display for DeliveryError {
             ),
             DeliveryError::Stalled(e) => write!(f, "herdr reported agent_prompt_stalled: {e}"),
             DeliveryError::Transport(e) => write!(f, "{e}"),
-            DeliveryError::NeverAcked { attempts } => write!(
+            DeliveryError::NeverAcked { bound: NeverAckedBound::ResendAttempts, attempts } => write!(
                 f,
-                "sent the pointer {attempts} time(s) but neither the round's ack file nor its result file ever appeared"
+                "resent the pointer {attempts} time(s) (the agent kept going ready with no ack) but neither the \
+                 round's ack file nor its result file ever appeared"
+            ),
+            DeliveryError::NeverAcked { bound: NeverAckedBound::AckWaitBudget, attempts } => write!(
+                f,
+                "waited past the {ACK_WAIT_BUDGET_SECS}s ack-wait budget ({attempts} send(s) made) but neither the \
+                 round's ack file nor its result file ever appeared"
             ),
         }
     }
 }
 
 /// herding-prompt-stall D4 (narrows D1; supersedes herding-pointer-delivery
-/// D1 / herding-receipt-state D1): herdr's own atomic submit-and-observe —
-/// `herdr agent prompt <job> <text> --wait --until working --timeout <ms>`
-/// — still sends the pointer and still fails FAST on the two things herdr
-/// can observe immediately: a pane already `blocked` (checked before the
-/// send is even attempted — there is no point submitting into a pane
-/// waiting on an unrelated question) and `agent_prompt_stalled` (no
-/// observed lifecycle change within herdr's own five-second window). But a
-/// successful "working" observation is no longer the receipt: herdr
-/// lifecycle state proved unreliable on its own (a boot flap through
+/// D1 / herding-receipt-state D1; hps-6 narrows the cadence below, decisions
+/// unchanged): herdr's own atomic submit-and-observe — `herdr agent prompt
+/// <job> <text> --wait --until working --timeout <ms>` — still sends the
+/// pointer and still fails FAST on the two things herdr can observe
+/// immediately: a pane already `blocked` (checked before the send is even
+/// attempted — there is no point submitting into a pane waiting on an
+/// unrelated question) and `agent_prompt_stalled` (no observed lifecycle
+/// change within herdr's own five-second window). But a successful
+/// "working" observation is no longer the receipt: herdr lifecycle state
+/// proved unreliable on its own (a boot flap through
 /// unknown/working/idle/done satisfied the old transition test and
 /// receipted a pointer a booting TUI discarded — live: job trust-par-2,
 /// docs/history/herding-prompt-stall/CONTEXT.md). The receipt is now the
 /// worker's OWN ack file, or the round's result file for an ultra-fast
 /// round that finishes before an ack is ever observed (`result_present()`,
-/// kept as the pre-existing escape, `ack_present()` added beside it). When
-/// herdr reports the send successful but neither file has appeared yet,
-/// the pointer is idempotent — it only re-points at the same brief — so it
-/// is resent, bounded, never infinite, and a stall or a blocked
-/// observation mid-resend still ends the wait at once rather than being
-/// swallowed by another attempt.
+/// kept as the pre-existing escape, `ack_present()` added beside it).
+///
+/// hps-6's cadence, once a send has gone out: `working` is the HEALTHY
+/// path, so it is polled, never resent — a worker reading a ten-kilobyte
+/// brief must see exactly one send. The pointer is idempotent, so a resend
+/// only fires once the agent has gone back to a READY state (`idle`/`done`,
+/// D2's vocabulary) with STILL no ack — that is the actual signature of a
+/// submission the TUI dropped, not a slow worker. `blocked` and a stall
+/// still end the wait at once, whether observed before the first send or
+/// mid-poll, never swallowed by another attempt. The wait is bounded two
+/// ways — `DELIVERY_RESEND_ATTEMPTS` resends and the wall-clock
+/// `ACK_WAIT_BUDGET_SECS` — and exhausting either ends it as `NeverAcked`,
+/// naming which bound ran out.
 fn deliver_pointer(
     pointer: &str,
     prompt: &mut dyn FnMut(&str) -> Result<(), String>,
@@ -899,10 +939,20 @@ fn deliver_pointer(
     ack_present: &mut dyn FnMut() -> bool,
     result_present: &mut dyn FnMut() -> bool,
     sleep: &mut dyn FnMut(Duration),
+    now: &mut dyn FnMut() -> i64,
 ) -> Result<(), DeliveryError> {
-    for attempt in 1..=DELIVERY_RESEND_ATTEMPTS {
+    let started_ms = now();
+    let mut sends = 0u32;
+    loop {
         if status().as_deref() == Some("blocked") {
             return Err(DeliveryError::Blocked);
+        }
+        sends += 1;
+        if sends > DELIVERY_RESEND_ATTEMPTS {
+            return Err(DeliveryError::NeverAcked {
+                bound: NeverAckedBound::ResendAttempts,
+                attempts: DELIVERY_RESEND_ATTEMPTS,
+            });
         }
         match prompt(pointer) {
             Ok(()) => {
@@ -914,11 +964,26 @@ fn deliver_pointer(
             Err(e) if is_agent_prompt_stalled(&e) => return Err(DeliveryError::Stalled(e)),
             Err(e) => return Err(DeliveryError::Transport(e)),
         }
-        if attempt < DELIVERY_RESEND_ATTEMPTS {
+
+        // Sent successfully, no ack or result yet: poll (never resend)
+        // until the ack/result appears, the pane goes blocked, the agent
+        // goes back to ready with still no ack (resend), or the wall-clock
+        // budget runs out.
+        loop {
+            if now().saturating_sub(started_ms) >= (ACK_WAIT_BUDGET_SECS as i64).saturating_mul(1000) {
+                return Err(DeliveryError::NeverAcked { bound: NeverAckedBound::AckWaitBudget, attempts: sends });
+            }
             sleep(POLL_INTERVAL);
+            if ack_present() || result_present() {
+                return Ok(());
+            }
+            match status().as_deref() {
+                Some("blocked") => return Err(DeliveryError::Blocked),
+                Some("idle") | Some("done") => break, // ready again, still no ack — resend
+                _ => {}                                // working/unknown — healthy, keep polling
+            }
         }
     }
-    Err(DeliveryError::NeverAcked { attempts: DELIVERY_RESEND_ATTEMPTS })
 }
 
 /// herding-prompt-stall D2 (narrows herding-run-ready-wait D1): polls
@@ -1407,6 +1472,7 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         &mut || round1_ack.exists(),
         &mut || round1_result.exists(),
         &mut |d| std::thread::sleep(d),
+        &mut || now_ms(),
     ) {
         let msg = match &e {
             DeliveryError::Blocked => blocked_message(&opts.job_id, &new_pane, &pane_tail(herdr, &new_pane)),
@@ -1557,6 +1623,7 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
             &mut || round_ack.exists(),
             &mut || round_result.exists(),
             &mut |d| std::thread::sleep(d),
+            &mut || now_ms(),
         ) {
             let msg = match &e {
                 DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
@@ -1695,6 +1762,7 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         &mut || round_ack.exists(),
         &mut || round_result.exists(),
         &mut |d| std::thread::sleep(d),
+        &mut || now_ms(),
     ) {
         let msg = match &e {
             DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
@@ -2431,6 +2499,7 @@ mod tests {
             &mut || true,
             &mut || false,
             &mut |_d| {},
+            &mut || 0,
         );
         assert!(out.is_ok(), "{out:?}");
         assert_eq!(*sent.borrow(), 1, "exactly one send when the ack already shows");
@@ -2452,6 +2521,7 @@ mod tests {
             &mut || false,
             &mut || false,
             &mut |_d| {},
+            &mut || 0,
         );
         match out {
             Err(DeliveryError::Stalled(e)) => assert!(e.contains("agent_prompt_stalled"), "{e}"),
@@ -2472,6 +2542,7 @@ mod tests {
             &mut || false,
             &mut || true,
             &mut |_d| {},
+            &mut || 0,
         );
         assert!(out.is_ok(), "{out:?}");
     }
@@ -2487,6 +2558,7 @@ mod tests {
             &mut || true,
             &mut || false,
             &mut |_d| {},
+            &mut || 0,
         );
         assert!(out.is_ok(), "{out:?}");
     }
@@ -2500,6 +2572,7 @@ mod tests {
             &mut || false,
             &mut || false,
             &mut |_d| {},
+            &mut || 0,
         );
         match out {
             Err(DeliveryError::Transport(e)) => assert!(e.contains("could not spawn herdr"), "{e}"),
@@ -2522,6 +2595,7 @@ mod tests {
             &mut || false,
             &mut || false,
             &mut |_d| {},
+            &mut || 0,
         );
         assert!(matches!(out, Err(DeliveryError::Blocked)), "{out:?}");
         assert_eq!(*sent.borrow(), 0, "never sends into an already-blocked pane");
@@ -2543,8 +2617,15 @@ mod tests {
             &mut || false,
             &mut || false,
             &mut |_d| {},
+            &mut || 0,
         );
-        assert!(matches!(out, Err(DeliveryError::NeverAcked { attempts: DELIVERY_RESEND_ATTEMPTS })), "{out:?}");
+        assert!(
+            matches!(
+                out,
+                Err(DeliveryError::NeverAcked { bound: NeverAckedBound::ResendAttempts, attempts: DELIVERY_RESEND_ATTEMPTS })
+            ),
+            "{out:?}"
+        );
         assert_eq!(*sent.borrow(), DELIVERY_RESEND_ATTEMPTS, "bounded, not infinite");
     }
 
@@ -2561,6 +2642,7 @@ mod tests {
             &mut || *sent.borrow() >= 3, // ack shows on the 3rd send
             &mut || false,
             &mut |_d| {},
+            &mut || 0,
         );
         assert!(out.is_ok(), "{out:?}");
         assert_eq!(*sent.borrow(), 3, "stops resending the moment the ack shows");
@@ -2582,6 +2664,7 @@ mod tests {
             &mut || false,
             &mut || false,
             &mut |_d| {},
+            &mut || 0,
         );
         assert!(matches!(out, Err(DeliveryError::Blocked)), "{out:?}");
         assert_eq!(*sent.borrow(), 1, "must not send again once blocked shows up between attempts");
@@ -2605,9 +2688,94 @@ mod tests {
             &mut || false,
             &mut || false,
             &mut |_d| {},
+            &mut || 0,
         );
         assert!(matches!(out, Err(DeliveryError::Stalled(_))), "{out:?}");
         assert_eq!(*sent.borrow(), 3, "stops resending the instant a stall appears");
+    }
+
+    #[test]
+    fn deliver_pointer_polls_a_working_agent_to_ack_with_exactly_one_send() {
+        // hps-6: a worker that is `working` and has not acked yet is
+        // healthy — it gets polled, never resent, no matter how many ticks
+        // it takes to write its ack.
+        let sent = std::cell::RefCell::new(0u32);
+        let polls = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("working".to_string()),
+            &mut || {
+                *polls.borrow_mut() += 1;
+                *polls.borrow() >= 5 // ack shows only after a few poll ticks
+            },
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 1, "a working agent is polled, never resent");
+    }
+
+    #[test]
+    fn deliver_pointer_resends_only_once_the_agent_goes_ready_with_still_no_ack() {
+        // hps-6: `working` is healthy and burns no resend; the pointer is
+        // resent only once the agent settles back to `idle`/`done` with the
+        // ack still missing — the actual signature of a dropped submission.
+        let sent = std::cell::RefCell::new(0u32);
+        let poll = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || {
+                *poll.borrow_mut() += 1;
+                if *poll.borrow() < 3 { Some("working".to_string()) } else { Some("idle".to_string()) }
+            },
+            &mut || *sent.borrow() >= 2, // ack shows only after the resend
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 2, "exactly one resend, triggered only by the return to ready with no ack");
+    }
+
+    #[test]
+    fn deliver_pointer_expires_the_ack_wait_budget_distinct_from_the_resend_bound() {
+        // hps-6: the agent stays `working` forever (healthy — never
+        // triggers a resend), so only the wall-clock ack-wait budget, not
+        // the resend bound, can end this wait.
+        let sent = std::cell::RefCell::new(0u32);
+        let calls = std::cell::RefCell::new(0i64);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("working".to_string()),
+            &mut || false,
+            &mut || false,
+            &mut |_d| {},
+            &mut || {
+                let mut c = calls.borrow_mut();
+                *c += 1;
+                if *c == 1 { 0 } else { (ACK_WAIT_BUDGET_SECS as i64) * 1000 + 1 }
+            },
+        );
+        match out {
+            Err(DeliveryError::NeverAcked { bound: NeverAckedBound::AckWaitBudget, attempts }) => {
+                assert_eq!(attempts, 1, "the budget expires after the single healthy send")
+            }
+            other => panic!("expected NeverAcked{{AckWaitBudget}}, got {other:?}"),
+        }
+        assert_eq!(*sent.borrow(), 1, "never resends while status stays working — only the budget ends it");
     }
 
     #[test]
