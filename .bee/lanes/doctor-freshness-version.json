@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "doctor-freshness-version",
   "mode": "feature",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
@@ -11,7 +11,7 @@
     "uat": false
   },
   "summary": "Feature \"doctor-freshness-version\" started at phase \"planning\" (lane).",
-  "next_action": "Invoke bee-swarming for dfv-1.",
+  "next_action": "bee close finished \"doctor-freshness-version\" — feature is closed.",
   "created_at": "2026-08-21T09:03:54.887Z",
   "run_state": "awaiting-approval",
   "waiting_on": null,
