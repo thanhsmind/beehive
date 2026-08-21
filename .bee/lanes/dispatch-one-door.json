@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Tiếp theo: nói \"go\" thì tôi mở lane sửa 11 test Windows đó.",
-    "asked_at": "2026-08-21T10:21:13.916Z",
-    "session": "50604963-80c5-4cdd-b083-b7ae9072fd54"
+    "subject": "**Chưa push.** Muốn tôi push, hay copy luôn block `herding` này vào `.bee/config.json` thật của bạn?",
+    "asked_at": "2026-08-21T10:40:08.079Z",
+    "session": "3fdfa1d1-6c3f-4589-ab65-50f34f3307b0"
   },
   "route": {
     "class": "feature",

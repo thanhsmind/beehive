@@ -8,11 +8,11 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"windows-suite-green\" started at phase \"planning\" (lane).",
   "next_action": "Continue bee-planning for \"windows-suite-green\" (lane).",
   "created_at": "2026-08-21T10:20:53.152Z",
-  "run_state": "awaiting-approval",
+  "run_state": "done",
   "waiting_on": null
 }

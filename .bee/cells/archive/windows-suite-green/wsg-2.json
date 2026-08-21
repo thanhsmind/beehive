@@ -1,0 +1,63 @@
+{
+  "id": "wsg-2",
+  "feature": "windows-suite-green",
+  "title": "session_close tests use the canonical root, and self-exec test children stop printing into the parent suite",
+  "lane": "small",
+  "deps": [
+    "wsg-1"
+  ],
+  "judge_obligation_ack": "No guard logic changes: the edit rebinds a fixture path in six tests and nulls a child process's stdio; the diagnosis itself came from an independent read-only agent, and the Windows arm is judged by CI, not by the author.",
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_close/perf.rs",
+    "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- hooks::session_close herding::control_loop",
+  "action": "Five session_close Stop tests fail on Windows only. The hook realpaths the repo root through dunce::canonicalize, and the transcript is then found by a STRING encoding of that root; the fixtures use the raw tempdir spelling, which on a Windows runner carries an 8.3 short component (RUNNER~1) that canonicalizes to a different string. The transcript is never found, so no read happens and no mark is written. Test-only: production keeps the deliberate Node-parity realpath. Rebind root to the canonical path right after the fixture in each of the five failing tests, plus stop_never_overwrites_a_live_declared_wait, which passes only vacuously today. Separately, SelfExecSpawner in control_loop.rs spawns the test binary with inherited stdio, so a deliberately failing child prints its own libtest FAILED report into the parent suite's stream. Null the child's stdout and stderr.",
+  "must_haves": {
+    "truths": [
+      "Each rebound test resolves the same transcript path the hook resolves, on a runner whose temp path is a short name",
+      "No assertion is weakened and no test is cfg-gated away",
+      "A deliberately failing self-exec child prints nothing into the parent suite's output"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "main-wsg2",
+    "outcome": "seven session_close fixtures bind the canonical root; the self-exec test child no longer prints into the parent suite",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T10:35:52.911Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "50604963-80c5-4cdd-b083-b7ae9072fd54",
+    "claimed_at": "2026-08-21T10:27:54.453Z",
+    "inline_reason": "Windows-only CI repair judged by CI, not by a local worker: diagnosis came from an independent read-only agent and the diff took an independent review pass before the cap",
+    "report": {
+      "outcome": "session_close fixtures resolve the same canonical root the Stop hook resolves (seven, including one false-green the review found); SelfExecSpawner nulls its child stdio as log hygiene",
+      "commit": "f8484ca4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_close/tests.rs",
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- hooks::session_close herding::control_loop — green — 64 passed, the two modules the change touches; an independent review checked the six rebinds for weakened assertions and found none, and the Windows arm is judged by CI on push",
+      "deviations": [
+        "Ran in the main checkout: Windows CI repair is integration work main owns",
+        "Review finding applied in the same cell: a seventh fixture (the malformed-transcript case) was passing for the wrong reason on Windows"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

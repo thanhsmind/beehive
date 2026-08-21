@@ -1,0 +1,58 @@
+{
+  "id": "wsg-1",
+  "feature": "windows-suite-green",
+  "title": "mailbox brief assertions build their expected paths, and tilde expansion falls back to USERPROFILE",
+  "lane": "small",
+  "deps": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::mailbox herding::wave",
+  "action": "Six Windows-only failures. Four in mailbox.rs are test-only: render_brief joins paths with Path::join and renders with display(), which emits backslashes on Windows, while the assertions hard-code forward-slash strings. Build each expected string from the same join(...).display() the production code uses (mailbox_dir and ack_path are already in test scope). Two in wave.rs come from expand_tilde reading only HOME (wave.rs:173): on Windows HOME is normally unset, so a ~/... workspace_trust file never expands - a real production bug. Add a USERPROFILE fallback there, and mirror the same fallback in the test fixture that hard-requires HOME.",
+  "must_haves": {
+    "truths": [
+      "Every mailbox assertion derives its expected path from the same join the renderer uses",
+      "expand_tilde resolves a home-relative path on a machine where only USERPROFILE is set",
+      "No assertion is weakened or cfg-gated away"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "main-wsg",
+    "outcome": "mailbox assertions derive their paths; expand_tilde falls back to USERPROFILE",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/wave.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T10:26:22.549Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "50604963-80c5-4cdd-b083-b7ae9072fd54",
+    "claimed_at": "2026-08-21T10:23:47.711Z",
+    "inline_reason": "Windows-only CI repair: the fix is provable only by CI on push, and the diagnosis came from a read-only gather agent; a dispatched execution worker cannot see the Windows arm either, so the edit ran inline in main",
+    "report": {
+      "outcome": "four mailbox brief assertions now build expected paths from the same join the renderer uses; expand_tilde gains a USERPROFILE fallback (a real Windows bug) and its test fixture mirrors the order",
+      "commit": "e2902303",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/wave.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee -- herding::mailbox herding::wave — green — 85 passed, the two modules the change touches; the Windows arm is provable only on CI, which runs on push",
+      "deviations": [
+        "Ran in the main checkout: Windows CI repair is integration work main owns"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
