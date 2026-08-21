@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["herding-tier D1-D6 (the config tier route)", "herding-review-slots D1 (every purpose on a herding slot)", "herding-review-slots D3 (optional per-slot fallback to default)", "herd-registry D1-D2 (the named-agent registry)", "herding-bare-agent D1-D5 (four-step bare-run agent resolution order: --agent > tier slot > string agent_command > array fallback)", "defaults-and-agent-env D3 (built-in claude-sonnet and agy-flash registry entries)", "defaults-and-agent-env D4 (registry entry carries validated pane env)", "herding-orchestration D12 (starting a worker is two acts)", "herding-orchestration D14 (command tokens are never re-joined into a shell string)", i54-closeout D4, "herding-prompt-stall D1 (retires herding-pointer-delivery D1's hand-rolled receipt)", "herding-prompt-stall D2 (narrows herding-run-ready-wait D1 — done counts as ready)", "herding-prompt-stall D3 (blocked is a fast, loud failure at every wait point)"]
+  decisions: ["herding-tier D1-D6 (the config tier route)", "herding-review-slots D1 (every purpose on a herding slot)", "herding-review-slots D3 (optional per-slot fallback to default)", "herd-registry D1-D2 (the named-agent registry)", "herding-bare-agent D1-D5 (four-step bare-run agent resolution order: --agent > tier slot > string agent_command > array fallback)", "defaults-and-agent-env D3 (built-in claude-sonnet and agy-flash registry entries)", "defaults-and-agent-env D4 (registry entry carries validated pane env)", "herding-orchestration D12 (starting a worker is two acts)", "herding-orchestration D14 (command tokens are never re-joined into a shell string)", i54-closeout D4, "herding-prompt-stall D1 (retires herding-pointer-delivery D1's hand-rolled receipt)", "herding-prompt-stall D2 (narrows herding-run-ready-wait D1 — done counts as ready)", "herding-prompt-stall D3 (blocked is a fast, loud failure at every wait point)", "herding-prompt-stall D5 (corrects D3's reach: blocked does not cover a trust dialog; a herd entry may declare and pre-seed the foreign tool's own trust store instead)"]
   sources: [docs/history/herding-bare-agent/CONTEXT.md, docs/history/herd-registry/CONTEXT.md, docs/history/defaults-and-agent-env/CONTEXT.md, docs/history/herding-tier/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, "herding-review-slots, herd-registry, herding-tier and defaults-and-agent-env promote proposals (reviewed 2026-08-20)"]
   authoritative_for: "bee-herding: agent resolution, the named-agent registry, and spawn-command construction"
 ---
@@ -109,6 +109,32 @@ Only the `bee herding run` spawn path applies env; the wave/control-loop caller
 resolves it but cannot apply it (its `agent start` lives in
 `fleet::backend::herdr`, another crate — noted at the call site).
 
+## A herd entry may declare the foreign tool's own trust store
+
+A herd agent may gate on a per-workspace trust question that its own
+auto-approve flag never reaches — an agent's "skip tool permissions" flag
+skips tool permissions, not workspace trust, so the question surfaces anyway.
+bee mints a fresh worktree directory for every feature, so a first run into
+that directory meets the question every single time, not just once.
+
+A `herding.agents` object-shape entry may therefore carry an optional
+workspace-trust declaration: which file holds the foreign tool's own
+trust-store data, and which field inside it names the array of trusted
+absolute paths. Before the pane is created — the same moment the entry's
+pane environment is exported — bee seeds the current working directory into
+that array, so the question the dialog would have asked is already answered
+by the time the agent starts. bee carries no knowledge of what the file or
+its contents mean beyond that one array; the declaration names the shape,
+nothing more.
+
+The pre-flight FAILS OPEN and LOUD on every error: the file missing or
+unreadable, its contents not valid data, the declared field missing or not
+an array, or the rewritten file failing to write back all produce a warning
+naming the file and what went wrong, and the run proceeds regardless — a
+foreign tool's own config being unreadable or unwritable must never fail a
+bee run, but the warning means the gap is never silent either
+(herding-prompt-stall D5).
+
 ## Edge Cases Settled
 
 - **Starting a worker is two acts, not one.** The pane is created first, and the
@@ -155,9 +181,14 @@ Four states in that quote, and what each means to bee:
   bee's fast, loud failure at every wait point — the ready gate, pointer
   delivery, and the round poll (herding-prompt-stall D3). A blocked pane
   ends the wait immediately with a typed error naming the pane id, the tail
-  of its text, and the remedy, which is how a per-workspace trust or
-  approval prompt is covered without bee carrying an agent-specific pattern
-  table.
+  of its text, and the remedy. `blocked` does NOT reliably cover a
+  per-workspace trust dialog, though — that reach was retired
+  (herding-prompt-stall D5, corrects D3): proven live, three concurrent
+  runs into a genuinely untrusted workspace all sat at a trust dialog while
+  Herdr reported the agent `idle`, never `blocked`. A trust dialog is
+  covered two other ways instead: the declared trust-store pre-flight
+  above, and a give-up diagnosis that reads the pane for a confirmation cue
+  once a wait has already failed (`handing-a-foreign-agent-its-brief.md`).
 - **`unknown`** — an agent is present but Herdr cannot classify it
   confidently. `unknown` does not prove completion.
 
@@ -196,6 +227,12 @@ inferred from a sampled state.
 - Resolution and the registry live with the `herding` command group in
   `packages/bee-rs/crates/bee/src/herding.rs`; the spawn path that applies env is
   `packages/bee-rs/crates/bee/src/herding/run.rs`.
+- The trust-store declaration parses as `herding.agents`' optional
+  `workspace_trust` field (`{"file": ..., "key": ...}`,
+  `wave::parse_workspace_trust`); the pre-flight that seeds it is
+  `run::preflight_workspace_trust`, fail-open by returning a `Warning`
+  variant the caller logs and proceeds past (hps-8, herding-prompt-stall
+  D5).
 - The wave caller that resolves env without applying it reaches
   `fleet::backend::herdr` in `packages/bee-rs/crates/fleet/src/backend/herdr.rs`.
 - Operating detail for operators:

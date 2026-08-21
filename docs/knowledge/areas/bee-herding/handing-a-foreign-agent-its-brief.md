@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/the-run-verb-and-worker-outcomes.md]
-  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)"]
+  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)", "herding-prompt-stall D5 (corrects D3: blocked does not cover a trust dialog; a give-up wait reads the pane for a confirmation cue instead)"]
   sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-brief-file/CONTEXT.md, docs/history/herding-worker-standalone/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, "live smoke smoke-agy-delivery-1/-2/-3", "live case job hws-1-r1"]
   authoritative_for: "bee-herding: the brief mailbox, the standalone-worker contract, and delivery receipts"
 ---
@@ -127,6 +127,39 @@ the pane oppositely. A failure BEFORE the agent starts closes the pane — there
 nothing to look at. A ready wait that runs out AFTER the agent started keeps it:
 something was running and did not answer, and that screen is the only record of
 why.
+
+## A give-up diagnosis reads the pane, and the trust-prompt theory is retired
+
+A first working theory for a 2026-08-21 parallel-dispatch stall was a
+per-workspace trust question the herd entry's auto-approve flag does not
+reach. **That diagnosis was WRONG for the incident it was raised against.**
+Reproduced live: the stall happened again with no trust prompt anywhere on
+the pane — the actual mechanism was bee reading the herd agent's lifecycle
+state during its BOOT window, where it is not yet stable, covered above (the
+receipt-as-artifact rule and the `idle`-or-`done` ready gate). A later reader
+should not re-derive the trust-prompt theory; it does not explain that
+stall.
+
+A related fact turned out true anyway, on a separate probe: a trust dialog
+is a real stall shape, and `blocked` — the failure detector that was
+supposed to catch any approval-or-question UI — does NOT reliably cover it.
+Live proof: three concurrent runs into a genuinely untrusted workspace all
+sat at a trust dialog while the herd tool reported the agent `idle`, never
+`blocked`, and bee burned its full ready-wait ceiling before failing with a
+generic timeout message that named nothing on screen.
+
+Two consequences followed. First, a herd entry may declare and pre-seed the
+foreign tool's own trust store so the question never appears at all — the
+declaration lives in `agent-resolution-and-spawn-commands.md` ("A herd
+entry may declare the foreign tool's own trust store"). Second, every wait
+that gives up — the ready gate, the ack budget, the delivery bound — now
+reads the pane on its way out, and when the text shows a confirmation cue (a
+short yes/no hint, an arrow-key nav footer, a selection caret, or a line
+ending in a question mark) it names the matched line and the remedy in its
+error instead of generic timeout wording. This diagnosis pass runs only on
+an already-failed wait, so a false positive costs nothing and it is never
+load-bearing for whether a wait keeps going (herding-prompt-stall D5,
+corrects D3's reach).
 
 ## The worker is kept bee-ignorant, not merely asked to be
 
