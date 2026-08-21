@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"guard-herding-fallback\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"guard-herding-fallback\" (lane).",
+  "next_action": "Merged into main at 5e082bc; reload the product and test \"guard-herding-fallback\", then either approve uat (\"bee gate --name uat --approved true --lane guard-herding-fallback\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-21T13:45:35.412Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Sent the judge back for a final read of the amended commit. Then I cap, close, and merge.",
-    "asked_at": "2026-08-21T14:12:14.155Z",
-    "session": "2a7f3cd2-3cf9-4540-9d24-8a9b64594486"
+    "kind": "gate",
+    "subject": "uat: guard-herding-fallback",
+    "asked_at": "2026-08-21T14:23:15.106Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
