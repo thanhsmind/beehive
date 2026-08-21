@@ -461,9 +461,18 @@ mod tests {
         let text = render_brief(&spec);
 
         assert!(text.contains("/repo/work"), "missing absolute worktree root:\n{text}");
-        assert!(text.contains("/repo/work/src/lib.rs"), "missing absolute file path:\n{text}");
-        assert!(text.contains("/repo/work/src/main.rs"), "missing absolute file path:\n{text}");
-        assert!(text.contains("/repo/.bee/mailbox/job-42"), "missing absolute mailbox dir:\n{text}");
+        assert!(
+            text.contains(&worktree_root.join("src/lib.rs").display().to_string()),
+            "missing absolute file path:\n{text}"
+        );
+        assert!(
+            text.contains(&worktree_root.join("src/main.rs").display().to_string()),
+            "missing absolute file path:\n{text}"
+        );
+        assert!(
+            text.contains(&mailbox_dir(bee_dir, "job-42").display().to_string()),
+            "missing absolute mailbox dir:\n{text}"
+        );
     }
 
     #[test]
@@ -554,7 +563,10 @@ mod tests {
 
         assert!(text.to_lowercase().contains("rename"), "no rename instruction for the ack file:\n{text}");
         assert!(text.contains("ack-2.json.tmp"), "no named ack temp file:\n{text}");
-        assert!(text.contains("/repo/.bee/mailbox/job-42/ack-2.json"), "no absolute ack file path:\n{text}");
+        assert!(
+            text.contains(&ack_path(bee_dir, "job-42", 2).display().to_string()),
+            "no absolute ack file path:\n{text}"
+        );
         assert!(text.to_lowercase().contains("before any other step") || text.to_lowercase().contains("before you read the task"), "brief does not say the ack comes first:\n{text}");
     }
 
@@ -599,7 +611,13 @@ mod tests {
         let text = render_brief(&spec);
 
         assert!(text.contains("# Result contract\n\nWhen you are done, or genuinely blocked, write EXACTLY ONE JSON object matching\nthis schema, and nothing else, to the result file:\n\n{\n\"status\": \"done\" | \"blocked\",\n\"summary\": \"<one line: what happened>\",\n\"files_changed\": [\"<path>\", \"...\"],\n\"proof\": \"<command or evidence that backs the status>\"\n}\n\n"), "Result-form block drifted:\n{text}");
-        assert!(text.contains("temp file (write your JSON here):   /repo/.bee/mailbox/job-42/result-1.json.tmp\n"), "result temp-file line drifted:\n{text}");
+        assert!(
+            text.contains(&format!(
+                "temp file (write your JSON here):   {}/result-1.json.tmp\n",
+                mailbox_dir(bee_dir, "job-42").display()
+            )),
+            "result temp-file line drifted:\n{text}"
+        );
     }
 
     #[test]
@@ -638,7 +656,10 @@ mod tests {
         assert!(task_pos < exp_pos, "# Task must come before # Expertise");
         assert!(exp_pos < cwd_pos, "# Expertise must come before # Working directory");
 
-        assert!(text.contains("  - /repo/work/skills/bee-swarming/references/swarming-reference.md — prompt template details. Read it to structure worker prompt."));
+        assert!(text.contains(&format!(
+            "  - {} — prompt template details. Read it to structure worker prompt.",
+            worktree_root.join("skills/bee-swarming/references/swarming-reference.md").display()
+        )));
         assert!(text.contains("  - /abs/path/docs/knowledge/foo.md — domain background. Read it to understand area rules."));
     }
 

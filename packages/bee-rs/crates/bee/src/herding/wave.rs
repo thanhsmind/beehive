@@ -159,10 +159,13 @@ struct RegistryEntry {
     workspace_trust: Option<WorkspaceTrust>,
 }
 
-/// Expands a leading `~` (or `~/...`) to `$HOME`, same shape as every
-/// shell's own tilde expansion. Anything else (no leading `~`, `$HOME`
-/// unset) is returned unchanged — the caller's fail-open read of the
-/// resulting path names its own "file not found" warning either way.
+/// Expands a leading `~` (or `~/...`) to the user's home, same shape as
+/// every shell's own tilde expansion. `HOME` first, then `USERPROFILE` —
+/// the same order the standard library uses, and the only one that works
+/// on Windows, where `HOME` is normally unset. Anything else (no leading
+/// `~`, neither variable set) is returned unchanged — the caller's
+/// fail-open read of the resulting path names its own "file not found"
+/// warning either way.
 fn expand_tilde(path: &str) -> String {
     let Some(rest) = path.strip_prefix('~') else { return path.to_string() };
     if !rest.is_empty() && !rest.starts_with('/') {
@@ -170,7 +173,9 @@ fn expand_tilde(path: &str) -> String {
         // scope, left unchanged rather than guessed at.
         return path.to_string();
     }
-    let Ok(home) = std::env::var("HOME") else { return path.to_string() };
+    let Ok(home) = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")) else {
+        return path.to_string();
+    };
     format!("{home}{rest}")
 }
 
@@ -1345,7 +1350,9 @@ mod tests {
 
     #[test]
     fn tilde_expansion_only_applies_to_a_bare_home_relative_path() {
-        let home = std::env::var("HOME").expect("HOME must be set in the test environment");
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .expect("HOME or USERPROFILE must be set in the test environment");
         assert_eq!(expand_tilde("~/foo/bar.json"), format!("{home}/foo/bar.json"));
         assert_eq!(expand_tilde("~"), home);
         assert_eq!(expand_tilde("/already/absolute.json"), "/already/absolute.json");
