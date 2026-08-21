@@ -789,7 +789,7 @@ fn deliver_pointer(
     for _ in 1..=POINTER_DELIVERY_ATTEMPTS {
         prompt(pointer).map_err(|e| format!("agent prompt failed: {e}"))?;
         for _ in 0..RECEIPT_POLLS_PER_ATTEMPT {
-            if matches!(status().as_deref(), Some("working") | Some("done")) || result_present() {
+            if status().as_deref() == Some("working") || result_present() {
                 return Ok(());
             }
             sleep(POLL_INTERVAL);
@@ -809,7 +809,7 @@ fn wait_for_agent_ready(
 ) -> bool {
     let started = now();
     loop {
-        if matches!(status().as_deref(), Some("idle") | Some("working") | Some("done")) {
+        if status().as_deref() == Some("idle") {
             return true;
         }
         if now().saturating_sub(started) >= (ready_wait_secs as i64).saturating_mul(1000) {
@@ -2230,6 +2230,58 @@ mod tests {
         );
         assert!(ready);
         assert_eq!(polls, 3, "ready only on the third status read");
+    }
+
+    #[test]
+    fn ready_wait_rejects_booting_working_status_until_idle() {
+        // When an agent process is booting or updating, herdr may report
+        // "working". Ready-wait must not accept "working" as ready for input;
+        // it must wait until the agent reports "idle" at its prompt.
+        let mut clock = 0i64;
+        let statuses = std::cell::RefCell::new(vec![
+            Some("working".to_string()),
+            Some("working".to_string()),
+            Some("idle".to_string()),
+        ]);
+        let mut polls = 0u32;
+        let ready = wait_for_agent_ready(
+            60,
+            Duration::from_millis(500),
+            || {
+                polls += 1;
+                let mut v = statuses.borrow_mut();
+                if v.is_empty() { Some("idle".to_string()) } else { v.remove(0) }
+            },
+            |_| {},
+            || {
+                clock += 500;
+                clock
+            },
+        );
+        assert!(ready);
+        assert_eq!(polls, 3, "ready only when status reaches idle, not while working");
+    }
+
+    #[test]
+    fn pointer_delivery_never_trusts_done_status_as_receipt() {
+        // A quiescent agent from a prior round in an unfocused pane may
+        // report "done". Pointer delivery must not treat stale "done" as a
+        // receipt for the new prompt — it requires "working" or result file.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "job-1",
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("done".to_string()),
+            &mut || false,
+            &mut |_d| {},
+        );
+        let err = out.unwrap_err();
+        assert!(err.contains("state receipt"), "{err}");
+        assert_eq!(*sent.borrow(), POINTER_DELIVERY_ATTEMPTS);
     }
 
     #[test]
