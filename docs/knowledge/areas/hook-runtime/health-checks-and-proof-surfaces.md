@@ -38,14 +38,34 @@ against isolated fixtures, asserting that a denied action changed nothing.
 - The `binary_freshness` row exists only in a bee SOURCE checkout
   (`packages/bee-rs/Cargo.toml` present) and is absent — never a false
   not_ok — in a host project (doctor-binary-freshness dbf-1, 2026-08-11). It
-  reads not_ok when the installed `.bee/bin/bee` reports a different version
-  (`bee rs-info`) than the workspace `Cargo.toml`, or when any source input
-  (`packages/bee-rs/crates/**/*.rs`, `packages/bee-rs/**/Cargo.toml`,
-  `packages/bee/prompts/*.md`) is newer by mtime than the binary; the detail
-  names the two versions or the offending path plus the rebuild remedy. No
-  binary installed reads `unknown`, leaving absence to the host-binary rows.
-  This gives the "source that ships without reinstalling the binary the hooks
-  call is inert" pattern a machine owner instead of a doc line.
+  reads not_ok when the installed `.bee/bin/bee` reports a different RELEASE
+  version than the checkout's own, or when any source input
+  (`packages/bee-rs/crates/**/*.rs`, `packages/bee-rs/**/Cargo.toml`, the
+  plugin manifest, `packages/bee/prompts/*.md`) is newer by mtime than the
+  binary; the detail names the two versions or the offending path plus the
+  rebuild remedy. No binary installed reads `unknown`, leaving absence to the
+  host-binary rows. This gives the "source that ships without reinstalling the
+  binary the hooks call is inert" pattern a machine owner instead of a doc
+  line.
+
+- **The version arm compares RELEASE versions, and the manifest that carries
+  one is a source input (doctor-freshness-version, cell dfv-1, 2026-08-21).**
+  Both halves were blind before it. The comparison read the installed
+  binary's package version against the checkout's package version — one
+  pinned value that no release ever bumps, read twice, so the two operands
+  could not disagree and the row answered ok with authority. The mtime arm
+  never watched the plugin manifest, which the build embeds and which a
+  release bump is the only thing to touch, so a release could not move either
+  operand. A binary a whole release behind its checkout therefore read `ok`
+  while the session state reported the drift plainly in the same moment. The
+  row now reads the checkout's release version from the plugin manifest and
+  compares it against the release version the installed binary reports about
+  ITSELF; a binary too old to report one is not_ok rather than ok, since
+  predating the check is itself the staleness; a manifest that cannot be read
+  is `unknown`, never invented agreement; and the manifest joins the
+  freshness inputs so the mtime arm can see a bump the version arm cannot
+  probe. Package version and release version stay separate answers — the
+  binary reports both, and only the release one is compared.
 
 - Doctor's overall verdict is THREE-STATE (gh22-completion g22-3, supersedes
   the binary ready/not_ready): `blocked` = a mechanical blocking row is
@@ -102,6 +122,17 @@ against isolated fixtures, asserting that a denied action changed nothing.
   (codex-native-runtime-v2, cnr2-14).
 
 ## Pointers (implementation)
+
+- The freshness row and its two arms are `binary_freshness_row`,
+  `read_source_release_version`, `installed_binary_bee_version` and
+  `source_inputs` in `packages/bee-rs/crates/bee/src/doctor.rs`; the release
+  version the binary reports about itself is `bee_version` in `rs-info`
+  (`router.rs`), carrying `crate::version::BEE_VERSION` beside the unchanged
+  package `version` field. The regression the fix pins is
+  `binary_freshness_catches_release_drift_when_package_versions_agree` —
+  package versions equal, release versions differing, every mtime older than
+  the binary, which is exactly the case the old comparison could not see
+  (cell dfv-1).
 
 - `scripts/lib/run-module-worker.mjs` — shared isolated runner for nested test
   entrypoints used by the hook, command, onboarding, and metadata suites.

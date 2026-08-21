@@ -2,18 +2,18 @@
   "schema_version": "1.0",
   "feature": "doctor-freshness-version",
   "mode": "feature",
-  "phase": "idle",
+  "phase": "compounding",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"doctor-freshness-version\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at 3cce442; capture what settled, then bee close --feature doctor-freshness-version.",
+  "next_action": "Merged the release-version freshness rule into the health-checks concept and updated the vendored-binary pattern; nothing further owed.",
   "created_at": "2026-08-21T09:03:54.887Z",
-  "run_state": null,
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "bugfix",
@@ -25,5 +25,14 @@
     "rationale": "Two arms of one health check are blind; the fix touches doctor.rs, its tests, and rs-info's payload. The flag count reads 2 on the letter — an existing test changes and its assertion is replaced — but the replaced assertion compares the workspace package version against itself (0.1.0 vs 0.1.0, neither bumped by any release), so it proves nothing and replacing it removes no coverage. De-escalated to small on that evidence; recorded rather than silent.",
     "updated_at": "2026-08-21T09:07:04.467Z",
     "feature": "doctor-freshness-version"
+  },
+  "last_scribing_run": {
+    "feature": "doctor-freshness-version",
+    "date": "2026-08-21",
+    "at": "2026-08-21T09:47:31.914Z",
+    "areas_synced": [
+      "hook-runtime"
+    ],
+    "next_action": "Merged the release-version freshness rule into the health-checks concept and updated the vendored-binary pattern; nothing further owed."
   }
 }

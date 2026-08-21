@@ -59,6 +59,15 @@ that is embedded at build time is a build input, whatever directory it
 sits in. A check that compares two values which cannot differ is worse
 than no check: it answers `ok` with authority.
 
+That half is now fixed and owned by a machine: the health check compares
+release versions, treats the plugin manifest as a build input, calls a
+binary too old to report its release version stale rather than fine, and
+answers unknown when it cannot read the manifest at all — see
+`areas/hook-runtime/health-checks-and-proof-surfaces.md` (cell dfv-1,
+2026-08-21). What the check still cannot do is notice a REBUILT binary
+that was never installed, so the verdict discipline below is not
+retired.
+
 For an argument parser: an unknown flag is a refusal, never a
 shrug. A fail-open parser turns "you are running the wrong binary"
 into "the feature did nothing", which is the same shape as a bug in

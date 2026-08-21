@@ -1131,6 +1131,10 @@ each decision event.
 - 1b7bbff5 · 2026-07-22 · okf-foundation D4: bee knowledge check reports two independent levels — OKF-level failures (missing/unparseable frontmatter, empty type, malformed reserved file) are ERRORS; bee-profile findings (unknown type, missing profile field, dangling supersedes target) are WARNINGS, promoted to errors only under --strict
 - 184dc99a · 2026-07-22 · okf-foundation D2: .bee/*.json(l) stores stay authoritative for runtime state; the OKF bundle is their human/agent-readable layer, never a second write path
 
+### doctor
+
+- cbf41191 · 2026-08-21 · doctor-freshness-version D1: bee doctor's binary_freshness row compares RELEASE versions, and the plugin manifest that carries one is a build input. The checkout's release version is read from .claude-plugin/plugin.json and compared against the release version the installed binary reports about itself through rs-info's new bee_version field. A binary too old to carry that field is not_ok, since predating the check is itself the staleness; a manifest that cannot be read is unknown, never invented agreement; and the manifest joins source_inputs so the mtime arm can see a bump the version arm cannot probe. The package version stays a separate answer — rs-info still reports it, and nothing compares it any more.
+
 ### doctrine
 
 - 324fc456 · 2026-08-16 · Contention triage doctrine: file overlap with an in-flight cell or live worktree is triage data, never a user question — disjoint items first, natural scope split second, overlapped remainder deferred with recorded reason and one report line; the user is asked only when the deferred set is the entire explicit ask. Herding dispatch ranks overlap-aware (role-dispatch.md §7) and skips overlapped candidates for the iteration instead of spawning into a known merge collision. No guard/code change: worktree-first enforcement already ships (write_guard hook_local.rs:734-875; cross-worktree leases advisory per checks.rs:366-374).

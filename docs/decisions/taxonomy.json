@@ -384,6 +384,8 @@
     "boot",
     "promote",
     "triggers",
-    "triage"
+    "triage",
+    "freshness",
+    "rust-runtime"
   ]
 }
