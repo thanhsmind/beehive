@@ -1104,26 +1104,30 @@ stops asking\npane tail:\n{tail}"
 /// hps-7 (D3, D5): upgrades a give-up wait's GENERIC message once
 /// `find_prompt_diagnosis` names a matching line — same shape as
 /// `blocked_message`: names the job and pane, quotes the matched line
-/// verbatim, states the remedy. Diagnosis-only: called only from a path
-/// that has already decided to stop waiting, never as part of deciding
-/// whether to keep waiting.
-fn diagnosis_message(job_id: &str, pane_id: &str, matched_line: &str, generic: &str) -> String {
+/// verbatim, states the remedy, and (hps-9) appends the same `pane_tail`
+/// `blocked_message` uses — a clipped narrow-pane capture's matched line can
+/// be a short fragment (an arrow-key nav footer, e.g.) that alone does not
+/// show what the prompt actually asked; the tail does. Diagnosis-only:
+/// called only from a path that has already decided to stop waiting, never
+/// as part of deciding whether to keep waiting.
+fn diagnosis_message(job_id: &str, pane_id: &str, matched_line: &str, generic: &str, tail: &str) -> String {
     format!(
         "{generic} — pane {pane_id} (job {job_id}) shows what looks like an unanswered prompt: \
 \"{matched_line}\" — remedy: answer the prompt in pane {pane_id}, or pre-authorize whatever it is \
-asking so the agent stops asking"
+asking so the agent stops asking\npane tail:\n{tail}"
     )
 }
 
 /// hps-7 (D5): the one call every give-up wait point makes on its way out,
 /// through the existing `pane_read` seam. A match upgrades `generic` via
-/// `diagnosis_message`; no match, or a failing `pane_read`, returns
-/// `generic` UNCHANGED, byte for byte — a `pane_read` failure must never
-/// turn a real timeout into a different error.
+/// `diagnosis_message`, carrying the same `pane_tail` (hps-9) `blocked_message`
+/// uses; no match, or a failing `pane_read`, returns `generic` UNCHANGED,
+/// byte for byte — a `pane_read` failure must never turn a real timeout into
+/// a different error.
 fn diagnose_giveup(herdr: &dyn Herdr, job_id: &str, pane_id: &str, generic: String) -> String {
     let Ok(text) = herdr.pane_read(pane_id) else { return generic };
     match find_prompt_diagnosis(&text) {
-        Some(line) => diagnosis_message(job_id, pane_id, &line, &generic),
+        Some(line) => diagnosis_message(job_id, pane_id, &line, &generic, &pane_tail(herdr, pane_id)),
         None => generic,
     }
 }
@@ -3339,6 +3343,24 @@ mod tests {
         assert!(msg.contains("job-1"), "job id missing: {msg}");
         assert!(msg.contains("Trust this folder?"), "matched line not quoted: {msg}");
         assert!(msg.contains("remedy"), "remedy missing: {msg}");
+        assert!(msg.contains("pane tail:"), "pane tail missing: {msg}");
+    }
+
+    #[test]
+    fn diagnose_giveup_carries_the_pane_tail_on_a_clipped_narrow_pane_capture() {
+        // The live acceptance probe's exact shape: an eight-column clipped
+        // pane leaves only a short arrow-key nav footer for
+        // `find_prompt_diagnosis` to match — nothing in that fragment names
+        // the workspace-trust dialog above it. The pane tail must carry
+        // that context, or the give-up message stays as unreadable as the
+        // bare matched line.
+        let clipped_pane = "Trust th\nis works\npace\n\n↑/↓ Na\n";
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some(clipped_pane.to_string());
+        let msg = diagnose_giveup(&fake, "job-1", "w1:p2", "generic timeout text".to_string());
+        assert!(msg.contains("\"↑/↓ Na\""), "matched line not quoted: {msg}");
+        assert!(msg.contains("pane tail:"), "pane tail missing: {msg}");
+        assert!(msg.contains("Trust th"), "clipped trust-dialog line dropped from tail: {msg}");
     }
 
     #[test]
