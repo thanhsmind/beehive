@@ -387,6 +387,7 @@
     "triage",
     "freshness",
     "rust-runtime",
-    "prompts"
+    "prompts",
+    "pane-split"
   ]
 }
