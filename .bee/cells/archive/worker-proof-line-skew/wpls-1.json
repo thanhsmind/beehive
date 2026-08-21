@@ -1,0 +1,62 @@
+{
+  "id": "wpls-1",
+  "feature": "worker-proof-line-skew",
+  "title": "worker-cell prompt stops claiming finish runs the declared suite, and planners author narrow verify commands",
+  "lane": "tiny",
+  "deps": [],
+  "files": [
+    "packages/bee/prompts/worker-cell.md",
+    "skills/bee-planning/references/planning-reference.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "packages/bee/prompts/worker-cell.md",
+    "skills/bee-swarming/references/worker-details.md",
+    "skills/bee-planning/references/planning-reference.md"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prompt && .bee/bin/bee dev release-manifest --check",
+  "action": "The worker prompt's finish bullet (packages/bee/prompts/worker-cell.md line 40) still says `cells finish` runs the project's declared commands.test first. That stopped being true at td-1: handlers_close.rs and proof.rs read the recorded proof line and spawn nothing. Every dispatched worker reads that bullet and runs the whole declared release suite to be safe, which is the slow pane run the user reported. The bullet also omits the REQUIRED --report flag. Rewrite it: finish caps the cell and records the proof line, no door runs tests, the worker owns the scope (code -> the related tests, filtered; docs -> parity/pointer checks; behavior -> judge verdict), a red result refuses the cap, and CI runs the declared commands.test on every push. Second edit, in skills/bee-planning/references/planning-reference.md's Test scoping section: planners author each cell's verify as the narrowest command that proves that cell (a test-name or module filter), never a copy of the whole declared suite, and keep the release profile only when the proof needs it. Editing the prompt puts the on-disk copy out of parity with the copy compiled into .bee/bin/bee, and prompts_match_disk refuses every dispatch until they match, so the cell also runs the full regen chain, rebuilds the binary, and re-vendors the prompts.",
+  "must_haves": {
+    "truths": [
+      "The worker prompt never claims a door runs commands.test",
+      "The finish bullet carries --report",
+      "The rebuilt binary's embedded prompt matches both on-disk copies so dispatch does not refuse"
+    ]
+  },
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "main-wpls",
+    "outcome": "worker prompt now states finish records proof and runs no tests; planners author narrow verify commands",
+    "files_changed": [
+      "packages/bee/prompts/worker-cell.md",
+      "skills/bee-planning/references/planning-reference.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T09:30:56.786Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "50604963-80c5-4cdd-b083-b7ae9072fd54",
+    "claimed_at": "2026-08-21T09:26:50.570Z",
+    "report": {
+      "outcome": "worker prompt finish bullet corrected to td-1 doctrine plus --report; planning reference gains verify-scoping rule; binary rebuilt and prompts re-vendored so the dispatch skew guard passes",
+      "commit": "8ddd17e4",
+      "files": [
+        "packages/bee/prompts/worker-cell.md",
+        "skills/bee-planning/references/planning-reference.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/bin/prompts/worker-cell.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee prompt && bee dev release-manifest --check — green — prompt-rendering suites plus manifest parity are the only surfaces a prompt/doc edit can break; 50 passed, 270 files match",
+      "deviations": [
+        "Ran in the main checkout rather than a feature worktree: the skew guard needs main own installed .bee/bin/bee rebuilt, which is integration work main owns; no overlap with the live doctor-freshness-version reservations"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

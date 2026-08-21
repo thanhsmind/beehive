@@ -718,5 +718,10 @@
     "capped": 16,
     "dropped": 0,
     "archived_at": "2026-08-21T08:05:33.714Z"
+  },
+  "worker-proof-line-skew": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-21T09:35:20.718Z"
   }
 }

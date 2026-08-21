@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "doctor-freshness-version",
+  "mode": "feature",
+  "phase": "swarming",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"doctor-freshness-version\" started at phase \"planning\" (lane).",
+  "next_action": "Invoke bee-swarming for dfv-1.",
+  "created_at": "2026-08-21T09:03:54.887Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 3,
+    "rationale": "Two arms of one health check are blind; the fix touches doctor.rs, its tests, and rs-info's payload. The flag count reads 2 on the letter — an existing test changes and its assertion is replaced — but the replaced assertion compares the workspace package version against itself (0.1.0 vs 0.1.0, neither bumped by any release), so it proves nothing and replacing it removes no coverage. De-escalated to small on that evidence; recorded rather than silent.",
+    "updated_at": "2026-08-21T09:07:04.467Z",
+    "feature": "doctor-freshness-version"
+  }
+}
