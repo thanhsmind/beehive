@@ -330,16 +330,17 @@ while `resolveTier` refuses a cli-shaped tier for anything but a gather.
 `bee herding run` (herding-executor D1, D4) is a THIRD transport, distinct
 from both the native subagent dispatch above and the cli gather branch: a
 long-lived foreign agent (any herdr-supported kind) started in its own
-pane, doing write work against a worktree. It exists for scope A only —
-running the verb by hand against ONE cell the user names — and is
-**user-requested per cell, never the default dispatch path**. The
-default for `standard`/`high-risk` cell execution stays the wave protocol
-above; reach for herding only when the user asks for a specific cell to
-run through an external agent. Scope B (a `{kind:"herding"}` tier kind in
-`models.*`, picked automatically the way `subagent`/`cli` are today) is a
-separate, trigger-gated backlog item — it does not exist yet, and this
-reference never treats herding as something the tier judgment step (4,
-above) can select on its own.
+pane, doing write work against a worktree. It supports two scopes:
+
+- **Scope A (user-requested per cell)**: running the verb by hand against ONE
+  cell the user names, when an external agent is explicitly requested.
+- **Scope B (automatic tier dispatch)**: a `{kind:"herding"}` tier slot in
+  `models.*` (herding-tier D1-D6, widened by herding-review-slots D1), which is
+  selected automatically by `.bee/bin/bee dispatch prepare` (per D1) whenever
+  the configured tier slot is herding-shaped.
+
+For model-shaped slots, the default for `standard`/`high-risk` cell execution
+stays the wave protocol above.
 
 **The pane worker is bee-ignorant (D4): it never runs a `bee` verb.** Its
 whole contract is the self-contained brief `bee herding run` renders —
