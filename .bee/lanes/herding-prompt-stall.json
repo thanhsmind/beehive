@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"herding-prompt-stall\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "Merged into main at 469d1c0; reload the product and test \"herding-prompt-stall\", then either approve uat (\"bee gate --name uat --approved true --lane herding-prompt-stall\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-21T04:33:45.519Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Đã dọn, không còn pane agy nào. ▸ Chạy lại lần cuối từ trạng thái sạch.",
-    "asked_at": "2026-08-21T07:21:47.016Z",
-    "session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3"
+    "kind": "gate",
+    "subject": "uat: herding-prompt-stall",
+    "asked_at": "2026-08-21T07:31:55.333Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "bugfix",
