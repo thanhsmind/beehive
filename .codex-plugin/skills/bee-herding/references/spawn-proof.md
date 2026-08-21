@@ -54,6 +54,12 @@ herdr pane layout --pane w4:pA
 
 `rect`: `width 173, height 50` — wider than tall → `--direction right`.
 
+> Recorded as run. The direction rule has since been fixed rather than read off
+> the rect (`role-dispatch.md` §8: `right` only for a tab's first split, `down`
+> after that). This round trip WAS that tab's first split, so the command it
+> issued is the same one the current rule issues; only the reason printed above
+> is retired.
+
 ```
 herdr pane split w4:pA --direction right --ratio 0.5 \
   --cwd /home/thanhsmind/projects/goglbe/beehive--wt--ho2-spawn-rt --no-focus

@@ -32,6 +32,17 @@ as an argument, and an empty standard input refuses exactly as an empty task
 argument does — a caller piping a generated task never gets a worker started on
 nothing.
 
+**Where that pane lands is a fixed rule, not a geometry read.** The split
+targets the roomiest pane in the caller's own tab, and the direction comes from
+how many panes that tab already holds: exactly one (an untouched root) splits
+`right`, so a single worker gets the full-height column; two or more split
+`down`, so every later worker lands as a full-width band under the last. A
+`down` split leaves width untouched, so width halves at most once no matter how
+many workers a tab collects. The rule replaced an aspect-ratio read that
+answered `right` again and again on a wide tab: measured live, a 120-column tab
+went 60/30/15, and both the 30- and 15-column children died mid-submission with
+herdr's `agent_prompt_stalled`.
+
 ## The poll decides on a ladder of signals, not one signal
 
 The poll loop is native and health-check based, at zero token cost, and it ranks
