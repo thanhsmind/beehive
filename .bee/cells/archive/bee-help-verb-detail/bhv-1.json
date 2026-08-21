@@ -1,0 +1,109 @@
+{
+  "id": "bhv-1",
+  "feature": "bee-help-verb-detail",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Single-verb help prints per-flag descriptions; read-once rule in docs",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/help.rs",
+    "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+    "AGENTS.md"
+  ],
+  "read_first": [
+    "docs/history/bee-help-verb-detail/CONTEXT.md"
+  ],
+  "action": "Per CONTEXT.md D1-D3: (a) in verbs/help.rs render_help_text, when exactly ONE entry is rendered (single-verb help), replace the compact 'flags:' line with a detail block: a 'flags:' header line, then one indented line per flag — '--name' plus '*' when required, the type abbreviation in parens, an em-dash, then the flag's registry parameters.properties description (fall back to the compact form for a flag with no description). Multi-entry renders keep the existing compact flags_line. The json flag stays omitted (existing filter + header note). Extend help.rs unit tests in the existing style: single-entry render shows a described flag's line with its description and required star; multi-entry render still uses the compact line. (b) in hooks/session_preamble/budget.rs:160 extend the Command-surface sentence with the read-once rule: before the FIRST use of a verb in a session, read bee <verb> --help — never guess flags; one read per verb, never re-read. Adjust any preamble snapshot/budget test that pins the old sentence. (c) in AGENTS.md, extend the existing 'Spend full text on bee <command> --help' sentence with the same read-once rule, one sentence, matching prose style. No new dump-all surface (D3).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "bee <verb> --help shows each flag with its description and required marker",
+      "bee --help --all output shape unchanged (compact flags line)",
+      "Preamble and AGENTS.md carry the read-once sentence"
+    ]
+  },
+  "decisions": [
+    "bee-help-verb-detail D1",
+    "bee-help-verb-detail D2",
+    "bee-help-verb-detail D3"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "bhv-w1",
+    "outcome": "Single-verb help prints per-flag descriptions with required markers; read-once rule lands in preamble and AGENTS.md",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/help.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "AGENTS.md",
+      "docs/history/bee-help-verb-detail/CONTEXT.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T01:49:20.969Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c1eacb78-2dd2-497a-8ea0-8a0c59b5a89d",
+    "claimed_at": "2026-08-21T01:37:52.346Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "help.rs:550 flags_detail_lines + single-entry branch; live binary shows detail block for cells show, compact for group; test covers described line, fallback, multi-entry compact"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "budget.rs:160 read-once sentence; tests.rs:236 pin updated; 46 preamble tests green"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "AGENTS.md:51-53 one-sentence read-once rule on the existing help line"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "numstat shows only the five declared files; no new dump-all surface in added lines"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "help 26 passed, session_preamble 46 passed; tree clean at 47a92416"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.7-flash",
+        "judge_model": "claude-review-tier",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-21T01:49:12.386Z"
+      }
+    ],
+    "report": {
+      "outcome": "Single-verb help prints per-flag descriptions with required markers; read-once rule lands in preamble and AGENTS.md",
+      "commit": "47a92416",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/help.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "AGENTS.md",
+        "docs/history/bee-help-verb-detail/CONTEXT.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- help; -- session_preamble — green (26 + 46 passed) — cell touches the help renderer and the preamble sentence",
+      "deviations": [
+        "session_preamble/tests.rs pin updated alongside budget.rs — undeclared at plan time, recorded here"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

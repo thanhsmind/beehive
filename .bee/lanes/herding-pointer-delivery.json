@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-pointer-delivery",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-pointer-delivery\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"herding-pointer-delivery\" (lane).",
+  "created_at": "2026-08-21T01:43:17.949Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null
+}

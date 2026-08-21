@@ -1,0 +1,40 @@
+{
+  "id": "hpd-1",
+  "feature": "herding-pointer-delivery",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Fix round-1 pointer delivery loss under parallel herding spawns",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "skills/bee-herding/references/spawn-proof.md",
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md"
+  ],
+  "action": "Investigate the bee-bin-refresh incident (round-1 pointer never reached the agy pane spawned in parallel with bhv-1-r1; keystrokes echoed above the boot banner; run waited toward ceiling with an undelivered brief) and fix the delivery/receipt defect in run.rs, keeping the contracts: one-line pointer, bounded re-sends, agent-caused-state-transition receipt, typed failure when attempts run out. Tests in existing run.rs style cover the found failure mode.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "An undelivered brief can no longer ride silently to ceiling",
+      "Receipt still requires an agent-caused state transition"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "claimed",
+  "trace": {
+    "worker": "hpd-w1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c1eacb78-2dd2-497a-8ea0-8a0c59b5a89d",
+    "claimed_at": "2026-08-21T01:44:07.915Z"
+  }
+}
