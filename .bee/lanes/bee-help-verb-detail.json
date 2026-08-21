@@ -12,12 +12,12 @@
   },
   "summary": "Feature \"bee-help-verb-detail\" started at phase \"exploring\".",
   "next_action": "bee-help-verb-detail merged; hpd bug-hunt lane in flight",
+  "created_at": "2026-08-21T01:36:07.903Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Verb config chưa port sang Rust — thông báo lỗi chỉ cách: sửa JSON trực tiếp. Sửa.",
-    "asked_at": "2026-08-21T02:50:55.274Z",
+    "subject": "Main sạch, không nợ gì từ vụ conflict.",
+    "asked_at": "2026-08-21T03:07:32.838Z",
     "session": "c1eacb78-2dd2-497a-8ea0-8a0c59b5a89d"
-  },
-  "created_at": "2026-08-21T01:36:07.903Z"
+  }
 }
