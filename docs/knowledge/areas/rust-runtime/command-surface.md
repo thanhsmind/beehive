@@ -35,6 +35,16 @@ name. What changes is only which ones a bare `bee --help` puts in front of you.
   carrying its own `surface` value.
 - `bee <group> --help` — unchanged: every match in the group, regardless of
   surface. A scoped question deserves a scoped answer, not a filtered one.
+- `bee <verb> --help` — when exactly ONE entry renders, the compact flags
+  line becomes a detail block: one line per flag — `--name`, `*` when
+  required, the type in parens, then the registry parameter description
+  (bee-help-verb-detail D1). A flag with no description falls back to its
+  compact form; `json` stays filtered under the header note. Multi-entry
+  renders keep the compact line — detail only where asked, so token cost
+  stays bounded to the verb in question (D3). The read-once rule rides the
+  preamble Command-surface sentence and AGENTS.md (D2): before a verb's
+  FIRST use in a session, read its help — never guess flags; one read per
+  verb, never re-read.
 - `bee internal <group> <verb>` — the explicit plumbing namespace.
 
 ## Data Dictionary
