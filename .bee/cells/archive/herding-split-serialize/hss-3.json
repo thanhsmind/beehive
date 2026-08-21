@@ -1,0 +1,72 @@
+{
+  "id": "hss-3",
+  "feature": "herding-split-serialize",
+  "title": "Anchor the main pane and stack workers in one right-hand column",
+  "lane": "small",
+  "status": "capped",
+  "deps": [
+    "hss-2"
+  ],
+  "decisions": [
+    "D2"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Change where worker panes land, per herding-split-serialize D2 (logged 2026-08-21, supersedes herding-pane-slides D1 — read it with `bee decisions search --text \"caller's pane is the MAIN pane\"`). The rule the user wants: the caller's own pane is the MAIN pane, it is split exactly ONCE, and it always stays the largest pane; the first spawn takes a column on its RIGHT, and every subsequent spawn splits DOWN inside that worker column so workers stack under each other and never touch the main pane again. What is there now (`rg -n 'fn resolve_split_parent|fn split_direction|fn narrow_pane_refusal|fn pane_split' packages/bee-rs/crates/bee/src/herding/run.rs`): `resolve_split_parent` picks the roomiest pane in the tab BY AREA including the caller's own, and `split_direction` answers from the tab's pane count alone. Live evidence that this is wrong for the human: five spawns on a 173x50 tab cut the caller's pane to 13 rows while every worker kept 25. Three changes, all inside run.rs. FIRST, parent choice: `resolve_split_parent` already receives `own_pane` — when the tab holds more than one pane, choose the roomiest pane EXCLUDING `own_pane`; when the tab holds only the caller's own pane, that pane is the parent as today. Keep the existing fail-open fallbacks byte-for-byte: an unreadable layout and a candidate-less list both still fall back to `own_pane` with direction `right`. SECOND, direction: it now follows from WHICH pane was chosen, not from the tab's pane count — splitting the caller's own pane goes `right` (the worker column is created), splitting any other pane goes `down` (the column grows). Rewrite or replace `split_direction` accordingly and update its doc comment, which currently states the retired pane-count rule; cite D2 in the new comment the way the file cites hps-12/hps-13. THIRD, ratio: `RealHerdr::pane_split` hardcodes `--ratio 0.5`. Thread a ratio through the `Herdr::pane_split` trait method (updating every fake in the test module) and compute it in one small pure function beside `narrow_pane_refusal`: for a `down` split the ratio stays 0.5; for the `right` split that creates the worker column the CHILD should get one third of the parent's width, floored at `MIN_PANE_WIDTH` columns and capped at half the parent, so the main pane is always strictly the larger share whenever the parent is wide enough for both. Express it as columns first, then convert to the ratio herdr takes, and keep `narrow_pane_refusal` measuring the width the CHILD actually lands at under that ratio — the hps-13 invariant — so a tab too narrow for a sixty-column child still refuses and still falls through to the existing `tab_create` fresh-tab path. Do NOT change: the split lock and its fail-open behavior from hss-2, `MIN_PANE_WIDTH`'s value, the `tab_create` fallback, or any `SpawnFailed` message wording. Tests: update the existing `resolve_split_parent_*` cases in run.rs's test module that assert the retired pane-count rule (they will fail — that is expected, rewrite them to assert D2), and add cases for: the caller's own pane never chosen as parent once another pane exists; a `right` split's child getting a third of a wide parent, not half; the sixty-column floor winning on a parent where a third would be too thin; the half cap holding on a parent narrow enough that a third and a half converge; and a five-spawn sequence over a 173x50 tab asserting the caller's pane keeps its full height and every worker lands in the right-hand column. Extend the existing two-thread concurrency regression from hss-2 rather than replacing it.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::",
+  "must_haves": {
+    "truths": [
+      "Five spawns from one tab leave the caller's pane at full height and every worker in a right-hand column",
+      "The main pane is never split more than once",
+      "A worker pane still never lands below the sixty-column minimum"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "parent choice excludes the caller's own pane, direction follows the chosen parent, first-split ratio computed with a floor and a cap"
+      }
+    ],
+    "key_links": [
+      "pane_split carries a ratio through the Herdr trait instead of a hardcoded 0.5"
+    ]
+  },
+  "trace": {
+    "worker": "w-hss-3",
+    "outcome": "Worker panes stack in one right-hand column; the caller's main pane is split exactly once at a one-third ratio floored at 60 columns",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T14:41:24.188Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1083b691-2617-4369-95d8-5204003a5b9d",
+    "claimed_at": "2026-08-21T14:31:43.741Z",
+    "tier_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier",
+    "report": {
+      "outcome": "Worker panes now stack in one right-hand column and the caller's main pane is split exactly once, at a one-third-floored-at-60 ratio",
+      "commit": "77823ed9",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding:: — green (280 passed, 0 failed) — the whole herding module, where the split rule and its Herdr seam live",
+      "deviations": [
+        "herdr's --ratio semantics were undocumented and unmeasurable at 0.5; probed live against herdr 0.8.0 in a scratch tab (created, split, measured, closed) — --ratio is the share the PARENT KEEPS, so D2's one-third worker column travels as a ratio ABOVE 0.5. Recorded in first_split_geometry's doc comment.",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md still states the retired pane-count rule (section 'Where that pane lands is a fixed rule, not a geometry read') — left alone per the cell; orchestrator to sync.",
+        "skills/bee-herding/references/role-dispatch.md also states the retired rule twice: step 2 of the dispatch flow (the pane-count direction rule plus '--ratio 0.5, unconditionally') and the command table row 'Split the runtime pane'. Out of cell scope; orchestrator to sync."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 440 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "ceiling"
+}
