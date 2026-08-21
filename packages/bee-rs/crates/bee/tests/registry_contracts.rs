@@ -222,32 +222,38 @@ fn backlog_add_declares_every_flag_run_add_hard_requires() {
 /// payload and stayed green because nothing re-derived the const).
 const SET_GATE_SOURCE: &str = include_str!("../src/verbs/state_group/set_gate.rs");
 
-/// Parses the `keys_known(&flags, &[...])` array literal out of `run_gate`'s
-/// own body (not `run_gate_body`, and not the unrelated `keys_known` calls
-/// in `run_set` / `run_plan_rev_bump` elsewhere in the same file) —
-/// precedent for parsing a source string for its own ground truth:
+/// srg-1: `run_route`'s own source. A SECOND `include_str!` is unavoidable —
+/// route's handler lives in verbs/state_group/workflows.rs, a different file
+/// from `SET_GATE_SOURCE` above, so the drift net that already covers gate
+/// could not reach it and route shipped `--no-lane` with no net at all.
+const WORKFLOWS_SOURCE: &str = include_str!("../src/verbs/state_group/workflows.rs");
+
+/// Parses the `keys_known(&flags, &[...])` array literal out of ONE named
+/// handler's own body (not a `*_body` helper, and not the unrelated
+/// `keys_known` calls in sibling handlers in the same file) — precedent for
+/// parsing a source string for its own ground truth:
 /// `opencode_plugin_contracts.rs`'s `include_str!` + scan pattern. Anchored
-/// on `run_gate`'s exact signature so it can never pick up a sibling
-/// handler's flag list by accident.
-fn parse_known_flags_from_source(source: &str) -> Vec<String> {
-    let anchor = "pub(crate) fn run_gate(";
+/// on the handler's exact signature so it can never pick up a sibling
+/// handler's flag list by accident. `what` names the file in every panic, so
+/// a drifted anchor says which source it lost.
+fn parse_known_flags_at_anchor(source: &str, anchor: &str, what: &str) -> Vec<String> {
     let fn_start = source
         .find(anchor)
-        .unwrap_or_else(|| panic!("set_gate.rs: could not find {anchor:?} to anchor the keys_known parse"));
+        .unwrap_or_else(|| panic!("{what}: could not find {anchor:?} to anchor the keys_known parse"));
     let after_fn = &source[fn_start..];
 
     let kk = "keys_known(";
     let kk_at = after_fn
         .find(kk)
-        .unwrap_or_else(|| panic!("set_gate.rs: run_gate has no keys_known(...) call to parse"));
+        .unwrap_or_else(|| panic!("{what}: {anchor:?} has no keys_known(...) call to parse"));
     let after_kk = &after_fn[kk_at + kk.len()..];
 
     let open = after_kk
         .find('[')
-        .unwrap_or_else(|| panic!("set_gate.rs: run_gate's keys_known(...) has no array literal"));
+        .unwrap_or_else(|| panic!("{what}: {anchor:?}'s keys_known(...) has no array literal"));
     let close = after_kk[open..]
         .find(']')
-        .unwrap_or_else(|| panic!("set_gate.rs: run_gate's keys_known(...) array literal never closes"));
+        .unwrap_or_else(|| panic!("{what}: {anchor:?}'s keys_known(...) array literal never closes"));
     let body = &after_kk[open + 1..open + close];
 
     body.split(',')
@@ -258,6 +264,16 @@ fn parse_known_flags_from_source(source: &str) -> Vec<String> {
             Some(entry.to_string())
         })
         .collect()
+}
+
+/// `run_gate`'s flag list — the original spelling, unchanged for its callers.
+fn parse_known_flags_from_source(source: &str) -> Vec<String> {
+    parse_known_flags_at_anchor(source, "pub(crate) fn run_gate(", "set_gate.rs")
+}
+
+/// `run_route`'s flag list (srg-1).
+fn parse_known_route_flags_from_source(source: &str) -> Vec<String> {
+    parse_known_flags_at_anchor(source, "pub(crate) fn run_route(", "workflows.rs")
 }
 
 #[test]
@@ -336,6 +352,101 @@ fn known_flags_parser_would_catch_a_new_handler_flag() {
         assert!(
             !props.contains_key("totally-fake-injected-flag"),
             "sanity check invalid: the real payload unexpectedly declares the injected fake flag"
+        );
+    }
+}
+
+#[test]
+fn state_route_and_route_list_every_flag_workflows_rs_actually_accepts() {
+    // srg-1, the twin of the gate test above, over `run_route`'s own
+    // keys_known(...) in verbs/state_group/workflows.rs. Route had no drift
+    // net at all — the gate test is hard-wired to set_gate.rs — so a new
+    // route flag could ship undeclared and `bee --help --json` would
+    // understate the command exactly the way p-62f0566d did for gate.
+    let known_flags = parse_known_route_flags_from_source(WORKFLOWS_SOURCE);
+    // Defensive floor: a silent empty (or near-empty) parse must fail loudly
+    // rather than pass vacuously.
+    assert!(
+        known_flags.len() >= 5,
+        "workflows.rs: parsed only {} known flags from run_route's keys_known(...) — defensive \
+         floor is 5, a silent empty (or near-empty) parse must fail loudly",
+        known_flags.len()
+    );
+    assert!(
+        known_flags.iter().any(|f| f == "no-lane"),
+        "workflows.rs: run_route no longer accepts --no-lane — srg-1's whole point is that an \
+         unbound session has a sanctioned way past the default-record refusal"
+    );
+
+    let p = payload();
+    for cmd_name in ["state.route", "route"] {
+        let entry = commands(&p)
+            .iter()
+            .find(|e| e["name"] == cmd_name)
+            .unwrap_or_else(|| panic!("registry payload has no {cmd_name:?} entry"));
+        let props = entry["parameters"]["properties"]
+            .as_object()
+            .unwrap_or_else(|| panic!("{cmd_name}: parameters.properties must be an object"));
+        for flag in &known_flags {
+            assert!(
+                props.contains_key(flag),
+                "{cmd_name}: workflows.rs accepts --{flag} but the registry payload does not \
+                 declare it as a parameter — bee --help --json would understate the command"
+            );
+        }
+    }
+}
+
+#[test]
+fn route_known_flags_parser_would_catch_a_new_handler_flag() {
+    // Deletion coverage: the parser must still find every flag `run_route`
+    // accepts today.
+    for expected in ["set", "show", "class", "lane", "flags", "files", "rationale", "no-lane"] {
+        assert!(
+            parse_known_route_flags_from_source(WORKFLOWS_SOURCE)
+                .iter()
+                .any(|f| f == expected),
+            "parser missed known real route flag {expected:?} — deletion coverage would silently pass"
+        );
+    }
+
+    // Addition coverage, proven WITHOUT touching the real workflows.rs:
+    // inject a fake flag into a COPY of the source and confirm the parser
+    // (and therefore the drift test above) would pick it up while the real
+    // payload does not declare it — i.e. the net goes red for a flag that
+    // reaches keys_known but neither payload entry.
+    let injected = WORKFLOWS_SOURCE.replacen(
+        "\"set\", \"show\", \"class\"",
+        "\"set\", \"show\", \"class\", \"totally-fake-injected-route-flag\"",
+        1,
+    );
+    assert_ne!(
+        injected, WORKFLOWS_SOURCE,
+        "replacen found no anchor in workflows.rs to inject a fake flag into — the parse anchor drifted"
+    );
+    let injected_flags = parse_known_route_flags_from_source(&injected);
+    assert!(
+        injected_flags.iter().any(|f| f == "totally-fake-injected-route-flag"),
+        "parser did not pick up a flag injected into a copy of run_route's keys_known(...) — it \
+         would silently miss a real addition too"
+    );
+
+    let p = payload();
+    for cmd_name in ["state.route", "route"] {
+        let entry = commands(&p).iter().find(|e| e["name"] == cmd_name).unwrap();
+        let props = entry["parameters"]["properties"].as_object().unwrap();
+        assert!(
+            !props.contains_key("totally-fake-injected-route-flag"),
+            "sanity check invalid: the real payload unexpectedly declares the injected fake flag"
+        );
+        // The net's own verdict, by construction: the injected flag IS in the
+        // parsed list and is NOT declared, so the loop in the drift test
+        // above would fire its assert for this entry.
+        assert!(
+            injected_flags
+                .iter()
+                .any(|f| !props.contains_key(f.as_str())),
+            "{cmd_name}: an undeclared parsed flag must exist for the drift net to have teeth"
         );
     }
 }

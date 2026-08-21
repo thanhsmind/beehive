@@ -684,15 +684,87 @@ pub(crate) fn route_belongs_to_feature(existing_route: &Map<String, Value>, feat
     existing_route.get("feature") == Some(feature)
 }
 
-pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
-    if !keys_known(&flags, &["set", "show", "class", "lane", "flags", "files", "rationale"]) {
+/// srg-1: every lane record that is still working — the feature slugs of the
+/// `.bee/lanes/*.json` records whose own phase is live, using the same
+/// `lane_live` predicate `n`'s lane backfill applies (feature.rs). A workflow
+/// record carries no lane marker at all (it is created per LIVE FEATURE,
+/// default record and lane alike), so the workflow listing the caller already
+/// holds cannot answer "is a lane record live" — this reads the lane store.
+pub(crate) fn live_lane_features(root: &Path) -> Ex<Vec<String>> {
+    let mut out = Vec::new();
+    for lane in list_lanes(root)? {
+        let feature = match lane.get("feature") {
+            Some(Value::String(s)) if !s.is_empty() => s.clone(),
+            _ => continue,
+        };
+        let phase = lane.get("phase").cloned().unwrap_or(Value::Null);
+        if !truthy(&phase) || &phase == &json!("idle") || &phase == &json!("compounding-complete") {
+            continue;
+        }
+        out.push(feature);
+    }
+    Ok(out)
+}
+
+/// srg-1: `route --set` from a session that never bound itself, aimed at the
+/// shared default record, while other lanes are in flight. The write would
+/// stamp `route.feature` with the default record's OWN feature and overwrite
+/// that feature's recorded triage with the caller's — silently, because
+/// nothing in the call says which feature the caller meant. That combination
+/// is unresolvable from intent, so it is refused rather than guessed.
+///
+/// Returns `None` (no refusal) whenever any leg is absent: `--no-lane` makes
+/// the default record an explicit choice; a lane target is already
+/// unambiguous; and with no live lane records there is no rival writer at
+/// all, so a single-lane repo behaves exactly as it did before.
+pub(crate) fn unbound_default_route_refusal(
+    target: &Target,
+    no_lane: bool,
+    live_lanes: &[String],
+) -> Option<String> {
+    if no_lane || target.lane().is_some() || live_lanes.is_empty() {
         return None;
     }
-    for b in ["set", "show"] {
+    let feature_disp = match target.record().get("feature") {
+        None | Some(Value::Null) => "none".to_string(),
+        Some(v) => js_disp(v),
+    };
+    // Up to three names inline, the rest elided — a repo with a dozen lanes
+    // still gets a one-line refusal.
+    let shown: Vec<&str> = live_lanes.iter().take(3).map(String::as_str).collect();
+    let named = match live_lanes.len().saturating_sub(shown.len()) {
+        0 => shown.join(", "),
+        rest => format!("{}, +{rest} more", shown.join(", ")),
+    };
+    Some(format!(
+        "route --set: refused \u{2014} this session is not bound to a lane, but {} lane record(s) are live ({named}), and the default record (.bee/state.json) carries feature \"{feature_disp}\". Writing here would overwrite that feature's own triage. FIX: bind this session to its lane (bee state session bind --lane <feature>), or pass --no-lane to write the default record on purpose.",
+        live_lanes.len()
+    ))
+}
+
+pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
+    if !keys_known(
+        &flags,
+        &["set", "show", "class", "lane", "flags", "files", "rationale", "no-lane"],
+    ) {
+        return None;
+    }
+    for b in ["set", "show", "no-lane"] {
         if !bool_flag_ok(&flags, b) {
             return None;
         }
     }
+    // srg-1: `no-lane` is read DIRECTLY here, never through
+    // `mutation_lane_selector` — that helper exists to reconcile `--lane`
+    // (a lane RECORD selector on set/gate/scribing-run) with `--no-lane`,
+    // and route's `--lane` is a different flag wearing the same name: the
+    // triage class (ROUTE_LANE_VALUES). Feeding route's `--lane` to the
+    // selector would refuse `route --set --lane standard --no-lane` as a
+    // "cannot combine" collision that does not exist.
+    // Presence is the value, exactly as `mutation_lane_selector` reads it for
+    // every other lane-targeting verb — `bool_flag_ok` above has already
+    // rejected anything that is not bare / "true" / "false".
+    let no_lane = flags.get("no-lane").is_some();
     let show = matches!(flags.get("show"), Some(FlagV::Present));
     let set = matches!(flags.get("set"), Some(FlagV::Present));
     let ctx = match go("state route", use_json, t0)? {
@@ -701,7 +773,7 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
     };
     let out = (|| -> R2<Out> {
         if show {
-            let target = resolve_mutation_target(&ctx.root, None, "route show", false)?;
+            let target = resolve_mutation_target(&ctx.root, None, "route show", no_lane)?;
             // `target.record.route ?? null`, then `if (!route)`.
             let route = match target.record().get("route") {
                 Some(v) if truthy(v) => v.clone(),
@@ -741,10 +813,18 @@ pub(crate) fn run_route(flags: Flags, use_json: bool, t0: Instant) -> Option<Exi
         };
         let lane_class = js_disp_opt(route_object.get("lane"));
 
-        let scope = resolve_mutation_lock_scope(&ctx.root, None, false)?;
+        let scope = resolve_mutation_lock_scope(&ctx.root, None, no_lane)?;
         let workflows = list_workflows(&ctx.root)?;
         let locks = acquire_mutation_locks(&ctx.root, &scope, &workflows)?;
-        let mut target = resolve_mutation_target(&ctx.root, None, "route", false)?;
+        let mut target = resolve_mutation_target(&ctx.root, None, "route", no_lane)?;
+        // srg-1: the unbound-session guard. It lands BEFORE the no-active-
+        // feature check and before any field is set, so a refusal mutates
+        // nothing (the lock above is transient and released on drop).
+        if let Some(message) =
+            unbound_default_route_refusal(&target, no_lane, &live_lane_features(&ctx.root)?)
+        {
+            return Ok(Out::Thrown(message));
+        }
         let phase = target.record().get("phase").cloned().unwrap_or(Value::Null);
         let feature_set = target.record().get("feature").map(truthy).unwrap_or(false);
         if !feature_set
