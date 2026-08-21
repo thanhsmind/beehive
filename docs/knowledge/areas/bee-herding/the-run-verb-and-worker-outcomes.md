@@ -32,16 +32,29 @@ as an argument, and an empty standard input refuses exactly as an empty task
 argument does — a caller piping a generated task never gets a worker started on
 nothing.
 
-**Where that pane lands is a fixed rule, not a geometry read.** The split
-targets the roomiest pane in the caller's own tab, and the direction comes from
-how many panes that tab already holds: exactly one (an untouched root) splits
-`right`, so a single worker gets the full-height column; two or more split
-`down`, so each further worker lands as a full-width band under the last. A
-`down` split leaves width untouched, so width halves at most once no matter how
-many workers a tab collects. The rule replaced an aspect-ratio read that
-answered `right` again and again on a wide tab: measured live, a 120-column tab
-went 60/30/15, and both the 30- and 15-column children died mid-submission with
-herdr's `agent_prompt_stalled`.
+**The caller's pane is the main pane, and it is split exactly once.** Workers
+live in one column beside it and never take space from it again. The first
+spawn splits the caller's pane to the RIGHT and takes a column one third of the
+tab wide — floored at the sixty-column worker minimum, capped at half — so the
+main pane always keeps the larger share and its full height. Every spawn after
+that splits DOWN inside that worker column, stacking under the previous worker.
+The parent is therefore the roomiest pane in the tab EXCLUDING the caller's
+own, and the direction follows from which pane that picked, not from any
+measurement of the rectangle.
+
+Two earlier rules were tried and retired against live evidence. Reading the
+aspect ratio answered `right` again and again on a wide tab: a 120-column tab
+went 60/30/15, and both the 30- and 15-column children died mid-submission.
+Taking the roomiest pane overall then ate the human's own pane instead: five
+spawns on a 173-by-50 tab cut it from 50 rows to 13 while every worker kept 25.
+The human needs their own pane readable at all times; a worker only needs
+enough width to accept a submission (herding-split-serialize D2).
+
+**The share passed to the terminal tool is what the PARENT keeps, not what the
+child gets.** Measured live: asking for a quarter left the parent a quarter and
+handed the child the rest. A stacking split inside the worker column halves it;
+the one split that creates the column asks for whatever leaves the worker its
+computed width.
 
 **Counting the panes and splitting one are a single indivisible step.** Every
 spawn runs as its own process, so the rule above is only correct over a count
@@ -141,9 +154,9 @@ one 120-column tab: the first split produced a sixty-column child that carried
 a full round to a written ack and result, while two thirty-column children both
 died mid-submission.
 
-So the run verb splits off the ROOMIEST pane in the caller's own tab rather
-than halving the caller's own pane again and again, and it measures the width
-the CHILD will land at, never the parent's. When no pane in the tab can yield a
+So the run verb always measures the width the CHILD will land at, never the
+parent's, and the worker column's width is floored at that sixty-column minimum
+before the main pane's share is worked out. When no pane in the tab can yield a
 workable child, the worker gets a FRESH TAB's root pane at full width — never a
 sliver, and never a refusal — and it never takes the human's focus. A geometry
 read that fails at all falls open to the caller's own pane (herding-prompt-stall,
@@ -182,9 +195,12 @@ even when the brief states the rule.
 ## Pointers (implementation)
 
 - The pane-width floor is `MIN_PANE_WIDTH` (60) in the same module, with
-  `resolve_split_parent` picking the roomiest parent, `narrow_pane_refusal`
-  measuring the child's resulting width, and the `tab_create` fallback on the
-  herd seam (cells hps-12, hps-13).
+  `resolve_split_parent` picking the roomiest parent excluding `own_pane`,
+  `split_direction` answering from whether that parent is the caller's own,
+  `first_split_geometry` computing the worker column's columns and the
+  `--ratio` that leaves them, `narrow_pane_refusal` measuring the child's
+  resulting width, and the `tab_create` fallback on the herd seam (cells
+  hps-12, hps-13, hss-3).
 - The spawn queue is a lock file at `.bee/locks/herding-pane-split.lock` under
   the main checkout, taken and released by
   `packages/bee-rs/crates/bee/src/herding/split_lock.rs`; `run.rs`'s
