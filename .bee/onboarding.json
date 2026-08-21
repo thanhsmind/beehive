@@ -25,7 +25,7 @@
       "planning.md": "e46c1d07d3d91aa81cf01748d94ee87f115bfd40a5d31508d70fe49c8b9932a7",
       "review.md": "764ace8584c122e5ce74203919f4d9d6d4f93e82736047529d9b3e2444887d29",
       "security.md": "c39709516b888a41ae620fa7b070f8c2b28623c8f1d8f4639267385de4edeed8",
-      "tests.md": "fdec638fdc89ed19d046e74cf5e575ccad5b11e44fec82be03082e4c8cc71895",
+      "tests.md": "b238fff4cd5af78a4973d74e15fbcaa540d7993ebe560950b0488a40d4804691",
       "tests/patterns/asserting-on-generated-output.md": "4f7c229210b0c8ee952d21881b3a616259f0ac3cfc6c7719efbe473521065626",
       "tests/patterns/comparing-structured-data.md": "708d72115b3c9c0e5dfad84ac27c8ef153dc36620a4d1c5ce7050e005da363e7",
       "tests/patterns/differential-testing.md": "2c089b719275b401ae62c5f6f6af4cdcdfc7e5a2528fc64ce16eff8a1d0b6add",
@@ -71,5 +71,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-21T07:30:09.925Z"
+  "updated_at": "2026-08-21T07:55:27.392Z"
 }
