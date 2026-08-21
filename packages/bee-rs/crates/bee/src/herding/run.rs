@@ -745,10 +745,22 @@ fn parse_process_info(v: &Value) -> Liveness {
 // pure decisions — split direction, poll timing, pane lifecycle
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// `role-dispatch.md` §8's geometry rule: wider than tall (or square) splits
-/// right, taller than wide splits down. Pure: takes an already-read rect.
-fn split_direction(width: u64, height: u64) -> &'static str {
-    if width >= height {
+/// `role-dispatch.md` §8's FIXED split rule, and deliberately not a
+/// geometry one any more: a tab's FIRST split goes `right` — one worker
+/// gets the whole full-height column — and every later split goes `down`,
+/// stacking the extra workers as full-width bands.
+///
+/// The old rule read the parent's own rect (wider-or-square → right, else
+/// down) and, on a wide tab, that answer stays "right" for every split in
+/// a row: a 120-column tab went 60/30/15 live, and the 30- and 15-column
+/// children both died in submission (`agent_prompt_stalled`, the evidence
+/// `MIN_PANE_WIDTH` records). A `down` split leaves width UNTOUCHED, so
+/// under this rule width halves at most once, for the first worker only,
+/// and no later split can ever walk a pane below the minimum.
+///
+/// Pure: takes the pane count of the caller's own tab, touches no process.
+fn split_direction(pane_count: usize) -> &'static str {
+    if pane_count <= 1 {
         "right"
     } else {
         "down"
@@ -806,10 +818,13 @@ struct SplitParent {
 /// degrading gracefully as more spawns land.
 ///
 /// hps-13: the width guard now checks the RESULTING CHILD's width, not the
-/// chosen parent's own — with `--ratio 0.5`, a "right" split (wider-than-tall
-/// parent, `split_direction`) halves the width, so the parent needs TWICE
+/// chosen parent's own — with `--ratio 0.5`, a "right" split (a tab's first
+/// split, `split_direction`) halves the width, so the parent needs TWICE
 /// `MIN_PANE_WIDTH` to clear it; a "down" split leaves width unchanged, so
-/// the parent's own width is already the child's.
+/// the parent's own width is already the child's. The parent choice and the
+/// direction are now separate reads of the SAME list: which pane (roomiest)
+/// from the rects, which direction (`split_direction`) from how many panes
+/// the tab already holds.
 ///
 /// Pure, over an already-parsed pane list: `panes` is `None` when the
 /// layout could not be read at all, and both the parent choice and the
@@ -819,10 +834,14 @@ struct SplitParent {
 /// (`Iterator::max_by_key`'s own rule) — an arbitrary but deterministic
 /// choice, since herdr's own list order carries no other meaning here.
 fn resolve_split_parent(panes: Option<&[PaneGeom]>, own_pane: &str) -> SplitParent {
-    let chosen = panes.and_then(|list| list.iter().max_by_key(|p| p.width.saturating_mul(p.height)));
+    let chosen = panes.and_then(|list| {
+        list.iter()
+            .max_by_key(|p| p.width.saturating_mul(p.height))
+            .map(|p| (p, list.len()))
+    });
     match chosen {
-        Some(p) => {
-            let direction = split_direction(p.width, p.height);
+        Some((p, pane_count)) => {
+            let direction = split_direction(pane_count);
             let resulting_child_width = if direction == "right" { p.width / 2 } else { p.width };
             SplitParent {
                 pane_id: p.pane_id.clone(),
@@ -2368,22 +2387,27 @@ mod tests {
     // ─── pure decisions ─────────────────────────────────────────────────
 
     #[test]
-    fn split_direction_prefers_right_when_wider_or_square() {
-        assert_eq!(split_direction(173, 50), "right");
-        assert_eq!(split_direction(50, 50), "right");
-        assert_eq!(split_direction(40, 100), "down");
+    fn split_direction_is_right_only_for_a_tabs_first_split() {
+        // An unreadable/empty layout counts as a first split, and so does a
+        // tab still holding only its own root pane.
+        assert_eq!(split_direction(0), "right");
+        assert_eq!(split_direction(1), "right");
+        // Every later split stacks a band instead of halving the width again.
+        assert_eq!(split_direction(2), "down");
+        assert_eq!(split_direction(3), "down");
+        assert_eq!(split_direction(9), "down");
     }
 
     // ─── hps-12/hps-13: roomiest-pane split parent + child-side width guard ───
 
     #[test]
-    fn resolve_split_parent_chooses_the_largest_area_pane_even_when_its_child_would_be_too_narrow() {
-        // Shaped like the live 60/30/15 measurement: caller's own pane
-        // (w1:p1) has already been halved down to 30, a sibling (w1:p2) is
-        // still the roomiest at 60 — but hps-13's live probe proved a
-        // 60-wide parent's "right" split (a 30-wide child) stalls every
-        // submission, so the CHOSEN parent is still w1:p2, only now it
-        // refuses (the child-width guard, not the old parent-width one).
+    fn resolve_split_parent_stacks_a_band_instead_of_halving_a_populated_tab_again() {
+        // Shaped like the live 60/30/15 measurement, and the exact case the
+        // fixed rule exists to remove: three panes already, so this is not a
+        // first split — the direction is "down", which leaves the roomiest
+        // parent's 60 columns untouched in its child. Under the old
+        // aspect-ratio rule this same layout answered "right", handed the
+        // worker a 30-column child, and stalled every submission.
         let panes = vec![
             PaneGeom { pane_id: "w1:p1".to_string(), width: 30, height: 43 },
             PaneGeom { pane_id: "w1:p2".to_string(), width: 60, height: 43 },
@@ -2391,10 +2415,8 @@ mod tests {
         ];
         let parent = resolve_split_parent(Some(&panes), "w1:p1");
         assert_eq!(parent.pane_id, "w1:p2");
-        assert_eq!(parent.direction, "right");
-        let msg = parent.refusal.expect("a 60-wide parent's right-split child is only 30 columns, below the minimum");
-        assert!(msg.contains("w1:p2"), "{msg}");
-        assert!(msg.contains("30"), "{msg}");
+        assert_eq!(parent.direction, "down");
+        assert!(parent.refusal.is_none(), "a down split keeps the parent's 60 columns: {:?}", parent.refusal);
     }
 
     #[test]
@@ -2409,10 +2431,14 @@ mod tests {
 
     #[test]
     fn resolve_split_parent_a_down_split_never_narrows_so_the_parents_own_width_is_the_guard() {
-        // Taller-than-wide: `split_direction` picks "down", which leaves
-        // width unchanged — the child is exactly as wide as the parent, so
-        // a 60-wide-but-tall parent is workable with no halving penalty.
-        let panes = vec![PaneGeom { pane_id: "w1:p1".to_string(), width: 60, height: 90 }];
+        // A tab that already holds two panes: `split_direction` picks
+        // "down", which leaves width unchanged — the child is exactly as
+        // wide as the parent, so a 60-wide parent is workable with no
+        // halving penalty.
+        let panes = vec![
+            PaneGeom { pane_id: "w1:p1".to_string(), width: 60, height: 90 },
+            PaneGeom { pane_id: "w1:p2".to_string(), width: 60, height: 40 },
+        ];
         let parent = resolve_split_parent(Some(&panes), "w1:p1");
         assert_eq!(parent.direction, "down");
         assert!(parent.refusal.is_none(), "a down split keeps width unchanged: {:?}", parent.refusal);
@@ -2435,12 +2461,14 @@ mod tests {
 
     #[test]
     fn resolve_split_parent_refuses_a_parent_below_the_minimum_width_naming_it() {
+        // One pane, so this is a first split: "right", and 15 columns halve
+        // to a 7-column child — the width the refusal must name.
         let panes = vec![PaneGeom { pane_id: "w1:p3".to_string(), width: 15, height: 43 }];
         let parent = resolve_split_parent(Some(&panes), "w1:p1");
         assert_eq!(parent.pane_id, "w1:p3");
-        let msg = parent.refusal.expect("15 columns is below the minimum and must refuse");
+        let msg = parent.refusal.expect("a 7-column child is below the minimum and must refuse");
         assert!(msg.contains("w1:p3"), "{msg}");
-        assert!(msg.contains("15"), "{msg}");
+        assert!(msg.contains("7"), "{msg}");
         assert!(msg.contains("60"), "{msg}");
     }
 
@@ -3142,8 +3170,10 @@ mod tests {
         let opts = test_options(tmp.path(), false);
         let mut fake = FakeHerdr::new();
         // Caller's own pane has already been halved to 30; a sibling is
-        // still the roomiest, and wide enough (130) that its "right" split
-        // child (65) still clears the minimum — hps-13's roomy-tab case.
+        // still the roomiest at 130. The tab already holds two panes, so
+        // this is not a first split: the direction is "down", and the child
+        // keeps all 130 columns — hps-13's roomy-tab case, now proved
+        // without any halving at all.
         fake.layout = Some(vec![
             PaneGeom { pane_id: "w1:p1".to_string(), width: 30, height: 43 },
             PaneGeom { pane_id: "w1:p9".to_string(), width: 130, height: 43 },
@@ -3155,7 +3185,7 @@ mod tests {
         assert!(matches!(result.outcome, RunOutcome::Result(_)), "got {:?}", result.outcome);
         assert_eq!(
             fake.split_calls.borrow().as_slice(),
-            [("w1:p9".to_string(), "right".to_string())],
+            [("w1:p9".to_string(), "down".to_string())],
             "the split must target the roomiest sibling, not the caller's own w1:p1"
         );
         assert!(fake.tab_create_calls.borrow().is_empty(), "a roomy tab must never open a fresh one");
