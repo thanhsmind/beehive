@@ -47,9 +47,13 @@ governs (guard-hardening E5). The recorded set:
   level a browsed-and-taken cell is indistinguishable from a handed one; the
   difference is intent, which lives where no guard looks.
 
-Not in the set: *never build on a red base* needs no prose home — `bee cells
-finish` runs the declared suite and refuses the cap on red, so the CLI already
-enforces it. And the set shrinks when a mechanism becomes possible: in the same
+Not in the set, though for a narrower reason than it once had: *never build
+on a red base* keeps no prose home because the cap door refuses a proof line
+whose recorded result is red. That is a check on what the worker REPORTS, not
+a test run — the door runs nothing itself, and the worker picks and runs the
+proof. So the enforcement is real but partial: a worker that runs no proof at
+all is caught, and a worker that misreports one is not. The remaining gap is
+covered by evidence discipline, not by a guard. And the set shrinks when a mechanism becomes possible: in the same
 feature, three formerly markdown-only rules moved to enforcement — the
 containment deny's harness-owned allowlist judges the resolved write target
 (guard-hardening E1), hand-edits to the CLI-owned stores `.bee/cells/*.json`,

@@ -386,6 +386,7 @@
     "triggers",
     "triage",
     "freshness",
-    "rust-runtime"
+    "rust-runtime",
+    "prompts"
   ]
 }

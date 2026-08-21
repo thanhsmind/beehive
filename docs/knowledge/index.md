@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 109 concept(s)
-- [patterns/](patterns/index.md) — 130 concept(s)
+- [patterns/](patterns/index.md) — 131 concept(s)
 - [work/](work/index.md) — 12 concept(s)
 
 ## Critical patterns
@@ -63,3 +63,4 @@ never a generation timestamp or any other wall-clock value.
 - [A test that derives its fixture from the constant under test only proves the code agrees with itself](patterns/20260819-a-test-that-derives-its-fixture-from-the-constant-under-test-only-proves-the-code-agrees-with-itself.md) — A test that derives its fixture from the constant under test only proves the code agrees with itself
 - [A faked seam hides the parse](patterns/20260821-a-faked-seam-hides-the-parse.md) — A trait seam that every test fakes proves the seam is exercised, never that the parse behind it is right; a fake returns whatever the test configured, so the one thing only a real process reply can falsify — the extraction of a live response — stays unchecked while the suite is green.
 - [A vendored binary is a second place the feature must land](patterns/20260821-a-vendored-binary-is-a-second-place-the-feature-must-land.md) — A vendored binary is a second place the feature must land
+- [Instruction text is an untested code path](patterns/20260821-instruction-text-is-an-untested-code-path.md) — Instruction text is an untested code path

@@ -205,6 +205,16 @@ silent.
 
 ## Business Rules
 
+- **A unit's verification command is authored at the narrowest scope that
+  proves that unit (worker-proof-line-skew, cell wpls-1, 2026-08-21).** A name
+  or module filter over the tests the unit's own change can break, or a parity
+  check when the change is prose — never a copy of the project's declared test
+  command. The copy buys nothing the push does not already buy, and it makes
+  every worker pay a full build of everything before it can cap. The declared
+  command belongs to continuous integration, which runs it on every push. The
+  rule is authored here because the scope decision is made when the unit is
+  written, not when it is capped.
+
 - R46 — A unit's change classification is set explicitly or derived only from
   the behavior-change flag — never any richer auto-derivation — and an
   insufficient verification plan is reported as an authoring-time warning on

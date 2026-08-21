@@ -103,7 +103,10 @@ govern the working residue of a cell rather than its content.
   economics are retired; `bee cells finish` now runs the one declared
   `commands.test` at every cap and writes the result record the
   orchestrator reads instead of re-running. The mutation-proof scoping
-  survives as craft. Kept as the historical record.)* Verify-once: in a
+  survives as craft. Kept as the historical record. Narrowed again
+  2026-08-18: no door runs tests at all — `bee cells finish` RECORDS the
+  proof line the worker hands it and refuses a red one, and the worker picks
+  the narrowest proof its change type needs rather than the declared suite.)* Verify-once: in a
   serial tiny/small dispatch the worker's
   recorded verify output is the cap evidence — the orchestrator repeats the
   command only when the report smells, the wave ran parallel workers, or the
@@ -182,7 +185,10 @@ govern the working residue of a cell rather than its content.
   issue when red. *(Amended 2026-07-31 — decision 412e9b3a,
   docs/specs/test-simple.md: `commands.test` now runs at every
   `bee cells finish` and again at `bee close`; `bee worktree merge`
-  re-runs `commands.test` against the staged merge as the last net.)*
+  re-runs `commands.test` against the staged merge as the last net. Amended
+  again 2026-08-18: none of those three doors runs a test. Each CHECKS the
+  proof line already recorded on the cap; continuous integration is the one
+  place the full declared command still runs, on every push.)*
 
   **The claim is still the trigger, not arrival.** It is stated claim-first,
   in the execution discipline rather than in any startup checklist, because a
@@ -215,7 +221,9 @@ govern the working residue of a cell rather than its content.
   per loop for 4 new assertions). *(Since 2026-07-31 / 412e9b3a the
   end-of-cell run is the declared `commands.test` executed by
   `bee cells finish`; red-before-green itself survives as craft in
-  `.bee/expertise/tests.md`, not as machinery.)* (2) *The small-lane parallel criterion* —
+  `.bee/expertise/tests.md`, not as machinery. Since 2026-08-18 the end-of-cell
+  run is neither full nor executed by the door: the worker runs the narrowest
+  proof its change type needs and the door only records it.)* (2) *The small-lane parallel criterion* —
   serial stays the default; cells may run in parallel only when every cell's
   file set INCLUDING regen targets (release manifest, onboarding ledger,
   plugin mirrors) is provably disjoint; any shared generated artifact forces

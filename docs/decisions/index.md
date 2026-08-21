@@ -1570,6 +1570,10 @@ each decision event.
 - e75a0f46 · 2026-08-03 · Gate 2 (shape+execution, merged) for prompt-diet auto-approved under gate_bypass=total
 - d611c213 · 2026-08-03 · Gate 1 (context) for prompt-diet auto-approved under gate_bypass=total
 
+### prompts
+
+- 5a6a1e17 · 2026-08-21 · worker-proof-line-skew capture: instruction text is an untested code path, and the retired claim it carried was alive in three surfaces, not one. A worker prompt still said the cap door runs the project's declared test command; the door had been changed to record a proof line the worker hands it and run nothing, so every dispatched worker ran the whole release-profile suite as insurance before capping, for months, with nothing red to show it. The prompt was corrected in cell wpls-1. This pass found the same retired claim still live in two doctrine concepts — unenforced-obedience, which argued FROM the false premise that the never-build-on-red rule needed no prose home because the CLI enforced it, and lane-and-working-discipline's three 2026-07-31 amendment notes — and corrected both in place. The narrowest-verify rule, absent from the bundle entirely, is now a business rule on the unit-authoring concept, and the general failure is promoted as a critical pattern.
+
 ### prose-rule-audit
 
 - e1e41ec8 · 2026-08-04 · Batch B of the prose-rule-audit approved: (1) write-guard denies plan.md edits once shape gate approved, stamps go through plan-rev bump; (2) cells claim refuses on a red last test run absent a recorded fix-first reason; (3) cells add refuses in a gated phase without execution approval; (4) handoff adopt refuses outside a fresh-session boundary; (5) route --set validates re-lane transitions (downward only, once per feature, high-risk never demotes); (6) cells finish verifies the cell commit trailer with a recorded escape
