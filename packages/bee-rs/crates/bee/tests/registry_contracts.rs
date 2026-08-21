@@ -158,6 +158,63 @@ fn the_payload_declares_the_schema_version_the_binary_was_built_against() {
     );
 }
 
+/// `run_add`'s own source (verbs/backlog.rs) — the ground truth for which
+/// flags `bee backlog add` hard-requires. Same D1 discipline as
+/// `SET_GATE_SOURCE` below: derived from the handler, never hand-copied.
+const BACKLOG_SOURCE: &str = include_str!("../src/verbs/backlog.rs");
+
+/// Reads `BACKLOG_ADD_REQUIRED`'s array literal out of backlog.rs.
+fn backlog_add_required_from_source() -> Vec<String> {
+    let anchor = "const BACKLOG_ADD_REQUIRED:";
+    let at = BACKLOG_SOURCE
+        .find(anchor)
+        .unwrap_or_else(|| panic!("backlog.rs: could not find {anchor:?} to anchor the required parse"));
+    let after = &BACKLOG_SOURCE[at..];
+    let open = after.find('[').expect("backlog.rs: BACKLOG_ADD_REQUIRED has no array literal");
+    // Skip the `[&str; 4]` type ascription and take the VALUE's literal.
+    let after_ty = &after[open + 1..];
+    let open2 = after_ty.find('[').expect("backlog.rs: BACKLOG_ADD_REQUIRED has no value literal");
+    let close = after_ty[open2..].find(']').expect("backlog.rs: value literal never closes");
+    after_ty[open2 + 1..open2 + close]
+        .split(',')
+        .filter_map(|e| Some(e.trim().strip_prefix('"')?.strip_suffix('"')?.to_string()))
+        .collect()
+}
+
+/// The p-bah defect: `backlog.add`'s entry declared `required: []` while
+/// `run_add` hard-required four flags. Two lies followed — `bee backlog add
+/// --help` printed those flags without the `*` every other required flag
+/// carries, and the router's `missing_required_argument` branch could never
+/// fire for them. Derived from the handler's own const so the declaration and
+/// the code can never drift apart again.
+#[test]
+fn backlog_add_declares_every_flag_run_add_hard_requires() {
+    let from_source = backlog_add_required_from_source();
+    // D2: a silently-empty parse must fail loudly, not pass vacuously.
+    assert_eq!(
+        from_source.len(),
+        4,
+        "backlog.rs: parsed {from_source:?} from BACKLOG_ADD_REQUIRED — expected all four flags"
+    );
+
+    let p = payload();
+    let entry = commands(&p)
+        .iter()
+        .find(|e| e["name"] == "backlog.add")
+        .expect("registry payload has no \"backlog.add\" entry");
+    let declared: Vec<String> = entry["parameters"]["required"]
+        .as_array()
+        .expect("backlog.add: parameters.required must be an array")
+        .iter()
+        .map(|v| v.as_str().expect("required entries are strings").to_string())
+        .collect();
+    assert_eq!(
+        declared, from_source,
+        "backlog.add: the registry declares required {declared:?} but run_add hard-requires \
+         {from_source:?} — `bee backlog add --help` would misreport which flags are required"
+    );
+}
+
 /// `run_gate`'s own source (verbs/state_group/set_gate.rs) — the ground
 /// truth `parse_known_flags_from_source` below derives the flag list from,
 /// so the two never drift apart the way a hand-copied const did (the exact

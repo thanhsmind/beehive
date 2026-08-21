@@ -738,11 +738,17 @@ const BACKLOG_ADD_REQUIRED: [&str; 4] = ["type", "title", "severity", "layer"];
 /// WHY THIS IS A PURE FUNCTION. Every one of these misses used to
 /// `return None`, the old "delegate to Node" signal. Node is gone, so None fell
 /// through to the router's generic `unsupported_argument_shape` diagnosis,
-/// which reads the argv from the outside and gets it wrong twice: it claims the
-/// required arguments are all present (they are not — the registry entry
-/// declares `required: []`), and it blames "an optional flag, a flag value, or
-/// a target that does not exist". Only this function knows which flag is
-/// actually at fault, so the message is built here and emitted by run_add.
+/// which reads the argv from the outside and gets it wrong twice: it claimed
+/// the required arguments were all present (the registry entry declared
+/// `required: []` — bah-2 fixed that declaration, so `bee backlog add --help`
+/// now stars all four), and it blames "an optional flag, a flag value, or a
+/// target that does not exist". Only this function knows which flag is actually
+/// at fault, so the message is built here and emitted by run_add — the verb
+/// answers first, so the router's `missing_required_argument` branch is the
+/// fallback that never fires for a served `backlog add`.
+///
+/// `BACKLOG_ADD_REQUIRED` above and the registry entry's `parameters.required`
+/// are the same four names; keep them in step.
 fn add_refusal(parsed: &ParsedArgs) -> Option<String> {
     const HELP: &str = "`bee backlog add --help` for every accepted flag and its type.";
     let missing: Vec<String> = BACKLOG_ADD_REQUIRED
