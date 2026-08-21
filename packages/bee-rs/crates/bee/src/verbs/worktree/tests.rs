@@ -113,7 +113,8 @@ use std::time::Instant;
         assert_eq!(first.get("created"), Some(&Value::Bool(true)));
         assert_eq!(
             first.keys().collect::<Vec<_>>(),
-            vec!["created", "worktreeStoreRoot", "onboarding", "config", "identity", "state"]
+            // srg-2: `binary` rides beside `config` on BOTH return paths.
+            vec!["created", "worktreeStoreRoot", "onboarding", "config", "binary", "identity", "state"]
         );
         assert_eq!(first["onboarding"]["copied"], Value::Bool(true));
         assert_eq!(first["config"]["copied"], Value::Bool(false));
