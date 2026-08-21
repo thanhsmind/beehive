@@ -13,8 +13,13 @@
   "summary": "Feature \"herding-prompt-stall\" started at phase \"exploring\" (lane).",
   "next_action": "bee close finished \"herding-prompt-stall\" — feature is closed.",
   "created_at": "2026-08-21T04:33:45.519Z",
-  "run_state": "shaping",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Nếu ý anh là muốn tôi cắt thêm một tag nữa dù nội dung không đổi thì nói, tôi làm. Còn nếu trải nghiệm bên project kia phát hiện lỗi mới thì",
+    "asked_at": "2026-08-21T08:09:10.513Z",
+    "session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",

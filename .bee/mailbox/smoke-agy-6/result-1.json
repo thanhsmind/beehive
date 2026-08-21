@@ -1,6 +1,0 @@
-{
-  "status": "done",
-  "summary": "Read README.md and produced a 5-line plain-text summary of the bee tool.",
-  "files_changed": [],
-  "proof": "bee is a tool suite for software development with AI agents.\nIt divides work into small tasks and controls tasks with approval gates.\nEach task must pass tests before the system marks it complete.\nAgents make code changes in separate worktrees to protect the main branch.\nThe tool records project decisions, specifications, and lessons for future work."
-}
