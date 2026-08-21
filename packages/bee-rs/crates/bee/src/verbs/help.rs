@@ -547,6 +547,46 @@ fn flags_line(entry: &Value) -> Option<String> {
     }
 }
 
+/// Detailed per-flag breakdown for a single-entry render (`bee <verb> --help`).
+/// One indented line per flag: `--name`, `*` when required, the type
+/// abbreviation in parens, an em-dash, and the registry description. A flag
+/// with no description falls back to `--name*:typ`. `--json` is omitted.
+/// `None` when the entry declares no properties at all (or only `json`).
+fn flags_detail_lines(entry: &Value) -> Option<Vec<String>> {
+    let properties = entry
+        .as_object()?
+        .get("parameters")?
+        .get("properties")?
+        .as_object()?;
+    let required: HashSet<&str> = entry
+        .as_object()
+        .and_then(|m| m.get("parameters"))
+        .and_then(|p| p.get("required"))
+        .and_then(Value::as_array)
+        .map(|r| r.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    let flags: Vec<String> = properties
+        .iter()
+        .filter(|(k, _)| k.as_str() != "json")
+        .map(|(k, v)| {
+            let star = if required.contains(k.as_str()) { "*" } else { "" };
+            let t = v.get("type").and_then(Value::as_str).unwrap_or("value");
+            let abbrev = type_abbrev(t);
+            match v.get("description").and_then(Value::as_str) {
+                Some(desc) if !desc.trim().is_empty() => {
+                    format!("--{k}{star} ({abbrev}) — {desc}")
+                }
+                _ => format!("--{k}{star}:{abbrev}"),
+            }
+        })
+        .collect();
+    if flags.is_empty() {
+        None
+    } else {
+        Some(flags)
+    }
+}
+
 /// True when at least one rendered entry declares a `json` property — the
 /// trigger for the one, render-wide header note that states its omission
 /// instead of repeating it on every flags line.
@@ -573,14 +613,21 @@ fn render_help_text(entries: &[Value], footer_lines: &[String], schema_version: 
         );
     }
     lines.push(String::new());
+    let is_single = entries.len() == 1;
     for entry in entries {
         let get = |k: &str| entry.as_object().and_then(|m| m.get(k));
         lines.push(js_display(get("invoke")));
         lines.push(format!("    {}", js_display(get("description"))));
-        // The full flag surface — required and optional both visible, `*`
-        // marking the required ones (folds the old required-only line: see
-        // flags_line).
-        if let Some(flags) = flags_line(entry) {
+        // Single-entry renders print a detail block with descriptions;
+        // multi-entry renders keep the compact flags_line.
+        if is_single {
+            if let Some(detail) = flags_detail_lines(entry) {
+                lines.push("    flags:".to_string());
+                for flag in detail {
+                    lines.push(format!("      {flag}"));
+                }
+            }
+        } else if let Some(flags) = flags_line(entry) {
             lines.push(format!("    flags: {flags}"));
         }
         if let Some(surface) = get("surface") {
@@ -785,7 +832,7 @@ mod tests {
         let text = render_help_text(&entries, &[], &json!("1.0"));
         assert_eq!(
             text,
-            "bee — unified CLI dispatcher (schema_version 1.0)\n\nbee cells show\n    Show one cell.\n    flags: --id*:str\n"
+            "bee — unified CLI dispatcher (schema_version 1.0)\n\nbee cells show\n    Show one cell.\n    flags:\n      --id*:str\n"
         );
         // Footer path: body trimmed, two newlines, footer lines, one trailing
         // \n. Each footer line is its own paragraph, so the index pointer that
@@ -822,13 +869,36 @@ mod tests {
         assert!(text.contains("--claim"), "{text}");
         assert!(text.contains("--purpose"), "{text}");
         // Required flags are marked distinct from optional ones.
-        assert!(text.contains("--runtime*:str"), "{text}");
-        assert!(text.contains("--kind*:str"), "{text}");
-        assert!(text.contains("--claim:boo"), "{text}");
-        assert!(text.contains("--purpose:str"), "{text}");
+        assert!(text.contains("--runtime* (str) —"), "{text}");
+        assert!(text.contains("--kind* (str) —"), "{text}");
+        assert!(text.contains("--claim (boo) —"), "{text}");
+        assert!(text.contains("--purpose (str) —"), "{text}");
         // --json is dropped from the line and stated once instead.
         assert!(!text.contains("--json"), "{text}");
         assert!(text.contains("also takes a `json` flag"), "{text}");
+    }
+
+    #[test]
+    fn single_entry_renders_flag_details_and_multi_entry_renders_compact() {
+        let entry1 = Value::Object(obj(
+            r#"{"name":"cmd.a","invoke":"bee cmd a","description":"Command A.",
+                "parameters":{"type":"object","properties":{"task":{"type":"string","description":"Task text"},"dry-run":{"type":"boolean","description":"Dry run"},"undesc":{"type":"string"}},"required":["task"]},
+                "examples":[],"deprecated":null}"#,
+        ));
+        let entry2 = Value::Object(obj(
+            r#"{"name":"cmd.b","invoke":"bee cmd b","description":"Command B.",
+                "parameters":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]},
+                "examples":[],"deprecated":null}"#,
+        ));
+
+        // Single-entry: detailed block with descriptions, required stars, and fallback for undescribed flags.
+        let single_text = render_help_text(&[entry1.clone()], &[], &json!("1.0"));
+        assert!(single_text.contains("    flags:\n      --task* (str) — Task text\n      --dry-run (boo) — Dry run\n      --undesc:str"), "{single_text}");
+
+        // Multi-entry: compact single line.
+        let multi_text = render_help_text(&[entry1, entry2], &[], &json!("1.0"));
+        assert!(multi_text.contains("    flags: --task*:str --dry-run:boo --undesc:str"), "{multi_text}");
+        assert!(multi_text.contains("    flags: --id*:str"), "{multi_text}");
     }
 
     #[test]

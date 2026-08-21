@@ -236,7 +236,7 @@ use crate::version::BEE_VERSION;
         let section = command_surface_section().join("\n");
         assert!(!section.contains("--json"), "{section}");
         assert!(section.contains("### Command surface"), "{section}");
-        assert!(section.contains("`bee <command> --help`"), "{section}");
+        assert!(section.contains("`bee <verb> --help`"), "{section}");
         assert!(section.contains('`'), "the header note should mention `json` once:\n{section}");
     }
 
