@@ -209,6 +209,20 @@ guard each branch and exit cleanly on an unrecognized shape. A double that
 falls through to a catch-all branch produces side effects in the wrong
 context, and the resulting failure surfaces two layers away from the cause.
 
+**A double at a seam that crosses a process boundary exercises the seam,
+never the parse behind the real implementation** — the extraction that
+turns an external tool's actual reply into a value the code acts on. A
+fake returns whatever the test configured, so that extraction is the one
+thing no test through the fake can falsify, and a whole suite stays green
+while it is wrong. A suite of over two thousand tests stayed green while a
+real extraction read the wrong path out of an external tool's JSON reply
+and returned nothing every time, so every live call through that path
+failed. When a change adds a call to an external tool, capture one real
+reply and pin the extraction to that captured text in a test, writing the
+extraction as a pure function over a string so the test needs no process.
+A green suite over a faked seam is not evidence that the path crossing the
+real boundary works.
+
 **If a test needs many doubles, the code under test has too many
 dependencies.** Fix the design, not the test.
 
@@ -359,7 +373,9 @@ Adjust the code to fit the test, never the test to avoid the code.
 fallback — a delegate, a retry, a cached answer — a test can pass because
 the fallback answered while the code under test was never reached. If a
 fallback exists, prove it stayed out of the way; see the
-proving-the-code-under-test-ran pattern.
+proving-the-code-under-test-ran pattern. The sibling case is a double
+standing in for the real path: see the faked-seam rule under Fakes over
+stubs over mocks.
 
 ## What not to test
 
