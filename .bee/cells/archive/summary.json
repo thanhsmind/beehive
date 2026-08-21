@@ -723,5 +723,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-21T09:35:20.718Z"
+  },
+  "doctor-freshness-version": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-21T09:41:53.631Z"
   }
 }

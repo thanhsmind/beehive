@@ -51,20 +51,37 @@
       "No process spawned in any test beyond the existing executable stub"
     ]
   },
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "w-dfv-1",
-    "outcome": null,
-    "files_changed": [],
+    "outcome": "binary_freshness compares the real release version and watches the manifest that carries it",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/doctor.rs",
+      "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+      "packages/bee-rs/crates/bee/src/router.rs"
+    ],
     "deviations": [],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-21T09:41:29.206Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "7dcda44f-e90a-4291-af12-cb3b603d9acf",
-    "claimed_at": "2026-08-21T09:06:22.028Z"
+    "claimed_at": "2026-08-21T09:06:22.028Z",
+    "report": {
+      "outcome": "doctor binary_freshness now compares the checkout release version against the release version the installed binary reports, and treats the plugin manifest as a source input",
+      "commit": "726bcf99",
+      "files": [
+        "packages/bee-rs/crates/bee/src/doctor.rs",
+        "packages/bee-rs/crates/bee/src/doctor/tests.rs",
+        "packages/bee-rs/crates/bee/src/router.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml doctor — 16 passed, 0 failed — the doctor module owns every changed line; a live end-to-end run also confirmed a binary one release behind its checkout is reported not_ok where it previously read ok",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
   },
   "tier": "generation"
 }
