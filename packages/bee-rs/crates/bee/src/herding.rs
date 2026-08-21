@@ -91,6 +91,11 @@ mod mailbox;
 // See run.rs.
 mod run;
 
+// The cross-PROCESS pane-split lock (herding-split-serialize): concurrent
+// `bee herding run` processes serialize their pane split through an advisory
+// lock file, because each spawn is its own OS process. See split_lock.rs.
+mod split_lock;
+
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
