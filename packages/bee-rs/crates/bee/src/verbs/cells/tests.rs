@@ -314,6 +314,242 @@ use std::time::Instant;
     }
 
     #[test]
+    fn show_annotates_claimed_cell_with_live_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let body = json!({
+            "id": "c-1",
+            "title": "c",
+            "status": "claimed",
+            "verify": "run checks",
+            "trace": default_trace()
+        });
+        write_cell_fixture(root, "c-1", &body);
+        let now_iso = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+        write_session_fixture(root, "sess-1", &now_iso, Some("lane-1"));
+        write_claim_fixture(root, "c-1", Some("sess-1"), 3600.0, &now_iso);
+
+        let Handled::Emit { result, .. } = handle_show(root, "c-1").unwrap() else { panic!() };
+        let claim = result.get("claim").expect("claim annotation must be present");
+        assert_eq!(claim.get("session"), Some(&json!("sess-1")));
+        assert_eq!(claim.get("holder_alive"), Some(&json!(true)));
+        assert_eq!(claim.get("verdict"), Some(&json!("held")));
+        assert_eq!(claim.get("expired"), Some(&json!(false)));
+        assert!(claim.get("expiry").unwrap().as_str().unwrap().starts_with("expires "));
+        let keys: Vec<&String> = result.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["id", "title", "status", "verify", "verify_owner", "trace", "claim"]);
+    }
+
+    #[test]
+    fn show_annotates_claimed_cell_with_closed_session_as_holder_not_alive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let body = json!({
+            "id": "c-closed",
+            "title": "c",
+            "status": "claimed"
+        });
+        write_cell_fixture(root, "c-closed", &body);
+        let now_iso = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+        let s_dir = sessions_dir(root);
+        std::fs::create_dir_all(&s_dir).unwrap();
+        std::fs::write(
+            s_dir.join("sess-closed.json"),
+            jsjson::stringify_pretty(&json!({
+                "id": "sess-closed",
+                "status": "closed",
+                "last_heartbeat": now_iso,
+                "started_at": now_iso
+            })),
+        )
+        .unwrap();
+        write_claim_fixture(root, "c-closed", Some("sess-closed"), 3600.0, &now_iso);
+
+        let Handled::Emit { result, .. } = handle_show(root, "c-closed").unwrap() else { panic!() };
+        let claim = result.get("claim").expect("claim annotation must be present");
+        assert_eq!(claim.get("session"), Some(&json!("sess-closed")));
+        assert_eq!(claim.get("holder_alive"), Some(&json!(false)));
+        assert_eq!(claim.get("verdict"), Some(&json!("held")));
+        assert_eq!(claim.get("expired"), Some(&json!(false)));
+    }
+
+    #[test]
+    fn show_annotates_expired_claim_sweepable_when_holder_stale_and_held_when_holder_alive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let old_iso = "2020-01-01T00:00:00.000Z";
+        let now_iso = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+
+        // 1. Expired claim with stale session -> sweepable
+        write_cell_fixture(root, "c-exp-stale", &json!({"id": "c-exp-stale", "status": "claimed"}));
+        write_session_fixture(root, "sess-stale", old_iso, None);
+        write_claim_fixture(root, "c-exp-stale", Some("sess-stale"), 10.0, old_iso);
+
+        let Handled::Emit { result: res_stale, .. } = handle_show(root, "c-exp-stale").unwrap() else { panic!() };
+        let claim_stale = res_stale.get("claim").unwrap();
+        assert_eq!(claim_stale.get("expired"), Some(&json!(true)));
+        assert_eq!(claim_stale.get("holder_alive"), Some(&json!(false)));
+        assert_eq!(claim_stale.get("verdict"), Some(&json!("sweepable")));
+
+        // 2. Expired claim with live session -> held
+        write_cell_fixture(root, "c-exp-live", &json!({"id": "c-exp-live", "status": "claimed"}));
+        write_session_fixture(root, "sess-live", &now_iso, None);
+        write_claim_fixture(root, "c-exp-live", Some("sess-live"), 10.0, old_iso);
+
+        let Handled::Emit { result: res_live, .. } = handle_show(root, "c-exp-live").unwrap() else { panic!() };
+        let claim_live = res_live.get("claim").unwrap();
+        assert_eq!(claim_live.get("expired"), Some(&json!(true)));
+        assert_eq!(claim_live.get("holder_alive"), Some(&json!(true)));
+        assert_eq!(claim_live.get("verdict"), Some(&json!("held")));
+    }
+
+    #[test]
+    fn show_annotates_sessionless_claim_with_session_null() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "c-nosess", &json!({"id": "c-nosess", "status": "claimed"}));
+        let now_iso = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+        write_claim_fixture(root, "c-nosess", None, 3600.0, &now_iso);
+
+        let Handled::Emit { result, .. } = handle_show(root, "c-nosess").unwrap() else { panic!() };
+        let claim = result.get("claim").expect("claim annotation must be present");
+        assert_eq!(claim.get("session"), Some(&Value::Null));
+        assert_eq!(claim.get("holder_alive"), Some(&json!(false)));
+        assert_eq!(claim.get("verdict"), Some(&json!("held")));
+    }
+
+    #[test]
+    fn list_annotates_claimed_row_and_leaves_unclaimed_row_byte_identical() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let cell_unclaimed = json!({
+            "id": "u-1",
+            "title": "unclaimed cell",
+            "status": "open",
+            "lane": "small"
+        });
+        let cell_claimed = json!({
+            "id": "c-1",
+            "title": "claimed cell",
+            "status": "claimed",
+            "lane": "small"
+        });
+        write_cell_fixture(root, "u-1", &cell_unclaimed);
+        write_cell_fixture(root, "c-1", &cell_claimed);
+
+        let now_iso = rsv::iso_from_ms(rsv::now_ms()).ok().unwrap();
+        write_session_fixture(root, "sess-1", &now_iso, None);
+        write_claim_fixture(root, "c-1", Some("sess-1"), 3600.0, &now_iso);
+
+        let Handled::Emit { result, .. } = handle_list(root, None, None).unwrap() else { panic!() };
+        let arr = result.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+
+        let u1 = arr.iter().find(|c| c.get("id") == Some(&json!("u-1"))).unwrap();
+        let c1 = arr.iter().find(|c| c.get("id") == Some(&json!("c-1"))).unwrap();
+
+        assert_eq!(u1.get("claim"), None);
+        let u1_keys: Vec<&String> = u1.as_object().unwrap().keys().collect();
+        assert_eq!(u1_keys, vec!["id", "title", "status", "lane"]);
+
+        assert!(c1.get("claim").is_some());
+        let c1_keys: Vec<&String> = c1.as_object().unwrap().keys().collect();
+        assert_eq!(c1_keys, vec!["id", "title", "status", "lane", "claim"]);
+    }
+
+    #[test]
+    fn summarize_cell_renders_holder_suffix_for_claimed_and_old_line_for_unclaimed() {
+        let unclaimed = json!({
+            "id": "u-1",
+            "status": "open",
+            "lane": "small",
+            "title": "My title"
+        });
+        assert_eq!(summarize_cell(&unclaimed), "u-1 [open] (small) My title");
+
+        let claimed_held = json!({
+            "id": "c-1",
+            "status": "claimed",
+            "lane": "small",
+            "title": "My title",
+            "claim": {
+                "session": "s1",
+                "verdict": "held",
+                "holder_alive": true,
+                "expiry": "expires 2026-08-21T18:00:00.000Z"
+            }
+        });
+        assert_eq!(
+            summarize_cell(&claimed_held),
+            "c-1 [claimed] (small) My title — held by session s1"
+        );
+
+        let claimed_held_dead = json!({
+            "id": "c-1",
+            "status": "claimed",
+            "lane": "small",
+            "title": "My title",
+            "claim": {
+                "session": "s1",
+                "verdict": "held",
+                "holder_alive": false,
+                "expiry": "expires 2026-08-21T18:00:00.000Z"
+            }
+        });
+        assert_eq!(
+            summarize_cell(&claimed_held_dead),
+            "c-1 [claimed] (small) My title — held by session s1 (holder not alive, claim still valid until expires 2026-08-21T18:00:00.000Z)"
+        );
+
+        let claimed_sessionless = json!({
+            "id": "c-1",
+            "status": "claimed",
+            "lane": "small",
+            "title": "My title",
+            "claim": {
+                "session": null,
+                "verdict": "held",
+                "holder_alive": true,
+                "expiry": "no expiry"
+            }
+        });
+        assert_eq!(
+            summarize_cell(&claimed_sessionless),
+            "c-1 [claimed] (small) My title — held by sessionless claim"
+        );
+
+        let claimed_sweepable = json!({
+            "id": "c-1",
+            "status": "claimed",
+            "lane": "small",
+            "title": "My title",
+            "claim": {
+                "session": "s1",
+                "verdict": "sweepable",
+                "holder_alive": false,
+                "expiry": "expires 2020-01-01T00:00:00.000Z"
+            }
+        });
+        assert_eq!(
+            summarize_cell(&claimed_sweepable),
+            "c-1 [claimed] (small) My title — claim expired and holder not alive (sweepable)"
+        );
+    }
+
+    #[test]
+    fn show_and_list_delegate_when_claim_file_is_json_array() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_cell_fixture(root, "c-arr", &json!({"id": "c-arr", "status": "claimed"}));
+        let c_dir = claims_dir(root);
+        std::fs::create_dir_all(&c_dir).unwrap();
+        std::fs::write(c_dir.join("c-arr.json"), "[1, 2, 3]").unwrap();
+
+        assert!(handle_show(root, "c-arr").is_err(), "show must delegate on json array claim");
+        assert!(handle_list(root, None, None).is_err(), "list must delegate on json array claim");
+    }
+
+    #[test]
     fn show_not_found_message_matches_node_and_reads_archive() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
