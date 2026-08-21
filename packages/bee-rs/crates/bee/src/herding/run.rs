@@ -865,6 +865,19 @@ fn is_agent_prompt_stalled(e: &str) -> bool {
     e.contains("agent_prompt_stalled")
 }
 
+/// herding-prompt-stall D1/D4 (hps-11): herdr's OTHER `agent prompt --wait`
+/// failure shape — the submission itself landed (herdr's own five-second
+/// stall detector did not fire), only the state did not settle inside
+/// bee's `--timeout` window. Distinct from `is_agent_prompt_stalled`: a
+/// stall means no submission was observed at all, a timeout means one WAS
+/// made. Mirrors `is_agent_prompt_stalled`'s house style — a small
+/// substring predicate over herdr's error string — captured live from
+/// `{"error":{"code":"timeout","message":"timed out waiting for agent
+/// status"}}`.
+fn is_agent_prompt_timeout(e: &str) -> bool {
+    e.contains("\"code\":\"timeout\"") || e.contains("timed out waiting for agent status")
+}
+
 fn start_with_retry(
     start: &mut dyn FnMut() -> Result<(), String>,
     sleep: &mut dyn FnMut(Duration),
@@ -886,9 +899,16 @@ fn start_with_retry(
 }
 
 /// herdr's `agent_prompt --wait --until working --timeout` window
-/// (herding-prompt-stall D1): long enough to cross herdr's own five-second
-/// stall detector without padding it further.
-const AGENT_PROMPT_TIMEOUT_MS: u64 = 5_000;
+/// (herding-prompt-stall D1, raised by hps-11): setting this to EXACTLY
+/// herdr's own five-second stall detector gave the wait no room at all —
+/// bee's own client-side deadline and herdr's internal detector raced for
+/// the same instant, so bee's deadline routinely won and bee saw a bare
+/// `{"error":{"code":"timeout",...}}` before herdr's detector ever got to
+/// fire (or the agent got to settle). Captured live on a healthy pane:
+/// `--timeout 5000` returned `timeout`; `--timeout 20000` on the SAME pane
+/// returned a `working` observation and the brief landed. Comfortably
+/// above herdr's 5s window, not padding it further.
+const AGENT_PROMPT_TIMEOUT_MS: u64 = 20_000;
 
 /// herding-prompt-stall D4 (hps-6 narrows the cadence, decisions unchanged):
 /// how many times the idempotent pointer is (re)sent while the agent keeps
@@ -970,12 +990,18 @@ impl std::fmt::Display for DeliveryError {
 /// D1 / herding-receipt-state D1; hps-6 narrows the cadence below, decisions
 /// unchanged): herdr's own atomic submit-and-observe — `herdr agent prompt
 /// <job> <text> --wait --until working --timeout <ms>` — still sends the
-/// pointer and still fails FAST on the two things herdr can observe
-/// immediately: a pane already `blocked` (checked before the send is even
+/// pointer. `agent_prompt`'s reply now sorts into THREE outcomes, not two
+/// (hps-11). A pane already `blocked` (checked before the send is even
 /// attempted — there is no point submitting into a pane waiting on an
 /// unrelated question) and `agent_prompt_stalled` (no observed lifecycle
-/// change within herdr's own five-second window). But a successful
-/// "working" observation is no longer the receipt: herdr lifecycle state
+/// change at all within herdr's own five-second window — the submission
+/// never landed) both still fail FAST as hard delivery errors. A `timeout`
+/// reply is different: the submission WAS made, only the state did not
+/// settle inside bee's own wait window — that is not a delivery failure,
+/// so it falls straight through into the same ack poll a successful send
+/// enters, exactly like the `Ok(())` branch below with no ack yet. A
+/// successful "working" observation is no longer the receipt either way:
+/// herdr lifecycle state
 /// proved unreliable on its own (a boot flap through
 /// unknown/working/idle/done satisfied the old transition test and
 /// receipted a pointer a booting TUI discarded — live: job trust-par-2,
@@ -1025,6 +1051,12 @@ fn deliver_pointer(
             }
             Err(_) if ack_present() || result_present() => return Ok(()),
             Err(e) if is_agent_prompt_stalled(&e) => return Err(DeliveryError::Stalled(e)),
+            Err(e) if is_agent_prompt_timeout(&e) => {
+                // The submission WAS made — herdr's own stall detector
+                // never fired, only bee's wait window ran out before the
+                // state settled. Not a delivery failure: fall through into
+                // the same ack poll a successful send enters below.
+            }
             Err(e) => return Err(DeliveryError::Transport(e)),
         }
 
@@ -2825,6 +2857,50 @@ mod tests {
             other => panic!("expected DeliveryError::Stalled, got {other:?}"),
         }
         assert_eq!(*sent.borrow(), 1, "exactly one send, never a resend");
+    }
+
+    #[test]
+    fn is_agent_prompt_stalled_matches_the_captured_live_stalled_body() {
+        // hps-11: parse-level pin over the exact body captured live
+        // (docs/history/herding-prompt-stall/CONTEXT.md) — no process spawned.
+        let body = r#"{"error":{"code":"agent_prompt_stalled","message":"agent prompt produced no observed state change within 5000 ms; status is idle and state_change_seq remained 771"},"id":"cli:agent:prompt"}"#;
+        assert!(is_agent_prompt_stalled(body));
+        assert!(!is_agent_prompt_timeout(body));
+    }
+
+    #[test]
+    fn is_agent_prompt_timeout_matches_the_captured_live_timeout_body() {
+        // hps-11: parse-level pin over the exact body captured live —
+        // `--timeout 5000` on a healthy pane — no process spawned.
+        let body = r#"{"error":{"code":"timeout","message":"timed out waiting for agent status"}}"#;
+        assert!(is_agent_prompt_timeout(body));
+        assert!(!is_agent_prompt_stalled(body));
+    }
+
+    #[test]
+    fn deliver_pointer_falls_through_to_the_ack_poll_on_a_herdr_timeout_reply() {
+        // hps-11: a `timeout` reply means the submission WAS made — unlike
+        // agent_prompt_stalled it must NOT abort delivery. It polls for the
+        // ack exactly as a successful send would, never resending blind.
+        let sent = std::cell::RefCell::new(0u32);
+        let polls = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Err(r#"{"error":{"code":"timeout","message":"timed out waiting for agent status"}}"#.to_string())
+            },
+            &mut || Some("working".to_string()),
+            &mut || {
+                *polls.borrow_mut() += 1;
+                *polls.borrow() >= 2
+            },
+            &mut || false,
+            &mut |_d| {},
+            &mut || 0,
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 1, "exactly one send — a timeout reply is never resent blind");
     }
 
     #[test]
