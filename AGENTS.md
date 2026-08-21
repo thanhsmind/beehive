@@ -49,8 +49,7 @@ Four boundaries hold in every mode:
 `bee --help --json` prints the porcelain flow surface; `--names` adds a
 one-line-per-command index (plain `bee --help` / `bee --help --all` are the
 human-readable spellings of the same two surfaces). Spend full text on
-`bee <command> --help` before the FIRST use of a verb in a session — never
-guess flags; one read per verb is enough, never re-read.
+`bee <command> --help`.
 
 ## Judgment and deviation
 
