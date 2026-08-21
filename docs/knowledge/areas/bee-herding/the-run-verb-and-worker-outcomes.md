@@ -36,7 +36,7 @@ nothing.
 targets the roomiest pane in the caller's own tab, and the direction comes from
 how many panes that tab already holds: exactly one (an untouched root) splits
 `right`, so a single worker gets the full-height column; two or more split
-`down`, so every later worker lands as a full-width band under the last. A
+`down`, so each further worker lands as a full-width band under the last. A
 `down` split leaves width untouched, so width halves at most once no matter how
 many workers a tab collects. The rule replaced an aspect-ratio read that
 answered `right` again and again on a wide tab: measured live, a 120-column tab
