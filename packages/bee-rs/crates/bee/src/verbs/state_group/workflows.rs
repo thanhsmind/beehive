@@ -717,6 +717,14 @@ pub(crate) fn live_lane_features(root: &Path) -> Ex<Vec<String>> {
 /// the default record an explicit choice; a lane target is already
 /// unambiguous; and with no live lane records there is no rival writer at
 /// all, so a single-lane repo behaves exactly as it did before.
+///
+/// The guard sits BEFORE the older no-active-feature refusal, so in a repo
+/// with live lanes it shadows that one — deliberately, since an unbound blind
+/// write is the more fundamental objection. That means the featureless case
+/// reaches this message too, and it gets its OWN sentence: there is no
+/// feature there and therefore no triage to overwrite, so claiming otherwise
+/// would explain a correct refusal with a false statement. Both exits are
+/// identical either way.
 pub(crate) fn unbound_default_route_refusal(
     target: &Target,
     no_lane: bool,
@@ -725,10 +733,6 @@ pub(crate) fn unbound_default_route_refusal(
     if no_lane || target.lane().is_some() || live_lanes.is_empty() {
         return None;
     }
-    let feature_disp = match target.record().get("feature") {
-        None | Some(Value::Null) => "none".to_string(),
-        Some(v) => js_disp(v),
-    };
     // Up to three names inline, the rest elided — a repo with a dozen lanes
     // still gets a one-line refusal.
     let shown: Vec<&str> = live_lanes.iter().take(3).map(String::as_str).collect();
@@ -736,8 +740,17 @@ pub(crate) fn unbound_default_route_refusal(
         0 => shown.join(", "),
         rest => format!("{}, +{rest} more", shown.join(", ")),
     };
+    // Absent, null, and "" all mean the same thing here: no active feature.
+    let feature = target.record().get("feature").filter(|v| truthy(v));
+    let holds = match feature {
+        Some(v) => format!(
+            "the default record (.bee/state.json) carries feature \"{}\". Writing here would overwrite that feature's own triage.",
+            js_disp(v)
+        ),
+        None => "the default record (.bee/state.json) holds no active feature at all, so this route would have no feature to belong to.".to_string(),
+    };
     Some(format!(
-        "route --set: refused \u{2014} this session is not bound to a lane, but {} lane record(s) are live ({named}), and the default record (.bee/state.json) carries feature \"{feature_disp}\". Writing here would overwrite that feature's own triage. FIX: bind this session to its lane (bee state session bind --lane <feature>), or pass --no-lane to write the default record on purpose.",
+        "route --set: refused \u{2014} this session is not bound to a lane, but {} lane record(s) are live ({named}), and {holds} FIX: bind this session to its lane (bee state session bind --lane <feature>), or pass --no-lane to write the default record on purpose.",
         live_lanes.len()
     ))
 }

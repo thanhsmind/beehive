@@ -273,3 +273,47 @@ fn no_lane_is_type_checked_like_every_other_boolean_flag() {
     );
     assert_eq!(state_json(&repo), before, "a rejected flag value writes nothing");
 }
+
+#[test]
+fn a_featureless_default_record_is_refused_without_inventing_a_feature_to_protect() {
+    // The guard sits BEFORE the older no-active-feature refusal, so with lanes
+    // live it shadows that one — per spec, since an unbound blind write is the
+    // more fundamental objection. The refusal is still right here, but the
+    // REASON must be: there is no feature on the default record, so there is
+    // no triage to overwrite, and saying `feature "none"` would teach the next
+    // reader a model the repo does not have.
+    let tmp = tempfile::tempdir().unwrap();
+    let repo = fixture(tmp.path(), &[("lane-a", "shaping"), ("lane-b", "planning")]);
+    std::fs::write(repo.join(".bee/state.json"), r#"{"phase":"idle","feature":null,"gates":{}}"#)
+        .unwrap();
+    let before = state_json(&repo);
+
+    let (code, out) = run(&repo, &set_args(), None);
+
+    assert_eq!(code, 1, "the refusal must still fire: {out}");
+    assert!(out.contains("route --set: refused"), "{out}");
+    assert!(
+        out.contains("not bound to a lane") && out.contains("2 lane record(s) are live"),
+        "the live-lane half of the sentence is unchanged: {out}"
+    );
+    assert!(
+        !out.contains("feature \"none\""),
+        "the refusal must not invent a feature that does not exist: {out}"
+    );
+    assert!(
+        !out.contains("overwrite that feature's own triage"),
+        "there is no triage to overwrite when there is no feature: {out}"
+    );
+    assert!(
+        out.contains("holds no active feature at all"),
+        "the refusal must say what is actually true of the default record: {out}"
+    );
+    // BOTH exits stay, unchanged — they are still the real ways out.
+    assert!(out.contains("bee state session bind --lane"), "{out}");
+    assert!(
+        out.contains("pass --no-lane to write the default record on purpose"),
+        "{out}"
+    );
+
+    assert_eq!(state_json(&repo), before, "the refusal wrote to the default record");
+}
