@@ -357,10 +357,24 @@ trait Herdr {
     /// `herdr pane close <id>` — best-effort; a failure here is reported,
     /// never allowed to hide the run's own result.
     fn pane_close(&self, pane_id: &str) -> Result<(), String>;
-    /// `herdr agent prompt <job_id> <prompt>` (D3 `--continue`) — sends the
-    /// round N+1 brief to an ALREADY-RUNNING agent, never `agent start`
-    /// (that would spawn a second agent instead of continuing this one).
-    fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String>;
+    /// `herdr agent prompt <job_id> <prompt> --wait --until <state>
+    /// --timeout <ms>` (D3 `--continue`; herding-prompt-stall D1) — sends
+    /// the round N+1 brief (or the initial pointer) to an ALREADY-RUNNING
+    /// agent, never `agent start` (that would spawn a second agent instead
+    /// of continuing this one). `--wait` is herdr's own atomic
+    /// submit-and-observe: a prompt sent from a non-`working` state that
+    /// produces no observed lifecycle change within `timeout_ms` comes back
+    /// `agent_prompt_stalled` (`is_agent_prompt_stalled`) instead of herdr
+    /// waiting indefinitely — bee never resends blind into a booting TUI.
+    fn agent_prompt(&self, job_id: &str, prompt: &str, until: &str, timeout_ms: u64) -> Result<(), String>;
+    /// `herdr agent wait <job_id> --until idle --until done --timeout <ms>`
+    /// (herding-prompt-stall D2) — herdr's own settle-aware wait: blocks
+    /// herdr-side up to `timeout_ms` for the agent to settle into `idle`,
+    /// `done`, or `blocked`, then returns whatever it observed. `None` on
+    /// any trouble (herdr missing, an unparseable body, no settle inside
+    /// the window) — same fail-safe shape as `agent_status`: an
+    /// unverifiable status never counts as a ready or heartbeat signal.
+    fn agent_wait(&self, job_id: &str, timeout_ms: u64) -> Option<String>;
     /// `herdr pane list`, membership-tested against `pane_id` — the D3
     /// `--continue` "is the pane gone" check. Unlike `pane_rect` (which
     /// fails open to a default direction on ANY trouble), this fails
@@ -495,8 +509,21 @@ impl Herdr for RealHerdr {
         self.call(&["pane", "close", pane_id]).map(|_| ())
     }
 
-    fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String> {
-        self.call(&["agent", "prompt", job_id, prompt]).map(|_| ())
+    fn agent_prompt(&self, job_id: &str, prompt: &str, until: &str, timeout_ms: u64) -> Result<(), String> {
+        let timeout = timeout_ms.to_string();
+        self.call(&["agent", "prompt", job_id, prompt, "--wait", "--until", until, "--timeout", &timeout])
+            .map(|_| ())
+    }
+
+    fn agent_wait(&self, job_id: &str, timeout_ms: u64) -> Option<String> {
+        let timeout = timeout_ms.to_string();
+        let v = self
+            .call(&["agent", "wait", job_id, "--until", "idle", "--until", "done", "--timeout", &timeout])
+            .ok()?;
+        v.get("result")
+            .and_then(|r| r.get("agent_status").or_else(|| r.get("status")))
+            .and_then(Value::as_str)
+            .map(str::to_string)
     }
 
     fn pane_alive(&self, pane_id: &str) -> bool {
@@ -592,6 +619,9 @@ enum PollDecision {
     TimedOutCeiling,
     PausedLimit,
     Died { pid: Option<u32> },
+    /// D3: herdr reported `blocked` this tick — ends the wait at once,
+    /// ahead of the idle timeout and the ceiling.
+    Blocked,
 }
 
 /// The whole D5 timing rule, pure: a result already present short-circuits
@@ -646,6 +676,8 @@ struct PollTick {
     heartbeat_fresh: bool,
     pane_text: Option<String>,
     liveness: Option<Liveness>,
+    /// D3: this tick observed herdr's `blocked` status.
+    blocked: bool,
 }
 
 /// The loop `decide_poll` drives: sleep, observe, decide, repeat until a
@@ -670,6 +702,9 @@ fn run_poll_loop(
         let heartbeat_already_stale = tick_now_ms.saturating_sub(last_heartbeat_ms)
             >= (idle_timeout_secs as i64).saturating_mul(1000);
         let observed = tick(heartbeat_already_stale);
+        if observed.blocked && !observed.result_ready {
+            return PollDecision::Blocked;
+        }
         if observed.heartbeat_fresh {
             last_heartbeat_ms = tick_now_ms;
         }
@@ -734,6 +769,17 @@ fn is_pane_busy_error(e: &str) -> bool {
     e.contains("agent_pane_busy") || e.contains("not an available shell")
 }
 
+/// herding-prompt-stall D1: herdr's own five-second stall detector — a
+/// prompt sent from a non-`working` state that produces no observed
+/// lifecycle change within the `--timeout` window comes back
+/// `agent_prompt_stalled` instead of herdr waiting indefinitely. Mirrors
+/// `is_pane_busy_error`'s house style: a small predicate over herdr's error
+/// string, so the caller can branch a stall away from an ordinary transport
+/// error.
+fn is_agent_prompt_stalled(e: &str) -> bool {
+    e.contains("agent_prompt_stalled")
+}
+
 fn start_with_retry(
     start: &mut dyn FnMut() -> Result<(), String>,
     sleep: &mut dyn FnMut(Duration),
@@ -754,56 +800,90 @@ fn start_with_retry(
     Err(format!("{last} (after {START_RETRY_ATTEMPTS} start attempts, shell never became available)"))
 }
 
-/// herding-run-ready-wait D1: polls `status()` until the agent reports
-/// `idle` (ready for input) or the ready-wait ceiling passes. Check-then-sleep:
-/// an agent already idle is accepted with zero sleeps, and a 0-second ceiling
-/// with no status is exhausted immediately — both drive the tests without a
-/// real clock. Ready gate is idle-only: booting or working agents are not ready.
-///
-/// herding-receipt-state D1: sends the one-line pointer and treats it as
-/// delivered only when the AGENT'S STATE confirms receipt — an agent-caused
-/// transition into `working` (baseline != "working" observed transitioning to
-/// "working"), or the round's result file appears (an ultra-fast round can
-/// finish before a status poll sees "working"). 'done' was dropped because a
-/// stale done from a prior round is not evidence this round's pointer arrived.
-/// Pane text is no receipt: the pane echoes the send's own keystrokes during
-/// agent boot (live smoke smoke-agy-delivery-1/-2: the echoed pointer satisfied
-/// the old needle check ~6s after spawn, the booting TUI then discarded the
-/// buffered input, and the run waited on a brief no agent ever saw). An agent
-/// that does not transition to working after a per-attempt watch window gets a
-/// resend; the pointer is idempotent (read the same file), so a duplicate
-/// delivery is harmless. Bounded attempts; injected wait seam, same style as
-/// the other loops.
-const POINTER_DELIVERY_ATTEMPTS: u32 = 30;
-/// Status polls after each send before the next resend (~2s at
-/// `POLL_INTERVAL`): live smoke shows a real accepted prompt flips agy to
-/// working ("Generating") within about a second.
-const RECEIPT_POLLS_PER_ATTEMPT: u32 = 10;
+/// herdr's `agent_prompt --wait --until working --timeout` window
+/// (herding-prompt-stall D1): long enough to cross herdr's own five-second
+/// stall detector without padding it further.
+const AGENT_PROMPT_TIMEOUT_MS: u64 = 5_000;
 
+/// herding-prompt-stall D1/D3: the delivery outcomes `deliver_pointer` can
+/// return, kept distinct because each gets its own message and neither ever
+/// triggers a resend loop.
+#[derive(Debug)]
+enum DeliveryError {
+    /// D3: the pane already reported `blocked` (an approval or question UI)
+    /// before the pointer was ever sent.
+    Blocked,
+    /// D1: herdr's own `agent_prompt_stalled` — the submit produced no
+    /// observed lifecycle change within the wait window.
+    Stalled(String),
+    /// An ordinary herdr-call failure, unrelated to the agent's lifecycle
+    /// (herdr missing, a non-zero exit, an unparseable body).
+    Transport(String),
+}
+
+impl std::fmt::Display for DeliveryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DeliveryError::Blocked => write!(
+                f,
+                "pane is blocked (herdr recognized an approval or question UI) before the prompt was ever sent"
+            ),
+            DeliveryError::Stalled(e) => write!(f, "herdr reported agent_prompt_stalled: {e}"),
+            DeliveryError::Transport(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+/// herding-prompt-stall D1 (supersedes herding-pointer-delivery D1 /
+/// herding-receipt-state D1): the send IS herdr's own atomic
+/// submit-and-observe, `herdr agent prompt <job> <text> --wait --until
+/// working --timeout <ms>` — herdr's own `agent_prompt_stalled` (its
+/// five-second no-observed-change detector) IS the delivery failure now,
+/// surfaced at once, never a resend. bee's hand-rolled baseline/transition
+/// poll and its up to 30 blind resends are retired: sampled right after
+/// `agent start` it read the boot window, where an agy pane flaps through
+/// unknown/working/idle/done — a boot flap satisfied the old transition
+/// test and receipted a pointer a booting TUI discarded (live: job
+/// trust-par-2, docs/history/herding-prompt-stall/CONTEXT.md). D3: a pane
+/// already `blocked` fails before the send is even attempted — there is no
+/// point submitting into a pane that is waiting on an unrelated question.
+/// `result_present()` is kept as the one escape: an ultra-fast round can
+/// write its result file before herdr ever observes the "working"
+/// transition, so a stalled send that already produced a result still
+/// counts as delivered.
 fn deliver_pointer(
-    job_id: &str,
     pointer: &str,
     prompt: &mut dyn FnMut(&str) -> Result<(), String>,
     status: &mut dyn FnMut() -> Option<String>,
     result_present: &mut dyn FnMut() -> bool,
-    sleep: &mut dyn FnMut(Duration),
-) -> Result<(), String> {
-    let _ = job_id;
-    for _ in 1..=POINTER_DELIVERY_ATTEMPTS {
-        let baseline = status();
-        prompt(pointer).map_err(|e| format!("agent prompt failed: {e}"))?;
-        for _ in 0..RECEIPT_POLLS_PER_ATTEMPT {
-            if (baseline.as_deref() != Some("working") && status().as_deref() == Some("working"))
-                || result_present()
-            {
-                return Ok(());
-            }
-            sleep(POLL_INTERVAL);
-        }
+) -> Result<(), DeliveryError> {
+    if status().as_deref() == Some("blocked") {
+        return Err(DeliveryError::Blocked);
     }
-    Err(format!(
-        "agent stayed idle through {POINTER_DELIVERY_ATTEMPTS} pointer sends — the prompt was never accepted (state receipt)"
-    ))
+    match prompt(pointer) {
+        Ok(()) => Ok(()),
+        Err(_) if result_present() => Ok(()),
+        Err(e) if is_agent_prompt_stalled(&e) => Err(DeliveryError::Stalled(e)),
+        Err(e) => Err(DeliveryError::Transport(e)),
+    }
+}
+
+/// herding-prompt-stall D2 (narrows herding-run-ready-wait D1): polls
+/// `status()` until the agent reports `idle` OR `done` — herdr states
+/// `done` is the same underlying ready-for-input state for a tab that has
+/// not been seen in the focused UI, CLI reads never mark a tab seen, and
+/// every pane this verb splits carries `--no-focus`, so `done` is the
+/// NORMAL resting state of a bee worker pane; idle-only rejected a pane
+/// that was ready. D3: a `blocked` status ends the wait at once — the
+/// ready-wait ceiling and its sleeps are never burned on a question nobody
+/// is going to answer. Check-then-sleep: an agent already idle/done is
+/// accepted with zero sleeps, and a 0-second ceiling with no status is
+/// exhausted immediately — both drive the tests without a real clock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReadyOutcome {
+    Ready,
+    Blocked,
+    TimedOut,
 }
 
 fn wait_for_agent_ready(
@@ -812,14 +892,16 @@ fn wait_for_agent_ready(
     mut status: impl FnMut() -> Option<String>,
     mut sleep: impl FnMut(Duration),
     mut now: impl FnMut() -> i64,
-) -> bool {
+) -> ReadyOutcome {
     let started = now();
     loop {
-        if status().as_deref() == Some("idle") {
-            return true;
+        match status().as_deref() {
+            Some("idle") | Some("done") => return ReadyOutcome::Ready,
+            Some("blocked") => return ReadyOutcome::Blocked,
+            _ => {}
         }
         if now().saturating_sub(started) >= (ready_wait_secs as i64).saturating_mul(1000) {
-            return false;
+            return ReadyOutcome::TimedOut;
         }
         sleep(poll_interval);
     }
@@ -827,6 +909,28 @@ fn wait_for_agent_ready(
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
+}
+
+/// The last few lines of a pane's capture, for a blocked-pane error's
+/// remedy text — enough to show WHAT is being asked without dumping a full
+/// screen (reuses `Herdr::pane_read`).
+fn pane_tail(herdr: &dyn Herdr, pane_id: &str) -> String {
+    let text = herdr.pane_read(pane_id).unwrap_or_default();
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.len().saturating_sub(8);
+    lines[start..].join("\n")
+}
+
+/// D3: the one message every blocked wait point returns — names the job,
+/// the pane, shows its tail, and states the remedy. `blocked` is herdr's
+/// whole mechanism for an approval or question UI: bee carries no
+/// agent-specific trust-prompt pattern table.
+fn blocked_message(job_id: &str, pane_id: &str, tail: &str) -> String {
+    format!(
+        "job {job_id} pane {pane_id} is blocked (herdr recognized an approval or question UI) — \
+remedy: answer the prompt in pane {pane_id}, or pre-authorize whatever it is asking so the agent \
+stops asking\npane tail:\n{tail}"
+    )
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -895,6 +999,11 @@ enum RunOutcome {
     TimedOutCeiling,
     PausedLimit,
     Died { pid: Option<u32> },
+    /// D3: herdr reported `blocked` during the round poll — the agent
+    /// started and received its prompt, but the pane now shows an approval
+    /// or question UI. Distinct from `SpawnFailed`: this fires mid-round,
+    /// never before dispatch.
+    PaneBlocked(String),
 }
 
 struct ExecResult {
@@ -1045,9 +1154,13 @@ fn wait_for_round(
                     }
                 }
             }
-            if herdr.agent_status(job_id).as_deref() == Some("working") {
+            // One status read serves both the heartbeat check and the
+            // blocked check (D3) — never two herdr calls for one tick.
+            let status = herdr.agent_status(job_id);
+            if status.as_deref() == Some("working") {
                 heartbeat_fresh = true;
             }
+            let blocked = status.as_deref() == Some("blocked");
             let liveness = if tick_index % 10 == 0 {
                 Some(herdr.process_info(pane_id))
             } else {
@@ -1058,7 +1171,7 @@ fn wait_for_round(
             } else {
                 None
             };
-            PollTick { result_ready, heartbeat_fresh, pane_text, liveness }
+            PollTick { result_ready, heartbeat_fresh, pane_text, liveness, blocked }
         },
         |d| std::thread::sleep(d),
         now_ms,
@@ -1174,19 +1287,30 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     let ready = wait_for_agent_ready(
         opts.ready_wait_secs,
         POLL_INTERVAL,
-        || herdr.agent_status(&opts.job_id),
+        || herdr.agent_wait(&opts.job_id, POLL_INTERVAL.as_millis() as u64),
         |d| std::thread::sleep(d),
         now_ms,
     );
-    if !ready {
-        return ExecResult {
-            outcome: RunOutcome::SpawnFailed(format!(
-                "agent never reported ready within {}s (ready-wait) — pane kept for inspection",
-                opts.ready_wait_secs
-            )),
-            pane_id: Some(new_pane),
-            closed_pane: false,
-        };
+    match ready {
+        ReadyOutcome::Ready => {}
+        ReadyOutcome::Blocked => {
+            let tail = pane_tail(herdr, &new_pane);
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(blocked_message(&opts.job_id, &new_pane, &tail)),
+                pane_id: Some(new_pane),
+                closed_pane: false,
+            };
+        }
+        ReadyOutcome::TimedOut => {
+            return ExecResult {
+                outcome: RunOutcome::SpawnFailed(format!(
+                    "agent never reported ready within {}s (ready-wait) — pane kept for inspection",
+                    opts.ready_wait_secs
+                )),
+                pane_id: Some(new_pane),
+                closed_pane: false,
+            };
+        }
     }
 
     // The brief body lives in brief-1.txt and the agent receives a ONE-LINE
@@ -1206,18 +1330,16 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     let pointer = mailbox::pointer_prompt(&brief_file);
     let round1_result = mailbox::result_path(&bee_dir, &opts.job_id, 1);
     if let Err(e) = deliver_pointer(
-        &opts.job_id,
         &pointer,
-        &mut |p| herdr.agent_prompt(&opts.job_id, p),
+        &mut |p| herdr.agent_prompt(&opts.job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
         &mut || herdr.agent_status(&opts.job_id),
         &mut || round1_result.exists(),
-        &mut |d| std::thread::sleep(d),
     ) {
-        return ExecResult {
-            outcome: RunOutcome::SpawnFailed(format!("brief prompt failed after start: {e}")),
-            pane_id: Some(new_pane),
-            closed_pane: false,
+        let msg = match &e {
+            DeliveryError::Blocked => blocked_message(&opts.job_id, &new_pane, &pane_tail(herdr, &new_pane)),
+            _ => format!("brief prompt failed after start: {e}"),
         };
+        return ExecResult { outcome: RunOutcome::SpawnFailed(msg), pane_id: Some(new_pane), closed_pane: false };
     }
 
     record_dispatch(&opts.main_root, opts, &kind, &new_pane);
@@ -1247,6 +1369,10 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
             RunOutcome::PausedLimit
         }
         PollDecision::Died { pid } => RunOutcome::Died { pid },
+        PollDecision::Blocked => {
+            let tail = pane_tail(herdr, &new_pane);
+            RunOutcome::PaneBlocked(blocked_message(&opts.job_id, &new_pane, &tail))
+        }
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
@@ -1351,18 +1477,16 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
 
         // 1b. Deliver resume nudge through standard deliver_pointer path
         if let Err(e) = deliver_pointer(
-            job_id,
             &pointer,
-            &mut |p| herdr.agent_prompt(job_id, p),
+            &mut |p| herdr.agent_prompt(job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
             &mut || herdr.agent_status(job_id),
             &mut || round_result.exists(),
-            &mut |d| std::thread::sleep(d),
         ) {
-            return ExecResult {
-                outcome: RunOutcome::SpawnFailed(format!("agent prompt failed: {e}")),
-                pane_id: Some(pane_id),
-                closed_pane: false,
+            let msg = match &e {
+                DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
+                _ => format!("agent prompt failed: {e}"),
             };
+            return ExecResult { outcome: RunOutcome::SpawnFailed(msg), pane_id: Some(pane_id), closed_pane: false };
         }
 
         // On delivered: rewrite job.json WITHOUT paused_limit_at/limit_reset_hint (atomic)
@@ -1397,6 +1521,10 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
                 RunOutcome::PausedLimit
             }
             PollDecision::Died { pid } => RunOutcome::Died { pid },
+            PollDecision::Blocked => {
+                let tail = pane_tail(herdr, &pane_id);
+                RunOutcome::PaneBlocked(blocked_message(job_id, &pane_id, &tail))
+            }
             PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
         };
 
@@ -1482,18 +1610,16 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     let pointer = mailbox::pointer_prompt(&brief_file);
     let round_result = mailbox::result_path(&bee_dir, job_id, next_round);
     if let Err(e) = deliver_pointer(
-        job_id,
         &pointer,
-        &mut |p| herdr.agent_prompt(job_id, p),
+        &mut |p| herdr.agent_prompt(job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
         &mut || herdr.agent_status(job_id),
         &mut || round_result.exists(),
-        &mut |d| std::thread::sleep(d),
     ) {
-        return ExecResult {
-            outcome: RunOutcome::SpawnFailed(format!("agent prompt failed: {e}")),
-            pane_id: Some(pane_id),
-            closed_pane: false,
+        let msg = match &e {
+            DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
+            _ => format!("agent prompt failed: {e}"),
         };
+        return ExecResult { outcome: RunOutcome::SpawnFailed(msg), pane_id: Some(pane_id), closed_pane: false };
     }
 
     let kind = job_value.get("kind").and_then(Value::as_str).unwrap_or("unknown").to_string();
@@ -1535,6 +1661,10 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
             RunOutcome::PausedLimit
         }
         PollDecision::Died { pid } => RunOutcome::Died { pid },
+        PollDecision::Blocked => {
+            let tail = pane_tail(herdr, &pane_id);
+            RunOutcome::PaneBlocked(blocked_message(job_id, &pane_id, &tail))
+        }
         PollDecision::Continue => unreachable!("run_poll_loop only returns on a non-Continue decision"),
     };
 
@@ -1569,6 +1699,7 @@ fn outcome_label(o: &RunOutcome) -> &'static str {
         RunOutcome::TimedOutCeiling => "timed_out_ceiling",
         RunOutcome::PausedLimit => "paused_limit",
         RunOutcome::Died { .. } => "died",
+        RunOutcome::PaneBlocked(_) => "pane_blocked",
     }
 }
 
@@ -1600,7 +1731,7 @@ fn emit_result(opts: &Options, result: &ExecResult) {
                 );
                 m.insert("proof".into(), Value::String(r.proof.clone()));
             }
-            RunOutcome::SpawnFailed(msg) | RunOutcome::Malformed(msg) => {
+            RunOutcome::SpawnFailed(msg) | RunOutcome::Malformed(msg) | RunOutcome::PaneBlocked(msg) => {
                 m.insert("error".into(), Value::String(msg.clone()));
             }
             RunOutcome::ContinueRefused(refusal) => {
@@ -1731,7 +1862,7 @@ mod tests {
             Duration::from_millis(0),
             |_| {
                 ticks += 1;
-                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None }
+                PollTick { result_ready: ticks >= 3, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false }
             },
             |_| {},
             || {
@@ -1751,7 +1882,7 @@ mod tests {
             5,
             3_600,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None },
+            |_| PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: false },
             |_| {},
             || {
                 clock += 1_000;
@@ -1769,7 +1900,7 @@ mod tests {
             3_600,
             5,
             Duration::from_millis(0),
-            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None },
+            |_| PollTick { result_ready: false, heartbeat_fresh: true, pane_text: None, liveness: None, blocked: false },
             |_| {},
             || {
                 clock += 1_000;
@@ -1795,6 +1926,7 @@ mod tests {
                     heartbeat_fresh: flags.len() <= 2,
                     pane_text: None,
                     liveness: None,
+                    blocked: false,
                 }
             },
             |_| {},
@@ -1805,6 +1937,52 @@ mod tests {
         );
         assert_eq!(decision, PollDecision::ResultReady);
         assert_eq!(flags, vec![false, false, false, false, false, false, true]);
+    }
+
+    #[test]
+    fn run_poll_loop_ends_at_once_on_a_blocked_tick_without_burning_the_idle_timeout() {
+        // D3: a blocked observation ends the round poll immediately — a
+        // huge idle timeout and ceiling are never burned on a question
+        // nobody is going to answer.
+        let mut ticks = 0u32;
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            900,
+            21_600,
+            Duration::from_millis(0),
+            |_| {
+                ticks += 1;
+                PollTick { result_ready: false, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true }
+            },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::Blocked);
+        assert_eq!(ticks, 1, "blocked ends the wait on the very first tick");
+    }
+
+    #[test]
+    fn run_poll_loop_lets_a_same_tick_result_win_over_blocked() {
+        // A completed round already trumps a stale/simultaneous blocked
+        // read — the work finished, so ResultReady wins.
+        let mut clock = 0i64;
+        let decision = run_poll_loop(
+            0,
+            900,
+            21_600,
+            Duration::from_millis(0),
+            |_| PollTick { result_ready: true, heartbeat_fresh: false, pane_text: None, liveness: None, blocked: true },
+            |_| {},
+            || {
+                clock += 1_000;
+                clock
+            },
+        );
+        assert_eq!(decision, PollDecision::ResultReady);
     }
 
     // ─── the Herdr seam ─────────────────────────────────────────────────
@@ -1834,12 +2012,12 @@ mod tests {
         /// not merely that the same-kind built-in did (`started_kind` alone
         /// cannot tell those apart when both name the same herdr kind).
         started_args: RefCell<Option<Vec<String>>>,
-        /// One status returned (and consumed) by `agent_status` after the
-        /// first `agent_prompt` — the delivery receipt's "the agent took
-        /// the prompt" flip (herding-receipt-state D1). Steady-state
-        /// `status` answers before any prompt and after this is consumed,
-        /// so `wait_for_round`'s idle-timeout still sees an idle agent.
-        status_once_after_prompt: RefCell<Option<String>>,
+        /// Every `agent_wait(job_id, timeout_ms)` call, in order — proves
+        /// the ready gate uses herdr's settle-aware wait (herding-prompt-stall
+        /// D2), not a raw `agent_status` read. Its RETURN VALUE proxies
+        /// `status` (below) unless a test wants a different value, since
+        /// `agent_wait`'s fail-safe shape mirrors `agent_status`'s.
+        agent_wait_calls: RefCell<Vec<(String, u64)>>,
         /// D4: what `pane_run` returns — `Ok(())` unless a test overrides
         /// it to prove the env-export-failure path.
         pane_run_result: Result<(), String>,
@@ -1872,7 +2050,7 @@ mod tests {
                 start_calls: RefCell::new(Vec::new()),
                 started_kind: RefCell::new(None),
                 started_args: RefCell::new(None),
-                status_once_after_prompt: RefCell::new(Some("working".to_string())),
+                agent_wait_calls: RefCell::new(Vec::new()),
                 pane_run_result: Ok(()),
                 pane_run_calls: RefCell::new(Vec::new()),
                 call_log: RefCell::new(Vec::new()),
@@ -1913,20 +2091,19 @@ mod tests {
             self.start_result.clone()
         }
         fn agent_status(&self, _job_id: &str) -> Option<String> {
-            if !self.prompt_calls.borrow().is_empty() {
-                if let Some(s) = self.status_once_after_prompt.borrow_mut().take() {
-                    return Some(s);
-                }
-            }
             self.status.borrow().clone()
         }
         fn pane_close(&self, pane_id: &str) -> Result<(), String> {
             self.closed.borrow_mut().push(pane_id.to_string());
             Ok(())
         }
-        fn agent_prompt(&self, job_id: &str, prompt: &str) -> Result<(), String> {
+        fn agent_prompt(&self, job_id: &str, prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
             self.prompt_calls.borrow_mut().push((job_id.to_string(), prompt.to_string()));
             self.prompt_result.clone()
+        }
+        fn agent_wait(&self, job_id: &str, timeout_ms: u64) -> Option<String> {
+            self.agent_wait_calls.borrow_mut().push((job_id.to_string(), timeout_ms));
+            self.status.borrow().clone()
         }
         fn pane_alive(&self, pane_id: &str) -> bool {
             self.alive_panes.borrow().iter().any(|p| p == pane_id)
@@ -1976,8 +2153,11 @@ mod tests {
         fn pane_close(&self, _pane_id: &str) -> Result<(), String> {
             panic!("dry-run must never call Herdr::pane_close")
         }
-        fn agent_prompt(&self, _job_id: &str, _prompt: &str) -> Result<(), String> {
+        fn agent_prompt(&self, _job_id: &str, _prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
             panic!("dry-run must never call Herdr::agent_prompt")
+        }
+        fn agent_wait(&self, _job_id: &str, _timeout_ms: u64) -> Option<String> {
+            panic!("dry-run must never call Herdr::agent_wait")
         }
         fn pane_alive(&self, _pane_id: &str) -> bool {
             panic!("dry-run must never call Herdr::pane_alive")
@@ -2139,45 +2319,12 @@ mod tests {
     }
 
     #[test]
-    fn pointer_delivery_resends_while_the_agent_stays_idle_and_stops_on_working() {
-        // herding-receipt-state D1: idle polls through the first attempt's
-        // whole watch window drive a resend; the first "working" poll is
-        // the receipt. Injected sleep, no clock.
-        let sent = std::cell::RefCell::new(0u32);
-        let polls = std::cell::RefCell::new(0u32);
-        let out = deliver_pointer(
-            "job-1",
-            "Read the file /x/brief-1.txt and follow its instructions exactly.",
-            &mut |_p| {
-                *sent.borrow_mut() += 1;
-                Ok(())
-            },
-            &mut || {
-                *polls.borrow_mut() += 1;
-                if *polls.borrow() <= RECEIPT_POLLS_PER_ATTEMPT + 2 {
-                    Some("idle".to_string())
-                } else {
-                    Some("working".to_string())
-                }
-            },
-            &mut || false,
-            &mut |_d| {},
-        );
-        assert!(out.is_ok());
-        assert_eq!(*sent.borrow(), 2, "one idle window exhausted, delivered on the resend");
-    }
-
-    #[test]
-    fn pointer_delivery_never_trusts_an_idle_agent_even_with_the_pointer_on_screen() {
-        // herding-receipt-state D1 regression (live smoke
-        // smoke-agy-delivery-1/-2): during boot the pane ECHOES the send's
-        // own keystrokes, so any text-based receipt false-positives while
-        // the agent stays idle and the input is lost. An agent that never
-        // leaves idle is never "delivered", no matter what the pane shows —
-        // the receipt takes no pane text at all.
+    fn deliver_pointer_sends_once_and_succeeds_when_herdr_observes_the_transition() {
+        // herding-prompt-stall D1: the send IS herdr's own atomic
+        // submit-and-observe — a successful `--wait --until working` call
+        // is the whole receipt, no resend, no status poll after the send.
         let sent = std::cell::RefCell::new(0u32);
         let out = deliver_pointer(
-            "job-1",
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
             &mut |_p| {
                 *sent.borrow_mut() += 1;
@@ -2185,57 +2332,81 @@ mod tests {
             },
             &mut || Some("idle".to_string()),
             &mut || false,
-            &mut |_d| {},
         );
-        let err = out.unwrap_err();
-        assert!(err.contains("state receipt"), "{err}");
-        assert_eq!(*sent.borrow(), POINTER_DELIVERY_ATTEMPTS);
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 1, "exactly one send, no resend");
     }
 
     #[test]
-    fn pointer_delivery_never_trusts_a_booting_working_status_as_receipt() {
-        // A booting or pre-existing "working" status (pre-send baseline already
-        // "working") must not be counted as a receipt for a new prompt. Receipt
-        // requires a transition into "working" or result file presence.
+    fn deliver_pointer_surfaces_agent_prompt_stalled_as_a_typed_stall_not_a_resend() {
+        // D1: herdr's own agent_prompt_stalled IS the delivery failure,
+        // returned at once — never 30 blind resends into a booting TUI.
         let sent = std::cell::RefCell::new(0u32);
         let out = deliver_pointer(
-            "job-1",
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
             &mut |_p| {
                 *sent.borrow_mut() += 1;
-                Ok(())
+                Err("herdr agent prompt job-1 exited 1: agent_prompt_stalled: no observed change within 5000ms"
+                    .to_string())
             },
-            &mut || Some("working".to_string()),
+            &mut || Some("idle".to_string()),
             &mut || false,
-            &mut |_d| {},
         );
-        let err = out.unwrap_err();
-        assert!(err.contains("state receipt"), "{err}");
-        assert_eq!(*sent.borrow(), POINTER_DELIVERY_ATTEMPTS);
+        match out {
+            Err(DeliveryError::Stalled(e)) => assert!(e.contains("agent_prompt_stalled"), "{e}"),
+            other => panic!("expected DeliveryError::Stalled, got {other:?}"),
+        }
+        assert_eq!(*sent.borrow(), 1, "exactly one send, never a resend");
     }
 
     #[test]
-    fn pointer_delivery_accepts_the_round_result_as_receipt() {
-        // An ultra-fast round can finish before any status poll catches
-        // "working" — the result file's presence is an equally hard receipt.
-        let sent = std::cell::RefCell::new(0u32);
+    fn deliver_pointer_rescues_a_stalled_send_when_the_result_already_landed() {
+        // The result_present() escape survives the retirement of the
+        // baseline/transition poll: an ultra-fast round can write its
+        // result before herdr ever observes the "working" transition.
         let out = deliver_pointer(
-            "job-1",
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
-            &mut |_p| {
-                *sent.borrow_mut() += 1;
-                Ok(())
-            },
+            &mut |_p| Err("agent_prompt_stalled: no observed change".to_string()),
             &mut || Some("idle".to_string()),
             &mut || true,
-            &mut |_d| {},
         );
-        assert!(out.is_ok());
-        assert_eq!(*sent.borrow(), 1, "result present on the first poll: one send, no resend");
+        assert!(out.is_ok(), "{out:?}");
     }
 
     #[test]
-    fn ready_wait_accepts_an_agent_once_its_status_flips_and_only_then() {
+    fn deliver_pointer_surfaces_a_transport_error_distinctly_from_a_stall() {
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| Err("could not spawn herdr: No such file or directory".to_string()),
+            &mut || Some("idle".to_string()),
+            &mut || false,
+        );
+        match out {
+            Err(DeliveryError::Transport(e)) => assert!(e.contains("could not spawn herdr"), "{e}"),
+            other => panic!("expected DeliveryError::Transport, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deliver_pointer_refuses_fast_when_the_pane_is_already_blocked() {
+        // D3: blocked ends the delivery wait at once — never sent into a
+        // pane that is waiting on an unrelated question.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("blocked".to_string()),
+            &mut || false,
+        );
+        assert!(matches!(out, Err(DeliveryError::Blocked)), "{out:?}");
+        assert_eq!(*sent.borrow(), 0, "never sends into an already-blocked pane");
+    }
+
+    #[test]
+    fn ready_wait_accepts_idle_and_only_then() {
         // herding-run-ready-wait D1, injected clock: status None for the
         // first two polls (booting — the smoke's lost-brief window), idle on
         // the third. No real sleep.
@@ -2256,20 +2427,38 @@ mod tests {
                 clock
             },
         );
-        assert!(ready);
+        assert_eq!(ready, ReadyOutcome::Ready);
         assert_eq!(polls, 3, "ready only on the third status read");
     }
 
     #[test]
-    fn ready_wait_rejects_booting_working_status_until_idle() {
+    fn ready_wait_accepts_done_the_same_as_idle() {
+        // herding-prompt-stall D2: `done` is the normal resting state of a
+        // never-focused, --no-focus-split bee worker pane — not a rejection.
+        let mut clock = 0i64;
+        let ready = wait_for_agent_ready(
+            60,
+            Duration::from_millis(500),
+            || Some("done".to_string()),
+            |_| {},
+            || {
+                clock += 500;
+                clock
+            },
+        );
+        assert_eq!(ready, ReadyOutcome::Ready);
+    }
+
+    #[test]
+    fn ready_wait_rejects_working_status_until_idle_or_done() {
         // When an agent process is booting or updating, herdr may report
-        // "working". Ready-wait must not accept "working" as ready for input;
-        // it must wait until the agent reports "idle" at its prompt.
+        // "working". Ready-wait must not accept "working" as ready for
+        // input; it must wait until the agent settles into idle or done.
         let mut clock = 0i64;
         let statuses = std::cell::RefCell::new(vec![
             Some("working".to_string()),
             Some("working".to_string()),
-            Some("idle".to_string()),
+            Some("done".to_string()),
         ]);
         let mut polls = 0u32;
         let ready = wait_for_agent_ready(
@@ -2286,30 +2475,28 @@ mod tests {
                 clock
             },
         );
-        assert!(ready);
-        assert_eq!(polls, 3, "ready only when status reaches idle, not while working");
+        assert_eq!(ready, ReadyOutcome::Ready);
+        assert_eq!(polls, 3, "ready only when status reaches idle or done, not while working");
     }
 
     #[test]
-    fn pointer_delivery_never_trusts_done_status_as_receipt() {
-        // A quiescent agent from a prior round in an unfocused pane may
-        // report "done". Pointer delivery must not treat stale "done" as a
-        // receipt for the new prompt — it requires "working" or result file.
-        let sent = std::cell::RefCell::new(0u32);
-        let out = deliver_pointer(
-            "job-1",
-            "Read the file /x/brief-1.txt and follow its instructions exactly.",
-            &mut |_p| {
-                *sent.borrow_mut() += 1;
-                Ok(())
+    fn ready_wait_fails_fast_on_blocked_without_burning_the_ceiling() {
+        // D3: a blocked pane ends the ready wait at once — the 60s ceiling
+        // and its sleeps are never burned on a question nobody will answer.
+        let mut clock = 0i64;
+        let mut sleeps = 0u32;
+        let ready = wait_for_agent_ready(
+            60,
+            Duration::from_millis(500),
+            || Some("blocked".to_string()),
+            |_| sleeps += 1,
+            || {
+                clock += 500;
+                clock
             },
-            &mut || Some("done".to_string()),
-            &mut || false,
-            &mut |_d| {},
         );
-        let err = out.unwrap_err();
-        assert!(err.contains("state receipt"), "{err}");
-        assert_eq!(*sent.borrow(), POINTER_DELIVERY_ATTEMPTS);
+        assert_eq!(ready, ReadyOutcome::Blocked);
+        assert_eq!(sleeps, 0, "blocked is observed on the first check, before any sleep");
     }
 
     #[test]
@@ -3277,6 +3464,7 @@ mod tests {
                     heartbeat_fresh: true,
                     pane_text: None,
                     liveness: Some(Liveness::Absent),
+                    blocked: false,
                 }
             },
             |_| {},
@@ -3318,6 +3506,7 @@ mod tests {
                     heartbeat_fresh: true,
                     pane_text: None,
                     liveness,
+                    blocked: false,
                 }
             },
             |_| {},
@@ -3353,6 +3542,7 @@ mod tests {
                     heartbeat_fresh: true,
                     pane_text: None,
                     liveness,
+                    blocked: false,
                 }
             },
             |_| {},
@@ -3381,6 +3571,7 @@ mod tests {
                     heartbeat_fresh: true,
                     pane_text: None,
                     liveness: Some(Liveness::Unknown),
+                    blocked: false,
                 }
             },
             |_| {},
