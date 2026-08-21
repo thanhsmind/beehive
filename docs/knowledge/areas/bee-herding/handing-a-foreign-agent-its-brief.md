@@ -62,8 +62,17 @@ This is the "state-receipt delivery", and it replaced an earlier pane-text check
 A pane ECHOES the send's own keystrokes while the agent is still booting, so any
 receipt that looks for the sent text coming back confirms nothing but its own
 typing — it passes exactly when delivery failed. The receipt is therefore the
-agent's own reported state moving to working or done, or the round's result file
-appearing.
+agent's own reported state moving into working — as a TRANSITION off a per-send
+baseline, never a level read — or the round's result file appearing.
+
+A status LEVEL is not a transition (herding-pointer-delivery D1, narrowing
+herding-receipt-state D1, tripled live 2026-08-21): a booting agent flaps
+`working` before it accepts input, so a receipt that merely reads
+`working` — or a stale `done` from a prior round — receipts a swallowed
+pointer, the bounded re-send loop concludes falsely, and the run sits to
+ceiling on a brief no agent ever saw. The ready gate is idle-only for the same
+reason. The fix samples the status immediately before EACH send and counts only
+`not-working → working` (or the result file) as delivery.
 
 Proven the hard way in live smoke: two runs whose brief was silently lost still
 satisfied the text check, and only the run that watched for a state change
