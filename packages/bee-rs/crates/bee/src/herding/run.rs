@@ -57,6 +57,7 @@ use std::time::Duration;
 use serde_json::{Map, Value};
 
 use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxResult, MailboxStatus};
+use super::split_lock;
 use super::wave::{resolve_agent_command, WorkspaceTrust};
 use super::wave_ledger::{self, WaveRow, WorkerRow};
 
@@ -860,6 +861,79 @@ fn resolve_split_parent(panes: Option<&[PaneGeom]>, own_pane: &str) -> SplitPare
 /// colon, rather than panicking over a herdr id format change.
 fn pane_workspace(pane_id: &str) -> &str {
     pane_id.split(':').next().unwrap_or(pane_id)
+}
+
+/// How long a queued spawn waits for the pane-split lock before it gives up
+/// and splits unserialized. Generous ON PURPOSE: the ack wait a worker is
+/// judged by is 180s, so a budget well under that lets several queued spawns
+/// take their turn one after another and still ack in time, while a budget
+/// at or above it would turn a slow queue into the very timeout this lock
+/// exists to prevent.
+const SPLIT_LOCK_WAIT: Duration = Duration::from_secs(120);
+
+/// hss-2: the whole pane-split decision — read the tab's layout, choose the
+/// parent and direction, then create the pane — under ONE cross-process
+/// lock, returning the new worker pane's id.
+///
+/// The lock is the point. Every spawn is its own process, and the layout
+/// read is what makes them disagree: five concurrent spawns from one tab
+/// (live 2026-08-21) each read a layout still showing `pane_count` 1, each
+/// answered "right" from `split_direction`, and all five right-split — panes
+/// p3R p3S p3T p3V p3W, with worker 5 dying on the 180s ack wait. Reading
+/// the layout under the lock and releasing only once the pane EXISTS means
+/// the next spawn's read already counts this pane, so it answers "down".
+///
+/// Fail OPEN, the same habit the layout read (`resolve_split_parent`'s
+/// `None` arm) and the hps-8 workspace-trust pre-flight already follow: a
+/// busy budget or a broken lock file warns and splits anyway. A spawn that
+/// never happens is worse than a mis-directed one.
+///
+/// `lock_wait` is the acquire budget — `SPLIT_LOCK_WAIT` at the one
+/// production call site. It is a parameter, not a read of the const, so the
+/// budget-spent fail-open branch is provable in a test that takes
+/// milliseconds instead of two minutes.
+fn split_worker_pane(
+    herdr: &dyn Herdr,
+    own_pane: &str,
+    cwd: &Path,
+    job_id: &str,
+    main_root: &Path,
+    lock_wait: Duration,
+) -> Result<String, String> {
+    // Held for the whole body: the guard releases in `Drop`, at the return
+    // below, by which point the new pane already exists.
+    let _split_lock = match split_lock::acquire(main_root, job_id, lock_wait) {
+        Ok(held) => {
+            if held.is_none() {
+                eprintln!(
+                    "bee herding run: the herding pane-split lock stayed busy for {}s — splitting anyway",
+                    lock_wait.as_secs()
+                );
+            }
+            held
+        }
+        Err(e) => {
+            eprintln!("bee herding run: could not take the herding pane-split lock ({e}) — splitting anyway");
+            None
+        }
+    };
+
+    let layout = herdr.pane_layout(own_pane);
+    let parent = resolve_split_parent(layout.as_deref(), own_pane);
+    match parent.refusal {
+        None => herdr.pane_split(&parent.pane_id, parent.direction, cwd),
+        // hps-13: no pane in the caller's tab clears the child-width guard
+        // — a refusal here would still be a sliver's fault, not a fresh
+        // tab's, so try a fresh tab FIRST and refuse only if that fails too.
+        // The new tab's root pane is used directly, with no split call at
+        // all, so the worker starts at full width.
+        Some(width_msg) => {
+            let workspace = pane_workspace(own_pane);
+            herdr.tab_create(workspace, cwd, job_id).map_err(|create_err| {
+                format!("{width_msg}; tried opening a fresh tab instead and that failed too: {create_err}")
+            })
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1776,33 +1850,19 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         Ok(p) => p,
         Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
     };
-    let layout = herdr.pane_layout(&own_pane);
-    let parent = resolve_split_parent(layout.as_deref(), &own_pane);
-    let new_pane = match parent.refusal {
-        None => match herdr.pane_split(&parent.pane_id, parent.direction, &opts.cwd) {
-            Ok(p) => p,
-            Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
-        },
-        // hps-13: no pane in the caller's tab clears the child-width guard
-        // — a refusal here would still be a sliver's fault, not a fresh
-        // tab's, so try a fresh tab FIRST and refuse only if that fails too.
-        // The new tab's root pane is used directly, with no split call at
-        // all, so the worker starts at full width.
-        Some(width_msg) => {
-            let workspace = pane_workspace(&own_pane);
-            match herdr.tab_create(workspace, &opts.cwd, &opts.job_id) {
-                Ok(p) => p,
-                Err(create_err) => {
-                    return ExecResult {
-                        outcome: RunOutcome::SpawnFailed(format!(
-                            "{width_msg}; tried opening a fresh tab instead and that failed too: {create_err}"
-                        )),
-                        pane_id: None,
-                        closed_pane: false,
-                    };
-                }
-            }
-        }
+    // hss-2: the layout read and the split itself run under one
+    // cross-process lock, so concurrent spawns from one tab see each other's
+    // panes instead of all reading `pane_count` 1 and all splitting `right`.
+    let new_pane = match split_worker_pane(
+        herdr,
+        &own_pane,
+        &opts.cwd,
+        &opts.job_id,
+        &opts.main_root,
+        SPLIT_LOCK_WAIT,
+    ) {
+        Ok(p) => p,
+        Err(e) => return ExecResult { outcome: RunOutcome::SpawnFailed(e), pane_id: None, closed_pane: false },
     };
 
     // D4 + herding-worker-standalone D2: the registry entry's env is
@@ -2992,6 +3052,214 @@ mod tests {
                 Liveness::Unknown
             }
         }
+    }
+
+    // ─── hss-2: the pane split, serialized across processes ─────────────
+
+    /// A `Herdr` whose pane list is SHARED and MUTABLE — the stand-in for
+    /// the one real terminal layout that concurrent `bee herding run`
+    /// processes all read and all change. `pane_split` pushes the pane it
+    /// creates into that list, so the NEXT `pane_layout` read counts it;
+    /// the short sleep before the push is the race window an unserialized
+    /// split falls into (both racers read `pane_count` 1, both answer
+    /// "right"). Everything sits behind a `Mutex` instead of `FakeHerdr`'s
+    /// `RefCell` so the fake is `Sync` and two threads can share it.
+    struct SharedLayoutHerdr {
+        panes: std::sync::Mutex<Vec<PaneGeom>>,
+        /// The direction of every completed split, in the order the new
+        /// pane actually appeared.
+        directions: std::sync::Mutex<Vec<String>>,
+        next_pane: std::sync::atomic::AtomicUsize,
+    }
+
+    impl SharedLayoutHerdr {
+        fn new(root_width: u64, root_height: u64) -> Self {
+            SharedLayoutHerdr {
+                panes: std::sync::Mutex::new(vec![PaneGeom {
+                    pane_id: "w1:p1".to_string(),
+                    width: root_width,
+                    height: root_height,
+                }]),
+                directions: std::sync::Mutex::new(Vec::new()),
+                next_pane: std::sync::atomic::AtomicUsize::new(2),
+            }
+        }
+
+        fn directions(&self) -> Vec<String> {
+            self.directions.lock().expect("directions").clone()
+        }
+    }
+
+    impl Herdr for SharedLayoutHerdr {
+        fn pane_current(&self) -> Result<String, String> {
+            Ok("w1:p1".to_string())
+        }
+        fn pane_layout(&self, _pane_id: &str) -> Option<Vec<PaneGeom>> {
+            Some(self.panes.lock().expect("panes").clone())
+        }
+        fn pane_split(&self, pane_id: &str, direction: &str, _cwd: &Path) -> Result<String, String> {
+            // Creating a pane takes real time, and only once herdr returns
+            // does the new pane show up in a layout read. Without the lock,
+            // both racers spend this window on the SAME stale read.
+            std::thread::sleep(Duration::from_millis(120));
+            let id = format!(
+                "w1:p{}",
+                self.next_pane.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+            );
+            let mut panes = self.panes.lock().expect("panes");
+            let idx = panes
+                .iter()
+                .position(|p| p.pane_id == pane_id)
+                .ok_or_else(|| format!("no such pane {pane_id}"))?;
+            // A `right` split halves the parent's width, a `down` split
+            // halves its height; the child takes the parent's new rect.
+            if direction == "right" {
+                panes[idx].width /= 2;
+            } else {
+                panes[idx].height /= 2;
+            }
+            let child = PaneGeom {
+                pane_id: id.clone(),
+                width: panes[idx].width,
+                height: panes[idx].height,
+            };
+            panes.push(child);
+            self.directions.lock().expect("directions").push(direction.to_string());
+            Ok(id)
+        }
+        fn tab_create(&self, _workspace: &str, _cwd: &Path, _label: &str) -> Result<String, String> {
+            panic!("the hss-2 fake tab is roomy enough that no width refusal can fire")
+        }
+        fn pane_run(&self, _pane_id: &str, _command: &str) -> Result<(), String> {
+            unreachable!("split_worker_pane never runs a command")
+        }
+        fn agent_start(
+            &self,
+            _job_id: &str,
+            _kind: &str,
+            _pane_id: &str,
+            _args: &[String],
+        ) -> Result<(), String> {
+            unreachable!("split_worker_pane never starts an agent")
+        }
+        fn agent_status(&self, _job_id: &str) -> Option<String> {
+            unreachable!("split_worker_pane never reads a status")
+        }
+        fn pane_close(&self, _pane_id: &str) -> Result<(), String> {
+            unreachable!("split_worker_pane never closes a pane")
+        }
+        fn agent_prompt(&self, _job_id: &str, _prompt: &str, _until: &str, _timeout_ms: u64) -> Result<(), String> {
+            unreachable!("split_worker_pane never prompts")
+        }
+        fn agent_wait(&self, _job_id: &str, _timeout_ms: u64) -> Option<String> {
+            unreachable!("split_worker_pane never waits on an agent")
+        }
+        fn pane_alive(&self, _pane_id: &str) -> bool {
+            unreachable!("split_worker_pane never probes pane liveness")
+        }
+        fn pane_read(&self, _pane_id: &str) -> Result<String, String> {
+            unreachable!("split_worker_pane never reads a pane")
+        }
+        fn process_info(&self, _pane_id: &str) -> Liveness {
+            unreachable!("split_worker_pane never reads process info")
+        }
+    }
+
+    /// A private temp main root per test — the split lock lives under
+    /// `<root>/.bee/locks`, so each test needs its own.
+    fn hss_temp_root(tag: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!(
+            "bee-herding-split-serialize-{}-{}-{}",
+            tag,
+            std::process::id(),
+            nanos
+        ));
+        std::fs::create_dir_all(&dir).expect("temp root");
+        dir
+    }
+
+    /// The exact live regression (2026-08-21): five concurrent spawns from
+    /// one tab ALL split `right` (panes p3R p3S p3T p3V p3W) and worker 5
+    /// died on the 180s ack wait, because every process read a layout still
+    /// showing `pane_count` 1. Two threads over one shared layout and one
+    /// shared main root: with the lock held across the layout read AND the
+    /// split, the second thread's read already counts the first thread's
+    /// pane, so the directions are `right` then `down`. Drop the lock and
+    /// this asserts `["right", "right"]` instead, and fails.
+    #[test]
+    fn concurrent_splits_are_serialized_so_the_second_one_stacks_a_band() {
+        let root = hss_temp_root("concurrent");
+        let herdr = SharedLayoutHerdr::new(240, 40);
+        let budget = Duration::from_secs(20);
+        std::thread::scope(|s| {
+            let a = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-a", &root, budget));
+            let b = s.spawn(|| split_worker_pane(&herdr, "w1:p1", &root, "job-b", &root, budget));
+            a.join().expect("thread a").expect("first split must succeed");
+            b.join().expect("thread b").expect("second split must succeed");
+        });
+        assert_eq!(
+            herdr.directions(),
+            vec!["right".to_string(), "down".to_string()],
+            "two concurrent splits must be one right and one down, never two rights"
+        );
+        assert!(
+            !root.join(".bee").join("locks").join("herding-pane-split.lock").exists(),
+            "both guards must have released the lock file"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Fail OPEN on a busy budget: a lock the caller cannot take inside its
+    /// wait budget warns and splits anyway. A spawn that never happens is
+    /// worse than a mis-directed one.
+    #[test]
+    fn a_busy_split_lock_still_splits_once_the_budget_is_spent() {
+        let root = hss_temp_root("busy");
+        // A live-pid, fresh-mtime holder: never stale, so the budget runs
+        // out with the lock still held.
+        let held = split_lock::acquire(&root, "job-holder", Duration::from_millis(50))
+            .expect("holder acquire")
+            .expect("holder holds");
+        let herdr = SharedLayoutHerdr::new(240, 40);
+        let pane = split_worker_pane(
+            &herdr,
+            "w1:p1",
+            &root,
+            "job-queued",
+            &root,
+            Duration::from_millis(150),
+        )
+        .expect("a busy lock must never fail the spawn");
+        assert_eq!(pane, "w1:p2");
+        assert_eq!(herdr.directions(), vec!["right".to_string()]);
+        drop(held);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Fail OPEN on a broken lock: a main root whose `.bee` is a FILE means
+    /// the locks directory can never be created, so `acquire` returns
+    /// `Err`. The split still happens.
+    #[test]
+    fn an_unusable_lock_directory_still_splits() {
+        let root = hss_temp_root("unusable");
+        std::fs::write(root.join(".bee"), b"not a directory").expect("write .bee as a file");
+        let herdr = SharedLayoutHerdr::new(240, 40);
+        let pane = split_worker_pane(
+            &herdr,
+            "w1:p1",
+            &root,
+            "job-broken",
+            &root,
+            Duration::from_millis(150),
+        )
+        .expect("a broken lock must never fail the spawn");
+        assert_eq!(pane, "w1:p2");
+        assert_eq!(herdr.directions(), vec!["right".to_string()]);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// Every method panics — proves a code path never touches `Herdr` at

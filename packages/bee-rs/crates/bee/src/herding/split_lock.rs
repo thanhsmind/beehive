@@ -18,13 +18,6 @@
 //   SplitLock  releases in Drop, and removes the file only when the on-disk
 //              holder still carries this acquisition's own pid + token.
 
-// The caller — the pane split inside `bee herding run` — lands in the next
-// cell of this feature. Until it does, every item below is exercised only by
-// this file's own tests, so the module opts out of dead-code noise in one
-// place instead of sprinkling per-item attributes that would then have to be
-// unpicked again.
-#![allow(dead_code)]
-
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -55,7 +48,11 @@ pub(crate) struct SplitLock {
 }
 
 impl SplitLock {
-    /// Path of the lock file this guard holds.
+    /// Path of the lock file this guard holds. Read only by this module's
+    /// own tests — `run.rs`, the production caller, holds the guard and
+    /// never asks it where it lives — so this one accessor keeps the
+    /// dead-code opt-out the module-level one used to cover.
+    #[allow(dead_code)]
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
