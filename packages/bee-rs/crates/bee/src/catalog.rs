@@ -431,7 +431,15 @@ mod tests {
         // `--idle-timeout`, `--ceiling`, `--close-always`, `--continue` —
         // the mailbox executor's own knobs, no existing flag names them.
         // Net +7: 170 -> 177.
-        const PINNED_FLAG_COUNT: usize = 177;
+        // 177 -> 178 (worker-brief-expertise wbe-1): `herding.run` gains
+        // `--expertise`, a single newline-separated flag holding
+        // `<path> :: <purpose> :: <read-to>` entries for the worker's
+        // brief Expertise section. Checked first: no existing flag names
+        // dispatcher-picked expertise files with purpose and read-to guidance
+        // — `--task`/`--task-file` name the assignment itself, `--read-first`
+        // on cells names cell planning dependencies, not CLI brief entries.
+        // `--expertise` is new.
+        const PINNED_FLAG_COUNT: usize = 178;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

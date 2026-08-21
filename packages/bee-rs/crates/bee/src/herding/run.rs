@@ -48,7 +48,7 @@ use std::time::Duration;
 
 use serde_json::{Map, Value};
 
-use super::mailbox::{self, BriefSpec, MailboxResult, MailboxStatus};
+use super::mailbox::{self, BriefSpec, ExpertiseEntry, MailboxResult, MailboxStatus};
 use super::wave::resolve_agent_command;
 use super::wave_ledger::{self, WaveRow, WorkerRow};
 
@@ -104,6 +104,11 @@ struct Options {
     /// reads this field — the pane already exists, so `--continue`
     /// ignores `--agent` by construction.
     agent: Option<String>,
+    /// `--expertise <entries>` (worker-brief-expertise D1): dispatcher-picked
+    /// knowledge and skill reference files with purpose and read-to guidance.
+    expertise: Vec<ExpertiseEntry>,
+    /// True when `--expertise` was explicitly passed on the command line.
+    has_explicit_expertise: bool,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -150,6 +155,28 @@ fn resolve_task_with_stdin(
     Err("--task or --task-file is required".to_string())
 }
 
+pub(crate) fn parse_expertise(raw: &str) -> Result<Vec<ExpertiseEntry>, String> {
+    let mut entries = Vec::new();
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = line.split(" :: ").collect();
+        if parts.len() != 3 || parts.iter().any(|s| s.trim().is_empty()) {
+            return Err(format!(
+                "malformed --expertise line (want '<path> :: <purpose> :: <read-to>'): {line}"
+            ));
+        }
+        entries.push(ExpertiseEntry {
+            path: parts[0].trim().to_string(),
+            purpose: parts[1].trim().to_string(),
+            read_to: parts[2].trim().to_string(),
+        });
+    }
+    Ok(entries)
+}
+
 fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut task: Option<&str> = None;
     let mut task_file: Option<&str> = None;
@@ -163,6 +190,7 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut json = false;
     let mut dry_run = false;
     let mut agent: Option<&str> = None;
+    let mut expertise_raw: Option<&str> = None;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
@@ -218,6 +246,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 dry_run = true;
                 i += 1;
             }
+            "--expertise" => {
+                expertise_raw = flags.get(i + 1).copied();
+                i += 2;
+            }
             _ => i += 1,
         }
     }
@@ -240,6 +272,10 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
             false,
         ),
     };
+    let (expertise, has_explicit_expertise) = match expertise_raw {
+        Some(raw) => (parse_expertise(raw)?, true),
+        None => (Vec::new(), false),
+    };
 
     Ok(Options {
         task: task_text,
@@ -254,6 +290,8 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         is_continue,
         ready_wait_secs: 60,
         agent: agent.map(str::to_string),
+        expertise,
+        has_explicit_expertise,
     })
 }
 
@@ -1033,6 +1071,7 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         files: &files,
         bee_dir: &bee_dir,
         round: 1,
+        expertise: &opts.expertise,
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -1045,6 +1084,7 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         "ceiling_secs": opts.ceiling_secs,
         "close_always": opts.close_always,
         "created_at": chrono::Utc::now().to_rfc3339(),
+        "expertise": opts.expertise,
     });
     let job_file_path = mailbox::job_path(&bee_dir, &opts.job_id);
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &job_value) {
@@ -1389,6 +1429,16 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         .map(PathBuf::from)
         .unwrap_or_else(|| opts.cwd.clone());
 
+    let recorded_expertise: Vec<ExpertiseEntry> = match job_value.get("expertise") {
+        Some(val) => serde_json::from_value(val.clone()).unwrap_or_default(),
+        None => Vec::new(),
+    };
+    let expertise = if opts.has_explicit_expertise {
+        opts.expertise.clone()
+    } else {
+        recorded_expertise
+    };
+
     let files: Vec<String> = Vec::new();
     let spec = BriefSpec {
         job_id,
@@ -1397,6 +1447,7 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         files: &files,
         bee_dir: &bee_dir,
         round: next_round,
+        expertise: &expertise,
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -1449,6 +1500,9 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     if let Value::Object(ref mut m) = updated_job {
         m.insert("round".into(), Value::from(next_round));
         m.insert("continued_at".into(), Value::String(chrono::Utc::now().to_rfc3339()));
+        if opts.has_explicit_expertise {
+            m.insert("expertise".into(), serde_json::to_value(&opts.expertise).unwrap_or_default());
+        }
     }
     if let Err(e) = crate::fsutil::write_json_atomic(&job_file_path, &updated_job) {
         eprintln!("bee herding run --continue: could not update {}: {e}", job_file_path.display());
@@ -1944,6 +1998,8 @@ mod tests {
             is_continue: false,
             ready_wait_secs: 60,
             agent: None,
+            expertise: Vec::new(),
+            has_explicit_expertise: false,
         }
     }
 
@@ -1989,6 +2045,8 @@ mod tests {
             is_continue: true,
             ready_wait_secs: 60,
             agent: None,
+            expertise: Vec::new(),
+            has_explicit_expertise: false,
         }
     }
 
@@ -3359,5 +3417,150 @@ mod tests {
         let died_outcome = RunOutcome::Died { pid: Some(12345) };
         assert_eq!(outcome_label(&died_outcome), "died");
         assert_eq!(exit_code_for(&died_outcome), ExitCode::FAILURE);
+    }
+
+    #[test]
+    fn parse_options_parses_expertise_flag() {
+        let opts = parse_options(&[
+            "--task",
+            "do something",
+            "--expertise",
+            "skills/foo.md :: purpose one :: read this to x\n/abs/bar.md :: purpose two :: read this to y",
+        ])
+        .unwrap();
+        assert!(opts.has_explicit_expertise);
+        assert_eq!(
+            opts.expertise,
+            vec![
+                ExpertiseEntry {
+                    path: "skills/foo.md".to_string(),
+                    purpose: "purpose one".to_string(),
+                    read_to: "read this to x".to_string(),
+                },
+                ExpertiseEntry {
+                    path: "/abs/bar.md".to_string(),
+                    purpose: "purpose two".to_string(),
+                    read_to: "read this to y".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_options_refuses_malformed_expertise_line() {
+        let err1 = parse_options(&["--task", "x", "--expertise", "only one part"]).unwrap_err();
+        assert!(err1.contains("malformed --expertise line"), "got: {err1}");
+        assert!(err1.contains("only one part"), "got: {err1}");
+
+        let err2 = parse_options(&["--task", "x", "--expertise", "part1 :: part2"]).unwrap_err();
+        assert!(err2.contains("malformed --expertise line"), "got: {err2}");
+
+        let err3 = parse_options(&["--task", "x", "--expertise", "part1 ::  :: part3"]).unwrap_err();
+        assert!(err3.contains("malformed --expertise line"), "got: {err3}");
+    }
+
+    #[test]
+    fn dry_run_brief_carries_expertise_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), true);
+        opts.has_explicit_expertise = true;
+        opts.expertise = vec![ExpertiseEntry {
+            path: "skills/bee-swarming/SKILL.md".to_string(),
+            purpose: "swarming contract".to_string(),
+            read_to: "follow the worker protocol".to_string(),
+        }];
+        let result = execute(&opts, &PanicHerdr);
+        match &result.outcome {
+            RunOutcome::DryRun(brief) => {
+                assert!(brief.contains("# Expertise — read these before you start"));
+                assert!(brief.contains("skills/bee-swarming/SKILL.md — swarming contract. Read it to follow the worker protocol."));
+            }
+            other => panic!("expected DryRun, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn continue_round_trip_keeps_job_json_expertise_when_no_fresh_flag() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, "job-1");
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": "job-1",
+            "task": "round 1 task",
+            "cwd": tmp.path().join("work").display().to_string(),
+            "round": 1,
+            "pane_id": "w1:p2",
+            "kind": "fake",
+            "expertise": [
+                {
+                    "path": "skills/ref.md",
+                    "purpose": "reference docs",
+                    "read_to": "understand rules"
+                }
+            ]
+        });
+        std::fs::write(mailbox::job_path(&bee_dir, "job-1"), serde_json::to_string(&job).unwrap()).unwrap();
+        std::fs::write(
+            mailbox::result_path(&bee_dir, "job-1", 1),
+            r#"{"status":"done","summary":"round 1 done","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+
+        let opts = continue_options(tmp.path(), true);
+        let result = execute(&opts, &PanicHerdr);
+        match &result.outcome {
+            RunOutcome::DryRun(brief) => {
+                assert!(brief.contains("# Expertise — read these before you start"));
+                assert!(brief.contains("skills/ref.md — reference docs. Read it to understand rules."));
+            }
+            other => panic!("expected DryRun, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn continue_round_trip_overrides_job_json_expertise_when_fresh_flag_given() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bee_dir = tmp.path().join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, "job-1");
+        std::fs::create_dir_all(&dir).unwrap();
+        let job = serde_json::json!({
+            "job_id": "job-1",
+            "task": "round 1 task",
+            "cwd": tmp.path().join("work").display().to_string(),
+            "round": 1,
+            "pane_id": "w1:p2",
+            "kind": "fake",
+            "expertise": [
+                {
+                    "path": "skills/old.md",
+                    "purpose": "old ref",
+                    "read_to": "old purpose"
+                }
+            ]
+        });
+        std::fs::write(mailbox::job_path(&bee_dir, "job-1"), serde_json::to_string(&job).unwrap()).unwrap();
+        std::fs::write(
+            mailbox::result_path(&bee_dir, "job-1", 1),
+            r#"{"status":"done","summary":"round 1 done","files_changed":[],"proof":"n/a"}"#,
+        )
+        .unwrap();
+
+        let mut opts = continue_options(tmp.path(), true);
+        opts.has_explicit_expertise = true;
+        opts.expertise = vec![ExpertiseEntry {
+            path: "skills/new.md".to_string(),
+            purpose: "new ref".to_string(),
+            read_to: "new purpose".to_string(),
+        }];
+        let result = execute(&opts, &PanicHerdr);
+        match &result.outcome {
+            RunOutcome::DryRun(brief) => {
+                assert!(brief.contains("# Expertise — read these before you start"));
+                assert!(brief.contains("skills/new.md — new ref. Read it to new purpose."));
+                assert!(!brief.contains("skills/old.md"));
+            }
+            other => panic!("expected DryRun, got {other:?}"),
+        }
     }
 }

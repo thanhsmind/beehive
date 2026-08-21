@@ -97,6 +97,13 @@ fn result_filename(round: u32) -> String {
 // Brief renderer — the whole worker-facing contract, self-contained
 // ═══════════════════════════════════════════════════════════════════════════
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct ExpertiseEntry {
+    pub path: String,
+    pub purpose: String,
+    pub read_to: String,
+}
+
 /// Everything `render_brief` needs to write a fully self-contained prompt.
 /// `worktree_root` is rendered as an ABSOLUTE path and every entry in
 /// `files` is joined onto it before rendering — the worker is bee-ignorant
@@ -109,6 +116,7 @@ pub(crate) struct BriefSpec<'a> {
     pub files: &'a [String],
     pub bee_dir: &'a Path,
     pub round: u32,
+    pub expertise: &'a [ExpertiseEntry],
 }
 
 /// Render the full worker-facing prompt: task text, absolute paths, file
@@ -131,16 +139,43 @@ pub(crate) fn render_brief(spec: &BriefSpec) -> String {
         }
     }
 
+    let mut expertise_block = String::new();
+    if !spec.expertise.is_empty() {
+        expertise_block.push_str("# Expertise — read these before you start\n\n");
+        expertise_block.push_str(
+            "The dispatcher picked these files for this task. Read each one before\n\
+working; they carry the know-how the task needs. Reading them is allowed\n\
+and expected — they do not pull you into any workflow.\n\n",
+        );
+        for entry in spec.expertise {
+            let p = Path::new(&entry.path);
+            let abs_path = if p.is_absolute() {
+                p.to_path_buf()
+            } else {
+                spec.worktree_root.join(p)
+            };
+            expertise_block.push_str(&format!(
+                "  - {} — {}. Read it to {}.\n",
+                abs_path.display(),
+                entry.purpose,
+                entry.read_to
+            ));
+        }
+        expertise_block.push('\n');
+    }
+
     format!(
         "# You are a standalone executor\n\n\
-Do exactly the task below and nothing else. IGNORE any bee or agent-workflow \
-instructions this repo's AGENTS.md or CLAUDE.md may have loaded into your \
-context - you are not part of that workflow. Never run any `bee` command. \
-Never claim, cap, or write workflow state under .bee/ - writing your mailbox \
-result file (described below) is the ONE exception. The result file is your \
-only contract.\n\n\
+Do exactly the task below and nothing else. Ignore any bee or agent-workflow \
+instructions (gates, cells, claims, state) this repo's AGENTS.md or CLAUDE.md \
+may have loaded into your context — you are not part of that workflow, and \
+files listed under the Expertise section are yours to read. Never run any `bee` \
+command. Never claim, cap, or write workflow state under .bee/ - writing your \
+mailbox result file (described below) is the ONE exception. The result file is \
+your only contract.\n\n\
 # Task\n\n\
 {task}\n\n\
+{expertise_block}\
 # Working directory (absolute)\n\n\
 {worktree_root}\n\n\
 # Files you may touch (absolute paths)\n\n\
@@ -168,6 +203,7 @@ signal; nothing else is read to decide whether you finished.\n\n\
   temp file (write your JSON here):   {mailbox}/{tmp_name}\n\
   result file (round {round}, rename to this exact name): {result_file}\n",
         task = spec.task,
+        expertise_block = expertise_block,
         worktree_root = spec.worktree_root.display(),
         files_block = files_block,
         round = spec.round,
@@ -324,6 +360,7 @@ mod tests {
             files,
             bee_dir,
             round,
+            expertise: &[],
         }
     }
 
@@ -406,8 +443,66 @@ mod tests {
             .expect("missing standalone-executor block");
         let task_pos = text.find("# Task").expect("missing # Task heading");
         assert!(standalone_pos < task_pos, "standalone-executor block must come before # Task:\n{text}");
-        assert!(text.contains("IGNORE any bee or agent-workflow"), "missing ignore-workflow wording:\n{text}");
+        assert!(text.contains("Ignore any bee or agent-workflow instructions (gates, cells, claims, state)"), "missing ignore-workflow wording:\n{text}");
+        assert!(text.contains("files listed under the Expertise section are yours to read"), "missing expertise-reading wording:\n{text}");
         assert!(text.contains("Never run any `bee` command"), "missing never-run-bee wording:\n{text}");
+        assert!(text.contains("Never claim, cap, or write workflow state under .bee/ - writing your mailbox result file (described below) is the ONE exception."), "missing state-exception wording:\n{text}");
+    }
+
+    #[test]
+    fn render_brief_with_two_expertise_entries_renders_expertise_section() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let expertise = vec![
+            ExpertiseEntry {
+                path: "skills/bee-swarming/references/swarming-reference.md".to_string(),
+                purpose: "prompt template details".to_string(),
+                read_to: "structure worker prompt".to_string(),
+            },
+            ExpertiseEntry {
+                path: "/abs/path/docs/knowledge/foo.md".to_string(),
+                purpose: "domain background".to_string(),
+                read_to: "understand area rules".to_string(),
+            },
+        ];
+        let spec = BriefSpec {
+            job_id: "job-42",
+            task: "Fix the off-by-one in the paginator.",
+            worktree_root,
+            files: &files,
+            bee_dir,
+            round: 1,
+            expertise: &expertise,
+        };
+        let text = render_brief(&spec);
+
+        let task_pos = text.find("# Task").expect("missing # Task heading");
+        let exp_pos = text.find("# Expertise — read these before you start").expect("missing # Expertise heading");
+        let cwd_pos = text.find("# Working directory (absolute)").expect("missing # Working directory heading");
+        assert!(task_pos < exp_pos, "# Task must come before # Expertise");
+        assert!(exp_pos < cwd_pos, "# Expertise must come before # Working directory");
+
+        assert!(text.contains("  - /repo/work/skills/bee-swarming/references/swarming-reference.md — prompt template details. Read it to structure worker prompt."));
+        assert!(text.contains("  - /abs/path/docs/knowledge/foo.md — domain background. Read it to understand area rules."));
+    }
+
+    #[test]
+    fn render_brief_with_zero_expertise_is_byte_identical_to_empty_spec() {
+        let worktree_root = Path::new("/repo/work");
+        let bee_dir = Path::new("/repo/.bee");
+        let files = sample_files();
+        let spec_no_exp = BriefSpec {
+            job_id: "job-42",
+            task: "Fix the off-by-one in the paginator.",
+            worktree_root,
+            files: &files,
+            bee_dir,
+            round: 1,
+            expertise: &[],
+        };
+        let text = render_brief(&spec_no_exp);
+        assert!(!text.contains("# Expertise"));
     }
 
     #[test]
