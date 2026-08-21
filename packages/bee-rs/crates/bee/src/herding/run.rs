@@ -109,6 +109,14 @@ struct Options {
     expertise: Vec<ExpertiseEntry>,
     /// True when `--expertise` was explicitly passed on the command line.
     has_explicit_expertise: bool,
+    /// `--nickname <name>` (herding-prompt-stall D4): the worker-facing
+    /// identity recorded in the round's ack file. Falls back to `job_id`
+    /// when the caller has no separate reservation identity for this run.
+    nickname: String,
+    /// `--cell-id <id>` (D4): the cell id this round belongs to, when the
+    /// caller has one — carried into the ack schema the brief shows, never
+    /// invented when absent.
+    cell_id: Option<String>,
 }
 
 fn absolute_path(p: &Path) -> PathBuf {
@@ -191,6 +199,8 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
     let mut dry_run = false;
     let mut agent: Option<&str> = None;
     let mut expertise_raw: Option<&str> = None;
+    let mut nickname: Option<&str> = None;
+    let mut cell_id: Option<&str> = None;
     let mut i = 0usize;
     while i < flags.len() {
         match flags[i] {
@@ -250,6 +260,14 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
                 expertise_raw = flags.get(i + 1).copied();
                 i += 2;
             }
+            "--nickname" => {
+                nickname = flags.get(i + 1).copied();
+                i += 2;
+            }
+            "--cell-id" => {
+                cell_id = flags.get(i + 1).copied();
+                i += 2;
+            }
             _ => i += 1,
         }
     }
@@ -277,6 +295,8 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         None => (Vec::new(), false),
     };
 
+    let nickname = nickname.map(str::to_string).unwrap_or_else(|| job_id.clone());
+
     Ok(Options {
         task: task_text,
         cwd: cwd_path,
@@ -292,6 +312,8 @@ fn parse_options(flags: &[&str]) -> Result<Options, String> {
         agent: agent.map(str::to_string),
         expertise,
         has_explicit_expertise,
+        nickname,
+        cell_id: cell_id.map(str::to_string),
     })
 }
 
@@ -805,6 +827,12 @@ fn start_with_retry(
 /// stall detector without padding it further.
 const AGENT_PROMPT_TIMEOUT_MS: u64 = 5_000;
 
+/// herding-prompt-stall D4: how many times the idempotent pointer is
+/// resent while neither the round's ack file nor its result file has
+/// appeared — bounded, mirroring `START_RETRY_ATTEMPTS`'s house style,
+/// never an infinite resend loop.
+const DELIVERY_RESEND_ATTEMPTS: u32 = 10;
+
 /// herding-prompt-stall D1/D3: the delivery outcomes `deliver_pointer` can
 /// return, kept distinct because each gets its own message and neither ever
 /// triggers a resend loop.
@@ -819,6 +847,11 @@ enum DeliveryError {
     /// An ordinary herdr-call failure, unrelated to the agent's lifecycle
     /// (herdr missing, a non-zero exit, an unparseable body).
     Transport(String),
+    /// D4: the pointer was resent up to the bound and neither the round's
+    /// ack file nor its result file ever appeared — herdr's own lifecycle
+    /// state (a successful "working" observation) is never enough on its
+    /// own any more.
+    NeverAcked { attempts: u32 },
 }
 
 impl std::fmt::Display for DeliveryError {
@@ -830,42 +863,62 @@ impl std::fmt::Display for DeliveryError {
             ),
             DeliveryError::Stalled(e) => write!(f, "herdr reported agent_prompt_stalled: {e}"),
             DeliveryError::Transport(e) => write!(f, "{e}"),
+            DeliveryError::NeverAcked { attempts } => write!(
+                f,
+                "sent the pointer {attempts} time(s) but neither the round's ack file nor its result file ever appeared"
+            ),
         }
     }
 }
 
-/// herding-prompt-stall D1 (supersedes herding-pointer-delivery D1 /
-/// herding-receipt-state D1): the send IS herdr's own atomic
-/// submit-and-observe, `herdr agent prompt <job> <text> --wait --until
-/// working --timeout <ms>` — herdr's own `agent_prompt_stalled` (its
-/// five-second no-observed-change detector) IS the delivery failure now,
-/// surfaced at once, never a resend. bee's hand-rolled baseline/transition
-/// poll and its up to 30 blind resends are retired: sampled right after
-/// `agent start` it read the boot window, where an agy pane flaps through
-/// unknown/working/idle/done — a boot flap satisfied the old transition
-/// test and receipted a pointer a booting TUI discarded (live: job
-/// trust-par-2, docs/history/herding-prompt-stall/CONTEXT.md). D3: a pane
-/// already `blocked` fails before the send is even attempted — there is no
-/// point submitting into a pane that is waiting on an unrelated question.
-/// `result_present()` is kept as the one escape: an ultra-fast round can
-/// write its result file before herdr ever observes the "working"
-/// transition, so a stalled send that already produced a result still
-/// counts as delivered.
+/// herding-prompt-stall D4 (narrows D1; supersedes herding-pointer-delivery
+/// D1 / herding-receipt-state D1): herdr's own atomic submit-and-observe —
+/// `herdr agent prompt <job> <text> --wait --until working --timeout <ms>`
+/// — still sends the pointer and still fails FAST on the two things herdr
+/// can observe immediately: a pane already `blocked` (checked before the
+/// send is even attempted — there is no point submitting into a pane
+/// waiting on an unrelated question) and `agent_prompt_stalled` (no
+/// observed lifecycle change within herdr's own five-second window). But a
+/// successful "working" observation is no longer the receipt: herdr
+/// lifecycle state proved unreliable on its own (a boot flap through
+/// unknown/working/idle/done satisfied the old transition test and
+/// receipted a pointer a booting TUI discarded — live: job trust-par-2,
+/// docs/history/herding-prompt-stall/CONTEXT.md). The receipt is now the
+/// worker's OWN ack file, or the round's result file for an ultra-fast
+/// round that finishes before an ack is ever observed (`result_present()`,
+/// kept as the pre-existing escape, `ack_present()` added beside it). When
+/// herdr reports the send successful but neither file has appeared yet,
+/// the pointer is idempotent — it only re-points at the same brief — so it
+/// is resent, bounded, never infinite, and a stall or a blocked
+/// observation mid-resend still ends the wait at once rather than being
+/// swallowed by another attempt.
 fn deliver_pointer(
     pointer: &str,
     prompt: &mut dyn FnMut(&str) -> Result<(), String>,
     status: &mut dyn FnMut() -> Option<String>,
+    ack_present: &mut dyn FnMut() -> bool,
     result_present: &mut dyn FnMut() -> bool,
+    sleep: &mut dyn FnMut(Duration),
 ) -> Result<(), DeliveryError> {
-    if status().as_deref() == Some("blocked") {
-        return Err(DeliveryError::Blocked);
+    for attempt in 1..=DELIVERY_RESEND_ATTEMPTS {
+        if status().as_deref() == Some("blocked") {
+            return Err(DeliveryError::Blocked);
+        }
+        match prompt(pointer) {
+            Ok(()) => {
+                if ack_present() || result_present() {
+                    return Ok(());
+                }
+            }
+            Err(_) if ack_present() || result_present() => return Ok(()),
+            Err(e) if is_agent_prompt_stalled(&e) => return Err(DeliveryError::Stalled(e)),
+            Err(e) => return Err(DeliveryError::Transport(e)),
+        }
+        if attempt < DELIVERY_RESEND_ATTEMPTS {
+            sleep(POLL_INTERVAL);
+        }
     }
-    match prompt(pointer) {
-        Ok(()) => Ok(()),
-        Err(_) if result_present() => Ok(()),
-        Err(e) if is_agent_prompt_stalled(&e) => Err(DeliveryError::Stalled(e)),
-        Err(e) => Err(DeliveryError::Transport(e)),
-    }
+    Err(DeliveryError::NeverAcked { attempts: DELIVERY_RESEND_ATTEMPTS })
 }
 
 /// herding-prompt-stall D2 (narrows herding-run-ready-wait D1): polls
@@ -1127,8 +1180,10 @@ fn wait_for_round(
     herdr: &dyn Herdr,
 ) -> PollDecision {
     let log_file_path = mailbox::log_path(bee_dir, job_id);
+    let ack_file_path = mailbox::ack_path(bee_dir, job_id, min_round);
     let mailbox_path = mailbox::mailbox_dir(bee_dir, job_id);
     let mut last_log_mtime: Option<std::time::SystemTime> = None;
+    let mut last_ack_mtime: Option<std::time::SystemTime> = None;
     let mut tick_index: u64 = 0;
     run_poll_loop(
         started_at_ms,
@@ -1150,6 +1205,19 @@ fn wait_for_round(
                 if let Ok(modified) = meta.modified() {
                     if last_log_mtime.map_or(true, |prev| modified > prev) {
                         last_log_mtime = Some(modified);
+                        heartbeat_fresh = true;
+                    }
+                }
+            }
+            // herding-prompt-stall D4: the worker's ack file counts as a
+            // heartbeat too, the SAME "mtime advanced since last observed"
+            // rule as log.txt above — a worker that acked and is now
+            // thinking for a long time is never read as dead off the ack
+            // alone appearing once.
+            if let Ok(meta) = std::fs::metadata(&ack_file_path) {
+                if let Ok(modified) = meta.modified() {
+                    if last_ack_mtime.map_or(true, |prev| modified > prev) {
+                        last_ack_mtime = Some(modified);
                         heartbeat_fresh = true;
                     }
                 }
@@ -1191,6 +1259,8 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         bee_dir: &bee_dir,
         round: 1,
         expertise: &opts.expertise,
+        nickname: &opts.nickname,
+        cell_id: opts.cell_id.as_deref(),
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -1329,11 +1399,14 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     }
     let pointer = mailbox::pointer_prompt(&brief_file);
     let round1_result = mailbox::result_path(&bee_dir, &opts.job_id, 1);
+    let round1_ack = mailbox::ack_path(&bee_dir, &opts.job_id, 1);
     if let Err(e) = deliver_pointer(
         &pointer,
         &mut |p| herdr.agent_prompt(&opts.job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
         &mut || herdr.agent_status(&opts.job_id),
+        &mut || round1_ack.exists(),
         &mut || round1_result.exists(),
+        &mut |d| std::thread::sleep(d),
     ) {
         let msg = match &e {
             DeliveryError::Blocked => blocked_message(&opts.job_id, &new_pane, &pane_tail(herdr, &new_pane)),
@@ -1476,11 +1549,14 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         };
 
         // 1b. Deliver resume nudge through standard deliver_pointer path
+        let round_ack = mailbox::ack_path(&bee_dir, job_id, resume_round);
         if let Err(e) = deliver_pointer(
             &pointer,
             &mut |p| herdr.agent_prompt(job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
             &mut || herdr.agent_status(job_id),
+            &mut || round_ack.exists(),
             &mut || round_result.exists(),
+            &mut |d| std::thread::sleep(d),
         ) {
             let msg = match &e {
                 DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
@@ -1582,6 +1658,8 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         bee_dir: &bee_dir,
         round: next_round,
         expertise: &expertise,
+        nickname: &opts.nickname,
+        cell_id: opts.cell_id.as_deref(),
     };
     let brief = mailbox::render_brief(&spec);
 
@@ -1609,11 +1687,14 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     }
     let pointer = mailbox::pointer_prompt(&brief_file);
     let round_result = mailbox::result_path(&bee_dir, job_id, next_round);
+    let round_ack = mailbox::ack_path(&bee_dir, job_id, next_round);
     if let Err(e) = deliver_pointer(
         &pointer,
         &mut |p| herdr.agent_prompt(job_id, p, "working", AGENT_PROMPT_TIMEOUT_MS),
         &mut || herdr.agent_status(job_id),
+        &mut || round_ack.exists(),
         &mut || round_result.exists(),
+        &mut |d| std::thread::sleep(d),
     ) {
         let msg = match &e {
             DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
@@ -2186,6 +2267,8 @@ mod tests {
             agent: None,
             expertise: Vec::new(),
             has_explicit_expertise: false,
+            nickname: "job-1".to_string(),
+            cell_id: None,
         }
     }
 
@@ -2217,6 +2300,18 @@ mod tests {
         .unwrap();
     }
 
+    /// Writes an empty round-N ack file into the job's mailbox — enough for
+    /// `deliver_pointer`'s `ack_present()` check to see delivery as already
+    /// confirmed in a single send, so a test exercising `wait_for_round`'s
+    /// OWN timing (not delivery) never trips the bounded-resend loop's real
+    /// sleep (herding-prompt-stall D4).
+    fn seed_ack(main_root: &Path, job_id: &str, round: u32) {
+        let bee_dir = main_root.join(".bee");
+        let dir = mailbox::mailbox_dir(&bee_dir, job_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(mailbox::ack_path(&bee_dir, job_id, round), "{}").unwrap();
+    }
+
     fn continue_options(main_root: &Path, dry_run: bool) -> Options {
         Options {
             task: "round 2: keep going".to_string(),
@@ -2233,6 +2328,8 @@ mod tests {
             agent: None,
             expertise: Vec::new(),
             has_explicit_expertise: false,
+            nickname: "job-1".to_string(),
+            cell_id: None,
         }
     }
 
@@ -2319,10 +2416,10 @@ mod tests {
     }
 
     #[test]
-    fn deliver_pointer_sends_once_and_succeeds_when_herdr_observes_the_transition() {
-        // herding-prompt-stall D1: the send IS herdr's own atomic
-        // submit-and-observe — a successful `--wait --until working` call
-        // is the whole receipt, no resend, no status poll after the send.
+    fn deliver_pointer_succeeds_in_one_send_when_the_ack_already_shows() {
+        // herding-prompt-stall D4: the worker's ack file is the receipt
+        // now, not herdr's own "working" transition — an ack already
+        // present right after the send needs no resend.
         let sent = std::cell::RefCell::new(0u32);
         let out = deliver_pointer(
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
@@ -2331,16 +2428,18 @@ mod tests {
                 Ok(())
             },
             &mut || Some("idle".to_string()),
+            &mut || true,
             &mut || false,
+            &mut |_d| {},
         );
         assert!(out.is_ok(), "{out:?}");
-        assert_eq!(*sent.borrow(), 1, "exactly one send, no resend");
+        assert_eq!(*sent.borrow(), 1, "exactly one send when the ack already shows");
     }
 
     #[test]
     fn deliver_pointer_surfaces_agent_prompt_stalled_as_a_typed_stall_not_a_resend() {
         // D1: herdr's own agent_prompt_stalled IS the delivery failure,
-        // returned at once — never 30 blind resends into a booting TUI.
+        // returned at once — never blind resends into a booting TUI.
         let sent = std::cell::RefCell::new(0u32);
         let out = deliver_pointer(
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
@@ -2351,6 +2450,8 @@ mod tests {
             },
             &mut || Some("idle".to_string()),
             &mut || false,
+            &mut || false,
+            &mut |_d| {},
         );
         match out {
             Err(DeliveryError::Stalled(e)) => assert!(e.contains("agent_prompt_stalled"), "{e}"),
@@ -2361,14 +2462,31 @@ mod tests {
 
     #[test]
     fn deliver_pointer_rescues_a_stalled_send_when_the_result_already_landed() {
-        // The result_present() escape survives the retirement of the
-        // baseline/transition poll: an ultra-fast round can write its
-        // result before herdr ever observes the "working" transition.
+        // The result_present() escape survives D4: an ultra-fast round can
+        // write its result before herdr ever observes the "working"
+        // transition.
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| Err("agent_prompt_stalled: no observed change".to_string()),
+            &mut || Some("idle".to_string()),
+            &mut || false,
+            &mut || true,
+            &mut |_d| {},
+        );
+        assert!(out.is_ok(), "{out:?}");
+    }
+
+    #[test]
+    fn deliver_pointer_rescues_a_stalled_send_when_the_ack_already_landed() {
+        // D4: the ack file is its own escape for a stalled send, the same
+        // shape as the pre-existing result_present() escape.
         let out = deliver_pointer(
             "Read the file /x/brief-1.txt and follow its instructions exactly.",
             &mut |_p| Err("agent_prompt_stalled: no observed change".to_string()),
             &mut || Some("idle".to_string()),
             &mut || true,
+            &mut || false,
+            &mut |_d| {},
         );
         assert!(out.is_ok(), "{out:?}");
     }
@@ -2380,6 +2498,8 @@ mod tests {
             &mut |_p| Err("could not spawn herdr: No such file or directory".to_string()),
             &mut || Some("idle".to_string()),
             &mut || false,
+            &mut || false,
+            &mut |_d| {},
         );
         match out {
             Err(DeliveryError::Transport(e)) => assert!(e.contains("could not spawn herdr"), "{e}"),
@@ -2400,9 +2520,94 @@ mod tests {
             },
             &mut || Some("blocked".to_string()),
             &mut || false,
+            &mut || false,
+            &mut |_d| {},
         );
         assert!(matches!(out, Err(DeliveryError::Blocked)), "{out:?}");
         assert_eq!(*sent.borrow(), 0, "never sends into an already-blocked pane");
+    }
+
+    #[test]
+    fn deliver_pointer_resends_bounded_while_neither_ack_nor_result_appears() {
+        // D4: the send is idempotent — herdr keeps observing "working" but
+        // neither the ack nor the result ever shows, so the pointer is
+        // resent, bounded, never infinite.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("idle".to_string()),
+            &mut || false,
+            &mut || false,
+            &mut |_d| {},
+        );
+        assert!(matches!(out, Err(DeliveryError::NeverAcked { attempts: DELIVERY_RESEND_ATTEMPTS })), "{out:?}");
+        assert_eq!(*sent.borrow(), DELIVERY_RESEND_ATTEMPTS, "bounded, not infinite");
+    }
+
+    #[test]
+    fn deliver_pointer_succeeds_once_the_ack_appears_after_a_resend() {
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || Some("idle".to_string()),
+            &mut || *sent.borrow() >= 3, // ack shows on the 3rd send
+            &mut || false,
+            &mut |_d| {},
+        );
+        assert!(out.is_ok(), "{out:?}");
+        assert_eq!(*sent.borrow(), 3, "stops resending the moment the ack shows");
+    }
+
+    #[test]
+    fn deliver_pointer_stops_resending_the_instant_the_pane_goes_blocked_mid_resend() {
+        // D3/D4: a blocked observation mid-resend must not be swallowed by
+        // another attempt — it ends the wait at once, same as on the very
+        // first check.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                Ok(())
+            },
+            &mut || if *sent.borrow() >= 1 { Some("blocked".to_string()) } else { Some("idle".to_string()) },
+            &mut || false,
+            &mut || false,
+            &mut |_d| {},
+        );
+        assert!(matches!(out, Err(DeliveryError::Blocked)), "{out:?}");
+        assert_eq!(*sent.borrow(), 1, "must not send again once blocked shows up between attempts");
+    }
+
+    #[test]
+    fn deliver_pointer_stops_resending_the_instant_a_stall_appears_mid_resend() {
+        // D4: a stall mid-resend must not be swallowed either.
+        let sent = std::cell::RefCell::new(0u32);
+        let out = deliver_pointer(
+            "Read the file /x/brief-1.txt and follow its instructions exactly.",
+            &mut |_p| {
+                *sent.borrow_mut() += 1;
+                if *sent.borrow() < 3 {
+                    Ok(())
+                } else {
+                    Err("agent_prompt_stalled: no observed change".to_string())
+                }
+            },
+            &mut || Some("idle".to_string()),
+            &mut || false,
+            &mut || false,
+            &mut |_d| {},
+        );
+        assert!(matches!(out, Err(DeliveryError::Stalled(_))), "{out:?}");
+        assert_eq!(*sent.borrow(), 3, "stops resending the instant a stall appears");
     }
 
     #[test]
@@ -2626,6 +2831,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 1; // no heartbeat ever arrives; trips fast
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         let result = execute(&opts, &fake);
         assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
@@ -2639,6 +2845,7 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 1;
         opts.close_always = true;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         let result = execute(&opts, &fake);
         assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
@@ -2652,6 +2859,7 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 1;
         opts.close_always = true;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         *fake.pane_text.borrow_mut() = Some("You've hit your session limit · resets 6:20pm (Asia/Bangkok)\n".to_string());
         let result = execute(&opts, &fake);
@@ -2671,6 +2879,7 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 1;
         opts.close_always = true;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         *fake.pane_text.borrow_mut() = Some("waiting for something else...".to_string());
         let result = execute(&opts, &fake);
@@ -2703,6 +2912,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 1;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         *fake.pane_text.borrow_mut() = Some("regular error output".to_string());
         let result = execute(&opts, &fake);
@@ -3088,6 +3298,11 @@ mod tests {
     fn continue_sends_a_prompt_to_the_recorded_pane_and_never_calls_agent_start() {
         let tmp = tempfile::tempdir().unwrap();
         seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        // Round 2's ack is seeded up front, distinct from round 2's result
+        // below — delivery (the ack) and completion (the result) are
+        // separate concerns (herding-prompt-stall D4); the result still
+        // lands later from the background writer thread, unaffected.
+        seed_ack(tmp.path(), "job-1", 2);
         let opts = continue_options(tmp.path(), false);
         let fake = FakeHerdr::new();
 
@@ -3145,6 +3360,7 @@ mod tests {
         // immediately with round 1's stale result. This test proves it
         // instead times out waiting specifically for round 2.
         seed_job(tmp.path(), "job-1", "w1:p2", 1);
+        seed_ack(tmp.path(), "job-1", 2);
         let mut opts = continue_options(tmp.path(), false);
         opts.idle_timeout_secs = 1; // no round-2 result ever arrives; trips fast
         let fake = FakeHerdr::new();
@@ -3260,6 +3476,10 @@ mod tests {
         // Write brief-1.txt
         let brief_file = mailbox::brief_path(&bee_dir, "job-1", 1);
         std::fs::write(&brief_file, "round 1 brief text").unwrap();
+        // Round 1's ack already exists from the original delivery, before
+        // this pause ever happened — the resume nudge re-points at the
+        // SAME round, so its receipt is already on disk (herding-prompt-stall D4).
+        seed_ack(tmp.path(), "job-1", 1);
 
         let opts = continue_options(tmp.path(), false);
         let fake = FakeHerdr::new();
@@ -3374,6 +3594,9 @@ mod tests {
 
         let brief_file = mailbox::brief_path(&bee_dir, "job-1", 2);
         std::fs::write(&brief_file, "round 2 brief text").unwrap();
+        // Round 2's ack already exists from the original delivery, before
+        // this pause ever happened (herding-prompt-stall D4).
+        seed_ack(tmp.path(), "job-1", 2);
 
         let opts = continue_options(tmp.path(), false);
         let fake = FakeHerdr::new();
@@ -3653,6 +3876,7 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 60;
         opts.close_always = false;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         *fake.liveness_responses.borrow_mut() = vec![
             Liveness::Absent,
@@ -3671,6 +3895,7 @@ mod tests {
         let mut opts = test_options(tmp.path(), false);
         opts.idle_timeout_secs = 60;
         opts.close_always = true;
+        seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         *fake.liveness_responses.borrow_mut() = vec![
             Liveness::Absent,
