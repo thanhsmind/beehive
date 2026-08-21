@@ -110,7 +110,7 @@
     },
     {
       "path": ".bee/expertise/tests.md",
-      "sha256": "fdec638fdc89ed19d046e74cf5e575ccad5b11e44fec82be03082e4c8cc71895",
+      "sha256": "b238fff4cd5af78a4973d74e15fbcaa540d7993ebe560950b0488a40d4804691",
       "mode": "644",
       "role": "runtime_expertise"
     },
@@ -1254,7 +1254,7 @@
     },
     {
       "path": "expertise/tests.md",
-      "sha256": "fdec638fdc89ed19d046e74cf5e575ccad5b11e44fec82be03082e4c8cc71895",
+      "sha256": "b238fff4cd5af78a4973d74e15fbcaa540d7993ebe560950b0488a40d4804691",
       "mode": "644",
       "role": "expertise_guide"
     },
