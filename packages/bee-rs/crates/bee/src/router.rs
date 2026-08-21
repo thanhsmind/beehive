@@ -734,6 +734,7 @@ fn rs_info() -> ExitCode {
     let info = serde_json::json!({
         "runtime": "rust",
         "version": env!("CARGO_PKG_VERSION"),
+        "bee_version": crate::version::BEE_VERSION,
         "ported": PORTED,
         "fallback": null,
     });
