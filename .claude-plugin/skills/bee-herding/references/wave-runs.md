@@ -29,6 +29,10 @@ herdr pane split <anchor-pane-id> --direction right --ratio 0.5 \
   --cwd <worktree_path> --no-focus
 ```
 
+The direction is not a free choice — it follows §8's fixed rule: `right` only
+for a tab's FIRST split, `down` from the second pane on, so extra workers stack
+as full-width bands instead of halving the width again.
+
 Read `.result.pane.pane_id` from that reply and use it as the worker's `name`.
 The `worktree` field in a worker's input is recorded in the ledger row and
 nothing more — it does not place the worker anywhere.
