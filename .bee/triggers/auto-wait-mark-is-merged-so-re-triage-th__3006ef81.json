@@ -4,8 +4,8 @@
   "condition": "auto-wait-mark is merged, so re-triage the AskUserQuestion layer: an AskUserQuestion turn never reaches Stop, so the highest-confidence blocked-on-human moment is the one the Stop hook cannot mark. Backlog carries the proposal (P3, layer hooks).",
   "tier": "manual",
   "predicate": null,
-  "status": "waiting",
+  "status": "resolved",
   "created_at": "2026-08-18T14:48:11.667Z",
-  "updated_at": "2026-08-18T14:48:11.667Z",
-  "outcome": null
+  "updated_at": "2026-08-21T08:56:52.229Z",
+  "outcome": "Re-triaged 2026-08-21, and the premise no longer holds. The proposal's obstacle was that an interactive question turn never reaches the session-stop hook, so the highest-confidence blocked-on-human moment cannot be marked there. True, but the mark does not need that hook: the question tool is ALREADY matched by the pre-tool-use hook wiring, and bee's write guard already inspects that tool's payload to check its question and option counts. The seam exists and runs today. Setting the waiting-on mark with kind question from that same handler is a small mechanical addition, not a blocked idea. Re-filed as a P2 proposal against the hooks layer with that finding attached."
 }

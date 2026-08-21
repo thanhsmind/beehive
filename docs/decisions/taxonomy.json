@@ -382,6 +382,8 @@
     "mailbox",
     "trust",
     "boot",
-    "promote"
+    "promote",
+    "triggers",
+    "triage"
   ]
 }
