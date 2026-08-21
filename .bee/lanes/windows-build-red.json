@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "feature": "windows-build-red",
+  "mode": "feature",
+  "phase": "planning",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"windows-build-red\" started at phase \"planning\" (lane).",
+  "next_action": "Continue bee-planning for \"windows-build-red\" (lane).",
+  "created_at": "2026-08-21T10:01:25.320Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null
+}

@@ -1,0 +1,63 @@
+{
+  "id": "hpsl-2",
+  "feature": "herding-pane-slides",
+  "title": "state the fixed first-right-then-down split rule in the herding docs",
+  "lane": "small",
+  "deps": [],
+  "files": [
+    "skills/bee-herding/references/role-dispatch.md",
+    "skills/bee-herding/references/wave-runs.md",
+    "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "skills/bee-herding/references/role-dispatch.md",
+    "skills/bee-herding/references/wave-runs.md",
+    "skills/bee-herding/references/spawn-proof.md"
+  ],
+  "verify": ".bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check && rg -n 'wider than tall' skills docs | wc -l",
+  "action": "The pane-split geometry rule changes from an aspect-ratio choice to a FIXED strategy, because sub-dividing width made three worker panes unreadable. New rule: the FIRST split of a tab goes `--direction right` (one worker gets the full-height column); EVERY later split goes `--direction down`, so extra workers stack as full-width horizontal bands and width halves at most once. Ratio stays 0.5. Parent pane choice stays the roomiest pane (largest rect.width * rect.height). Edit skills/bee-herding/references/role-dispatch.md section 8 step 2 (around lines 324-335): replace the 'take the pane with the largest rect.width * rect.height, and pass --direction right if it is wider than tall, else --direction down' sentence with the fixed rule — still read `herdr pane layout --pane <any runtime pane_id>`, still split the largest-area pane, but choose the direction from how many panes that layout lists: exactly one pane (the untouched runtime root) -> `--direction right`, two or more -> `--direction down`. Say in one line WHY: a down split leaves width unchanged, so worker panes stay wide enough to read and wide enough for herdr to accept a submitted prompt (a right split halves width every time, which is what made the third pane unusable). Update the summary table row near line 472 to match. In skills/bee-herding/references/wave-runs.md (around line 28) the example hardcodes `--direction right`; keep the example but add that the direction follows role-dispatch.md section 8's fixed rule (right only for a tab's first split, down after that). In docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md, sync whatever it says about the split direction to the same rule; if it says nothing about direction, add one short line stating it. Do NOT edit skills/bee-herding/references/spawn-proof.md — it is a recorded live observation, not a rule, and its own split was a first split, so it stays true. Run `.bee/bin/bee dev regen` after the edits so the generated registry payload carries the new skill text.",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "main-hpsl",
+    "outcome": "the fixed split rule is now stated in role-dispatch, wave-runs, spawn-proof's retired-reason note, and the run-verb knowledge page",
+    "files_changed": [
+      "skills/bee-herding/references/role-dispatch.md",
+      "skills/bee-herding/references/wave-runs.md",
+      "skills/bee-herding/references/spawn-proof.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "Wrote the knowledge line into the-run-verb-and-worker-outcomes.md (where bee herding run's split is described) instead of the cell's named agent-resolution-and-spawn-commands.md, which says nothing about direction; also touched spawn-proof.md to mark its retired reason rather than leave a dead rule standing."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T10:16:12.845Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3fdfa1d1-6c3f-4589-ab65-50f34f3307b0",
+    "claimed_at": "2026-08-21T10:09:22.060Z",
+    "inline_reason": "docs parity edit alongside its own code cell; the external agy pane tier adds cost without adding proof here",
+    "report": {
+      "outcome": "role-dispatch section 8 and its summary row now carry the fixed rule and the live 60/30/15 evidence; wave-runs points at it; spawn-proof keeps its observation with the retired reason marked; the run-verb knowledge page states the rule",
+      "commit": "5706b94d",
+      "files": [
+        "skills/bee-herding/references/role-dispatch.md",
+        "skills/bee-herding/references/wave-runs.md",
+        "skills/bee-herding/references/spawn-proof.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "bee dev regen — green (all 3 steps, skill trees + onboard + release-manifest --write) — docs change: the proof is that the rendered skill trees and the release manifest carry the new text; bee dev release-manifest --check reports only the worktree's absent .bee/bin/bee binary, an environment fact this cell does not create",
+      "deviations": [
+        "knowledge line placed in the-run-verb-and-worker-outcomes.md instead of agent-resolution-and-spawn-commands.md",
+        "spawn-proof.md annotated so its retired reason does not stand as a live rule"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

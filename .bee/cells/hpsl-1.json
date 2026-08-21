@@ -1,0 +1,47 @@
+{
+  "id": "hpsl-1",
+  "feature": "herding-pane-slides",
+  "title": "make the pane split rule fixed: first split right, every later split down",
+  "lane": "small",
+  "deps": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee split",
+  "action": "In packages/bee-rs/crates/bee/src/herding/run.rs the split direction is currently chosen from the parent pane's aspect ratio (fn split_direction(width, height) around line 750: wider-or-square splits right, taller splits down). Live, that keeps sub-dividing width — a 120-column tab goes 60/30/15 and the third worker's pane is unreadable and stalls submissions. The owner wants a FIXED strategy instead: the FIRST split of a tab goes right (one worker gets the full-height column), and EVERY later split goes down, so extra workers stack as full-width horizontal bands ('slides') and width never halves more than once. Change split_direction to take the pane COUNT of the caller's tab instead of a rect: `fn split_direction(pane_count: usize) -> &'static str { if pane_count <= 1 { \"right\" } else { \"down\" } }`, and rewrite its doc comment to state the fixed rule and why (readability: a down split leaves width unchanged, so it never trips MIN_PANE_WIDTH). In resolve_split_parent (around line 821) keep the roomiest-pane parent choice unchanged (hps-12) and keep the child-width guard unchanged (hps-13) — only feed the direction from the pane list's len(). The None/empty-layout fallback keeps direction \"right\" (a tab whose layout cannot be read is treated as its first split). Update the existing unit tests to the new rule: split_direction_prefers_right_when_wider_or_square becomes a count-based test (0 or 1 pane -> right, 2+ -> down); resolve_split_parent_chooses_the_largest_area_pane_even_when_its_child_would_be_too_narrow now has 3 panes so it must expect direction \"down\", child width 60 unchanged and NO refusal — rename it and rewrite its comment to record that the fixed rule is exactly what removes the old 60/30/15 stall; resolve_split_parent_a_down_split_never_narrows... must supply 2+ panes to reach \"down\". Keep every other behaviour, comment and test as it is. Do not touch any file outside run.rs.",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "main-hpsl",
+    "outcome": "split direction is now fixed: right for a tab's first split, down after that; width halves at most once",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T10:15:59.963Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "3fdfa1d1-6c3f-4589-ab65-50f34f3307b0",
+    "claimed_at": "2026-08-21T10:08:58.557Z",
+    "inline_reason": "generation tier here resolves to an external agy cockpit pane; spawning one for a single-file Rust edit costs more than it proves",
+    "report": {
+      "outcome": "split_direction now takes the caller tab pane count (<=1 right, else down); resolve_split_parent feeds it from the layout len; hps-12 parent choice and hps-13 child-width guard unchanged; five affected unit tests rewritten to the new rule",
+      "commit": "e343b0b0",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee split — green (25 passed) — the split-direction and split-parent decisions are the only behaviour this cell changes; the wider -p bee herding filter also ran, 290 passed with only the pre-existing intentional quick_exit_helper fixture failing",
+      "deviations": [
+        "Executed inline by the orchestrator rather than through a dispatched generation worker (external agy pane tier)"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

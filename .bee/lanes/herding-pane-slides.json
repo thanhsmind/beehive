@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-pane-slides",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-pane-slides\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"herding-pane-slides\" (lane).",
+  "created_at": "2026-08-21T10:06:46.756Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "small",
+    "flags": [],
+    "product_files": 4,
+    "rationale": "fixed pane-split strategy: first right, later down",
+    "updated_at": "2026-08-21T10:09:19.273Z",
+    "feature": "herding-pane-slides"
+  }
+}

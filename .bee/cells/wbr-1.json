@@ -1,0 +1,47 @@
+{
+  "id": "wbr-1",
+  "feature": "windows-build-red",
+  "title": "gate the unwritable-trust-file test behind cfg(unix) so the Windows suite compiles",
+  "lane": "tiny",
+  "deps": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/verbs/reservations/tests.rs"
+  ],
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee preflight_warns",
+  "action": "The Windows CI job fails to COMPILE, not to assert: preflight_warns_and_proceeds_when_the_file_is_unwritable in packages/bee-rs/crates/bee/src/herding/run.rs (around line 4481) imports std::os::unix::fs::PermissionsExt and calls Permissions::from_mode, neither of which exists on Windows, so the whole test binary is a build error there (E0433 plus two E0599 at run.rs:4482, 4489, 4495) and every other Windows test in that crate goes unrun. The test proves a mode-0o500 directory makes the atomic write fail, which has no Windows equivalent. Put #[cfg(unix)] directly above its #[test] attribute — the exact shape reserve_bounded_retry_reports_conflict_when_takeover_is_blocked already uses in verbs/reservations/tests.rs:232. Change nothing else: not the assertions, not the production path, not any other test.",
+  "status": "capped",
+  "decisions": [],
+  "trace": {
+    "worker": "main-wbr",
+    "outcome": "the unix-only trust-file test is cfg-gated so the Windows crate compiles again",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T10:03:34.412Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "50604963-80c5-4cdd-b083-b7ae9072fd54",
+    "claimed_at": "2026-08-21T10:01:51.290Z",
+    "report": {
+      "outcome": "cfg(unix) on preflight_warns_and_proceeds_when_the_file_is_unwritable; Windows compile errors E0433/E0599 removed at the source",
+      "commit": "3b81d569",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee preflight_warns — green — 4 preflight tests are the only ones the attribute can affect; the Windows arm is a compile-only fix CI proves on push",
+      "deviations": [
+        "Ran in the main checkout: release-blocking CI red, and no overlap with the live doctor-freshness-version reservations"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
