@@ -119,6 +119,21 @@ bought a smaller help output at the price of a blind guard.
   the registry record (so the full help surface lists it) and the pinned
   flag-count assertion moves with it in the same change (wayfinding-flow
   wayf-6, 2026-08-17: discovery list/stub registered, count 156→158).
+- R8 — **A verb that accepts a call owns its refusal.** Declining to answer
+  hands the call to the dispatcher's last-resort diagnosis, which can only
+  guess from the shape of the arguments — so a verb that declines a call it
+  actually understands makes that guess the caller's whole answer. Each
+  validation problem is refused by the verb itself, naming the flag, the
+  value or the limit, and saying that nothing was written. The generic
+  argument-shape message stays honest only where it belongs: a call no verb
+  claims at all.
+- R9 — **A command's declared required arguments are exactly what its
+  handler demands.** A handler that requires more than the registry declares
+  costs twice: the help surface prints no required marker for those
+  arguments, and the dispatcher's own missing-argument branch can never fire
+  for them. The declaration is pinned to the handler's own list by a
+  contract test, so the two cannot drift apart
+  (backlog-add-honest-refusal D1, 2026-08-21).
 
 ## Edge Cases Settled
 
@@ -133,6 +148,16 @@ bought a smaller help output at the price of a blind guard.
   optional ones included — never only the required set; the always-accepted
   json/help pair is stated once in the header instead (harness-audit-hardening
   hah-4, verbs/help.rs, 2026-08-07).
+- **A returned "not mine" from a ported handler is a refusal in disguise.**
+  Before the port, a handler that declined a call meant "the other runtime
+  answers this one". With that runtime deleted, the same signal means "let
+  the dispatcher guess", and the guess is written as fact: one verb told
+  callers its required arguments were all present when the caller had simply
+  omitted one, and pointed at a help page that was already correct. The
+  decline path is now a per-problem refusal; the verb resolves its store root
+  first so it can speak for itself, and a caller outside a repo still hears
+  about the missing root before anything else
+  (backlog-add-honest-refusal D1, 2026-08-21).
 - **A hook entry point without a hook name is usage, never a panic.** Bare
   `bee hook` and `bee hook --help` print the usage line and exit cleanly; the
   hook dispatcher never panics on a missing subcommand (harness-audit-hardening
