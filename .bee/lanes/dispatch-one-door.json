@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"dispatch-one-door\" started at phase \"exploring\".",
   "next_action": "Merge the worktree, then present the uat gate.",
   "created_at": "2026-08-21T04:02:40.659Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "**Tiếp theo:** dọn mailbox test, hay để nguyên rồi quay lại gate `uat` của `dispatch-one-door`?",
-    "asked_at": "2026-08-21T08:41:50.912Z",
-    "session": "7dcda44f-e90a-4291-af12-cb3b603d9acf"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
