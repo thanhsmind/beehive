@@ -1,0 +1,77 @@
+{
+  "id": "hss-2",
+  "feature": "herding-split-serialize",
+  "title": "Hold the split lock across the layout read and the pane split",
+  "lane": "small",
+  "status": "capped",
+  "deps": [
+    "hss-1"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+  ],
+  "action": "Serialize the pane split in packages/bee-rs/crates/bee/src/herding/run.rs so concurrent spawns stop all splitting `right`. The bug, live 2026-08-21: five parallel spawns from one tab all right-split (panes p3R p3S p3T p3V p3W) and worker 5 died on the 180s ack-wait budget, because every process read a stale layout showing pane_count 1. Find the region with `rg -n 'pane_current|pane_layout|resolve_split_parent|tab_create' packages/bee-rs/crates/bee/src/herding/run.rs`; the guarded region is the run of statements starting at `let own_pane = match herdr.pane_current()` and ending when `new_pane` is bound - it currently reads `let layout = herdr.pane_layout(&own_pane);`, then `let parent = resolve_split_parent(layout.as_deref(), &own_pane);`, then the `match parent.refusal` arms that call `herdr.pane_split(...)` or, on the hps-13 width refusal, `herdr.tab_create(...)`. Extract that whole run into one helper function taking the herdr, own_pane/cwd/job_id and the main root, so the lock's scope is the helper body and the guard drops the moment the new pane exists. Acquire with herding::split_lock::acquire(&opts.main_root, &opts.job_id, <budget>) at the top of the helper - a budget generous enough that a queued spawn waits rather than fails (the ack-wait budget is 180s; 120s is the intended value). Fail OPEN, matching the fail-open habit this file already uses for the layout read and the hps-8 workspace-trust pre-flight: on Ok(None) (budget spent) or Err, print an eprintln! warning naming the lock and proceed with the split anyway - a spawn that never happens is worse than a mis-directed one. Keep every existing behavior inside the region byte-for-byte otherwise: the hps-8 pre-flight stays BEFORE the lock, the hps-13 fresh-tab fallback stays inside it, resolve_split_parent and split_direction are untouched, and every existing SpawnFailed message keeps its wording. Regression test in run.rs's existing #[cfg(test)] block, alongside the existing fake-Herdr test doubles (`rg -n 'fn pane_layout' packages/bee-rs/crates/bee/src/herding/run.rs` finds them): a fake Herdr whose pane list lives behind a shared Mutex, where pane_split PUSHES the new pane into that list and pane_layout returns the current list; drive the helper from two threads against one temp main root and assert the two recorded split directions are `right` then `down`, never `right` twice - the exact regression. Keep the fake's pane_split slow enough (a short sleep before the push) that an unlocked implementation reliably fails the test.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::",
+  "must_haves": {
+    "truths": [
+      "Two concurrent spawns from one tab produce one right split and one down split, never two right splits",
+      "A lock that cannot be taken within the budget warns and still spawns"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "split helper holding the lock across layout read and split, plus the concurrent regression test"
+      }
+    ],
+    "key_links": [
+      "run.rs calls herding::split_lock::acquire before reading the pane layout"
+    ],
+    "prohibitions": [
+      "No change to resolve_split_parent, split_direction, MIN_PANE_WIDTH or narrow_pane_refusal",
+      "No change to any existing SpawnFailed message wording",
+      "The hps-13 fresh-tab fallback stays"
+    ]
+  },
+  "trace": {
+    "worker": "w-hss-2",
+    "outcome": "Pane split now holds a cross-process lock across the layout read and the split, so concurrent spawns stop all splitting right",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T13:57:45.274Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1083b691-2617-4369-95d8-5204003a5b9d",
+    "claimed_at": "2026-08-21T13:45:51.103Z",
+    "tier_reason": "same as hss-1: generation tier resolves to a herding-executor pane and the cockpit interlock is disabled; ceiling is the model-guard sanctioned in-family tier",
+    "report": {
+      "outcome": "Pane split now holds a cross-process lock across the layout read and the split, so concurrent spawns stop all splitting right",
+      "commit": "5f42381e",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/split_lock.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding:: — green — the cell verify: 273 herding tests passed, 0 failed, including the new concurrent-split regression",
+      "deviations": [
+        "split_worker_pane takes the acquire budget as a parameter; the one production call site passes the SPLIT_LOCK_WAIT const (120s). The seam makes the budget-spent fail-open branch provable in a millisecond test instead of a two-minute one.",
+        "Reserved and edited split_lock.rs as well: run.rs now calls acquire, so the module-level allow(dead_code) was stale. Removed it and narrowed the opt-out to SplitLock::path(), the one item still test-only, with its own reason comment.",
+        "Negative check run and reverted: with acquire replaced by Ok(None), the regression test records [right, right] and fails, so the test really catches the bug."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 335 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "decisions": [],
+  "tier": "ceiling"
+}

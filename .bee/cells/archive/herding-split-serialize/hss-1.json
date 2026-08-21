@@ -1,0 +1,72 @@
+{
+  "id": "hss-1",
+  "feature": "herding-split-serialize",
+  "title": "Add a cross-process pane-split lock module",
+  "lane": "small",
+  "status": "capped",
+  "deps": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/split_lock.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/hooks/prompt_context.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "action": "Create packages/bee-rs/crates/bee/src/herding/split_lock.rs: a cross-process advisory lock so concurrent `bee herding run` PROCESSES serialize their pane split. Each spawn is its own OS process, so an in-process Mutex cannot work; the lock must be a file. Model it on the store-lock already in packages/bee-rs/crates/bee/src/hooks/prompt_context.rs - read `fn try_acquire` (create_new + AlreadyExists), `fn try_stale_takeover`, `fn is_pid_alive`/`fn pid_alive_os` (both the #[cfg(windows)] and #[cfg(unix)] arms), `fn random_token`, and `struct LockGuard` with its `fn release`. Do NOT refactor prompt_context.rs and do NOT make its private items public: write a self-contained module in herding/. Shape: lock file at <main_root>/.bee/locks/herding-pane-split.lock holding {pid, ts, token, job_id}; `pub(crate) fn acquire(main_root: &Path, job_id: &str, wait: Duration) -> Result<Option<SplitLock>, String>` that retries every 50ms until the wait budget is spent, returning Ok(None) on budget exhaustion (never an Err - the caller fails open) and Err only on a real filesystem failure; a stale holder is taken over when its recorded pid is dead, or when the lock file's mtime is older than a hard-stale ceiling (keep the two-tier rule prompt_context.rs uses: a soft window where a live pid still holds, a hard ceiling where it does not). `pub(crate) struct SplitLock` releases in `impl Drop`, and - like LockGuard::release - removes the file ONLY when the on-disk holder still carries this acquisition's own pid and token. Create the .bee/locks directory if absent. Add `mod split_lock;` to packages/bee-rs/crates/bee/src/herding.rs beside the existing `mod run;` line, keeping the file's existing doc-comment-per-mod style. Tests in the module's own #[cfg(test)] block, using a temp directory: (a) a second acquire while a live holder is held returns Ok(None) within the budget; (b) the lock is re-acquirable after the first guard drops; (c) a holder file naming a dead pid with an old mtime is taken over; (d) a real contention test - N threads each acquire, increment a shared counter, assert the counter was never observed concurrently, and release - proving mutual exclusion over the actual file.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::split_lock",
+  "must_haves": {
+    "truths": [
+      "Two concurrent acquire calls against the same lock file never both hold it"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/split_lock.rs",
+        "substantive": "acquire + SplitLock Drop release + stale takeover + unit tests, no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "herding.rs declares mod split_lock"
+    ],
+    "prohibitions": [
+      "No edit to hooks/prompt_context.rs",
+      "No change to any existing herding behavior in this cell"
+    ]
+  },
+  "trace": {
+    "worker": "w-hss-1",
+    "outcome": "Cross-process pane-split file lock module added, with acquire wait budget, two-tier stale takeover, identity-checked Drop release, and 5 unit tests",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/split_lock.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T13:19:37.019Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1083b691-2617-4369-95d8-5204003a5b9d",
+    "claimed_at": "2026-08-21T13:11:28.852Z",
+    "tier_reason": "generation tier resolves to a herding-executor pane and the cockpit interlock is disabled (no owner enable marker); the only in-family claude slots are review=opus and advisor=fable, so the model-guard sanctioned ceiling is the honest execution tier here",
+    "report": {
+      "outcome": "Cross-process pane-split file lock module added, with acquire wait budget, two-tier stale takeover, identity-checked Drop release, and 5 unit tests including a real 8-thread contention test",
+      "commit": "9e4b1eb4e36bc32ce16e448b4ff6d46038556e94",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/split_lock.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::split_lock — green — 5 passed; the cell adds one new module and its own tests are the whole surface, and cargo build --release adds no new warnings",
+      "deviations": [
+        "Added a module-level #![allow(dead_code)] with a recorded reason: the caller lands in a later cell, so 13 new dead-code warnings would otherwise ship with this module"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 485 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "decisions": [],
+  "tier": "ceiling"
+}

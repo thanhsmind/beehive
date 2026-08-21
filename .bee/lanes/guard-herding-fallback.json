@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "guard-herding-fallback",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"guard-herding-fallback\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"guard-herding-fallback\" (lane).",
+  "created_at": "2026-08-21T13:45:35.412Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": null,
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 1,
+    "rationale": "Raised from small to standard: the one product file is packages/bee-rs/crates/bee/src/hooks/model_guard.rs, machine-guard source under a judge-required root. A guard and its tests written by one author prove only that the author agrees with themselves (pattern-20260812), so the close-time judge-debt door must own an independent read here rather than a lane-small ack. Substance is unchanged: configured_model_set must admit the model dispatch prepare already publishes for a herding slot's fallback:\"default\".",
+    "updated_at": "2026-08-21T13:47:53.390Z",
+    "feature": "guard-herding-fallback"
+  }
+}

@@ -743,5 +743,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-21T10:46:52.382Z"
+  },
+  "herding-split-serialize": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-21T13:59:36.732Z"
   }
 }

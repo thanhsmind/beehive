@@ -1,0 +1,54 @@
+{
+  "id": "hgf-1",
+  "feature": "guard-herding-fallback",
+  "title": "Admit a herding slot's fallback:\"default\" model into the guard's configured set",
+  "lane": "standard",
+  "status": "claimed",
+  "deps": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee-rs/crates/bee/src/verbs/drivers/models.rs"
+  ],
+  "action": "Two bee doors disagree today. `bee dispatch prepare` (packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs:781-833, the Resolved::Herding arm) reads a herding slot's `fallback:\"default\"` and publishes `payload.fallback = {model: <default_models(runtime)[tier]>}` - for claude generation that is \"sonnet\" (packages/bee-rs/crates/bee/src/verbs/drivers/models.rs:43-55). That is bee telling the orchestrator: on a failed herding run, re-dispatch through the Agent path on this model. But `bee hook model-guard` then refuses that exact model, because `configured_model_set` (packages/bee-rs/crates/bee/src/hooks/model_guard.rs:428-443) only collects `Resolved::Model` slots and a herding slot resolves to `Resolved::Herding`. With `.bee/config.json` setting generation+extraction to `{kind:\"herding\", agent:..., fallback:\"default\"}`, the claude member set is just {opus, fable} and every prepared fallback dispatch is denied.\n\nFix, entirely inside packages/bee-rs/crates/bee/src/hooks/model_guard.rs:\n1. Change `Slot::Herding` (l. 238-241) from a unit variant to one carrying the fallback flag, e.g. `Herding { fallback: bool }`. Keep the existing doc comment and add one line naming this cell's reason.\n2. In `normalize_tier_value`, the herding branch (l. 287-291): set that flag true when and only when the slot object carries the LITERAL string `\"default\"` under key `fallback` - mirror drivers/models.rs normalize_tier_value, which round-trips `fallback` only for that literal. Any other value (absent, empty, mistyped, non-string) is false.\n3. Leave `Resolved::Herding` a unit variant and leave `resolve_tier`/`resolve_advisor` returning it. The dispatch refusal must not change: an Agent/Task subagent still cannot BE a herding pane (herding-tier D5), and the two refusal messages that say so stay byte-identical.\n4. In `configured_model_set` (l. 428-443): for each of extraction/generation/review, when that slot's raw `Slot` is `Herding { fallback: true }`, insert the trimmed non-empty string from `crate::verbs::drivers::models::default_models(\"claude\")` for that same slot name. `default_models` is `pub(crate)`, so call it - do NOT re-type the haiku/sonnet/opus table in the hook, or the two doors drift again the next time one moves. Honour the same review-falls-back-to-generation rule resolve_tier uses only where it already applies; a herding review slot resolves on its own, so its default is \"opus\".\n5. Do NOT add the advisor slot to this path: prepare.rs's own comment (l. 809-817) records that advisor has no default-model table entry and never takes a tier fallback.\n\nTests in the file's existing #[cfg(test)] block, following its established style: (a) a claude generation slot `{kind:\"herding\", agent:\"x\", fallback:\"default\"}` plus review:\"opus\" - a dispatch carrying `model: \"sonnet\"` with no tier marker is ALLOWED; (b) the same slot WITHOUT `fallback` - `model: \"sonnet\"` is still DENIED, and the existing refusal text is unchanged; (c) `fallback` set to something other than the literal \"default\" behaves like (b); (d) a herding review slot with fallback:\"default\" puts \"opus\" in the member set; (e) a dispatch that names `subagent_type: \"bee-gather\"` or carries `[bee-tier: generation]` against a herding slot is STILL denied exactly as before - this cell widens the model-membership check only, never the tier/transport check.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml model_guard",
+  "must_haves": {
+    "truths": [
+      "A herding slot carrying fallback:\"default\" makes that slot's default model a member of the guard's configured set",
+      "A herding slot with no fallback field admits no model - the refusal is unchanged",
+      "The tier/transport refusals (marker-on-nameless-tier, subagent_type-for-herding-slot) are unchanged by this cell"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/hooks/model_guard.rs",
+        "substantive": "Slot::Herding carries the fallback flag, configured_model_set calls drivers::models::default_models, plus the five new tests; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "configured_model_set sources its default model from drivers::models::default_models, not a second hardcoded table"
+    ],
+    "prohibitions": [
+      "No edit to verbs/drivers/prepare.rs or verbs/drivers/models.rs",
+      "No new hardcoded model-name table inside the hook",
+      "No change to any existing guard refusal message"
+    ]
+  },
+  "tier": "ceiling",
+  "decisions": [],
+  "trace": {
+    "worker": "w-hgf-1",
+    "outcome": null,
+    "files_changed": [],
+    "deviations": [],
+    "friction": null,
+    "capped_at": null,
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2a7f3cd2-3cf9-4540-9d24-8a9b64594486",
+    "claimed_at": "2026-08-21T13:48:19.542Z"
+  }
+}
