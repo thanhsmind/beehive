@@ -95,6 +95,12 @@ each decision event.
 
 - 0083835c · 2026-07-11 · Standing release flow (human-set, 2026-07-11): every bee update from now on ships as a tagged release — (1) bump BEE_VERSION in templates/lib/state.mjs + .claude-plugin/plugin.json version, (2) onboard --apply --repo-hooks on beegog itself (re-vendor, recheck up_to_date), (3) full verify green, (4) commit 'release: bee X.Y.Z', (5) annotated tag vX.Y.Z, (6) git push origin main --tags, (7) onboard --apply to every anphabe host project except anphabe-crm
 
+## bee-help-verb-detail
+
+### cli
+
+- 2bfe560a · 2026-08-21 · bee-help-verb-detail D1-D3: D1: single-verb help (bee <verb> --help rendering exactly one entry) prints one line per flag — --name, * when required, type, then the registry parameter description; multi-entry renders (--help --all, group listings) keep the compact flags line; the json flag stays omitted under the existing header note. D2: the read-once rule lands in AGENTS.md and the session preamble Command-surface line: before the FIRST use of a verb in a session, read bee <verb> --help — never guess flags; one read per verb is enough, never re-read. D3: no new dump-everything surface — per-verb help stays the cheap path.
+
 ## cli
 
 ### cli
@@ -166,6 +172,12 @@ each decision event.
 
 - b43d31eb · 2026-08-11 · Compounding batch 2026-08-12: six promote proposals (knowledge-link-check, finish-advisory, evidence-ladder, evolving-watch, workflow-lessons, doctor-binary-freshness) were reviewed and closed with nothing merged — every substantive claim was already in the bundle verbatim, with the same cell-id and date attribution, from an earlier authoring pass. Their pattern candidates were generic deviation narration and were discarded. write-guard-precision is the one proposal carrying unmerged content.
 
+## config
+
+### uat
+
+- bca8a1f0 · 2026-08-21 · Config: uat_stop=close and uat_before_merge=false — a green close merges the feature worktree into main without a pre-merge uat stop; the uat question moves AFTER merge, asked on the reloaded product on main; a failed uat is fixed in a worktree and merged again.
+
 ## decision-propagation
 
 ### decisions
@@ -188,6 +200,20 @@ each decision event.
 
 - e7adaa4c · 2026-07-21 · taxonomy schema corrected: tags[] entries are {name, description} objects per the dp-6 contract (loadTaxonomy maps t.name); dp-7's string-seed made every known tag classify as unknown and leak into candidates — candidates cleared, steady-state re-proven by this event
 - 3ff26b98 · 2026-07-21 · taxonomy bootstrap note: initial seed lacked schema_version — first classify call read it as invalid, treated known tags as unknown, appended gates/planning to candidates and rewrote the file canonically; steady-state behavior verified correct by this very event
+
+## defaults-and-agent-env
+
+### capture-deferral
+
+- 7adc6681 · 2026-08-20 · capture-deferral: defaults-and-agent-env — dae-1 and dae-2 settlements are stubbed in the capture queue (worktree-parallelism, bee-herding) and will merge into their area specs on the next bee-capturing pass together with the queue's 3 older stubs
+
+### config
+
+- aeb8308e · 2026-08-20 · defaults-and-agent-env D1+D2: absent-key defaults flip — uat_stop absent reads as close (merge lands on main, worktree held while uat pending), staging_before_merge absent reads as false (staging opt-in). Explicit keys and the uat_before_merge alias keep their meanings
+
+### herding
+
+- 1c73bf8f · 2026-08-20 · defaults-and-agent-env D3+D4: the herd registry pre-seeds built-in claude-sonnet and agy-flash entries (config same-name entries override), and an entry may take the object shape {argv, env} — env is applied inside the fresh pane as one export line before agent start; invalid keys/values drop the entry fail-open-per-entry
 
 ## doctrine-layer
 
@@ -255,6 +281,16 @@ each decision event.
 
 - 66230fd5 · 2026-07-08 · Agents run all bee commands themselves (bee_status, bee_cells, reservations, decisions, onboarding, verify); never hand a bee command to the user. Human actions = gate approvals, decision answers, privacy approvals only. Record: docs/decisions/0006.
 
+## feature-porting effort
+
+### skills
+
+- a4319276 · 2026-08-18 · feature-porting: no separate numeric risk score for ports — challenge outcomes map into bee's existing lane classification and route flags (high risk lands hard-gate)
+- 9fb2923b · 2026-08-18 · feature-porting: source provenance (repo, ref, resolved commit SHA) is recorded in the decision log at shape lock plus a capture stub into knowledge
+- a1a83035 · 2026-08-18 · feature-porting: port work exposes exactly two modes — compare (analysis report only) and port (default, idiomatic rewrite); copy/improve are outcomes the challenge step decides, never upfront flags
+- 0f0ecbe0 · 2026-08-18 · feature-porting: the challenge framework (adversarial questions with source-answer/local-answer/risk, red-green flags) applies to port work only
+- 1d51c588 · 2026-08-18 · feature-porting: extend bee-researching with a port protocol reference (port-protocol.md plus trigger wording) instead of creating a separate bee-porting skill
+
 ## feature:opencode-support
 
 ### capture-deferral
@@ -299,6 +335,51 @@ each decision event.
 - edd15fc5 · 2026-07-27 · SECURITY FINDING (verified independently): the write-guard worktree containment is bypassed by the tilde-slash and HOME-variable spellings — writing into the home directory via the tilde spelling exits 0 while the absolute spelling of the same file exits 2. Pre-existing, unrelated to GH #71, and fix-first before or with it
 - 49d83077 · 2026-07-27 · An extra-root target short-circuits: it is allowed and never passed to checkWrite, so intake gate, gates, reservations and holds do not apply. Fail-closed on every error path; declared roots are sanity-refused when they are the filesystem root, contain the worktree, or are a bare home directory
 - f13f56a6 · 2026-07-27 · GH #71 is fixed by a DECLARED extra-root allowlist in .bee/config.json honored at the single containment funnel canonicalRelPath/canonical_rel_path, with an EMPTY default so behavior is byte-identical to today until a human declares a root — the existing blanket 'absolute outside path is always denied' tests must keep passing unchanged
+
+## herding-bare-agent
+
+### herding
+
+- 7abf296f · 2026-08-20 · herding-bare-agent D1-D5: a bare bee herding run resolves its agent through the cell-execution ROLE. resolve_agent_command precedence becomes --agent <name> > models.<runtime>.generation when that slot is {"kind":"herding","agent":"<non-empty>"} > herding.agent_command > built-in default array (D1). Any other slot shape (kind herding with no agent, a plain model name, kind cli, null) is skipped and falls through unchanged (D2). The runtime block is BEE_RUNTIME when it names claude/codex/opencode, else claude — no new flag on the verb (D3). A slot agent missing from herding.agents fails closed as UnknownAgent listing the known keys, never a silent fallback (D4). bee herding wave inherits the same precedence through the same resolver (D5).
+
+## herding-limit-pause
+
+### herding
+
+- 98805a42 · 2026-08-20 · herding-limit-pause D1-D4: a worker usage-limit stop is a typed paused_limit outcome (stale heartbeat + pane limit-pattern match), never timed_out_idle; the pane is never closed and job.json is stamped paused_limit_at + limit_reset_hint; bee herding run --continue on a stamped job re-nudges the SAME round and clears the stamp; the control loop counts a paused job as occupying its slot and never re-dispatches its work
+
+## herding-liveness-signals
+
+### orchestration
+
+- de386361 · 2026-08-20 · herding-liveness-signals D1-D6 (restates 6194c0f2 with D1 narrowed after the plan review). D1: bee herding run's poll decides on a signal ladder, not one signal. Tier 0 truth is mailbox result-N.json (round >= min_round) and a well-formed result outranks every other tier. Tier 1 liveness is herdr pane process-info's foreground_processes; agent-present means at least one entry whose pid differs from shell_pid, NEVER a name match against the agent kind, because an agent that shells out to cargo or git puts a different name in its own foreground group. No result plus no agent process is a typed died outcome. Tier 2 progress keeps its CURRENT membership — log.txt mtime OR agent_status working — because the third source D1 originally named does not work (D6). Tier 3 classification runs only when tier 2 goes stale: pane read is pulled once at that moment to match LIMIT_PATTERNS for paused_limit versus timed_out_idle. The died rung sits between the ceiling check and the stale-heartbeat check, so timed_out_ceiling keeps winning every tie. D2: the tier-1 liveness read fails OPEN — an unreachable herdr reports unknown, never died — the opposite direction from pane_alive's fail-CLOSED refusal gate, because a herdr hiccup must never kill a live multi-hour job. D3: died requires N consecutive absent process observations, N=3 read every 10th tick (~2s), and an unknown read RESETS the counter to zero rather than incrementing or holding it — an Absent-Unknown-Absent interleave must not fire died. D4: pane read moves from every 200ms tick to tier-3 on-demand only. D5: herdr socket event subscription is refused as a liveness source — edge-triggered, silent-when-dead, same heuristic underneath, and blind to result-N.json. D6 (NEW): /proc CPU delta is refused as the hang-detecting progress signal. As an OR-branch it never goes stale, because a TUI agent's event loop burns CPU while blocked (measured: utime 12313 to 12315 on a process in state S) and a hung agent's spinner redraw burns it identically. As an override it kills an agent legitimately blocked minutes on an LLM API call with near-flat CPU. The pane revision counter fails the same way a spinner advances mtime. Hang detection therefore has no mechanism yet and is parked against its trigger; the feature ships the death verdict and the pane-read economy without it.
+
+## herding-prompt-stall
+
+### herding
+
+- d4bf5264 · 2026-08-21 · herding-prompt-stall D6 (narrows D1): herdr's agent_prompt_stalled is a RETRYABLE outcome, not an immediate delivery failure. A stall means herdr observed no state change from the submission - for an agent herdr already reports as ready but whose TUI has not finished initializing, that is the expected transient, not a fault. Measured live 2026-08-21: a fresh 173x50 tab pane, agy booted and drawn, bee's submission returned agent_prompt_stalled and the run died; the identical herdr agent prompt typed by hand seconds afterwards on the SAME pane returned agent_status working at once. So a stall feeds the same bounded retry the ready-with-no-ack path already uses, under the same two bounds (the resend count and the wall-clock ack budget), and becomes terminal only when a bound is exhausted - with a message saying every submission stalled. blocked and a transport error stay immediate.
+- 83141af0 · 2026-08-21 · herding-prompt-stall D5 (corrects D3's reach): herdr's blocked state does NOT cover every question a pane can be waiting on, so it cannot be bee's only prompt detector. Proven live 2026-08-21 with the fixed binary: three concurrent agy runs into a genuinely untrusted workspace all sat at Antigravity's 'Do you trust this folder?' dialog while herdr reported the agent as idle, never blocked; bee burned its full 60s ready wait and failed with 'agent never reported ready within 60s (ready-wait)', a message that says nothing about a question being on screen. Two consequences. First, every wait that gives up — the ready gate, the ack budget, the delivery bound — reads the pane on its way out and, when the text looks like a question or approval UI, names the matched line and the remedy in its error instead of the generic timeout wording. This diagnosis pass runs only on an already-failed wait, so a false positive costs nothing and no pattern table is ever load-bearing. Second, workspace trust comes back INTO scope as a declared per-agent pre-flight: bee worktree new mints a brand-new path every time, so a first run into a fresh worktree stalls on this dialog every time.
+- fc3be3ed · 2026-08-21 · herding-prompt-stall D4 (narrows D1): the delivery receipt becomes an ACK the worker WRITES, not a state bee infers. The rendered brief's first instruction is: before any other step, write <mailbox>/ack-<round>.json atomically (tmp then rename, the same gesture the result file already uses) carrying who took the job — worker nickname, cell id when there is one, job id, round, the agent's own name, and a received_at timestamp. deliver_pointer's receipt is that ack file appearing, or the round's result file appearing for an ultra-fast round; herdr lifecycle state stops being the receipt entirely. herdr's agent_prompt_stalled (D1) and blocked (D3) stay as the fast FAILURE detectors, never as the success signal.
+- ad2a4f13 · 2026-08-21 · herding-prompt-stall D3: herdr's blocked state — recognized an approval or question UI — is a fast, loud failure at every bee wait point: the ready gate, pointer delivery, and the round poll. A blocked pane ends the wait immediately with a typed error naming the pane id, the tail of its text, and the remedy; bee never burns the 60s ready wait, the 30 pointer resends, or the 900s idle timeout on a question nobody is going to answer. This is how a per-workspace trust prompt is covered without bee carrying any agent-specific pattern table.
+- 6da8387a · 2026-08-21 · herding-prompt-stall D2 (narrows herding-run-ready-wait D1): the ready gate accepts idle OR done. herdr's own agent contract states that idle means ready-for-input AND the tab has been seen in the focused UI, that done is the same underlying idle state for a tab nobody has looked at, and that CLI reads never mark a tab seen. Every pane bee splits carries --no-focus and is read only over the CLI, so done is the NORMAL resting state of a bee worker pane and an idle-only gate rejects a pane that is ready. Prefer herdr agent wait <job> --until idle --until done --timeout <ms> over bee's hand-rolled poll.
+- 9391e9e8 · 2026-08-21 · herding-prompt-stall D1: bee stops hand-rolling the pointer-delivery receipt. The send becomes herdr's own atomic submit-and-observe — herdr agent prompt <job> <text> --wait --until working --timeout <ms> — and herdr's agent_prompt_stalled (no observed lifecycle change within 5s of a submission from a non-working state) IS the delivery failure, surfaced at once. bee's own baseline/transition poll is retired: sampling agent_status right after agent start reads the boot window, where an agy pane flaps through unknown/working/idle/done, so a boot flap satisfies the transition test and receipts a pointer the booting TUI discarded.
+
+### impact-deferral
+
+- 1a9972ca · 2026-08-21 · herding-prompt-stall impact sweep: the one citing doc of decision 9391e9e8 — docs/knowledge/patterns/20260821-a-faked-seam-hides-the-parse.md — was reviewed and reconciled in place. Its frontmatter citation now names both narrowings (D4, the receipt is the worker's ack file; D6, a stalled submission is retried rather than fatal) and states that neither touches the pattern's claim, which is about the parse behind a faked seam, not about what counts as a receipt. The citation stays because it is accurate: that decision IS the misread this pattern generalizes from. No further change is owed on this citation.
+
+## herding-receipt-state
+
+### herding
+
+- 8cebb154 · 2026-08-20 · herding-receipt-state D1: the herding run delivery receipt is an agent state transition (agent_status working/done or result-1.json present) polled after each send, never pane-text needle visibility
+
+## herding-worker-standalone
+
+### herding
+
+- 38681ef3 · 2026-08-20 · herding-worker-standalone D1-D3: a herded pane worker is standalone — the brief opens with an ignore-the-repo-bee-workflow contract, bee herding run always exports BEE_HERDING_WORKER=1 into the pane (marker wins over per-agent env), and every bee hook exits 0 silently under that marker, checked once in hooks::try_native
 
 ## hook-runtime
 
@@ -409,6 +490,16 @@ each decision event.
 - b1ea3c73 · 2026-07-21 · intake-gate-git-exemption closed: guard/hook toggles persist only to the gitignored config.local.json (ige-1), and git is exempt from the intake gate only when every path it would change is bookkeeping, resolved from real staged paths with fail-closed unknown subcommands and no push exemption (ige-2). P46 / GH 1 closed with per-clause CoS evidence. Full chain green 3x, 58 suites
 - 6942ea25 · 2026-07-21 · intake-gate-git-exemption D1-D4 locked + Gates 1-3 auto-approved (bypass total): git read-only always allowed; mutating git allowed at a terminal phase only when EVERY changed path is bookkeeping (.bee/, docs/, plans/, AGENTS.md), computed from actual staged paths never from wording; guards.*/hooks.* toggles persist to the gitignored .bee/config.local.json instead of the tracked config; the refusal message stops recommending the dangerous escape first
 
+## knowledge bundle
+
+### capture
+
+- 2f62e09e · 2026-08-18 · Promote-proposal review 2026-08-18: all seven pending proposals reviewed (wayfinding-flow, wayfinding-craft, windows-ci-test-fix, release-2-8-0, test-doctrine, wayfinding-triggers, porting-protocol) — nothing merged. Six carry zero bullets or content already stated in docs/knowledge/areas/discovery-wayfinding/overview.md; wayfinding-flow's wayf-6 bullet declined: its substance is already owned by pattern 20260818-a-generated-view-in-scope-puts-its-source-record-in-scope (area rust-runtime), and its discovery-wayfinding area tag was wrong
+
+### docs
+
+- 40272d61 · 2026-08-18 · Capture flush 2026-08-18: proof-line doctrine synced into the living layer — workflow-state specs (cells-completion-judge-and-archive, cells-authoring-and-revision, sessions-lanes-and-identity) and docs/handbook/register.md now state agent-owned proof-per-change-type with doors that check recorded proof and run nothing; docs/specs/test-simple.md left as read-only compatibility surface; test-cadence-boundary history docs kept as historical record
+
 ## ledger-parity-and-status-payload
 
 ### state
@@ -484,6 +575,12 @@ each decision event.
 
 - 20fe078b · 2026-07-21 · User-reported false drift on clean main is CONFIRMED REAL and fixed (commit 6412017): .bee/onboarding.json is tracked and recorded lock.mjs hash from before 1aa74de, because the release ran onboarding BEFORE the last fix commit and the tag was re-pointed without re-onboarding. Files were byte-identical to source throughout — the ledger alone was stale. Two structural findings filed: P1 no parity guard between .bee/bin and the ledger (a third copy relationship, unlike templates<->.bee/bin which test_lib_mirror covers), P2 status --json is ~4000 tokens with lanes alone 58%
 
+## packages/bee-rs/crates/bee/src/verbs/state_group/policy.rs start_default
+
+### state
+
+- e62d1311 · 2026-08-18 · start-feature-reservation-scope D1: the default (non-lane) bee state start-feature reservation precondition gets the same scoping the lane path already has, and its FIX line never tells the caller to release another session's holds. The three-way judgment call is answered (iii)+(ii) together: the default path now ACCEPTS --paths (already parsed by run_start_feature, previously handed only to start_lane), and it refuses on exactly two grounds. (a) An active reservation held by ANOTHER session whose path overlaps a path this start declares — FIX: wait for release or expiry, or start over non-overlapping paths. (b) An active reservation held by THIS SAME session — the caller's own leftover state, the original hygiene intent of the check — FIX: bee reservations release --agent <agent>, naming the caller's own agent. With no --paths declared and no same-session hold, a peer's reservation in another worktree over unrelated paths refuses nothing; the claimed-cells precondition just below stays the guard for real in-flight work. The --as-lane --paths workaround stays legitimate and byte-untouched.
+
 ## performance-log
 
 ### performance
@@ -509,6 +606,31 @@ each decision event.
 
 - 6bca2638 · 2026-07-13 · Compat/transition surfaces always ship with an explicit removal trigger: any 'keep the old path working' layer (shims, legacy regexes, fallback formats) is filed as backlog debt in the same feature that creates it, with the upgrade condition that retires it
 - 9e1c99f4 · 2026-07-13 · Compat/transition surfaces always ship with an explicit removal trigger: any 'keep the old path working' layer (shims, legacy regexes, fallback formats) is filed as backlog debt in the same feature that creates it, with the upgrade condition that retires it
+
+## pocock-nuggets feature
+
+### feature-local
+
+- 77363407 · 2026-08-18 · Routing record: pocock-nuggets D1, pocock-nuggets D2, pocock-nuggets D3, pocock-nuggets D4, pocock-nuggets D5 are feature-local, shipped in cell pn-1 (commit a4241eb) as expertise/reference prose
+
+### skills
+
+- 0002a616 · 2026-08-18 · pocock-nuggets source provenance: distilled from mattpocock/skills (github.com/mattpocock/skills) commit 84fdeff; six prose nuggets into expertise/planning.md, expertise/debugging.md, expertise/tests.md, bee-shaping and bee-capturing references, per porting-protocol D4
+
+## porting-protocol feature
+
+### feature-local
+
+- ff69368a · 2026-08-18 · Routing record: porting-protocol D2, porting-protocol D3, porting-protocol D4, porting-protocol D5, porting-protocol D6, porting-protocol D7 are feature-local, shipped in cell pp-1 (commit 7fb20eb2) as skills/bee-researching/references/port-protocol.md and SKILL.md 0.3
+- 213682f5 · 2026-08-18 · Routing record: porting-protocol D2-D7 are feature-local decisions, shipped in cell pp-1 alongside porting-protocol D1
+- 4d09dc11 · 2026-08-18 · Routing record: porting-protocol D1/D2/D3/D4/D5/D6/D7 are feature-local decisions, shipped as skills/bee-researching/references/port-protocol.md and the 0.3 SKILL.md prose in cell pp-1
+
+### skills
+
+- 0201fea9 · 2026-08-18 · porting-protocol D1/D2/D3/D4/D5/D6/D7 are feature-local: they shipped as the port-protocol reference and bee-researching 0.3 prose in cell pp-1; no separate knowledge-bundle routing needed beyond the pending capture stub
+- c133ebc0 · 2026-08-18 · porting-protocol: the two modes are named xia (distill: strengths, weaknesses, does bee already have it, recommendation — ends in discussion, builds nothing) and port (idiomatic rewrite); xia widens the earlier compare semantics from side-by-side report to a knowledge-distill report
+- 7bd126d5 · 2026-08-18 · porting-protocol: xia lives as a trigger keyword in bee-researching's description (xia, distill from, learn from repo X) — no rename, no separate bee-xia skill
+- 0c6601e9 · 2026-08-18 · porting-protocol source provenance: ported from ak-xia at /home/thanhsmind/projects/AI/ak/.claude/skills/ak-xia (repo projects/AI/ak, commit a70c7cdb9ab76faa7e3c88490c0ce21b34b9d651)
 
 ## release-1-10-0
 
@@ -559,6 +681,12 @@ each decision event.
 ### release
 
 - 147983a4 · 2026-07-21 · bee 1.9.0 RELEASED: tag on 1aa74de, exact-tag CI GREEN on Linux (29860999690) and Windows (29860999810). Contents: worktree --with-companion + skill-tree sync from contributor PRs 44/45 (GH 43 closed), intake-gate git exemption closing P46/GH 1 open since v1.3.10, machine-local guard toggles, and a third lock fix — takeover now verifies identity BEFORE the rename so a live lock is never briefly vacated for a third racer
+
+## release-2-8-0
+
+### impact-deferral
+
+- a83ed13f · 2026-08-18 · Impact sweep at release-2-8-0 close: the 16 citing lines in test-doctrine docs (CONTEXT.md, MAP.md, tickets 001/003) stay correct as written; the release shipped the doctrine those decisions state and changed no meaning, so no citing doc needs rework.
 
 ## release-v0.1.35
 
@@ -638,6 +766,13 @@ each decision event.
 
 ### bee-herding
 
+- d891fc43 · 2026-08-19 · herding-orchestration D19 (owner, 2026-08-19): Windows leaves D1's closing condition. The feature is finished when the D6 scenario runs end to end ON LINUX. What D4 claimed — that Windows is a required outcome rather than a follow-up — is narrowed to what is actually true and actually proven: the MECHANISM is proven on Windows, because the whole suite runs unexcluded on a windows-latest CI lane and every behaviour that matters is pinned by platform-portable tests, with the herdr backend deliberately split into pure interpretation and thin process glue for exactly that reason. What is NOT proven on Windows is a LIVE run: the D6 scenario needs a running herdr server, real panes and real agents, which CI cannot stand up and which this session cannot reach from inside WSL. That live run becomes an owner-run supervised cycle, the same shape the area already records as R7, rather than an agent-run step.
+- 8d413c12 · 2026-08-18 · herding-orchestration D17: the bee-side entry point is a new CLI verb in the existing herding group, bee herding wave. The shape gate deliberately left this unnamed after a reviewer caught it being smuggled in as shape; it is decided here at planning time, on the record. The dispatch and merge roles are models following markdown and can reach bee only through its CLI, so a library-only entry point cannot be used by the cockpit at all. The verb is what makes the D6 scenario runnable and what phase 4's Rust control loop will call.
+- 64e8abe6 · 2026-08-18 · herding-orchestration D16: the herdr backend lives INSIDE the fleet crate, as a module beside the fake one, not in the bee crate and not in a third crate. D2 forbids the core knowing bee concepts — cells, lanes, worktrees, gates, proof — and herdr is none of those; it is a terminal multiplexer, so a herdr backend is a peer of the fake backend rather than a bee concern. Keeping it in fleet is what makes the coordination story reusable outside bee at all, which is the point of D02.
+- fb8a8628 · 2026-08-18 · herding-orchestration D15: ordering invariant 8 (dedupe before preflight) is satisfied at the generic-core layer ONLY for specs whose names are the same string. Collapsing a name and a differently-spelled canonical id for one underlying target is backend-layer work, because the WorkerBackend trait exposes only start, status, send and read_output — there is no name-to-canonical-id resolver, and adding one to the generic core would require it to know a backend's identity scheme, which D2 forbids. The herdr-backend phase carries four obligations: add a canonical-identity step (a resolve method on the trait, or a backend-side pre-pass that rewrites each spec name to a canonical id) with the dedupe keyed on it; add a test where a name and its pane id name one target and assert exactly one send, one baseline and one succeeded entry; correct the public doc on WorkerSpec::name, which currently tells implementers the choreography already handles this; and keep this decision cited wherever invariant 8 is stated.
+- 88d1aab7 · 2026-08-18 · herding-orchestration D18: the dispatch role's section 8 records its own wave-ledger row immediately after a successful agent start, through a recording verb on the bee side. Dispatch keeps its current shape — open one agent and walk away — rather than being rerouted through bee herding wave, which runs a whole five-phase choreography and then WAITS, a fundamentally different shape from a cold loop that spawns and exits. Section 8 already holds everything a row needs: the worker name, the pane id, the worktree path and the PBI it was given.
+- c496c1d6 · 2026-08-18 · herding-orchestration D18: the dispatch role's section 8 records its own wave-ledger row immediately after a successful agent start, through a recording verb on the bee side. Dispatch keeps its current shape — open one agent and walk away — rather than being rerouted through bee herding wave, which runs a whole five-phase choreography and then WAITS, a fundamentally different shape from a cold loop that spawns and exits. Section 8 already holds everything a row needs: the worker name, the pane id, the worktree path and the PBI it was given.
+- 75bf36ba · 2026-08-18 · herding-orchestration D14: the herding.agent_command config keeps its existing shape — token 0 stays the agent executable name. bee splits it at spawn time: token 0 feeds herdr's --kind, the remaining tokens go after the -- separator as agent arguments. The documented default array is unchanged, so any project that already set the key needs no edit. operational-invariants.md records the new mapping and restates its no-config promise as 'the same effective spawn' rather than 'byte-equivalent', because herdr 0.8.0 changed the wire format and byte-equivalence is no longer available to promise. Named failure mode: token 0 must be one of herdr's supported kinds (claude, codex, pi, opencode and the rest of the enum) — an unrecognised name is a herdr refusal at spawn, which must be surfaced as a typed error naming the key, never as a generic start failure.
 - 6bb703ca · 2026-07-23 · tiny/docs lane: follow up P77 by adding the new bee herding enable/disable/status CLI verbs to skills/bee-herding/README.md and SKILL.md, which still only documented the manual touch/rm marker gesture
 
 ### block-lean
@@ -650,6 +785,7 @@ each decision event.
 
 ### capture
 
+- b6419b46 · 2026-08-20 · The herding promote batch was reviewed and applied: three concept-level facts entered docs/knowledge/areas/bee-herding/overview.md (the config tier route, the herding.agents registry, the spawn-resilience principle); ten fact groups were confirmed already covered by the overview or operational-invariants.md; the rest were feature-local process notes, dropped with reasons on their flush records. All 26 capture stubs flushed; the 11 herding-arc promote-proposals.md files are consumed by this batch
 - 8d640531 · 2026-08-16 · Promote proposal for waiting-on-pair-clear reviewed 2026-08-16: delivery draft not saved (trace restatement); area bullet [wpc-1] already stated in docs/knowledge/areas/workflow-state/workflow-records-and-projections.md:473-476; no pattern candidates; nothing applied.
 - 66e985af · 2026-08-16 · Promote proposal for worktree-first-enforcement reviewed 2026-08-16: empty (0 capped cells, no area bullets, no pattern candidates); nothing applied; scribing-run stamp deferred to feature close
 - ba138c93 · 2026-08-11 · Compounding batch 2026-08-11 over 9 promote proposals (8 backlog + backlog-anchor): two real gaps merged — sra-2 CLI rendering (obligation_conflicts array, empty-case byte-identity) into workflow-state/cells-scheduling.md B17, and the fourth backlog-row anchor arm into okf-profile/context-and-promote.md B9. Every other area bullet verified already-stated in its owning concept. All 6 deviation-derived pattern candidates declined: each is feature-specific or already stated in its area spec; none clears multi-feature relevance. Delivery drafts not adopted into docs/knowledge/work/ — traces and docs/history carry provenance.
@@ -665,8 +801,31 @@ each decision event.
 - b6296353 · 2026-07-24 · scribing-integrity D6 (pre-ledger amnesty): every feature whose capped behavior_change cells predate the scribing ledger's existence receives one backfill stamp (areas: pre-ledger-backfill) — by construction those features either passed the compounding-complete wall (debt paid or explicitly waived, both logged at the time) or were repaired by a later session (router-cost d5a75c18). Exceptions stamped with their REAL areas because their content was synced today: full-run-retirement (doctrine-layer), codex-loop-p0 (hook-runtime), work-visibility (doctrine-layer,performance-log — state-stamped at its close, ledger just did not exist yet). The orphan alarm must start at zero real debt or it teaches everyone to ignore it.
 - d5a75c18 · 2026-07-23 · router-cost close-out (by a later session): the dead session left phase=swarming with rc-1..rc-4 capped, code merged+pushed, and its three scribing concepts already written (read-size-guard, skill-reference-pointer-integrity, router-triage — sources name the rc cells) but never stamped. Verified the concepts cover all four cells, committed them earlier (fa20ffa), now stamping scribing-run + compounding-complete. Zero-exception capture invariant honored — nothing waived.
 
+### capture-deferral
+
+- 99485b25 · 2026-08-18 · test-doctrine capture deferred to the capture-queue flush: the five behavior_change cells (td-1..td-5) settle one doctrine — agent-owned proof-per-change-type — and one capture pass at flush beats five
+
 ### cells
 
+- 627240b7 · 2026-08-21 · «cells judge-record: cell "dod-4" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- 61f0afbb · 2026-08-21 · «cells judge-record: cell "dod-1" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- f9c9b361 · 2026-08-19 · «cells judge-record: cell "ho-17" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- 16364ecf · 2026-08-19 · «cells judge-record: cell "ho-13" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- bc4c1dca · 2026-08-18 · «cells judge-record: cell "ddb-1" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- 5b87e696 · 2026-08-18 · «cells judge-record: cell "ho-12" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- 4318efcf · 2026-08-18 · «cells judge-record: cell "ho-10" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- e83906d0 · 2026-08-18 · «cells judge-record: cell "usp-3" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- 3471a618 · 2026-08-18 · «cells judge-record: cell "awm-2" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- 6fa09a9c · 2026-08-18 · «cells judge-record: cell "awm-1" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- 1b642bcf · 2026-08-18 · «cells judge-record: cell "tdt-3" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- 2417188d · 2026-08-18 · «cells cap: cell "ho-9" judge override by w-ho-9r — Rework of the NEEDS_REVISION on 9400633f: both flagged probes re-verified as real tests and now pass — a_90_minute_old_unresolved_worker_whose_pane_is_still_live_counts_as_live (was 0, now Live(1)) and a_worker_whose_outcome_arrived_in_a_later_row_never_counts_at_any_age (was 1, now Live(0)); added the absent-pane and fallback-degradation cases the rework brief called for. Full workspace cargo test still green (2085 passed, 11 ignored).»
+- b2f5a063 · 2026-08-18 · «cells judge-record: cell "ho-9" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- dc58be39 · 2026-08-18 · «cells judge-record: cell "ho-8" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- c92a9b83 · 2026-08-18 · «cells cap: cell "mcl-2" judge override by unknown — Fixed the sole FAIL check (collateral-post-commit-dirty-warning-regression, signature merge_lane_write_placed_before_post_commit_dirty_guard_fires_verify_mutated_tracked_files_on_every_green_merge): moved the lane write in phases.rs to run after the post-commit git-status read instead of before it, without narrowing the guard, and added a_green_merge_of_a_tracked_lane_file_emits_no_mutated_tracked_files_warning (force-tracks the fixture lane file, asserts no warning key) to close the test gap that let the untracked fixture hide the bug. All 5 PASS truths from the original verdict are re-verified unchanged by the full worktree suite (185 passed, 0 failed).»
+- 643ae990 · 2026-08-18 · «cells cap: cell "mcl-2" judge override by unknown — Fixed the sole FAIL check (collateral-post-commit-dirty-warning-regression, signature merge_lane_write_placed_before_post_commit_dirty_guard_fires_verify_mutated_tracked_files_on_every_green_merge): moved the lane write in phases.rs to run after the post-commit git-status read instead of before it, without narrowing the guard, and added a_green_merge_of_a_tracked_lane_file_emits_no_mutated_tracked_files_warning (force-tracks the fixture lane file, asserts no warning key) to close the test gap that let the untracked fixture hide the bug. All 5 PASS truths from the original verdict are re-verified unchanged by the full worktree suite (185 passed, 0 failed).»
+- bd616551 · 2026-08-18 · «cells judge-record: cell "mcl-2" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- 9d9b113f · 2026-08-18 · «cells judge-record: cell "ho-6" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
+- 1d55d24d · 2026-08-18 · «cells judge-record: cell "ho-1" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
 - 0ab9a81a · 2026-08-14 · «cells judge-record: cell "ah-3" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
 - efe57d57 · 2026-08-14 · «cells judge-record: cell "ah-2" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
 - 8dc6be74 · 2026-08-14 · «cells judge-record: cell "trun-9" reopened capped->open by a NEEDS_REVISION semantic-judge verdict»
@@ -745,12 +904,14 @@ each decision event.
 
 ### ci
 
+- acd1d6c6 · 2026-08-16 · Repo-relative doc paths in bee output and stored records are spelled with forward slashes on every platform; Windows-native spellings are normalized before comparison (path_relative joins with /, touches_sweep_excluded and impact_sweep_in_generated_tree normalize input). Test fixtures that build real git worktrees canonicalize their temp roots with dunce::canonicalize against 8.3 short paths.
 - e2373374 · 2026-07-27 · win-ci-timeout D1: Windows portable-suites job sets BEE_VERIFY_SUITE_TIMEOUT_MS=600000 — Node-20-on-windows-latest runs the worktree/review suites 2-4x slower than Linux (spawn-heavy git suites: test_reviews 265s, test_worktree_store >300s killed); the 300s default stays everywhere else
 - fb12954c · 2026-07-24 · release-1-15-0: never release on red — full verify measured 3 red suites and each becomes a fix-first cell before the bump: rb-1 trim AGENTS.block.md under the 20480-byte hard budget preserving every test-pinned sentence; rb-2 root-cause compact-check .bee/ tree-hash mutation (prime suspect: wv-1's timings.jsonl append on every CLI call — if confirmed, the D13 negative control exempts .bee/logs/** as telemetry WITH a negative control proving real state mutation still reddens); rb-3 make repeat bash install byte-idempotent (managed-file hash churn). rel1150-1 then runs bump 1.15.0 -> render_plugin -> manifest --write -> onboard --apply -> full verify FOREGROUND green -> commit+tag v1.15.0 -> push --tags -> CI dispatch. Auto-approved Gates 1-3 (bypass total). A9 skipped: total autopilot + explicit release command.
 - 3b011fc1 · 2026-07-23 · ci-cadence D1: beegog's OWN CI cadence moves to nightly 23:00 Asia/Ho_Chi_Minh (cron 0 16 * * * UTC) + workflow_dispatch on ci.yml and windows.yml — push/PR triggers removed; the auto-issue step's event gate widens from push to any non-PR event. D2: cadence is a PROJECT choice, never harness doctrine — every harness surface that hardcoded 'runs on push' is reworded cadence-neutral ('on the project's own CI cadence — the host workflow decides'), so neither 'push' nor '23h' is baked into bee.
 
 ### claims
 
+- 5a957ce6 · 2026-08-19 · «sweep: cell "uls-1" reset claimed -> blocked — swept session "837fbcd4-540d-49a6-a882-7366f6bc3f97"'s expired, stale claim»
 - dbf22043 · 2026-07-20 · D-GHF-B: budget claim-counting keys on heartbeat-invariant acquired_at — claim files gain immutable acquired_at at acquisition; renewClaimTTL preserves it; ledger entries carry acquired_at with claimed_at fallback for legacy entries. Amends Δ1's (claim_session,claimed_at) pairing IMPLEMENTATION while preserving its intent (count real acquisitions); heartbeat renewal broke the invariant Δ1 assumed.
 
 ### cli
@@ -860,8 +1021,22 @@ each decision event.
 
 - f6606f4d · 2026-08-04 · The generation tier gets a second rendered agent, bee-build, with write tools: bee-gather stays read-only for gathers, bee-build executes cells. A generation dispatch naming general-purpose is refused naming both rather than repaired, because the guard cannot tell a gather from an execution from the tier alone
 
+### discovery
+
+- a536c68a · 2026-08-18 · herding-orchestration D11: a scenario is described through a Rust API in which the wave is a VALUE, not a sequence of calls — a Wave struct holding a list of WorkerSpec, timeouts, and a failure policy. The failure policy is an enum in that value from day one (wait-all, first-success-cancel-rest, best-effort) even with a single variant implemented. No recipe file format is invented in this effort.
+- 984a2cde · 2026-08-18 · herding-orchestration D10: the core returns typed results and records nothing (structural, per D05). On the bee side, one append-only wave ledger, one row per wave, in the shape .bee/ already uses — wave id, start time, and per worker: name, pane id, worktree, task, outcome, evidence pointer. Wave results never become cells, decisions or proof lines; a cell has its own owner, claim and proof, and a wave is not a cell.
+- ef9fe466 · 2026-08-18 · herding-orchestration D09 (agent's call, open to owner override): wave concurrency uses std::thread plus std::sync::mpsc, not a new async runtime. The bash tmpdir handoff layer is not recreated — a spawned thread returns a structured value directly, which is the only reason that layer existed.
+- bc6291ed · 2026-08-18 · herding-orchestration D08: control-loop.sh is replaced by Rust in this effort; bootstrap-cockpit.sh stays in bash and is out of this effort's scope, recorded as a known gap — at effort end the orchestrator and its control loop run on Windows while first-time cockpit setup still wants a bash.
+- 72577bf5 · 2026-08-18 · herding-orchestration D07: the core drives a worker-backend trait (start a worker, read status, send a task, read output) with herdr as the first implementation. The status model the trait exposes is the one the choreography needs — ready, working, blocked, finished, unverifiable — with unverifiable a first-class value, never an error, and each backend mapping its own vocabulary onto it.
+- bad04b67 · 2026-08-18 · herding-orchestration D06: the first real scenario is a spawn-and-brief wave with collection — open N agents each in its own worktree, wait for readiness, hand each a brief, wait on all concurrently, collect results, aggregate failures. It must exercise at least one failure path.
+- a6738d9d · 2026-08-18 · herding-orchestration D05: the coordination core is its own crate in the bee-rs workspace, compiled into the existing bee binary as a library dependency — not a second shipped binary, not loose modules inside the bee crate. The core crate never depends on the bee crate.
+- 9d054b02 · 2026-08-18 · herding-orchestration D03: the herdr-agent-comms Python/bash IS a complete coordination choreography and its ORDERING is the specification worth taking. This corrects the first distill pass, which read the scripts as primitives and judged them redundant against herdr 0.8.0 native verbs. Take the five-phase state machine (resolve+dedupe, fail-closed status filter, baseline before any dispatch, re-check immediately before each send, dispatch then wait concurrently then aggregate), take the 29-test corpus as the spec, take none of the code.
+- a475986f · 2026-08-18 · herding-orchestration D02: build a generic coordination core (workers, tasks, waiting, result collection, failure aggregation) that knows nothing about bee; bee-herding is its first client, not its only possible one.
+- c7646101 · 2026-08-18 · herding-orchestration D01: the effort's destination is ONE real coordination scenario running end to end in Rust on Linux and Windows — not a locked design document.
+
 ### dispatch
 
+- c80e0220 · 2026-08-21 · dispatch-one-door D1: every subagent dispatch resolves its transport from .bee/config.json through ONE verb, bee dispatch prepare, never from prose that names a subagent_type. prepare reads the tier slot and returns the payload: a model-shaped slot returns an Agent/Task payload naming the rendered bee agent; a herding-shaped slot returns a Bash 'bee herding run' payload; a cli-shaped slot returns a Bash external-executor payload. Consequences: (a) gates-and-delegation.md Transport line names prepare as the door, with subagent_type kept only as what prepare RETURNS; (b) the stale 'a gather never dispatches through a herding pane (herding-executor D7)' line is retired, since herding-tier D1-D6 widened it and the code already routes gathers through herding; (c) swarming-reference.md 'unrendered tier uses general-purpose' is retired, since the guard refuses general-purpose at generation; (d) every model-guard FIX message names bee dispatch prepare as the remedy instead of a hand-written command, and the bare-denied FIX stops calling a herding slot 'a cli executor or unconfigured'.
 - f46b1f54 · 2026-08-12 · A dispatched worker inherits the orchestrator session's working directory. Naming the worktree path in the dispatch prompt does NOT put the worker there: the containment guard resolves the tool call's own cwd, and an in-command cd cannot move it. Before dispatching any cell into a feature worktree, the orchestrator must move its own session into that worktree first; and a session already inside one must not be moved out while its workers are running.
 - ce4ec28c · 2026-08-07 · The dispatch label is closed across the whole fan-out, not one cell of it: prepare computes the subject once before the transport branch so every runtime and kind inherits it, the model-guard hook repairs a bare label in place for dispatches prepare never saw, a matrix test walks DISPATCH_RUNTIMES x DISPATCH_KINDS from the constants so a new pair cannot ship unlabelled, and cli-exec's absent label field is a recorded limit rather than a gap.
 - dde8cba3 · 2026-08-07 · Gate 1 and the merged Gate 2 for dispatch-label-chokepoint are recorded APPROVED under gate_bypass=total, not by the user. Approved shape: two cells — prepare computes the dispatch subject ONCE before the transport branch so every runtime and kind inherits it (codex task_name stops being a bare id; non-cell kinds take an optional --purpose), and the model-guard hook repairs a label in place at the chokepoint every dispatch passes, including hand-written ones that never called prepare. A matrix test reads DISPATCH_RUNTIMES x DISPATCH_KINDS from the constants, so a new runtime or kind fails until it is labelled. cli-exec has no label field and is recorded as a named limit.
@@ -879,6 +1054,17 @@ each decision event.
 ### distribution
 
 - 1f4262ca · 2026-07-31 · Distribution stays source-checkout install: bee is installed per project by running the onboarder (or scripts/install.sh) from a bee source checkout; no public registry shim skill, no network installer flow. Revisit only if bee is ever released publicly.
+
+### doc-deferral
+
+- 7fb55a97 · 2026-08-19 · Doc-postponement record for herding-orchestration: the ten postponement-shaped lines in docs/history/herding-orchestration/CONTEXT.md and plan.md carry no registered trigger, deliberately. Nine are RECORDS of a finished effort, not live promises — two section headings, the sentence describing what those sections hold, D11's own text on a recipe file format that waits for a second scenario, the phase-3 row noting the bee-side entry-point surface was left to planning (it was named there, as D17), the line sending the CLI-verb question to phase-3 preparation (same answer), the slice-queue line waiting on D14 (locked), and the validation line recording which blockers were answered how. Rewriting any of them to match the present would corrupt the record. The tenth was real and is now filed: plan.md:141 left the wave ledger's sweep and retention open. Its over-spawn half turned out to be covered — occupancy crosses unresolved pane ids against the live pane list, so a row whose pane is gone stops counting by itself — and its remaining half, unbounded growth of .bee/wave-ledger.jsonl, is a P3 backlog row.
+- 7740a2bf · 2026-08-19 · auto-wait-mark doc-deferral: of the thirteen flagged lines, twelve are the plain time adverb inside shipped prose — a plan-rev bump, a cross-checkout read, record retirement, a following gate entry, a hook firing inside the same turn, a duplicated start — plus the frontmatter decisions array that quotes several of them. The thirteenth, docs/history/auto-wait-mark/CONTEXT.md:110, is a real postponement: the PreToolUse AskUserQuestion mark. It already carries a registered trigger, auto-wait-mark-is-merged-so-re-triage-th__3006ef81, and a backlog proposal (P3, layer hooks). CONTEXT.md froze at the shape gate, so its citation cannot be written inline.
+- 57861aff · 2026-08-19 · uat-stop-placement doc-deferral: the five lines the door flags in docs/handbook/register.md:293-319 are the handbook's file inventory describing two stores by name — the pending-work queue and the capture-stub queue — plus the one sentence explaining that a session absent at queue time can pick an item up. The matcher hits those two store names and that single time adverb, not any intent to postpone work. No condition exists to register as a trigger.
+- b8521770 · 2026-08-18 · The ten lines the doc-deferral door flags against test-doctrine-text-sweep are all prose describing the pending-work queue and the two capture stages that run after a close — the queue's store path, its contents, its verbs, its stub kind, and the diagram labels naming those stages. None of them postpones any work. This is the fourth close blocked by the same matcher, after staging-optional, staging-lane and uat-gate-before-merge.
+- 21e55b16 · 2026-08-18 · The doc-deferral door's scan is file-scoped, not change-scoped: it full-text scans every docs/ file any capped cell touched, so a feature that edits one line of docs/handbook/register.md inherits all seven pre-existing matches in that file. None of the flagged lines in register.md or docs/knowledge/index.md were written by staging-lane or uat-gate-before-merge; every one is prose DESCRIBING the pending-work queue mechanism (its store path, its verbs, its stub kind), not a statement that any work is being put off. Both features close over this, with the diagnosis filed for a durable fix.
+- a354cd0e · 2026-08-18 · The line the doc-deferral door flags in docs/history/merge-closes-the-lane/plan.md:44 is a Discovery finding, not a postponement. It states that the merge path's only durable self-record is a worktree-cleanup row in the pending-work queue; the detector matches that queue's name, not any intent to postpone work. No condition exists to register as a trigger.
+- 0d9a33d8 · 2026-08-17 · test-cadence-boundary D2 (doc-deferral door): the 14 lines the close-time doc scanner flags for this feature are descriptions of mechanisms and recorded fallbacks, not open commitments — handbook/register.md and the stage pages describe queue and wave-barrier mechanics; plan.md lines 89/101/149 record the tcb-4 contention fallback and the scribing hand-off, both executed and resolved before close. No line needs a registered trigger; a trigger without a live condition is ritual.
+- e783413c · 2026-08-16 · doc-impact-synthesis doc-deferral: plan.md is frozen by the shape-gate plan-freeze write-guard, and state plan-rev bump refuses on the default (non-lane) record, so plan.md line 56's word-list collision (a spec-prose feature-ordering clause, not an open condition) cannot be reworded from this backfill cell (kds-4).
 
 ### docs
 
@@ -971,6 +1157,23 @@ each decision event.
 - 2981ee46 · 2026-08-11 · auto-approved Gate 2 (bypass normal): expertise-transplant ships as 5 small cells et-1..et-5 in one parallel wave, wave-barrier regen at close; brief at docs/history/expertise-transplant/implement-plan.md
 - c722ed5b · 2026-08-11 · expertise-transplant scoping (standard, docs-only): import 8 craft gaps from mattpocock engineering skill set into bee expertise/skill files per docs/history/expertise-transplant/CONTEXT.md D1-D11 — new merges.md (conflict-resolution craft), debugging.md feedback-loop ladder, architecture.md deletion-test/seam rules, planning.md design-it-twice + spike craft, tests.md independent-oracle rule, routing-and-contracts.md phase-boundary tree, bee-shaping Qualify verify-the-claim
 
+### feature-local
+
+- c9d03e2b · 2026-08-20 · herding-review-slots D1, herding-review-slots D2 and herding-review-slots D3 are feature-local
+- 9026c9ff · 2026-08-20 · herding-start-retry D1 and herding-start-retry D2 are feature-local
+- 8a67130c · 2026-08-20 · herd-registry D1 and herd-registry D2 are feature-local
+- a146fcb7 · 2026-08-20 · herding-exec-economics D1 and herding-exec-economics D2 are feature-local
+- 031d7892 · 2026-08-20 · herding-receipt-source D1 and herding-receipt-source D2 are feature-local
+- c2afe77f · 2026-08-20 · herding-prompt-verify D1 is feature-local
+- cff47515 · 2026-08-20 · herding-brief-file D1 is feature-local
+- 6d64f389 · 2026-08-20 · herding-run-ready-wait D1 is feature-local
+- d76cc0d7 · 2026-08-20 · herding-run-prompt-delivery D1 is feature-local
+- a5ef677c · 2026-08-20 · herding-tier D1, herding-tier D2, herding-tier D3, herding-tier D4, herding-tier D5 and herding-tier D6 are feature-local
+- 2a065c49 · 2026-08-19 · config-sample-herding D2 and config-sample-herding D3 are feature-local
+- 663e70e3 · 2026-08-19 · config-sample-herding D1/D2/D3 are feature-local
+- bd1028af · 2026-08-19 · Routing record: herding-orchestration D1, herding-orchestration D3, herding-orchestration D4 and herding-orchestration D6 are FEATURE-LOCAL and are deliberately not routed into the knowledge bundle. herding-orchestration D1 (done means one real coordination scenario running end to end) and herding-orchestration D6 (that scenario is a spawn-and-brief wave with at least one failure path) are this effort's own definition of finished; D20 records that it happened, and nothing a future reader of the bee-herding area needs depends on them. herding-orchestration D3 (the external Python/bash IS a choreography whose ORDERING is the specification — take the ordering and the 29-scenario corpus, take none of the code) is provenance for a distill that is now shipped code and spec'd behavior. herding-orchestration D4 (Windows is a required outcome rather than a follow-up) was narrowed by D19 and survives only as history. The durable half — D2, D5, D7, D8, D9, D10, D11, D12, D13, D14, D18, D19 — is cited in docs/knowledge/areas/bee-herding/overview.md.
+- 096e8d75 · 2026-08-16 · doc-impact-synthesis D4: mechanism slices first, then one bounded backfill slice over live areas; the full historical 110-CONTEXT routing sweep is its own standalone backlog campaign row, outside this feature — feature-local, no area spec owns it.
+
 ### gate
 
 - b7e0eadb · 2026-08-06 · cli-surface-in-context ran with no exploring phase and no CONTEXT.md; Gate 1 is recorded approved under gate_bypass=total. The decisions that would have been locked there were taken in the session itself: V2 (names + types + required marker) over V3 (a description line per flag), priced at ~1,950 vs ~7,000 tokens per session, chosen by the user; and no flag renamed.
@@ -984,6 +1187,11 @@ each decision event.
 
 ### gates
 
+- e85d1d10 · 2026-08-18 · uat-lane-source D1: the lane classification behind the uat stop must resolve the LANE, and the lane lives in route.lane, not in mode. A lane record carries two different vocabularies in mode across the store — the workflow mode (feature, release) on records written by state start-feature --mode, and, on older records only, an actual lane value. route.lane is the field bee route --set --lane writes and is the only reliable source. crate::uat::uat_lane_mode must therefore prefer route.lane and fall back to mode ONLY when mode holds a recognized ROUTE_LANE_VALUES member, still failing closed as standard when neither yields one.
+- 1e4beae4 · 2026-08-18 · uat-stop-placement: the owner approved the uat gate for this feature in conversation on 2026-08-18 ("Approve"). The approval was recorded with bee gate --name uat --approved true --lane uat-stop-placement, which wrote approved_gates.uat true on .bee/lanes/uat-stop-placement.json. bee worktree merge still refused WORKTREE_MERGE_UAT_PENDING, because its precheck reads the live workflow record gates.uat.approved first and the default .bee/state.json record approved_gates.uat as a same-feature fallback, and reads the LANE record at neither step. The merge was therefore landed with the documented one-merge escape --skip-uat. This is a recorded deviation, not a self-approval: the human acceptance exists and is cited here; only the plumbing could not see it.
+- 7e37cea3 · 2026-08-18 · uat-after-merge D3: under uat_stop "close", merging is a PUBLISH-FOR-TESTING step, not the finish line. Four changes, and only four. (1) bee worktree merge stops refusing WORKTREE_MERGE_UAT_PENDING. (2) The post-merge lane write inverts: instead of clearing the pair via clear_lane_waiting_on_pair (waiting_on.rs:199-213, called from phases.rs:621-633), a merge with uat still unapproved SETS waiting_on kind "gate" subject "uat: <feature>" and writes a next_action naming the road — reload the product, test it, then either approve uat or fix in the worktree and merge again. (3) Cleanup is forced OFF while uat is pending: --cleanup and worktree_cleanup_on_merge true are both ignored, because the worktree is the only place the fix can be written. (4) bee close carries the blocking uat door from D2. Everything else already behaves correctly and is NOT touched: merge never writes lane phase (phases.rs:615-616), the worktree is kept by default (handlers.rs:415-421), repeat merges of the same feature are normal, and nothing refuses further commits or cells for a merged-but-unaccepted feature.
+- ed4061f7 · 2026-08-18 · uat-after-merge D2: under uat_stop "close", bee close grows a blocking "uat" door that keeps the merge-time lane rule exactly — it applies to standard and high-risk only, and tiny/small/docs/spike stay exempt, the same set uat_gate_applies_to_lane already decides at phases.rs:698-700. The door is escapable by a uat-deferral decision naming the feature, copying the judge-debt precedent at close.rs:1195-1256. A failed uat after merge is fixed forward with a new cell on a new worktree; bee grows no revert or rollback mechanism for a merge already on main.
+- 66efba75 · 2026-08-18 · uat-after-merge D1: the uat stop is placed by a new .bee/config.json key "uat_stop" with three values — "merge" (default, today behavior: bee worktree merge refuses WORKTREE_MERGE_UAT_PENDING), "close" (merge lands unblocked and bee close carries a blocking uat door instead), and "off" (no uat stop anywhere). The existing uat_before_merge key stays readable as a back-compat alias: true reads as "merge", false reads as "off". A value outside the three refuses rather than guessing. The stop MOVES; it is never silently removed, and bee state gate --name uat keeps refusing --actor auto at either end of the road.
 - ff3792fc · 2026-08-14 · Gate 1 auto-approved for awaiting-human under gate_bypass=normal (lane standard, no hard-gate flag). Recorded with actor=auto, bypass_level=normal and the reason, using the flags traceable-runs trun-2 shipped.
 - 47495d22 · 2026-08-07 · Gate 1+2 for harness-audit-hardening auto-approved under gate_bypass=total; shape: docs/history/harness-audit-hardening/plan.md (7 cells hah-1..7 fixing audit findings H1,H2,M3+M5,A1,A2 and doc drift)
 - 1fa99486 · 2026-08-05 · Gate 2 (merged shape+execution) for knowledge-in-flow recorded APPROVED under gate_bypass=total, not by the user. The approved shape is decisions D1, D2 and D3 of this feature plus a docs-lane pattern-writing cell. The user asked for the complete execution interactively; only the gate ceremony was bypassed.
@@ -1196,6 +1404,12 @@ each decision event.
 - 9f7fa594 · 2026-07-23 · compaction-hardening D3 (helper floor): every behavior this feature adds is reachable through a bee.mjs verb, and each hook only calls that verb's library function — no behavior exists solely inside a hook.
 - 8ba804e6 · 2026-07-23 · compaction-hardening D14: bee ships NO provider-native compaction transport adapter — no OpenAI Responses compaction_trigger, no previous_response_id continuation, no opaque-artifact replay, no compaction-provider interface.
 
+### impact-deferral
+
+- f9c4da6f · 2026-08-18 · uat-approval-reaches-the-door impact note: all seven citing docs the impact door names are this feature's own records, written in this feature's own capture pass and citing this feature's own decision 8ca2378f — the two area specs that carry the new resolver and the new gate reply, plus the dated learnings file. No pre-existing citation drifted; the sweep is seeing its own sync.
+- e76b40bb · 2026-08-18 · The three remaining impact hits for uat-gate-before-merge are all line 12 of docs/knowledge/areas/worktree-parallelism/staging-mixing-ground.md — the frontmatter sources array naming d20ef88e, 0f87be54 and 16c7ba64. An independent audit read each against its decision text and the shipped code and found all three CURRENT: the staging topology prose at lines 18-22 matches D0, the awaiting-UAT invariant at lines 26-30 matches D0a, and the uat gate is the signal staging reads, which D1 and the code agree on. The door fires because the closing feature owns those decision ids, not because any prose drifted.
+- 943784c6 · 2026-08-18 · merge-closes-the-lane impact-deferral: the eight citing docs the impact door names are the area specs this feature's own scribing pass just wrote — returning-and-the-merge-gate.md, gates.md, and workflow-records-and-projections.md each cite b61d41ac, f220f461, or 500fa2f9 because those decisions are what the new prose states. No stale citation exists to repair.
+
 ### install
 
 - d2fd8c63 · 2026-08-02 · Prebuilt binaries are published per release and preferred by both installers, superseding 1f4262ca. The release-binaries workflow builds x86_64-unknown-linux-gnu and x86_64-pc-windows-msvc from the tag, publishes them plus SHA256SUMS as release assets, and refuses to publish when .claude-plugin/plugin.json disagrees with the tag. install.sh/install.ps1 download the asset for the host, verify its SHA-256, and pin the cloned source tree to the SAME tag so BEE_VERSION and the vendored instruction layer always come from one commit; any download or checksum failure is non-fatal and falls back to the cargo build, which also remains the path for uncovered platforms and for --build-from-source.
@@ -1231,6 +1445,10 @@ each decision event.
 
 ### knowledge
 
+- 2a424157 · 2026-08-16 · Promote proposal for doc-impact-synthesis reviewed 2026-08-16: delivery draft not saved (trace restatement); kds-1 bullets already stated (decision-memory R2/R2a synced in-feature); kds-2/kds-3 door coverage WAS a real gap in workflow-state/gates.md — merged now as three door paragraphs (impact, routing expanded, doc-deferral); no pattern candidates.
+- b5dd8513 · 2026-08-16 · doc-impact-synthesis D4: slice order is mechanism-then-bounded-backfill inside this feature — the new doors arm, then one backfill slice routes/fixes findings in LIVE areas only (known semantic-staleness list from the 2026-08-16 audit). The full 110-CONTEXT historical routing sweep is filed as a standalone backlog campaign row, not this feature's scope.
+- dbe446cb · 2026-08-16 · doc-impact-synthesis D3: deferral-shaped prose written into DOCS (area specs, CONTEXT.md, delivery records) must name a registered trigger id; the check runs at close over the closing feature's touched doc files (bounded by the diff, never a repo scan) and blocks with a create-the-trigger teach line. Extends the phase-1 decisions-log guard to the doc layer.
+- 0a37e16d · 2026-08-16 · doc-impact-synthesis D2: at feature close, every locked D-ID in the feature's CONTEXT.md decision table must be routed — merged into exactly one area spec (citation present in the bundle) or explicitly recorded feature-local. Close counts unrouted D-IDs and blocks on them. Area specs are the final complete picture; CONTEXT.md is frozen history.
 - 8856a91a · 2026-08-16 · Promote proposal for knowledge-distill-trigger reviewed 2026-08-16: delivery draft not saved (trace restatement); all 9 area bullets already stated in-feature (kdt-5 distill + conformance-check.md and decision-memory/overview.md scribing edits); pattern candidate rejected as duplicate of existing pattern 20260811-a-cells-declared-file-is-a-hypothesis (compile-forced file-scope fanout is that pattern's exact case); nothing applied.
 - b1df01bd · 2026-08-16 · Formal record of a shape supersession that lived only in backlog row p76: the bee-exploring skill was deleted outright and bee-shaping absorbed its qualifying triage — any doc or reference naming bee-exploring as a live skill describes a retired surface.
 - 57834418 · 2026-08-16 · knowledge-distill-trigger D4: slice 1 builds the mechanisms; slice 2 runs those same mechanisms to clean existing debt (38 dangling sources, 13 dangling required_context, unmarked reversals, changelog-prose distill) inside the same feature — the backfill doubles as the mechanism's proof.
@@ -1265,6 +1483,7 @@ each decision event.
 
 ### onboarding
 
+- eac9c5be · 2026-08-19 · Routing record: config-sample-herding D1 and D2 are sample-file documentation (the herding block + no-key-removed audit), already carried by the samples themselves and docs/config-reference.md's pointer to operational-invariants.md; D3 (onboard seeds the sample via compile-time include_str) is captured in the onboarding capture stub pending promote. All three are feature-local; no separate knowledge concept owed.
 - 1b46fa30 · 2026-08-10 · onboard-root-resolution scoping synthesis (small): onboard apply resolves its template/source root from the PROJECT being onboarded (the resolved repo root of the invocation), never from current_exe()'s physical location; a worktree whose .bee/bin/bee is a symlink into MAIN therefore renders from its own checkout's templates and can no longer splice MAIN's AGENTS.block.md over worktree edits; when the invocation root carries no templates the command refuses naming both paths, never silently falls back to the exe's checkout
 - f05e6583 · 2026-08-06 · A host-dependent doctrine section is decided by the REPOSITORY first and the machine second: onboarding reads .bee/config.json host_shell (powershell|posix) and only falls back to the running host when the key is absent or unrecognised. The Windows Environment section ships this way, rendered inside the managed AGENTS.md block.
 - 034764bf · 2026-08-06 · Gate 2 (merged) for windows-shell-doctrine is recorded APPROVED under gate_bypass=total, not by the user. Approved shape: onboarding appends a Windows Environment section to the managed AGENTS.md block when the resolved host shell is powershell — .bee/config.json host_shell wins, else cfg!(windows). The section states the two-shell split (user terminal = PowerShell, agent Bash tool and the ! prefix = Git Bash), the PowerShell default for anything handed to the user, and the three Windows facts that break silently: forward-slash paths in Bash-tool commands, CRLF, and NTFS exec-bit/symlink semantics.
@@ -1276,6 +1495,20 @@ each decision event.
 
 ### orchestration
 
+- 267192c1 · 2026-08-20 · Optional per-slot degradation: a kind-herding slot may carry fallback: default — when the herding run fails (spawn failure, timeout, invalid result), the dispatch falls back to the runtime default model path for that slot instead of failing the work; absent the field, a failure stays loud with the pane kept
+- 227fb988 · 2026-08-20 · Herd selection spellings: models.*.generation {kind:herding, agent:<name>} picks the herd for that slot's cells; bee herding run gains --agent <name>; herding.agent_command may be a plain string naming a herd. Unknown name = typed refusal listing the registry keys; absent agent = global herding.agent_command as today
+- ced126ce · 2026-08-20 · herd-registry: herding.agents is a map name -> argv token array (same shape/validation as herding.agent_command); a herd name ALWAYS means the pane transport — the cli tier kind stays untouched and unrelated
+- 5db8f358 · 2026-08-19 · bee herding run itself appends the dispatch.jsonl row for every run it starts
+- 22dd6bc2 · 2026-08-19 · The write-guard hook must admit worker writes to .bee/mailbox/ — a bee-hooked claude worker in the same repo inherits the guard that blocks hand-writes to .bee/*.json; the exact carve (guard allowlist path vs mailbox location) is an open planning question
+- 5120eaae · 2026-08-19 · The herding executor is cell-execution-only, the mirror of the cli tier kind (which is gather/review/advisor-only): a gather never dispatches through a herding pane
+- f6c0a81d · 2026-08-19 · Pane lifecycle: on a valid result the verb closes the worker pane (herdr pane close); on failure or timeout the pane stays open as forensics; a --close-always flag closes it in every outcome
+- 3bc0dceb · 2026-08-19 · Liveness is health-check based, two layers, all native in the Rust verb: heartbeat (log.txt mtime, worktree diff activity, herdr agent list status) with an --idle-timeout kill, plus a high absolute --ceiling as the busy-loop backstop; no fixed short wall-clock timeout
+- 25f20a1b · 2026-08-19 · The herding-executor worker stays bee-ignorant: the dispatch prompt is fully self-contained (task, absolute paths, file constraints, result schema and the tmp-rename write gesture); every piece of bee bookkeeping (cells finish, proof line, reservations, dispatch row) is done by the orchestrator after reading the result
+- de911edd · 2026-08-19 · herding-executor ships as a native verb bee herding run first (scope A); a models.* tier kind {kind:herding} is a separate backlog item (scope B) gated on A running real cells green
+- b1b1a708 · 2026-08-19 · Worker completion travels through a file mailbox (.bee/mailbox/<job-id>/: job.json, result-N.json round-numbered, log.txt), written tmp-then-rename; the result file's appearance IS the done signal
+- 851d79fd · 2026-08-19 · bee drops its own herdr agent-kind allow-list; herdr is the authority on --kind
+- 92f6797f · 2026-08-19 · Routing record: herding-orchestration D1, D3, D4 and D6 are feature-local. D1 (done means one real scenario running end to end) and D6 (the scenario is a spawn-and-brief wave with a failure path) are the effort's own definition of finished — consumed by D20, which records that it happened, and by nothing a future reader of the bee-herding area needs. D3 (the external Python/bash is a choreography whose ORDERING is the specification; take the ordering and the 29-scenario corpus, take none of the code) is provenance for a distill that is now shipped code. D4 (Windows is a required outcome) was narrowed by D19 and survives only as history. The durable half of this feature's decisions — D2, D5, D7, D9, D12, D13, D14, plus D10, D11 and D18 already there — is cited in docs/knowledge/areas/bee-herding/overview.md.
+- 897e07c2 · 2026-08-19 · herding-orchestration D20: the D6 scenario RAN end to end on Linux on 2026-08-19 (wave ledger rows d6-live-linux-20260819, -b, -c). Two agents were started into their own worktree panes, each took its brief and answered it correctly, and the wave resolved, pre-flighted, baselined, re-checked, sent, waited concurrently and aggregated — one ledger row per wave. D1's closing condition, as narrowed by D19, is met. The run bought two things no test had. (1) The backend derived the agent slug from the pane id with a bare colon-to-dash replace, so every pane whose id carries an uppercase letter (pA, pB, pC — most panes in a busy workspace) was refused by herdr with invalid_agent_name and the whole wave aborted at phase 1; fixed in ho-17, the first defect in this feature that 1937 green tests did not see and one live run did. (2) A wave has no completion signal: both workers finished correctly and were still classified unverifiable_after_send, because the only signal available tracks the pane's attention rather than the work. That classification is honest per D7 and is now a recorded Open Gap plus a backlog row — a wave over ordinary agent sessions reports overall failure even on a perfect run, so the ledger row and the pane output are what an owner reads today, not the verdict.
 - 98a10115 · 2026-08-16 · bee state session release lets an open session drop its liveness holds instantly: marks the record status=closed + released:true (guards already read closed as not-live); the PostToolUse heartbeat leaves a released mark intact (a release can't be undone by its own trailing hook), while UserPromptSubmit and SessionStart revive — the user speaking is the re-engage signal. Care-for-the-session doctrine now names the release step after caps/reservations. Cells srv-1/srv-2, merged via wt/session-release-verb.
 - 5f2ef1e5 · 2026-08-16 · bee state session release lets an open session drop its liveness holds instantly: marks the record status=closed + released:true (guards already read closed as not-live); the PostToolUse heartbeat leaves a released mark intact (a release can't be undone by its own trailing hook), while UserPromptSubmit and SessionStart revive — the user speaking is the re-engage signal. Care-for-the-session doctrine now names the release step after caps/reservations. Cells srv-1/srv-2, merged via wt/session-release-verb.
 - ac7459b8 · 2026-07-29 · A law stated in one place and operationalized in others is audited against its own statement, never against its neighbours: a restatement can carry a precondition the law never had, from birth, and the reader obeys the restatement. Where a tier can be checked, check it - compliance that is the output of a required command survives drift that prose does not.
@@ -1322,6 +1555,10 @@ each decision event.
 - 70be9395 · 2026-08-05 · The two live gaps found under the dead cells are carried as backlog rows, not as reopened cells: (P1) bee state set --feature <other> refuses every live-feature swap because it still delegates to the deleted Node runtime, and the native swap-debt door was never ported; (P2) no verb-level test drives run_start_feature, run_workflows_list or run_workflows_close.
 - 6261ba39 · 2026-08-05 · Stale-lane sweep over advisor-gate-port, guard-parser-depth, review-p1-fixes and workflow-lifecycle: all four are closed. agp-1/agp-2/gpd-1 were retro-capped (inline-reason recorded) because their code shipped in fb94ba8f, 6fefd6ee and 98888896 and is pinned by tests — only the cell records were stale. p3-1 and wl-3 were dropped: every file they name lives in the deleted JS package, so neither can be executed as written.
 - 0f02a408 · 2026-08-05 · agp-2 live-verification checkpoint
+
+### promote
+
+- 19b8a5d0 · 2026-08-21 · Compounding pass 2026-08-21 over four unapplied promote proposals: worker-brief-expertise, bee-help-verb-detail, herding-pointer-delivery, herding-prompt-stall. Three of the four merged NOTHING and are closed as reviewed-nothing-kept. worker-brief-expertise: both bullets were already written, in more depth, in the bee-herding brief concept by that feature's own earlier capture pass. bee-help-verb-detail: its one bullet was already in the rust-runtime command-surface concept. herding-pointer-delivery: every bullet is stale — its own decision was retired by herding-prompt-stall D1 the same day and the code and tests it described are deleted, with the bundle already recording that retirement. herding-prompt-stall merged three of sixteen bullets (hps-11 the racing send deadline, hps-14 the retryable stall, hps-12/13 the pane-width floor) and corrected two bundle lines that still stated D1 in its unnarrowed form.
 
 ### prompt-diet
 
@@ -1388,6 +1625,10 @@ each decision event.
 - 11d96d39 · 2026-07-15 · Release v1.0.0 (major): bypass autopilot levels + Slice 1a release-integrity guards. User marked bypass as a big step and chose 1.0.0. Shipped without independent review per explicit user instruction (total autopilot).
 - 6427d703 · 2026-07-15 · codex-harness-hardening Slice 1a added standing release-integrity guards: (1) scripts/release_manifest.mjs — tree manifest of the release-identity set (15 source_lib + 15 runtime_lib + 2 plugin_manifest) with sha256+POSIX-mode+role, subcommands --write/--check/--selftest (release-gate tool, NOT in verify yet); (2) scripts/test_release_tuple.mjs — asserts BEE_VERSION (templates/lib + .bee/bin/lib) == both plugin.json versions; (3) scripts/test_lib_mirror.mjs — asserts templates/lib byte-identical to .bee/bin/lib (file set derived via readdirSync). Guards (2)+(3) joined commands.verify (now 10 suites, green). The mirror guard is the FIRST standing enforcement of the templates<->.bee/bin/lib invariant the reading-map referenced but which previously had only ad-hoc per-cell cmp checks.
 
+### research
+
+- f5288dda · 2026-08-18 · xia source manifest for the herdr-orchestrator distill: luongnv89/skills at commit 48730b30da90dfd2d2e3fa77a93c657cf75c4448 (path /home/thanhsmind/projects/AI/luongnv89-skill), scope skills/herdr-agent-comms. Mode xia (distill and discuss, nothing built). Verdict: take the discipline (fail-closed status gating, baseline+split completion marker as the unknown-status fallback, concurrent fan-out with typed failure buckets, orchestrator context succession), take none of its ~1500 lines of Python — herdr 0.8.0 native verbs (agent start --kind/--pane, agent prompt --wait, agent wait --until, pane wait-output) already cover the mechanics the scripts hand-rolled against herdr 0.7.4.
+
 ### reservations
 
 - af43edbe · 2026-08-14 · A cross-worktree hold belongs to the work stream that owns the CELL, never to the checkout that typed the command. cell_hold_owner (leases.rs) resolves cell -> feature -> granted worktree, falling back to the acting topology holder, and every ledger site now asks it: reserve's foreign check and its stamp, release's holder filter, finish_support's cap-time release, and candidate_ok behind cells claim-next. The write-guard is deliberately excluded - once a row names its real owner, a worker inside that worktree matches it and the deny stops firing.
@@ -1420,6 +1661,11 @@ each decision event.
 
 ### scribing
 
+- 82fc910f · 2026-08-21 · Orphaned-scribing repair 2026-08-21 over five capped cells in four features. doc-deferral-baseline (ddb-1) and herding-receipt-state (hrst-1) were already covered — the gates concept carries ddb-1 by name, and the brief concept already records hrst-1's lifecycle-transition receipt as a retired step — so both are stamped scribed with no merge. doc-deferral-scope (dds-1) was partial: the bundle named the reasoned marker pair but never gave its syntax, so no reader could use the escape; the HTML-comment pair, the non-empty-reason requirement, the unclosed and code-fence nesting rules, and the widened refusal are now in the gates concept. knowledge-sweep-scope (kss-1, kss-2) was missing entirely AND the bundle actively contradicted the shipped behavior by still saying the merge auto-commit is path-scoped to two roots; the merge-gate concept now states the real root list and why authored prose under docs/knowledge is scoped to the merging feature's own capped-cell paths.
+- 46d7ae17 · 2026-08-19 · Three more promote proposals were reviewed and NOTHING was applied — test-doctrine-text-sweep, start-feature-reservation-scope, uat-stop-placement, ten items in total. Where each durable fact already lives: the proof-rule doctrine the text sweep enforced is at docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md R24-31; the reservation-scope rule is gates.md R86 with its edge cases; all four uat-stop bullets are the four named sections of docs/knowledge/areas/worktree-parallelism/returning-and-the-merge-gate.md covering the uat_stop door, the single home for lane classification, cleanup suppression under close, and an unresolvable feature. Each of the three pattern candidates was already minted from the very cell that produced it — the matcher-blind-spot sweep pattern, the test-asserting-the-escape pattern paired with the declared-file hypothesis, and the rule-checked-at-two-points pattern. The remaining bullets are feature narration (assertions rewritten, suite green), which is not knowledge. Shipped source still matches every curated statement; nothing describes retired code.
+- ca341c3f · 2026-08-19 · The fifteen touches-sweep capture stubs were reconciled and NO document needed an edit. Two decision pairs were involved. Pair A: thirteen docs cite 58ec9664 (test-doctrine), touched by 56af6cbb (test-doctrine-text-sweep D1) — but that touching decision is a TEXT SWEEP that made user-facing surfaces state the same rule 58ec9664 already set, so it can only contradict a document still teaching the retired boundary auto-run. None does: the two workflow-state concepts and docs/specs/test-simple.md all carry the live rule inside their own supersession banners (cap records its own proof line; close and merge check that record and run nothing; CI runs the declared command), and test-simple.md fences the old sentences as historical. Pair B: workflow-records-and-projections.md cites 8cb30970 (traceable-runs D8), touched by 3006ef81 (auto-wait-mark D1) — which extends rather than contradicts it, and that doc already integrates the third kind throughout its body. The remaining stubs name docs/history and docs/discovery lines, which are records of what was true when written, give a reader no instruction that fails, and are therefore never rewritten.
+- b39e400e · 2026-08-19 · auto-wait-mark's promote proposal was reviewed and NOTHING was applied. All 4 area bullets are already stated in docs/knowledge/areas/workflow-state/workflow-records-and-projections.md — R125 (the three-value waiting_on kind vocabulary, citing auto-wait-mark D1/D3), R130 (the hook sets the mark on every turn end, never overwrites a declared mark, subject taken from the last assistant line), R131 (orient excludes turn-end from blockers) and R132 (the transcript is read exactly once, with the two leaked attempts and the read-counting tests). Two of the four bullets were the same text filed a second time under rust-runtime; duplicating one sentence into a second area is drift, not coverage. Of the 2 pattern candidates, one describes code fixed before its own cap — the hardcoded turn-end literal now imports the shared constant — and its generalization already exists as the 2026-07-28 hand-copied-membership pattern; the other was already minted as the 2026-08-18 never-do-x-twice pattern from this very cell.
+- cbcc4a8d · 2026-08-18 · Closed feature "release-2-8-0" with the compounding-run freshness check WAIVED — no fresh recorded `state compounding-run` (matching the last scribing run) was found.
 - 9fa4fd61 · 2026-08-06 · All 15 promote proposals are reviewed and answered 2026-08-06: three real gaps applied (the reclaimable-worktree surfacing, the workflow-record creation seam and its list/close verb, and a retirement notice on the suite-result cache), eleven already-present proposals recorded as such, and two pitfall patterns promoted. Fourteen features are stamped; ci-preamble-session-fixture is left unstamped because it is the active feature and its proposal contains zero area bullets.
 - 962a6490 · 2026-08-06 · The orphaned scribing debt is closed 2026-08-06 (20 cells across 5 features to zero). exec-speed closes with NO area-spec merge on purpose - four of its five runtime changes no longer exist and the fifth survives only structurally - and gate-door-refusal closes with attribution on advisor-protocol/triggers (new B3a and P7) plus an Open Gap on gates.md naming the refusal that cannot be satisfied from the CLI.
 - 31ed934d · 2026-08-06 · js-parity-cleanup's knowledge sync is repaired 2026-08-06: gates.md gains B53/R104 for the approvals-map shape rule, a new rust-runtime concept records the two counting units and their pinned exceptions (R8/R9/R10), write-guard-request-shapes gains B28/R27 plus an Open Gap for the non-ASCII heading fall-through, one pitfall pattern is promoted, and learnings are written.
@@ -1468,6 +1714,12 @@ each decision event.
 - ed0b2920 · 2026-07-15 · codex-harness-hardening SPEC §15 D-01..D-14 locked as written (owner-approved 2026-07-15). Notable choices with alternatives: D-02 commit both .agents/.claude projections + CI regenerate-clean check (over gitignore-and-generate); D-11 single Node distribution engine owns all mutation, shell/PS only fetch+confirm+call Node (over keeping gated shell/PS copy); D-10 native-Windows/no-git without a tested transport reports unsupported/advisory, not silent success.
 - 25687451 · 2026-07-10 · Digest is an allowlist snapshot with no free-text fields
 
+### staging-lane
+
+- 3ec77460 · 2026-08-17 · staging-lane D0b (user, 2026-08-17): mechanics alone are not enough — the skills must carry guidance for the main/staging/worktree topology so agents understand the flow before any guard fires. Guidance lands in: bee-hive routing references (a Topology passage), bee-planning (worktree-first names the topology), bee-swarming (close step points user testing at staging), bee-herding role-merge (rebuild after landing), AGENTS.md (one sentence on the always-loaded surface), plus handbook and the worktree-parallelism area doc. Guards keep the teeth; skills teach the why (invariant + three triggers).
+- d20ef88e · 2026-08-17 · staging-lane D0a (user, 2026-08-17, lifecycle detail on D0): staging is a CONSUMABLE branch, invariant 'staging = main + sum of features awaiting UAT, at every moment'. Created lazily on the first feature ready for user test, ALWAYS branched from main at creation, never from a feature branch. Exactly three update triggers: (1) a feature becomes ready for user test — merge that feature branch into staging, rebuild; (2) an agent lands a bug fix on the feature branch after user feedback — merge the same branch into staging again, rebuild; (3) main moved (a feature merged to main) — FULL refresh: reset --hard main, then re-merge every branch still under test, rebuild; skipping this leaves staging on a stale base and hides interaction bugs. Outside those three, staging never updates itself: no pull, no rebase, no direct commit; its only inputs are reset --hard main and merge feature-x. Deletion is optional — the branch may live forever; its history is garbage, only its current state has meaning. In bee mechanics the 'awaiting UAT' set is derivable, not hand-kept: features whose uat gate is pending and which have been staged.
+- 0f87be54 · 2026-08-17 · staging-lane D0 (user, 2026-08-17): the main/staging/worktree topology becomes FIRST-CLASS bee mechanics, not convention. Model: main = clean, receives only UAT-passed feature branches (enforced by the uat gate); one staging worktree per repo = disposable mixing ground where finished features are merged for the user to test at ONE place (one port/build); feature branches = the only source of truth. Iron rules to enforce in the CLI: (1) merging the staging branch into main is refused outright; (2) direct commits/fixes on the staging branch are refused — fixes happen on the feature branch and re-merge into staging; (3) staging is rebuildable at any time: reset --hard main + re-merge the still-testing feature branches (a bee command). Per-worktree runtime isolation (ports, SQLite/db name, .env, node_modules) is host-project knowledge, not bee code.
+
 ### state
 
 - eeb268f8 · 2026-08-11 · Retired dead HANDOFF.json by direct delete: written 2026-08-05 for worktree-reclaim wr-2..wr-5, all four cells capped and archived, feature merged — the handoff guarded nothing and blocked state start-feature for every new feature
@@ -1481,6 +1733,10 @@ each decision event.
 
 - 2f95936a · 2026-07-25 · Rubric deviation in-scope chính đáng của worker (từ SKILLS_VERSION_STAMP): hợp lệ khi verify của chính cell buộc sửa + fix nằm trong closure trực tiếp của thay đổi + worker consult advisor sau 2 lần thử cơ học thất bại; thiếu bất kỳ vế nào là scope creep
 - f7c47237 · 2026-07-23 · no-clear-stop D1: the mid-swarm stop that offers the user a /clear (fresh-session-handoff offer flow) is removed. When work remains, the orchestrator continues in-session; the planned-next handoff becomes a silent session-exit artifact (written only when the session is actually ending), adopted automatically by the next fresh session. Never stop to suggest /clear, never wait for one. Adoption machinery (AGENTS.md step 5, session-init hook) unchanged.
+
+### test-cadence-boundary
+
+- 36c68db7 · 2026-08-17 · tcb-1 ran the skill/opencode projection regen (bee dev render-skill-trees + the ignored regen_opencode_skills_tree test) to clear tcb-3's acknowledged wave-barrier debt, rather than leave the whole test-cadence-boundary worktree's cap door red for every cell
 
 ### test-economy
 
@@ -1514,6 +1770,10 @@ each decision event.
 ### traceable-runs
 
 - 97b7a312 · 2026-08-16 · traceable-runs promote proposal applied 2026-08-16: delivery record saved (docs/knowledge/work/traceable-runs/delivery.md), two generalized pitfall patterns promoted (git-add pathspec empty-match; debt derived in two places). Declined: the 9 area bullets (feature-wide workflow-state scribing sync already recorded 2026-08-14) and 4 cell-scoped pattern candidates (trun-1/2/5/8 — process notes, not generalizable; trun-2's payload gap already fixed as p-62f0566d)
+
+### uat-gate-before-merge
+
+- 16c7ba64 · 2026-08-17 · uat-gate-before-merge D1: a new 'uat' gate sits between execution-complete and worktree merge. bee worktree merge REFUSES (typed error naming the remedy) when the merging feature's lane is standard or high-risk and the uat gate is unapproved; tiny/small/docs lanes are exempt. Escape hatches: --skip-uat flag on one merge, or config uat_before_merge=false repo-wide. Gate bypass levels NEVER auto-approve the uat gate — only the user's explicit word records it (bee gate --name uat --approved true). After the last cell caps, the agent stops in the worktree, presents 'ready for user testing' with how to run it, and sets waiting-on kind=gate; user feedback becomes fix cells in the same worktree; merge only after approval.
 
 ### verification
 
@@ -1569,6 +1829,12 @@ each decision event.
 
 ### workflow
 
+- 0f26d6eb · 2026-08-17 · cell-preflight (user, 2026-08-17): cell authoring pre-flights its constraints — the planner walks the checklist (id pattern + <feature-slug>-<n> convention, required fields, lane values, scope-derived regen/judge obligations) and submits the real cells add only after a clean --dry-run
+- b1d050a2 · 2026-08-17 · Routing (feature-local, close door): wayfinding-flow D2, wayfinding-flow D3, wayfinding-flow D4, wayfinding-flow D5, wayfinding-flow D6, wayfinding-flow D7, wayfinding-flow D8 — bundle citation lives in docs/knowledge/areas/discovery-wayfinding/overview.md on the feature branch and lands on main at merge
+- de4318c6 · 2026-08-17 · wayfinding-flow D2-D8 routing: recorded feature-local for the close door, same grounds as the D1 entry — bundle citation lives in docs/knowledge/areas/discovery-wayfinding/overview.md on the feature branch and lands on main at merge
+- 1f9864c0 · 2026-08-17 · wayfinding-flow D1/D2/D3/D4/D5/D6/D7/D8 routing: recorded feature-local for the close door — the bundle citation already exists in docs/knowledge/areas/discovery-wayfinding/overview.md on the feature branch (worktree), which lands on main at bee worktree merge; the door scans main before the merge and cannot see it yet
+- 6f029179 · 2026-08-17 · wayfinding-flow doc-deferral door: of the 6 scanner-flagged lines, only the Deferred Ideas bullets are real deferrals — they cite trigger wayfinding-v1-has-been-used-for-at-least__wayfindi. The remaining flags (CONTEXT.md template headings 'Deferred To Planning'/'Deferred Ideas'/handoff-note prose; design-draft.md section heading and the backlog-add reuse-table row) are descriptions of mechanisms, not deferrals — recorded per the test-cadence-boundary D2 door precedent
+- e21c55eb · 2026-08-17 · wayfinding-flow D1-D8 (user, 2026-08-17): new pre-shaping discovery flow — separate bee-wayfinding skill; map+tickets as markdown under docs/discovery/<effort>/; v1 activation = status/preamble map scan + deterministic orient resume + route park-to-map-stub + shaping entry check (semi-hard by design); wayfinder ticket model (4 types, destination-first, one HITL ticket/session); resolved tickets log via bee decisions; exit hands decisions to bee-shaping Lock without re-asking
 - ba66cb07 · 2026-07-29 · auto-approved Gate 1 (bypass total): derived-check-hardening CONTEXT.md, E1-E9
 - fd3e639c · 2026-07-28 · The predictive validation layer is removed; empirical gates carry the load
 - 67a134d4 · 2026-07-28 · auto-approved Gate 3 (bypass total): validation-diet slice 1, cells vd-0..vd-4
@@ -1578,6 +1844,23 @@ each decision event.
 
 ### workflow-state
 
+- c00124c7 · 2026-08-19 · Reviewed test-doctrine-text-sweep's promote proposals and applied only the pattern candidate. The two area bullets restate a rule the specs already state correctly in three places — that feature changed text DESCRIBING behavior (the bee test output, three registry command descriptions, eight handbook surfaces), never behavior itself, so the knowledge layer was already right and had nothing to learn from it.
+- f8382a10 · 2026-08-19 · doc-deferral-baseline D8 (2026-08-18, agent): D4's no-third-escape rule is reversed. The reasoned marker built in the doc-deferral-scope lane lands ON TOP of the baseline - an HTML comment pair naming a reason, exempting the lines between, where an empty or missing reason exempts nothing. The baseline stays the mechanism that forgives the PAST, repo-wide and automatically; the marker is how a NEW passage says at the site that it documents deferral machinery rather than promising work. Order: the baseline merges first because it holds close.rs and is mid-judge, then the marker lane rebases and lands the marker alone, dropping whatever else it carried.
+- 74569880 · 2026-08-18 · doc-deferral-baseline D7 (2026-08-18, agent): every pre-existing door test runs in ENFORCE mode, with a baseline fixture that covers nothing relevant, so each one still discriminates. A door test that runs in seed mode is vacuous by construction - the seed arm returns non-blocking and clear regardless of what the scan found - and a vacuous test reads as coverage while proving nothing.
+- 423e8eef · 2026-08-18 · doc-deferral-baseline D6 (2026-08-18, agent): the seed is REPO-WIDE, not scan-set-wide. On the first run that finds no baseline file, the door walks every markdown file under docs/ and records every deferral-shaped line in the whole tree, then passes. Enforcement afterwards stays per-feature, over the door's existing scan set. And the seed ALWAYS writes the file, even when it flags nothing at all, because an absent file IS the seed state and a seed state adopts whatever the next run finds.
+- 98a980f9 · 2026-08-18 · doc-deferral-baseline D5 (2026-08-18, agent, derived): the one-time seed writes only on a real bee close run, never on --dry-run. A dry-run that finds no baseline file reports the door as non-blocking and says what it WOULD baseline and how many lines, so the report stays truthful without the dry-run writing anything.
+- 41e796f3 · 2026-08-18 · doc-deferral-baseline D1 (2026-08-18, user): bee close's doc-deferral door keeps its whole-file scan and its word list, and gains a baseline instead. A tracked baseline file records the deferral-shaped lines that already exist; from then on the door blocks only a line absent from it. Identity is the line's normalized CONTENT, per file, never its line number, so inserting text above a baselined line does not resurrect it.
+- 8ca2378f · 2026-08-18 · uat-approval-reaches-the-door D1 (shipped shape, amending the frozen plan's Approach step 3): with no live workflow record, the uat resolver reads the lane record OR the default state record, not the lane record in strict precedence over it. The live record still short-circuits: its answer is final either way.
+- 56af6cbb · 2026-08-18 · test-doctrine-text-sweep D1: every user-facing surface now states the live proof rule — no local door runs commands.test; each cap records its own proof line; bee close and bee worktree merge check that record; CI runs the declared command on every push. Swept: the bee test undeclared-path output, the cells cap / cells finish / cells reopen registry descriptions that MCP clients and --help read, one code comment, and eight handbook and config surfaces.
+- ef20924d · 2026-08-18 · auto-wait-mark D4 (2026-08-18, agent, derived): two write rules bound the Stop hook's setter. (1) It never overwrites a live mark — if the agent already declared a gate or question wait this turn, that declared mark stands and the hook writes nothing; the hook only fills an empty slot. (2) The subject it writes for a turn-end mark is the last non-empty line of the turn's final assistant text block, trimmed and truncated, because subject is required non-empty and that line is the one thing a human reader can use to recall what the session was doing.
+- fdd1d3ca · 2026-08-18 · auto-wait-mark D3 (2026-08-18, user): the waiting_on kind vocabulary grows from two closed values to three — gate, question, turn-end. gate and question keep their meaning: the run is blocked on a person. turn-end is what the Stop hook writes on an ordinary turn end: control is back with the human, but nothing is owed. A reader that wants only real blocks filters kind != turn-end. Derived rule, following straight from the split: a surface that renders a live wait as a BLOCKER — bee orient's blockers array at status_full/orient.rs:400 — must not list a turn-end mark, because a turn-end is by definition not a blocker; surfaces that merely DISPLAY the wait keep showing all three.
+- a964197a · 2026-08-18 · auto-wait-mark D2 (2026-08-18, user): a mark the Stop hook sets carries no marker saying a hook set it. The hook calls the same store setter the agent-facing verb calls, writes the same record shape, and every reading surface treats the two as one kind of fact. No provenance field, no separate kind.
+- 3006ef81 · 2026-08-18 · auto-wait-mark D1 (2026-08-18, user): the Stop hook sets a waiting_on mark on EVERY turn end, not only on turns whose last line ends in a question mark. Stop means the agent handed control back to the human, so the run IS waiting on a person at that instant, whatever the last sentence looked like. No text heuristic, no phrase table, no language detection.
+- d2433b77 · 2026-08-18 · Audited the twenty-seven citation notices the impact sweep queued against decision 58ec9664 and its siblings. Every distinct target is CURRENT: three area-spec rules carry dated banners that state the live no-auto-run rule, the six locked rows in test-doctrine's context record match the decision verbatim, the closed grilling ticket and both discovery-map bullets restate it accurately, and three test-organization targets are moot because that map was deleted at HEAD. Nothing drifted, no edit owed.
+- 30608074 · 2026-08-18 · Reviewed the promote proposals from three closes — staging-lane, uat-gate-before-merge, merge-commits-the-lane — and applied nothing. All eight candidate area bullets restate behavior the specs already carry: the uat gate appears in gates.md and returning-and-the-merge-gate.md, the staging verbs in staging-mixing-ground.md, and the merge's own lane commit was written into returning-and-the-merge-gate.md during that feature's scribing pass. The one pattern candidate, from staging-lane cell sl-2, is already an active pattern: 20260818-a-generated-view-in-scope-puts-its-source-record-in-scope covers the same catalog-and-pinned-count file pair, mined from two earlier features.
+- 712423fd · 2026-08-18 · test-doctrine's proof-line cadence supersedes test-cadence-boundary D1: no local door auto-runs commands.test. Each cap records its own proof line and bee close / bee worktree merge check that record, running nothing themselves; CI runs the declared command on every push.
+- 500fa2f9 · 2026-08-18 · merge-closes-the-lane D3: 'bee state waiting-on clear' accepts a feature whose workflow record is already closed — it falls back to the newest record regardless of status and clears the lane projection's waiting_on+run_state pair. Only a feature with no workflow record at all still refuses. 'waiting-on set' never widens.
+- f220f461 · 2026-08-18 · merge-closes-the-lane D2: 'bee close' is the only command entitled to write a terminal lane phase. A green, non-dry-run close sets the lane to 'idle' — never 'compounding-complete', which stays gated on a fresh recorded compounding run.
 - f9fd9d46 · 2026-08-16 · clear_default_state_waiting_on clears the pair its setter wrote: waiting_on AND run_state (nulled only when run_state=='awaiting-approval', so record-derived values are never clobbered).
 - 93f164b1 · 2026-08-14 · awaiting-human D3: a question asked while no feature is active still records the wait, on the default state record. The mark is session-scoped first and feature-scoped only when a feature happens to be live.
 - c6b52383 · 2026-08-14 · awaiting-human D2: the waiting mark ends three ways, all of them live at once. The UserPromptSubmit hook clears it the moment the human sends anything; the agent may clear it explicitly when it acts on the answer; and a mark whose owning session heartbeat has gone stale expires on its own, the same dual-condition rule cell claims already use.
@@ -1638,6 +1921,8 @@ each decision event.
 
 ### worktree
 
+- 5b1a1826 · 2026-08-20 · herding-start-retry merged with --skip-uat: the uat door fail-closed on an unreadable lane classification (default record still named herd-registry), but the feature's recorded route is tiny — a lane the uat-before-merge door does not cover
+- 0523961c · 2026-08-18 · staging-optional D1: `staging_before_merge` in .bee/config.json is the repo-wide staging opt-out. Absent means ON (every existing repo keeps today's behavior); an explicit false makes `bee staging add` and `bee staging rebuild` refuse STAGING_DISABLED as a zero-mutation precondition, before any lock or git work, so the repo runs feature worktree -> uat gate -> main with no mixing ground; a non-boolean refuses STAGING_CONFIG_INVALID rather than guessing. `bee staging status` is read-only and unaffected in every case. The key is INDEPENDENT of uat_before_merge — the uat gate itself is untouched by it.
 - c117994b · 2026-08-14 · worktree merge auto-commits path-scoped .bee/ and the merging feature's own docs/history/<feature>/ before its dirty-MAIN refusal fires (trun-4): when every dirty path in MAIN is under those two roots, merge commits them and proceeds; any other dirty path still refuses WORKTREE_MERGE_MAIN_DIRTY, naming the offending non-bee/non-history paths. Reuses the same unsigned-commit helper bee close's own bookkeeping commit (decision 35f28b57) uses, widened to accept multiple pathspecs; shares that same close_commit_bookkeeping opt-out key rather than a second one.
 - 298b23d5 · 2026-08-04 · cells finish runs from a granted feature worktree: the cell record and its claim resolve at the MAIN store (they are one ledger), the declared tests run with cwd in the WORKTREE (the code that changed is the evidence), and holds release through StoreRoots::hold_topology with the git-verified worktree id as holder
 - b7f4517b · 2026-07-31 · Worktree-first routing adopted: code-touching feature work branches at feature start; main checkout is integration/docs/release only; supersedes lane-first deferral
@@ -1681,12 +1966,20 @@ each decision event.
 - afbf8025 · 2026-07-26 · Port-D2: mechanical/generated-file conflicts (manifest hashes, onboarding ledger, knowledge indexes, docs/backlog.md, taxonomy.json, JSONL logs) are resolved by accepting upstream then re-running the OWNING regen command (render_plugin_skill_trees.mjs, onboard_bee.mjs --apply, knowledge index, backlog render), never by hand-merging generated content.
 - bb33bec4 · 2026-07-26 · Port-D1: sync onto upstream via a MERGE of origin/main into wt/worktree-concurrency-guard, not a rebase -- preserves existing commit hashes and PR #64's review thread, avoids force-push.
 
+### worktree-keep-on-merge
+
+- 3630d166 · 2026-08-17 · worktree-keep-on-merge D1 (supersedes worktree-reclaim D1): bee worktree merge KEEPS the worktree by default on a green merge. Instead of teardown it appends a worktree-cleanup entry to bee's existing pending-work queue ledger (the .bee JSONL queue store; exact path in docs/history/worktree-keep-on-merge/plan.md) carrying id, worktree root, branch, feature, merge commit sha, timestamp — the user's cross-check record. Immediate removal becomes opt-in: --cleanup flag (currently a no-op) is re-armed to force teardown now; config worktree_cleanup_on_merge=true restores old always-clean behavior repo-wide. bee worktree prune stays the drain: when it removes a worktree it resolves the matching queue entry.
+
 ### worktree-orphan-verdict
 
 - 4075f449 · 2026-08-05 · Gate 2 (merged shape+execution) for worktree-orphan-verdict recorded APPROVED under gate_bypass=total, not by the user. The approved shape is the single cell wov-1: one new verdict branch in classify_worktree for a record whose worktree directory and branch are both absent.
 
 ### worktree-parallelism
 
+- 99906b39 · 2026-08-19 · Correcting my own backlog proposal: widening the merge's dirty-main auto-commit to docs/history/** is WRONG and must not be built. The narrow, feature-scoped shape is deliberate — a peer feature's docs/history dirt is meant to refuse, and the test another_features_docs_history_dirt_still_refuses_and_is_named (verbs/worktree/tests.rs:1805) pins it. Cell kss-1 is moving the OPPOSITE way in the same code, scoping docs/knowledge down to the merging feature to match how docs/history already behaves. Only the second branch survives: the refusal should name the lane that owns the blocking path and the session bound to it.
+- ef376cf9 · 2026-08-18 · merge-commits-the-lane D1: the merge-time lane rewrite lands in its own path-scoped commit, made right after the write succeeds, through the same bookkeeping-commit helper the merge path already owns. The merge commit is never amended, and the post-commit tracked-files reading still comes first.
+- c74c5afd · 2026-08-18 · merge-closes-the-lane D4: the merge-time lane write runs AFTER the post-commit tracked-files guard takes its reading, never before. The guard itself is never narrowed and no path is special-cased inside it.
+- b61d41ac · 2026-08-18 · merge-closes-the-lane D1: a green 'bee worktree merge' that actually merged something clears the merged feature's lane waiting_on+run_state pair and rewrites next_action to name 'bee close --feature <f>' — but NEVER writes phase. A merge can land slice 1 of 3, so a phase write from merge would lie about a feature still mid-flight.
 - 15cd6ebc · 2026-08-16 · Promote proposal for claim-time-worktree-redirect reviewed: delivery draft not saved (trace restatement), the single area bullet [cwr-1] already stated in routing-and-visibility.md 'The claim-time redirect chain' section (synced by cwr-2), no pattern candidates; nothing applied.
 - 2eff3af5 · 2026-08-16 · cells claim/claim-next append a worktree_root suffix line + JSON field when the claimed cell's feature holds a granted worktree — annotation, never refusal; fail-open on NotFound/Unresolvable/Err; narrow-door claim-from-main contract unchanged. Redirect chain: claim annotation -> worker cwd self-check ([BLOCKED: session cwd is not the worktree]) -> write guard.
 - 1d9c3794 · 2026-08-14 · A dispatched worker cannot be told to work in a feature worktree by prompt alone: it inherits the parent session's project binding, and bee's write guard refuses every write into a worktree the session is not bound to. The orchestrator must rebind its OWN session into the worktree (EnterWorktree with the worktree path) BEFORE spawning, then dispatch. Instructing the worker to cd, or handing it absolute worktree paths, does not work.
@@ -1714,7 +2007,6 @@ each decision event.
 - bd9e52db · 2026-08-05 · worktree-reclaim D4: bee orient and the session preamble surface reclaimable worktrees as named open work once the count crosses a threshold, the same way orphaned scribing debt and unapplied promote proposals are surfaced today. The line names the count and the reclaimable size, and the command that reclaims it.
 - 8f05fb95 · 2026-08-05 · worktree-reclaim D3: bee worktree unregister drops the workspace record (.bee/runtime/workspaces/<id>.json) in the same call it drops the grant. Today only merge cleanup calls ws::unregister_workspace, so unregister leaves an orphan record behind.
 - 14323952 · 2026-08-05 · worktree-reclaim D2: a new subcommand bee worktree prune sweeps DEAD worktrees the merge path never reclaimed. Dead means all of: the branch is fully merged into the base ref (rev-list --count base..branch is 0), the tree holds no tracked-modified and no untracked files, no live session is bound to it, and its last commit is older than an age threshold. It drops all four artifacts per worktree: directory, branch (branch -d, never -D), grant, workspace record. It carries a dry-run flag and an age-threshold flag, and reports one line per worktree with the reason it was kept or removed.
-- 866cc946 · 2026-08-05 · worktree-reclaim D1: bee worktree merge runs its cleanup path BY DEFAULT on a green (or verify-skipped) merge — worktree directory, branch, grant and workspace record all go. A no-cleanup flag opts one merge out; the .bee/config.json key worktree_cleanup_on_merge (default true) opts a repo out. The old cleanup flag stays accepted as a no-op for compatibility. Cleanup still refuses on a dirty worktree, a textual conflict, or a red verify — unchanged.
 
 ### worktrees
 
@@ -1724,6 +2016,16 @@ each decision event.
 
 - a0c3617f · 2026-08-16 · Bash write-guard extraction follows an operand-role table per verb: cp drops sources (reads), mv extracts every operand (source is an unlink-write), -t/--target-directory never takes a separator as its argument, fd-digit null redirects yield no target, and cd makes later-segment targets unresolvable while redirects inside the cd segment still extract; brace expansion (comma/range) classifies unresolvable, plain globs deliberately do not
 - 5bcdc6c9 · 2026-08-16 · A Bash write-guard target token carrying unexpanded shell syntax ($VAR, backquote) is unresolvable by definition: it is refused with a message that names the resolution failure and quotes the raw token, and never appears inside a gate 'writing X is blocked' sentence as if it were a path
+
+## review-axes feature
+
+### feature-local
+
+- 3aadbddc · 2026-08-18 · Routing record: review-axes D1, review-axes D2, review-axes D3 are feature-local, shipped in cell ra-1 (commit cc76ea25) as reviewing skill/reference/expertise prose
+
+### skills
+
+- 99edabeb · 2026-08-18 · review-axes source provenance: axis separation and the 12-smell vocabulary distilled from mattpocock/skills (github.com/mattpocock/skills) commit 84fdeff, code-review skill, per porting-protocol D4
 
 ## rust-migration
 
@@ -1777,6 +2079,13 @@ each decision event.
 - d4adaf96 · 2026-07-27 · The 'state' lock is acquired AROUND rebuildStateProjection by each caller, never INSIDE it — lock.mjs is non-reentrant and bee-state-sync already holds 'state' at that call, so an internal acquire would self-deadlock into LockBusyError on every hook tick
 - f9390f10 · 2026-07-27 · GH #70's false intake-gate deny is NOT controlRoot resolution — it is a lost update on .bee/state.json between four writers that do not share a lock: bee-state-sync.mjs takes 'state', withMutationLock's workflow branch takes workflow:<id> ONLY, and bee.mjs:3284/3304 take nothing. Every writer of that record must hold 'state', order workflow:<id> -> 'state'
 
+## test-doctrine discovery
+
+### testing
+
+- 1f534837 · 2026-08-18 · test-doctrine 001+003 (user, 2026-08-18): no boundary auto-run remains — bee close and bee worktree merge stop running commands.test and instead require a recorded proof line; the cap report tests field changes from the boundary/undeclared enum to a proof string '<command> — <result> — <scope reason>' (shape change in finish_support.rs and worker-cell.md); the change ships as ONE feature covering CLI doors, preamble red-check removal, ~16 skill-text refrains, and the stale AGENTS.md/AGENTS.block.md lines with their hash regen
+- 58ec9664 · 2026-08-18 · test-doctrine sweep (user, 2026-08-18): agent owns test scope end to end — it chooses which tests to run for a change at every point, including the close/merge boundary, and records scope + reason with the cap; docs-only diffs skip the test suite (cheap parity checks remain the right proof); the mandatory session-start full-suite red check is dropped; CI full suite on every push stays the deterministic last net; DoD becomes proof-per-change-type (code: related tests green; docs: parity/pointer green; behavior: judge verdict) taught as principle, not a fixed table; a scoped-green-but-CI-red miss is a fix-first cell plus a mandatory captured learning about why the chosen scope missed
+
 ## test-economy
 
 ### test-economy
@@ -1788,6 +2097,14 @@ each decision event.
 ### test-economy
 
 - 6d9b9afc · 2026-07-27 · USER LAW (2026-07-27): tests are for CODE only. A behavior/api cell whose entire recorded file set is instruction/knowledge text (skills/, docs/, plans/, .bee/, bare .md) creates no slice test-cell debt; an empty file list stays conservative and counts as code. The skill byte budget is ADVISORY — a lint that warns, never a suite that blocks
+
+## test-organization
+
+### tests
+
+- 90ce6d67 · 2026-08-18 · test-organization research constraints (tickets 001+002 closed, 2026-08-18): three facts now bound the convention's design. (1) The parallel scheduling unit differs per stack — Jest/Vitest schedule the FILE, Go schedules the PACKAGE, pytest schedules tests or files depending on --dist, and cargo test runs multiple test BINARIES SERIALLY with concurrency only inside one binary's thread pool — so 'split files to go faster' is stack-conditional and cargo-nextest is Rust's only real lever. (2) Jest has no first-party way to make ONE file serial while others stay parallel, so the convention's Jest row must state the gap rather than invent a mechanism. (3) No surveyed runner declares a three-tier pure/tmpdir/global isolation class — every existing mechanism (xdist_group, serial_test keys, nextest test-groups, JUnit @ResourceLock) expresses only the global tier as named-lock grouping — so the taxonomy is novel, and its risk is that a declared class nothing enforces is documentation rather than a guard
+- 588eecb5 · 2026-08-18 · test-organization doctrine, two standing laws (user, 2026-08-18): LAW 1 parallel-first — concurrent execution is the default posture of every test the convention governs; a test that cannot run concurrently is the exception and must declare why in its file header, so serialization is always a visible, named cost rather than a silent default. LAW 2 enough, not overload — tests are written to the size the change needs and no further; a suite that grows past what its source justifies is a defect of the suite, not a virtue, and the convention gives agents a stop rule so they neither under-test nor bulk-generate
+- dab5f286 · 2026-08-18 · test-organization wayfinding round 1-2 (user, 2026-08-18): the convention ships as a bee-owned skill, not a standalone portable package; its scope is test FILE ORGANIZATION and ISOLATION only (layout, naming, size, isolation class, parallel posture) and it deliberately does NOT own coverage quantity, assertions, mocks or fixtures — luongnv89's test-coverage skill covers that and the two compose; the skill carries two modes, write (author new tests to the convention) and audit (report violations in an existing suite and propose splits, never auto-fix); the first stack table covers TS/JS, Python, Go and Rust, matching the four rows of luongnv89's manifest-detection table
 
 ## tree-hygiene
 
@@ -1804,6 +2121,18 @@ each decision event.
 ### hooks
 
 - 189f1e1f · 2026-07-21 · auto-approved Gates 1-2 (bypass total): tree-hygiene D1-D6 locked + plan frozen — in-repo .bak backups move to .bee/backups/ with UTC stamps, atomic tmp stays adjacent (EXDEV correctness) but becomes ignored+self-cleaning, managed gitignore block gains scratch patterns, .claude/settings.json.bak untracked, render .old-* sweep added, settings.local.json doctrine
+
+## two-flows feature
+
+### feature-local
+
+- c6732986 · 2026-08-18 · Routing record: two-flows D1, two-flows D2, two-flows D3, two-flows D4, two-flows D5, two-flows D6, two-flows D7, two-flows D8 are feature-local, shipped in cells tf-1 (d193ff37) and tf-2 (1de66dc9) as router, contract, README, wayfinding, researching, and planning prose
+
+### skills
+
+- f1a93ae6 · 2026-08-18 · two-flows: Discovery-flow ticket claims are reservation-guarded (reserve the ticket path, frontier means unreserved), and the spike LOGIC-page recipe plus the primary-source rule ride the same feature; distilled from mattpocock/skills @ 84fdeff per porting-protocol D4
+- ece396b5 · 2026-08-18 · The agent routes between the two flows; the user never has to name a flow. Fog or too-big-to-name routes to Discovery, a nameable outcome routes to Main. An explicit user word — wayfinding, brainstorm, discuss, discovery (any language) — routes straight into the Discovery flow and skips the classification
+- ad3adc4a · 2026-08-18 · bee names two flows: Main flow (idea to ship: shaping, planning, swarming, reviewing, merge) and Discovery flow (an open question to a locked decision: wayfinding as the spine, research/spike/grilling as ticket-resolution kinds). Discovery flow reuses the existing docs/discovery/ and bee discovery surface for its name
 
 ## verify-pipeline
 
@@ -1853,6 +2182,12 @@ each decision event.
 - 3a611c32 · 2026-07-20 · verify-parallel-runner: new scripts/run_verify.mjs parallel test runner replaces the &&-chain in commands.verify; conservative concurrency pool + serial tail for timing/lock-sensitive suites. Gates auto-approved (bypass total).
 - 49f032fe · 2026-07-15 · codex-harness-hardening Slice 0: bee's mandatory commands.verify now self-guards its own suite composition. Added test_bee_cli.mjs + scripts/test_verify_manifest.mjs to verify; test_verify_manifest reads .bee/config.json and fails if any of the 7 required suites (test_lib, test_onboard_bee, test_portable_paths, test_model_guard, test_write_guard, test_hook_contracts, test_bee_cli) is dropped, and carries an internal self-test proving its own checker flags a verify-string missing test_bee_cli. Two red-now freeze artifacts added OUTSIDE verify (run on-demand): test_split_brain_regression.mjs and census_stale_spawn_syntax.mjs.
 - b7e01bce · 2026-07-08 · Verify-string authoring discipline promoted to critical-patterns: dry-run metachar greps before dispatch; grep stable headings not invented tokens for prose cells.
+
+## worker-brief-expertise
+
+### brief
+
+- b8e4f393 · 2026-08-20 · worker-brief-expertise D1-D4: the worker brief gains an optional Expertise section written leader-style by the dispatcher. D1: each entry names an absolute file path, its purpose, and one 'read this to do X correctly' line; zero entries renders no section. D2: entries point at bee's own expertise content — skill reference files under skills/ and bee knowledge files — chosen per task by the dispatching agent's judgment (Main orchestrator or herding dispatch role); no automatic derivation machinery. D3: the standalone-executor clause is rescoped to workflow-only — the worker still never runs bee commands and never writes workflow state, but reading the listed expertise files is explicitly allowed and encouraged, and the brief wording must not contradict the Expertise section. D4: the same entry shape (path + purpose + read-to line) appears in the bee-swarming dispatched-worker brief, where entries may also name skills directly.
 
 ## workflow-state
 

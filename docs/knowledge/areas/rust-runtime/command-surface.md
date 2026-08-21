@@ -42,9 +42,12 @@ name. What changes is only which ones a bare `bee --help` puts in front of you.
   compact form; `json` stays filtered under the header note. Multi-entry
   renders keep the compact line — detail only where asked, so token cost
   stays bounded to the verb in question (D3). The read-once rule rides the
-  preamble Command-surface sentence and AGENTS.md (D2): before a verb's
-  FIRST use in a session, read its help — never guess flags; one read per
-  verb, never re-read.
+  session briefing's command-surface sentence (D2): before a verb's FIRST use
+  in a session, read its help — never guess flags; one read per verb, never
+  re-read. The always-loaded instruction layer does NOT carry the rule today:
+  D2's other half was written into the rendered instruction file instead of
+  the managed source it is generated from, and the next regeneration undid
+  it — an Open Gap, tracked in the backlog.
 - `bee internal <group> <verb>` — the explicit plumbing namespace.
 
 ## Data Dictionary

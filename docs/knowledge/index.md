@@ -14,7 +14,7 @@ never a generation timestamp or any other wall-clock value.
 ## Sections
 
 - [areas/](areas/index.md) — 109 concept(s)
-- [patterns/](patterns/index.md) — 128 concept(s)
+- [patterns/](patterns/index.md) — 130 concept(s)
 - [work/](work/index.md) — 12 concept(s)
 
 ## Critical patterns
@@ -61,3 +61,5 @@ never a generation timestamp or any other wall-clock value.
 - [A write placed before a self-check makes the check accuse itself](patterns/20260818-a-write-placed-before-a-self-check-makes-the.md) — A write placed before a self-check makes the check accuse itself
 - [Defaults merged into a read erase the difference between absent and refused](patterns/20260818-defaults-merged-into-a-read-erase-the-difference-between-absent-and-refused.md) — Defaults merged into a read erase the difference between absent and refused
 - [A test that derives its fixture from the constant under test only proves the code agrees with itself](patterns/20260819-a-test-that-derives-its-fixture-from-the-constant-under-test-only-proves-the-code-agrees-with-itself.md) — A test that derives its fixture from the constant under test only proves the code agrees with itself
+- [A faked seam hides the parse](patterns/20260821-a-faked-seam-hides-the-parse.md) — A trait seam that every test fakes proves the seam is exercised, never that the parse behind it is right; a fake returns whatever the test configured, so the one thing only a real process reply can falsify — the extraction of a live response — stays unchecked while the suite is green.
+- [A vendored binary is a second place the feature must land](patterns/20260821-a-vendored-binary-is-a-second-place-the-feature-must-land.md) — A vendored binary is a second place the feature must land

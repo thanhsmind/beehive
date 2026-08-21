@@ -339,6 +339,15 @@ baseline forgives the PAST automatically and repo-wide; the marker is how NEW
 prose states intent at the site, which a baseline cannot express — asked why a
 line is forgiven, a baseline can only answer that it was already there.
 
+The marker is an HTML comment pair — `<!-- bee:not-a-deferral: <reason> -->`
+opening it and `<!-- /bee:not-a-deferral -->` closing it — and the opener needs
+a non-empty reason: a reasonless opener exempts nothing, an unclosed one
+exempts to end of file, and a marker and a code fence nest independently,
+neither closing the other. The door's refusal names the marker as a third
+remedy beside citing a registered trigger and logging a tagged decision, so a
+writer who hits a genuine false positive learns the escape from the message
+itself (doc-deferral-scope, cell dds-1).
+
 **Once every hard door above (tests, scribing-debt, judge-debt, pattern-check,
 knowledge-freshness) has cleared, close also runs `bee knowledge promote` for
 the closing feature in process — a SOFT door (knowledge-loop D2/D9, cells

@@ -107,6 +107,22 @@ Everything else bee-shaped — capping the cell, the proof line, reservations �
 stays the orchestrator's job, done only after it reads the result file back
 (herding-executor D4).
 
+## A worker pane must be wide enough to take a submission at all
+
+Below sixty columns a submitted prompt does not merely render badly — the herd
+tool reports it stalled before the agent ever processes it. Proven live from
+one 120-column tab: the first split produced a sixty-column child that carried
+a full round to a written ack and result, while two thirty-column children both
+died mid-submission.
+
+So the run verb splits off the ROOMIEST pane in the caller's own tab rather
+than halving the caller's own pane again and again, and it measures the width
+the CHILD will land at, never the parent's. When no pane in the tab can yield a
+workable child, the worker gets a FRESH TAB's root pane at full width — never a
+sliver, and never a refusal — and it never takes the human's focus. A geometry
+read that fails at all falls open to the caller's own pane (herding-prompt-stall,
+cells hps-12 and hps-13).
+
 ## The commit split, as observed
 
 The worker owns the edit and the result file; the orchestrator owns the cell
@@ -139,6 +155,10 @@ even when the brief states the rule.
 
 ## Pointers (implementation)
 
+- The pane-width floor is `MIN_PANE_WIDTH` (60) in the same module, with
+  `resolve_split_parent` picking the roomiest parent, `narrow_pane_refusal`
+  measuring the child's resulting width, and the `tab_create` fallback on the
+  herd seam (cells hps-12, hps-13).
 - `run`'s own module — pane split/start, the native poll loop, and pane-lifecycle
   decisions, each seam-tested with a fake so no test needs a real multiplexer on
   PATH — is `packages/bee-rs/crates/bee/src/herding/run.rs`; the mailbox contract

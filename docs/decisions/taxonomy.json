@@ -381,6 +381,7 @@
     "blocked",
     "mailbox",
     "trust",
-    "boot"
+    "boot",
+    "promote"
   ]
 }

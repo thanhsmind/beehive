@@ -7,7 +7,7 @@ bee:
   id: pattern-20260819-worktree-tracked-store-answers-stale
   lifecycle: active
   areas: [worktree-parallelism, workflow-state]
-  sources: [capture stub 8f89c13e (herding-orchestration), docs/history/herding-orchestration/CONTEXT.md]
+  sources: [capture stub 8f89c13e (herding-orchestration), docs/history/herding-orchestration/CONTEXT.md, herding-prompt-stall cells hps-1..hps-16 (the absent-file arm)]
 ---
 
 A feature worktree carries its own git-tracked copy of
@@ -43,3 +43,20 @@ construction. And when a finding proves false, ask what true defect
 it was aimed at before dismissing it: here the record existed but was
 never locked into CONTEXT.md, and locking, not logging, is what the
 next worker sees.
+
+**The sharper sibling: absent, not stale.** The same failure has a
+second form, and it is quieter. A feature's locked context document is
+authored in the main checkout AFTER the worktree branched, so inside
+the worktree the path a worker is told to read first does not exist at
+all. Sixteen workers ran a whole wave that way. Not one stopped: each
+reconstructed the feature's decisions from the decision log and the
+code and carried on, and the wave came out green, so nothing ever
+signalled the gap.
+
+A stale file at least parses into a wrong answer someone might
+double-check. A missing one produces no answer, and a capable reader
+fills the hole with an improvised one — which is why the absent case
+needs the louder rule: a `read this first` path that does not resolve
+is a REFUSAL, not a prompt to improvise. The worker says the authority
+document is missing and stops; it never substitutes its own
+reconstruction for a document it was told is authoritative.

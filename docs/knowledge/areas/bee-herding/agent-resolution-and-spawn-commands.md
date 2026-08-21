@@ -209,8 +209,10 @@ D1). bee now defers to herdr's own settle-aware verbs instead of polling
 raw samples: `herdr agent prompt <job> <text> --wait --until working
 --timeout <ms>` for delivery, and `herdr agent wait <job> --until idle
 --until done --timeout <ms>` for the ready gate. herdr's own
-`agent_prompt_stalled` IS the delivery failure, surfaced at once instead of
-inferred from a sampled state.
+`agent_prompt_stalled` is bee's delivery signal instead of an inference from a
+sampled state — but it is a RETRYABLE one, not an immediate failure
+(herding-prompt-stall D6, narrowing D1); see
+`handing-a-foreign-agent-its-brief.md` for the bounded retry it feeds.
 
 ## Open Gaps
 

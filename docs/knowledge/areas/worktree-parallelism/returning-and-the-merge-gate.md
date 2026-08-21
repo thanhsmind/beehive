@@ -174,9 +174,11 @@ granted worktree. Neither door could be satisfied without disabling the
 other, so a green slice could not land at all.
 
 - **Before the dirty-MAIN refusal fires, `worktree merge` now auto-commits —
-  path-scoped to two roots only.** When every dirty path in MAIN is under
-  `.bee/` (wholesale) or under the *merging feature's own*
-  `docs/history/<feature>/` (never any other feature's history), the merge
+  path-scoped, never wholesale.** When every dirty path in MAIN is under one
+  of the swept roots — `.bee/` and `docs/decisions` (wholesale), the *merging
+  feature's own* `docs/history/<feature>/` (never any other feature's
+  history), and the exact `docs/knowledge/` files that feature's own capped
+  cells recorded — the merge
   commits exactly those paths and proceeds; the same `git add -A --
   <pathspecs>` / commit helper `bee close`'s own bookkeeping commit uses
   (`R81` in `gates.md`), widened here to accept the feature's docs-history
@@ -204,6 +206,20 @@ other, so a green slice could not land at all.
   bookkeeping commit under this feature's message — misattributed history,
   never data loss, the same tradeoff `gates.md` R81 already accepts for
   `bee close`'s own sweep.
+- **Authored prose is never swept blanket (knowledge-sweep-scope, cells
+  kss-1/kss-2).** `.bee` and `docs/decisions` stay wholesale — they are the
+  machine-written control plane and its rendered index — but `docs/knowledge/`
+  enters the root list only as the exact paths the merging feature's own
+  capped cells recorded as changed, the same scoping `docs/history/<feature>/`
+  already had. A sibling session's knowledge dirt therefore stays
+  uncommitted, and the ordinary dirty-MAIN refusal names it, which is the
+  honest instruction: commit your own capture. A merge that cannot resolve
+  WHICH feature it is landing sweeps no `docs/knowledge` at all, matching what
+  that same unresolved arm already did for `docs/history` — having no data to
+  scope a sweep argues for not sweeping, never for sweeping wholesale. Cause:
+  one merge's bookkeeping commit swallowed 21 insertions of a sibling
+  session's spec sync; nothing was lost, but both the authorship and the
+  feature attribution were wrong, and a peer session found it, not a test.
 
 ## Concurrent merges serialize through an integration queue, never the lock (multisession-native D8 stage 5, D9 invariant 12, msn-22)
 

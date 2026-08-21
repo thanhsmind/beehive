@@ -8,7 +8,7 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/the-run-verb-and-worker-outcomes.md]
-  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)", "herding-prompt-stall D5 (corrects D3: blocked does not cover a trust dialog; a give-up wait reads the pane for a confirmation cue instead)"]
+  decisions: ["herding-executor D3 (file mailbox is the completion signal)", "herding-executor D4 (worker stays bee-ignorant, orchestrator owns bee bookkeeping)", "herding-brief-file D1 (the brief persists as brief-N.txt behind a one-line pointer)", "herding-run-ready-wait D1 (readiness is observed before the send; narrowed by herding-prompt-stall D2 — the gate accepts idle OR done, not idle alone)", "herding-start-retry D1 (agent start retries through a booting shell)", "herding-prompt-verify D1 (bounded resends, never a silent proceed; narrowed by herding-prompt-stall D1/D4 — the receipt is now the worker's ack file, and a resend fires only when the agent returns to idle/done with still no ack)", "herding-receipt-source D1 (superseded: the receipt no longer reads pane text)", "herding-worker-standalone D1-D3 (standalone-executor contract, the worker env marker, hooks silent under it)", "herding-prompt-stall D1 (retires the lifecycle-transition receipt; the send is herdr's own atomic submit-and-observe)", "herding-prompt-stall D2 (the ready gate accepts idle or done)", "herding-prompt-stall D3 (a blocked pane ends the wait immediately, at every wait point)", "herding-prompt-stall D4 (the receipt is the worker's own ack file, or the round's result file for an ultra-fast round; a resend fires only on ready-with-no-ack, bounded separately from the ack-wait budget)", "herding-prompt-stall D5 (corrects D3: blocked does not cover a trust dialog; a give-up wait reads the pane for a confirmation cue instead)", "herding-prompt-stall D6 (narrows D1: a stalled submission is retryable, not an immediate delivery failure)"]
   sources: [docs/history/herding-executor/CONTEXT.md, docs/history/herding-brief-file/CONTEXT.md, docs/history/herding-worker-standalone/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, "live smoke smoke-agy-delivery-1/-2/-3", "live case job hws-1-r1"]
   authoritative_for: "bee-herding: the brief mailbox, the standalone-worker contract, and delivery receipts"
 ---
@@ -113,14 +113,39 @@ submit-and-observe, `herdr agent prompt <job> <text> --wait --until working
 --timeout <ms>` (herding-prompt-stall D1), and delivery is confirmed by the
 worker's ack file appearing, or by the round's result file appearing for an
 ultra-fast round that finishes before an ack is ever observed. A `blocked`
-pane or herdr's own `agent_prompt_stalled` ends the wait at once, ahead of
-any resend. The pointer is idempotent, so a RESEND fires only once the agent
+pane ends the wait at once, ahead of any resend; a STALLED submission does
+not (herding-prompt-stall D6, narrowing D1). The pointer is idempotent, so a RESEND fires only once the agent
 has gone back to a ready state (`idle` or `done`) with STILL no ack — never
 on a timer while the agent is still `working` (herding-prompt-stall D4). That
 resend path is itself bounded two ways — a fixed count of ready-with-no-ack
 resends, and a separate wall-clock ack-wait budget — and exhausting either is
 a typed failure that says the prompt was never accepted; it never becomes a
 silent decision to wait anyway.
+
+Two facts about that single submission are easy to get wrong, and both were
+measured live rather than reasoned about.
+
+bee's own deadline on the submit-and-observe send must comfortably outlast the
+herd tool's internal stall detector. Set to the same instant, the two race,
+bee's client-side deadline wins, and the caller sees a bare transport timeout
+before the detector ever fires or the agent ever settles. On one healthy pane a
+five-second window returned a timeout while a twenty-second window on the SAME
+pane returned a working observation and the brief landed. A timeout reply is
+also not a stall: a timeout means the submission WAS made, so it falls through
+to the ack wait exactly as a successful send does — never aborting delivery,
+never resending blind (herding-prompt-stall, cell hps-11).
+
+A stalled submission is a RETRYABLE outcome, not an immediate delivery
+failure. A stall only means the herd tool observed no state change from that
+one submission; for an agent it already reports as ready but whose interface
+has not finished drawing, that is the expected transient — measured live, the
+identical submission typed by hand seconds later on the same pane returned
+working at once. A stall therefore feeds the same bounded retry the
+ready-with-no-ack path uses, under the same two bounds, and becomes terminal
+only when a bound runs out, with a distinct failure saying the agent never
+took the text at all — kept apart from the failure that says the agent took it
+and never confirmed it. A blocked pane and a transport error stay immediate
+(herding-prompt-stall D6, cell hps-14).
 
 Failing to get that receipt splits by WHEN it failed, and the two halves treat
 the pane oppositely. A failure BEFORE the agent starts closes the pane — there is
@@ -186,6 +211,12 @@ permit.
   `packages/bee-rs/crates/bee/src/herding/mailbox.rs`; the delivery path
   (`deliver_pointer`), the ack-wait budget, and the stall/blocked errors are in
   `packages/bee-rs/crates/bee/src/herding/run.rs`.
+- The two measured submission facts live in the same file: the send deadline is
+  `AGENT_PROMPT_TIMEOUT_MS` (20s) with `is_agent_prompt_timeout` telling a
+  timeout apart from a stall, pinned against the captured live reply body; the
+  retryable stall runs through `is_agent_prompt_stalled` into
+  `DeliveryError::NeverDelivered`, kept distinct from
+  `DeliveryError::NeverAcked` (cells hps-11, hps-14).
 - The worker marker is the environment variable `BEE_HERDING_WORKER=1`, exported
   into the pane before `agent start`; the mailbox directory is
   `.bee/mailbox/<job-id>/`. The repo instructions the contract tells the worker to
