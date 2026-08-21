@@ -883,9 +883,12 @@ fn provision_worktree_binary(
     };
     let name = src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
 
-    // `symlink_metadata`, not `exists()`: a DANGLING link left by a deleted
-    // main binary is still "already there", and a copy through it would
-    // write into main's own bin instead of the worktree's.
+    // `symlink_metadata`, not `exists()`: a dest link whose TARGET is gone —
+    // an earlier link into a main checkout since moved or rebuilt elsewhere,
+    // while the current main still has its binary — reads as absent to
+    // `exists()`, which follows links. The copy below would then write
+    // THROUGH the stale link, landing main's binary at the old target path
+    // instead of in this worktree. `symlink_metadata` sees the link itself.
     let dest_dir = worktree_store_root.join("bin");
     let dest = dest_dir.join(&name);
     if std::fs::symlink_metadata(&dest).is_ok() {
@@ -1025,10 +1028,11 @@ pub(crate) fn bootstrap_worktree_store(
     Some(out)
 }
 
-// srg-2: this cell's reserved file is registry.rs alone — `worktree/tests.rs`
-// is held by a sibling, so the binary-provisioning tests live in this
-// module's own block, the way prune.rs's do, with a local fixture instead of
-// a reach across the reservation boundary.
+// srg-2: the binary-provisioning tests live in this module's own block, the
+// way prune.rs's do, with a local fixture — `worktree/tests.rs` carries the
+// bootstrap's cross-cutting shapes and this is one narrow concern. The one
+// edit that file did take is its exact-key-order assertion, which the new
+// `binary` key forces to move.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1070,9 +1074,62 @@ mod tests {
 
         let binary = report.get("binary").expect("the report must carry the binary key");
         assert_eq!(binary["provisioned"], Value::Bool(true), "{binary:?}");
-        let method = binary["method"].as_str().unwrap();
-        assert!(method == "symlink" || method == "copy", "unexpected method {method:?}");
         assert_eq!(binary.get("reason"), None, "a provisioned binary carries no reason");
+        let method = binary["method"].as_str().unwrap();
+
+        // On unix the link ALWAYS succeeds, so `copy` here is a regression,
+        // not an alternative: it would forfeit the whole point of linking —
+        // that a rebuilt main binary is instantly live in every worktree.
+        // The either/or is honest only on Windows, where the fallback is a
+        // real outcome.
+        #[cfg(unix)]
+        {
+            assert_eq!(method, "symlink", "unix must never fall back to a copy");
+            assert!(
+                std::fs::symlink_metadata(&dest).unwrap().file_type().is_symlink(),
+                "the provisioned binary must be a link, not a snapshot"
+            );
+        }
+        #[cfg(not(unix))]
+        assert!(method == "symlink" || method == "copy", "unexpected method {method:?}");
+    }
+
+    /// The `symlink_metadata`-not-`exists()` guard. A dest link whose target
+    /// is gone reads as absent to `exists()`; provisioning through it would
+    /// write main's binary out to that stale target instead of into this
+    /// worktree. Test (c)'s regular file would not catch this — plain
+    /// `exists()` sees that one.
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_destination_link_is_refused_and_never_written_through() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main_store = main_store_with_binary(tmp.path());
+        let wt = tmp.path().join("wt-a");
+        let dest_dir = wt.join(".bee").join("bin");
+        std::fs::create_dir_all(&dest_dir).unwrap();
+
+        // A link into a main checkout that has since moved away. Its parent
+        // dir EXISTS on purpose: without it a write-through would merely
+        // fail on ENOENT, and the fence would pass for the wrong reason.
+        let stale_dir = tmp.path().join("old-main").join(".bee").join("bin");
+        std::fs::create_dir_all(&stale_dir).unwrap();
+        let stale_target = stale_dir.join("bee");
+        let dest = dest_dir.join("bee");
+        std::os::unix::fs::symlink(&stale_target, &dest).unwrap();
+        assert!(!dest.exists(), "the fixture must really dangle");
+
+        let report = bootstrap_worktree_store(&wt, &main_store, "demo").unwrap();
+
+        let binary = report.get("binary").expect("the report must carry the binary key");
+        assert_eq!(binary["provisioned"], Value::Bool(false), "{binary:?}");
+        assert_eq!(binary["method"], Value::Null);
+        assert_eq!(binary["reason"], json!("bin/bee already exists"));
+
+        // Nothing written: the link is untouched and its target never made.
+        assert!(std::fs::symlink_metadata(&dest).unwrap().file_type().is_symlink());
+        assert_eq!(std::fs::read_link(&dest).unwrap(), stale_target);
+        assert!(!dest.exists(), "the link must still dangle — never written through");
+        assert!(!stale_target.exists(), "main's binary must never land at the stale target");
     }
 
     /// (c) idempotence — the rule `worktree register` depends on, since it
