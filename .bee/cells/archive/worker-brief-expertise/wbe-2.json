@@ -1,0 +1,122 @@
+{
+  "id": "wbe-2",
+  "feature": "worker-brief-expertise",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "dispatch prepare --expertise feeds the worker-cell prompt",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+    "packages/bee/prompts/worker-cell.md",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/worker-brief-expertise/CONTEXT.md",
+    "docs/history/worker-brief-expertise/plan.md"
+  ],
+  "action": "Per plan.md Cell 2, honoring CONTEXT.md D1, D2, D4: (a) bee dispatch prepare accepts the same single --expertise flag (one entry per line, same parse and typed refusal as wbe-1 — the shared Flags parser is last-value-wins, so the flag is single-use by design). Wiring pinned by review: keys_known at prepare.rs:1104 gains \"expertise\" (else the verb silently delegates), and prompt_body_for gains an explicit expertise parameter threaded from its call site at prepare.rs:622 — learned_context is derived inside prompt_body_for, so the CLI-fed value needs its own param. (b) packages/bee/prompts/worker-cell.md gains a {{#if expertise}} block titled 'Expertise — dispatcher-picked; read/load before implementing'; a Task-tool worker may be told to load a skill directly per D4. No template-test edit: real_templates_render_end_to_end auto-discovers vars. (c) register --expertise for dispatch prepare in the hand-edited registry_payload.json (no further PINNED_FLAG_COUNT change — the name already counts once from wbe-1). (d) packages/bee/prompts is a release-manifest inventory root: run the full regen chain inside this cell (bee dev regen: render-skill-trees, onboard --repo-root . --apply, release-manifest --write, in that order). Serial after wbe-1: both cells hand-edit registry_payload.json.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "prepare without --expertise renders today's prompt unchanged",
+      "Embedded prompt and packages/bee/prompts source agree after regen"
+    ]
+  },
+  "decisions": [
+    "worker-brief-expertise D1",
+    "worker-brief-expertise D2",
+    "worker-brief-expertise D4"
+  ],
+  "deps": [
+    "wbe-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "wbe-w2",
+    "outcome": "dispatch prepare --expertise feeds a dispatcher-picked Expertise block into the worker-cell prompt",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee/prompts/worker-cell.md",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".claude/agents/bee-build.md",
+      ".claude/agents/bee-extract.md",
+      ".claude/agents/bee-gather.md",
+      ".bee/onboarding.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T22:56:40.242Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c1eacb78-2dd2-497a-8ea0-8a0c59b5a89d",
+    "claimed_at": "2026-08-20T21:13:34.663Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "prepare.rs:419-444 parse_expertise byte-identical to herding/run.rs sibling; typed malformed refusal; both refusal tests ok"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "keys_known includes expertise (prepare.rs:1135-1147); prompt_body_for explicit expertise param threaded from call sites; wave passes None"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "worker-cell.md:29-33 {{#if expertise}} block after learned_context; zero-flag render byte-identical, test ok"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "registry_payload.json dispatch.prepare gains expertise; PINNED_FLAG_COUNT stays 178"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "repair ebd66fbd restored .claude/agents/bee-build|extract|gather.md + onboarding rendered_from; release-manifest --check 270 match; devtools::prompts 4 passed, expertise 14 passed; 2 close.rs uat_door reds pre-existing, out of scope"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.7-flash",
+        "judge_model": "claude-review-tier",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-20T22:56:06.895Z"
+      }
+    ],
+    "report": {
+      "outcome": "dispatch prepare --expertise feeds a dispatcher-picked Expertise block into the worker-cell prompt",
+      "commit": "b9c1b1a5 + repair ebd66fbd",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/drivers/prepare.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee/prompts/worker-cell.md",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".claude/agents/bee-build.md",
+        ".claude/agents/bee-extract.md",
+        ".claude/agents/bee-gather.md",
+        ".bee/onboarding.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- devtools::prompts; -- expertise; bee dev release-manifest --check — green (4 + 14 passed; 270 files match) — cell touches prepare plumbing, the prompt template, and manifest-inventoried roots",
+      "deviations": [
+        "round-2 regen with the worktree stale bee binary deleted .claude/agents/bee-*.md and onboarding rendered_from entries; repaired in ebd66fbd with the main binary",
+        "tests.rs and the restored files were undeclared at plan time — recorded here",
+        "2 pre-existing close.rs uat_door test failures on the base (7155d8eb) are out of this feature scope"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

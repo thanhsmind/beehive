@@ -1092,23 +1092,57 @@ fn line_trigger_ids(line: &str) -> Vec<String> {
     ids
 }
 
+/// The opening `<!-- bee:not-a-deferral: <reason> -->` marker's prefix and
+/// the exact closing marker line. A line's trimmed content must match one
+/// of these exactly to toggle the not-a-deferral exemption.
+const NOT_A_DEFERRAL_OPEN_PREFIX: &str = "<!-- bee:not-a-deferral:";
+const NOT_A_DEFERRAL_OPEN_SUFFIX: &str = "-->";
+const NOT_A_DEFERRAL_CLOSE: &str = "<!-- /bee:not-a-deferral -->";
+
+/// If `trimmed` is a `<!-- bee:not-a-deferral: <reason> -->` opening marker
+/// carrying a non-empty reason, returns that reason. An empty or missing
+/// reason returns `None` — skipping a guard is a named act, never an
+/// oversight (the same posture `regen_obligation_ack` takes on a cell), so
+/// an unreasoned marker opens nothing and the lines below it still block.
+fn not_a_deferral_open_reason(trimmed: &str) -> Option<&str> {
+    let rest = trimmed.strip_prefix(NOT_A_DEFERRAL_OPEN_PREFIX)?;
+    let rest = rest.strip_suffix(NOT_A_DEFERRAL_OPEN_SUFFIX)?;
+    let reason = rest.trim();
+    if reason.is_empty() { None } else { Some(reason) }
+}
+
 /// D3: the doc-deferral door itself. A line matching `matches_deferral_
 /// prose` inside a ``` fenced block is exempt (`in_fence` toggles on every
-/// fence-marker line, code included); every other match needs a same-line
-/// trigger citation resolving via `trigger_registered` or it blocks, naming
-/// file:line and the create-the-trigger teach line.
+/// fence-marker line, code included); a line inside a reasoned
+/// `<!-- bee:not-a-deferral: <reason> --> ... <!-- /bee:not-a-deferral -->`
+/// block is exempt the same way (`in_marker` toggles independently of
+/// `in_fence` — a fence and a marker nest without interacting; an
+/// unreasoned opening marker toggles nothing; an unclosed marker exempts to
+/// end of file). Every other match needs a same-line trigger citation
+/// resolving via `trigger_registered` or it blocks, naming file:line and the
+/// create-the-trigger teach line.
 pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str) -> D<Door> {
     let files = doc_deferral_scan_files(root, feature)?;
     let mut blocking_items: Vec<String> = Vec::new();
     for rel in &files {
         let Ok(text) = std::fs::read_to_string(root.join(rel)) else { continue };
         let mut in_fence = false;
+        let mut in_marker = false;
         for (idx, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed == NOT_A_DEFERRAL_CLOSE {
+                in_marker = false;
+                continue;
+            }
+            if not_a_deferral_open_reason(trimmed).is_some() {
+                in_marker = true;
+                continue;
+            }
             if line.trim_start().starts_with("```") {
                 in_fence = !in_fence;
                 continue;
             }
-            if in_fence {
+            if in_fence || in_marker {
                 continue;
             }
             if !crate::verbs::decisions::matches_deferral_prose(line) {
@@ -1148,7 +1182,7 @@ pub(crate) fn build_doc_deferral_door(root: &Path, feature: &str) -> D<Door> {
         door: "doc-deferral",
         blocking: true,
         detail: format!(
-            "{} deferral line(s) with no registered trigger citation: {} — remedy: register the condition first with `bee triggers add --decision <id> --condition \"...\"`, then cite it inline (backtick `<id>` or [[trigger:<id>]])",
+            "{} deferral line(s) with no registered trigger citation: {} — remedy: register the condition first with `bee triggers add --decision <id> --condition \"...\"`, then cite it inline (backtick `<id>` or [[trigger:<id>]]), or if the prose documents deferral machinery rather than promising to act later, wrap it in a reasoned <!-- bee:not-a-deferral: <reason> --> ... <!-- /bee:not-a-deferral --> block",
             blocking_items.len(),
             blocking_items.join("; ")
         ),
@@ -3499,53 +3533,57 @@ mod tests {
         }
     }
 
-    /// usp-3 revision (D4, judge NEEDS_REVISION t4): the door must classify
-    /// through the SAME source the merge side reads (`mode`), not through
-    /// `feature_route` (which prefers `route.lane`). A record whose `mode`
-    /// is "standard" but whose `route.lane` names "small" — the exact
-    /// shape of `.bee/lanes/knowledge-loop.json`, the judge's worked
-    /// example — must still block under close: the merge side would set
-    /// the uat wait for this feature, so close must agree.
+    /// uat-lane-source (uls-1): the door classifies through `route.lane`,
+    /// not through `mode`. `mode` carries the WORKFLOW vocabulary
+    /// (feature, release) while the exemption is written in LANE vocabulary
+    /// (tiny, small, docs, spike, standard, high-risk), so reading `mode`
+    /// meant the exemption almost never fired and every feature was asked
+    /// for uat. Agreement with the merge side is preserved by construction,
+    /// not by matching sources by hand: both sides call the one helper
+    /// `crate::uat::uat_lane_mode` (here, and `verbs/worktree/phases.rs`),
+    /// so flipping it flipped both together.
+    ///
+    /// This case supersedes the usp-3 D4 pair that pinned the `mode` read.
+    /// A record whose `mode` is "standard" but whose `route.lane` names
+    /// "small" is EXEMPT: the lane is what the exemption speaks about.
     #[test]
-    fn uat_door_blocks_when_mode_and_route_lane_disagree_toward_standard() {
+    fn uat_door_reads_route_lane_and_is_exempt_when_mode_disagrees_toward_standard() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
         write_lane_mode_and_route(root, "demo", "standard", "small");
 
         let doors = build_close_report_doors(root, "demo").unwrap();
-        let uat_door = doors
-            .iter()
-            .find(|d| d.door == "uat")
-            .expect("mode standard must grow a blocking door even when route.lane disagrees");
-        assert!(
-            uat_door.blocking,
-            "mode=standard/route.lane=small must block — the merge side reads mode and would wait on this feature: {}",
-            uat_door.detail
-        );
+        let uat_door = doors.iter().find(|d| d.door == "uat");
+        if let Some(uat_door) = uat_door {
+            assert!(
+                !uat_door.blocking,
+                "route.lane=small must stay exempt even though mode says standard — the exemption is written in lane vocabulary: {}",
+                uat_door.detail
+            );
+        }
     }
 
-    /// usp-3 revision (D4): mirror of the above in the other direction — a
-    /// record whose `mode` is "small" but whose `route.lane` names
-    /// "standard" must stay EXEMPT under close, again agreeing with the
-    /// merge side's `mode`-only read rather than `feature_route`'s
-    /// `route.lane`-preferring one.
+    /// Mirror of the above: a record whose `mode` is "small" but whose
+    /// `route.lane` names "standard" BLOCKS, because `route.lane` is the
+    /// source both sides read.
     #[test]
-    fn uat_door_is_exempt_when_mode_and_route_lane_disagree_toward_small() {
+    fn uat_door_reads_route_lane_and_blocks_when_mode_disagrees_toward_small() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         w(root, ".bee/config.json", r#"{"uat_stop":"close"}"#);
         write_lane_mode_and_route(root, "demo", "small", "standard");
 
         let doors = build_close_report_doors(root, "demo").unwrap();
-        let uat_door = doors.iter().find(|d| d.door == "uat");
-        if let Some(uat_door) = uat_door {
-            assert!(
-                !uat_door.blocking,
-                "mode=small/route.lane=standard must stay exempt — the merge side reads mode: {}",
-                uat_door.detail
-            );
-        }
+        let uat_door = doors
+            .iter()
+            .find(|d| d.door == "uat")
+            .expect("route.lane standard must grow a blocking door even when mode disagrees");
+        assert!(
+            uat_door.blocking,
+            "route.lane=standard must block — the merge side reads the same helper and would wait on this feature: {}",
+            uat_door.detail
+        );
     }
 
     /// D1 (`uat_stop_config`'s own fail-closed read): a bogus `uat_stop`
