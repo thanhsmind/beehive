@@ -409,7 +409,7 @@ sequenceDiagram
     B->>B: wait until the agent reports ready
     B->>M: write brief-1.txt (the full job)
     B->>A: one-line pointer: "read brief-1.txt"
-    Note over B,A: delivered only when the agent's STATE says so —<br/>status flips to working/done or the result file appears;<br/>still idle → resend, bounded (pane echo is never trusted)
+    Note over B,A: delivered when the worker's own ack file appears<br/>(or the result file, for an ultra-fast round) — never on lifecycle<br/>state alone; a blocked pane or a stalled send fails fast (pane echo is never trusted)
     A->>M: works, then writes result-1.json
     B->>B: zero-token native poll: result file, log.txt mtime, agent status
     B->>P: valid result closes the pane; failure/timeout keeps it open as forensics

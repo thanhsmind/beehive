@@ -245,35 +245,44 @@ hardenings, each one bought by a real failure:
   silently drops a multi-line injected prompt even when idle. The brief is
   written to `<mailbox>/brief-N.txt` and the agent receives a ONE-LINE
   pointer at that absolute path.
-- **Readiness and delivery both defer to herdr's own lifecycle contract, not
-  a bee-side state guess (herding-prompt-stall D1-D3).** The ready gate
-  accepts `idle` OR `done` — not `idle` alone (herding-prompt-stall D2
+- **Readiness defers to herdr's own lifecycle contract; delivery's receipt is
+  the worker's own ack file, and herdr lifecycle state is a FAILURE detector
+  only, never the success signal (herding-prompt-stall D1-D4).** The ready
+  gate accepts `idle` OR `done` — not `idle` alone (herding-prompt-stall D2
   narrows herding-run-ready-wait D1, retiring the earlier idle-alone rule):
   `done` is the SAME underlying ready-for-input state for a pane nobody has
-  focused, and since bee splits every worker pane with `--no-focus` and only
-  ever reads over the CLI — which never marks a tab seen — `done` is the
-  NORMAL resting state of a bee worker pane. Delivery no longer counts a
-  pointer received by watching the agent's own state move to `working`
+  focused, and since bee splits every worker pane with `--no-focus` and reads
+  it only via CLI reads — which never mark a tab seen — `done` is the NORMAL
+  resting state of a bee worker pane. Delivery no longer counts a pointer
+  received by watching the agent's own state move to `working`
   (herding-prompt-stall D1 supersedes herding-pointer-delivery D1, retiring
   that receipt rule): a lifecycle sample taken inside the agent's boot
   window is not trustworthy — an agy pane flaps through
   unknown/working/idle/done while its TUI initializes, so a boot flap could
   have satisfied the old test and receipted a pointer the booting TUI had
-  actually discarded. The send is now herdr's own atomic submit-and-observe,
-  `herdr agent prompt <job> <text> --wait --until working --timeout <ms>`,
-  and herdr's `agent_prompt_stalled` IS the delivery failure, surfaced at
-  once. At every one of these wait points — the ready gate, pointer
-  delivery, and the round poll — `blocked` ends the wait immediately as a
-  typed, fast, loud failure naming the pane id, the tail of its text, and
-  the remedy (herding-prompt-stall D3): this is how a per-workspace trust or
-  approval prompt is covered without bee carrying an agent-specific pattern
-  table. The pointer stays idempotent, so a duplicate send is harmless. Do
-  NOT check whether the pane echoes the brief-file name: a booting pane
-  echoes the keystrokes of the send itself, so that check passes exactly
-  when delivery failed (two live smokes lost their brief this way). If the
-  ready wait is exhausted without a `blocked` verdict, that is a typed spawn
-  failure that KEEPS the pane for forensics — unlike a pre-start spawn
-  failure, which closes it.
+  actually discarded. The send itself is still herdr's own atomic
+  submit-and-observe, `herdr agent prompt <job> <text> --wait --until working
+  --timeout <ms>`; herdr's `agent_prompt_stalled` is one of two things that
+  can end the wait early as a typed failure — never as a success signal. The
+  RECEIPT is the worker's own ack file, written as the brief's first
+  instruction, or the round's result file for an ultra-fast round that
+  finishes before an ack is ever observed (herding-prompt-stall D4). Once a
+  send has gone out, an observed `working` status is the HEALTHY path — bee
+  keeps polling for the ack, it never resends into a pane that is actively
+  working; a resend fires only once the agent has returned to `idle` or
+  `done` with still no ack, bounded by a fixed resend count and a separate
+  wall-clock ack-wait budget. At every one of these wait points — the ready
+  gate, pointer delivery, and the round poll — `blocked` ends the wait
+  immediately as a typed, fast, loud failure naming the pane id, the tail of
+  its text, and the remedy (herding-prompt-stall D3): this is how a
+  per-workspace trust or approval prompt is covered without bee carrying an
+  agent-specific pattern table. The pointer stays idempotent, so a duplicate
+  send is harmless. Do NOT check whether the pane echoes the brief-file name:
+  a booting pane echoes the keystrokes of the send itself, so that check
+  passes exactly when delivery failed (two live smokes lost their brief this
+  way). If the ready wait is exhausted without a `blocked` verdict, that is a
+  typed spawn failure that KEEPS the pane for forensics — unlike a pre-start
+  spawn failure, which closes it.
 - **Operator rules.** Put each kind's auto-approve flag in its herd entry
   (`claude … --permission-mode bypassPermissions`, `agy
   --dangerously-skip-permissions`) — an agent that stops to ask permission

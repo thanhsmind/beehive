@@ -80,9 +80,10 @@ closed, even under `--close-always`, and `job.json` is stamped `paused_limit_at`
 plus `limit_reset_hint` (the matched line).
 
 Continuing a stamped job with a live pane resumes the SAME round — a resume
-pointer through the state-receipt delivery, stamp cleared, wait re-entered; a
-gone pane refuses typed. The control loop's occupancy already counts the paused
-job as occupying its slot, so its work is never re-dispatched (live case
+pointer through the pointer-delivery path (herding-prompt-stall D1/D4), stamp
+cleared, wait re-entered; a gone pane refuses typed. The control loop's
+occupancy already counts the paused job as occupying its slot, so its work
+is never re-dispatched (live case
 hws-1-r1).
 
 ## A job is not always one round

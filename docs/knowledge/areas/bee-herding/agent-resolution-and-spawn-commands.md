@@ -141,13 +141,13 @@ verbatim (quoted, not paraphrased — herding-prompt-stall D1-D3):
 > `blocked` means Herdr recognized an approval or question UI. `unknown`
 > means an agent is present but Herdr cannot classify it confidently.
 
-Five states, and what each means to bee:
+Four states in that quote, and what each means to bee:
 
 - **`idle`** — ready for input AND the tab has been seen in the focused
   Herdr UI.
 - **`done`** — the SAME underlying ready state, for a tab nobody has looked
-  at. bee splits every worker pane with `--no-focus` and only ever reads
-  over the CLI, which never marks a tab seen — so `done`, not `idle`, is the
+  at. bee splits every worker pane with `--no-focus` and reads it only via
+  CLI reads — which never mark a tab seen — so `done`, not `idle`, is the
   NORMAL resting state of a bee worker pane (herding-prompt-stall D2 narrows
   herding-run-ready-wait D1: the ready gate accepts `idle` OR `done`, not
   `idle` alone).
@@ -160,7 +160,13 @@ Five states, and what each means to bee:
   table.
 - **`unknown`** — an agent is present but Herdr cannot classify it
   confidently. `unknown` does not prove completion.
-- **`working`** — the agent is actively processing.
+
+`working` is not part of that quoted enumeration — herdr's own contract
+mentions it only in passing, as "a non-working state" in the definition of
+`agent_prompt_stalled` (a submission from a non-working state that produces
+no observed lifecycle change within the timeout window). bee treats an
+observed `working` status as the HEALTHY in-progress path once a pointer has
+been sent: it is polled, never resent (herding-prompt-stall D4).
 
 **A sample taken inside the agent's boot window is not trustworthy.** An
 agy pane flaps through several of these states — unknown, working, idle,
