@@ -1,0 +1,75 @@
+{
+  "id": "hps-6",
+  "feature": "herding-prompt-stall",
+  "title": "The pointer is resent only when the agent went ready again without acking",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D3",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "hps-3 left `deliver_pointer` (run.rs:895) resending the pointer on a fixed tick, and that tick is far too fast for a real worker. Today: `AGENT_PROMPT_TIMEOUT_MS` is 5000 and the loop sleeps `POLL_INTERVAL` (200ms) between attempts, so resend 2 fires about 5.2s after resend 1 and resend 3 about 10.4s after it — while a healthy worker is still reading a ten-kilobyte brief and has not written its ack yet. Every one of those resends is `herdr agent prompt` typing the pointer into an agent that IS working, where it queues as another user message and makes the worker re-read the brief. The bound is also the whole delivery budget: ten attempts is roughly 52 seconds, after which a perfectly healthy but slow first turn is failed as `NeverAcked`. Fix the CADENCE, not the decisions — D1, D3 and D4 all stay exactly as they are. New shape: after a send herdr reports successful, POLL for the ack instead of resending. In that poll, the round's ack file or result file appearing is delivery (`Ok`); a `blocked` status ends it at once (`DeliveryError::Blocked`, D3); a `working` status is the HEALTHY path and must NOT trigger a resend — keep polling; and only when the agent has gone back to a ready state (`idle` or `done`, per D2's vocabulary) with still no ack does the pointer get resent, because that is the actual signature of a submission the TUI dropped. Bound the whole thing two ways: keep a resend attempt bound in the house style, and add a named wall-clock ack-wait budget generous enough for a slow first turn — well under the idle timeout, and stated in its doc comment as being about how long a first agent turn takes, not about how fast a poll ticks. Exhausting either bound is still `DeliveryError::NeverAcked`, and its message should name which bound ran out. Use the same injected `sleep`/`now` seams the other loops use so the tests need no real clock. Tests: a working agent polled to an ack with EXACTLY ONE send; an agent that returns to idle without acking getting a resend; a blocked status mid-poll ending at once; `agent_prompt_stalled` still failing fast; the ack-wait budget expiring as NeverAcked; and the existing hps-3 cases kept green.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "A worker that is working and has not acked yet receives exactly one pointer send, never a resend",
+      "A resend happens only when the agent returned to idle or done with no ack",
+      "A blocked status and agent_prompt_stalled still end the delivery at once",
+      "The delivery budget is a named wall-clock ack window sized for a slow first agent turn, not a byproduct of the resend tick"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "ready-gated resend with a named ack-wait budget, its doc comment, and the tests above; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the resend decision reads the agent status, not a timer"
+    ],
+    "prohibitions": [
+      "No change to D1, D3 or D4 semantics — the receipt stays the ack or result file",
+      "No reintroduction of a lifecycle state as the delivery success signal",
+      "Do not drop the result_present() escape",
+      "No unbounded wait"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-6",
+    "outcome": "deliver_pointer polls a working agent with exactly one send and resends only on a ready-with-no-ack transition, bounded by a resend count and a separate 180s wall-clock ack budget",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T05:35:57.564Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T05:27:14.954Z",
+    "commit_pending": "worker committed with a bare 'hps-6' trailer instead of the required 'cell: hps-6' form - third instance this wave of the bee-ignorant-herding-worker gap",
+    "report": {
+      "outcome": "Pointer resend is gated on the agent returning to ready with no ack; a working agent is polled, never resent; ack wait bounded by ACK_WAIT_BUDGET_SECS as well as the resend count",
+      "commit": "2e29647c",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green — 236 passed 0 failed in herding::run, re-run by the orchestrator; the FAILED lines are control_loop quick_exit_helper self-exec children, an intentional fixture in a file this branch never touched",
+      "deviations": [
+        "orchestrator raised this cell after reading hps-3s landed code: the fixed-tick resend would have typed duplicate pointers into a healthy working worker every ~5s"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

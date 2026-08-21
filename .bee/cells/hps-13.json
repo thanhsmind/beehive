@@ -1,0 +1,76 @@
+{
+  "id": "hps-13",
+  "feature": "herding-prompt-stall",
+  "title": "When the tab has no room left, the worker gets a new tab instead of an unusable sliver",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D5"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "hps-12 put the width guard on the PARENT pane (refuse under 60 columns). The live acceptance probe shows that is the wrong side of the split, and that a refusal alone kills fan-out anyway. Measured, tab root 120x43, three concurrent runs: the first split produced a 60-column child and that run completed end to end with its ack and result files; the other two got 30-column children and BOTH died with herdr's `agent_prompt_stalled` — `agent prompt produced no observed state change within 5000 ms; status is idle`. agy renders its banner fine at 30 columns but never takes the submitted pointer there, so the symptom is a stalled submission, not a visibly broken TUI. Three changes. (1) MOVE THE GUARD TO THE CHILD. What must be usable is the pane the agent gets, so the rule is that a parent may only be split when the RESULTING child would still be at least the minimum wide — with `--ratio 0.5` that means the parent needs twice the minimum. Set the minimum from measurement, not taste, and state the evidence in the doc comment: 60 columns carried a full agy round to a written result; 30 columns stalled every submission; the boundary between them is unmeasured, so the minimum takes the last known-good value rather than a guess in the gap. (2) NEW TAB INSTEAD OF A SLIVER. When no pane in the caller's tab can yield a usable child, do NOT refuse — ask herdr for a fresh tab and give the worker its root pane directly, with no split at all, so it starts at full width. A live capture of `herdr tab create --workspace w4 --cwd <path> --label bee-probe`, trimmed: `{\"id\":\"cli:tab:create\",\"result\":{\"root_pane\":{\"pane_id\":\"w4:p31\",\"cwd\":\"<path>\",\"tab_id\":\"w4:tE\",\"workspace_id\":\"w4\"},\"tab\":{...}}}` — the pane id is at `result.root_pane.pane_id`. Add it to the `Herdr` trait beside `pane_split`, with `RealHerdr`, `FakeHerdr` and `PanicHerdr` impls, pass the workspace the caller's own pane reports, the run's `--cwd`, and a label naming the job, and do NOT pass `--focus`: a worker must never steal the human's focus, exactly as `pane_split` already passes `--no-focus`. Pin the parse with a test over the captured body above, no process. (3) REFUSE ONLY AS THE LAST RESORT. If the tab cannot be created either, keep hps-12's typed refusal — naming the widths, the minimum and the remedy — but add that a new tab was attempted and why it failed. An unreadable layout still falls open to the caller's own pane and never refuses, unchanged. Tests: a roomy tab still splitting in place; a tab with no usable candidate creating a tab and using its root pane with no split call; the pane id parsed from the captured create body; a failed create producing the refusal that mentions both attempts; and an unreadable layout still falling back to the caller's own pane.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "The width guard is on the resulting child pane, not the parent",
+      "A tab with no room left yields a fresh tab's root pane, unsplit and unfocused, instead of a sliver or a refusal",
+      "The minimum's doc comment cites the measured 60-works / 30-stalls evidence and says the boundary between them is unmeasured",
+      "A refusal happens only when the new tab could not be created, and says both attempts failed"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "child-side width guard, a tab-create seam with all three impls and a parse test over the captured body, new-tab fallback before any refusal; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the new tab's root pane is used directly, with no split, so the worker starts at full width"
+    ],
+    "prohibitions": [
+      "Never focus the new tab or pane — a worker must not steal the human's focus",
+      "No refusal while a fresh tab is still an option",
+      "No change to delivery, the ready gate, the ack receipt or the poll loop",
+      "No process spawned in any test"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-13",
+    "outcome": "The width guard moves to the child pane, and a tab with no room left yields a fresh tab's root pane instead of a sliver or a refusal",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "The worker again returned no commit; the orchestrator made the path-scoped commit a365300 with the required trailer."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T07:05:48.337Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T06:49:53.265Z",
+    "report": {
+      "outcome": "Child-side width guard, a herdr tab-create seam whose root pane is used unsplit and unfocused when no pane clears the guard, and refusal only when both attempts fail",
+      "commit": "a365300",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — full suite 2285 passed 0 failed 11 ignored, re-run by the orchestrator",
+      "deviations": [
+        "worker returned no commit; orchestrator committed path-scoped as a365300"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 255 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

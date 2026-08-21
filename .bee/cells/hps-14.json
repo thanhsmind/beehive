@@ -1,0 +1,75 @@
+{
+  "id": "hps-14",
+  "feature": "herding-prompt-stall",
+  "title": "A stalled submission is retried, not fatal — herdr calls an agent ready before its TUI takes input",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4",
+    "D6"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "The last failure standing, and the plainest. D1 made herdr's `agent_prompt_stalled` a hard `DeliveryError::Stalled` that kills the run on the first occurrence. D6 narrows that: a stall proves the submission had not landed AT THAT INSTANT, not that it never will. Measured live 2026-08-21 — a worker got a fresh 173x50 tab pane, agy booted and fully drawn, bee's submission came back `agent_prompt_stalled` (`agent prompt produced no observed state change within 5000 ms; status is idle`) and the run died as `spawn_failed`; the IDENTICAL `herdr agent prompt <job> <pointer> --wait --until working --timeout 20000` typed by hand seconds afterwards on that same pane returned `agent_status: working` immediately and the worker ran to a written result. Width was not the cause — this pane was the widest in the session. The cause is the window the pre-existing code comment already named: herdr's ready flags fire before some agents accept input. Change: in `deliver_pointer`, a stalled reply joins the SAME bounded retry the ready-with-no-ack path already uses instead of returning early. Sleep the existing backoff, resend the idempotent pointer, and keep going under the two bounds already there — `DELIVERY_RESEND_ATTEMPTS` and `ACK_WAIT_BUDGET_SECS`. Only when a bound is exhausted is it terminal, and then the error must say that EVERY submission stalled, distinct from the existing never-acked wording, so the reader can tell 'the agent never took the text' from 'the agent took it and never acked'. `DeliveryError::Blocked` and `DeliveryError::Transport` stay immediate, unchanged. Keep the ack-or-result receipt exactly as D4 left it — a retry is never evidence of delivery, the ack still decides. Check the ack and result files between attempts as the loop already does, so a worker that accepted an earlier submission and is writing its ack is never resent into needlessly. Update the doc comment that currently states the stall is a hard failure, citing D6, and update the tests that pin that behaviour: a stall followed by a successful send must deliver; a stall every time must exhaust a bound and produce the every-submission-stalled message; blocked and transport must still be immediate.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "A stalled submission is retried under the existing bounds instead of ending the run",
+      "A stall on every attempt ends as a terminal error whose wording is distinct from the never-acked one",
+      "blocked and transport errors are still immediate",
+      "The ack or result file is still the only evidence of delivery"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "stall folded into the bounded retry, distinct terminal wording, doc comment citing D6, and the rewritten and new tests; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "a retried stall still proves nothing — only the ack or result file confirms delivery"
+    ],
+    "prohibitions": [
+      "No new bound — reuse DELIVERY_RESEND_ATTEMPTS and ACK_WAIT_BUDGET_SECS",
+      "No change to the ack receipt, the ready gate, the width guard or the tab fallback",
+      "blocked and transport must not become retryable",
+      "No process spawned in any test"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-14",
+    "outcome": "A stalled submission is retried under the existing bounds instead of ending the run, with a distinct terminal error when every send stalls",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T07:17:18.623Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T07:07:19.440Z",
+    "commit_pending": "worker committed with a bare trailer instead of the required 'cell: hps-14' form",
+    "report": {
+      "outcome": "deliver_pointer folds agent_prompt_stalled into the bounded retry and returns a distinct NeverDelivered error only when a bound is exhausted with every send stalled",
+      "commit": "d51ae3e8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — full suite 2286 passed 0 failed 11 ignored, re-run by the orchestrator",
+      "deviations": [
+        "found by the live acceptance probe on the widest pane of the session, which ruled width out and left timing as the only explanation"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

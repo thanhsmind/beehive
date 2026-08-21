@@ -3,7 +3,7 @@
   "feature": "herding-prompt-stall",
   "title": "The worker writes an ack file and that ack is the delivery receipt",
   "lane": "standard",
-  "status": "claimed",
+  "status": "capped",
   "deps": [
     "hps-1"
   ],
@@ -52,16 +52,37 @@
   },
   "trace": {
     "worker": "w-hps-3",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "The worker-written ack file is the delivery receipt; deliver_pointer confirms on ack or result, never on a herdr lifecycle state, and the ack counts as a heartbeat",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [
+      "The worker never committed - it returned a result with no commit field at all. The orchestrator made the path-scoped commit 0418c68 with the required 'cell: hps-3' trailer. Second instance this wave of a herding worker not carrying bee's commit bookkeeping."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-21T05:26:04.099Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
-    "claimed_at": "2026-08-21T05:02:17.188Z"
+    "claimed_at": "2026-08-21T05:02:17.188Z",
+    "report": {
+      "outcome": "Worker-written ack-N.json is the delivery receipt; deliver_pointer confirms via ack or result file, never herdr lifecycle state, and the ack counts as a wait_for_round heartbeat",
+      "commit": "0418c68",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green — 233 passed 0 failed in herding::run, re-run by the orchestrator; the FAILED lines are control_loop quick_exit_helper self-exec children, an intentional fixture in a file this branch never touched",
+      "deviations": [
+        "worker returned no commit; orchestrator committed path-scoped as 0418c68"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 479 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   }
 }

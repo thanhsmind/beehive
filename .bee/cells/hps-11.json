@@ -1,0 +1,73 @@
+{
+  "id": "hps-11",
+  "feature": "herding-prompt-stall",
+  "title": "The prompt wait outlives herdr's stall window, and a timeout reply is not a delivery failure",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D4"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "SHIP-BLOCKING, found by the live acceptance probe with every unit test green. `AGENT_PROMPT_TIMEOUT_MS` is 5000, and herdr's own contract says a `--wait` submission from a non-working state must produce an observed state change within 5000ms or it returns `agent_prompt_stalled`, while 'a shorter --timeout returns timeout instead'. Setting bee's timeout to exactly herdr's own window means `--until working` gets no room at all: herdr returns `{\"error\":{\"code\":\"timeout\",\"message\":\"timed out waiting for agent status\"}}` before the agent can flip. bee then classifies that as a delivery failure and the whole run dies as `spawn_failed`. Captured live, all three concurrent runs and a solo run, against healthy agy panes sitting at their prompt. TWO fixes. (1) Raise the window so herdr's stall detector is the one that fires, not the timeout. Proven live on a healthy 60-column pane: `--timeout 5000` returned `timeout`; `--timeout 20000` on the SAME pane returned `{\"result\":{\"agent\":{\"agent_status\":\"working\",...}}}` and the brief landed. Pick a value comfortably above herdr's 5s window, and say in the doc comment WHY it must be — the current comment claims 5000 is 'long enough to cross herdr's own five-second stall detector without padding it further', which is exactly the off-by-a-boundary that broke it. (2) Classify herdr's replies into THREE outcomes, not two. `agent_prompt_stalled` means herdr observed no state change at all — the submission did not land — and stays a hard `DeliveryError::Stalled`. A `timeout` code means the submission WAS made and only the state did not settle inside the window; under D4 the receipt is the worker's ack file, not a lifecycle state, so a `timeout` must NOT abort delivery — fall straight through into the ack poll exactly as a successful send does. Anything else stays `DeliveryError::Transport`. Mirror `is_agent_prompt_stalled`'s house style for the new predicate, and pin BOTH predicates with parse-level tests over the captured error bodies: the timeout body above, and the stalled body `{\"error\":{\"code\":\"agent_prompt_stalled\",\"message\":\"agent prompt produced no observed state change within 5000 ms; status is idle and state_change_seq remained 771\"},\"id\":\"cli:agent:prompt\"}`. Tests must drive the predicates and the delivery branch with those strings, never a process. Change nothing about the ack receipt, the ready gate, the blocked fast paths, or the resend gating.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "The prompt wait window is comfortably longer than herdr's own five-second stall window, and the doc comment says why",
+      "A herdr timeout reply falls through into the ack poll instead of failing the run",
+      "agent_prompt_stalled still fails fast as a hard delivery error",
+      "Both predicates are pinned by tests over the captured live error bodies, with no process spawned"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "substantive": "raised prompt window with corrected rationale, three-way reply classification, parse-level tests over both captured error bodies; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "the timeout branch continues into the same ack poll a successful send enters"
+    ],
+    "prohibitions": [
+      "No change to the ack receipt, the ready gate, the blocked fast paths, or the resend gating",
+      "Do not treat a timeout reply as evidence the pointer was delivered — it only stops being a failure; the ack still decides",
+      "No process spawned in any test"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-11",
+    "outcome": "The herdr prompt wait outlives herdr's own five-second stall window, and a herdr timeout reply falls through to the ack poll instead of failing the run",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-21T06:36:16.446Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T06:31:17.943Z",
+    "commit_pending": "worker committed with a bare trailer instead of the required 'cell: hps-11' form",
+    "report": {
+      "outcome": "AGENT_PROMPT_TIMEOUT_MS raised to 20000 with corrected rationale, and herdr prompt replies classified three ways so a timeout continues into the ack poll while agent_prompt_stalled still fails fast",
+      "commit": "04bf0f34",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green — 272 passed 0 failed in herding::run, with both predicates pinned to captured live error bodies",
+      "deviations": [
+        "found by the live acceptance probe with the whole unit suite green, same as hps-10"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

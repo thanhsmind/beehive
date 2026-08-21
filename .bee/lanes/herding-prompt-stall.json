@@ -14,7 +14,12 @@
   "next_action": "Invoke bee-swarming.",
   "created_at": "2026-08-21T04:33:45.519Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Đã dọn, không còn pane agy nào. ▸ Chạy lại lần cuối từ trạng thái sạch.",
+    "asked_at": "2026-08-21T07:21:47.016Z",
+    "session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3"
+  },
   "route": {
     "class": "bugfix",
     "lane": "standard",

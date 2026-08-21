@@ -7,7 +7,6 @@
     "session-close": true,
     "write-guard": true
   },
- 
   "commands": {
     "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"
   },
@@ -18,7 +17,7 @@
   "uat_stop": "close",
   "uat_before_merge": false,
   "staging_before_merge": false,
-    "advisor": {
+  "advisor": {
     "enabled": false,
     "at": [
       "shape",
@@ -73,10 +72,16 @@
         "--permission-mode",
         "bypassPermissions"
       ],
-      "agy-flash": [
-        "agy",
-        "--dangerously-skip-permissions"
-      ]
+      "agy-flash": {
+        "argv": [
+          "agy",
+          "--dangerously-skip-permissions"
+        ],
+        "workspace_trust": {
+          "file": "~/.gemini/antigravity-cli/settings.json",
+          "key": "trustedWorkspaces"
+        }
+      }
     }
   }
 }

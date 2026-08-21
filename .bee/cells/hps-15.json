@@ -1,0 +1,99 @@
+{
+  "id": "hps-15",
+  "feature": "herding-prompt-stall",
+  "title": "Flush the herding capture queue into the area specs and promote the faked-seam pattern",
+  "lane": "standard",
+  "status": "capped",
+  "deps": [],
+  "decisions": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "files": [
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+    "docs/knowledge/patterns/20260821-a-faked-seam-hides-the-parse.md"
+  ],
+  "read_first": [
+    "docs/history/herding-prompt-stall/CONTEXT.md",
+    "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+    "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+    "docs/knowledge/patterns/20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "action": "Close the knowledge loop for herding-prompt-stall. Run `.bee/bin/bee capture list` for the exact stub ids and text; four stubs are in scope, all area `herding`, and each gets a real merge into a spec — never a summary, never a drop. Specs describe BEHAVIOR in business vocabulary; technology names live only in a Pointers section. Read each target spec first and update in place; a contradicted line is replaced, not kept alongside. (1) Stub cbf95dbe (a herd agent's per-workspace trust prompt stalls the run) and its correction, stub 7e9bf7a3 — merge as ONE settled account into `agent-resolution-and-spawn-commands.md` for the declaration and into `handing-a-foreign-agent-its-brief.md` for the stall. The settled facts: a herd agent may gate on a per-workspace trust question that its auto-approve flag does not reach; bee mints a fresh worktree directory for every feature, so a first run into one meets that question every time; a herd entry may therefore declare the foreign tool's own trust store and bee seeds it before the pane is created, failing open and loud on every error; and separately, an approval-or-question UI is NOT reliably classified by the host as blocked, so every wait that gives up also reads the pane and names the question when the text shows a confirmation cue. State plainly that the original diagnosis in cbf95dbe was wrong — the parallel stall was not the trust prompt — and what it actually was, so a later reader does not re-derive the retired theory. (2) Stub 7b0e7eec (a bee-ignorant worker does not carry bee's commit conventions) — merge into `the-run-verb-and-worker-outcomes.md`. It now has far more evidence than when it was queued: across this feature's fourteen dispatches the worker committed with the required trailer ONCE; it used a bare trailer five times and did not commit at all three times, and the orchestrator made the commit each time. Record the settled division as observed, not as aspiration: the pane worker owns the edit and the result file, the orchestrator owns the cell commit and the cap. Leave the open question — whether the brief should drop the commit step entirely or restate the trailer rule verbatim for an agent that has never heard of bee — as an Open Gap, with the counts as its evidence. (3) Stub 756e9cba — this one is a PATTERN, not an area fact. Write `docs/knowledge/patterns/20260821-a-faked-seam-hides-the-parse.md`, matching the frontmatter and shape of the existing `20260805-source-that-ships-without-reinstalling-the-binary-the-hooks-call-is-inert.md` exactly. Its claim: a trait seam that every test fakes hides the one thing only production runs, the parse of the real reply. Its evidence: two new host calls went in behind an existing trait whose fake returns whatever a test configured; 2261 unit tests were green while the real extraction read the wrong JSON path and returned nothing for every live reply, so every dispatch died at the readiness gate. Its remedy, stated as a check a reader can apply: when a change adds a call to an external tool, capture one real reply and pin the extraction to that captured text, with the extraction written as a pure function over a string so the test needs no process. Cross-reference the 20260805 pattern as the same family — in both, the thing under test and the thing that runs are not the same thing. Keep it short; this pattern earns its place by being repeatable, not by being long. (4) After each merge, retire its stub with `.bee/bin/bee capture flush --id <id> --into <spec path>`. Do not touch the two promote-proposal stubs for other features (b819d680, 7b0e7eec is NOT one of those — flush it; the ones to leave are the rows whose text begins 'Promote proposal for') or the worker-brief-expertise pattern stub 446c0c54.",
+  "verify": "rg -n 'trust|blocked|confirmation cue' docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md; rg -n 'commit' docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md; ls docs/knowledge/patterns/20260821-a-faked-seam-hides-the-parse.md; .bee/bin/bee capture list",
+  "must_haves": {
+    "truths": [
+      "The trust-store declaration and the give-up pane diagnosis are recorded as settled behaviour, with the retired trust-prompt diagnosis named as retired",
+      "The observed worker/orchestrator commit division is recorded with its counts, and the open question survives as an Open Gap",
+      "The faked-seam pattern file exists, matches the house pattern shape, and cross-references the 20260805 pattern",
+      "Every flushed stub is retired through bee capture flush, none summarized away"
+    ],
+    "artifacts": [
+      {
+        "path": "docs/knowledge/patterns/20260821-a-faked-seam-hides-the-parse.md",
+        "substantive": "the claim, the live evidence, and the applicable check, in the house pattern shape"
+      },
+      {
+        "path": "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+        "substantive": "the trust-question stall and the give-up diagnosis recorded, the retired diagnosis named"
+      },
+      {
+        "path": "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "substantive": "the observed commit division with counts, plus the Open Gap"
+      }
+    ],
+    "key_links": [
+      "the pattern file names the 20260805 pattern as the same family"
+    ],
+    "prohibitions": [
+      "No technology names outside a Pointers section",
+      "No stub dropped or summarized instead of merged",
+      "Do not touch the promote-proposal stubs for other features",
+      "No code changes in this cell"
+    ]
+  },
+  "trace": {
+    "worker": "w-hps-15",
+    "outcome": "The four herding capture stubs are merged into their area specs and the faked-seam pattern is promoted with its live evidence and an applicable check",
+    "files_changed": [
+      "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+      "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/knowledge/patterns/20260821-a-faked-seam-hides-the-parse.md"
+    ],
+    "deviations": [
+      "The worker merged all four stubs but did not run bee capture flush, reporting that its standalone-executor brief forbids running any bee command; it read .bee/capture-queue.jsonl directly instead. The orchestrator ran the four flushes. Worth noting: the brief tells a herding worker to run bee cells finish while also forbidding bee commands."
+    ],
+    "friction": null,
+    "capped_at": "2026-08-21T07:28:59.653Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "5f23b539-acc7-4d8b-b50d-a05d7fb40ac3",
+    "claimed_at": "2026-08-21T07:21:29.706Z",
+    "report": {
+      "outcome": "Four herding capture stubs merged into their area specs, the retired trust-prompt diagnosis named as retired, the observed commit division recorded with counts and an Open Gap, and the faked-seam pattern promoted",
+      "commit": "61e369b",
+      "files": [
+        "docs/knowledge/areas/bee-herding/agent-resolution-and-spawn-commands.md",
+        "docs/knowledge/areas/bee-herding/handing-a-foreign-agent-its-brief.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/knowledge/patterns/20260821-a-faked-seam-hides-the-parse.md"
+      ],
+      "tests": "rg over the four targets for the merged content plus the four bee capture flush calls — green — docs cell: pointer/parity check is the proof its change type needs",
+      "deviations": [
+        "worker did not run bee capture flush, citing a no-bee-commands clause in its own brief; orchestrator ran all four"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}
