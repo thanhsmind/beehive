@@ -595,7 +595,13 @@ so the next session can resume cleanly, or record a capture stub for what settle
         unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
 
         let fx = fixture();
-        let root = fx.path();
+        // resolve_roots realpaths the root (dunce::canonicalize). A Windows
+        // runner's temp path carries 8.3 short components (RUNNER~1) that
+        // canonicalize to a different STRING, and the transcript's
+        // projects-dir name is built from that string — so the fixture has to
+        // use the canonical spelling the hook itself resolves.
+        let root_canon = dunce::canonicalize(fx.path()).unwrap();
+        let root = root_canon.as_path();
         write_json_file(&root.join(".bee").join("config.json"), &json!({}));
         write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
         // The turn's FINAL assistant entry is a bare tool_use (no text) —
@@ -651,7 +657,13 @@ so the next session can resume cleanly, or record a capture stub for what settle
         unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
 
         let fx = fixture();
-        let root = fx.path();
+        // resolve_roots realpaths the root (dunce::canonicalize). A Windows
+        // runner's temp path carries 8.3 short components (RUNNER~1) that
+        // canonicalize to a different STRING, and the transcript's
+        // projects-dir name is built from that string — so the fixture has to
+        // use the canonical spelling the hook itself resolves.
+        let root_canon = dunce::canonicalize(fx.path()).unwrap();
+        let root = root_canon.as_path();
         write_json_file(&root.join(".bee").join("config.json"), &json!({}));
         write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
         write_transcript(
@@ -718,7 +730,13 @@ so the next session can resume cleanly, or record a capture stub for what settle
         unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
 
         let fx = fixture();
-        let root = fx.path();
+        // resolve_roots realpaths the root (dunce::canonicalize). A Windows
+        // runner's temp path carries 8.3 short components (RUNNER~1) that
+        // canonicalize to a different STRING, and the transcript's
+        // projects-dir name is built from that string — so the fixture has to
+        // use the canonical spelling the hook itself resolves.
+        let root_canon = dunce::canonicalize(fx.path()).unwrap();
+        let root = root_canon.as_path();
         write_json_file(&root.join(".bee").join("config.json"), &json!({}));
         write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
         write_transcript(
@@ -780,7 +798,13 @@ so the next session can resume cleanly, or record a capture stub for what settle
         unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
 
         let fx = fixture();
-        let root = fx.path();
+        // resolve_roots realpaths the root (dunce::canonicalize). A Windows
+        // runner's temp path carries 8.3 short components (RUNNER~1) that
+        // canonicalize to a different STRING, and the transcript's
+        // projects-dir name is built from that string — so the fixture has to
+        // use the canonical spelling the hook itself resolves.
+        let root_canon = dunce::canonicalize(fx.path()).unwrap();
+        let root = root_canon.as_path();
         write_json_file(&root.join(".bee").join("config.json"), &json!({}));
         write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
         // A transcript that resolves and parses fine, but the only text
@@ -839,7 +863,12 @@ so the next session can resume cleanly, or record a capture stub for what settle
         // Case two: a transcript file exists but carries zero parseable
         // JSONL lines.
         let fx2 = fixture();
-        let root2 = fx2.path();
+        // Same canonical-spelling requirement as the tests above: on a raw
+        // tempdir path this case never reaches the malformed-transcript
+        // branch — the hook simply finds no file and the assertion passes
+        // for the wrong reason.
+        let root2_canon = dunce::canonicalize(fx2.path()).unwrap();
+        let root2 = root2_canon.as_path();
         write_json_file(&root2.join(".bee").join("config.json"), &json!({}));
         write_json_file(&root2.join(".bee").join("state.json"), &json!({"phase": "idle"}));
         write_transcript(config.path(), root2, "s-2", &["not json at all"]);
@@ -898,7 +927,13 @@ so the next session can resume cleanly, or record a capture stub for what settle
         unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
 
         let fx = fixture();
-        let root = fx.path();
+        // resolve_roots realpaths the root (dunce::canonicalize). A Windows
+        // runner's temp path carries 8.3 short components (RUNNER~1) that
+        // canonicalize to a different STRING, and the transcript's
+        // projects-dir name is built from that string — so the fixture has to
+        // use the canonical spelling the hook itself resolves.
+        let root_canon = dunce::canonicalize(fx.path()).unwrap();
+        let root = root_canon.as_path();
         write_json_file(&root.join(".bee").join("config.json"), &json!({}));
         write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
         write_transcript(
@@ -954,7 +989,13 @@ so the next session can resume cleanly, or record a capture stub for what settle
         unsafe { std::env::set_var("CLAUDE_CONFIG_DIR", config.path()) };
 
         let fx = fixture();
-        let root = fx.path();
+        // resolve_roots realpaths the root (dunce::canonicalize). A Windows
+        // runner's temp path carries 8.3 short components (RUNNER~1) that
+        // canonicalize to a different STRING, and the transcript's
+        // projects-dir name is built from that string — so the fixture has to
+        // use the canonical spelling the hook itself resolves.
+        let root_canon = dunce::canonicalize(fx.path()).unwrap();
+        let root = root_canon.as_path();
         write_json_file(&root.join(".bee").join("config.json"), &json!({}));
         write_json_file(&root.join(".bee").join("state.json"), &json!({"phase": "idle"}));
         write_transcript(

@@ -826,7 +826,16 @@ mod tests {
         fn spawn(&self, argv: &Argv) -> std::io::Result<Child> {
             self.received.lock().unwrap().push(argv.clone());
             let exe = std::env::current_exe().expect("test binary path");
-            Command::new(exe).args([self.test_name, "--exact"]).env(self.env_var, self.env_value).spawn()
+            // Null the child's stdio: the child is a full libtest harness, and a
+            // deliberately FAILING child would otherwise print its own
+            // "test ... FAILED" report into THIS suite's inherited output stream,
+            // where it reads as a failure of the parent suite.
+            Command::new(exe)
+                .args([self.test_name, "--exact"])
+                .env(self.env_var, self.env_value)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
         }
     }
 
