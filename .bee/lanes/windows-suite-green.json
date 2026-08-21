@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "windows-suite-green",
   "mode": "feature",
-  "phase": "planning",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,8 +11,8 @@
     "uat": true
   },
   "summary": "Feature \"windows-suite-green\" started at phase \"planning\" (lane).",
-  "next_action": "Continue bee-planning for \"windows-suite-green\" (lane).",
+  "next_action": "bee close finished \"windows-suite-green\" — feature is closed.",
   "created_at": "2026-08-21T10:20:53.152Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null
 }

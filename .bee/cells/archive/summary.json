@@ -738,5 +738,10 @@
     "capped": 2,
     "dropped": 0,
     "archived_at": "2026-08-21T10:46:47.794Z"
+  },
+  "windows-build-red": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-21T10:46:52.382Z"
   }
 }
