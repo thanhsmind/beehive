@@ -284,8 +284,12 @@ use std::process::ExitCode;
         let fx = build_fixture("swarming", true);
         let a = expect_done(bash("node .bee/bin/bee_state.mjs set --phase swarming"), &fx.root);
         assert_eq!(a.code, 0, "stderr={}", a.stderr);
+        // bah-2: `--layer` joined the declared required set when
+        // `backlog.add`'s registry entry was corrected to match its handler,
+        // so this call needs it to stay a well-shaped one. The paired
+        // malformed case is rows5c_5d below.
         let b = expect_done(
-            bash("node .bee/bin/bee_backlog.mjs add --type bug --title \"x\" --severity P2"),
+            bash("node .bee/bin/bee_backlog.mjs add --type bug --title \"x\" --severity P2 --layer cli"),
             &fx.root,
         );
         assert_eq!(b.code, 0, "stderr={}", b.stderr);

@@ -685,7 +685,11 @@ mod tests {
     #[test]
     fn row5_plain_legacy_helper_invocations_fail_open() {
         allow("node .bee/bin/bee_state.mjs set --phase swarming");
-        allow("node .bee/bin/bee_backlog.mjs add --type bug --title \"x\" --severity P2");
+        // bah-2: `--layer` joined the declared required set when
+        // `backlog.add`'s registry entry was corrected to match its handler.
+        // A well-shaped legacy call still fails open; row5c below is the
+        // paired case proving a legacy call MISSING a required flag denies.
+        allow("node .bee/bin/bee_backlog.mjs add --type bug --title \"x\" --severity P2 --layer cli");
     }
 
     #[test]
@@ -1129,12 +1133,19 @@ mod documented_invocations {
     /// addition naturally leaves an old real invocation behind. Each entry
     /// says which cell dated it obsolete, so a fixed extractor or a rewritten
     /// history file makes this row go red and the exception comes out.
-    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 1] = [
+    const KNOWN_HISTORICAL_EXCEPTIONS: [&str; 2] = [
         // kdt-3 (knowledge-distill-trigger): `decisions log` gained a
         // required `--relation` after this codex-native-runtime-v2 advisor
         // session ran; the report is a raw shell-transcript line, not a
         // spelling to keep current.
         r#"node .bee/bin/bee.mjs decisions log --decision "auto-approved Gate 3 (bypass): proceed with required validation repairs" --rationale "Advisor verdict was PROCEED-WITH-CHANGES; repairs are bounded and required before implementation."' in /home/thanhsmind/projects/goglbe/beegog"#,
+        // bah-2 (backlog-add-honest-refusal): `backlog add` declared
+        // `required: []` while its handler always demanded four flags; the
+        // declaration was corrected, which makes this walkthrough line
+        // refusable. The line is a transcript of a call the walkthrough
+        // shows BEING REJECTED ("# rejected, exit 1") — refusing it is the
+        // documented behavior, not a stale spelling to repair.
+        r#"node .bee/bin/bee_backlog.mjs add --type kind --title x   # rejected, exit 1"#,
     ];
 
     #[test]
