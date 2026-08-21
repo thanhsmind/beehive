@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/bee-herding/overview.md]
-  decisions: ["herding-tier D1-D6 (the config tier route)", "herding-review-slots D1 (every purpose on a herding slot)", "herding-review-slots D3 (optional per-slot fallback to default)", "herd-registry D1-D2 (the named-agent registry)", "herding-bare-agent D1-D5 (four-step bare-run agent resolution order: --agent > tier slot > string agent_command > array fallback)", "defaults-and-agent-env D3 (built-in claude-sonnet and agy-flash registry entries)", "defaults-and-agent-env D4 (registry entry carries validated pane env)", "herding-orchestration D12 (starting a worker is two acts)", "herding-orchestration D14 (command tokens are never re-joined into a shell string)", i54-closeout D4]
-  sources: [docs/history/herding-bare-agent/CONTEXT.md, docs/history/herd-registry/CONTEXT.md, docs/history/defaults-and-agent-env/CONTEXT.md, docs/history/herding-tier/CONTEXT.md, "herding-review-slots, herd-registry, herding-tier and defaults-and-agent-env promote proposals (reviewed 2026-08-20)"]
+  decisions: ["herding-tier D1-D6 (the config tier route)", "herding-review-slots D1 (every purpose on a herding slot)", "herding-review-slots D3 (optional per-slot fallback to default)", "herd-registry D1-D2 (the named-agent registry)", "herding-bare-agent D1-D5 (four-step bare-run agent resolution order: --agent > tier slot > string agent_command > array fallback)", "defaults-and-agent-env D3 (built-in claude-sonnet and agy-flash registry entries)", "defaults-and-agent-env D4 (registry entry carries validated pane env)", "herding-orchestration D12 (starting a worker is two acts)", "herding-orchestration D14 (command tokens are never re-joined into a shell string)", i54-closeout D4, "herding-prompt-stall D1 (retires herding-pointer-delivery D1's hand-rolled receipt)", "herding-prompt-stall D2 (narrows herding-run-ready-wait D1 — done counts as ready)", "herding-prompt-stall D3 (blocked is a fast, loud failure at every wait point)"]
+  sources: [docs/history/herding-bare-agent/CONTEXT.md, docs/history/herd-registry/CONTEXT.md, docs/history/defaults-and-agent-env/CONTEXT.md, docs/history/herding-tier/CONTEXT.md, docs/history/herding-prompt-stall/CONTEXT.md, "herding-review-slots, herd-registry, herding-tier and defaults-and-agent-env promote proposals (reviewed 2026-08-20)"]
   authoritative_for: "bee-herding: agent resolution, the named-agent registry, and spawn-command construction"
 ---
 
@@ -127,6 +127,53 @@ resolves it but cannot apply it (its `agent start` lives in
   such pair exists. This was found by the first live run, not by any test: before
   the repair, every pane with an uppercase letter was refused and the whole wave
   aborted before sending anything.
+
+## After spawn: herdr's agent lifecycle contract
+
+Resolving and spawning the right agent is only half the seam; bee also has
+to read that agent back honestly once it is running. From `herdr --skill`,
+verbatim (quoted, not paraphrased — herding-prompt-stall D1-D3):
+
+> `idle` means the agent is ready for input and its tab has been seen in the
+> focused Herdr UI. `done` is the same underlying idle state after unseen
+> background work finishes. Focusing the tab or targeting the pane or agent
+> with a focus command marks it seen. CLI reads do not mark it seen.
+> `blocked` means Herdr recognized an approval or question UI. `unknown`
+> means an agent is present but Herdr cannot classify it confidently.
+
+Five states, and what each means to bee:
+
+- **`idle`** — ready for input AND the tab has been seen in the focused
+  Herdr UI.
+- **`done`** — the SAME underlying ready state, for a tab nobody has looked
+  at. bee splits every worker pane with `--no-focus` and only ever reads
+  over the CLI, which never marks a tab seen — so `done`, not `idle`, is the
+  NORMAL resting state of a bee worker pane (herding-prompt-stall D2 narrows
+  herding-run-ready-wait D1: the ready gate accepts `idle` OR `done`, not
+  `idle` alone).
+- **`blocked`** — Herdr recognized an approval or question UI. This is
+  bee's fast, loud failure at every wait point — the ready gate, pointer
+  delivery, and the round poll (herding-prompt-stall D3). A blocked pane
+  ends the wait immediately with a typed error naming the pane id, the tail
+  of its text, and the remedy, which is how a per-workspace trust or
+  approval prompt is covered without bee carrying an agent-specific pattern
+  table.
+- **`unknown`** — an agent is present but Herdr cannot classify it
+  confidently. `unknown` does not prove completion.
+- **`working`** — the agent is actively processing.
+
+**A sample taken inside the agent's boot window is not trustworthy.** An
+agy pane flaps through several of these states — unknown, working, idle,
+done — while its TUI initializes. bee's earlier hand-rolled poll sampled
+right after `agent start`, in that window, so a boot flap could satisfy its
+old transition test and receipt a pointer the booting TUI had actually
+discarded (herding-prompt-stall D1, supersedes herding-pointer-delivery
+D1). bee now defers to herdr's own settle-aware verbs instead of polling
+raw samples: `herdr agent prompt <job> <text> --wait --until working
+--timeout <ms>` for delivery, and `herdr agent wait <job> --until idle
+--until done --timeout <ms>` for the ready gate. herdr's own
+`agent_prompt_stalled` IS the delivery failure, surfaced at once instead of
+inferred from a sampled state.
 
 ## Open Gaps
 
