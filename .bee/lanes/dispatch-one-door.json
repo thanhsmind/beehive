@@ -11,14 +11,14 @@
     "uat": false
   },
   "summary": "Feature \"dispatch-one-door\" started at phase \"exploring\".",
-  "next_action": "Merge the worktree, then present the uat gate.",
+  "next_action": "Merged into main at b6b5259; reload the product and test \"dispatch-one-door\", then either approve uat (\"bee gate --name uat --approved true --lane dispatch-one-door\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-21T04:02:40.659Z",
   "run_state": "awaiting-approval",
   "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Nếu tôi chỉ đọc chữ `FAILED` thì đã báo sai cho bạn.",
-    "asked_at": "2026-08-21T05:13:59.772Z",
-    "session": "2775e641-e691-4b3f-bfce-9e88933651d7"
+    "kind": "gate",
+    "subject": "uat: dispatch-one-door",
+    "asked_at": "2026-08-21T05:15:10.863Z",
+    "session": "bee-worktree-merge-sessionless"
   },
   "route": {
     "class": "feature",
