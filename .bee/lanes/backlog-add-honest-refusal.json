@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"backlog-add-honest-refusal\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close finished \"backlog-add-honest-refusal\" — feature is closed.",
+  "next_action": "Merged into main at 4c7b993; capture what settled, then bee close --feature backlog-add-honest-refusal.",
   "created_at": "2026-08-21T14:47:05.113Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: backlog-add-honest-refusal",
-    "asked_at": "2026-08-21T15:12:11.559Z",
-    "session": "1083b691-2617-4369-95d8-5204003a5b9d"
-  },
+  "run_state": null,
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "small",
