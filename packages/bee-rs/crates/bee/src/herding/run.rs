@@ -72,6 +72,56 @@ fn find_limit_match(pane_text: &str) -> Option<String> {
     None
 }
 
+/// Case-insensitive substrings for `find_prompt_diagnosis` — DIAGNOSIS-ONLY
+/// (herding-prompt-stall D3/D5, cell hps-7): this table never decides
+/// whether a wait keeps going, only what a wait that has ALREADY given up
+/// says. It is checked nowhere near `decide_poll`; a false positive here
+/// costs a slightly wrong sentence and nothing else, so it stays entirely
+/// separate from `LIMIT_PATTERNS` (a genuine wait-changing signal) and from
+/// herdr's own `blocked` classification (D3, checked live against herdr,
+/// never guessed from raw pane text).
+///
+/// Tokens are kept SHORT on purpose. The live acceptance probe (D5) put
+/// three concurrent `agy` runs into a genuinely untrusted workspace; all
+/// three sat at Antigravity's "Do you trust this folder?" dialog while
+/// `herdr agent list` reported the agent as `idle`, never `blocked` — the
+/// stall bee had no name for. The SAME probe found that a worker pane split
+/// three deep off the same parent renders at roughly EIGHT COLUMNS wide, and
+/// `herdr pane read` returns that dialog CLIPPED to one short fragment per
+/// line (`Do you t`, `Yes, I`, `No, ex`). A long needle like
+/// "do you trust this folder" cannot match a capture that narrow — the tail
+/// of every long line is exactly what clipping throws away. A short
+/// confirmation cue that lives on ITS OWN line (a `(y/n)` hint, an arrow-key
+/// nav footer, a selection caret) needs no clipping margin at all, so it
+/// still lands inside a narrow capture even when the question text above it
+/// does not.
+const PROMPT_DIAGNOSIS_PATTERNS: &[&str] = &["y/n", "↑/↓", "❯"];
+
+/// Scans `pane_text` for `PROMPT_DIAGNOSIS_PATTERNS` (case-insensitive,
+/// mirroring `find_limit_match`'s own scan) or a line ending in `?` — both
+/// common shapes for an unanswered interactive prompt. Returns the first
+/// matching line, trimmed, or `None` on no match. Pure and diagnosis-only:
+/// this function decides nothing about waiting, only what a give-up message
+/// SAYS once a wait has already ended.
+fn find_prompt_diagnosis(pane_text: &str) -> Option<String> {
+    for line in pane_text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if trimmed.ends_with('?') {
+            return Some(trimmed.to_string());
+        }
+        let lower = trimmed.to_lowercase();
+        for pattern in PROMPT_DIAGNOSIS_PATTERNS {
+            if lower.contains(&pattern.to_lowercase()) {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CLI parsing
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1051,6 +1101,33 @@ stops asking\npane tail:\n{tail}"
     )
 }
 
+/// hps-7 (D3, D5): upgrades a give-up wait's GENERIC message once
+/// `find_prompt_diagnosis` names a matching line — same shape as
+/// `blocked_message`: names the job and pane, quotes the matched line
+/// verbatim, states the remedy. Diagnosis-only: called only from a path
+/// that has already decided to stop waiting, never as part of deciding
+/// whether to keep waiting.
+fn diagnosis_message(job_id: &str, pane_id: &str, matched_line: &str, generic: &str) -> String {
+    format!(
+        "{generic} — pane {pane_id} (job {job_id}) shows what looks like an unanswered prompt: \
+\"{matched_line}\" — remedy: answer the prompt in pane {pane_id}, or pre-authorize whatever it is \
+asking so the agent stops asking"
+    )
+}
+
+/// hps-7 (D5): the one call every give-up wait point makes on its way out,
+/// through the existing `pane_read` seam. A match upgrades `generic` via
+/// `diagnosis_message`; no match, or a failing `pane_read`, returns
+/// `generic` UNCHANGED, byte for byte — a `pane_read` failure must never
+/// turn a real timeout into a different error.
+fn diagnose_giveup(herdr: &dyn Herdr, job_id: &str, pane_id: &str, generic: String) -> String {
+    let Ok(text) = herdr.pane_read(pane_id) else { return generic };
+    match find_prompt_diagnosis(&text) {
+        Some(line) => diagnosis_message(job_id, pane_id, &line, &generic),
+        None => generic,
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // the run itself
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1113,7 +1190,10 @@ enum RunOutcome {
     /// A result file appeared but could not be read or did not pass the
     /// mailbox schema — never a valid result.
     Malformed(String),
-    TimedOutIdle,
+    /// hps-7 (D5): carries the give-up message — `idle_timeout_message`'s
+    /// generic text, or `diagnose_giveup`'s upgrade of it when the pane
+    /// shows a matching line.
+    TimedOutIdle(String),
     TimedOutCeiling,
     PausedLimit,
     Died { pid: Option<u32> },
@@ -1128,6 +1208,12 @@ struct ExecResult {
     outcome: RunOutcome,
     pane_id: Option<String>,
     closed_pane: bool,
+}
+
+/// The round poll's idle-timeout give-up, GENERIC (hps-7): unchanged when
+/// `diagnose_giveup` finds no match on the pane, upgraded when it does.
+fn idle_timeout_message(idle_timeout_secs: u64) -> String {
+    format!("no heartbeat for {idle_timeout_secs}s (idle timeout) — pane kept for inspection")
 }
 
 fn read_result(bee_dir: &Path, job_id: &str) -> RunOutcome {
@@ -1437,11 +1523,12 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
             };
         }
         ReadyOutcome::TimedOut => {
+            let generic = format!(
+                "agent never reported ready within {}s (ready-wait) — pane kept for inspection",
+                opts.ready_wait_secs
+            );
             return ExecResult {
-                outcome: RunOutcome::SpawnFailed(format!(
-                    "agent never reported ready within {}s (ready-wait) — pane kept for inspection",
-                    opts.ready_wait_secs
-                )),
+                outcome: RunOutcome::SpawnFailed(diagnose_giveup(herdr, &opts.job_id, &new_pane, generic)),
                 pane_id: Some(new_pane),
                 closed_pane: false,
             };
@@ -1476,6 +1563,9 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     ) {
         let msg = match &e {
             DeliveryError::Blocked => blocked_message(&opts.job_id, &new_pane, &pane_tail(herdr, &new_pane)),
+            DeliveryError::NeverAcked { .. } => {
+                diagnose_giveup(herdr, &opts.job_id, &new_pane, format!("brief prompt failed after start: {e}"))
+            }
             _ => format!("brief prompt failed after start: {e}"),
         };
         return ExecResult { outcome: RunOutcome::SpawnFailed(msg), pane_id: Some(new_pane), closed_pane: false };
@@ -1501,7 +1591,10 @@ fn execute_new(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
 
     let outcome = match decision {
         PollDecision::ResultReady => read_result(&bee_dir, &opts.job_id),
-        PollDecision::TimedOutIdle => RunOutcome::TimedOutIdle,
+        PollDecision::TimedOutIdle => {
+            let generic = idle_timeout_message(opts.idle_timeout_secs);
+            RunOutcome::TimedOutIdle(diagnose_giveup(herdr, &opts.job_id, &new_pane, generic))
+        }
         PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
         PollDecision::PausedLimit => {
             stamp_paused_limit(&bee_dir, &opts.job_id, herdr, &new_pane);
@@ -1627,6 +1720,9 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
         ) {
             let msg = match &e {
                 DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
+                DeliveryError::NeverAcked { .. } => {
+                    diagnose_giveup(herdr, job_id, &pane_id, format!("agent prompt failed: {e}"))
+                }
                 _ => format!("agent prompt failed: {e}"),
             };
             return ExecResult { outcome: RunOutcome::SpawnFailed(msg), pane_id: Some(pane_id), closed_pane: false };
@@ -1657,7 +1753,10 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
 
         let outcome = match decision {
             PollDecision::ResultReady => read_result(&bee_dir, job_id),
-            PollDecision::TimedOutIdle => RunOutcome::TimedOutIdle,
+            PollDecision::TimedOutIdle => {
+                let generic = idle_timeout_message(opts.idle_timeout_secs);
+                RunOutcome::TimedOutIdle(diagnose_giveup(herdr, job_id, &pane_id, generic))
+            }
             PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
             PollDecision::PausedLimit => {
                 stamp_paused_limit(&bee_dir, job_id, herdr, &pane_id);
@@ -1766,6 +1865,9 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
     ) {
         let msg = match &e {
             DeliveryError::Blocked => blocked_message(job_id, &pane_id, &pane_tail(herdr, &pane_id)),
+            DeliveryError::NeverAcked { .. } => {
+                diagnose_giveup(herdr, job_id, &pane_id, format!("agent prompt failed: {e}"))
+            }
             _ => format!("agent prompt failed: {e}"),
         };
         return ExecResult { outcome: RunOutcome::SpawnFailed(msg), pane_id: Some(pane_id), closed_pane: false };
@@ -1803,7 +1905,10 @@ fn execute_continue(opts: &Options, herdr: &dyn Herdr) -> ExecResult {
 
     let outcome = match decision {
         PollDecision::ResultReady => read_result(&bee_dir, job_id),
-        PollDecision::TimedOutIdle => RunOutcome::TimedOutIdle,
+        PollDecision::TimedOutIdle => {
+            let generic = idle_timeout_message(opts.idle_timeout_secs);
+            RunOutcome::TimedOutIdle(diagnose_giveup(herdr, job_id, &pane_id, generic))
+        }
         PollDecision::TimedOutCeiling => RunOutcome::TimedOutCeiling,
         PollDecision::PausedLimit => {
             stamp_paused_limit(&bee_dir, job_id, herdr, &pane_id);
@@ -1844,7 +1949,7 @@ fn outcome_label(o: &RunOutcome) -> &'static str {
             MailboxStatus::Blocked => "blocked",
         },
         RunOutcome::Malformed(_) => "malformed_result",
-        RunOutcome::TimedOutIdle => "timed_out_idle",
+        RunOutcome::TimedOutIdle(_) => "timed_out_idle",
         RunOutcome::TimedOutCeiling => "timed_out_ceiling",
         RunOutcome::PausedLimit => "paused_limit",
         RunOutcome::Died { .. } => "died",
@@ -1900,7 +2005,10 @@ fn emit_result(opts: &Options, result: &ExecResult) {
                     m.insert("pid".into(), Value::from(*p));
                 }
             }
-            RunOutcome::TimedOutIdle | RunOutcome::TimedOutCeiling | RunOutcome::PausedLimit => {}
+            RunOutcome::TimedOutIdle(msg) => {
+                m.insert("error".into(), Value::String(msg.clone()));
+            }
+            RunOutcome::TimedOutCeiling | RunOutcome::PausedLimit => {}
         }
         println!("{}", Value::Object(m));
     } else {
@@ -2134,6 +2242,52 @@ mod tests {
         assert_eq!(decision, PollDecision::ResultReady);
     }
 
+    // ─── hps-7: prompt diagnosis, pure (D5) ────────────────────────────
+
+    #[test]
+    fn find_prompt_diagnosis_finds_a_short_hint_line_that_survives_clipping_where_the_question_would_not() {
+        // The live acceptance probe's exact shape: an eight-column-wide
+        // capture clips the question itself down to unmatchable fragments,
+        // but a short confirmation hint on its OWN line needs no clipping
+        // margin at all and still lands whole.
+        let clipped_pane = "Do you t\nrust wor\n(y/n)\n";
+        assert!(
+            !clipped_pane.to_lowercase().contains("do you trust this folder"),
+            "the clipped capture must not contain the long needle — that is the whole premise"
+        );
+        assert_eq!(find_prompt_diagnosis(clipped_pane), Some("(y/n)".to_string()));
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_matches_the_navigation_arrows() {
+        assert_eq!(find_prompt_diagnosis("choose one:\n↑/↓ to move, enter to select\n"), Some("↑/↓ to move, enter to select".to_string()));
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_matches_a_selection_caret() {
+        assert_eq!(find_prompt_diagnosis("  yes\n❯ no\n"), Some("❯ no".to_string()));
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_matches_a_line_ending_in_a_question_mark() {
+        assert_eq!(find_prompt_diagnosis("some banner\nContinue anyway?\n"), Some("Continue anyway?".to_string()));
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_is_case_insensitive_on_its_pattern_table() {
+        assert_eq!(find_prompt_diagnosis("Overwrite the file [Y/n]\n"), Some("Overwrite the file [Y/n]".to_string()));
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_returns_none_on_ordinary_output() {
+        assert_eq!(find_prompt_diagnosis("compiling…\nrunning tests\nall green\n"), None);
+    }
+
+    #[test]
+    fn find_prompt_diagnosis_returns_none_on_empty_text() {
+        assert_eq!(find_prompt_diagnosis(""), None);
+    }
+
     // ─── the Herdr seam ─────────────────────────────────────────────────
 
     struct FakeHerdr {
@@ -2179,6 +2333,10 @@ mod tests {
         /// line was sent BEFORE `agent_start`, never after.
         call_log: RefCell<Vec<&'static str>>,
         pane_text: RefCell<Option<String>>,
+        /// hps-7: when set, every `pane_read` call returns this error
+        /// instead of `pane_text` — the seam a "pane_read failure keeps the
+        /// generic message" test uses.
+        pane_read_err: RefCell<Option<String>>,
         pane_read_calls: RefCell<Vec<String>>,
         liveness_responses: RefCell<Vec<Liveness>>,
         process_info_calls: RefCell<Vec<String>>,
@@ -2204,6 +2362,7 @@ mod tests {
                 pane_run_calls: RefCell::new(Vec::new()),
                 call_log: RefCell::new(Vec::new()),
                 pane_text: RefCell::new(None),
+                pane_read_err: RefCell::new(None),
                 pane_read_calls: RefCell::new(Vec::new()),
                 liveness_responses: RefCell::new(Vec::new()),
                 process_info_calls: RefCell::new(Vec::new()),
@@ -2259,6 +2418,9 @@ mod tests {
         }
         fn pane_read(&self, pane_id: &str) -> Result<String, String> {
             self.pane_read_calls.borrow_mut().push(pane_id.to_string());
+            if let Some(err) = self.pane_read_err.borrow().clone() {
+                return Err(err);
+            }
             Ok(self.pane_text.borrow().clone().unwrap_or_default())
         }
         fn process_info(&self, pane_id: &str) -> Liveness {
@@ -3002,7 +3164,7 @@ mod tests {
         seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         let result = execute(&opts, &fake);
-        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle(_)), "got {:?}", result.outcome);
         assert!(!result.closed_pane);
         assert!(fake.closed.borrow().is_empty());
     }
@@ -3016,7 +3178,7 @@ mod tests {
         seed_ack(tmp.path(), &opts.job_id, 1);
         let fake = FakeHerdr::new();
         let result = execute(&opts, &fake);
-        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle(_)), "got {:?}", result.outcome);
         assert!(result.closed_pane);
         assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
     }
@@ -3051,7 +3213,7 @@ mod tests {
         let fake = FakeHerdr::new();
         *fake.pane_text.borrow_mut() = Some("waiting for something else...".to_string());
         let result = execute(&opts, &fake);
-        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle(_)), "got {:?}", result.outcome);
         assert!(result.closed_pane, "TimedOutIdle closes with close_always");
         assert_eq!(fake.closed.borrow().as_slice(), ["w1:p2"]);
     }
@@ -3084,12 +3246,124 @@ mod tests {
         let fake = FakeHerdr::new();
         *fake.pane_text.borrow_mut() = Some("regular error output".to_string());
         let result = execute(&opts, &fake);
-        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle(_)), "got {:?}", result.outcome);
         // Across the fresh-heartbeat ticks before staleness, pane_read was never called.
-        // Once heartbeat went stale, pane_read was called once to check for limit patterns.
+        // Once heartbeat went stale, pane_read was called once to check for limit patterns,
+        // then once more by `diagnose_giveup` (hps-7) on the way out of the give-up path.
         let reads = fake.pane_read_calls.borrow();
-        assert_eq!(reads.len(), 1, "pane_read should only be called once when heartbeat becomes stale, not on fresh ticks: {:?}", *reads);
+        assert_eq!(reads.len(), 2, "pane_read should be called once for the limit check and once for hps-7's diagnosis, never on fresh ticks: {:?}", *reads);
         assert_eq!(reads[0], "w1:p2");
+        assert_eq!(reads[1], "w1:p2");
+    }
+
+    // ─── hps-7: diagnosis wired into the three give-up paths (D5) ───────
+
+    #[test]
+    fn diagnose_giveup_upgrades_the_generic_message_on_a_match() {
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        let msg = diagnose_giveup(&fake, "job-1", "w1:p2", "generic timeout text".to_string());
+        assert!(msg.contains("generic timeout text"), "generic prefix dropped: {msg}");
+        assert!(msg.contains("w1:p2"), "pane id missing: {msg}");
+        assert!(msg.contains("job-1"), "job id missing: {msg}");
+        assert!(msg.contains("Trust this folder?"), "matched line not quoted: {msg}");
+        assert!(msg.contains("remedy"), "remedy missing: {msg}");
+    }
+
+    #[test]
+    fn diagnose_giveup_leaves_the_generic_message_byte_for_byte_on_no_match() {
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("compiling…\nall green\n".to_string());
+        let generic = "generic timeout text".to_string();
+        let msg = diagnose_giveup(&fake, "job-1", "w1:p2", generic.clone());
+        assert_eq!(msg, generic);
+    }
+
+    #[test]
+    fn diagnose_giveup_leaves_the_generic_message_byte_for_byte_on_a_failing_pane_read() {
+        let fake = FakeHerdr::new();
+        // Even a pane whose text WOULD match if it could be read must never
+        // change which message comes back once `pane_read` itself fails.
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        *fake.pane_read_err.borrow_mut() = Some("herdr: pane gone".to_string());
+        let generic = "generic timeout text".to_string();
+        let msg = diagnose_giveup(&fake, "job-1", "w1:p2", generic.clone());
+        assert_eq!(msg, generic, "a pane_read failure must not change which error is returned");
+    }
+
+    #[test]
+    fn ready_gate_timeout_names_the_question_on_screen() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.ready_wait_secs = 0; // exhausted on the first check, no sleep
+        let fake = FakeHerdr::new();
+        *fake.status.borrow_mut() = Some("working".to_string()); // never idle/done/blocked
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => {
+                assert!(msg.contains("ready-wait"), "generic ready-wait text dropped: {msg}");
+                assert!(msg.contains("Trust this folder?"), "question not named: {msg}");
+            }
+            other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ready_gate_blocked_still_wins_over_a_diagnosis_match_in_the_same_pane_text() {
+        // D3's fast path is untouched by hps-7: `blocked` is checked first
+        // and produces `blocked_message`, never the diagnosis pass, even
+        // when the pane text would also match `find_prompt_diagnosis`.
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let fake = FakeHerdr::new();
+        *fake.status.borrow_mut() = Some("blocked".to_string());
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => {
+                assert!(msg.contains("is blocked"), "expected D3's blocked_message shape, got: {msg}");
+            }
+            other => panic!("expected SpawnFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn round_poll_idle_timeout_names_the_question_on_screen() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut opts = test_options(tmp.path(), false);
+        opts.idle_timeout_secs = 1;
+        seed_ack(tmp.path(), &opts.job_id, 1);
+        let fake = FakeHerdr::new();
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::TimedOutIdle(msg) => {
+                assert!(msg.contains("idle timeout"), "generic idle-timeout text dropped: {msg}");
+                assert!(msg.contains("Trust this folder?"), "question not named: {msg}");
+            }
+            other => panic!("expected TimedOutIdle, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn delivery_never_acked_names_the_question_on_screen() {
+        let tmp = tempfile::tempdir().unwrap();
+        let opts = test_options(tmp.path(), false);
+        let fake = FakeHerdr::new();
+        // idle/done with no ack ever written: `deliver_pointer` resends
+        // until `DELIVERY_RESEND_ATTEMPTS` is exhausted (NeverAcked's
+        // ResendAttempts bound).
+        *fake.status.borrow_mut() = Some("idle".to_string());
+        *fake.pane_text.borrow_mut() = Some("Trust this folder?\n".to_string());
+        let result = execute(&opts, &fake);
+        match &result.outcome {
+            RunOutcome::SpawnFailed(msg) => {
+                assert!(msg.contains("brief prompt failed after start"), "generic delivery text dropped: {msg}");
+                assert!(msg.contains("Trust this folder?"), "question not named: {msg}");
+            }
+            other => panic!("expected SpawnFailed, got {other:?}"),
+        }
     }
 
     // ─── flag parsing ───────────────────────────────────────────────────
@@ -3535,7 +3809,7 @@ mod tests {
 
         let result = execute(&opts, &fake);
 
-        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle), "got {:?}", result.outcome);
+        assert!(matches!(result.outcome, RunOutcome::TimedOutIdle(_)), "got {:?}", result.outcome);
     }
 
     #[test]
