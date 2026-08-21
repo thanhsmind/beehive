@@ -564,7 +564,6 @@ fn dispatch_kind_for_tier(tier: &str) -> Option<&'static str> {
     match tier {
         "review" => Some("reviewer"),
         "generation" => Some("gather"),
-        "advisor" => Some("advisor"),
         _ => None,
     }
 }
@@ -655,30 +654,46 @@ model: \"{param}\" → \"{resolved_model}\" (AO5: config is the authority)"
         // working door. Naming the resolving verb directly closes that gap
         // in the same message, using the same Option-aware helper the
         // tier-transport denials below use.
-        let door = match dispatch_kind_for_tier(t) {
-            Some(kind) => format!(
+        // The clause is appended ONLY when there is a remedy to name — a
+        // resolving --kind, or a slot-own transport (herding-exec, or the
+        // configured cli command on stdin). A tier that resolves to the
+        // session model (ceiling, and anything else that resolves to
+        // Resolved::Inherit) has no remedy to name — appending "or" with
+        // nothing after it reads as a dangling clause, so the message ends
+        // at "you intended." instead, exactly as it did before dod-1.
+        let door: Option<String> = match dispatch_kind_for_tier(t) {
+            Some(kind) => Some(format!(
                 "run \".bee/bin/bee dispatch prepare --runtime claude --kind {kind} --json\" \
 for the {t} tier's own transport"
-            ),
+            )),
             None => match resolved {
-                Resolved::Herding => format!(
+                Resolved::Herding => Some(format!(
                     "dispatch prepare has no --kind for the {t} tier yet — run \".bee/bin/bee \
 herding run --task-file - --json\" directly with the prompt on stdin"
-                ),
-                Resolved::Refused => format!(
+                )),
+                Resolved::Refused => Some(format!(
                     "dispatch prepare has no --kind for the {t} tier yet — run the configured \
 command verbatim with the prompt on stdin"
-                ),
-                _ => format!("dispatch prepare has no --kind for the {t} tier yet"),
+                )),
+                _ => None,
             },
         };
-        let reason = format!(
-            "bee-model-guard: [bee-tier: {t}] resolves to no model name{cli_note}\
+        let reason = match &door {
+            Some(door) => format!(
+                "bee-model-guard: [bee-tier: {t}] resolves to no model name{cli_note}\
 , but the dispatch carries model: \"{param}\". The marker would record one \
 thing in dispatch.jsonl while the subagent actually runs on the param.\n\
 FIX: drop the model param (the marker alone selects the tier), or drop the marker \
 and declare the tier whose configured model equals the param you intended; or {door}."
-        );
+            ),
+            None => format!(
+                "bee-model-guard: [bee-tier: {t}] resolves to no model name{cli_note}\
+, but the dispatch carries model: \"{param}\". The marker would record one \
+thing in dispatch.jsonl while the subagent actually runs on the param.\n\
+FIX: drop the model param (the marker alone selects the tier), or drop the marker \
+and declare the tier whose configured model equals the param you intended."
+            ),
+        };
         return deny(reason, "param-on-nameless-tier", tier, model_param, subagent_type);
     }
 
@@ -1292,10 +1307,14 @@ mod tests {
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "param-tier-repaired");
         assert_eq!(d["model"], "sonnet", "the audit records what will actually run");
-        // ceiling + param -> deny "drop the model param"
+        // ceiling + param -> deny "drop the model param", and no dangling
+        // "or" clause (dod-6: ceiling resolves to Resolved::Inherit, which
+        // has no --kind and no slot-own transport to name)
         let (code, stderr) = run_payload(fx.path(), json!({"tool_name": "Agent", "tool_input": {"prompt": "[bee-tier: ceiling] go", "model": "sonnet"}}));
         assert_eq!(code, 2);
         assert!(stderr.contains("drop the model param"));
+        assert!(!stderr.contains("has no --kind for the ceiling tier"), "{stderr}");
+        assert!(stderr.trim_end().ends_with("you intended."), "{stderr}");
         let d = last_jsonl(dispatch_log(fx.path())).unwrap();
         assert_eq!(d["transport"], "param-on-nameless-tier");
         // review + its own model -> allow
