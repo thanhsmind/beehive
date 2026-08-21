@@ -2,19 +2,24 @@
   "schema_version": "1.0",
   "feature": "backlog-add-honest-refusal",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": false,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"backlog-add-honest-refusal\" started at phase \"exploring\" (lane).",
-  "next_action": "Present the uat gate, then merge the worktree.",
+  "next_action": "bee close finished \"backlog-add-honest-refusal\" — feature is closed.",
   "created_at": "2026-08-21T14:47:05.113Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: backlog-add-honest-refusal",
+    "asked_at": "2026-08-21T15:12:11.559Z",
+    "session": "1083b691-2617-4369-95d8-5204003a5b9d"
+  },
   "route": {
     "class": "feature",
     "lane": "small",
