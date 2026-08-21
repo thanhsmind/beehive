@@ -43,6 +43,21 @@ answered `right` again and again on a wide tab: measured live, a 120-column tab
 went 60/30/15, and both the 30- and 15-column children died mid-submission with
 herdr's `agent_prompt_stalled`.
 
+**Counting the panes and splitting one are a single indivisible step.** Every
+spawn runs as its own process, so the rule above is only correct over a count
+that already includes the sibling a concurrent spawn just made. Spawns
+therefore queue: one at a time counts the tab and takes its pane, and the next
+one counts again afterwards. Without that queue, five simultaneous spawns from
+one tab each saw an untouched root, each answered `right`, and the fifth worker
+died waiting for an acknowledgement it could never send from a sliver — the
+same stale count also hides the width floor, since every one of them measures
+the untouched root. A spawn waits up to two minutes for its turn, well inside
+the acknowledgement budget, and a turn held by a process that has since died,
+or held far past any plausible split, is taken over. If the wait runs out
+anyway, or the queue itself cannot be used, the spawn warns and proceeds
+unqueued: a worker that never starts is a worse outcome than one that lands in
+the wrong place (herding-split-serialize D1).
+
 ## The poll decides on a ladder of signals, not one signal
 
 The poll loop is native and health-check based, at zero token cost, and it ranks
@@ -170,6 +185,11 @@ even when the brief states the rule.
   `resolve_split_parent` picking the roomiest parent, `narrow_pane_refusal`
   measuring the child's resulting width, and the `tab_create` fallback on the
   herd seam (cells hps-12, hps-13).
+- The spawn queue is a lock file at `.bee/locks/herding-pane-split.lock` under
+  the main checkout, taken and released by
+  `packages/bee-rs/crates/bee/src/herding/split_lock.rs`; `run.rs`'s
+  `split_worker_pane` holds it across the layout read and the split, waiting
+  `SPLIT_LOCK_WAIT` (120s) and failing open past it (cells hss-1, hss-2).
 - `run`'s own module — pane split/start, the native poll loop, and pane-lifecycle
   decisions, each seam-tested with a fake so no test needs a real multiplexer on
   PATH — is `packages/bee-rs/crates/bee/src/herding/run.rs`; the mailbox contract
