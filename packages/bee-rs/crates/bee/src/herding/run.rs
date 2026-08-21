@@ -479,10 +479,26 @@ impl RealHerdr {
                 String::from_utf8_lossy(&out.stderr)
             ));
         }
-        serde_json::from_slice(&out.stdout).map_err(|_| {
-            format!("herdr {} returned a body that was not valid JSON: {}", args.join(" "), String::from_utf8_lossy(&out.stdout))
-        })
+        parse_herdr_body(&args.join(" "), &out.stdout)
     }
+}
+
+/// The JSON-decode half of `RealHerdr::call`, split out so a test can drive
+/// it with a captured reply body and no spawned process.
+fn parse_herdr_body(args_desc: &str, stdout: &[u8]) -> Result<Value, String> {
+    serde_json::from_slice(stdout).map_err(|_| {
+        format!("herdr {args_desc} returned a body that was not valid JSON: {}", String::from_utf8_lossy(stdout))
+    })
+}
+
+/// `agent_wait`'s extraction, pure: herdr's `agent wait` reply nests the
+/// status one level deeper than `agent_status`'s `agent list` reply —
+/// `result.agent.agent_status`, not `result.agent_status` — captured live
+/// from `herdr agent wait <job> --until idle --until done --timeout <ms>`.
+/// Split out so a test can feed the captured reply straight through the
+/// same extraction the impl uses.
+fn extract_agent_wait_status(v: &Value) -> Option<String> {
+    v.get("result")?.get("agent")?.get("agent_status").and_then(Value::as_str).map(str::to_string)
 }
 
 impl Herdr for RealHerdr {
@@ -592,10 +608,7 @@ impl Herdr for RealHerdr {
         let v = self
             .call(&["agent", "wait", job_id, "--until", "idle", "--until", "done", "--timeout", &timeout])
             .ok()?;
-        v.get("result")
-            .and_then(|r| r.get("agent_status").or_else(|| r.get("status")))
-            .and_then(Value::as_str)
-            .map(str::to_string)
+        extract_agent_wait_status(&v)
     }
 
     fn pane_alive(&self, pane_id: &str) -> bool {
@@ -2361,6 +2374,53 @@ mod tests {
     #[test]
     fn find_prompt_diagnosis_returns_none_on_empty_text() {
         assert_eq!(find_prompt_diagnosis(""), None);
+    }
+
+    // ─── hps-10: real herdr reply parsing, no process spawned ───────────
+    //
+    // These feed bodies captured live from a real `herdr` binary through
+    // the exact extraction `RealHerdr` uses, so a parse bug (like the one
+    // that shipped here — `agent_wait` reading `result.agent_status`
+    // instead of `result.agent.agent_status`) fails a test instead of
+    // hanging every `bee herding run` for 60s. `FakeHerdr::agent_wait`
+    // below returns whatever a test configures, so it exercises the seam,
+    // never the parse — these are the only tests that do.
+
+    #[test]
+    fn extract_agent_wait_status_reads_the_captured_live_reply() {
+        // Captured from `herdr agent wait accept-solo-1 --until idle
+        // --until done --timeout 200` against a real, healthy pane.
+        let body = r#"{"id":"cli:agent:wait","result":{"agent":{"agent":"agy","agent_status":"done","interactive_ready":true,"name":"accept-solo-1","pane_id":"w4:p2J"},"type":"agent_info"}}"#;
+        let v: Value = serde_json::from_str(body).expect("captured reply is valid JSON");
+        assert_eq!(extract_agent_wait_status(&v), Some("done".to_string()));
+    }
+
+    #[test]
+    fn extract_agent_wait_status_is_none_when_the_status_is_missing() {
+        let v: Value = serde_json::from_str(r#"{"id":"cli:agent:wait","result":{"agent":{"name":"accept-solo-1"}}}"#).unwrap();
+        assert_eq!(extract_agent_wait_status(&v), None);
+    }
+
+    #[test]
+    fn extract_agent_wait_status_is_none_on_the_old_wrong_shallow_path() {
+        // Guards against regressing to the shape this cell fixed: a status
+        // sitting at `result.agent_status` (one level too shallow) must
+        // NOT be picked up by the real extraction.
+        let v: Value = serde_json::from_str(r#"{"result":{"agent_status":"done"}}"#).unwrap();
+        assert_eq!(extract_agent_wait_status(&v), None);
+    }
+
+    #[test]
+    fn parse_herdr_body_accepts_the_captured_agent_prompt_success_envelope() {
+        // Captured from `herdr agent prompt <job> <text> --wait --until
+        // working --timeout 5000` against a real, healthy pane.
+        let body = br#"{"id":"cli:agent:prompt","result":{"agent":{"agent":"agy","agent_status":"working","name":"accept-solo-1"},"type":"agent_info"}}"#;
+        assert!(parse_herdr_body("agent prompt", body).is_ok());
+    }
+
+    #[test]
+    fn parse_herdr_body_rejects_non_json() {
+        assert!(parse_herdr_body("agent wait", b"not json").is_err());
     }
 
     // ─── the Herdr seam ─────────────────────────────────────────────────
