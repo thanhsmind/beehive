@@ -2793,14 +2793,30 @@ use crate::version::BEE_VERSION;
         assert!(validate_agent_files_drift(&ctx_for(tmp.path()), Some(&cfg)).is_empty());
 
         // (d) a stale file under a now cli-shaped slot is flagged, never
-        // silently accepted.
+        // silently accepted, and named as a cli executor rather than a
+        // generic "cli-shaped or unconfigured" catch-all.
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
         write_agent_file(root, "bee-gather", "name: bee-gather\nmodel: sonnet");
         let cfg = json!({"models": {"claude": {"generation": {"kind": "cli", "command": "codex exec -m gpt-5.5 -s read-only -"}}}});
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
-        assert!(problems[0].message.contains("cli-shaped or unconfigured"));
+        assert!(problems[0].message.contains("is now a cli executor"));
+        assert!(!problems[0].message.contains("herding"));
+
+        // (d2) dod-4: a rendered bee-build.md under a herding-shaped
+        // generation slot is named a herding executor, never "cli-shaped".
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_agent_file(root, "bee-build", "name: bee-build\nmodel: sonnet");
+        let cfg = json!({"models": {"claude": {"generation": {"kind": "herding", "agent": "agy-flash", "fallback": "default"}}}});
+        let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
+        assert_eq!(codes(&problems), vec!["agent-file-drift"]);
+        assert_eq!(problems[0].agent, Some("bee-build"));
+        assert_eq!(problems[0].slot, Some("generation"));
+        assert!(problems[0].message.contains("is now a herding executor"));
+        assert!(!problems[0].message.contains("cli"));
+        assert!(problems[0].message.contains("bee onboard --apply"));
 
         // (e) unparseable frontmatter is its own code, never a throw.
         let tmp = tempfile::tempdir().unwrap();
@@ -2872,7 +2888,8 @@ use crate::version::BEE_VERSION;
         assert_eq!(problems[0].agent, Some("bee-gather"));
         assert!(problems[0].message.contains("model: \"opencode/big-pickle\""));
         assert!(problems[0].message.contains("is \"opencode/deepseek-v4-flash-free\""));
-        assert!(problems[0].message.contains("re-run onboarding to re-render it"));
+        assert!(problems[0].message.contains("bee onboard --apply"));
+        assert!(problems[0].message.contains("to re-render it"));
         assert!(!problems[0].message.contains("hand-authored"));
 
         // (c) matching config across all three opencode agents -> clean.
@@ -2911,7 +2928,7 @@ use crate::version::BEE_VERSION;
         let cfg = json!({"models": {"opencode": {"generation": {"kind": "cli", "command": "opencode run -"}}}});
         let problems = validate_agent_files_drift(&ctx_for(root), Some(&cfg));
         assert_eq!(codes(&problems), vec!["agent-file-drift"]);
-        assert!(problems[0].message.contains("cli-shaped or unconfigured"));
+        assert!(problems[0].message.contains("is now a cli executor"));
     }
 
     /// The point of the cell (scripts/tests/test_config_validate.mjs header):
