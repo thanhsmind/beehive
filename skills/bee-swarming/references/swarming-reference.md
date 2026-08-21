@@ -367,6 +367,65 @@ while `resolveTier` refuses a cli-shaped tier for anything but a gather.
 
 **Transient hygiene:** dispatch transients (`<cell-id>.prompt.md`, `.out*.log`, `.result.md|json`, reviewer/plan-check logs) accumulate in `.bee/workers/` and are never needed after the feature closes. At feature close — after review acceptance, before the closing commit — the orchestrator runs `.bee/bin/bee state worker prune` (`--dry-run` to preview). Keep-rules protect transients of active workers and non-capped cells (re-read immediately before the destructive loop), and files outside the transient suffix set (evidence snapshots, cell payloads, subdirectories) are never touched — but prune is still the orchestrator's feature-close verb, not something to race against an in-flight dispatch round.
 
+## Herding Execution — A Foreign Agent In A Pane
+
+`bee herding run` (herding-executor D1, D4) is a THIRD transport, distinct
+from both the native subagent dispatch above and the cli gather branch: a
+long-lived foreign agent (any herdr-supported kind) started in its own
+pane, doing write work against a worktree. It exists for scope A only —
+running the verb by hand against ONE cell the user names — and is
+**user-requested per cell, never the default dispatch path**. The
+default for `standard`/`high-risk` cell execution stays the wave protocol
+above; reach for herding only when the user asks for a specific cell to
+run through an external agent. Scope B (a `{kind:"herding"}` tier kind in
+`models.*`, picked automatically the way `subagent`/`cli` are today) is a
+separate, trigger-gated backlog item — it does not exist yet, and this
+reference never treats herding as something the tier judgment step (4,
+above) can select on its own.
+
+**The pane worker is bee-ignorant (D4): it never runs a `bee` verb.** Its
+whole contract is the self-contained brief `bee herding run` renders —
+task, absolute paths, file constraints, the `result-N.json` schema, the
+tmp-then-rename write gesture — and one JSON file written back. Every
+piece of bee bookkeeping — verify, `cells finish`, reservations, judge —
+is the ORCHESTRATOR's job, done AFTER reading the result, exactly as D4
+requires. This mirrors the cli gather branch's stdout-is-the-digest
+posture, but for write work: the external process never touches
+`.bee/*.json(l)`, never claims, never caps.
+
+The orchestrator's loop for one herding cell:
+
+1. **Claim first**, same as any dispatch — `cells claim` under a chosen
+   nickname — before starting the pane.
+2. **Dispatch through background Bash**, one call:
+   `bee herding run --task "<self-contained brief>" --cwd <worktree> --job-id <id>`.
+   Background Bash delivers exactly one completion notification when the
+   verb returns — the native poll loop inside `herding run` (heartbeat +
+   idle-timeout + ceiling, D5) already does the waiting at zero token
+   cost; the orchestrator does not poll it itself.
+3. **Read the result.** `bee herding run` prints the validated
+   `result-N.json` JSON on completion (`status: done|blocked`, `summary`,
+   `files_changed[]`, `proof`) — read that, never re-derive it by
+   screen-scraping the pane.
+4. **Do the bookkeeping the worker never could:** verify per the cell's
+   own proof type (re-run the declared test/parity check against the
+   `files_changed` diff), then `.bee/bin/bee cells finish --id <id>
+   --report <proof line>` carrying the worker's evidence, confirm
+   reservations released, and run goal-check/judge exactly as step 7 of
+   the Operating Contract already requires for any `[DONE]`. A `status:
+   blocked` result is never force-capped — treat it as a `[BLOCKED]`
+   report and re-triage.
+5. **Blocked → `--continue`, not a fresh spawn.** When the result (or the
+   orchestrator's own verify) surfaces something the same agent should
+   retry — a failing test, a narrower ask — send the next round through
+   the SAME job mailbox: `bee herding run --continue <job-id> --task
+   "<round N+1 brief>"`. This reuses the existing pane and agent (`herdr
+   agent prompt`, never `agent start` again) and waits on
+   `result-(N+1).json`; it refuses typed when the job dir, a prior
+   result, or the pane itself is gone (D3). Loop rounds this way until a
+   `status: done` result passes verify, or the orchestrator gives up and
+   reports `[BLOCKED]` itself.
+
 ## Worker Prompt Template
 
 Nicknames are Minions character names — recognizable,
@@ -410,6 +469,8 @@ The `Advisor` line is omitted entirely — a session whose config has no advisor
 for a **model-shaped** advisor, `your own Agent tool, model param <advisor-model>, description starting exactly "advisor-consult <CELL_ID>: <advisor-model>"` (fallback: headless `claude -p --model <advisor-model>`);
 <!-- bee:end -->
 for a **cli-shaped** advisor, `<the configured command>, evidence bundle on stdin` (External Executors output-capture discipline, above).
+
+The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived.
 
 Default: no session history, no other cells, no orchestrator reasoning. A worker that needs more than this contract means the cell failed cold-pickup review — route the gap back rather than widen the prompt with transcript.
 

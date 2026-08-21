@@ -1,0 +1,71 @@
+{
+  "id": "hlp-0",
+  "feature": "herding-limit-pause",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "pane_run reads herdr's raw exit, not a JSON envelope",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-limit-pause/CONTEXT.md"
+  ],
+  "action": "Fix-first: RealHerdr::pane_run currently routes through call(), which requires a JSON envelope, but `herdr pane run` emits plain/empty stdout — so the always-on BEE_HERDING_WORKER export (hws-1) kills EVERY fresh spawn with 'env export failed: ... not valid JSON' (live: job hlp-1-r1, pane w4:p13). Rewrite pane_run as a raw Command invocation like the old pane_text: success = exit status 0, stdout ignored; stderr trimmed into the error on nonzero.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "pane_run succeeds on exit-0 regardless of stdout shape"
+    ]
+  },
+  "decisions": [],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hlp-0",
+    "outcome": "pane_run reads raw exit status; JSON-envelope parse removed",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T11:35:13.424Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5",
+    "claimed_at": "2026-08-20T11:33:33.706Z",
+    "report": {
+      "outcome": "RealHerdr::pane_run is a raw Command invocation — success is exit 0, stdout ignored, stderr trimmed into the error; fixes every fresh spawn dying on the always-on BEE_HERDING_WORKER export",
+      "commit": "9b98561b",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — 180 passed, 0 real failures — the touched module suite",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "raw-exit-contract",
+            "status": "PASS",
+            "evidence": "RealHerdr::pane_run is a raw Command call — success is exit 0, stdout ignored, stderr in the error; live re-dispatch hlp-1-r2 spawned clean where hlp-1-r1 died on 'not valid JSON'"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-fable-5",
+        "judge_model": "claude-fable-5",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-20T11:47:11.009Z"
+      }
+    ]
+  }
+}

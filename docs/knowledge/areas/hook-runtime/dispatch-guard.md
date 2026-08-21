@@ -150,6 +150,16 @@ decision auditable.
 
 ## Business Rules
 
+- R7 — **Every hook exits 0 and silent inside a herded worker session.** When
+  the worker marker is set in the environment, the hook dispatcher returns
+  success without running any hook body, and the check sits at the single
+  dispatch entry point so every rendered manifest inherits it on a binary
+  upgrade rather than needing its own opt-out. A herded worker is a foreign
+  agent executing one brief; giving it preamble, guards, or nudges makes it
+  act like a session of this repo, which is exactly what its contract forbids
+  (herding-worker-standalone D3, 2026-08-20 — the behavior that forced it is
+  recorded with the herding area).
+
 - R6 — A guard refuses only what it cannot derive or resolve. Where the
   request already contains the answer (a helper type that stands for exactly
   one tier) or where an existing decision already names the winner (config over

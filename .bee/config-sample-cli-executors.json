@@ -13,7 +13,9 @@
       "claude.generation": "Gemini via the agy CLI, plan mode, sandboxed, 30m print timeout.",
       "claude.review": "Claude Opus via the opencode CLI, plan agent.",
       "codex.review": "codex exec read-only with high reasoning effort, prompt from stdin ('-')."
-    }
+    },
+    "herding_agents_shapes": "A herding.agents entry accepts a second shape alongside the plain argv array: {\"argv\": [...], \"env\": {\"KEY\": \"value\"}} (herd-registry D4) — shown live below as codex-envd. argv is validated exactly like the array shape (non-empty, newline-free strings); env is optional (absent means no env) and, when present, every key must match [A-Za-z_][A-Za-z0-9_]* and every value must be newline-free — ANY violation drops the WHOLE entry, fail-open-per-entry, the same rule a malformed argv array already gets. A non-empty env is exported into the freshly split pane as ONE `export K='v' K2='v2'` line, sent AFTER the pane split and BEFORE the agent starts, so the agent process itself inherits it; the plain array shape and the top-level agent_command path never carry env. Separately (herd-registry D3), claude-sonnet and agy-flash below are also the registry's two BUILT-IN defaults — they resolve even with no herding.agents block at all with these exact argv; declaring them here is redundant but harmless, and a same-name entry with different argv overrides the built-in.",
+    "herding": "The cli slots above and herding.agent_command are NOT the same seam: cli-shaped model/tier slots are GATHER-ONLY (file hunts, scans, reviews, advisor consults — never cell execution), while herding.agent_command is the WRITE-WORK executor for `bee herding run` / `--continue` and `bee herding wave` — a real cell-execution worker in its own worktree. Shown live below: agent_command as a plain STRING naming a herding.agents entry (the alias form, herd-registry D2) so the command is written exactly once; the array form works too. In array form, token 0 is the herdr agent kind (21 kinds, no bee-side allow-list), passed straight through; the rest is that agent's own argv — here a non-claude example, codex with its own model flag. A THIRD model-slot shape, `{ \"kind\": \"herding\" }`, routes EVERY purpose against that slot — cell, gather, reviewer, advisor, extraction — through `bee herding run` automatically (herding-tier D1-D6, widened by herding-review-slots D1: the old gather/review/advisor default-model fallback is gone, so the operator who sets the slot owns the pane cost for every purpose it serves) — not shown in this sample, and not something a repo without herding.agent_command configured should turn on; an optional \"agent\": \"<name>\" on that same shape (herd-registry D1/D2) looks the name up in an optional herding.agents map (name -> argv token array, same validation as agent_command — shown live in the herding block below: claude-sonnet and agy-flash) instead of the global agent_command default; an unknown name refuses, listing every registry key. An optional \"fallback\": \"default\" (herding-review-slots D3) re-dispatches a failed run (spawn failure, timeout, invalid result) through the runtime's own default model path for that slot instead of leaving the failure loud with the pane kept; example spelling: { \"kind\": \"herding\", \"agent\": \"agy-flash\", \"fallback\": \"default\" }. The registry is inert until a slot, --agent flag, or string agent_command names an entry — safe to keep in every repo. A herd name always means the pane transport — it never touches the cli slots above, and a cli slot can never name a herd. Canonical doc: bee-herding/references/operational-invariants.md. OPERATIONAL RULES (live-proven 2026-08-20): the spawn survives a booting shell (agent start retries agent_pane_busy up to 10 times ~1s apart); the brief is never typed into the pane — it is written to <mailbox>/brief-N.txt and the agent receives a one-line pointer, resent until the pane text echoes it (30 attempts ~1s; herdr's ready flags fire before some agents accept input); a run that fails keeps its pane as forensics, a run that succeeds closes it. Put each kind's auto-approve flag in its herd entry (claude: --permission-mode bypassPermissions; agy: --dangerously-skip-permissions) — an agent that stops to ask permission mid-run stalls until the idle-timeout. NEVER type into a live worker pane: a human keystroke hijacks the agent's turn and the brief goes unanswered. LIVE EXAMPLE in this sample (needs agy + codex installed): models.codex.review runs herd agy-flash with fallback: default (a failed pane run re-dispatches through the slot's default model), models.codex.advisor runs herd codex-sol with no fallback (a failure stays loud, pane kept). Every purpose accepts this shape — cell, gather, reviewer, advisor, extraction; the operator owns the pane cost per slot."
   },
   "hooks": {
     "session-init": true,
@@ -54,11 +56,41 @@
       "extraction": null,
       "generation": null,
       "review": {
-        "kind": "cli",
-        "command": "codex exec --skip-git-repo-check -s read-only -c model_reasoning_effort=xhigh -",
-        "promptVia": "stdin"
+        "kind": "herding",
+        "agent": "agy-flash",
+        "fallback": "default"
       },
-      "advisor": null
+      "advisor": {
+        "kind": "herding",
+        "agent": "codex-sol"
+      }
+    }
+  },
+  "herding": {
+    "agent_command": "claude-sonnet",
+    "agents": {
+      "claude-sonnet": [
+        "claude",
+        "--model",
+        "sonnet",
+        "--permission-mode",
+        "bypassPermissions"
+      ],
+      "agy-flash": [
+        "agy",
+        "--dangerously-skip-permissions"
+      ],
+      "codex-sol": [
+        "codex",
+        "--model",
+        "gpt-5.5"
+      ],
+      "codex-envd": {
+        "argv": ["codex", "--model", "gpt-5.5"],
+        "env": {
+          "CODEX_API_KEY": "replace-with-a-real-key"
+        }
+      }
     }
   }
 }

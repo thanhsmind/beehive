@@ -1,0 +1,58 @@
+{
+  "id": "hsr-1",
+  "feature": "herding-start-retry",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Retry agent_start on agent_pane_busy, bounded",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-start-retry/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Per D1: in execute_new, when herdr.agent_start returns an error containing agent_pane_busy (or: pane is not an available shell), retry the start up to 10 times spaced about 1 second (injected sleep seam like deliver_pointer, so tests run with no real clock); any other error keeps the current immediate spawn-failure path; exhaustion keeps the existing behavior (close the just-split pane, typed SpawnFailed). Tests: busy-twice-then-ok succeeds with exactly 3 start calls; non-busy error never retries; exhaustion closes the pane and names the retry in the message.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::run",
+  "must_haves": {
+    "truths": [
+      "agent_pane_busy retries bounded and succeeds when the shell warms",
+      "a non-busy start error never retries",
+      "exhaustion closes the pane with a typed message naming the retry"
+    ]
+  },
+  "decisions": [
+    "herding-start-retry D1"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hsr-1",
+    "outcome": "agent start retries through the shell-boot window; the eval's own blocker is extinct",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T05:01:40.036Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T04:57:12.445Z",
+    "report": {
+      "outcome": "bounded agent_pane_busy retry (10x~1s); non-busy immediate; exhaustion keeps pane-close shape",
+      "commit": "head",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run — green (44 passed) — touched module, 3 new retry tests",
+      "deviations": [
+        "executed inline by the orchestrator (tiny lane allows inline): the config-route dispatch of this cell was itself blocked twice by agent_pane_busy — the bug this cell fixes; recorded as the eval finding"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

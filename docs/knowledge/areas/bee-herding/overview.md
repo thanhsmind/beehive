@@ -2,23 +2,28 @@
 type: bee.area
 title: "Bee Herding — the three-role cockpit, its safety boundaries, and adoption"
 description: "A herdr-driven cockpit that runs several Claude Code sessions in parallel worktrees: a dispatch loop that starts work behind an owner interlock, a merge gesture the owner runs by hand, and the safety boundaries that make unattended dispatch acceptable while keeping every landing in main a human act."
-timestamp: 2026-07-24
+timestamp: 2026-08-20
 bee:
   id: bee-herding-overview
   lifecycle: active
   areas: [bee-herding]
   required_context: [areas/worktree-parallelism/overview.md]
-  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), i54-closeout D4]
-  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", "i54-closeout cell i54-closeout-4 (herding spawn command config-driven templates; trace in .bee/cells/, 2026-07-24)"]
+  decisions: [herding-adopt D1 (rename mandatory), herding-adopt D7 (posture split), herding-adopt D10 (dispatch interlock), herding-adopt D11 (merge is a gesture), herding-adopt D12 (supervised acceptance cycle), "herding-dispatch-lock-toggle D1-D3 (bee herding enable/disable/status CLI verb group, byte-identical to the manual marker gesture)", "herding-dispatch-lock-toggle D4 (CLI verbs stay owner-typed only, never called by bee automation)", herding-dispatch-lock-toggle D5 (no runtime guard added — explicit user decision), "herding-orchestration D8 (the control loop is a native command, not a script)", "herding-orchestration D13 (the control and working panes do not share a permission posture)", "herding-orchestration D19 (the live Windows run is an owner-run gap, not a blocker)"]
+  sources: ["PR #50 (external contribution, vantt — the design)", "herding-adopt cells h-2, h-3 (adoption: rename, hardening, merge demotion, interlock, shipping switch; traces in `.bee/cells/`, 2026-07-23)", docs/history/herding-adopt/CONTEXT.md, docs/history/herding-adopt/reports/advisor-digest.md, docs/history/herding-dispatch-lock-toggle/CONTEXT.md, "hdlt-1 (cell: bee herding enable/disable/status CLI verb group; trace in .bee/cells/hdlt-1.json, 2026-07-23)", docs/history/herding-orchestration/CONTEXT.md]
   authoritative_for: "bee-herding: the three-role cockpit, its safety boundaries, and adoption"
 ---
 
-# Bee Herding — The Three-Role Cockpit, Its Safety Boundaries, and Adoption
+# Bee Herding — the three-role cockpit, its safety boundaries, and adoption
 
-Bee herding runs several working sessions at once and retires them as they finish. It is one
-cockpit with three roles, and the whole design turns on a single principle: **the dangerous act —
-landing work in the shared trunk — stays a human gesture, while the cheap act — starting work in an
-isolated copy — is what runs unattended.**
+This page is the cockpit itself: who may act, what arms it, and what bounds it.
+The machinery it starts is documented beside it:
+
+| Concept | What it covers |
+|---|---|
+| [Agent resolution and spawn commands](agent-resolution-and-spawn-commands.md) | Which agent a pane runs as, the named-agent registry, and how its command is built |
+| [Handing a foreign agent its brief](handing-a-foreign-agent-its-brief.md) | The mailbox channel, the standalone-worker contract, and delivery receipts |
+| [The run verb and worker outcomes](the-run-verb-and-worker-outcomes.md) | The poll's signal ladder, the typed outcomes, and pane lifecycle |
+| [Waves and occupancy](waves-and-occupancy.md) | Fan-out over running workers, the ledger, and slot counting |
 
 ## Entry Points & Triggers
 
@@ -28,6 +33,13 @@ isolated copy — is what runs unattended.**
   iteration; every fact it needs is read live from state, the trunk, and the pane workspace.
 - **Merge** is **not a loop.** It is a single-shot the owner runs by hand when they want finished
   work retired.
+- **The config tier route** sends every purpose dispatched against a herding-kind slot through a
+  pane automatically — see
+  [agent resolution and spawn commands](agent-resolution-and-spawn-commands.md).
+- **A wave** is a fourth entry point that briefs several already-running workers at once, and no
+  role calls it — see [waves and occupancy](waves-and-occupancy.md).
+- **A herding run** is a fifth entry point that starts a worker rather than briefing one that
+  already exists — see [the run verb and worker outcomes](the-run-verb-and-worker-outcomes.md).
 
 ## Data Dictionary
 
@@ -80,21 +92,16 @@ stop that silently leaves agents running is worse than none.
 binary or a transient error cannot produce an infinite retry, and the control invocations carry a
 turn ceiling — iterations were bounded in the original design, spend was not.
 
-**The working-agent and control-pane spawn commands are config-driven templates,
-byte-equivalent to the hardcoded default (i54-closeout D4).** `control-loop.sh`
-reads an optional `.bee/config.json` `herding.control_command` — a JSON array of
-argv-token strings — and, when present, substitutes `{PROMPT}` / `{MODEL}` /
-`{MAX_TURNS}` / `{ALLOWED_TOOLS}` per token and runs the result verbatim: tokens
-are never joined into one string and re-split or shell-`eval`'d, so a
-config-supplied command cannot smuggle shell injection through a placeholder
-value. The working agent's spawn tail has the matching `herding.agent_command`
-seam. When the key is absent, invalid, or empty, the command built is
-byte-equivalent to the pre-existing hardcoded `claude -p ... --model sonnet
---max-turns ... --allowedTools ...` invocation — a project with no config
-change sees no behavior change at all. A codex adapter example is documented
-purely as an illustration of the seam; full codex-native herding (its own event
-loop and pane protocol) stays out of scope (D4). None of enable/disable/status,
-the dispatch interlock, or the merge owner-gesture change.
+**The control panes and the working panes do not share a permission posture
+(herding-orchestration D13).** A control agent runs headless under an enumerated command surface; a
+working agent runs with its permissions open inside its own worktree. Keeping the two argv forms
+separate is what stops the narrow one from silently widening.
+
+**The control loop is a native command, not a script.** The loop that re-invokes the dispatch role
+on its interval is part of the tool itself. This is what made the cockpit portable: the previous
+form was a shell script that depended on GNU utilities and a modern shell, so it could not run on
+Windows at all. The one-shot cockpit setup is still a shell script and is a recorded gap
+(herding-orchestration D8).
 
 ## Actors & Access
 
@@ -108,7 +115,8 @@ the dispatch interlock, or the merge owner-gesture change.
   surface includes the writes that landing requires, and it runs the project's verify over the
   just-merged tree — so it executes whatever the working agents wrote.
 - **A working agent** runs with its permissions fully open, as a deliberately accepted risk (see
-  Business Rules). It is confined to its own worktree and branch until a merge.
+  R4). What it is confined to, and how its bee-ignorance is enforced rather than requested, is
+  [handing a foreign agent its brief](handing-a-foreign-agent-its-brief.md).
 
 ## Business Rules
 
@@ -143,10 +151,11 @@ the dispatch interlock, or the merge owner-gesture change.
 
 ## Edge Cases Settled
 
-- **A working agent that fails to name its own pane** leaves a slot looking free, so the loop could
-  spawn again next interval. The four-slot cap is currently enforced by the control model counting
-  panes, not by code — a known limit, recorded so it is chosen rather than assumed. Making it
-  mechanical is deferred.
+- **Starting an agent steals the owner's view.** Splitting a pane and creating a tab both honour a
+  do-not-focus request; starting an agent has no such option and moves the workspace's focus to the
+  new agent. For a loop that dispatches unattended on a fixed interval, every single spawn yanks the
+  owner away from whatever they were reading — the one thing the do-not-focus option exists to
+  prevent everywhere else. Found only by running the spawn for real; no documentation states it.
 - **A control pane narrowed too far** stalls silently every interval — the exact failure the whole
   cockpit exists to end. This is why the control surface is enumerated against measured actions, and
   why it is documented to grow when a role gains a command, rather than being set to "read-only".
@@ -155,23 +164,31 @@ the dispatch interlock, or the merge owner-gesture change.
 
 ## Open Gaps
 
-- **The four-slot concurrency cap is not yet mechanical** (see Edge Cases). Until it is, a spawned
-  agent that fails to self-name can lead the loop to over-spawn.
+- **The live D6 scenario has not been run end to end on Windows.** The mechanism is proven there —
+  the whole suite runs unexcluded on a Windows CI lane and every behavior that matters is pinned by
+  platform-portable tests — but a live run needs a running herdr server, real panes and real agents,
+  which CI cannot stand up. That run is an owner-run supervised cycle, the same shape as R7, not an
+  agent-run step (herding-orchestration D19, narrowing D4).
 - **The classifier reads the backlog row, not the work.** It vouches for an item from its one-line
   description, never opening the feature's own context. Reading the real work is the honest form of
   the safety check and is not yet built — the interlock (R3) is the compensating control meanwhile.
-- **The dependency on herdr's JSON shapes is unpinned** — no capability probe, so an upstream shape
-  change degrades to the silent-stall class.
 - **The supervised acceptance cycle (R7) is owner-run and outstanding** for this repo.
 
 ## Pointers (implementation)
 
 - The skill and its three roles: `skills/bee-herding/SKILL.md`; the loop driver
-  `scripts/control-loop.sh`; the one-shot `scripts/bootstrap-cockpit.sh`; the owner interlock
-  `scripts/dispatch-interlock.mjs`; the work classifier `scripts/classify-lane.mjs`.
-- The CLI-verb equivalent of the manual marker gesture: `packages/bee/lib/herding.mjs`,
-  wired into `the bee binary` as the `herding` command group. Test coverage:
-  `packages/bee/tests/test_herding_cli.mjs`.
-- Regression coverage: `packages/bee/tests/test_herding.mjs`.
+  `bee herding control-loop`
+  (`packages/bee-rs/crates/bee/src/herding/control_loop.rs`); the one-shot
+  `skills/bee-herding/scripts/bootstrap-cockpit.sh`.
+- The `herding` command group — `classify-lane`, `interlock`, `command-template`,
+  `herdr-result`, `herdr-pane-id`, `wave`, `occupancy`, `record-worker`, `run` and
+  `control-loop`, the ten verbs the current binary actually
+  serves — is implemented in `packages/bee-rs/crates/bee/src/herding.rs`, dispatched
+  from `packages/bee-rs/crates/bee/src/router.rs`, and listed (with `enable`,
+  `disable` and `status` marked `unavailable`) in the command catalog
+  `packages/bee-rs/crates/bee/src/catalog.rs`. `enable`, `disable` and `status` are
+  not among the ten live verbs and refuse by name; the manual `touch`/`rm` marker
+  gesture is their only live form (see Data Dictionary). Test coverage is inline:
+  the `#[cfg(test)] mod tests` block in `herding.rs`.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.

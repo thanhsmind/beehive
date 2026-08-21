@@ -195,12 +195,12 @@ pub(crate) fn merge_stage(
                 ),
             ));
         }
-        let roots = main_bookkeeping_roots(identity.feature.as_deref());
+        let roots = main_bookkeeping_roots(main_root, identity.feature.as_deref());
         if is_tree_dirty_excluding(main_root, &roots).map_err(MErr::Thrown)? {
             let offending = git_status_porcelain_excluding_untracked_all(main_root, &roots).map_err(MErr::Thrown)?;
             let scope = match &identity.feature {
-                Some(f) => format!(".bee/, docs/decisions/, docs/knowledge/, or docs/history/{f}/"),
-                None => ".bee/, docs/decisions/, or docs/knowledge/".to_string(),
+                Some(f) => format!(".bee/, docs/decisions/, docs/knowledge/ paths this feature recorded, or docs/history/{f}/"),
+                None => ".bee/ or docs/decisions/".to_string(),
             };
             return Err(refuse_merge(
                 "WORKTREE_MERGE_MAIN_DIRTY",
@@ -216,9 +216,9 @@ pub(crate) fn merge_stage(
         // keep refusing forever.
         let message = match &identity.feature {
             Some(f) => format!(
-                "Auto-commit .bee, docs/decisions, docs/knowledge, and docs/history/{f} bookkeeping before merging worktree {id}"
+                "Auto-commit .bee, docs/decisions, {f}'s recorded docs/knowledge, and docs/history/{f} bookkeeping before merging worktree {id}"
             ),
-            None => format!("Auto-commit .bee, docs/decisions, and docs/knowledge bookkeeping before merging worktree {id}"),
+            None => format!("Auto-commit .bee and docs/decisions bookkeeping before merging worktree {id}"),
         };
         bookkeeping_commit = Some(commit_main_bookkeeping(main_root, &message, &roots).value());
     }

@@ -8,15 +8,15 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md, areas/hook-runtime/write-guard-request-shapes.md, areas/hook-runtime/governed-paths-and-the-intake-gate.md]
-  decisions: ["write-guard-precision D1 (guard precision over blanket strictness, 2026-08-11)"]
+  decisions: ["write-guard-precision D1 (guard precision over blanket strictness, 2026-08-11)", "herding-executor D8 (the worker mailbox is exempt from the scratch-shape deny, 2026-08-19)"]
   sources: ["write-guard-precision cell wgp-1 (trace .bee/cells/archive/write-guard-precision/wgp-1.json, commit 23ad32e, worker suite 1529 passed / 7 ignored, 2026-08-11)", "write-guard-precision cell wgp-2 (trace .bee/cells/archive/write-guard-precision/wgp-2.json, commit fbcc40d7, worker suite 1422 passed, 2026-08-11)", docs/history/write-guard-precision/plan.md]
   authoritative_for: "hook-runtime: write-guard code-extension exemptions, the idle-gate git safe-form table, and the worker-count-unresolved remedy"
 ---
 
 # Hook Runtime — guard precision: code exemptions, the idle-gate git safe-form table, and a named worker-count remedy
 
-Three write-guard checks were found refusing legitimate work that a blanket rule
-could not tell apart from the thing it actually exists to stop. Each was
+Several write-guard checks were found refusing legitimate work that a blanket
+rule could not tell apart from the thing it actually exists to stop. Each was
 narrowed to the precise shape it needs to catch, never widened past it — the
 guard still refuses everything it refused before, it just stops refusing the
 ordinary work sitting next to it.
@@ -37,6 +37,15 @@ the heuristic was built to catch. The narrower `.pem`/`.key`/`.p12` secret
 match is untouched by this exemption on purpose: widening it to cover a
 matching key file was considered and rejected as a privacy loss for
 near-zero gain.
+
+**The worker mailbox is exempt from the scratch-shape refusal.** A herded
+worker's only channel back is a file it writes into the mailbox directory, and
+those file names carry the very shapes the scratch heuristic refuses — a log,
+and a staged temporary that is renamed into place. Without the exemption the
+guard denies the worker the one write its whole contract permits, which is how
+it was found: a worker completed its task and then could not report it. The
+exemption is scoped to that directory, so a scratch-named file anywhere else is
+refused exactly as before.
 
 **The idle-gate git check admits a table of safe, non-mutating command forms
 instead of refusing by subcommand alone.** At the terminal, gate-controlled
@@ -66,6 +75,9 @@ for a genuine multi-worker conflict.
 - The code-extension exemption applies identically to the secret-prefix
   check and the scratch-prefix check; a `.pem`/`.key`/`.p12` match is never
   exempted by it (write-guard-precision D1).
+- The worker-mailbox exemption is scoped to that directory alone; a
+  scratch-named file outside it is refused exactly as before
+  (herding-executor D8).
 - An idle-gate git safe form is recognized by its exact, proven-read-only
   spelling; the corresponding mutating spelling of the same subcommand is
   never covered by the same table entry (write-guard-precision D1).

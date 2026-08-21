@@ -1,0 +1,68 @@
+{
+  "id": "hx-5",
+  "feature": "herding-executor",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Docs: run verb in operational-invariants, knowledge sync, doctrine branch",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-herding/references/operational-invariants.md",
+    "docs/knowledge/areas/bee-herding/overview.md",
+    "skills/bee-hive/references/gates-and-delegation.md"
+  ],
+  "read_first": [
+    "docs/history/herding-executor/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Document bee herding run in operational-invariants.md (canonical home of herding.agent_command — no net-new herding section in config-reference.md); sync docs/knowledge/areas/bee-herding/overview.md (the run verb joins wave as an entry shape; mailbox, health-check liveness, pane lifecycle, D7 cell-only boundary); add one doctrine paragraph in gates-and-delegation.md beside the cli gather branch naming the herding execution branch (cell-only, mirror of cli; D4 bookkeeping stays with the orchestrator).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo run --release --manifest-path packages/bee-rs/Cargo.toml -- knowledge index --check",
+  "must_haves": {
+    "truths": [
+      "operational-invariants.md documents the run verb where agent_command already lives",
+      "gates-and-delegation.md names the herding execution branch as the cli branch's cell-side mirror"
+    ]
+  },
+  "decisions": [
+    "herding-executor D7",
+    "herding-executor D4"
+  ],
+  "deps": [
+    "hx-4",
+    "hx-2"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hx-5",
+    "outcome": "Documented bee herding run in operational-invariants.md, synced the bee-herding knowledge overview, and named the herding execution branch beside cli in gates-and-delegation.md",
+    "files_changed": [
+      "skills/bee-herding/references/operational-invariants.md",
+      "docs/knowledge/areas/bee-herding/overview.md",
+      "skills/bee-hive/references/gates-and-delegation.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T21:04:33.758Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-19T21:00:14.892Z",
+    "report": {
+      "outcome": "Documented bee herding run in operational-invariants.md, synced the bee-herding knowledge overview, and named the herding execution branch beside cli in gates-and-delegation.md",
+      "commit": "00078a2eaa2b0dae45fd1d59be9c306105a05b70",
+      "files": [
+        "skills/bee-herding/references/operational-invariants.md",
+        "docs/knowledge/areas/bee-herding/overview.md",
+        "skills/bee-hive/references/gates-and-delegation.md"
+      ],
+      "tests": "bee knowledge index --check — green — docs-only cell, verify command run via the prebuilt release binary (cargo run was refused by the worktree git-guard as too complex to statically verify)",
+      "deviations": [
+        "Used the existing packages/bee-rs/target/release/bee binary instead of `cargo run --release --manifest-path ...` — the write-guard refused the cargo-run form as too complex to verify it stays inside the worktree; the built binary is code-identical since no Rust source changed in this cell."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

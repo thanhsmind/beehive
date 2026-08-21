@@ -365,6 +365,15 @@
     "discovery",
     "platform",
     "public-contracts",
-    "test-doctrine"
+    "test-doctrine",
+    "delivery",
+    "receipt",
+    "defaults",
+    "staging",
+    "env",
+    "worker",
+    "limit",
+    "resume",
+    "brief"
   ]
 }

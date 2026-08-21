@@ -1,0 +1,112 @@
+{
+  "id": "wbe-1",
+  "feature": "worker-brief-expertise",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "herding run --expertise: plumb, render, rescope the ignore clause",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/src/catalog.rs"
+  ],
+  "read_first": [
+    "docs/history/worker-brief-expertise/CONTEXT.md",
+    "docs/history/worker-brief-expertise/plan.md"
+  ],
+  "action": "Per plan.md Cell 1, honoring CONTEXT.md D1-D3. Entry format (one spelling both paths): a single --expertise flag given once, value holds one entry per line, each line '<path> :: <purpose> :: <read-to>' — exactly three non-empty ' :: ' segments per non-empty line, anything else refuses with a typed message. (a) parse_options in run.rs parses it into Vec<ExpertiseEntry{path,purpose,read_to}>. (b) BriefSpec in mailbox.rs gains expertise: &[ExpertiseEntry]; render_brief renders an '# Expertise — read these before you start' section BETWEEN '# Task' and '# Working directory (absolute)', one '- <abs path> — <purpose>. Read it to <read-to>.' line per entry, path joined onto worktree_root when relative (same base as the files list, mailbox.rs:130); zero entries render no section. (c) D3 rescope: keep 'Never run any bee command.' and the 'Never claim, cap, or write workflow state under .bee/ - writing your mailbox result file (described below) is the ONE exception.' sentence verbatim; reword ONLY the blanket 'IGNORE any bee or agent-workflow instructions' sentence to scope the ignoring to workflow participation and to say Expertise-listed files are yours to read; no rendered sentence may tell the worker to skip listed files. (d) job.json gains an 'expertise' array; the --continue path reads entries back from job.json (fresh flags win) — recorded deviation from the flags-only continue precedent, per plan.md. (e) register --expertise for herding run in the hand-edited packages/bee-rs/crates/bee/src/generated/registry_payload.json (decision 3358743e) and bump catalog.rs PINNED_FLAG_COUNT 177 -> 178 (one distinct new name). Tests in existing style: render with 2 entries and with 0, malformed refusal, continue round-trip, dry-run carries the section.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "must_haves": {
+    "truths": [
+      "Zero --expertise flags render a brief byte-identical to today's",
+      "Malformed --expertise value refuses with a typed message",
+      "Round N+1 continue brief keeps the entries recorded in job.json",
+      "No rendered sentence tells the worker to ignore the listed files"
+    ]
+  },
+  "decisions": [
+    "worker-brief-expertise D1",
+    "worker-brief-expertise D2",
+    "worker-brief-expertise D3"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "wbe-w1",
+    "outcome": "herding run --expertise plumbs dispatcher-picked expertise into the worker brief; ignore clause rescoped to workflow-only",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "packages/bee-rs/crates/bee/src/catalog.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T21:13:12.092Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c1eacb78-2dd2-497a-8ea0-8a0c59b5a89d",
+    "claimed_at": "2026-08-20T16:24:16.906Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "c1",
+            "status": "PASS",
+            "evidence": "run.rs:158 parse_expertise splits on ' :: ', requires len==3 non-blank, else typed Err; test parse_options_refuses_malformed_expertise_line ok"
+          },
+          {
+            "id": "c2",
+            "status": "PASS",
+            "evidence": "mailbox.rs:142-179 expertise_block between # Task and # Working directory; two-entry and zero-entry byte-identity tests ok"
+          },
+          {
+            "id": "c3",
+            "status": "PASS",
+            "evidence": "mailbox.rs:167-175 keeps never-run-bee and .bee ONE-exception sentences verbatim; blanket clause scoped to workflow participation, Expertise files yours to read; no other skip sentence at HEAD"
+          },
+          {
+            "id": "c4",
+            "status": "PASS",
+            "evidence": "run.rs:1087 job.json expertise array; run.rs:1432-1440 continue reads it back, fresh flag wins; both round-trip tests ok"
+          },
+          {
+            "id": "c5",
+            "status": "PASS",
+            "evidence": "registry_payload.json herding.run gains expertise; catalog.rs:432 PINNED_FLAG_COUNT=178 test ok; expertise-scoped 11 passed, herding:: 189 passed"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "gemini-3.7-flash",
+        "judge_model": "claude-review-tier",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-20T21:12:36.804Z"
+      }
+    ],
+    "report": {
+      "outcome": "herding run --expertise plumbs dispatcher-picked expertise into the worker brief; ignore clause rescoped to workflow-only",
+      "commit": "f29c30a1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "packages/bee-rs/crates/bee/src/catalog.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee -- herding:: — green (189 passed) plus catalog:: 8 passed — cell touches herding run/mailbox and the pinned flag vocabulary",
+      "deviations": [
+        "worker dispatched as external pane (config routes generation tier to herding-executor); orchestrator ran judge-record and this cap on the bee-ignorant worker's behalf per herding-executor D4"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 326 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  }
+}

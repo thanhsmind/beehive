@@ -2,18 +2,18 @@
   "schema_version": "1.0",
   "feature": "herding-orchestration",
   "mode": "feature",
-  "phase": "swarming",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"herding-orchestration\" started at phase \"exploring\" (lane).",
-  "next_action": "Invoke bee-swarming.",
+  "next_action": "bee close finished \"herding-orchestration\" — feature is closed.",
   "created_at": "2026-08-18T08:07:25.780Z",
-  "run_state": "awaiting-approval",
+  "run_state": null,
   "waiting_on": null,
   "route": {
     "class": "feature",

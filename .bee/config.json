@@ -7,14 +7,28 @@
     "session-close": true,
     "write-guard": true
   },
+  "ship_visibility": "on",
+  "worktree_first": "on",
+  "worktree_cleanup_on_merge": true,
+  "uat_stop": "merge",
+  "uat_before_merge": true,
+  "staging_before_merge": false,
   "commands": {
     "test": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml"
   },
   "gate_bypass": "normal",
   "models": {
     "claude": {
-      "extraction": "haiku",
-      "generation": "sonnet",
+      "extraction": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "fallback": "default"
+      },
+      "generation": {
+        "kind": "herding",
+        "agent": "agy-flash",
+        "fallback": "default"
+      },
       "review": "opus",
       "advisor": "fable"
     },
@@ -26,6 +40,33 @@
         "command": "codex exec -m gpt-5.5 -s read-only -c model_reasoning_effort=\"high\" -",
         "promptVia": "stdin"
       }
+    }
+  },
+  "herding": {
+    "agent_command": "claude-sonnet",
+    "control_command": [
+      "claude",
+      "-p",
+      "{PROMPT}",
+      "--model",
+      "sonnet",
+      "--max-turns",
+      "{MAX_TURNS}",
+      "--allowedTools",
+      "{ALLOWED_TOOLS}"
+    ],
+    "agents": {
+      "claude-sonnet": [
+        "claude",
+        "--model",
+        "sonnet",
+        "--permission-mode",
+        "bypassPermissions"
+      ],
+      "agy-flash": [
+        "agy",
+        "--dangerously-skip-permissions"
+      ]
     }
   }
 }

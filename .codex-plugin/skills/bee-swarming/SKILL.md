@@ -45,7 +45,7 @@ From two cells up, state the one-line concurrency plan before dispatching.
    bound how many cells of the wave are claimed). One cell, or a cell
    needing its own worker name, takes
    `bee dispatch prepare --cell <id> --worker <name> --runtime <rt> --claim`
-   instead. Judge and record the model tier first (`bee cells tier`;
+   instead. The dispatcher may compose an Expertise section for the worker leader-style via `--expertise` (one entry per line, `<path> :: <purpose> :: <read-to>`), choosing from bee's own skill references and knowledge files; optional and judgment-driven, never auto-derived. Judge and record the model tier first (`bee cells tier`;
    rubric: `references/swarming-reference.md`).
 3. Spawn with exactly that payload — a whole wave goes out in ONE message,
    one tool call per cell. Never paste session history; never hand a

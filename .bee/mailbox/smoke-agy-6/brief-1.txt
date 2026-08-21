@@ -1,0 +1,42 @@
+# Task
+
+Read the file /home/thanhsmind/projects/goglbe/beehive/README.md and produce a 5-line plain-text summary of what the bee tool does. Do not edit any file in the repository — your only write is the result file named in the instructions.
+
+# Working directory (absolute)
+
+/home/thanhsmind/projects/goglbe/beehive
+
+# Files you may touch (absolute paths)
+
+  (no files declared for this round — do not create files outside the task's own scope)
+
+A file not listed above is out of scope for this round; do not touch it.
+
+# Round
+
+This is round 1 of job "smoke-agy-6". Write your result to round 1's
+result file below — never a different round's file.
+
+# Result contract
+
+When you are done, or genuinely blocked, write EXACTLY ONE JSON object matching
+this schema, and nothing else, to the result file:
+
+{
+"status": "done" | "blocked",
+"summary": "<one line: what happened>",
+"files_changed": ["<path>", "..."],
+"proof": "<command or evidence that backs the status>"
+}
+
+# How to write it — write to a temp file, then rename (do not skip this)
+
+Write the JSON above to a temp file in the SAME directory as the result file,
+then RENAME the temp file onto the result file's exact final name. Never write
+directly to the final name — a partial write at the final name is read as a
+finished result. The result file's appearance at its final name IS the done
+signal; nothing else is read to decide whether you finished.
+
+mailbox directory:                  /home/thanhsmind/projects/goglbe/beehive/.bee/mailbox/smoke-agy-6
+temp file (write your JSON here):   /home/thanhsmind/projects/goglbe/beehive/.bee/mailbox/smoke-agy-6/result-1.json.tmp
+result file (round 1, rename to this exact name): /home/thanhsmind/projects/goglbe/beehive/.bee/mailbox/smoke-agy-6/result-1.json

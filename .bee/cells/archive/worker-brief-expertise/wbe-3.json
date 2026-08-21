@@ -1,0 +1,69 @@
+{
+  "id": "wbe-3",
+  "feature": "worker-brief-expertise",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Skill prose: dispatcher composes expertise entries leader-style",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-swarming/SKILL.md",
+    "skills/bee-swarming/references/swarming-reference.md",
+    "skills/bee-herding/references/operational-invariants.md",
+    "docs/history/codex-harness-hardening/release-manifest.json"
+  ],
+  "read_first": [
+    "docs/history/worker-brief-expertise/CONTEXT.md",
+    "docs/history/worker-brief-expertise/plan.md"
+  ],
+  "action": "Per plan.md Cell 3, honoring CONTEXT.md D2 and D4: add one short rule to the orchestrator dispatch step in skills/bee-swarming/SKILL.md and the prompt-template details in skills/bee-swarming/references/swarming-reference.md — the dispatcher composes Expertise entries leader-style (path, purpose, read-to) via --expertise, choosing from bee's own skill references and knowledge files; optional, judgment-driven, never auto-derived. Cite the flag spelling exactly as bee dispatch prepare --help prints it after wbe-2 lands; do not restate the template text. Also add --expertise to the verbatim herding-run flag enumeration in skills/bee-herding/references/operational-invariants.md (around lines 195-198). dispatch-prompt.md needs no change (13 lines, composes no run command — checked, recorded in plan.md). Knowledge-area sync belongs to capture, not this cell. Regen obligation: skills/ is a release-manifest inventory root — run the full regen chain inside this cell (bee dev regen: render-skill-trees, onboard --repo-root . --apply, release-manifest --write, in that order).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "Prose cites the flag spelling exactly as --help prints it"
+    ]
+  },
+  "decisions": [
+    "worker-brief-expertise D2",
+    "worker-brief-expertise D4"
+  ],
+  "deps": [
+    "wbe-2"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "wbe-w3",
+    "outcome": "Skill prose: dispatcher composes Expertise entries leader-style; herding run flag list gains --expertise",
+    "files_changed": [
+      "skills/bee-swarming/SKILL.md",
+      "skills/bee-swarming/references/swarming-reference.md",
+      "skills/bee-herding/references/operational-invariants.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T23:59:43.159Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "c1eacb78-2dd2-497a-8ea0-8a0c59b5a89d",
+    "claimed_at": "2026-08-20T22:56:46.172Z",
+    "report": {
+      "outcome": "Skill prose: dispatcher composes Expertise entries leader-style; herding run flag list gains --expertise",
+      "commit": "81f0c606",
+      "files": [
+        "skills/bee-swarming/SKILL.md",
+        "skills/bee-swarming/references/swarming-reference.md",
+        "skills/bee-herding/references/operational-invariants.md",
+        "docs/history/codex-harness-hardening/release-manifest.json"
+      ],
+      "tests": "rg -n expertise over the three skill files + bee dev release-manifest --check — green (6 prose matches, entry shape matches the registry flag description; 270 files match manifest) — docs cell, parity/pointer proof per plan",
+      "deviations": [
+        "regen initially ran with the worktree stale bee binary and re-deleted .claude/agents/bee-*.md; worker restored them and re-ran regen with the main binary before committing",
+        "generated skill projections (.agents/.claude/.claude-plugin/.codex-plugin/.opencode trees) ride the same commit — regen outputs, undeclared at plan time"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

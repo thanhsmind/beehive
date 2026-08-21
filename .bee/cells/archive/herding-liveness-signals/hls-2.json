@@ -1,0 +1,106 @@
+{
+  "id": "hls-2",
+  "feature": "herding-liveness-signals",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Read pane text only when the heartbeat is already stale, not on every poll tick",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-liveness-signals/CONTEXT.md",
+    "docs/history/herding-liveness-signals/plan.md"
+  ],
+  "action": "Per D4, slice 3 of the plan — the follow-up hlp-1's own cap already flagged ('pane_read polled every tick rather than only on stale heartbeat'). Today the production tick closure in wait_for_round calls herdr.pane_read(pane_id) on EVERY 200ms tick and hands the text to decide_poll, but decide_poll consumes pane_text ONLY inside its stale-heartbeat branch. At the 900s idle timeout that is roughly 4,500 discarded subprocess spawns per worker per stall. TAKE THE SEAM THAT DOES NOT TOUCH decide_poll: change run_poll_loop's `tick` parameter from `impl FnMut() -> PollTick` to `impl FnMut(bool) -> PollTick`, where the bool is `heartbeat_already_stale` — computed in run_poll_loop from the same `now - last_heartbeat_ms >= idle_timeout` expression decide_poll uses, evaluated BEFORE the tick so the closure knows whether the text will be needed. The production closure calls herdr.pane_read(pane_id).ok() only when that flag is true, and passes pane_text: None otherwise. decide_poll's signature, body, branch order and ALL SEVEN of its existing tests stay completely untouched — that is the point of choosing this seam. The three existing run_poll_loop tests and any other closure sites gain an ignored parameter (|_| ...) with NO change to any expected value. Watch the boundary case: on the exact tick where staleness first becomes true the flag must already be true, so paused_limit still fires on the same tick it fires today — the existing FakeHerdr end-to-end tests (stale_heartbeat_with_matching_pane_text_pauses_limit..., stale_heartbeat_with_non_matching_pane_text_times_out_idle_unchanged, fresh_heartbeat_with_matching_pane_text_keeps_waiting_until_result_ready) must pass byte-identically. Add one test proving pane_read is NOT called while the heartbeat is fresh: script FakeHerdr to count pane_read calls and assert the count stays zero across several fresh-heartbeat ticks, then becomes non-zero once the heartbeat goes stale. Do not touch the tier-1 liveness cadence (every 10th tick), the debounce, or anything else from hls-1.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "pane_read is not called on a tick whose heartbeat is fresh, proven by a call-counting fake",
+      "paused_limit and timed_out_idle still fire on exactly the tick they fire today — the three existing FakeHerdr classification tests pass with no assertion changed",
+      "decide_poll's signature, body and all seven of its existing tests are untouched",
+      "The tier-1 liveness cadence and debounce from hls-1 are unchanged"
+    ]
+  },
+  "decisions": [
+    "herding-liveness-signals D4"
+  ],
+  "deps": [
+    "hls-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hls-2",
+    "outcome": "A stall now costs one pane read instead of roughly 4500 discarded subprocess spawns",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T13:34:39.661Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "8ca30885-b974-4da5-8327-c60ae9cd5a46",
+    "claimed_at": "2026-08-20T13:28:02.093Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "pane-read-skipped-while-heartbeat-fresh",
+            "status": "PASS",
+            "evidence": "run.rs wait_for_round closure now guards the read: pane_text = if heartbeat_already_stale { herdr.pane_read(pane_id).ok() } else { None }. Pinned by pane_read_is_not_called_while_heartbeat_is_fresh_and_polled_when_stale, which asserts the call-counting fake records exactly one read for a whole stall and that it names the right pane"
+          },
+          {
+            "id": "classification-timing-unchanged",
+            "status": "PASS",
+            "evidence": "heartbeat_already_stale is computed in run_poll_loop from the SAME expression decide_poll uses (now - last_heartbeat >= idle_timeout * 1000). Orchestrator traced the one-tick skew: the flag reads last_heartbeat BEFORE this tick's freshness is applied, so it can only ever be true when decide_poll would be false (one wasted read, no verdict change) and never false when decide_poll needs the text. paused_limit and timed_out_idle therefore still fire on the tick they fire today; the three FakeHerdr classification tests are untouched by the diff"
+          },
+          {
+            "id": "decide-poll-untouched",
+            "status": "PASS",
+            "evidence": "The diff contains no hunk touching decide_poll's signature, body, branch order, or any of its seven tests. The chosen seam was run_poll_loop's tick parameter, exactly so that surface stayed frozen"
+          },
+          {
+            "id": "hls-1-cadence-and-debounce-intact",
+            "status": "PASS",
+            "evidence": "tick_index increment, the every-10th-tick liveness read, and the absent/unknown debounce arithmetic appear nowhere in the diff. The liveness sequence tests gained only an ignored closure parameter"
+          },
+          {
+            "id": "test-edits-are-mechanical-or-strengthening",
+            "status": "PASS",
+            "evidence": "Every pre-existing closure site changed only from || to |_|; no expected value changed. One existing test gained an added assertion that pane_read stays uncalled on the result-ready path — a strengthening, not a relaxation"
+          },
+          {
+            "id": "tests-green-orchestrator-run",
+            "status": "PASS",
+            "evidence": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding, re-run by the orchestrator: 206 passed; 0 failed on the bee unit binary, up from 204 after hls-1. The FAILED lines are the known quick_exit_helper intentional-failure fixture at control_loop.rs:795"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "agy-flash",
+        "judge_model": "claude-opus-5",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-20T13:34:31.646Z"
+      }
+    ],
+    "report": {
+      "outcome": "run_poll_loop computes heartbeat_already_stale before each tick and passes it to the tick closure, which fetches pane text only when the classification branch will consume it; decide_poll keeps its signature, body and all seven existing tests",
+      "commit": "d9778ea5",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — 206 passed, 0 failed (FAILED lines are the known quick_exit_helper intentional-failure fixture at control_loop.rs:795) — scope: the touched module suite, re-run by the orchestrator rather than trusted from the worker report",
+      "deviations": [
+        "worker executed as a herded agy-flash pane (job job-1787232487517, outcome done) and left the work uncommitted in the tree; the orchestrator read the full diff, verified the one-tick staleness skew is harmless, and committed it as d9778ea5"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

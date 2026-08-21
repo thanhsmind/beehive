@@ -1726,6 +1726,11 @@ use std::process::ExitCode;
         allow("scripts/probe-foo.mjs");
         allow("src/probe-runner.rs");
         deny("probe-results.json");
+        // D8: .bee/mailbox/ is a tmp-then-rename staging area (D3's
+        // gesture) — the exemption must cover it, not just the other
+        // .bee/ scratch dirs.
+        allow(".bee/mailbox/job-1/result-1.json.tmp");
+        deny(".bee/other/x.tmp");
         // decisions ledger append stays allowed
         let e = expect_done(bash("printf \"x\" >> .bee/decisions.jsonl"), &fx.root);
         assert_eq!(e.code, 0, "{}", e.stderr);

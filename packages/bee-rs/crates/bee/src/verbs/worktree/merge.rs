@@ -168,22 +168,48 @@ pub(crate) fn git_status_porcelain_excluding_untracked_all(cwd: &Path, exclude_p
 // --no-gpg-sign`, through `commit_unsigned`.
 
 /// The pathspecs a pre-merge bookkeeping auto-commit is allowed to sweep:
-/// `.bee`, `docs/decisions`, and `docs/knowledge` always; `docs/history/<feature>`
-/// only when the worktree's feature is known (`resolve_worktree_feature` —
-/// absent for a worktree registered without bee's own creation identity, in
-/// which case the other three still apply). `docs/decisions` and
-/// `docs/knowledge` join `.bee` unconditionally because bee itself writes
-/// all three on every session — `decisions log` writes
-/// `docs/decisions/taxonomy.json` (verbs/decisions/mod.rs), and the capture
-/// chain writes `docs/knowledge/**` — exactly the bookkeeping dirt this
-/// auto-commit exists to sweep, never a peer's work. Never widened to all of
-/// `docs/history/`: a sibling feature's in-flight worktree can be writing
-/// its own `docs/history/<other>/` at the same moment, and sweeping it into
-/// an UNRELATED merge's bookkeeping commit would land a peer's uncommitted
-/// work without their say-so.
-pub(crate) fn main_bookkeeping_roots(feature: Option<&str>) -> Vec<String> {
-    let mut roots = vec![".bee".to_string(), "docs/decisions".to_string(), "docs/knowledge".to_string()];
+/// `.bee` and `docs/decisions` always — both are bee's own machine-written
+/// control plane and its rendered index, written by every session
+/// (`decisions log` writes `docs/decisions/taxonomy.json`,
+/// verbs/decisions/mod.rs). `docs/knowledge` and `docs/history/<feature>`
+/// are different: both hold AUTHORED prose (capture, not bookkeeping), so
+/// neither is ever swept blanket — each is scoped to the MERGING feature's
+/// own recorded paths, and only when that feature is known.
+/// `docs/knowledge/**` is scoped to the exact paths the merging feature's
+/// own capped cells recorded touching — `feature_touched_files`
+/// (drivers/close.rs, already `pub(crate)`, already read this way by
+/// close's own doc-deferral scan) filtered to `docs/knowledge/`. REAL
+/// INCIDENT, 2026-08-18: a blanket sweep on merging `uat-stop-placement`
+/// produced bookkeeping commit `7429dfda`, which swallowed a SIBLING
+/// session's capture sync to
+/// `docs/knowledge/areas/workflow-state/gates.md` — work belonging to
+/// feature `start-feature-reservation-scope`. Nothing was lost, but the
+/// authorship was wrong; a peer session found it, no test did.
+/// `docs/history/<feature>` keeps its own existing scoping, only when the
+/// feature is known: never widened to all of `docs/history/`, since a
+/// sibling feature's in-flight worktree can be writing its own
+/// `docs/history/<other>/` at the same moment, and sweeping it into an
+/// UNRELATED merge's bookkeeping commit would land a peer's uncommitted
+/// work without their say-so. When the worktree's feature is unknown
+/// (`resolve_worktree_feature` — absent for a worktree registered without
+/// bee's own creation identity), there is no cell record to scope EITHER
+/// tree by, so (kss-2) neither is swept at all — `docs/knowledge` now
+/// matches what `docs/history` already did here. A blanket sweep when the
+/// feature IS known leaves a wrong-but-traceable author; a blanket sweep
+/// when it is NOT known would commit authored prose under a feature
+/// nobody can identify — no author at all, a worse version of the same
+/// 7429dfda incident, not a milder one. A dirty `docs/knowledge` file left
+/// behind this way is named by the existing dirty-main refusal below, the
+/// same path that already names an unscoped `docs/history` file.
+pub(crate) fn main_bookkeeping_roots(root: &Path, feature: Option<&str>) -> Vec<String> {
+    let mut roots = vec![".bee".to_string(), "docs/decisions".to_string()];
     if let Some(feature) = feature {
+        let touched = crate::verbs::drivers::feature_touched_files(root, feature).unwrap_or_default();
+        for f in touched {
+            if f.starts_with("docs/knowledge/") && !roots.contains(&f) {
+                roots.push(f);
+            }
+        }
         roots.push(format!("docs/history/{feature}"));
     }
     roots

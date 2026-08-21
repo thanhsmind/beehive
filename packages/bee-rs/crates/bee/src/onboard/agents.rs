@@ -53,6 +53,13 @@ enum Slot {
     Model(String),
     Null,
     Cli,
+    /// herding-tier D1: `{kind:"herding"}` — a router value, never a model
+    /// name. AO11-shaped: like Cli, resolve_tier_model_generic reads this as
+    /// "no model" (sync_agent_file no-ops, no file written) — the Claude
+    /// subagent Task/Model tool has nothing to write here since cell
+    /// dispatch on this slot routes through the herding-exec Bash payload,
+    /// never a Task dispatch.
+    Herding,
     /// "no override" — the default for that slot stands.
     Unset,
 }
@@ -64,6 +71,7 @@ fn normalize_agent_tier_value(value: Option<&Value>) -> Slot {
         Some(Value::Object(o)) => {
             match o.get("kind") {
                 Some(Value::String(k)) if k == "cli" => Slot::Cli,
+                Some(Value::String(k)) if k == "herding" => Slot::Herding,
                 None => match o.get("model") {
                     Some(Value::String(m)) if !m.trim().is_empty() => {
                         Slot::Model(m.trim().to_string())

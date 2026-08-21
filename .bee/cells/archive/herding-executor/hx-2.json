@@ -1,0 +1,97 @@
+{
+  "id": "hx-2",
+  "feature": "herding-executor",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Drop the herdr agent-kind allow-list; herdr owns --kind validation",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "skills/bee-herding/references/operational-invariants.md",
+    "packages/bee-rs/crates/fleet/src/backend/herdr.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-executor/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "action": "Per D2: remove SUPPORTED_AGENT_KINDS and the token-0 contains check in resolve_agent_command (wave.rs:143) — token 0 passes through to herdr, which refuses unknown kinds itself. Reshape AgentCommandError: the UnrecognizedKind variant (carries supported: Vec) goes; keep/rename a variant for the empty-token fail-closed arm (wave.rs:134-140). Update the wave.rs tests asserting UnrecognizedKind to assert pass-through instead. Doc drift owned here: rewrite operational-invariants.md:74-76 (typed error now sourced from herdr's refusal after the pane split, not a bee-side list) and the caller-obligation comment in fleet/src/backend/herdr.rs:150-161 (comment only, no fleet behavior change).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave",
+  "must_haves": {
+    "truths": [
+      "An arbitrary token 0 (e.g. gemini, agy) resolves and reaches backend construction unchanged",
+      "Empty/malformed agent_command still falls back to the default command"
+    ]
+  },
+  "decisions": [
+    "herding-executor D2"
+  ],
+  "deps": [],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hx-2",
+    "outcome": "Removed bee's herdr agent-kind allow-list; token 0 passes through, herdr validates --kind itself",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+      "skills/bee-herding/references/operational-invariants.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T20:34:16.964Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-19T20:28:11.242Z",
+    "report": {
+      "outcome": "Removed bee's herdr agent-kind allow-list; token 0 passes through, herdr validates --kind itself",
+      "commit": "b5db2753ee7ab71d67c7586c7a52aa20440be3e1",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "packages/bee-rs/crates/fleet/src/backend/herdr.rs",
+        "skills/bee-herding/references/operational-invariants.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml wave — green — verify command from cell hx-2",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "token0-passthrough",
+            "status": "PASS",
+            "evidence": "test asserts kind==gemini reaches backend ctor unchanged"
+          },
+          {
+            "id": "fallback-intact",
+            "status": "PASS",
+            "evidence": "empty/malformed agent_command still falls back to default"
+          },
+          {
+            "id": "fleet-comment-only",
+            "status": "PASS",
+            "evidence": "fleet herdr.rs diff comment-only as declared"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "no undeclared files in b5db2753"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-19T21:11:20.092Z"
+      }
+    ]
+  }
+}

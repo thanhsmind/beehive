@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "herd-registry",
+  "mode": "feature",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"herd-registry\" started at phase \"planning\".",
+  "next_action": "Promote with the herding batch",
+  "created_at": "2026-08-20T04:22:43.763Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "**`agent_command` — bạn bắt đúng chỗ thừa.** Nó là mặc định khi không nêu tên herd, nhưng sample đang ghi **nguyên argv trùng khớp 100% với",
+    "asked_at": "2026-08-20T06:01:01.946Z",
+    "session": "1adb69d1-67be-4463-8349-af8832af8a32"
+  }
+}

@@ -393,7 +393,53 @@ mod tests {
         // seeded into a fresh document's body" — `--effort` and `--from`
         // are the two new spellings. `discovery list`'s `--json` reuses the
         // existing name unchanged, no count cost. Net +2: 156 -> 158.
-        const PINNED_FLAG_COUNT: usize = 158;
+        // herding-orchestration D17 (ho-10): `herding wave`/`herding
+        // occupancy` land. Checked first: `--main-root` (interlock/
+        // command-template) and `--json` (nearly every verb) are reused
+        // unchanged, no count cost. `--wave-id`, `--worker-settle-ms` and
+        // `--poll-interval-ms` name concepts no existing flag carries — a
+        // wave's own ledger-row id, and the choreography's two D9 timeouts
+        // (worker_settle/poll_interval on `WaveTimeouts`) — so all three
+        // are genuinely new. Net +3: 158 -> 161.
+        // herding-orchestration D18 (ho-12): `herding record-worker` lands —
+        // the verb `role-dispatch.md` §8 calls right after a spawn so the
+        // ledger row occupancy reads next iteration actually exists.
+        // Checked first: `--main-root`, `--json` (reused, no cost);
+        // `--name` (gate/state.gate — a different concept, "gate name" vs
+        // "this worker's own slug", but the same "identify by name" shape
+        // the registry already reuses across differing concepts, e.g.
+        // `--worker` across cells.claim/claim-next/dispatch.prepare — reused,
+        // no cost); `--path` (reservations.reserve — "a filesystem path to
+        // act on", the same shape as "the worktree path to record" — reused,
+        // no cost); `--wave-id` (herding.wave, same ledger-row concept —
+        // reused, no cost). `--pane-id` and `--task` name concepts no
+        // existing flag carries — a herdr pane's own identifier (every
+        // existing `--id`/`--*-id` names a BEE entity's id: cell, decision,
+        // worktree, review, trigger — never an external system's), and the
+        // item a worker was given (`--request`/`--subject`/`--cos` are all
+        // different concepts) — so both are genuinely new. Net +2: 161 -> 163.
+        // herding-orchestration D8 (ho-13): `herding control-loop` lands —
+        // the Rust replacement for control-loop.sh. Checked first:
+        // `--main-root` (interlock/command-template/wave/occupancy/
+        // record-worker) is reused unchanged, no cost. `--role`, `--interval`,
+        // `--timeout`, `--max-iterations`, `--max-consecutive-failures`,
+        // `--turn-ceiling` and `--once` name concepts no existing flag
+        // carries — which control agent this loop drives, the loop's own
+        // poll/kill/ceiling/backoff knobs, and "run one iteration then
+        // exit" — so all seven are genuinely new. Net +7: 163 -> 170.
+        // herding.run (hx-4/hx-6) adds `--task`, `--task-file`, `--job-id`,
+        // `--idle-timeout`, `--ceiling`, `--close-always`, `--continue` —
+        // the mailbox executor's own knobs, no existing flag names them.
+        // Net +7: 170 -> 177.
+        // 177 -> 178 (worker-brief-expertise wbe-1): `herding.run` gains
+        // `--expertise`, a single newline-separated flag holding
+        // `<path> :: <purpose> :: <read-to>` entries for the worker's
+        // brief Expertise section. Checked first: no existing flag names
+        // dispatcher-picked expertise files with purpose and read-to guidance
+        // — `--task`/`--task-file` name the assignment itself, `--read-first`
+        // on cells names cell planning dependencies, not CLI brief entries.
+        // `--expertise` is new.
+        const PINNED_FLAG_COUNT: usize = 178;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

@@ -1,0 +1,63 @@
+{
+  "id": "hba-2",
+  "feature": "herding-bare-agent",
+  "lane": "small",
+  "tier": "generation",
+  "title": "State the bare-run agent precedence in the help surface and the herding knowledge area",
+  "behavior_change": false,
+  "files": [
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "read_first": [
+    "docs/history/herding-bare-agent/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "action": "Make the two reader-facing surfaces state what hba-1 shipped. (1) `packages/bee-rs/crates/bee/src/generated/registry_payload.json` is edited by hand — no live subcommand regenerates it (recorded on cell awm-1); update the `herding run` command description and its `agent` parameter description so the resolution order reads: `--agent <name>`, then the `models.<runtime>.generation` tier slot when it is `{kind:\"herding\", agent:\"<name>\"}`, then `herding.agent_command`, then the built-in default. Keep the existing wording style and touch no other command entry. If a registry pin test fails, follow the fix its message names rather than reverting the text. (2) `docs/knowledge/areas/bee-herding/overview.md` around lines 154-190 already describes the `herding.agent_command` seam and the three reference spellings — replace that with the four-step precedence and name the tier slot as the configured role-to-agent mapping a bare run obeys. Ask the CLI for the write target and frontmatter (`bee knowledge check`, `bee knowledge context`) rather than assuming this file is the only right home; if the precedence deserves its own concept under bee-herding, promote one and record the deviation. Cite herding-bare-agent D1-D5. SEQUENCING: start only after hba-1 is capped, so the docs describe live behavior.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml registry",
+  "must_haves": {
+    "truths": [
+      "The herding run help description names all four resolution steps in order",
+      "The bee-herding knowledge area no longer presents herding.agent_command as the bare-run default",
+      "Both surfaces match the shipped resolver, verified against wave.rs at HEAD",
+      "No other registry command entry is modified"
+    ]
+  },
+  "decisions": [],
+  "deps": [
+    "hba-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "hba-2-worker",
+    "outcome": "Both reader surfaces state the four-step bare-run agent resolution order",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "docs/knowledge/areas/bee-herding/overview.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T11:56:00.132Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "b8251975-37ac-4380-a180-97e680aea639",
+    "claimed_at": "2026-08-20T11:50:44.237Z",
+    "report": {
+      "outcome": "The herding run help entry and the bee-herding knowledge overview both state the four-step bare-run resolution order (--agent, then the models.<runtime>.generation herd slot, then a string herding.agent_command, then the array/built-in default), plus the skip rules, the fail-closed unknown-agent arm, and the BEE_RUNTIME/claude runtime fallback; the agent parameter description now says it overrides both the tier slot and agent_command",
+      "commit": "0323bc17",
+      "files": [
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "docs/knowledge/areas/bee-herding/overview.md"
+      ],
+      "tests": "python3 -m json.tool registry_payload.json && cargo test --release --manifest-path packages/bee-rs/Cargo.toml registry — green: JSON_OK, 22 passed (bee unittests), 7 passed (registry_contracts), 3 passed (registry_dispatch), 0 failed — scope: docs-only change, so the proof is JSON validity plus every registry pin test that reads the edited payload",
+      "deviations": [
+        "worker executed as a herded agy pane (job hba-2-r1, outcome done); orchestrator re-read both surfaces against the shipped resolver before capping"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

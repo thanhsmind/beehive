@@ -54,6 +54,12 @@ pub const GITIGNORE_BLOCK_PATTERNS: &[&str] = &[
     ".bee/bin/bee.exe",
     ".claude/settings.json.bak",
     ".codex/hooks.json.bak",
+    // herding-executor D3/D8: the file mailbox worker-completion contract
+    // (job.json, result-N.json, log.txt) — runtime data, never committed.
+    // Appended at the end deliberately: the block's order is load-bearing
+    // (hashed into the managed ledger), so a new pattern joins at the tail
+    // rather than reordering any existing one.
+    ".bee/mailbox/",
 ];
 
 /// onboard_bee.mjs HOOK_FILENAMES (l. 225–248) — the vendoring order is the
@@ -140,6 +146,16 @@ pub fn default_config() -> Value {
 pub fn default_reservations() -> Value {
     json!({ "reservations": [] })
 }
+
+/// config-sample-herding D3: the bee repo's own `.bee/config-sample.json`,
+/// embedded at compile time so the release binary and the sample can never
+/// drift apart — the sample is annotated documentation for `.bee/config.json`,
+/// including the `herding` block. `bee onboard` seeds this into a fresh host
+/// repo create-if-missing (plan.rs runtime-file list, apply.rs's content
+/// match arm), so a release user sees the full commented sample without
+/// visiting the bee repo. Path is relative to this source file:
+/// crates/bee/src/onboard/ up six to the repo root.
+pub const CONFIG_SAMPLE_JSON: &str = include_str!("../../../../../../.bee/config-sample.json");
 
 pub const CRITICAL_PATTERNS_STUB: &str = "# Critical Patterns\n\nMandatory pre-planning / pre-execution context for this repository.\nbee-capturing appends hard-won patterns here; keep it short and current.\n\n(none captured yet)\n";
 
@@ -293,5 +309,17 @@ mod tests {
             assert!(!s.ends_with("\n\n"));
         }
         assert_eq!(claude_md_template(), format!("# Project Rules\n\n{CLAUDE_MD_IMPORT_SECTION}"));
+    }
+
+    #[test]
+    fn config_sample_json_embed_parses_and_carries_the_herding_key() {
+        // A moved or renamed source file must break the build loudly (the
+        // include_str! path fails to compile), not silently ship an empty
+        // or stale sample. This test guards the second failure mode: the
+        // path still resolves, but to content that no longer parses or has
+        // drifted behind the herding-key addition (config-sample-herding D1).
+        let v: Value = serde_json::from_str(CONFIG_SAMPLE_JSON)
+            .expect("embedded .bee/config-sample.json must parse as JSON");
+        assert!(v.get("herding").is_some(), "embedded config-sample.json is missing the herding key");
     }
 }

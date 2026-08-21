@@ -285,23 +285,23 @@ use std::time::Instant;
         let m = models_from("{}");
         // Defaults (DEFAULT_MODELS).
         assert_eq!(
-            resolve_tier(&m, "generation", "claude", false),
+            resolve_tier(&m, "generation", "claude", "cell"),
             Resolved::Model { model: "sonnet".into(), effort: None }
         );
         assert_eq!(
-            resolve_tier(&m, "review", "claude", true),
+            resolve_tier(&m, "review", "claude", "gather"),
             Resolved::Model { model: "opus".into(), effort: None }
         );
         // codex defaults are null -> budget; review falls back to generation
         // (also null) -> budget.
-        assert_eq!(resolve_tier(&m, "generation", "codex", false), Resolved::Budget);
-        assert_eq!(resolve_tier(&m, "review", "codex", true), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "generation", "codex", "cell"), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "review", "codex", "gather"), Resolved::Budget);
         // ceiling is never configured.
-        assert_eq!(resolve_tier(&m, "ceiling", "claude", false), Resolved::Inherit);
+        assert_eq!(resolve_tier(&m, "ceiling", "claude", "cell"), Resolved::Inherit);
         // An unknown slot ('advisor') coerces to generation — the trap
         // resolveAdvisor exists to avoid.
         assert_eq!(
-            resolve_tier(&m, "advisor", "claude", true),
+            resolve_tier(&m, "advisor", "claude", "gather"),
             Resolved::Model { model: "sonnet".into(), effort: None }
         );
 
@@ -310,25 +310,25 @@ use std::time::Instant;
             r#"{"claude":{"generation":{"kind":"cli","command":"glm run"},"review":null}}"#,
         );
         assert_eq!(
-            resolve_tier(&m, "review", "claude", true),
+            resolve_tier(&m, "review", "claude", "gather"),
             Resolved::Cli { command: "glm run".into() }
         );
         // cli + cell purpose -> typed refusal naming the RESOLVED slot.
         assert_eq!(
-            resolve_tier(&m, "review", "claude", false),
+            resolve_tier(&m, "review", "claude", "cell"),
             Resolved::Refused { slot: "review".into() }
         );
 
         // {model, effort}
         let m = models_from(r#"{"claude":{"generation":{"model":"opus","effort":"high"}}}"#);
         assert_eq!(
-            resolve_tier(&m, "generation", "claude", false),
+            resolve_tier(&m, "generation", "claude", "cell"),
             Resolved::Model { model: "opus".into(), effort: Some("high".into()) }
         );
         // An invalid effort is dropped by normalize.
         let m = models_from(r#"{"claude":{"generation":{"model":"opus","effort":"turbo"}}}"#);
         assert_eq!(
-            resolve_tier(&m, "generation", "claude", false),
+            resolve_tier(&m, "generation", "claude", "cell"),
             Resolved::Model { model: "opus".into(), effort: None }
         );
 
@@ -337,7 +337,7 @@ use std::time::Instant;
             r#"{"codex":{"generation":{"primary":{"kind":"native","model":"gpt-5","effort":"high"},"fallback_policy":"explicit-only","fallback":{"kind":"cli","command":"codex exec"}}}}"#,
         );
         assert_eq!(
-            resolve_tier(&m, "generation", "codex", false),
+            resolve_tier(&m, "generation", "codex", "cell"),
             Resolved::Native {
                 model: "gpt-5".into(),
                 effort: Some("high".into()),
@@ -351,10 +351,205 @@ use std::time::Instant;
         let m = models_from(
             r#"{"codex":{"generation":{"primary":{"kind":"native","model":"gpt-5"},"fallback":{"kind":"cli","command":"codex exec"}}}}"#,
         );
-        match resolve_tier(&m, "generation", "codex", false) {
+        match resolve_tier(&m, "generation", "codex", "cell") {
             Resolved::Native { fallback, .. } => assert_eq!(fallback, None),
             other => panic!("expected native, got {other:?}"),
         }
+    }
+
+    // herding-review-slots D1 (widened to the full mapping): `{kind:
+    // "herding"}` is a router value — EVERY purpose (cell, gather,
+    // reviewer, advisor, extraction) resolves to Resolved::Herding
+    // (ht-3/hrv-1/hrv-3 turn that into the herding-exec Bash payload);
+    // there is no longer a gather-default split.
+    #[test]
+    fn normalize_tier_value_accepts_and_round_trips_the_herding_shape() {
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding"}))),
+            Some(json!({"kind": "herding"}))
+        );
+        // No other fields are required, and unknown extras are dropped —
+        // same posture as the cli/native shapes above.
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "command": "ignored", "extra": 1}))),
+            Some(json!({"kind": "herding"}))
+        );
+        // A near-miss kind value is not herding — it falls through the
+        // existing rules unchanged (no `model` field either, so None).
+        assert_eq!(normalize_tier_value(Some(&json!({"kind": "hording"}))), None);
+    }
+
+    #[test]
+    fn resolve_tier_routes_every_purpose_on_a_herding_slot_to_herding() {
+        // cell purpose -> Resolved::Herding, never a refusal.
+        let m = models_from(r#"{"claude":{"generation":{"kind":"herding"}}}"#);
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", "cell"),
+            Resolved::Herding { agent: None, fallback: None }
+        );
+
+        // gather purpose on the SAME slot -> Herding too (D1 widened): the
+        // gather-default-model split hrv-1 still carried is gone.
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", "gather"),
+            Resolved::Herding { agent: None, fallback: None }
+        );
+
+        // A runtime with no configured default for the slot (codex) still
+        // reads Herding on both purposes — the herding shape never
+        // consults the runtime's default-model table to resolve itself.
+        let m = models_from(r#"{"codex":{"generation":{"kind":"herding"}}}"#);
+        assert_eq!(
+            resolve_tier(&m, "generation", "codex", "gather"),
+            Resolved::Herding { agent: None, fallback: None }
+        );
+        assert_eq!(
+            resolve_tier(&m, "generation", "codex", "cell"),
+            Resolved::Herding { agent: None, fallback: None }
+        );
+
+        // The extraction slot resolves exactly the same way — D1's "full
+        // mapping" covers every CONFIGURABLE_SLOTS member, not just
+        // generation/review.
+        let m = models_from(r#"{"claude":{"extraction":{"kind":"herding"}}}"#);
+        assert_eq!(
+            resolve_tier(&m, "extraction", "claude", "cell"),
+            Resolved::Herding { agent: None, fallback: None }
+        );
+        assert_eq!(
+            resolve_tier(&m, "extraction", "claude", "gather"),
+            Resolved::Herding { agent: None, fallback: None }
+        );
+    }
+
+    // herding-review-slots D1: the widened split — reviewer AND advisor
+    // purposes resolve a herding-shaped slot to Herding exactly like a cell
+    // purpose does — every purpose reads the shape the same way now (D1
+    // widened to the full mapping, no purpose left carrying its own rule).
+    #[test]
+    fn resolve_tier_routes_reviewer_and_advisor_purposes_to_herding_too() {
+        let m = models_from(r#"{"claude":{"review":{"kind":"herding","agent":"agy-flash"}}}"#);
+        assert_eq!(
+            resolve_tier(&m, "review", "claude", "reviewer"),
+            Resolved::Herding { agent: Some("agy-flash".into()), fallback: None }
+        );
+        // resolve_tier itself is purpose-agnostic beyond the cli-only
+        // gate it already knew — an "advisor" purpose on the same shape
+        // also resolves to Herding (resolve_advisor is the production path
+        // for a real --kind advisor dispatch; this pins resolve_tier's own
+        // symmetry so the two doors never drift apart).
+        assert_eq!(
+            resolve_tier(&m, "review", "claude", "advisor"),
+            Resolved::Herding { agent: Some("agy-flash".into()), fallback: None }
+        );
+    }
+
+    // herd-registry D2: `agent` on a kind:herding slot round-trips through
+    // normalize and resolve, and prepare's herding-exec arm appends
+    // `--agent "<name>"` when the slot names one.
+    #[test]
+    fn normalize_tier_value_round_trips_the_herding_agent_field() {
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "agent": "codex-cli"}))),
+            Some(json!({"kind": "herding", "agent": "codex-cli"}))
+        );
+        // Trimmed, same as every other string field on this leaf.
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "agent": "  codex-cli  "}))),
+            Some(json!({"kind": "herding", "agent": "codex-cli"}))
+        );
+        // Empty/whitespace-only agent is dropped, not carried as "".
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "agent": "   "}))),
+            Some(json!({"kind": "herding"}))
+        );
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding"}))),
+            Some(json!({"kind": "herding"}))
+        );
+    }
+
+    #[test]
+    fn resolve_tier_carries_the_herding_agent_name_through() {
+        let m = models_from(
+            r#"{"claude":{"generation":{"kind":"herding","agent":"codex-cli"}}}"#,
+        );
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", "cell"),
+            Resolved::Herding { agent: Some("codex-cli".into()), fallback: None }
+        );
+    }
+
+    // herding-review-slots D3: `"fallback": "default"` on the herding shape
+    // round-trips through normalize (only the literal string "default" is
+    // recognized) and resolve_tier carries it through to Resolved::Herding.
+    #[test]
+    fn normalize_tier_value_round_trips_the_herding_fallback_field() {
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "fallback": "default"}))),
+            Some(json!({"kind": "herding", "fallback": "default"}))
+        );
+        // Any other value is dropped, not carried through — no near-miss
+        // spellings, same exact-match posture as `fork_turns`.
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "fallback": "budget"}))),
+            Some(json!({"kind": "herding"}))
+        );
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "fallback": ""}))),
+            Some(json!({"kind": "herding"}))
+        );
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding", "fallback": true}))),
+            Some(json!({"kind": "herding"}))
+        );
+        // Absent stays absent.
+        assert_eq!(
+            normalize_tier_value(Some(&json!({"kind": "herding"}))),
+            Some(json!({"kind": "herding"}))
+        );
+    }
+
+    #[test]
+    fn resolve_tier_carries_the_herding_fallback_field_through() {
+        let m = models_from(
+            r#"{"claude":{"generation":{"kind":"herding","agent":"codex-cli","fallback":"default"}}}"#,
+        );
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", "cell"),
+            Resolved::Herding {
+                agent: Some("codex-cli".into()),
+                fallback: Some("default".into())
+            }
+        );
+
+        // Absent -> None, unchanged from before D3.
+        let m = models_from(r#"{"claude":{"generation":{"kind":"herding"}}}"#);
+        assert_eq!(
+            resolve_tier(&m, "generation", "claude", "cell"),
+            Resolved::Herding { agent: None, fallback: None }
+        );
+    }
+
+    // herding-review-slots D1: a herding-shaped advisor slot now resolves
+    // to Resolved::Herding (widening herding-tier D1's cell-only scope),
+    // never "no advisor" — an advisor consult is one task in, one result
+    // out, the same shape as the herding-exec pane's own read-only job.
+    #[test]
+    fn resolve_advisor_treats_a_herding_shaped_slot_as_herding() {
+        assert_eq!(
+            resolve_advisor(&models_from(r#"{"claude":{"advisor":{"kind":"herding"}}}"#), "claude"),
+            Some(Resolved::Herding { agent: None, fallback: None })
+        );
+        // herd-registry D2: `agent` carries through, same as every other
+        // herding-shaped slot.
+        assert_eq!(
+            resolve_advisor(
+                &models_from(r#"{"claude":{"advisor":{"kind":"herding","agent":"named-herd"}}}"#),
+                "claude"
+            ),
+            Some(Resolved::Herding { agent: Some("named-herd".into()), fallback: None })
+        );
     }
 
     #[test]
@@ -386,30 +581,30 @@ use std::time::Instant;
         // no-baked-in-default treatment codex gets — no established model
         // naming convention to assume).
         let m = models_from("{}");
-        assert_eq!(resolve_tier(&m, "generation", "opencode", false), Resolved::Budget);
-        assert_eq!(resolve_tier(&m, "extraction", "opencode", false), Resolved::Budget);
-        assert_eq!(resolve_tier(&m, "review", "opencode", true), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "generation", "opencode", "cell"), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "extraction", "opencode", "cell"), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "review", "opencode", "gather"), Resolved::Budget);
 
         // A configured models.opencode block resolves exactly like claude/codex do.
         let m = models_from(
             r#"{"opencode":{"extraction":"opencode/ling-3.0-tiny-free","generation":"opencode/big-pickle","review":"opencode/nemotron-3-ultra-free"}}"#,
         );
         assert_eq!(
-            resolve_tier(&m, "generation", "opencode", false),
+            resolve_tier(&m, "generation", "opencode", "cell"),
             Resolved::Model { model: "opencode/big-pickle".into(), effort: None }
         );
         assert_eq!(
-            resolve_tier(&m, "extraction", "opencode", false),
+            resolve_tier(&m, "extraction", "opencode", "cell"),
             Resolved::Model { model: "opencode/ling-3.0-tiny-free".into(), effort: None }
         );
         assert_eq!(
-            resolve_tier(&m, "review", "opencode", true),
+            resolve_tier(&m, "review", "opencode", "gather"),
             Resolved::Model { model: "opencode/nemotron-3-ultra-free".into(), effort: None }
         );
         // A sibling claude/codex block in the same config is untouched by
         // opencode's presence (no cross-runtime leakage).
-        assert_eq!(resolve_tier(&m, "generation", "claude", false), Resolved::Model { model: "sonnet".into(), effort: None });
-        assert_eq!(resolve_tier(&m, "generation", "codex", false), Resolved::Budget);
+        assert_eq!(resolve_tier(&m, "generation", "claude", "cell"), Resolved::Model { model: "sonnet".into(), effort: None });
+        assert_eq!(resolve_tier(&m, "generation", "codex", "cell"), Resolved::Budget);
     }
 
     // ── economics ──────────────────────────────────────────────────────────
@@ -450,6 +645,12 @@ use std::time::Instant;
             jsjson::stringify(&Value::Object(e)),
             r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"cli-exec","enforcement":"cli-command"}"#
         );
+        // herding-exec mirrors cli-exec, never prompt-budget.
+        let e = derive_economics("herding-exec", "generation", None, &Resolved::Budget, false);
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
+        );
     }
 
     #[test]
@@ -472,8 +673,7 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
         let out = prepare_dispatch(
-            &root, "claude", "gather", None, None, false, None, None, false,
-        )
+            &root, "claude", "gather", None, None, false, None, None, false, None)
         .unwrap();
         let Prepared::Value(v) = out else { panic!("expected an envelope") };
         assert_eq!(v.get("tool"), Some(&json!("Agent")));
@@ -503,7 +703,7 @@ use std::time::Instant;
             r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
         );
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -539,7 +739,7 @@ use std::time::Instant;
         cell("c-1", "cap the test scrubber");
         let d = |id: &str| {
             let Prepared::Value(v) =
-                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, None, false)
+                prepare_dispatch(&root, "claude", "cell", Some(id), Some("w"), false, None, None, false, None)
                     .unwrap()
             else {
                 panic!("expected an envelope")
@@ -587,8 +787,7 @@ use std::time::Instant;
             false,
             None,
             Some("scout the auth middleware before the shape gate"),
-            false,
-        )
+            false, None)
         .unwrap() else {
             panic!("expected an envelope")
         };
@@ -613,8 +812,7 @@ use std::time::Instant;
             r#"{"id":"c-1","feature":"f","title":"cap the test scrubber","status":"claimed","trace":{"worker":"w"}}"#,
         );
         let Prepared::Value(v) = prepare_dispatch(
-            &root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false,
-        )
+            &root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
         .unwrap() else {
             panic!("expected an envelope")
         };
@@ -675,8 +873,7 @@ use std::time::Instant;
                     false,
                     None,
                     purpose,
-                    false,
-                )
+                    false, None)
                 .unwrap() else {
                     panic!("{runtime}/{kind}: expected an envelope, not a refusal")
                 };
@@ -725,7 +922,7 @@ use std::time::Instant;
     fn recording_pass_appends_exactly_one_prepare_line() {
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
-        prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, true).unwrap();
+        prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, true, None).unwrap();
         let log = std::fs::read_to_string(root.join(".bee/logs/dispatch.jsonl")).unwrap();
         assert_eq!(log.lines().count(), 1);
         let line: Value = serde_json::from_str(log.lines().next().unwrap()).unwrap();
@@ -741,7 +938,7 @@ use std::time::Instant;
         let tmp = tempfile::tempdir().unwrap();
         let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false).unwrap()
+            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false, None).unwrap()
         else {
             panic!("expected a refusal value")
         };
@@ -765,7 +962,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!()
@@ -775,7 +972,7 @@ use std::time::Instant;
         assert_eq!(v.get("fix"), Some(&json!(CLI_REFUSAL_FIX)));
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false).unwrap()
+            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false, None).unwrap()
         else {
             panic!()
         };
@@ -791,6 +988,324 @@ use std::time::Instant;
             .starts_with("Gather:"));
     }
 
+    // ── ht-3: herding-tier D4 — the herding-exec Bash payload ──────────────
+
+    #[test]
+    fn herding_shaped_generation_emits_the_herding_exec_bash_payload_for_a_cell() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        let payload = v.get("payload").unwrap();
+        assert_eq!(
+            payload.get("command"),
+            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+        );
+        let stdin = payload.get("stdin").unwrap().as_str().unwrap();
+        assert!(!stdin.is_empty());
+        assert!(stdin.contains("c-1"), "{stdin}");
+        assert_eq!(
+            v.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+    }
+
+    /// D4: the same herding slot on a codex runtime dispatch takes the SAME
+    /// Bash arm — a herding pane is a subprocess call, never a native
+    /// codex spawn_agent (the `_ if runtime == "codex"` catch-all must
+    /// never see a `Resolved::Herding`).
+    #[test]
+    fn herding_shaped_generation_takes_the_bash_arm_on_codex_too() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"codex":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+        );
+    }
+
+    /// D4: a granted worktree adds `--cwd "<worktree_root>"` to the
+    /// command — the same single Location resolution the envelope and
+    /// prompt already read (dp1_worktree_fixture, defined below).
+    #[test]
+    fn herding_shaped_generation_adds_cwd_for_a_granted_worktree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (main, granted) = dp1_worktree_fixture(tmp.path());
+        std::fs::write(
+            main.join(".bee").join("config.json"),
+            r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#,
+        )
+        .unwrap();
+        w(
+            &main,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"demo","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        let norm = |p: &str| match dunce::canonicalize(p) {
+            Ok(c) => c.to_string_lossy().into_owned(),
+            Err(_) => p.to_string(),
+        };
+        let granted_s = v.get("worktree_root").unwrap().as_str().unwrap().to_string();
+        assert_eq!(norm(&granted_s), norm(granted.to_str().unwrap()));
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(format!(
+                ".bee/bin/bee herding run --task-file - --json --cwd \"{granted_s}\""
+            )))
+        );
+    }
+
+    /// herd-registry D2: a slot naming `agent:"<name>"` appends
+    /// `--agent "<name>"` after `--task-file - --json` (and after --cwd,
+    /// when a granted worktree also applies).
+    #[test]
+    fn herding_shaped_generation_appends_agent_when_the_slot_names_one() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":{"kind":"herding","agent":"codex-cli"}}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(
+                ".bee/bin/bee herding run --task-file - --json --agent \"codex-cli\""
+            ))
+        );
+    }
+
+    // ── hrv-3: herding-review-slots D3 — the fallback:default field ────────
+
+    /// D3: `"fallback": "default"` on a herding-shaped generation slot adds
+    /// a `fallback: {model}` payload field naming the runtime's own default
+    /// model for that slot (claude generation -> sonnet) — the same value
+    /// a gather purpose used to resolve to silently, pre-D1-widening, now
+    /// surfaced for the orchestrator's re-dispatch instead.
+    #[test]
+    fn herding_shaped_generation_with_fallback_default_adds_the_payload_fallback_field() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"generation":{"kind":"herding","fallback":"default"}}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").unwrap().get("fallback"),
+            Some(&json!({"model": "sonnet"}))
+        );
+    }
+
+    /// D3: absent `fallback` leaves the payload byte-identical — no
+    /// `fallback` key at all.
+    #[test]
+    fn herding_shaped_generation_without_fallback_omits_the_payload_field() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("payload").unwrap().get("fallback"), None);
+    }
+
+    /// D3: a runtime whose default for the slot is null (codex generation)
+    /// still recognizes `fallback:"default"` on the shape, but has no
+    /// default model to name — the payload stays byte-identical to a slot
+    /// with no `fallback` field at all, never a `{model: null}`.
+    #[test]
+    fn herding_shaped_generation_with_fallback_default_and_no_runtime_default_omits_the_field() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"codex":{"generation":{"kind":"herding","fallback":"default"}}}}"#,
+        );
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "codex", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("payload").unwrap().get("fallback"), None);
+    }
+
+    /// D3: an advisor purpose recognizes `fallback:"default"` on the shape
+    /// (it round-trips through Resolved::Herding the same as every other
+    /// purpose) but the advisor slot has no default-model table entry at
+    /// all (resolveAdvisor "NEVER a tier fallback") — the payload stays
+    /// byte-identical to no `fallback` field.
+    #[test]
+    fn herding_shaped_advisor_with_fallback_default_has_no_default_model_to_name() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"advisor":{"kind":"herding","fallback":"default"}}}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("payload").unwrap().get("fallback"), None);
+    }
+
+    // ── hrv-1: herding-review-slots D1/D2 — reviewer/advisor purposes ──────
+
+    /// D1: a reviewer purpose on a herding-shaped review slot takes the
+    /// SAME herding-exec Bash arm as a cell purpose — the exact widening
+    /// this cell exists to make.
+    #[test]
+    fn reviewer_purpose_on_a_herding_shaped_review_slot_emits_the_herding_exec_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"review":{"kind":"herding","agent":"agy-flash"}}}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "reviewer", None, None, false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(
+                ".bee/bin/bee herding run --task-file - --json --agent \"agy-flash\""
+            ))
+        );
+        assert_eq!(
+            v.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+    }
+
+    /// D1: an advisor purpose on a herding-shaped advisor slot takes the
+    /// same herding-exec Bash arm — resolve_advisor no longer reads a
+    /// herding-shaped slot as "no advisor".
+    #[test]
+    fn advisor_purpose_on_a_herding_shaped_advisor_slot_emits_the_herding_exec_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(
+            &tmp,
+            r#"{"models":{"claude":{"advisor":{"kind":"herding","agent":"named-herd"}}}}"#,
+        );
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "advisor", None, None, false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(
+                ".bee/bin/bee herding run --task-file - --json --agent \"named-herd\""
+            ))
+        );
+        assert_eq!(
+            v.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+    }
+
+    /// hrv-3 (D1 widened to the full mapping): a gather purpose on the SAME
+    /// herding-shaped generation slot now ALSO takes the herding-exec Bash
+    /// arm — the gather-default-model split the three tests above used to
+    /// pin against is gone; every purpose reads the shape identically.
+    #[test]
+    fn gather_purpose_on_a_herding_shaped_generation_slot_also_emits_the_herding_exec_payload() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":{"kind":"herding"}}}}"#);
+
+        let Prepared::Value(v) =
+            prepare_dispatch(&root, "claude", "gather", None, None, false, None, None, false, None)
+                .unwrap()
+        else {
+            panic!()
+        };
+        assert_eq!(v.get("tool"), Some(&json!("Bash")));
+        assert_eq!(
+            v.get("payload").unwrap().get("command"),
+            Some(&json!(".bee/bin/bee herding run --task-file - --json"))
+        );
+        assert_eq!(
+            v.get("economics").unwrap().get("channel"),
+            Some(&json!("herding-exec"))
+        );
+    }
+
     #[test]
     fn malformed_calls_throw_with_node_wording() {
         let tmp = tempfile::tempdir().unwrap();
@@ -801,7 +1316,7 @@ use std::time::Instant;
         };
         assert_eq!(
             thrown(
-                prepare_dispatch(&root, "claude", "cell", None, Some("w"), false, None, None, false)
+                prepare_dispatch(&root, "claude", "cell", None, Some("w"), false, None, None, false, None)
                     .unwrap()
             ),
             "dispatch prepare: --cell is required when --kind cell."
@@ -809,8 +1324,7 @@ use std::time::Instant;
         assert_eq!(
             thrown(
                 prepare_dispatch(
-                    &root, "claude", "cell", Some("ghost"), Some("w"), false, None, None, false
-                )
+                    &root, "claude", "cell", Some("ghost"), Some("w"), false, None, None, false, None)
                 .unwrap()
             ),
             "dispatch prepare: cell \"ghost\" not found."
@@ -823,8 +1337,7 @@ use std::time::Instant;
         assert_eq!(
             thrown(
                 prepare_dispatch(
-                    &root, "claude", "cell", Some("c-1"), Some("   "), false, None, None, false
-                )
+                    &root, "claude", "cell", Some("c-1"), Some("   "), false, None, None, false, None)
                 .unwrap()
             ),
             "dispatch prepare: --worker is required when --kind cell."
@@ -842,8 +1355,7 @@ use std::time::Instant;
         );
         // Forced past a real conflict.
         let Prepared::Value(v) = prepare_dispatch(
-            &root, "claude", "cell", Some("c-1"), Some("thief"), true, None, None, true,
-        )
+            &root, "claude", "cell", Some("c-1"), Some("thief"), true, None, None, true, None)
         .unwrap() else {
             panic!()
         };
@@ -854,8 +1366,7 @@ use std::time::Instant;
         assert_eq!(ov.get("transferred"), Some(&json!(false)));
         // Forced with NO conflict still audits (msh-4 mirror).
         let Prepared::Value(v) = prepare_dispatch(
-            &root, "claude", "cell", Some("c-1"), Some("owner"), true, None, None, false,
-        )
+            &root, "claude", "cell", Some("c-1"), Some("owner"), true, None, None, false, None)
         .unwrap() else {
             panic!()
         };
@@ -884,8 +1395,7 @@ use std::time::Instant;
             false,
             Some(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY),
             None,
-            false,
-        )
+            false, None)
         .unwrap() else {
             panic!()
         };
@@ -903,8 +1413,7 @@ use std::time::Instant;
             false,
             Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE),
             None,
-            false,
-        )
+            false, None)
         .unwrap() else {
             panic!()
         };
@@ -982,7 +1491,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -1048,7 +1557,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -1090,7 +1599,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&main, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -1125,7 +1634,7 @@ use std::time::Instant;
         );
 
         let Prepared::Value(v) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-1"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -1279,7 +1788,7 @@ use std::time::Instant;
             r#"{"id":"c-4","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
         );
         let Prepared::Value(_) =
-            prepare_dispatch(&root, "claude", "cell", Some("c-4"), Some("w"), false, None, None, false)
+            prepare_dispatch(&root, "claude", "cell", Some("c-4"), Some("w"), false, None, None, false, None)
                 .unwrap()
         else {
             panic!("expected an envelope")
@@ -1638,7 +2147,11 @@ use std::time::Instant;
     #[test]
     fn close_dry_run_reports_the_doors_and_runs_nothing() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":["a","b"]}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // the other doors.
+        let root = repo(&tmp, r#"{"commands":{"test":["a","b"]},"uat_stop":"off"}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
             close_handler(&root, "demo", true, declared, None, &HashMap::new()).unwrap()
@@ -1689,7 +2202,9 @@ use std::time::Instant;
     fn close_green_reports_the_capture_checklist() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close —
+        // pin "off" since this test is about the promote/capture doors.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
             close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
@@ -1735,9 +2250,11 @@ use std::time::Instant;
     fn close_green_promote_none_warns_once_and_writes_nothing() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
+        // defaults-and-agent-env D1: pin uat_stop off — this test is about
+        // the promote door's product_root path, not the uat door.
         let root = repo(
             &tmp,
-            r#"{"commands":{"test":"echo suite-green"},"product_root":"elsewhere"}"#,
+            r#"{"commands":{"test":"echo suite-green"},"product_root":"elsewhere","uat_stop":"off"}"#,
         );
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, text, code) =
@@ -1776,7 +2293,11 @@ use std::time::Instant;
     fn close_green_promote_ok_writes_the_proposals_file_and_a_headline() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
         w(
             &root,
@@ -1845,7 +2366,11 @@ use std::time::Instant;
     fn close_green_promote_ok_enqueues_one_capture_stub_pointing_at_it() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         std::fs::create_dir_all(root.join("docs/knowledge")).unwrap();
         w(
             &root,
@@ -1891,7 +2416,11 @@ use std::time::Instant;
     fn close_green_promote_skipped_enqueues_nothing() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(_, _text, code) =
             close_handler(&root, "demo", false, declared, Some(shell), &HashMap::new()).unwrap()
@@ -1956,9 +2485,11 @@ use std::time::Instant;
     fn close_never_spawns_commands_test_even_with_a_granted_worktree() {
         let tmp = tempfile::tempdir().unwrap();
         let (main, _granted) = dp1_worktree_fixture(tmp.path());
+        // defaults-and-agent-env D1: pin uat_stop off — this test is about
+        // commands.test never spawning, not the uat door.
         std::fs::write(
             main.join(".bee").join("config.json"),
-            r#"{"commands":{"test":"echo should-not-run"}}"#,
+            r#"{"commands":{"test":"echo should-not-run"},"uat_stop":"off"}"#,
         )
         .unwrap();
         let declared = declared_test_commands(&main).unwrap();
@@ -1986,7 +2517,9 @@ use std::time::Instant;
     #[test]
     fn close_proceeds_when_every_capped_cell_carries_a_valid_proof_line() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, "{}");
+        // defaults-and-agent-env D1: pin uat_stop off — this test is about
+        // the tests door, not the uat door.
+        let root = repo(&tmp, r#"{"uat_stop":"off"}"#);
         w(
             &root,
             ".bee/cells/demo-1.json",
@@ -2015,7 +2548,9 @@ use std::time::Instant;
     #[test]
     fn close_surfaces_pending_capture_reminders() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, "{}");
+        // defaults-and-agent-env D1: pin uat_stop off — this test is about
+        // the capture-reminder doors, not the uat door.
+        let root = repo(&tmp, r#"{"uat_stop":"off"}"#);
         w(&root, ".bee/state.json", r#"{"feature":"demo"}"#);
         w(&root, ".bee/cells/demo-4.json", r#"{"id":"demo-4","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-01T00:00:00.000Z"}}"#);
         w(&root, ".bee/cells/demo-5.json", r#"{"id":"demo-5","feature":"demo","status":"capped","trace":{"behavior_change":true,"capped_at":"2026-07-02T00:00:00.000Z"}}"#);
@@ -2220,7 +2755,11 @@ use std::time::Instant;
     // ── D1: the refusal itself (red, green-after-capture, green-with-deferral) ─
 
     fn declare_echo_test(tmp: &tempfile::TempDir) -> PathBuf {
-        repo(tmp, r#"{"commands":{"test":"echo suite-green"}}"#)
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — this helper's callers are about
+        // the capture/scribing-debt doors, not the uat door, so pin "off".
+        repo(tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#)
     }
 
     /// RED: a behavior_change cell with no capture recorded and no logged
@@ -2577,7 +3116,11 @@ use std::time::Instant;
     fn close_refuses_at_the_knowledge_freshness_door() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         write_freshness_touch_anchor(&root, "demo");
         write_freshness_dangling(&root, "demo");
         write_freshness_capped_cell(&root, "demo", "src/a.rs");
@@ -2867,7 +3410,11 @@ use std::time::Instant;
     fn close_refuses_at_the_impact_door() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         write_impact_decision(&root, "demo");
         w(&root, "docs/knowledge/areas/other/notes.md", "cites decision aaaaaaaa here\n");
         let declared = declared_test_commands(&root).unwrap();
@@ -3069,7 +3616,11 @@ use std::time::Instant;
     fn close_refuses_at_the_routing_door() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         write_locked_decisions_table(&root, "demo", &["D1"]);
         let declared = declared_test_commands(&root).unwrap();
         let Out::Emit(result, text, code) =
@@ -3194,6 +3745,146 @@ use std::time::Instant;
         assert_eq!(door.detail, "clear");
     }
 
+    #[test]
+    fn doc_deferral_door_exempts_a_reasoned_not_a_deferral_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "prose\n<!-- bee:not-a-deferral: names the queue file, not a promise -->\nThis work is deferred for now.\n<!-- /bee:not-a-deferral -->\nmore prose\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn doc_deferral_door_ignores_a_not_a_deferral_marker_with_an_empty_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "prose\n<!-- bee:not-a-deferral:  -->\nThis work is deferred for now.\n<!-- /bee:not-a-deferral -->\nmore prose\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:3"), "{}", door.detail);
+    }
+
+    #[test]
+    fn doc_deferral_door_ignores_a_not_a_deferral_marker_with_a_missing_reason() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "prose\n<!-- bee:not-a-deferral: -->\nThis work is deferred for now.\n<!-- /bee:not-a-deferral -->\nmore prose\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:3"), "{}", door.detail);
+    }
+
+    #[test]
+    fn doc_deferral_door_blocks_again_after_the_closing_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "<!-- bee:not-a-deferral: names the queue file, not a promise -->\nThis work is deferred for now.\n<!-- /bee:not-a-deferral -->\nThis work is deferred for now, too.\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:4"), "{}", door.detail);
+        assert!(!door.detail.contains(":2 "), "{}", door.detail);
+    }
+
+    #[test]
+    fn doc_deferral_door_unclosed_marker_exempts_to_end_of_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "<!-- bee:not-a-deferral: names the queue file, not a promise -->\nThis work is deferred for now.\nThis is deferred later too.\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn doc_deferral_door_fence_inside_a_marked_block_behaves_independently() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "<!-- bee:not-a-deferral: names the queue file, not a promise -->\n```\nThis is deferred for now inside a fence.\n```\nThis is deferred for now inside the marker.\n<!-- /bee:not-a-deferral -->\nThis is deferred for now outside both.\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:7"), "{}", door.detail);
+        assert!(!door.detail.contains(":3 "), "{}", door.detail);
+        assert!(!door.detail.contains(":5 "), "{}", door.detail);
+    }
+
+    #[test]
+    fn doc_deferral_door_marker_inside_a_fence_behaves_independently() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_empty_doc_deferral_baseline(root);
+        w(
+            root,
+            "docs/knowledge/areas/demo/notes.md",
+            "```\n<!-- bee:not-a-deferral: names the queue file, not a promise -->\nThis is deferred for now inside the fence and the marker.\n<!-- /bee:not-a-deferral -->\n```\nThis is deferred for now outside both.\n",
+        );
+        write_freshness_capped_cell(root, "demo", "docs/knowledge/areas/demo/notes.md");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(door.blocking, "{}", door.detail);
+        assert!(door.detail.contains("docs/knowledge/areas/demo/notes.md:6"), "{}", door.detail);
+        assert!(!door.detail.contains(":3 "), "{}", door.detail);
+    }
+
+    /// The exact register.md shapes from the real incident: a heading whose
+    /// backtick span is a filename (tried and failing as a trigger id), a
+    /// prose line carrying "deferred", and one carrying "later" — all clear
+    /// once wrapped in a reasoned not-a-deferral block.
+    #[test]
+    fn doc_deferral_door_register_md_incident_shapes_clear_once_wrapped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        w(
+            root,
+            "docs/handbook/register.md",
+            concat!(
+                "<!-- bee:not-a-deferral: this documents the deferred-queue file, it is not a promise to act later -->\n",
+                "### `.bee/deferred-queue.jsonl`\n",
+                "\n",
+                "Entries deferred here are written by the doc-impact-synthesis door.\n",
+                "The capture queue is flushed later by bee-capturing.\n",
+                "<!-- /bee:not-a-deferral -->\n",
+            ),
+        );
+        write_freshness_capped_cell(root, "demo", "docs/handbook/register.md");
+        let door = build_doc_deferral_door(root, "demo", false).unwrap();
+        assert!(!door.blocking, "{}", door.detail);
+        assert_eq!(door.detail, "clear");
+    }
+
     /// CONTEXT.md is written at shaping, before any cell exists — the scan
     /// set is the UNION of capped-cell `files_changed` and every file on
     /// disk under `docs/history/<feature>/`, so a feature with ZERO capped
@@ -3235,7 +3926,11 @@ use std::time::Instant;
     fn close_refuses_at_the_doc_deferral_door() {
         let Some(shell) = posix_shell() else { return };
         let tmp = tempfile::tempdir().unwrap();
-        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"}}"#);
+        // defaults-and-agent-env D1: absent uat_stop now reads as Close,
+        // which would grow a blocking uat door for this fixture's
+        // unclassified "demo" feature — pin "off" since this test is about
+        // a different door.
+        let root = repo(&tmp, r#"{"commands":{"test":"echo suite-green"},"uat_stop":"off"}"#);
         write_empty_doc_deferral_baseline(&root);
         w(&root, "docs/history/demo/CONTEXT.md", "# Demo\n\nThis is deferred for now.\n");
         let declared = declared_test_commands(&root).unwrap();
@@ -3509,4 +4204,108 @@ use std::time::Instant;
         let door = build_doc_deferral_door(root, "demo", false).unwrap();
         assert!(!door.blocking, "{}", door.detail);
         assert_eq!(door.detail, "clear");
+    }
+
+    #[test]
+    fn dispatch_prepare_with_expertise_renders_expertise_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let expertise_block = "- skills/bee-swarming/SKILL.md — swarming contract. Read it to follow worker protocol.\n- docs/knowledge/index.md — knowledge index. Read it to understand patterns.";
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "claude",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            Some(expertise_block),
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let p = v.get("payload").unwrap();
+        let prompt = p.get("prompt").unwrap().as_str().unwrap();
+        assert!(prompt.contains("Expertise — dispatcher-picked; read/load before implementing:"));
+        assert!(prompt.contains("- skills/bee-swarming/SKILL.md — swarming contract. Read it to follow worker protocol."));
+        assert!(prompt.contains("- docs/knowledge/index.md — knowledge index. Read it to understand patterns."));
+    }
+
+    #[test]
+    fn dispatch_prepare_without_expertise_renders_no_expertise_section() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        w(
+            &root,
+            ".bee/cells/c-1.json",
+            r#"{"id":"c-1","feature":"f","status":"claimed","trace":{"worker":"w"}}"#,
+        );
+        let Prepared::Value(v) = prepare_dispatch(
+            &root,
+            "claude",
+            "cell",
+            Some("c-1"),
+            Some("w"),
+            false,
+            None,
+            None,
+            false,
+            None,
+        )
+        .unwrap()
+        else {
+            panic!("expected an envelope")
+        };
+        let p = v.get("payload").unwrap();
+        let prompt = p.get("prompt").unwrap().as_str().unwrap();
+        assert!(!prompt.contains("Expertise — dispatcher-picked"));
+    }
+
+    #[test]
+    fn run_dispatch_prepare_refuses_malformed_expertise_line() {
+        let (flags, use_json) = parse_flags(&[
+            "--runtime",
+            "claude",
+            "--kind",
+            "cell",
+            "--cell",
+            "c-1",
+            "--worker",
+            "w",
+            "--expertise",
+            "not a valid three part line",
+        ])
+        .unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let _root = repo(&tmp, r#"{"models":{"claude":{"generation":"sonnet"}}}"#);
+        // keys_known succeeds
+        assert!(crate::verbs::reservations::keys_known(
+            &flags,
+            &[
+                "runtime",
+                "kind",
+                "cell",
+                "worker",
+                "force-ownership",
+                "claim",
+                "session-id",
+                "purpose",
+                "expertise",
+            ],
+        ));
+        let flag_val = flags.get("expertise").unwrap();
+        let raw = match flag_val {
+            FlagV::S(s) => s.as_str(),
+            _ => "",
+        };
+        let err = parse_expertise(raw).unwrap_err();
+        assert!(err.contains("malformed --expertise line"), "got {err}");
     }

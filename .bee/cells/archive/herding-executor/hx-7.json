@@ -1,0 +1,62 @@
+{
+  "id": "hx-7",
+  "feature": "herding-executor",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "bee-swarming wiring: the herding execution path and its orchestrator bookkeeping",
+  "behavior_change": false,
+  "files": [
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "read_first": [
+    "docs/history/herding-executor/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "action": "Per D4 (second half) and D1: add a short section to swarming-reference.md — when the user asks for a cell to run through an external agent, the orchestrator dispatches it with bee herding run (background Bash, one completion notification), reads result-N.json's validated JSON, then does ALL bee bookkeeping itself: verify per the cell's proof type, bee cells finish with the worker's evidence, reservations, judge. The pane worker never runs bee verbs. Name the boundary: herding execution is user-requested per cell in scope A — never the default dispatch path (that is scope B, trigger-gated). Include the --continue round loop for blocked results.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo run --release --manifest-path packages/bee-rs/Cargo.toml -- dev release-manifest --check",
+  "must_haves": {
+    "truths": [
+      "swarming-reference.md names the orchestrator as the only bee-verb actor on a herding-run cell",
+      "Scope A boundary stated: herding dispatch is user-requested, never the default"
+    ]
+  },
+  "decisions": [
+    "herding-executor D4",
+    "herding-executor D1"
+  ],
+  "deps": [
+    "hx-6"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hx-7",
+    "outcome": null,
+    "files_changed": [
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T22:50:36.507Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-19T22:44:38.919Z",
+    "report": {
+      "outcome": "swarming-reference.md documents the bee herding run execution path: pane worker stays bee-ignorant, orchestrator owns all bee bookkeeping, scope A is user-requested per cell never the default",
+      "commit": "ff849f38",
+      "files": [
+        "skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": "rg -n \"bee-ignorant (D4)\" plus fence/heading structure check — green — docs-only wave-barrier cell: both must_haves truths verified present in the added section; release-manifest --check is expected to mismatch on this file until the orchestrator's wave-close regen (regen_obligation_ack: wave-barrier, obligation.rs L218); pointer_integrity's one failure is pre-existing and unrelated (confirmed red on the base commit via git stash, in gates-and-delegation.md which this cell never touches)",
+      "deviations": [
+        "Used rg-based must_haves verification plus a fence/heading structure check instead of the cell's literal verify command (release-manifest --check): that check is expected to mismatch on THIS cell's own file under the wave-barrier protocol (regen deferred to orchestrator at wave close), so running it to green would require the in-cell regen the ack explicitly forbids."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "feature": "herding-liveness-signals",
+  "mode": "feature",
+  "phase": "idle",
+  "approved_gates": {
+    "context": true,
+    "shape": false,
+    "execution": false,
+    "review": false,
+    "uat": false
+  },
+  "summary": "Feature \"herding-liveness-signals\" started at phase \"exploring\".",
+  "next_action": "Nothing pending.",
+  "created_at": "2026-08-20T12:22:00.698Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "`uls-1` bị đánh dấu blocked do phiên chết, nhưng worktree sạch và công việc đã commit — chỉ là nợ sổ sách. Chờ khảo sát đầy đủ.",
+    "asked_at": "2026-08-20T15:09:58.095Z",
+    "session": "8ca30885-b974-4da5-8327-c60ae9cd5a46"
+  },
+  "route": {
+    "class": "feature",
+    "lane": "standard",
+    "flags": [
+      "external-systems"
+    ],
+    "product_files": 1,
+    "rationale": "slice 3 (hls-2) moves pane_read to on-demand; one product file, herdr subprocess call only",
+    "updated_at": "2026-08-20T13:27:55.240Z",
+    "feature": "herding-liveness-signals"
+  },
+  "last_scribing_run": {
+    "feature": "herding-liveness-signals",
+    "date": "2026-08-20",
+    "at": "2026-08-20T13:38:41.540Z",
+    "areas_synced": [
+      "bee-herding"
+    ],
+    "next_action": "Run bee close --feature herding-liveness-signals."
+  }
+}

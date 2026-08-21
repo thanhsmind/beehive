@@ -1,0 +1,64 @@
+{
+  "id": "cs-1",
+  "feature": "config-sample-herding",
+  "lane": "small",
+  "tier": "generation",
+  "title": "Samples document the herding executor key; config-reference points at it",
+  "behavior_change": false,
+  "files": [
+    ".bee/config-sample.json",
+    ".bee/config-sample-cli-executors.json",
+    "docs/config-reference.md"
+  ],
+  "read_first": [
+    "docs/history/config-sample-herding/CONTEXT.md",
+    "skills/bee-herding/references/operational-invariants.md",
+    ".bee/config-sample.json"
+  ],
+  "action": "Per D1/D2: add a \"herding\" block to BOTH samples with _doc notes in each file's established _doc style: agent_command (JSON array of argv tokens; token 0 = herdr agent kind passed straight to herdr — 21 kinds, no bee-side allow-list; rest = the agent's own argv; default when absent: [\"claude\",\"--model\",\"sonnet\",\"--permission-mode\",\"bypassPermissions\"]) and control_command (the cockpit control pane's argv template with {PROMPT}/{MODEL}/{MAX_TURNS}/{ALLOWED_TOOLS} placeholders). Name the consumers: bee herding run / --continue (one external agent as a cell-execution worker, mailbox protocol, cell-only — mirror of the gather-only cli tier), bee herding wave, control-loop. In config-sample-cli-executors.json give a concrete non-claude example (e.g. [\"gemini\"] or [\"codex\",\"--model\",\"gpt-5.5\"]) and state the split: cli slots = read-only gathers, herding.agent_command = the write-work executor. In docs/config-reference.md add one row/short section under Other keys pointing to skills/bee-herding/references/operational-invariants.md as the canonical herding.* doc — no net-new duplicate key guide (herding-executor D7 precedent). Remove NO existing key (D2 — audit found every sample key still read). Verify: both files parse as JSON (python3 -m json.tool), reference link resolves.",
+  "verify": "python3 -m json.tool .bee/config-sample.json > /dev/null && python3 -m json.tool .bee/config-sample-cli-executors.json > /dev/null && echo parse-ok",
+  "must_haves": {
+    "truths": [
+      "Both samples carry a herding block whose _doc names bee herding run, the token-0 pass-through, and the default",
+      "config-reference.md points at operational-invariants.md for herding.* instead of duplicating it",
+      "No existing sample key removed"
+    ]
+  },
+  "decisions": [
+    "config-sample-herding D1",
+    "config-sample-herding D2"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-cs-1",
+    "outcome": "Added herding block + _doc to both config samples; config-reference points at operational-invariants.md",
+    "files_changed": [
+      ".bee/config-sample.json",
+      ".bee/config-sample-cli-executors.json",
+      "docs/config-reference.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T23:30:49.031Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-19T23:28:37.435Z",
+    "report": {
+      "outcome": "Added herding block + _doc to both config samples; config-reference points at operational-invariants.md",
+      "commit": "9e1b1010891f728246cfdf2aa97dfcb35666b50c",
+      "files": [
+        ".bee/config-sample.json",
+        ".bee/config-sample-cli-executors.json",
+        "docs/config-reference.md"
+      ],
+      "tests": "python3 -m json.tool .bee/config-sample.json && python3 -m json.tool .bee/config-sample-cli-executors.json — green — docs/JSON-only cell; verify is the JSON parse + link-resolve check declared on the cell",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

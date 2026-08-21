@@ -1,0 +1,68 @@
+{
+  "id": "cs-2",
+  "feature": "config-sample-herding",
+  "lane": "small",
+  "tier": "generation",
+  "title": "bee onboard seeds .bee/config-sample.json into the host repo",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+    "packages/bee-rs/crates/bee/src/onboard/templates.rs"
+  ],
+  "read_first": [
+    "docs/history/config-sample-herding/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+    "packages/bee-rs/crates/bee/src/onboard/apply.rs"
+  ],
+  "action": "Per D3: onboard writes .bee/config-sample.json into the host repo, create-if-missing, exactly like the existing create_runtime_file entries (plan.rs:391-401 list + apply.rs:260-272 content arms). Content comes from the bee repo's own .bee/config-sample.json embedded at compile time — include_str! from templates.rs (path relative to the source file; add a test asserting the embedded bytes parse as JSON and contain a \"herding\" key so a moved file breaks the build loudly, not silently). Never overwrite an existing file (same rule as the other runtime files). Extend the existing onboard tests' expected-plan fixtures where they enumerate created files. Note: this makes onboard emit one more file in fresh repos — additive, no reader change.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard",
+  "must_haves": {
+    "truths": [
+      "Fresh-repo onboard writes .bee/config-sample.json; an existing file is never overwritten",
+      "The embedded sample is include_str! of the repo's own sample and a test asserts it parses and carries the herding key"
+    ]
+  },
+  "decisions": [
+    "config-sample-herding D3"
+  ],
+  "deps": [
+    "cs-1"
+  ],
+  "status": "capped",
+  "trace": {
+    "worker": "w-cs-2",
+    "outcome": "onboard seeds .bee/config-sample.json create-if-missing via compile-time include_str; test guards drift",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+      "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+      "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+      "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T23:35:15.296Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-19T23:31:08.794Z",
+    "report": {
+      "outcome": "onboard seeds .bee/config-sample.json create-if-missing via compile-time include_str; test guards drift",
+      "commit": "66d8e03ea5b9bad2fdd9eafd9dd43a4027d9f2d4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/onboard/plan.rs",
+        "packages/bee-rs/crates/bee/src/onboard/apply.rs",
+        "packages/bee-rs/crates/bee/src/onboard/templates.rs",
+        "packages/bee-rs/crates/bee/src/onboard/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml onboard — green — touched onboard module, ran full onboard test suite",
+      "deviations": [
+        "tests.rs was not in the declared files list but the action explicitly required extending onboard test fixtures; reserved the path before writing per the additional-path contract"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

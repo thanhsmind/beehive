@@ -1,0 +1,55 @@
+{
+  "id": "hrpd-1",
+  "feature": "herding-run-prompt-delivery",
+  "lane": "tiny",
+  "tier": "generation",
+  "title": "Deliver the round-1 brief via herdr agent prompt, not agent start argv",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-run-prompt-delivery/CONTEXT.md",
+    "packages/bee-rs/crates/bee/src/herding/run.rs"
+  ],
+  "action": "Per D1: execute_new stops appending the brief to agent start argv; it starts the agent with the agent_command tokens only, then on start success sends the rendered brief with herdr agent prompt (same call shape execute_continue uses), then enters the existing poll loop. A prompt-send failure is a typed spawn-phase failure (pane kept per the existing failure rule). Update the seam tests: start_calls carry no brief text; prompt_calls receive the round-1 brief; the live-smoke failure shape (agent start refusing an unencodable argv) can no longer occur by construction.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding::run",
+  "must_haves": {
+    "truths": [
+      "agent start argv contains only agent_command tokens, never the brief",
+      "the round-1 brief arrives via agent prompt before polling begins"
+    ]
+  },
+  "decisions": [
+    "herding-run-prompt-delivery D1"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hrpd-1",
+    "outcome": "Brief travels via agent prompt after a plain start; live-smoke argv failure impossible by construction",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T02:24:25.572Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-20T02:17:21.095Z",
+    "report": {
+      "outcome": "Brief via agent prompt after plain start; prompt failure keeps pane",
+      "commit": "amended",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml --bin bee herding::run — green (32 passed) — touched module, includes 2 new pinning tests",
+      "deviations": []
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

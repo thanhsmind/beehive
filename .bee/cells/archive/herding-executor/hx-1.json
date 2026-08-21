@@ -1,0 +1,92 @@
+{
+  "id": "hx-1",
+  "feature": "herding-executor",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Mailbox contract module: layout, brief renderer, result parsing",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "read_first": [
+    "docs/history/herding-executor/CONTEXT.md",
+    "docs/history/herding-executor/plan.md",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs"
+  ],
+  "action": "New module herding/mailbox.rs (mod-wired in herding.rs): (1) path layout .bee/mailbox/<job-id>/ — job.json, result-N.json, log.txt; (2) brief renderer producing a fully self-contained worker prompt per D4: task text, absolute paths, file constraints, the result schema {status: done|blocked, summary, files_changed[], proof}, and the tmp-then-rename write gesture, round number N named explicitly; (3) result-N.json reader: find highest N, parse, schema-validate — missing/invalid = typed error, never silent green. Pure functions only, no process I/O; unit tests for renderer content (absolute paths present, schema block present, round number), result parsing (valid, missing fields, not-json, tmp-file ignored).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox",
+  "must_haves": {
+    "truths": [
+      "Brief is self-contained: absolute paths, result schema, tmp-rename gesture, round number all present in rendered text",
+      "Result reader refuses missing or schema-invalid result files with a typed error"
+    ]
+  },
+  "decisions": [
+    "herding-executor D3",
+    "herding-executor D4"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-hx-1",
+    "outcome": "Mailbox contract module: pure path layout, self-contained brief renderer, and typed-error result-N.json parsing",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T20:36:20.516Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "1adb69d1-67be-4463-8349-af8832af8a32",
+    "claimed_at": "2026-08-19T20:26:29.994Z",
+    "report": {
+      "outcome": "Mailbox contract module: pure path layout, self-contained brief renderer, and typed-error result-N.json parsing",
+      "commit": "1d60dc53f3bfa60995a8f959496fb6e6c75cf737",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/mailbox.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml mailbox — green — 27 passed, 0 failed, scoped to the touched mailbox module",
+      "deviations": []
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 482 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "brief-self-contained",
+            "status": "PASS",
+            "evidence": "4 tests assert absolute paths, schema block, round number, tmp-rename gesture on rendered output"
+          },
+          {
+            "id": "typed-refusal",
+            "status": "PASS",
+            "evidence": "5 MailboxError variants each asserted; tmp files never read as finished rounds"
+          },
+          {
+            "id": "frozen-files",
+            "status": "PASS",
+            "evidence": "no undeclared files in 1d60dc53"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": null,
+        "judge_model": null,
+        "model_independence": "unverified",
+        "recorded_at": "2026-08-19T21:11:20.087Z"
+      }
+    ]
+  }
+}

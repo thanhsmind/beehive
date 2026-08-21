@@ -1,0 +1,96 @@
+{
+  "id": "dae-2",
+  "feature": "defaults-and-agent-env",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Built-in herd registry defaults and per-agent env",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    ".bee/config-sample-cli-executors.json"
+  ],
+  "read_first": [
+    "docs/history/defaults-and-agent-env/CONTEXT.md"
+  ],
+  "action": "Per D3: agent_registry(cfg) in wave.rs starts from built-in defaults — claude-sonnet => [claude,--model,sonnet,--permission-mode,bypassPermissions], agy-flash => [agy,--dangerously-skip-permissions] — then overlays config entries (same name overrides). UnknownAgent 'known' listing therefore always includes the built-ins. Per D4: a registry entry value may also be an object {\"argv\": [...], \"env\": {\"KEY\":\"value\"}}: argv validated exactly like the array shape; env keys must match [A-Za-z_][A-Za-z0-9_]*, values must be newline-free — any violation drops the whole entry (fail-open-per-entry, matching the existing rule). Registry value type becomes a small struct (argv + env BTreeMap); resolve_agent_command returns the env alongside (kind, args) — adjust its two callers. In run.rs execute_new: when env is non-empty, AFTER the pane split and BEFORE agent start, send one line `export K='v' K2='v2'` (single-quote values, escape embedded single quotes as '\\'') into the pane through a new Herdr trait method pane_run(pane_id, command) implemented with `herdr pane run <pane> <command>` (check `herdr pane run --help` for exact argv and use it; if it needs different plumbing use send-text+send-keys Enter). A pane_run failure is a typed spawn failure that closes the just-split pane (same rule as a start failure). Wave/control-loop callers that spawn panes apply the same env line when they split+start; callers that only brief running agents do not. Extend FakeHerdr + PanicHerdr; tests: object-shape entry parses with env; bad env key or newline value drops the entry; export line is sent before agent_start exactly when env is non-empty (order asserted), never sent for array-shape entries; built-in names resolve with zero config and are overridden by same-name config entries. Update .bee/config-sample-cli-executors.json to show one object-shape entry with env in its herding.agents plus a _doc line.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding",
+  "must_haves": {
+    "truths": [
+      "agy-flash and claude-sonnet resolve with no herding config at all; config same-name entries override",
+      "Object-shape registry entry carries env; export line lands in the pane before agent start and only when env is non-empty",
+      "Invalid env key or value drops that entry only, never the registry"
+    ]
+  },
+  "decisions": [
+    "defaults-and-agent-env D3",
+    "defaults-and-agent-env D4"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-dae-2",
+    "outcome": "Seeded built-in herd registry defaults (claude-sonnet, agy-flash) overridable by config, and added per-agent env carried through resolve_agent_command into a pane export line sent before agent start",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      ".bee/config-sample-cli-executors.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T10:09:57.756Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5",
+    "claimed_at": "2026-08-20T09:52:04.516Z",
+    "report": {
+      "outcome": "agent_registry(cfg) now starts from built-in claude-sonnet/agy-flash defaults then overlays config.herding.agents entries (same-name override); a herding.agents value may be an object {argv, env} with env validated per-key/value, any violation dropping the whole entry; resolve_agent_command returns (kind, args, env); execute_new sends a sorted, single-quoted export line into the freshly split pane via a new Herdr::pane_run before agent_start, closing the pane on failure like a start failure; the wave.rs control-loop caller resolves env but documents in a code comment why it cannot apply it (HerdrBackend spawns via a different out-of-scope crate with no pane-split step in this file); config-sample-cli-executors.json gained an object-shape codex-envd example plus a _doc entry explaining both shapes and the env rules",
+      "commit": "5440028d",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        ".bee/config-sample-cli-executors.json"
+      ],
+      "tests": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml herding — green, 0 failed (5 interleaved FAILED lines are the pre-existing control_loop::tests::quick_exit_helper self-exec subprocess intentionally exercising its failure path, unrelated to this cell and unchanged by it; overall cargo test process exit code 0) — scope: herding suite covers registry defaults, resolution, and spawn/env-order, all 12 new tests passing",
+      "deviations": [
+        "wave.rs build_wave_backend_and_run (the wave/control-loop resolve_agent_command caller) does not apply env: it never splits a pane itself, and the agent-start call for its HerdrBackend lives in packages/bee-rs/crates/fleet/src/backend/herdr.rs, a different crate outside this cell's file scope — documented in a code comment at the call site rather than reached past the boundary"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 562 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "builtin-registry",
+            "status": "PASS",
+            "evidence": "cargo test herding green — built-in claude-sonnet and agy-flash resolve with empty config, same-name config entry overrides; UnknownAgent listing includes built-ins; live dry-run resolved --agent agy-flash"
+          },
+          {
+            "id": "per-agent-env",
+            "status": "PASS",
+            "evidence": "object-shape {argv, env} parses; export line sent into the pane BEFORE agent start only when env non-empty (order asserted via fake call log); invalid env key or newline value drops that entry only"
+          },
+          {
+            "id": "wave-path-deviation-recorded",
+            "status": "PASS",
+            "evidence": "wave/control-loop caller resolves env but cannot apply it (agent start lives in fleet::backend::herdr, outside cell scope) — documented in a code comment and the cell report deviation"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-fable-5",
+        "judge_model": "claude-fable-5",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-20T10:29:05.071Z"
+      }
+    ]
+  }
+}

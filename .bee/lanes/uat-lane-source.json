@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "uat-lane-source",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"uat-lane-source\" started at phase \"exploring\" (lane).",
+  "next_action": "Merged into main at 7ae5996; capture what settled, then bee close --feature uat-lane-source.",
+  "created_at": "2026-08-19T03:00:05.080Z",
+  "run_state": null,
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 1,
+    "rationale": null,
+    "updated_at": "2026-08-19T03:00:12.927Z",
+    "feature": "uat-lane-source"
+  }
+}

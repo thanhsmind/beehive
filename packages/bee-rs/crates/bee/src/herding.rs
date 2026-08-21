@@ -1,5 +1,5 @@
-// herding — the bee-herding cockpit's two EXECUTABLE helpers, ported off Node
-// (R6a of plans/rust-port.md).
+// herding — the bee-herding cockpit's EXECUTABLE helpers, ported off Node
+// (R6a of plans/rust-port.md), plus the D17 wave/occupancy verbs below.
 //
 //   bee herding classify-lane <PBI-ID>   <- skills/bee-herding/scripts/classify-lane.mjs
 //   bee herding interlock [--main-root P] <- skills/bee-herding/scripts/dispatch-interlock.mjs
@@ -7,7 +7,32 @@
 //   bee herding herdr-result <path>      <- bootstrap-cockpit.sh's json_result
 //   bee herding herdr-pane-id --label L  <- bootstrap-cockpit.sh's find_dispatch_pane
 //
-// The last three are the cockpit shell scripts' inline `node -e` snippets. They
+// Two more verbs (herding-orchestration D17) live beside these, in wave.rs:
+//
+//   bee herding wave      <- the bee-side entry point: turns herding.agent_command
+//                             (D14 split) into a running fleet::Wave through a real
+//                             HerdrBackend, then appends one row to the wave ledger.
+//   bee herding occupancy <- the CLI bridge to the wave ledger's read side (D10),
+//                             reachable from a markdown role for the first time.
+//   bee herding record-worker <- (herding-orchestration D18) the recording verb
+//                             role-dispatch.md §8 calls right after a successful
+//                             spawn, so the row occupancy reads next iteration
+//                             actually exists. See wave.rs.
+//
+//   bee herding control-loop <- (herding-orchestration D8) the Rust replacement
+//                             for skills/bee-herding/scripts/control-loop.sh.
+//                             See control_loop.rs — control-loop.sh was deleted
+//                             by ho-14, which rewired bootstrap-cockpit.sh onto
+//                             this verb; ho-15 moved the references it left.
+//
+//   bee herding run       <- (herding-executor D1/D2/D5/D6/D9) start one
+//                             bee-ignorant external agent in a pane, wait on
+//                             a file mailbox with native health-check
+//                             liveness, return one structured result. See
+//                             run.rs.
+//
+// The next three (herdr-result, herdr-pane-id, command-template) are the cockpit
+// shell scripts' inline `node -e` snippets. They
 // are not bee state at all — they parse a config file and herdr's own JSON
 // envelopes — but they were the only remaining reason `control-loop.sh` and
 // `bootstrap-cockpit.sh` needed a Node runtime on PATH, so they move with the
@@ -41,6 +66,31 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
+// The append-only wave ledger (D10): one row per wave, read side (occupancy)
+// and write side (append_wave). `wave` below is the CLI verb that drives a
+// real wave and appends to it; `occupancy` is the CLI verb that reads it.
+mod wave_ledger;
+
+// `bee herding wave` (D17) and `bee herding occupancy` — the caller that
+// turns `herding.agent_command` into a running wave, and the CLI bridge to
+// the ledger's read side. See `wave.rs` for both.
+mod wave;
+
+// `bee herding control-loop` (D8) — the Rust replacement for
+// control-loop.sh. See control_loop.rs.
+mod control_loop;
+
+// The file mailbox worker-completion contract (herding-executor feature:
+// mailbox layout and the self-contained-brief requirement, both locked in
+// .bee/decisions.jsonl feature=herding-executor). See mailbox.rs.
+mod mailbox;
+
+// `bee herding run` (herding-executor D1/D2/D5/D6/D9) — the scope-A verb:
+// spawn one bee-ignorant external agent into a pane, wait on the mailbox
+// above with native health-check liveness, return one structured result.
+// See run.rs.
+mod run;
+
 const ENABLE_BASENAME: &str = "bee-herding.enable";
 
 pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
@@ -55,6 +105,11 @@ pub fn try_native(args: &[OsString]) -> Option<ExitCode> {
         "command-template" => Some(command_template(rest)),
         "herdr-result" => Some(herdr_result(rest)),
         "herdr-pane-id" => Some(herdr_pane_id(rest)),
+        "wave" => Some(wave::wave(rest)),
+        "occupancy" => Some(wave::occupancy(rest)),
+        "record-worker" => Some(wave::record_worker(rest)),
+        "run" => Some(run::run(rest)),
+        "control-loop" => Some(control_loop::control_loop(rest)),
         _ => None,
     }
 }
@@ -428,7 +483,7 @@ fn interlock_object(
 /// Resolve the MAIN checkout root the same way bootstrap's §1 does: the shared
 /// .git common dir, correct whether invoked from main or a linked worktree.
 /// An explicit --main-root always wins.
-fn resolve_main_root(explicit: Option<&str>) -> Option<PathBuf> {
+pub(crate) fn resolve_main_root(explicit: Option<&str>) -> Option<PathBuf> {
     if let Some(p) = explicit {
         return Some(PathBuf::from(p));
     }
@@ -505,6 +560,35 @@ fn interlock(flags: &[&str]) -> ExitCode {
 // the cockpit shell scripts' inline JSON readers
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Shared by the `command_template` CLI verb below (the shell scripts'
+/// external reader) and `control_loop::resolve_iteration_argv` (the same
+/// read done in-process, no child `bee` call): `herding.<key>` from
+/// `<main_root>/.bee/config.json` as a JSON array of argv-token strings.
+/// `None` covers every "fall back to the hardcoded default" case
+/// control-loop.sh's `read_command_template` covered by printing nothing: a
+/// missing file, a missing key, a non-array value, an empty array, a
+/// non-string element, or an element containing a newline (the line-per-token
+/// protocol `command_template` still prints over cannot carry one, so the
+/// same rejection is kept here even though nothing crosses a line in the
+/// in-process caller).
+pub(crate) fn read_command_template_tokens(main_root: &Path, key: &str) -> Option<Vec<String>> {
+    let path = main_root.join(".bee").join("config.json");
+    let raw = std::fs::read_to_string(&path).ok()?;
+    let cfg: Value = serde_json::from_str(&raw).ok()?;
+    let Value::Array(tmpl) = cfg.get("herding")?.get(key)? else { return None };
+    if tmpl.is_empty() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(tmpl.len());
+    for t in tmpl {
+        match t.as_str() {
+            Some(s) if !s.contains('\n') => out.push(s.to_string()),
+            _ => return None,
+        }
+    }
+    Some(out)
+}
+
 /// control-loop.sh `read_command_template KEY`: print `herding.<KEY>` from
 /// `<main-root>/.bee/config.json`, one argv token per line. A missing file, a
 /// missing key, a non-array value, an empty array, a non-string element, or an
@@ -529,29 +613,15 @@ fn command_template(flags: &[&str]) -> ExitCode {
     }
     let Some(key) = key else { return ExitCode::SUCCESS };
     let Some(main_root) = resolve_main_root(explicit) else { return ExitCode::SUCCESS };
-    let path = main_root.join(".bee").join("config.json");
-    let Ok(raw) = std::fs::read_to_string(&path) else { return ExitCode::SUCCESS };
-    let Ok(cfg) = serde_json::from_str::<Value>(&raw) else { return ExitCode::SUCCESS };
-    let Some(Value::Array(tmpl)) = cfg.get("herding").and_then(|h| h.get(key)) else {
-        return ExitCode::SUCCESS;
-    };
-    if tmpl.is_empty() {
-        return ExitCode::SUCCESS;
-    }
-    let mut out = Vec::with_capacity(tmpl.len());
-    for t in tmpl {
-        match t.as_str() {
-            Some(s) if !s.contains('\n') => out.push(s),
-            _ => return ExitCode::SUCCESS,
+    if let Some(tokens) = read_command_template_tokens(&main_root, key) {
+        for s in tokens {
+            println!("{s}");
         }
-    }
-    for s in out {
-        println!("{s}");
     }
     ExitCode::SUCCESS
 }
 
-fn read_stdin() -> String {
+pub(crate) fn read_stdin() -> String {
     use std::io::Read;
     let mut s = String::new();
     let _ = std::io::stdin().read_to_string(&mut s);

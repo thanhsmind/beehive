@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "feature": "knowledge-sweep-scope",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"knowledge-sweep-scope\" started at phase \"exploring\" (lane).",
+  "next_action": "Merged into main at 1595f2a; capture what settled, then bee close --feature knowledge-sweep-scope.",
+  "created_at": "2026-08-19T03:13:48.516Z",
+  "run_state": null,
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "standard",
+    "flags": [
+      "covered-contract-change",
+      "public-contracts"
+    ],
+    "product_files": 3,
+    "rationale": null,
+    "updated_at": "2026-08-19T03:13:54.287Z",
+    "feature": "knowledge-sweep-scope"
+  }
+}

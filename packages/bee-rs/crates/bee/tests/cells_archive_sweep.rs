@@ -218,9 +218,13 @@ fn close_fixture(base: &Path, code: i32, opt_out: bool) -> PathBuf {
     std::fs::create_dir_all(dir.join(".bee").join("logs")).unwrap();
     std::fs::write(dir.join(".bee/onboarding.json"), r#"{"version":1,"completed":true}"#).unwrap();
     let opt = if opt_out { r#","cells_archive_on_close":false"# } else { "" };
+    // defaults-and-agent-env D1: absent uat_stop now reads as Close, which
+    // would grow a blocking uat door for these unclassified features — this
+    // fixture is about the cell-retirement sweep, not the uat door, so pin
+    // "off".
     std::fs::write(
         dir.join(".bee/config.json"),
-        format!(r#"{{"commands":{{"test":"exit {code}"}}{opt}}}"#),
+        format!(r#"{{"commands":{{"test":"exit {code}"}},"uat_stop":"off"{opt}}}"#),
     )
     .unwrap();
     std::fs::write(

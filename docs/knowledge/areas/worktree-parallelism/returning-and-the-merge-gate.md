@@ -33,7 +33,10 @@ Run from the ordinary MAIN checkout (never from inside a worktree — that inclu
   unapproved refuses `WORKTREE_MERGE_UAT_PENDING` before any mutation, the message naming
   its three exits: the user approves (`bee gate --name uat --approved true` — user actor
   only, never auto), a one-merge `--skip-uat`, or repo config `uat_before_merge: false`
-  (absent means on; a non-boolean value refuses). Tiny/small/docs lanes are exempt; a
+  (a non-boolean value refuses; since defaults-and-agent-env D1, 2026-08-20, both keys
+  absent reads as the CLOSE placement — see "Where the uat door sits" below — so this
+  merge-time refusal fires only under an explicit `uat_stop: "merge"` or
+  `uat_before_merge: true`). Tiny/small/docs lanes are exempt; a
   missing or unreadable lane reads as standard — fail closed.
 - **A `--with-companion` mount survives every zero-mutation refusal** (GH #84, gh-fix-batch
   cell gfb-3, 2026-07-28 — two prior live incidents where a refused merge destroyed a
@@ -288,9 +291,15 @@ sits instead of whether it exists at all:
 
 | Value | Behavior |
 |---|---|
-| `"merge"` (the default; absent means this) | today's behavior, unchanged: `bee worktree merge` refuses `WORKTREE_MERGE_UAT_PENDING` until the gate is approved |
-| `"close"` | the merge lands first — the product becomes testable on main — and `bee close` carries the door instead |
+| `"merge"` | `bee worktree merge` refuses `WORKTREE_MERGE_UAT_PENDING` until the gate is approved (the original shipped default, until defaults-and-agent-env D1) |
+| `"close"` (the default since defaults-and-agent-env D1, 2026-08-20; absent means this) | the merge lands first — the product becomes testable on main, the `wt/<feature>` branch is held for convenient testing — and `bee close` carries the door instead |
 | `"off"` | no uat stop anywhere |
+
+defaults-and-agent-env D2 (2026-08-20) flipped the sibling `staging_before_merge`
+absent-key default the same day: absent now reads FALSE — staging is opt-in
+(`bee staging add`/`rebuild` refuse `STAGING_DISABLED` unless the key is an explicit
+`true`), so an unconfigured repo runs worktree → merge to main → uat at close.
+Explicit values on either key keep their meanings.
 
 Any other string, or a non-string shape, refuses rather than guessing (`None` from
 `uat_stop_config`, surfaced as `WORKTREE_MERGE_UAT_CONFIG_INVALID` at merge or a

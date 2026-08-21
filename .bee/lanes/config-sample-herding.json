@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "feature": "config-sample-herding",
+  "mode": "feature",
+  "phase": "compounding",
+  "approved_gates": {
+    "context": false,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"config-sample-herding\" started at phase \"planning\".",
+  "next_action": "Promote the onboard-sample capture stub with the herding-executor batch",
+  "created_at": "2026-08-19T23:26:35.390Z",
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Việc còn treo duy nhất, không gấp: duyệt promote 4 capture stub (3 của herding-executor, 1 của onboard-sample) vào knowledge. Muốn làm thì n",
+    "asked_at": "2026-08-19T23:53:42.293Z",
+    "session": "1adb69d1-67be-4463-8349-af8832af8a32"
+  }
+}

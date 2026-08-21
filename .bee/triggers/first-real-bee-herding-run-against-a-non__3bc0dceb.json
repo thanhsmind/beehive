@@ -1,0 +1,11 @@
+{
+  "id": "first-real-bee-herding-run-against-a-non__3bc0dceb",
+  "decision": "3bc0dceb",
+  "condition": "first real bee herding run against a non-claude agent kind hits a mid-run interactive stall (permission prompt/login) that idle-timeout mishandles",
+  "tier": "manual",
+  "predicate": null,
+  "status": "resolved",
+  "created_at": "2026-08-19T21:12:00.900Z",
+  "updated_at": "2026-08-20T02:43:07.801Z",
+  "outcome": "Fired live on smoke-agy-2 (2026-08-20): two stalls found. (1) agent prompt raced the agent's boot — brief landed before the banner; fix = wait for interactive_ready/idle after start before prompting. (2) agy asked Allow-creation mid-run; answered by hand via herdr agent send-keys — durable answer is an auto-approve flag in herding.agent_command per kind, documented, since idle-timeout alone just burns the timeout."
+}

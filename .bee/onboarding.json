@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "bee_version": "2.11.0",
+  "bee_version": "2.17.0",
   "managed": {
     "agents_block": "2ce58a3e4e4e58f5f4b704866f9c98d037ef948af073e10df7183215067d9a6f",
-    "gitignore_block": "d5a82410e3d53acf08f6b97ce3fe9bfe0b2cc58731af40e095d1178be2b149a2",
+    "gitignore_block": "cea6e7ea571219e956c754a9dde610886ae95c7e83b2cb56d2deca64b4f6c6c7",
     "helpers": {},
     "lib": {},
     "expertise": {
@@ -38,23 +38,18 @@
       "advisor.md": "cc970fc08c6aa0bdccb77351926b481baa7b6176a281efdbeb5c4f1a3383a05e",
       "gather.md": "593521c49a0983b1a50ad437f89905ded6cc1ee588730e6402920ae585eeb622",
       "reviewer.md": "0c830dcb1ee67b8b27ea823984e487c1e16c31d5554d1e49f51a4562526e197c",
-      "worker-cell.md": "ee6bfa6edcc9917d36cb77ba4f52315ed6d813e754663c4c3e58229c00333956"
+      "worker-cell.md": "c3394e6f6a0c86b0abade22051b494264bd3266745040c62a35a7eb3fc24229d"
     },
     "repo_hooks": {
       ".codex/hooks.json": "c23084ec82ea0418547addc8e3fdf74ffc0fb2d65b7692f54ba5b95a94f8e4ae"
     }
   },
   "agents_sync": {
-    "bee_version": "2.11.0",
+    "bee_version": "2.17.0",
     "files": [
-      ".claude/agents/bee-build.md",
-      ".claude/agents/bee-extract.md",
-      ".claude/agents/bee-gather.md",
       ".claude/agents/bee-review.md"
     ],
     "rendered_from": {
-      "generation": "sonnet",
-      "extraction": "haiku",
       "review": "opus"
     },
     "codex": {
@@ -76,5 +71,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-18T14:42:23.142Z"
+  "updated_at": "2026-08-21T00:01:58.619Z"
 }

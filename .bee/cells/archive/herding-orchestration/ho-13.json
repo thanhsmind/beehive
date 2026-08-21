@@ -1,0 +1,187 @@
+{
+  "id": "ho-13",
+  "feature": "herding-orchestration",
+  "title": "Replace control-loop.sh with a Rust control loop",
+  "lane": "standard",
+  "behavior_change": true,
+  "action": "REWORK after a NEEDS_REVISION verdict on commit 5f2afeaa. Everything else passed independent mutation and must not be touched: the argv byte-identity, the per-token substitution seam, the kill, the stop-file checks, the ceilings, the exit codes, the allowed-tools surface copied token for token, and the platform split. THE FAILURE, and its cause is in the TEST DOUBLES rather than in the production code. Replacing the spawn's argument with a hardcoded three-token vector — discarding what the builder just produced — leaves the ENTIRE workspace suite green at 1932 passed. Two doubles make that possible. One declares its argv parameter underscore-prefixed and builds its own command, discarding the value outright. The other records argv into a field that is written once and read NOWHERE, while that field's own doc comment claims it exists so tests can assert on the full value crossing into the spawner rather than just a count. Only the call count is ever read. So the double documents the exact intent and does not fulfil it, which is worse than omitting the field: a reader checking coverage finds the field and the sentence and stops looking. THE FIX. Make both doubles observe what they receive, and make a test assert it. The recorded argv must be read by a test that compares the WHOLE token vector against what the builder returned for the same inputs — not a prefix, not a length, not the first flag. After that, the hardcoded-spawn mutation must fail a named test. TWO MECHANICAL CHECKS TO APPLY WHILE YOU ARE IN THERE, because this is the ninth instance of this shape in this feature and prose has demonstrably not prevented it. First: no test double may take a value it exists to observe as an underscore-prefixed parameter — that is the signature of the defect. Second: every field a double records must have a reader; a recorded-but-unread field is dead weight pretending to be coverage. Sweep the file for both and fix what you find. ALSO CLOSE THE COMPOUNDING GAP the judge named: the real argv provider, the real spawner, the real sleeper and the loop entry point have zero test callers, so the production wiring is unasserted. Give the production wiring at least one test that reaches it. VERIFY AS THE JUDGE DID: apply the hardcoded-spawn mutation, run the full suite, and confirm a named test FAILS. Report that test name. If the suite stays green the cell is unfinished — say so rather than reporting success.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "skills/bee-herding/scripts/control-loop.sh",
+    "skills/bee-herding/references/operational-invariants.md",
+    "packages/bee-rs/crates/bee/src/herding.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/*",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "Replacing the spawn's argument with a hardcoded vector FAILS a named test on the full workspace suite — observed, not assumed.",
+      "A test compares the whole argv token vector the spawner received against what the builder returned for the same inputs.",
+      "No test double takes a value it exists to observe as an underscore-prefixed parameter.",
+      "Every field a test double records has a reader; no recorded-but-unread field remains.",
+      "The production wiring — the real argv provider, the real spawner, the real sleeper and the loop entry point — is reached by at least one test.",
+      "The argv byte-identity, the per-token substitution seam, the kill, the stop-file checks, the ceilings and the exit codes all still pass their own mutations.",
+      "No assertion anywhere was deleted or loosened."
+    ],
+    "prohibitions": [
+      "Do not change the argv the loop builds, the allowed-tools surface, or any production behaviour — this is about proving what is already there.",
+      "Do not delete control-loop.sh; the rewiring cell removes it.",
+      "Do not add an async runtime or a dependency.",
+      "Do not use bee cells cap --override-judge; if finish refuses on a judge verdict, return BLOCKED with your commit hash."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-13r",
+    "outcome": "Replaced control-loop.sh with a native bee herding control-loop verb: argv byte-identical to the bash default per D13, per-token config substitution, and a pid-based terminate-then-kill ceiling with no shell and no GNU timeout",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-19T04:20:45.342Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-19T03:58:41.096Z",
+    "report": {
+      "outcome": "A native bee herding control-loop verb replacing the 438-line bash script: byte-identical default argv per D13, per-token config substitution that survives a metacharacter injection probe, and a wall-clock ceiling built on a waiter thread and a pid-based terminate-then-kill with no shell and no GNU timeout",
+      "commit": "1130f5bc",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/herding/control_loop.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — 1937 passed, 11 ignored; plus two independent judge passes running mutation matrices, the second confirming a hardcoded-argv substitution now fails five named tests",
+      "deviations": [
+        "Two passes. Pass 1 was correct in production but its TEST DOUBLES discarded argv — one took it as an underscore-prefixed parameter, the other recorded it into a field read nowhere while its doc comment claimed the field existed for exactly that assertion — so replacing the spawn argument with a hardcoded vector left the whole suite green. Ninth instance of this feature recurring untested-join shape.",
+        "Pass 2 fixed both doubles, added a crossing test comparing the whole token vector from the real provider, and reached the previously untested production wiring.",
+        "Four deliberate departures from the bash script, all documented in-file: the shell-command test flag is dropped as the third Windows blocker; the prompt path is main-root-relative since a compiled binary has no script directory; main-root resolution refuses rather than falling back to the working directory; and THE KILL SCOPE IS NARROWER — GNU timeout signalled the process group and reached descendants, this kills the immediate pid only, named explicitly rather than left silent."
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 154 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "N1",
+            "status": "PASS",
+            "evidence": "Baseline on a scratchpad copy is green at 1932 passed. Deleting the model flag pair from the default argv arm kills the byte-identity test and the merge-role test. Altering ONE entry of the dispatch allowed-tools surface kills the byte-identity test and the per-token substitution test. Both mutations caught."
+          },
+          {
+            "id": "N2",
+            "status": "FAIL",
+            "evidence": "MUTATION SURVIVED. Replacing the spawn call so it discards the builder's result and passes a hardcoded three-token vector leaves the ENTIRE workspace suite green at 1932 passed, 0 failed, with the mutated line confirmed present in the compiled source. The root cause is in the test doubles, not the production code: one spawner declares its argv parameter underscore-prefixed and builds its own command, discarding the value; the other records argv into a field that is written once and read NOWHERE, despite that field's own doc comment claiming it lets tests assert on the full value crossing into the spawner rather than just a count. Only the call count is ever read. So the builder is tested, the spawn is tested, and the join between them is not — the ninth instance of this feature's recurring shape, sitting directly on the D13 path that holds the cell at standard lane. Compounding: the real argv provider, the real spawner, the real sleeper and the loop entry point have zero test callers, so the production wiring is unasserted too."
+          },
+          {
+            "id": "N3",
+            "status": "PASS",
+            "evidence": "Replacing the config arm with a join-then-resplit kills the per-token substitution test, which feeds a metacharacter-laden prompt through the placeholder and asserts the whole eleven-token vector. The injection seam is genuinely protected."
+          },
+          {
+            "id": "N4",
+            "status": "PASS",
+            "evidence": "Removing the kill made the run HANG rather than fail — the scoped thread join blocks on the child wait, so the function cannot return while the child lives, which is a structural guarantee stronger than the assertion. Detaching the waiter as well as removing the kill made the assertion itself fire, with the panic naming the pid still alive after the ceiling kill, checked against real OS process liveness rather than an elapsed duration."
+          },
+          {
+            "id": "N5",
+            "status": "PASS",
+            "evidence": "Deleting the after-iteration stop-file block kills the test for a stop file created mid-iteration. An off-by-one on the consecutive-failure ceiling kills the ceiling-and-backoff test. Both caught."
+          },
+          {
+            "id": "C1",
+            "status": "PASS",
+            "evidence": "Every flag, default, validation, loop statement order, backoff cap and exit code is reproduced and pinned by name, with the loop's statement order matching the script line for line. Four deliberate changes, all documented in-file: the shell-command test flag is dropped, since it was the third Windows blocker; the prompt path moves from script-relative to main-root-relative, identical in this repo but now dependent on the skill tree living under main-root, which is a live risk for the cell that rewires the bootstrap script; main-root resolution refuses to start rather than falling back to the working directory, which removes the two-invokers-disagree hazard the script's own header warns about, though the refusal path has no test; and THE KILL SCOPE IS NARROWER — GNU timeout without a foreground flag signals the process GROUP and so reached descendants, while this kills the immediate pid only. That last is a real narrowing, named explicitly in the code and the commit rather than left silent, and worth carrying forward as a known gap."
+          },
+          {
+            "id": "C2",
+            "status": "PASS",
+            "evidence": "The Unix path uses signal calls and its terminate step is exercised live on this host, proven by the N4 panic. The Windows path uses the process-terminate API with the dependency already declared and the identical binding shape already in production elsewhere in the crate. Because the Windows workflow runs the whole suite unexcluded on a Windows runner, the kill test executes the Windows path there too. Not covered on either platform: the escalation from terminate to hard kill, since the helper dies on the first signal well inside the grace period and the two calls are identical by design on Windows; and descendants of the killed child. Both are inherent platform or design asymmetries, documented in the code, not plausible accidental defects."
+          },
+          {
+            "id": "C3",
+            "status": "PASS",
+            "evidence": "Extracted programmatically from both files and compared token by token: the script emits exactly two allowed-tools strings, and every occurrence in the Rust — two in production, three in test expectations — is equal to its bash source. Copied, not paraphrased. The working agent's permission tail appears on zero non-comment lines in either file, because it belongs to the agent spawn path rather than this loop, and the commit touches no file on that path."
+          },
+          {
+            "id": "C4",
+            "status": "PASS",
+            "evidence": "The commit lists exactly four files and the shell script is not among them; a diff of the script against HEAD is empty and its last touching commit is an earlier one. Nothing weakened: the only removed line matching an assertion or test pattern is the pinned flag count, which is RAISED rather than loosened, and the increase is justified — searching the pre-commit registry for each of the seven new flag names returns none, and the new entry carries exactly eight parameters of which one is reused. No test function was deleted."
+          }
+        ],
+        "failure_signature": "The argv builder and the spawn are each tested, but the JOIN between them is not: replacing the spawn's argument with a hardcoded vector leaves the whole workspace suite green at 1932 passed. Every test spawner discards argv — one declares the parameter underscore-prefixed and builds its own command, the other records into a field written once and read nowhere, despite that field's doc comment claiming it exists to assert on the full value crossing into the spawner. Ninth instance of this feature's recurring untested-crossing shape, on the D13 path that holds the cell at standard lane.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-19T03:58:41.086Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "V1",
+            "status": "PASS",
+            "evidence": "Replacing the spawn's argument in the ceiling runner with a hardcoded three-token vector, discarding the builder's result, fails FIVE named tests on the full workspace suite at 1932 passed and 5 failed: the failing-iteration test, the within-ceiling test, the kill test, the real-provider crossing test, and the mid-iteration stop-file test. The mutation was reverted and the file compares byte-identical to the worktree. The suite does not stay green."
+          },
+          {
+            "id": "V2",
+            "status": "PASS",
+            "evidence": "Every double in the test module was enumerated with what it records and who reads it: the self-exec spawner records received argv with a reader used by three tests; the counting spawner records both a call count and the seen argv, each with a reader used by several tests; the recording sleeper records its calls with a reader used by four tests; and the three remaining doubles record nothing, with their fields read where they are used. A grep for underscore-prefixed parameters returns exactly three hits, all the iteration index, on types that do not exist to observe it — two fixed providers and the production provider that ignores it by design. Both spawner doubles take argv non-underscored. Corroborated by the compiler: a check across all targets emits zero field-is-never-read warnings anywhere in this file, which rustc would raise for any recorded-but-unread field."
+          },
+          {
+            "id": "V3",
+            "status": "PASS",
+            "evidence": "The new crossing test builds the REAL argv provider, computes the expected argv by calling the resolver for identical inputs, runs the real loop, and asserts the seen argv equals a vector containing exactly that expected value — a whole-vector equality, with the assertion message naming what it is not: not a prefix, not a length, not the first flag."
+          },
+          {
+            "id": "V4",
+            "status": "PASS",
+            "evidence": "Reachability was proved by probe rather than inspection: each production body was replaced with a panic carrying its own marker, and exactly the expected tests failed — the real argv provider through the crossing test, the real spawner through its own spawn test, the real sleeper through its sleep test, and the loop entry point through two entry-point tests. Probes removed and the file restored byte-identical."
+          },
+          {
+            "id": "V5",
+            "status": "PASS",
+            "evidence": "All three earlier mutations still die: deleting the model flag pair from the default argv fails the byte-identity and merge-role tests; the join-then-resplit in the config arm fails the per-token substitution test; deleting the after-iteration stop-file block fails its own test. Nothing weakened — a filter for removed assertion lines returns nothing and the assertion count rose from 42 to 52. No production code changed: only the one file is in the diff, every hunk starts well below the test module's first line, and the production half of the file compares identical between the two revisions. NOTE FOR THE RECORD, all below the stopping rule's bar: the iteration index passed to the argv provider is behaviour-neutral in production and unpinned; the two entry-point tests prove reachability but assert nothing, because the exit-code type implements no equality, which is a language limitation rather than a weakened assertion; and a PRE-EXISTING INTERMITTENT FLAKE was observed once in the fleet crate, on the test pinning that a status read does not depend on the pane having been focused, which then passed in isolation and on three subsequent full runs — untouched by this commit and reported for separate handling."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-19T04:20:45.312Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-19T03:58:41.086Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  },
+  "tier": "generation"
+}

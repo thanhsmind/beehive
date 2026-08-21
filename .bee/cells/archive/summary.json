@@ -593,5 +593,120 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-18T13:02:49.203Z"
+  },
+  "uat-approval-reaches-the-door": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-18T15:49:25.664Z"
+  },
+  "uat-stop-placement": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-08-19T03:13:02.108Z"
+  },
+  "auto-wait-mark": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-19T03:13:05.566Z"
+  },
+  "herding-orchestration": {
+    "capped": 17,
+    "dropped": 0,
+    "archived_at": "2026-08-19T10:57:37.626Z"
+  },
+  "herding-executor": {
+    "capped": 7,
+    "dropped": 0,
+    "archived_at": "2026-08-19T23:18:37.261Z"
+  },
+  "config-sample-herding": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-19T23:39:45.821Z"
+  },
+  "herding-tier": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-20T00:22:12.458Z"
+  },
+  "herding-run-prompt-delivery": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T02:26:39.646Z"
+  },
+  "herding-run-ready-wait": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T02:49:57.106Z"
+  },
+  "herding-brief-file": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T03:11:18.378Z"
+  },
+  "herding-prompt-verify": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T03:20:44.758Z"
+  },
+  "herding-receipt-source": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T03:25:55.855Z"
+  },
+  "herding-exec-economics": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T03:49:26.273Z"
+  },
+  "herd-registry": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-20T04:45:39.480Z"
+  },
+  "herding-start-retry": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T05:11:33.181Z"
+  },
+  "herding-review-slots": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-20T06:45:22.244Z"
+  },
+  "defaults-and-agent-env": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-20T10:29:50.893Z"
+  },
+  "herding-worker-standalone": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-20T11:32:06.348Z"
+  },
+  "herding-limit-pause": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-20T11:50:03.991Z"
+  },
+  "herding-bare-agent": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-20T12:21:40.108Z"
+  },
+  "herding-liveness-signals": {
+    "capped": 2,
+    "dropped": 0,
+    "archived_at": "2026-08-20T13:39:21.762Z"
+  },
+  "worker-brief-expertise": {
+    "capped": 3,
+    "dropped": 0,
+    "archived_at": "2026-08-21T00:00:56.306Z"
+  },
+  "bee-help-verb-detail": {
+    "capped": 1,
+    "dropped": 0,
+    "archived_at": "2026-08-21T01:50:00.776Z"
   }
 }

@@ -1,0 +1,139 @@
+{
+  "id": "ho-11",
+  "feature": "herding-orchestration",
+  "title": "Move the dispatch role's occupancy count from counting panes to the ledger",
+  "lane": "standard",
+  "behavior_change": true,
+  "action": "Rewire section 4 of skills/bee-herding/references/role-dispatch.md so its OCCUPANCY COUNT comes from bee herding occupancy instead of from enumerating and classifying herdr panes. This is the move D10 exists for, and the verb it needs now exists (cell ho-10). Edit ONLY the canonical tree under skills/bee-herding/, then run the regen chain inside this cell (bee dev regen: render-skill-trees, then onboard --repo-root . --apply, then release-manifest --write, in that order) so all five mirrors carry it; never hand-edit a mirror. SCOPE THE CHANGE PRECISELY. Section 4 does two jobs today: it counts occupied runtime slots, and it reports anomalies once. Only the COUNT moves. The anomaly scan stays, because an unlabelled pane whose foreground_cwd is a worktree is a fact about panes that no ledger knows — keep that reading exactly as it is. THE FAIL-CLOSED RULE IS THE PART THAT MATTERS MOST. bee herding occupancy reports two shapes: a real crossing of the ledger's unresolved pane ids against the live pane list, and a DEGRADED timer fallback used when the live pane list could not be obtained. The role must read which one it got and must NOT treat them alike. On a real crossing, use the count against the four-slot cap as section 4 always did. On a fallback, the role cannot know occupancy — and note that the fallback fires precisely when herdr could not be reached, which is also when pane counting would have failed, so there is no better answer available. Treat that as a refusal to dispatch this iteration: report one plain line into the chat pane saying occupancy is undetermined and why, and take no dispatch action. That is the same fail-closed posture every other guard in this cockpit takes, and dispatching on an unknown count is exactly the over-spawn the whole ledger exists to prevent. Update section 4's quick-reference row to match, and check whether any other section cites the pane-count as the occupancy source; if one does, point it at the verb too. Do not change section 8's spawn sequence, the lane-safety filter, the interlock, or the merge role.",
+  "verify": ".bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "docs/history/herding-orchestration/plan.md",
+    "skills/bee-herding/references/role-dispatch.md",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "docs/knowledge/areas/bee-herding/overview.md"
+  ],
+  "files": [
+    "skills/bee-herding/references/role-dispatch.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".claude-plugin/skills/bee-herding/*",
+    ".codex-plugin/skills/bee-herding/*",
+    ".claude/skills/bee-herding/*",
+    ".agents/skills/bee-herding/*",
+    ".opencode/skills/bee-herding/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "Section 4 takes its occupied-slot count from bee herding occupancy, not from enumerating panes.",
+      "The role distinguishes a real crossing from the degraded fallback and does not treat them alike.",
+      "On a fallback answer the role refuses to dispatch that iteration and says so in one plain line.",
+      "The anomaly scan over panes is unchanged — the ledger does not know about unlabelled panes.",
+      "The quick-reference row for section 4 matches the new body.",
+      "Section 8's spawn sequence, the lane-safety filter, the interlock and the merge role are untouched."
+    ],
+    "artifacts": [
+      "skills/bee-herding/references/role-dispatch.md — section 4 reading occupancy from the verb, with the fail-closed fallback rule and the anomaly scan intact"
+    ],
+    "key_links": [
+      "The occupancy source named in section 4's body and in its quick-reference row are the same command."
+    ],
+    "prohibitions": [
+      "Do not edit any file under .claude/, .claude-plugin/, .codex-plugin/, .agents/ or .opencode/ by hand — they are generated or synced renders.",
+      "Do not remove the anomaly scan.",
+      "Do not let a fallback answer be used as if it were a real count.",
+      "Do not change section 8, the lane-safety filter, the interlock, or the merge role."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-11",
+    "outcome": "Section 4's occupancy count now reads bee herding occupancy's live/fallback-tagged JSON instead of enumerating panes; fallback answers refuse dispatch for the iteration; anomaly scan and section 8 untouched",
+    "files_changed": [
+      "skills/bee-herding/references/role-dispatch.md",
+      "docs/history/codex-harness-hardening/release-manifest.json",
+      ".claude-plugin/skills/bee-herding/references/role-dispatch.md",
+      ".codex-plugin/skills/bee-herding/references/role-dispatch.md",
+      ".claude/skills/bee-herding/references/role-dispatch.md",
+      ".agents/skills/bee-herding/references/role-dispatch.md",
+      ".opencode/skills/bee-herding/references/role-dispatch.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T14:39:22.620Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T14:34:48.981Z",
+    "report": {
+      "outcome": "Rewired section 4 to read occupied-slot count from bee herding occupancy --json (count/source fields), refusing to dispatch on a source:fallback answer instead of treating it as a real count; anomaly scan, section 8, lane-safety filter, interlock and merge role left untouched; regenerated all five mirrors and release manifest via bee dev regen",
+      "commit": "9d635b6a",
+      "files": [
+        "skills/bee-herding/references/role-dispatch.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".claude-plugin/skills/bee-herding/references/role-dispatch.md",
+        ".codex-plugin/skills/bee-herding/references/role-dispatch.md",
+        ".claude/skills/bee-herding/references/role-dispatch.md",
+        ".agents/skills/bee-herding/references/role-dispatch.md",
+        ".opencode/skills/bee-herding/references/role-dispatch.md"
+      ],
+      "tests": "bee dev regen && bee dev release-manifest --check — all 3 regen steps green, 270 file(s) match stored manifest — declared verify command for this cell",
+      "deviations": [
+        "Also staged .bee/onboarding.json, a necessary side-effect artifact of the onboard --apply regen step, not hand-edited"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 418 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "P1",
+            "status": "PASS",
+            "evidence": "The prose tells the role to ask the occupancy verb every iteration from the main checkout with the json flag, and quotes the answer shape as a count field plus a source field carrying either live or fallback. Running the built binary confirms all of it: the help text describes both answers, the json invocation emits exactly the quoted two-field shape, and the plain invocation emits exactly the quoted line. Every field and value the prose names is real."
+          },
+          {
+            "id": "P2",
+            "status": "PASS",
+            "evidence": "Section 4 names the fallback value literally, states outright that the two values must never be treated alike, and gives the fallback branch as an imperative with the stopping point named by section reference, labelling it a refusal rather than a guess. Recognition requires no inference because the literal field and value are quoted and match what the verb emits; the action requires none because the stopping point is named. The quick-reference row repeats the rule."
+          },
+          {
+            "id": "P3",
+            "status": "PASS",
+            "evidence": "A word-level diff of the anomaly portion shows the only changes are removals of slot-counting clauses. Unchanged byte for byte: the runtime-tab resolution, the pane enumeration, the three-way classification, the label-derived worktree path rule, the four finished conditions, the dead-session anomaly rule, the once-only scrollback dedup and the tail-stuck wording. The fact that an unlabelled pane whose foreground directory is a worktree is an anomaly candidate survives."
+          },
+          {
+            "id": "P4",
+            "status": "PASS",
+            "evidence": "The commit touches the canonical role file, its five mirrors, the five render stamps, the onboarding record and the release manifest. The merge role is absent. Within the role file every hunk falls inside section 4 or the quick-reference table; the interlock, the lane-safety filter, the ranking section and the section 8 spawn sequence carry no hunk. The table row names the same command and the same two values with the same refusal as the body."
+          },
+          {
+            "id": "P5",
+            "status": "PASS",
+            "evidence": "A hash over all six copies of the role file prints one identical digest, so no mirror carries a hand edit. The mirrors and the canonical file moved together with identical line counts alongside all five render stamps and an onboarding record whose only change is its timestamp — the signature of the regen chain. The release manifest's entries for the file all moved to the digest the files on disk carry."
+          },
+          {
+            "id": "P6",
+            "status": "PASS",
+            "evidence": "RECORDED AS RESOLVED, with its original finding preserved. The first judge on this cell read section 4 as a cold agent and found that it reads its slot count from the wave ledger while nothing on the dispatch path ever wrote to it — the append function had one caller, the wave verb, and section 8 never invoked it. Measured then: no ledger file existed and the occupancy verb returned a count of zero with a source of live, so the cap could never engage. That finding was real and is why decision D18 exists. It was a SLICE-level gap rather than a defect in this cell's own scope: section 8's writer was never in this cell's must_haves, and cell ho-12 closed it by adding the recording verb, wiring section 8 to call it after each spawn, and proving the loop with a crossing test that enters through the verb's own argv and reads back every value that crosses. Two independent judges then confirmed that crossing dies under argument-swap mutation. This cell's own seven must_haves were met at its own commit; the system gap it exposed is closed on the record by ho-12."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-19T05:51:49.162Z"
+      }
+    ]
+  },
+  "tier": "generation"
+}

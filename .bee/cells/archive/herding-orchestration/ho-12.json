@@ -1,0 +1,172 @@
+{
+  "id": "ho-12",
+  "feature": "herding-orchestration",
+  "title": "Close the ledger loop: record a row when dispatch spawns, per D18",
+  "lane": "standard",
+  "behavior_change": true,
+  "action": "FINAL PASS on ho-12, and it is four assertions. A judge applied the stopping rule properly: it found ONE thing meeting the bar and explicitly ruled out three others with reasons, so the hunt terminates after this. THE ONE FINDING. The argv-level crossing test now enters at the right boundary but asserts only the exit code and a live count of one. It never reads the recorded row back, so --name, --path and --task cross the argv boundary unasserted. Two same-typed positional swaps at the CLI wrapper's call into the append helper both survive the entire suite: swapping name with task, and swapping path with task. The first is the identical defect shape this cell has now been reworked twice to kill — adjacent String arguments, type-checks perfectly, invisible to a reader — and it sits on the production write path section 8 calls on every spawn. Its effect is that the wave id defaults to the name, so after the swap every ledger row is keyed by the PBI id instead of the worker slug, breaking the identity rule the module pins elsewhere; the existing default-wave-id test cannot see it because that test calls the pure helper positionally. THE FIX, mechanical and about four lines: in the argv test you already added, read the row back with the ledger's own read and assert every value that crossed — the worker name, the worktree path, the task, and that the wave id defaults to the worker name rather than to anything else. Then re-run both swaps and confirm each now fails. WHAT NOT TO DO. Three other mutations were judged NOT to meet the bar and must not be chased: rewiring the router's arm to call a different verb, which reads wrong at a glance because the verb string and the callee sit on one line; swapping the two adjacent integer arguments in the occupancy read, which can only distort the fallback count that the sole consumer refuses to act on anyway; and forcing the live pane list to none, which fails safe by always reporting fallback. Leave all three alone.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml && .bee/bin/bee dev regen && .bee/bin/bee dev release-manifest --check",
+  "read_first": [
+    "docs/history/herding-orchestration/CONTEXT.md",
+    "skills/bee-herding/references/role-dispatch.md",
+    "packages/bee-rs/crates/bee/src/herding/wave.rs",
+    "packages/bee-rs/crates/bee/src/herding/wave_ledger.rs"
+  ],
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding.rs",
+    "packages/bee-rs/crates/bee/src/herding/*",
+    "packages/bee-rs/crates/bee/src/catalog.rs",
+    "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+    "packages/bee-rs/crates/bee/tests/*",
+    "skills/bee-herding/references/role-dispatch.md",
+    "docs/history/codex-harness-hardening/release-manifest.json",
+    ".claude-plugin/skills/bee-herding/*",
+    ".codex-plugin/skills/bee-herding/*",
+    ".claude/skills/bee-herding/*",
+    ".agents/skills/bee-herding/*",
+    ".opencode/skills/bee-herding/*"
+  ],
+  "must_haves": {
+    "truths": [
+      "The argv-level crossing test reads the recorded row back and asserts the worker name, the worktree path and the task, not only the live count.",
+      "It asserts the wave id defaults to the worker name.",
+      "Swapping name with task at the CLI wrapper's append call FAILS a named test on the full suite — observed, not assumed.",
+      "Swapping path with task at the same call FAILS a named test — observed, not assumed.",
+      "Both earlier crossing tests still pass and neither was deleted.",
+      "No assertion anywhere was deleted or loosened, and nothing outside the test changed."
+    ],
+    "prohibitions": [
+      "Do not change the verb, its flags, its registration, role-dispatch.md, or any production code — this pass touches a test only.",
+      "Do not chase the three mutations the judge ruled below the bar.",
+      "Do not delete either existing crossing test.",
+      "Do not use bee cells cap --override-judge; if finish refuses on a judge verdict, return BLOCKED with your commit hash."
+    ]
+  },
+  "status": "capped",
+  "deps": [],
+  "decisions": [],
+  "trace": {
+    "worker": "w-ho-12s",
+    "outcome": "Closed the ledger loop: bee herding record-worker writes a row on the dispatch path per D18, section 8 calls it after each spawn, and section 4's fallback and command-failure branches are complete",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/wave.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs",
+      "packages/bee-rs/crates/bee/src/catalog.rs",
+      "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+      "skills/bee-herding/references/role-dispatch.md"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-18T17:03:59.241Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "d24210c3-13b9-4b0d-8663-300d54337491",
+    "claimed_at": "2026-08-18T16:46:22.629Z",
+    "report": {
+      "outcome": "bee herding record-worker plus the section 8 wiring that calls it after every spawn (D18), closing the write-read loop the occupancy mechanism needs, with section 4 gaining a dedup on its fallback branch and a third branch for the command failing outright",
+      "commit": "3f4db54f",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/wave.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs",
+        "packages/bee-rs/crates/bee/src/catalog.rs",
+        "packages/bee-rs/crates/bee/src/generated/registry_payload.json",
+        "skills/bee-herding/references/role-dispatch.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml — green — 2132 passed, 11 ignored, 23 suites; regen and release-manifest --check clean; plus three independent judge passes running mutation matrices on scratchpad copies",
+      "deviations": [
+        "Three passes, each closing a narrower instance of one shape. Pass 1 shipped the verb and the wiring, but the crossing test crossed two pure functions while production crossed argv to row to occupancy, so a swapped-argument mutation in the CLI wrapper passed the whole suite.",
+        "Pass 2 moved the crossing to argv level, but asserted only the downstream live count, leaving three of the four values that cross the boundary unwatched — two further same-typed swaps survived.",
+        "Pass 3 asserted every value that crosses. A judge then applied the stopping rule, ruling three remaining mutations below the bar with reasons: a router mis-wire reads wrong at a glance, a timer-argument swap only distorts a count the sole consumer refuses to act on, and a missing pane list fails safe."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "NEEDS_REVISION",
+        "checks": [
+          {
+            "id": "Q1",
+            "status": "PASS",
+            "evidence": "The named crossing test writes a row through the append helper and reads it back through the live-worker count, supplying a pane set containing the recorded pane id, and asserts a live count of one plus the matching json shape. Baseline on a scratchpad copy passes at 17 tests. Mutation A, writing the pane id into a different field so the pane id is empty and the worktree carries it, fails the test with a live count of zero against one, quoting the assertion that a row written through the recording path must read back as one live worker because that is the whole loop D18 closes. Mutation B, marking the worker resolved at write time, produces the identical failure. Both asked mutations kill the test; it is a real crossing at the level it operates, not a tautology."
+          },
+          {
+            "id": "Q2",
+            "status": "PASS",
+            "evidence": "The built binary's help for the recording verb prints every flag the role's prose passes, with the four content flags marked required. The registry declaration carries the same names and requirements. The pinned flag count was checked by counting distinct property names across all registry entries before and after rather than by trusting the constant: 161 before and 163 after, with exactly two names added and none removed — the two the catalog change argues are genuinely new. Dispatch is wired in the herding router."
+          },
+          {
+            "id": "Q3",
+            "status": "PASS",
+            "evidence": "Section 8 gains a step that fires only after the existing confirm step, which sits immediately above it. Its prose states that this is what closes the loop under D18 and that a spawn not recorded here is invisible to the next iteration's occupancy read, explaining that section 4 no longer counts panes but reads the ledger, so a spawn with no row simply is not in what it reads. The failure branch states that an unrecorded spawn is worse than no spawn, because it is a live agent the occupancy read cannot see, which lets the four-slot cap be walked past silently; it directs a loud report into the chat pane and ends the iteration without retrying the recording call and without spawning a second worker to compensate."
+          },
+          {
+            "id": "Q4",
+            "status": "FAIL",
+            "evidence": "The markdown-issuing residual itself is judged ACCEPTABLE: no test can prove a model emits a command, and a check that the role file merely mentions the verb would restate the file without catching a model skipping the call at runtime, so it buys little. But the premise that the verb writes and is tested is NOT TRUE OF THE CLI VERB — only of the pure inner function. Measured: mutating only the CLI wrapper's wiring, swapping two same-typed arguments so the path flag lands in the pane id field and the pane id flag lands in the worktree field, leaves the ENTIRE suite green at 1908 passed and 0 failed. That defect reproduces the exact inert-mechanism failure this cell exists to remove — rows get written, the pane id never matches the live pane list, and occupancy returns a confident non-degraded zero forever, so the four-slot cap never engages. The cause is ordinary and accidental: six string flags mapped positionally onto six string parameters, where a mis-wire type-checks silently. No integration test covers the verb either, and the existing dispatch test only asserts the router returns something when the required flags are MISSING, so it exercises no field mapping at all. Affordable fix, about fifteen lines and no new machinery: have the crossing test enter through the verb with real flags rather than through the pure helper, and cross to the occupancy read as it already does."
+          },
+          {
+            "id": "Q5",
+            "status": "PASS",
+            "evidence": "All three landed in section 4. The fallback branch now announces at most once, using the same dedup the anomaly scan uses — reading the chat pane's recent scrollback first and sending only if the line is not already there. It states that a failed send is not escalated further, because there is no second channel and the refusal to dispatch holds either way, with no retry and the iteration ending regardless. And a third case now exists for the command failing outright — a non-zero exit, unparseable output, or a shape carrying neither field, which is the error envelope an older binary returns since it predates the verb — treated exactly like the fallback, never read as a count of zero or of anything else. The section's lead-in was updated to name the third case."
+          },
+          {
+            "id": "Q6",
+            "status": "PASS",
+            "evidence": "The diff's hunks fall only in section 4, the stale-sentence fix, the new section 8 step, and the quick-reference table. The section 8 spawn command sequence, the agent-command paragraph, the confirm step, the lane-safety filter, the interlock and the merge role are all outside those hunks, and only the one role file changed under the skills tree. A hash over all six copies of the role file returns one identical digest, and each mirror's render stamp moved to the same value — regen output, not hand edits. A search for any sentence still describing section 4 as counting panes returns only the negations and the corrected lines."
+          }
+        ],
+        "failure_signature": "The recording verb's argv-to-row wiring is untested: swapping the pane-id and path arguments inside the CLI wrapper passes the entire suite at 1908 passed, silently reproducing the inert-ledger failure the cell exists to remove. The crossing test exercises only the pure append-and-count pair and never enters through the verb with real flags, so it crosses a boundary production does not.",
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T16:18:03.940Z"
+      },
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "S1",
+            "status": "PASS",
+            "evidence": "The whole worktree was copied and every mutation applied to the copy only; the baseline reproduced the commit's claim exactly at 2132 passed across 23 suites with zero failures. The mutation point is the CLI wrapper's call into the append helper. Swapping name with task fails the argv crossing test with the assertion that, absent an explicit wave id, it must default to the value given to the name flag rather than to the task flag, quoting the PBI id where the worker slug belonged. Swapping path with task fails the same test on the assertion that the recorded row's worktree must be the value given to the path flag, again quoting the PBI id in place of the path. Both swaps die on the same named test on the full suite at 1908 passed and 1 failed, and both were reverted from a pristine copy."
+          },
+          {
+            "id": "S2",
+            "status": "PASS",
+            "evidence": "The added block reads the ledger back and asserts one wave, that the wave id equals the worker slug with the message that it must default to the name flag rather than the task flag or any other, one worker, that the worker's name equals the name flag's value, that its worktree equals the path flag's value, and that its task equals the task flag's value. Mapped against the argv the test sends: the name, path and task flags each have a direct assertion, the wave-id default has its own, the pane-id flag remains covered by the pre-existing live-count assertion since the supplied live pane set holds only that pane, and the main-root flag is covered by the read finding exactly one row under the same root. Every value crossing the argv boundary is watched, not a subset."
+          },
+          {
+            "id": "S3",
+            "status": "PASS",
+            "evidence": "Both earlier crossing tests still exist and pass on the unmutated copy — the pure-helper crossing and the argv crossing — alongside the wave-id default test, the explicit-override test and the dispatch test. A prior-pass mutation was re-run, the pane-id and path swap at the same wrapper call, and it still dies on the argv crossing test with a live count of zero against one, quoting the message that a row recorded through the verb's own argv parsing must read back as one live worker through the occupancy path and that such a swap must fail this test rather than only the pure-helper crossing. Reverted."
+          },
+          {
+            "id": "S4",
+            "status": "PASS",
+            "evidence": "The diff against the previous commit is one file with twenty-one lines added and none removed, and the file is the test module's own source. The role document, the verb body, the append helper, its registration and all other production code are untouched. A filter for removed lines printed nothing — no deleted or loosened assertion — and the single hunk lands entirely inside the test module. NOTE FOR THE RECORD: the row's pane id is covered only indirectly, through the live-count assertion rather than a direct read-back; the S3 mutation proves that indirection sufficient, though a direct read-back would make the row's coverage uniform. Two uncommitted bookkeeping files sit at the repo root — the decision log and the onboarding record — with no source, docs or test among them."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "sonnet",
+        "judge_model": "opus",
+        "model_independence": "confirmed",
+        "recorded_at": "2026-08-18T17:03:59.207Z"
+      }
+    ],
+    "reopened_for_rework": {
+      "at": "2026-08-18T16:18:03.940Z",
+      "reason": "NEEDS_REVISION semantic-judge verdict recorded after cap"
+    },
+    "verify_command": null,
+    "verified_at": null
+  },
+  "tier": "generation"
+}

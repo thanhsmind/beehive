@@ -1,0 +1,112 @@
+{
+  "id": "dae-1",
+  "feature": "defaults-and-agent-env",
+  "lane": "standard",
+  "tier": "generation",
+  "title": "Flip absent-key defaults: uat_stop=close, staging opt-in",
+  "behavior_change": true,
+  "files": [
+    "packages/bee-rs/crates/bee/src/uat.rs",
+    "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs",
+    ".bee/config-sample.json",
+    "docs/config-reference.md"
+  ],
+  "read_first": [
+    "docs/history/defaults-and-agent-env/CONTEXT.md"
+  ],
+  "action": "Per D1: in uat.rs uat_stop_config, the both-keys-absent arm returns Some(UatStop::Close) instead of Some(UatStop::Merge); update the doc comment (absent no longer means today's-merge behavior — it means close placement: merge lands, worktree held while uat pending). Per D2: in verbs/staging/mod.rs staging_before_merge_config, None => Some(false); update its doc comment and the STAGING_DISABLED refusal text so it names the new default (staging is opt-in; set staging_before_merge: true to enable — 'absent or false' disables, remove 'or remove the key to re-enable'). Update existing tests that assert the old absent-key defaults, and add two tests pinning the new ones (absent uat_stop == Close; absent staging_before_merge == false). Update .bee/config-sample.json live values + _doc strings for uat_stop/uat_before_merge/staging_before_merge to state the new absent-key defaults (sample uat_stop stays an explicit value showing the shape, set it to \"close\"; staging_before_merge sample value false), and docs/config-reference.md rows for the same three keys (absent-means column). Do NOT touch README.md (other cell owns nothing there either; README sync happens after merge).",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml uat staging",
+  "must_haves": {
+    "truths": [
+      "Both uat keys absent resolves to UatStop::Close",
+      "staging_before_merge absent resolves to false and staging add refuses STAGING_DISABLED",
+      "Explicit uat_stop/uat_before_merge/staging_before_merge values keep their existing meanings"
+    ]
+  },
+  "decisions": [
+    "defaults-and-agent-env D1",
+    "defaults-and-agent-env D2"
+  ],
+  "deps": [],
+  "status": "capped",
+  "trace": {
+    "worker": "w-dae-1",
+    "outcome": "Flipped absent-key defaults: uat_stop reads as close, staging_before_merge reads as false; repinned every ripple fixture across uat.rs, staging/mod.rs, worktree/tests.rs, drivers/close.rs, drivers/tests.rs, and tests/cells_archive_sweep.rs",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/uat.rs",
+      "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs",
+      ".bee/config-sample.json",
+      "docs/config-reference.md",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+      "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+      "packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs"
+    ],
+    "deviations": [],
+    "friction": null,
+    "capped_at": "2026-08-20T10:22:18.168Z",
+    "behavior_change": true,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "881c9c36-21c2-4a7e-bfb8-c0dbc237d6f5",
+    "claimed_at": "2026-08-20T09:52:04.509Z",
+    "verify_command": null,
+    "verified_at": null,
+    "report": {
+      "outcome": "uat_stop absent-key default flipped Merge->Close; staging_before_merge absent-key default flipped true->false; doc strings and config-sample.json updated; every test fixture that assumed the old absent-key defaults across uat.rs, staging/mod.rs, worktree/tests.rs, drivers/close.rs, drivers/tests.rs, and tests/cells_archive_sweep.rs repinned to keep testing what it was about (either explicit old-value config for placement-specific tests, or explicit off/opt-in for unrelated fixtures)",
+      "commit": "7155d8eb",
+      "files": [
+        "packages/bee-rs/crates/bee/src/uat.rs",
+        "packages/bee-rs/crates/bee/src/verbs/staging/mod.rs",
+        ".bee/config-sample.json",
+        "docs/config-reference.md",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/drivers/tests.rs",
+        "packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs",
+        "packages/bee-rs/crates/bee/tests/cells_archive_sweep.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml uat — 60 passed, 0 failed — scope: uat suite covers uat_stop absent-key default | cargo test --release --manifest-path packages/bee-rs/Cargo.toml staging — 25 passed, 0 failed — scope: staging suite covers staging_before_merge absent-key default | cargo test --release --manifest-path packages/bee-rs/Cargo.toml worktree — 212 passed, 0 failed — scope: merge-side ripple from the uat_stop default flip | cargo test --release --manifest-path packages/bee-rs/Cargo.toml close — 174 passed, 0 failed — scope: close-side ripple from the uat_stop default flip | cargo test --release --manifest-path packages/bee-rs/Cargo.toml (full suite) — 2134 passed, 0 failed (plus unrelated pre-existing herding::control_loop::quick_exit_helper thread-env-var race, reproduced independent of these changes, unrelated file never touched by this cell)",
+      "deviations": [
+        "Cell files list named uat.rs/staging/mod.rs/config-sample.json/config-reference.md only; the default flip also broke fixtures in worktree/tests.rs (named in the dispatch prompt), drivers/close.rs, drivers/tests.rs, and tests/cells_archive_sweep.rs (discovered only by running the suite, since they assume the absent-key default without referencing uat_stop/staging_before_merge by name) — reserved and fixed all four to leave a genuinely green build rather than capping a red ripple"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "absent-uat-reads-close",
+            "status": "PASS",
+            "evidence": "cargo test uat: 60 passed — new test pins both-keys-absent == UatStop::Close; explicit values and the uat_before_merge alias keep prior meanings (assertions unchanged)"
+          },
+          {
+            "id": "staging-opt-in",
+            "status": "PASS",
+            "evidence": "cargo test staging: 25 passed — absent staging_before_merge == false, staging add refuses STAGING_DISABLED with no key; explicit true enables"
+          },
+          {
+            "id": "frozen-test-touch-reviewed",
+            "status": "PASS",
+            "evidence": "orchestrator reviewed git show 7155d8eb — cells_archive_sweep.rs and driver test fixtures only pin uat_stop:off to isolate unrelated tests from the new default, each with an explanatory comment; direct uat_stop tests repinned to explicit values, no assertion weakened"
+          },
+          {
+            "id": "docs-and-sample-flipped",
+            "status": "PASS",
+            "evidence": ".bee/config-sample.json values + _doc strings and docs/config-reference.md rows state the new absent-key defaults"
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "claude-fable-5",
+        "judge_model": "claude-fable-5",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-20T10:29:05.068Z"
+      }
+    ]
+  }
+}
