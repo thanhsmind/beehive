@@ -1280,7 +1280,7 @@
     },
     {
       "path": "packages/bee/agents/bee-build.md.tmpl",
-      "sha256": "03899e5a6d10b94d69c8a4478c57612838f33cdfdee599cc0f31d93bb2e99e13",
+      "sha256": "a38e4fcea2623d9d9e0b1659446c872884eb23c10cc650031c71c0b37c6b2d22",
       "mode": "644",
       "role": "package_payload",
       "packagePath": "packages/bee/agents/bee-build.md.tmpl"

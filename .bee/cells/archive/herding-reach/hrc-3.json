@@ -1,0 +1,61 @@
+{
+  "id": "hrc-3",
+  "feature": "herding-reach",
+  "lane": "small",
+  "title": "Carry the pane tail and the unwind remedy on a failed herding spawn",
+  "files": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs",
+    "skills/bee-swarming/references/swarming-reference.md"
+  ],
+  "action": "In run.rs diagnose_giveup: when find_prompt_diagnosis returns None but pane_read succeeded, return format!(\"{generic}\\npane tail:\\n{tail}\") using pane_tail; a failing pane_read still returns generic unchanged. Update the test diagnose_giveup_leaves_the_generic_message_byte_for_byte_on_no_match to assert the message starts with generic and contains 'pane tail:' and 'all green'; keep the failing-pane_read test as is. Then in the JSON output (around line 2461, RunOutcome::SpawnFailed arm only) add remedy: a string built by fn spawn_failed_remedy(cell_id: Option<&str>, agent: Option<&str>, pane_id: Option<&str>) -> String, e.g. 'inspect pane w5:pS (herdr pane read w5:pS); unwind: bee cells unclaim --id <cell>; bee reservations release --agent <agent> --cell <cell>' — omit the cells/reservations parts when cell_id is None and say 'no --cell-id was given, release any claim you took by hand'. Use opts.cell_id and the --agent name from opts (find its field). Add a unit test for spawn_failed_remedy. In swarming-reference.md herding section, add a short 'On spawn_failed' paragraph: the result JSON's remedy field names the unwind; claims and reservations stay the orchestrator's to release; the pane stays open as forensics.",
+  "verify": "PATH=\"${CARGO_HOME:-$HOME/.cargo}/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding::run",
+  "verify_owner": "worker",
+  "acceptance": "A no-match give-up error carries the pane tail; spawn_failed JSON carries remedy naming bee cells unclaim and bee reservations release; herding::run tests green; swarming-reference has the On spawn_failed paragraph.",
+  "deps": [],
+  "decisions": [
+    "herding-reach D3",
+    "herding-reach D4"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/herding/run.rs:1474-1525",
+    "packages/bee-rs/crates/bee/src/herding/run.rs:2020-2045",
+    "packages/bee-rs/crates/bee/src/herding/run.rs:2455-2470",
+    "packages/bee-rs/crates/bee/src/herding/run.rs:4490-4515"
+  ],
+  "regen_obligation_ack": "wave-barrier",
+  "status": "capped",
+  "trace": {
+    "worker": "w-hrc-3",
+    "outcome": "give-up errors carry the pane tail on no match; spawn_failed JSON carries a remedy naming the unwind; swarming reference documents it",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/run.rs",
+      "skills/bee-swarming/references/swarming-reference.md"
+    ],
+    "deviations": [
+      "worker left the work uncommitted; orchestrator made the path-scoped commit 8bec3bb4",
+      "worker did not commit; orchestrator committed path-scoped"
+    ],
+    "friction": null,
+    "capped_at": "2026-08-22T04:25:59.643Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "15dafcf0-9d77-49a6-aefe-e79b8f894e8d",
+    "claimed_at": "2026-08-22T04:10:25.372Z",
+    "report": {
+      "outcome": "pane tail and unwind remedy on a failed herding spawn",
+      "commit": "8bec3bb4",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/run.rs",
+        "skills/bee-swarming/references/swarming-reference.md"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding — 322 passed, 0 failed — herding::run owns diagnose_giveup and the result JSON",
+      "deviations": [
+        "worker did not commit; orchestrator committed path-scoped"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

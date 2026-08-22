@@ -773,5 +773,10 @@
     "capped": 1,
     "dropped": 0,
     "archived_at": "2026-08-22T01:24:46.443Z"
+  },
+  "herding-reach": {
+    "capped": 4,
+    "dropped": 0,
+    "archived_at": "2026-08-22T04:27:35.807Z"
   }
 }
