@@ -11,6 +11,9 @@ bee:
   decisions: ["worktree-feature-parallelism (shipped 2026-07-16, unreviewed)", "worktree-session-routing D7/D8/D9 (enter/return commands + routing rule, 2026-07-18, GH #21, unreviewed)", "cross-worktree-holds D1-D6 (the shared holds ledger, 2026-07-20)", "hardening-1-7-10 (atomic hold acquisition + heartbeat renewal, 2026-07-21, unreviewed)"]
   sources: [docs/history/worktree-feature-parallelism/, docs/history/worktree-session-routing/, "docs/specs/worktree-parallelism.md#S-what-problem-this-solves", "docs/specs/worktree-parallelism.md#S-boundary-out-of-scope"]
   authoritative_for: "worktree-parallelism: purpose, the two kinds of parallelism, and the area boundary"
+  owns.code: ["packages/bee-rs/crates/bee/src/verbs/worktree/*", "packages/bee-rs/crates/bee/src/verbs/staging/*"]
+  owns.skills: []
+  owns.tests: [packages/bee-rs/crates/bee/src/verbs/worktree/tests.rs]
 ---
 
 # Worktree Parallelism — Purpose and Boundary
