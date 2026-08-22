@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"herding-reach\" started at phase \"planning\" (lane).",
-  "next_action": "bee close finished \"herding-reach\" — feature is closed.",
+  "next_action": "Merged into main at 04b1dc9; capture what settled, then bee close --feature herding-reach.",
   "created_at": "2026-08-22T04:09:17.657Z",
   "run_state": "shaping",
   "waiting_on": null,
