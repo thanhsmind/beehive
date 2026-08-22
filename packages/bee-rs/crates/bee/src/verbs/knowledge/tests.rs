@@ -895,6 +895,7 @@ use std::time::Instant;
                 r#"{"outcome":"o","commit":"c","files":[],"tests":"cargo test -p bee — green — fixture","deviations":[]}"#
                     .to_string(),
             ),
+            sync_ack: None,
         };
         // decision 13ce1858 (test-cadence-boundary D1): `cap_cell_from_flags`
         // dropped its `test_root` parameter with the per-cap test run.

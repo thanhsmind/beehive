@@ -439,7 +439,14 @@ mod tests {
         // — `--task`/`--task-file` name the assignment itself, `--read-first`
         // on cells names cell planning dependencies, not CLI brief entries.
         // `--expertise` is new.
-        const PINNED_FLAG_COUNT: usize = 178;
+        // 178 -> 179 (knowledge-one-home koh-6): `cells.cap`/`cells.finish`/
+        // `finish` gained `--sync-ack`, the escape reason for the cap sync door
+        // (ownership, applied_at, and prediction checks). Checked first:
+        // `--override-judge`, `--inline-reason`, and `--commit-pending` name
+        // specific other escapes (judge rework, execution worker dispatch,
+        // commit trailer); none carries "reason for sync door divergence" —
+        // `--sync-ack` is new.
+        const PINNED_FLAG_COUNT: usize = 179;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

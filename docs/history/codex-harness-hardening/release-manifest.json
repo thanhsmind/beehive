@@ -136,7 +136,7 @@
     },
     {
       "path": ".claude-plugin/skills/.bee-render.json",
-      "sha256": "18adc466182b64d7167f5901b17c17617c95f20df08a07901cb42ef7a1cea27a",
+      "sha256": "973d75c8bb098590b8e18763eff84d61315d2b165550185a0a14c4c4178dc2a1",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/.bee-render.json"
@@ -521,7 +521,7 @@
     },
     {
       "path": ".claude-plugin/skills/bee-swarming/references/worker-details.md",
-      "sha256": "18b700d182cc35ba28bf1778c745fc1074e810f51c15d5a7ebbd06ce21c356f7",
+      "sha256": "cdba0036d999e851ccb584b7c97e6a70374eb167afc12d561aa5490f09f689f0",
       "mode": "644",
       "role": "plugin_skill_claude_render",
       "packagePath": ".claude-plugin/skills/bee-swarming/references/worker-details.md"
@@ -647,7 +647,7 @@
     },
     {
       "path": ".codex-plugin/skills/.bee-render.json",
-      "sha256": "5a438eb099a0af1a4d031f8bb3011896a619e15c91e60ab54099986c02744286",
+      "sha256": "74b9e17cd3463e679d6e028a4602e6c8dd9c5e67af800a6b4db1595e4bccbbcc",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/.bee-render.json"
@@ -1032,7 +1032,7 @@
     },
     {
       "path": ".codex-plugin/skills/bee-swarming/references/worker-details.md",
-      "sha256": "9787719ffb6c62f73caa470046d5ce29b0a57d2d4dad6db49633e6a10ad7cc78",
+      "sha256": "d1895bc2b13a75561b0c90b2518b119122e5b55d798583dd00819073244b9f2e",
       "mode": "644",
       "role": "plugin_skill_codex_render",
       "packagePath": ".codex-plugin/skills/bee-swarming/references/worker-details.md"
@@ -1747,7 +1747,7 @@
     },
     {
       "path": "skills/bee-swarming/references/worker-details.md",
-      "sha256": "d76d88ebec1f3f7e40383c1c192e74d3d157f7727db9f0a92040b217e82d049c",
+      "sha256": "31f1d38d753e0208e2575b2cb1dafe62367f93c9d82571c049ad42beda5710ad",
       "mode": "644",
       "role": "plugin_skill",
       "packagePath": "skills/bee-swarming/references/worker-details.md"

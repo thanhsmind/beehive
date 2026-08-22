@@ -115,6 +115,18 @@ on.
 - **An outcome summary** on `high-risk`.
 - **A `NEEDS_REVISION` semantic-judge verdict** without an audited
   `--override-judge` reason.
+- **The sync door (D3/D4)** — the touched set (the last commit's changed
+  files, union `--files`) must not: touch an area's owned code while
+  leaving every one of its owned skills untouched; touch a rule's home
+  file while leaving one of its `applied_at` files untouched; or carry a
+  set of touched `skills/**` paths that differs from the cell's own
+  `affects_skills` prediction. Each of the three names the area/rule/diff
+  it found. Escape with `--sync-ack "<reason>"` (blank is refused) — it
+  is recorded to `trace.sync_ack` and appended to `trace.deviations` as
+  `sync-ack: <reason>`. A cell that predates `affects_skills` skips the
+  prediction check alone, with `sync: no prediction on legacy cell`
+  appended to `trace.deviations` when the touched set actually carried a
+  `skills/**` path (nothing to say otherwise).
 
 ## Friction Triggers (verbatim — record friction only when one fires)
 

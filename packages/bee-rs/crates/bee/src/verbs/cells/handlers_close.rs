@@ -28,7 +28,7 @@ use std::time::Instant;
 
 // ── cells cap / cells finish ───────────────────────────────────────────────
 
-pub(crate) const CAP_FLAGS: [&str; 12] = [
+pub(crate) const CAP_FLAGS: [&str; 13] = [
     "id",
     "outcome",
     "files",
@@ -41,6 +41,7 @@ pub(crate) const CAP_FLAGS: [&str; 12] = [
     "commit-pending",
     "inline-reason",
     "report",
+    "sync-ack",
 ];
 
 /// resolveDeclaredBehaviorChange (E6).
@@ -115,6 +116,10 @@ pub(crate) struct CapFlags {
     /// now REFUSES that case (D8: --report is required on every cap path)
     /// rather than silently leaving `trace.report` untouched.
     pub(crate) report: Option<String>,
+    /// D3/D4: `--sync-ack "<reason>"`, RAW — escapes the sync door (ownership,
+    /// applied_at, prediction) when non-empty. Stored on trace.sync_ack and
+    /// appended to trace.deviations.
+    pub(crate) sync_ack: Option<String>,
 }
 
 /// wp-1: is `worker` (the cap's own `trace.worker`) a REGISTERED worker for
@@ -182,6 +187,15 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
         if js_trim(raw).is_empty() {
             return Err(Fail::Thrown(format!(
                 "capCell: cell \"{id}\" refused — --deviation requires a non-empty value (a blank or whitespace-only line records nothing to trace.deviations)."
+            )));
+        }
+    }
+
+    // D3/D4: `--sync-ack` shape check
+    if let Some(raw) = &f.sync_ack {
+        if js_trim(raw).is_empty() {
+            return Err(Fail::Thrown(format!(
+                "capCell: cell \"{id}\" refused — --sync-ack requires a non-empty value (a blank or whitespace-only reason cannot escape the sync door)."
             )));
         }
     }
@@ -416,6 +430,17 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
                 }
             }
         }
+        // D3/D4: --sync-ack reason recorded on trace.sync_ack and appended to trace.deviations
+        if let Some(raw) = &f.sync_ack {
+            let trimmed = js_trim(raw);
+            if !trimmed.is_empty() {
+                trace.insert("sync_ack".into(), Value::String(trimmed.to_string()));
+                let ack_line = format!("sync-ack: {trimmed}");
+                if !deviations.iter().any(|d| matches!(d, Value::String(s) if s == &ack_line)) {
+                    deviations.push(Value::String(ack_line));
+                }
+            }
+        }
         trace.insert("deviations".into(), Value::Array(deviations));
         trace.insert(
             "friction".into(),
@@ -477,6 +502,55 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             "tests".into(),
             Value::String(if declared.is_some() { "boundary" } else { "undeclared" }.into()),
         );
+
+        // D3/D4: the sync door check (ownership, applied_at, prediction).
+        // Skipped when a non-blank --sync-ack was passed.
+        if f.sync_ack.as_deref().map(js_trim).unwrap_or("").is_empty() {
+            let feature = match cell_map.get("feature") {
+                Some(Value::String(s)) if !s.is_empty() => Some(s.as_str()),
+                _ => None,
+            };
+            let history_root = commit_trailer_history_root(root, feature);
+            let mut touched_set: Vec<String> = Vec::new();
+            if let Some(rows) = head_commit_numstat(&history_root) {
+                for row in rows {
+                    let norm = normalize_cell_path(&row.path);
+                    if !norm.is_empty() && !touched_set.contains(&norm) {
+                        touched_set.push(norm);
+                    }
+                }
+            }
+            for f_val in &f.files_changed {
+                if let Some(s) = f_val.as_str() {
+                    let norm = normalize_cell_path(s);
+                    if !norm.is_empty() && !touched_set.contains(&norm) {
+                        touched_set.push(norm);
+                    }
+                }
+            }
+            if let Some(refusal) = sync_refusal(root, &cell_map, &touched_set) {
+                return Err(Fail::Thrown(refusal));
+            }
+            // D3/D4: legacy cell predates affects_skills — check (c) is
+            // skipped by `sync_refusal` for it. Only worth a deviation line
+            // when it actually mattered — the touched set carries a
+            // skills/** path, so a non-legacy cell would have had its
+            // prediction checked here. A cell that never touches skills/
+            // stays byte-identical to a pre-koh-5 cap (a legacy cell that
+            // predicted nothing, checked against nothing touched, has
+            // nothing to make visible).
+            if cell_map.get("affects_skills").is_none()
+                && touched_set.iter().any(|p| path_under_root(p, "skills"))
+            {
+                if let Some(Value::Array(devs)) = trace.get_mut("deviations") {
+                    let legacy_line = "sync: no prediction on legacy cell";
+                    if !devs.iter().any(|d| matches!(d, Value::String(s) if s == legacy_line)) {
+                        devs.push(Value::String(legacy_line.to_string()));
+                    }
+                }
+            }
+        }
+
         cell_map.insert("trace".into(), Value::Object(trace));
         let cell_value = Value::Object(cell_map);
         write_cell(root, &cell_value)?;
@@ -526,6 +600,7 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
     // owns the actual validation via `parse_report_flag`, same split
     // `--deviation`'s own probe takes above.
     let report = opt_string_flag(flags, "report")?;
+    let sync_ack = opt_string_flag(flags, "sync-ack")?;
     Some(CapFlags {
         id,
         outcome,
@@ -539,6 +614,7 @@ pub(crate) fn cap_flags_from(flags: &rsv::Flags) -> Option<CapFlags> {
         commit_pending,
         inline_reason,
         report,
+        sync_ack,
     })
 }
 

@@ -345,7 +345,7 @@ pub(crate) fn run_add(flags: rsv::Flags, use_json: bool, t0: Instant) -> Option<
 
 // ── cells update ───────────────────────────────────────────────────────────
 
-pub(crate) const UPDATE_FIELDS: [&str; 13] = [
+pub(crate) const UPDATE_FIELDS: [&str; 15] = [
     "title",
     "action",
     "verify",
@@ -359,6 +359,8 @@ pub(crate) const UPDATE_FIELDS: [&str; 13] = [
     "pbi",
     "change_class",
     REGEN_ACK_FIELD,
+    "affects_skills",
+    "affects_specs",
 ];
 
 pub(crate) fn update_field_problem(key: &str, value: &Value) -> Option<String> {
@@ -371,7 +373,7 @@ pub(crate) fn update_field_problem(key: &str, value: &Value) -> Option<String> {
                 bad("must be a non-empty string")
             }
         }
-        "files" | "read_first" | "deps" | "decisions" => {
+        "files" | "read_first" | "deps" | "decisions" | "affects_skills" | "affects_specs" => {
             if is_string_array(value) {
                 None
             } else {
