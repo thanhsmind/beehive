@@ -309,6 +309,31 @@ pub(crate) fn run_list(flags: Flags, use_json: bool, t0: Instant) -> Option<Exit
 
 // ─── worktree unregister ──────────────────────────────────────────────────
 
+/// merge-ready-fact D2: an unregistered worktree is no longer a place a
+/// feature waits to be merged FROM, so the stored `merge_ready` fact goes
+/// away with the grant — the same removal `worktree merge` makes, for the
+/// other way a grant can end.
+///
+/// The feature is resolved the SAME way every other worktree->feature lookup
+/// resolves it (`resolve_worktree_by_id` then
+/// `status_full::read_worktree_feature` — the creation identity first, the
+/// worktree's own state record second), never re-derived from the id string.
+/// It must run BEFORE teardown, because teardown is exactly what makes the
+/// id unresolvable.
+///
+/// FAIL-OPEN and result-neutral: a dead id, a worktree with no identity, a
+/// feature with no record, or a corrupt lane each answer `false` and never
+/// change `unregister`'s own result or exit code.
+pub(crate) fn clear_merge_ready_for_worktree(main_root: &Path, id: &str) -> bool {
+    let Some(worktree_root) = resolve_worktree_by_id(main_root, id) else { return false };
+    let Some(feature) =
+        crate::verbs::status_full::read_worktree_feature(&worktree_root.to_string_lossy())
+    else {
+        return false;
+    };
+    crate::verbs::workflow_store::merge_ready::clear(main_root, &feature)
+}
+
 pub(crate) fn run_unregister(flags: Flags, use_json: bool, t0: Instant) -> Option<ExitCode> {
     if !crate::verbs::reservations::keys_known(&flags, &["id"]) {
         return None;
@@ -343,6 +368,13 @@ pub(crate) fn run_unregister(flags: Flags, use_json: bool, t0: Instant) -> Optio
 
     // Pre-checked before the lock: an unparseable registry delegates.
     read_grants_strict(&main_store_root)?;
+
+    // D2's removal, taken BEFORE the worktree-admin lock rather than inside
+    // it: the clear goes through the ledger mutation seam and takes the
+    // record's own locks, so nesting it under this lock would invent a
+    // second lock order for no gain. Still strictly before teardown, which
+    // is the only ordering the fact needs.
+    clear_merge_ready_for_worktree(&main_root, &id);
 
     let mut guard = match lock::acquire_store_lock(&main_root, WORKTREE_ADMIN_LOCK, lock::MAX_ATTEMPTS) {
         Ok(g) => g,

@@ -214,10 +214,9 @@ pub(crate) fn clear(root: &Path, feature: &str) -> bool {
 
 /// D2: `bee gate --name uat` flips the stored `uat` field. Never CREATES the
 /// fact — a feature that is not merge-ready has no `uat` to flip.
-// Its one caller is the `gate` verb, wired in the next cell of this feature
-// (mrf-2); the tests below are its only use until then. Drop the allow with
-// that wiring.
-#[allow(dead_code)]
+// Its one caller is the `gate` verb (state_group/set_gate.rs `run_gate_body`,
+// wired by mrf-2 — after that body drops its own mutation locks, since this
+// helper takes the same ones).
 pub(crate) fn set_uat(root: &Path, feature: &str, approved: bool) -> bool {
     if feature.is_empty() {
         return false;
@@ -235,8 +234,9 @@ pub(crate) fn set_uat(root: &Path, feature: &str, approved: bool) -> bool {
 
 /// D2: `bee close` rewrites `blocked_by` with the doors it found still
 /// standing (empty on a green close). Never CREATES the fact.
-// Its one caller is `bee close`, wired in mrf-2 — see `set_uat` above.
-#[allow(dead_code)]
+// Its one caller is `bee close` (verbs/drivers/close.rs
+// `record_merge_ready_blocked_by`, wired by mrf-2 at every full-doors
+// vector — before any refusal arm, so a blocked close records WHY).
 pub(crate) fn set_blocked_by(root: &Path, feature: &str, doors: &[&str]) -> bool {
     if feature.is_empty() {
         return false;
