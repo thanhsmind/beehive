@@ -428,6 +428,30 @@ a malformed record has earned none.
   recorded `conflicts` verdict does not refuse anything by itself — it is a
   contradiction taken on with eyes open, and the `--note` is where the prior
   id a `retires-prior` verdict replaces is named.
+- R138 — The merged gate never opens on a lane whose plan-time conflict check
+  does not stand behind it (knowledge-one-home D2/D5, cell koh-9,
+  2026-08-22). An approval that includes the execution component — `bee gate
+  --merge --approved true`, or `--name execution --approved true` — targeting
+  a LANE is refused, before any lock or write, on exactly three causes:
+  the lane's workflow record carries no `conflict_review` at all (the check
+  has never run against this plan); the recorded review's `plan_rev` differs
+  from the lane's current `plan_rev`; or any derived candidate still carries
+  no verdict, in which case the refusal NAMES the unverdicted ids. Each
+  refusal names the fix — `bee state plan-conflicts derive`, then `bee state
+  plan-conflicts verdict` per candidate. The plan-rev cause is the reset:
+  a `plan-rev bump` invalidates the review by itself, so there is no separate
+  clear step, only a fresh derive. The precondition is the advisor
+  precondition's twin in shape and placement — same pre-lock peek, same
+  post-lock recompute against the locked read, same fail-closed reading (a
+  workflow store that cannot be read is an error, never a pass) — and it is
+  LANE-ONLY: `conflict_review` is as lane-scoped as `plan_rev`, so the
+  default (non-lane) record's gate behaviour is unchanged, and so is an
+  unapprove (`--approved false`), which never carries the check. A recorded
+  `conflicts` verdict is the deliberate exception (R137): it does not refuse.
+  The approval succeeds and names those candidates on a second output line
+  and under `conflicts_acknowledged` on the JSON result — present only when
+  non-empty — so the contradiction is approved with eyes open rather than
+  discovered later.
 - R104 — An approvals map merges over the gate defaults only when it is stored as
   an object; every other shape yields the defaults untouched, and no shape is
   read partially or refused (js-parity-cleanup D2, cell jp-4, 2026-08-04).
@@ -737,6 +761,23 @@ a malformed record has earned none.
   180 for the one new flag name `--verdict`. Proof: the six
   `plan-conflicts` rows in `verbs/state_group/tests.rs`, plus
   `tests/registry_contracts.rs` and `tests/registry_dispatch.rs`.
+- The merged gate's conflict precondition (R138, knowledge-one-home D2/D5):
+  `conflict_review_refusal` + `lane_conflict_review` /
+  `unverdicted_candidate_ids` / `acknowledged_conflicts` in
+  `packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs`, wired into
+  `run_gate_body` at BOTH `high_risk_advisor_refusal` call sites (the
+  pre-lock peek and the post-lock recompute). It reads the LIVE WORKFLOW
+  RECORD, never the lane record the gate mutates, because the lane
+  projection does not copy `conflict_review` down — which also takes the
+  review and the `plan_rev` it is compared against from one read. A lane
+  with no live workflow record is the same C1 shape
+  `write_through_projection` and the durable gate stamp already take: there
+  is no `plan_rev` to compare and no record a derive could have written to,
+  so the precondition does not apply. Help text for both `gate` spellings is
+  hand-edited in `src/generated/registry_payload.json`; koh-9 adds no flag
+  name, so `catalog.rs`'s `PINNED_FLAG_COUNT` stays 180. Proof: the ten
+  `koh9-*` rows in `verbs/state_group/set_gate.rs`'s own test module, beside
+  the advisor-precondition cases they are modelled on.
 - Approvals-map shape coercion (B53/R104): `spread_gates` in
   `packages/bee-rs/crates/bee/src/state.rs:100-121` — one match arm for an
   object, one wildcard arm returning `default_gates()`; re-exported for

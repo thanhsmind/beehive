@@ -614,6 +614,131 @@ fn high_risk_advisor_refusal(
     ))
 }
 
+// ─── D5's plan-time conflict precondition (knowledge-one-home, koh-9) ───────
+//
+// The twin of `high_risk_advisor_refusal` above, in the same place and with
+// the same fail-closed shape: a merged (or `--name execution`) APPROVAL never
+// opens while the plan-time conflict check is missing, stale, or unfinished.
+// D5 verbatim: "gate --merge refuses while any candidate lacks a verdict —
+// same precondition shape as the high-risk advisor_ref guard".
+//
+// WHERE THE FIELD IS READ FROM. `conflict_review` lives on the LIVE WORKFLOW
+// RECORD beside `plan_rev` (koh-8), and the lane projection never copies it
+// down, so this check reads the workflow record directly — never the lane
+// record the gate itself mutates. That also puts the review and the
+// `plan_rev` it is compared against in ONE read, so the two can never be
+// taken from two different revisions of the same lane.
+//
+// WHY IT IS LANE-ONLY. `conflict_review` is as lane-scoped as `plan_rev`:
+// `state plan-conflicts derive` refuses the default (non-lane) record
+// outright, so a default-record gate has no review it could ever have
+// recorded. The default record's behaviour is therefore unchanged, exactly
+// like the advisor precondition's `--no-lane` arm.
+
+/// The lane's live `conflict_review` beside the lane's CURRENT `plan_rev`.
+/// `None` means the precondition does not apply at all: the target is not a
+/// lane, or the lane names no live workflow record — with no workflow record
+/// there is no `plan_rev` to compare against and no record `state
+/// plan-conflicts derive` could have written to, the same C1 shape
+/// `write_through_projection` and the durable gate stamp already take. The
+/// inner `Option<Value>` keeps ABSENT distinct from any recorded value: a
+/// missing (or null) field is "never derived", never an empty review.
+fn lane_conflict_review(
+    root: &Path,
+    lane: Option<&str>,
+) -> Result<Option<(Option<Value>, Value)>, Err2> {
+    let Some(lane) = lane else { return Ok(None) };
+    let workflows = list_workflows(root)?;
+    let Some(wf) = find_live_workflow(&workflows, lane) else { return Ok(None) };
+    // `unwrap_or(json!(0))` is the SAME default `state plan-conflicts derive`
+    // stamps into the review, so an un-bumped lane compares equal instead of
+    // reading as stale.
+    let plan_rev = wf.get("plan_rev").cloned().unwrap_or(json!(0));
+    let review = wf.get("conflict_review").cloned().filter(|v| !v.is_null());
+    Ok(Some((review, plan_rev)))
+}
+
+/// Every candidate id whose verdict is still unrecorded, in derived order. A
+/// non-object candidate, or one with no `id`, still counts as unverdicted —
+/// a shape this code did not write is never read as "resolved".
+fn unverdicted_candidate_ids(review: &Value) -> Vec<String> {
+    let Some(Value::Array(items)) = review.get("candidates") else {
+        // A review with no candidates ARRAY at all is not a derived review.
+        return vec!["<no candidates list on the recorded review>".to_string()];
+    };
+    let mut out: Vec<String> = Vec::new();
+    for c in items {
+        match c.get("verdict") {
+            Some(Value::String(v)) if CONFLICT_VERDICTS.contains(&v.as_str()) => continue,
+            _ => {}
+        }
+        let id = js_disp_opt(c.get("id"));
+        out.push(if id.is_empty() { "<candidate with no id>".to_string() } else { id });
+    }
+    out
+}
+
+/// D5's `conflicts` verdicts, in derived order — the candidates the approval
+/// output names so the user approves with eyes open. A recorded `conflicts`
+/// verdict NEVER refuses (D5 verbatim: it is a contradiction taken on
+/// deliberately); it is surfaced, not blocked.
+fn acknowledged_conflict_ids(review: &Value) -> Vec<String> {
+    let Some(Value::Array(items)) = review.get("candidates") else { return Vec::new() };
+    items
+        .iter()
+        .filter(|c| matches!(c.get("verdict"), Some(Value::String(v)) if v == "conflicts"))
+        .map(|c| js_disp_opt(c.get("id")))
+        .filter(|id| !id.is_empty())
+        .collect()
+}
+
+/// The refusal text for a lane whose plan-time conflict check does not stand
+/// behind this approval, or `None` when the approval may proceed. Three
+/// causes, all of them fail-closed: no review recorded at all, a review
+/// derived against a different `plan_rev`, or any candidate still without a
+/// verdict. Errors are NOT swallowed into an allow — a workflow store that
+/// cannot be read propagates as `Err2`, never as a silent pass.
+fn conflict_review_refusal(root: &Path, lane: Option<&str>) -> Result<Option<String>, Err2> {
+    let Some((review, plan_rev)) = lane_conflict_review(root, lane)? else { return Ok(None) };
+    let lane = lane.unwrap_or_default();
+    let fix = format!(
+        "FIX: derive the candidates (bee state plan-conflicts derive --lane {lane}), \
+         then record one verdict for each (bee state plan-conflicts verdict --id <candidate> \
+         --verdict compatible|conflicts|retires-prior --lane {lane})."
+    );
+    let Some(review) = review else {
+        return Ok(Some(format!(
+            "gate: approval refused for lane \"{lane}\" \u{2014} the plan-time conflict check has never run against this plan (D5): the record carries no conflict_review at all. {fix}"
+        )));
+    };
+    let derived_rev = review.get("plan_rev").cloned().unwrap_or(Value::Null);
+    if js_disp(&derived_rev) != js_disp(&plan_rev) {
+        return Ok(Some(format!(
+            "gate: approval refused for lane \"{lane}\" \u{2014} the conflict review was derived against plan_rev {} but the lane is now at plan_rev {} (D5). A plan-rev bump invalidates the review by itself — there is no separate reset to run, only a fresh derive. {fix}",
+            js_disp(&derived_rev),
+            js_disp(&plan_rev),
+        )));
+    }
+    let missing = unverdicted_candidate_ids(&review);
+    if !missing.is_empty() {
+        return Ok(Some(format!(
+            "gate: approval refused for lane \"{lane}\" \u{2014} {} conflict candidate(s) still carry no verdict (D5): {}. {fix}",
+            missing.len(),
+            missing.join(", "),
+        )));
+    }
+    Ok(None)
+}
+
+/// The `conflicts` verdicts standing behind an approval that just passed
+/// `conflict_review_refusal`. Empty for a non-lane target, a lane with no
+/// live workflow record, and every lane whose candidates are all
+/// `compatible` / `retires-prior`.
+fn acknowledged_conflicts(root: &Path, lane: Option<&str>) -> Result<Vec<String>, Err2> {
+    let Some((Some(review), _)) = lane_conflict_review(root, lane)? else { return Ok(Vec::new()) };
+    Ok(acknowledged_conflict_ids(&review))
+}
+
 /// The mutation body, root-parameterized so it can be exercised directly in
 /// tests without a process CWD (`run_gate` above is the only caller in
 /// production; `prelude`'s CWD-resolved root is threaded through as `root`).
@@ -706,15 +831,36 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
                 return Ok(Out::Thrown(msg));
             }
         }
+        // D5's plan-time conflict precondition, decided off the same silent
+        // pre-lock read, for the same reason: a refusal makes zero mutations.
+        // It reads the workflow record itself, so it needs no peeked lane
+        // record — a lane with no lane file at all still gets checked.
+        let lane = match &scope.feature {
+            Some(f) if scope.lane => Some(f.as_str()),
+            _ => None,
+        };
+        if let Some(msg) = conflict_review_refusal(root, lane)? {
+            return Ok(Out::Thrown(msg));
+        }
     }
     let locks = acquire_mutation_locks(root, &scope, &workflows)?;
     let mut target = resolve_mutation_target(root, lane_feature.as_deref(), "gate", no_lane)?;
+    // D5 (koh-9): the `conflicts` verdicts standing behind this approval,
+    // read INSIDE the lock right after the precondition that validated
+    // them — surfaced on the output, never a refusal.
+    let mut conflicts_acknowledged: Vec<String> = Vec::new();
     if exec_component && approved {
         // race: the peek missed the high-risk mode, or the ref went stale
         // between the peek and the lock — recompute against the locked read.
         if let Some(msg) = high_risk_advisor_refusal(root, target.record(), target.lane()) {
             return Ok(Out::Thrown(msg));
         }
+        // Same race, D5's side: a `plan-rev bump` or a fresh `derive` may
+        // have landed between the peek and the lock.
+        if let Some(msg) = conflict_review_refusal(root, target.lane())? {
+            return Ok(Out::Thrown(msg));
+        }
+        conflicts_acknowledged = acknowledged_conflicts(root, target.lane())?;
     }
     let lane_note = target.lane_note();
     // multisession-native-9 D7 / validation-diet D15 — the plan-rev stamp is
@@ -839,6 +985,24 @@ pub(crate) fn run_gate_body(root: &Path, flags: &Flags) -> R2<Out> {
         record.insert("gate_durable_stamp_skipped".into(), Value::Bool(true));
         (text, record)
     } else {
+        (text, record)
+    };
+    // D5 (koh-9): a recorded `conflicts` verdict never refuses — it is a
+    // contradiction the plan takes on deliberately. The approval therefore
+    // NAMES it, on a second line beside the byte-identical success line and
+    // as a typed `conflicts_acknowledged` field on the JSON result (present
+    // only when non-empty), so the user approves with eyes open instead of
+    // discovering the contradiction later.
+    let (text, record) = if conflicts_acknowledged.is_empty() {
+        (text, record)
+    } else {
+        let text = format!(
+            "{text}\nNote: approved over {} recorded \"conflicts\" verdict(s) \u{2014} {}. D5 lets a conflict through with eyes open: the contradiction is recorded, not resolved.",
+            conflicts_acknowledged.len(),
+            conflicts_acknowledged.join(", "),
+        );
+        let mut record = record;
+        record.insert("conflicts_acknowledged".into(), json!(conflicts_acknowledged));
         (text, record)
     };
     Ok(Out::Emit(Value::Object(record), text, 0))
@@ -1483,6 +1647,271 @@ mod tests {
         let lane = read_json_file(root, ".bee/lanes/gate-door-safe.json");
         assert_eq!(lane["approved_gates"]["execution"], json!(true));
         assert_eq!(lane["approved_gates"]["shape"], json!(true));
+    }
+
+    // ── run_gate_body — D5's plan-time conflict precondition (koh-9) ────────
+    //
+    // The twin of the advisor block above, and written the same way: the
+    // gate refuses a merged/execution APPROVAL while the plan-time conflict
+    // check is absent, stale, or unfinished. `conflict_review` lives on the
+    // LIVE WORKFLOW RECORD (koh-8 writes it there and the lane projection
+    // never copies it down), so every fixture here writes both files — the
+    // lane record the gate mutates and the workflow record the precondition
+    // reads.
+
+    /// One lane whose workflow record carries `plan_rev` and, optionally,
+    /// the `conflict_review` object `state plan-conflicts derive` writes.
+    fn write_conflict_fixture(root: &Path, feature: &str, plan_rev: u64, review: Option<&str>) {
+        w(
+            root,
+            &format!(".bee/lanes/{feature}.json"),
+            &format!(r#"{{"feature":"{feature}","phase":"planning","mode":"standard"}}"#),
+        );
+        let review_field = match review {
+            Some(r) => format!(r#","conflict_review":{r}"#),
+            None => String::new(),
+        };
+        w(
+            root,
+            ".bee/runtime/workflows/wf-1/state.json",
+            &format!(
+                r#"{{"id":"wf-1","feature":"{feature}","status":"active","phase":"planning","plan_rev":{plan_rev},"created_at":"2026-01-01T00:00:00.000Z"{review_field}}}"#
+            ),
+        );
+    }
+
+    fn merged_approval(root: &Path, feature: &str) -> Out {
+        run_gate_body(root, &flags(&["--lane", feature, "--merge", "--approved", "true"])).unwrap()
+    }
+
+    /// Refusal cause 1: the check has never run at all. ABSENT is its own
+    /// fact — no default review is merged in on the read, so "never derived"
+    /// can never be mistaken for "derived and empty".
+    #[test]
+    fn merged_gate_approval_refuses_when_the_lane_has_no_conflict_review() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_conflict_fixture(root, "koh9-absent", 1, None);
+        let before =
+            std::fs::read_to_string(root.join(".bee/runtime/workflows/wf-1/state.json")).unwrap();
+        let Out::Thrown(msg) = merged_approval(root, "koh9-absent") else {
+            panic!("expected a refusal with no conflict_review recorded")
+        };
+        assert!(msg.contains("koh9-absent"), "{msg}");
+        assert!(msg.contains("no conflict_review"), "{msg}");
+        assert!(msg.contains("bee state plan-conflicts derive --lane koh9-absent"), "{msg}");
+        let after =
+            std::fs::read_to_string(root.join(".bee/runtime/workflows/wf-1/state.json")).unwrap();
+        assert_eq!(after, before, "a refusal must write nothing");
+    }
+
+    /// Refusal cause 2: the review was derived against an older plan_rev.
+    /// Every verdict below is recorded, so ONLY the rev mismatch can refuse
+    /// this call — and the message says the bump is itself the reset.
+    #[test]
+    fn merged_gate_approval_refuses_when_the_conflict_review_is_stale_by_plan_rev() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_conflict_fixture(
+            root,
+            "koh9-stale",
+            2,
+            Some(
+                r#"{"plan_rev":1,"derived_at":"2026-01-01T00:00:00.000Z","candidates":[{"id":"efd6cbaa","kind":"decision","title":"t","verdict":"compatible","note":null}]}"#,
+            ),
+        );
+        let Out::Thrown(msg) = merged_approval(root, "koh9-stale") else {
+            panic!("expected a refusal against a stale conflict review")
+        };
+        assert!(msg.contains("derived against plan_rev 1"), "{msg}");
+        assert!(msg.contains("now at plan_rev 2"), "{msg}");
+        assert!(msg.contains("plan-rev bump invalidates the review"), "{msg}");
+    }
+
+    /// Refusal cause 3: a candidate still carries a null verdict. The
+    /// refusal NAMES the unverdicted id and leaves the verdicted one out.
+    #[test]
+    fn merged_gate_approval_refuses_and_names_every_unverdicted_candidate() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_conflict_fixture(
+            root,
+            "koh9-open",
+            1,
+            Some(
+                r#"{"plan_rev":1,"derived_at":"2026-01-01T00:00:00.000Z","candidates":[{"id":"efd6cbaa","kind":"decision","title":"t","verdict":"compatible","note":null},{"id":"agents-proof-at-cap","kind":"rule","title":"r","verdict":null,"note":null}]}"#,
+            ),
+        );
+        let Out::Thrown(msg) = merged_approval(root, "koh9-open") else {
+            panic!("expected a refusal naming the unverdicted candidate")
+        };
+        assert!(msg.contains("agents-proof-at-cap"), "{msg}");
+        assert!(!msg.contains("efd6cbaa"), "the verdicted candidate must not be named: {msg}");
+        assert!(msg.contains("1 conflict candidate(s) still carry no verdict"), "{msg}");
+        assert!(msg.contains("plan-conflicts verdict"), "{msg}");
+    }
+
+    /// The happy path: every candidate verdicted at the current plan_rev —
+    /// the approval goes through, and nothing is added to the output.
+    #[test]
+    fn merged_gate_approval_succeeds_once_every_candidate_carries_a_verdict() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_conflict_fixture(
+            root,
+            "koh9-green",
+            3,
+            Some(
+                r#"{"plan_rev":3,"derived_at":"2026-01-01T00:00:00.000Z","candidates":[{"id":"efd6cbaa","kind":"decision","title":"t","verdict":"compatible","note":null},{"id":"27e55095","kind":"decision","title":"t","verdict":"retires-prior","note":"replaces 3ea7500a"}]}"#,
+            ),
+        );
+        let Out::Emit(record, text, _) = merged_approval(root, "koh9-green") else {
+            panic!("expected the approval to succeed with every verdict recorded")
+        };
+        assert!(text.contains("Gates \"shape\" and \"execution\" set to true"), "{text}");
+        assert!(!text.contains("conflicts"), "no conflict note is owed here: {text}");
+        assert_eq!(record["conflicts_acknowledged"], Value::Null, "{record:?}");
+        let wf = read_json_file(root, ".bee/runtime/workflows/wf-1/state.json");
+        assert_eq!(wf["gates"]["execution"]["state"], json!("approved"), "{wf:?}");
+        assert_eq!(wf["gates"]["shape"]["state"], json!("approved"), "{wf:?}");
+    }
+
+    /// D5: "0 conflicts" is valid exactly when bee returned zero candidates —
+    /// an empty derived list approves, and it is a different fact from the
+    /// absent field cause 1 refuses on.
+    #[test]
+    fn merged_gate_approval_succeeds_on_a_derived_review_with_zero_candidates() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_conflict_fixture(
+            root,
+            "koh9-zero",
+            0,
+            Some(r#"{"plan_rev":0,"derived_at":"2026-01-01T00:00:00.000Z","candidates":[]}"#),
+        );
+        let Out::Emit(..) = merged_approval(root, "koh9-zero") else {
+            panic!("a zero-candidate derive is a valid \"0 conflicts\" and must approve")
+        };
+    }
+
+    /// D5 verbatim, and the cell's prohibition: a recorded `conflicts`
+    /// verdict does NOT refuse. The approval succeeds and NAMES the
+    /// candidate, on the text and as a typed field, so the user takes the
+    /// contradiction on with eyes open.
+    #[test]
+    fn merged_gate_approval_over_a_conflicts_verdict_succeeds_and_names_it() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_conflict_fixture(
+            root,
+            "koh9-ack",
+            1,
+            Some(
+                r#"{"plan_rev":1,"derived_at":"2026-01-01T00:00:00.000Z","candidates":[{"id":"efd6cbaa","kind":"decision","title":"t","verdict":"conflicts","note":"taken on"},{"id":"27e55095","kind":"decision","title":"t","verdict":"compatible","note":null}]}"#,
+            ),
+        );
+        let Out::Emit(record, text, _) = merged_approval(root, "koh9-ack") else {
+            panic!("a conflicts verdict must never refuse the approval")
+        };
+        assert!(text.contains("Gates \"shape\" and \"execution\" set to true"), "{text}");
+        assert!(text.contains("efd6cbaa"), "{text}");
+        assert!(text.contains("eyes open"), "{text}");
+        assert_eq!(record["conflicts_acknowledged"], json!(["efd6cbaa"]), "{record:?}");
+    }
+
+    /// A `plan-rev bump` after the approval is the reset: the review keeps
+    /// its old rev, so the NEXT approval refuses as stale with no separate
+    /// clear step. (The bump itself is `run_plan_rev_bump`, which needs a
+    /// process CWD; its one effect on this door — `plan_rev` moving on the
+    /// workflow record — is written directly here.)
+    #[test]
+    fn a_plan_rev_bump_after_an_approval_makes_the_next_approval_refuse_as_stale() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_conflict_fixture(
+            root,
+            "koh9-bump",
+            1,
+            Some(
+                r#"{"plan_rev":1,"derived_at":"2026-01-01T00:00:00.000Z","candidates":[{"id":"efd6cbaa","kind":"decision","title":"t","verdict":"compatible","note":null}]}"#,
+            ),
+        );
+        let Out::Emit(..) = merged_approval(root, "koh9-bump") else {
+            panic!("the first approval stands on a fresh review")
+        };
+        let mut wf = read_json_file(root, ".bee/runtime/workflows/wf-1/state.json");
+        wf["plan_rev"] = json!(2);
+        w(root, ".bee/runtime/workflows/wf-1/state.json", &wf.to_string());
+        let Out::Thrown(msg) = merged_approval(root, "koh9-bump") else {
+            panic!("the bumped lane's next approval must refuse as stale")
+        };
+        assert!(msg.contains("derived against plan_rev 1"), "{msg}");
+        assert!(msg.contains("now at plan_rev 2"), "{msg}");
+    }
+
+    /// The unapprove path never runs the precondition — `exec_component &&
+    /// approved` is false — so a lane that never derived can still revoke.
+    #[test]
+    fn gate_unapprove_is_unaffected_by_the_conflict_precondition() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_conflict_fixture(root, "koh9-unapprove", 1, None);
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "koh9-unapprove", "--merge", "--approved", "false"]),
+        )
+        .unwrap();
+        let Out::Emit(_, text, _) = out else {
+            panic!("an unapprove is never gated by the conflict precondition")
+        };
+        assert!(text.contains("set to false"), "{text}");
+    }
+
+    /// Prohibition: the default (no-lane) record is untouched by this door.
+    /// `conflict_review` is as lane-scoped as `plan_rev`, so a default-record
+    /// approval has no review it could ever have recorded.
+    #[test]
+    fn default_record_gate_approval_is_unaffected_by_the_conflict_precondition() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_conflict_fixture(root, "koh9-default", 1, None);
+        w(
+            root,
+            ".bee/state.json",
+            r#"{"phase":"planning","feature":"koh9-default"}"#,
+        );
+        let out = run_gate_body(root, &flags(&["--no-lane", "--merge", "--approved", "true"]))
+            .unwrap();
+        let Out::Emit(..) = out else {
+            panic!("the default record must approve exactly as before")
+        };
+        let state = read_json_file(root, ".bee/state.json");
+        assert_eq!(state["approved_gates"]["execution"], json!(true), "{state:?}");
+    }
+
+    /// The `--name execution` spelling carries the same precondition as
+    /// `--merge` (both are `exec_component`); `--name shape` alone does not.
+    #[test]
+    fn the_conflict_precondition_covers_name_execution_but_not_name_shape() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_conflict_fixture(root, "koh9-named", 1, None);
+        let Out::Thrown(msg) = run_gate_body(
+            root,
+            &flags(&["--lane", "koh9-named", "--name", "execution", "--approved", "true"]),
+        )
+        .unwrap() else {
+            panic!("a --name execution approval must refuse just like --merge")
+        };
+        assert!(msg.contains("no conflict_review"), "{msg}");
+        let out = run_gate_body(
+            root,
+            &flags(&["--lane", "koh9-named", "--name", "shape", "--approved", "true"]),
+        )
+        .unwrap();
+        let Out::Emit(..) = out else {
+            panic!("a shape-only approval is not an execution approval")
+        };
     }
 
     // ── run_gate_body — input validation (giv-1) ────────────────────────────

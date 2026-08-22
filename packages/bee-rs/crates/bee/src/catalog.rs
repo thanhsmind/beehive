@@ -459,6 +459,10 @@ mod tests {
         // (`--outcome` is a worker's own result line, `--relation` is a
         // decision's structural link to another, `--reason` is retrospective
         // why-text). `--verdict` is new.
+        // 180 -> 180 (knowledge-one-home koh-9): the merged gate's D5
+        // conflict precondition is a REFUSAL and an extra output field
+        // (`conflicts_acknowledged`), not a flag — `gate`/`state gate` gained
+        // no parameter, so the count is deliberately unchanged.
         const PINNED_FLAG_COUNT: usize = 180;
 
         let names: std::collections::BTreeSet<&str> =

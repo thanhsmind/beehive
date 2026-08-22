@@ -73,6 +73,11 @@ decision?* FAIL → redraft. Standard/high-risk add the review wave before the g
 
 ## Gate
 
+Before the question, on a lane: `bee state plan-conflicts derive`, then one
+`bee state plan-conflicts verdict` per candidate — the gate refuses an
+execution approval while any candidate is unverdicted or the review is stale
+by `plan_rev` (rule: R138, `docs/knowledge/areas/workflow-state/gates.md`).
+
 Standard/high-risk: present the shape in plain language — what will be built,
 why this size, cost if the shape is wrong — link the plan, then ask verbatim:
 "Work shape is ready. Approve before current-work preparation?" and stop. On
