@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "store-reach-gaps",
   "mode": "feature",
-  "phase": "exploring",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,9 +11,9 @@
     "uat": true
   },
   "summary": "Feature \"store-reach-gaps\" started at phase \"exploring\" (lane).",
-  "next_action": "Merged into main at c136a86; capture what settled, then bee close --feature store-reach-gaps.",
+  "next_action": "bee close finished \"store-reach-gaps\" — feature is closed.",
   "created_at": "2026-08-21T15:25:22.880Z",
-  "run_state": "done",
+  "run_state": "shaping",
   "waiting_on": null,
   "route": {
     "class": "feature",
