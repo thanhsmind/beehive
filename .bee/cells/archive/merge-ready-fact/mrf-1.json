@@ -103,6 +103,61 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "last-cap-with-grant-writes-the-fact",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/workflow_store/merge_ready.rs:139-203 set_after_cap gates on open==0 && claimed==0 && blocked==0 && capped>=1 plus find_granted_worktree_for_feature (line 159); wired at packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:574-583. Proved by merge_ready_is_set_by_the_cap_that_leaves_nothing_outstanding (packages/bee-rs/crates/bee/src/verbs/cells/tests.rs) against a real `git worktree add` grant. `cargo test --release --manifest-path packages/bee-rs/Cargo.toml merge_ready` -> 19 passed, 1 ignored."
+          },
+          {
+            "id": "open-sibling-no-grant-zero-cell-write-nothing",
+            "status": "PASS",
+            "evidence": "merge_ready.rs:153-158 returns None on any open/claimed/blocked cell and on capped==0; merge_ready.rs:159 returns None without a granted worktree. Tests: merge_ready_stays_unset_while_a_sibling_cell_is_still_open, merge_ready_stays_unset_without_a_worktree_grant (cells/tests.rs), merge_ready_set_after_cap_refuses_a_feature_with_no_cells (merge_ready.rs:423). All green in the 19-test run."
+          },
+          {
+            "id": "reopen-unclaim-judge-record-clear-the-fact",
+            "status": "PASS",
+            "evidence": "Three call sites of clear_merge_ready_for: handlers_close.rs:977 (unclaim), handlers_close.rs:1039 (reopen), handlers_meta.rs:296 (NEEDS_REVISION judge-record); helper at handlers_close.rs:985-988 -> merge_ready::clear (merge_ready.rs:208-213). Tests merge_ready_is_cleared_by_a_reopen_and_re_set_with_a_fresh_since, merge_ready_is_cleared_by_an_unclaim, merge_ready_is_cleared_by_a_needs_revision_judge_record — green."
+          },
+          {
+            "id": "corrupt-record-never-changes-the-caps-outcome",
+            "status": "PASS",
+            "evidence": "merge_ready.rs:103-117 with_record swallows every Err (list_workflows, acquire_mutation_locks, resolve_mutation_target, write_through_projection) and returns bool; no function in the module returns Result. Tests merge_ready_is_silent_over_a_corrupt_record (merge_ready.rs:390) asserts the corrupt file is byte-identical after all four entry points, and merge_ready_over_a_corrupt_record_leaves_the_cap_result_intact (cells/tests.rs) asserts the cap result itself. Green."
+          },
+          {
+            "id": "d3-no-gate-or-merge-door-reads-merge-ready",
+            "status": "PASS",
+            "evidence": "`rg -n 'merge_ready' packages/bee-rs/crates/bee/src` over non-test files returns only: mod.rs:115-118 (module decl), status_full/topology.rs:341/344 (the surface D3 mandates), and write/clear call sites (handlers_close.rs:574/582/977/985/987/1039, handlers_meta.rs:296, drivers/close.rs:1802/1805/1864/1919/1962, set_gate.rs:981, worktree/phases.rs:513, worktree/registry.rs:327/334/377). Zero occurrences inside set_gate.rs's uat precondition or worktree/phases.rs merge preconditions (uat_merge_precheck reads no merge_ready). No occurrence anywhere outside packages/bee-rs except docs."
+          },
+          {
+            "id": "ledger-seam-only-no-hand-written-state-json",
+            "status": "PASS",
+            "evidence": "merge_ready.rs:103-117 routes every write through resolve_mutation_lock_scope / acquire_mutation_locks / resolve_mutation_target / write_through_projection; the only direct fs read is read_state_peek in home() (merge_ready.rs:83, a read, not a write). No std::fs::write outside #[cfg(test)] fixtures (merge_ready.rs:266+)."
+          },
+          {
+            "id": "cap-reopen-exit-codes-and-result-shape-unchanged",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:557-585 adds exactly one key to the cap result (`merge_ready`, Value::Null on every no-write arm) and returns the same Ok(saved); the reopen/unclaim/judge-record sites call clear_merge_ready_for, which returns unit (handlers_close.rs:985). Full suite `cargo test --release --manifest-path packages/bee-rs/Cargo.toml` -> 2459 passed, 0 failed in the lib suite; only the pre-declared out-of-scope red crates/bee/tests/opencode_plugin_contracts.rs (2 failed) remains."
+          },
+          {
+            "id": "decision-honored-d1-d2-d3",
+            "status": "PASS",
+            "evidence": "D1 cfccdde4: field set {since,branch,worktree_id,uat,blocked_by} built at merge_ready.rs:187-193, zero-cell arm at :156-158. D2 e069ef73: clear on every reopen path (three sites above); set_uat/set_blocked_by written here and left unwired for mrf-2 as the commit message states. D3 f2c16247: additive only — see d3-no-gate-or-merge-door-reads-merge-ready. docs/history/merge-ready-fact/CONTEXT.md read; no deviation from it found."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-22T17:00:10.589Z"
+      }
+    ]
   }
 }

@@ -108,6 +108,56 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "close-records-blocking-non-uat-doors",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/drivers/close.rs:1802-1805 record_merge_ready_blocked_by filters `d.blocking && d.door != \"uat\"`; called at :1864 (dry run), :1919 (proof-debt refusal arm, a named deviation the commit records), :1962 (green path). Tests close_records_the_blocking_doors_on_the_features_merge_ready_fact, a_close_stopped_at_the_tests_door_still_records_that_door, a_green_close_writes_the_empty_door_list_back (drivers/tests.rs) — green in the 19-test merge_ready run."
+          },
+          {
+            "id": "uat-gate-flips-merge-ready-uat",
+            "status": "PASS",
+            "evidence": "packages/bee-rs/crates/bee/src/verbs/state_group/set_gate.rs:979-983 fires only for `!merge && name == \"uat\"`, routed by routed_feature (:925-928, the same record the approval landed on), placed after drop(locks) at :960 because set_uat re-takes those locks. merge_ready.rs:220-233 never creates the fact and is idempotent. Tests the_uat_gate_flips_the_stored_merge_ready_fact_both_ways and a_non_uat_gate_and_a_factless_feature_both_leave_merge_ready_alone — green."
+          },
+          {
+            "id": "worktree-merge-and-unregister-remove-the-fact",
+            "status": "PASS",
+            "evidence": "worktree/phases.rs:513 clears inside close_the_lane_on_merge on both branches (:517-519 uat-wait branch, :529 no-lane branch); worktree/registry.rs:327-335 clear_merge_ready_for_worktree resolves feature via resolve_worktree_by_id + read_worktree_feature and is called at :377, before the teardown that makes the id unresolvable. Tests a_green_merge_removes_the_merged_features_merge_ready_fact_and_commits_the_lane, unregistering_a_worktree_removes_its_features_merge_ready_fact — green."
+          },
+          {
+            "id": "status-lanes-full-json-carries-merge-ready-verbatim",
+            "status": "PASS",
+            "evidence": "status_full/topology.rs:334-344 copies the record's value untouched and inserts explicit Value::Null when absent; reached by build_status(ctx, lanes_full=true) at status_full/build.rs:305-306. No unit test covers this row, so probed the built binary packages/bee-rs/target/release/bee (mtime 2026-08-22 23:54, after a92c0e72 at 23:21) against a throwaway store: `bee status --lanes-full --json` -> lanes[demo].merge_ready == {\"since\":\"2026-01-01T00:00:00.000Z\",\"branch\":\"wt/demo\",\"worktree_id\":\"wt-demo\",\"uat\":\"pending\",\"blocked_by\":[\"scribing\"]} verbatim; lanes[bare].merge_ready == null with the key present. exit 0."
+          },
+          {
+            "id": "no-change-to-close-doors-gate-refusals-or-merge-preconditions",
+            "status": "PASS",
+            "evidence": "close.rs:1802-1805 drops set_blocked_by's answer (`let _ =`) and adds no branch; set_gate.rs:979-983 likewise, after every refusal path and after the approval write, so gate text/JSON/exit code are unchanged. phases.rs merge preconditions (uat_merge_precheck at :761) are untouched. Whole-suite run: 2459 passed / 0 failed in the lib suite; only the pre-declared out-of-scope crates/bee/tests/opencode_plugin_contracts.rs stays red (2 failed, same two names as before this feature). NOTE (non-blocking, P3): phases.rs:771 now enters the lane-bookkeeping-commit arm when `outcome.changed` is true from a clear that landed on the DEFAULT record with no lane file; commit_main_bookkeeping (worktree/merge.rs:314-326) filters the nonexistent lane pathspec and returns skipped(\"clean\"), which the caller does not warn about — the only residue is an extra `lane_bookkeeping_commit: skipped/clean` key on that rare path."
+          },
+          {
+            "id": "d3-merge-ready-never-consulted-by-uat-gate-or-merge-door",
+            "status": "PASS",
+            "evidence": "`rg -n 'merge_ready' packages/bee-rs/crates/bee/src` (non-test) lists no read outside status_full/topology.rs:341, the surface D3 mandates. set_gate.rs holds one write (:981) and comments; phases.rs one clear (:513) and a bool it derives from that clear's own answer, never from the stored value. registry.rs:334 is a clear. No reader outside packages/bee-rs (`rg -n 'merge_ready' --glob '!packages/bee-rs/**'` -> docs only)."
+          },
+          {
+            "id": "decision-honored-d2-d3",
+            "status": "PASS",
+            "evidence": "D2 e069ef73: close rewrites blocked_by, gate --name uat flips uat, worktree merge / worktree unregister delete the fact — all four wired and tested above. D3 f2c16247: additive projection, status --json lane rows surface it verbatim — proved by the binary probe. docs/history/merge-ready-fact/CONTEXT.md read; no deviation found beyond the third close vector, which the commit names explicitly at close.rs:1909-1916."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-22T17:00:10.593Z"
+      }
+    ]
   }
 }

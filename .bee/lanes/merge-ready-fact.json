@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "merge-ready-fact",
   "mode": "feature",
-  "phase": "swarming",
+  "phase": "compounding",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,10 +11,15 @@
     "uat": true
   },
   "summary": "Feature \"merge-ready-fact\" started at phase \"planning\" (lane).",
-  "next_action": "Merged into main at cf3bba6; capture what settled, then bee close --feature merge-ready-fact.",
+  "next_action": "Record judge verdicts for mrf-1/mrf-2, then bee close --feature merge-ready-fact.",
   "created_at": "2026-08-22T15:42:06.449Z",
-  "run_state": "done",
-  "waiting_on": null,
+  "run_state": "awaiting-approval",
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "The trigger is the word \"later\" in \"a later completion\". Rewording it.",
+    "asked_at": "2026-08-22T16:56:28.929Z",
+    "session": "48e1abb8-07f6-4058-8db3-383af16fba58"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -26,5 +31,14 @@
     "rationale": "New stored field waggledance reads (public contract); touches cap, reopen, close, gate, worktree merge (multi-domain).",
     "updated_at": "2026-08-22T15:42:06.476Z",
     "feature": "merge-ready-fact"
+  },
+  "last_scribing_run": {
+    "feature": "merge-ready-fact",
+    "date": "2026-08-22",
+    "at": "2026-08-22T16:56:09.997Z",
+    "areas_synced": [
+      "workflow-state"
+    ],
+    "next_action": "Record judge verdicts for mrf-1/mrf-2, then bee close --feature merge-ready-fact."
   }
 }
