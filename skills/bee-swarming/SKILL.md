@@ -120,8 +120,9 @@ outputs — when a verb refuses, its message names the fix.
    make the cell fit. An unexpected red or an unfamiliar mechanism
    mid-cell is a pull moment: `bee knowledge search --text "<symptom>"`
    surfaces matching patterns and area concepts before you guess.
-4. Commit once: subject describes the change in imperative mood; the cell
-   id rides the last line of the body.
+4. Commit once: subject describes the change in imperative mood; the last
+   line of the body is the literal trailer `cell: <id>` — a bare id alone
+   fails the cap.
 5. `bee finish --id <cell> --outcome "<one line>" --files <a,b>
    --report '<json>'` — cap and release in one verb, `--report` REQUIRED
    and carrying the same Result form you return (`{outcome, commit,

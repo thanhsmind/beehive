@@ -197,8 +197,10 @@ evidence.
   5 bare, 3 none, out of 14; then 1 correct, 2 bare, out of 3) are the
   evidence. The worker brief today says only "cell id as the last body line"
   while the cap checker demands the literal `cell: <id>` form — a bare id
-  satisfies the brief's letter and fails the cap. Spelling the literal form
-  in the brief is the recorded remedy (backlog, 2026-08-22); not yet applied.
+  satisfied the brief's letter and failed the cap. Applied 2026-08-22: the
+  brief and the swarming skill now spell the literal `cell: <id>` trailer and
+  say a bare id fails the cap. Whether that closes the split is the next
+  run's evidence to record here.
 - **Hang detection remains an open gap.** A worker that is stuck but still
   emitting output satisfies every progress source there is. Accumulated CPU time
   was the intended discriminator and was REFUSED on measurement

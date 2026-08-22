@@ -38,7 +38,7 @@
       "advisor.md": "cc970fc08c6aa0bdccb77351926b481baa7b6176a281efdbeb5c4f1a3383a05e",
       "gather.md": "593521c49a0983b1a50ad437f89905ded6cc1ee588730e6402920ae585eeb622",
       "reviewer.md": "0c830dcb1ee67b8b27ea823984e487c1e16c31d5554d1e49f51a4562526e197c",
-      "worker-cell.md": "d90dd7b69bed35d2bbc6b88890833e222b1899a70ce5ce3b95b9144e7ddeb9dd"
+      "worker-cell.md": "cf675a166e00232be530f91a17f39024177421dadc8311a3c578305591ef021e"
     },
     "repo_hooks": {
       ".codex/hooks.json": "c23084ec82ea0418547addc8e3fdf74ffc0fb2d65b7692f54ba5b95a94f8e4ae"
@@ -76,5 +76,5 @@
     }
   },
   "created_at": "2026-07-24T03:53:44.750Z",
-  "updated_at": "2026-08-22T14:14:36.728Z"
+  "updated_at": "2026-08-22T14:47:46.367Z"
 }

@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Meanwhile, the 4 citation-reconcile stubs: the \"touching\" decision is my own impact-deferral note, which changes no rule — the docs need no",
-    "asked_at": "2026-08-22T14:39:27.813Z",
+    "subject": "Queue is empty. Committing and pushing.",
+    "asked_at": "2026-08-22T14:44:49.743Z",
     "session": "48e1abb8-07f6-4058-8db3-383af16fba58"
   },
   "route": {
