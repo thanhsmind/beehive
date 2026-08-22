@@ -8,8 +8,8 @@ bee:
   lifecycle: active
   areas: [hook-runtime]
   required_context: [areas/hook-runtime/overview.md]
-  decisions: [0023, 72f3d6dd (AO5 config is the authority — tier/model agreement and membership at dispatch), "codex-native-transport D3-D5 (3ceba8f5, D3a c0cba64e, Δ2-amended 760e9b05)", "f6606f4d (execution tier renders a second identity; a catch-all dispatch at that tier is refused naming both, 2026-08-04)", "2d36afc0 (extraction and review keep the 2026-08-03 repair behaviour, hook-runtime dispatch-guard B16a/B18, 2026-08-04)", "dispatch-one-door D1 (every helper dispatch resolves its transport from configuration through one preparation verb; refusals name that verb; a pane-worker slot is named honestly, 2026-08-21)"]
-  sources: ["advisor-and-orchestration Slice 2A-iii cell ao-2aiii-1 (declared-tier-first dispatch guard, 12 verification rows, 2026-07-17)", "advisor-and-orchestration Slice 3B cells ao-3b-1/ao-3b-2 (config-rendered pinned helper types + flat agents sync + generic-type dispatch refusal + drift advisory, 2026-07-17)", "codex-native-transport cell cnt-7 (Claude model-param guard allowlist folds a configured model-shaped adviser's own model, closing a live adviser-dispatch refusal, allow-only-widening; trace in .bee/cells/, report docs/history/codex-native-transport/reports/cnt-7.md, 2026-07-19)", "docs/specs/hook-runtime.md#B16", "docs/specs/hook-runtime.md#B18", "docs/specs/hook-runtime.md#R5", "docs/specs/hook-runtime.md#E17", "docs/specs/hook-runtime.md#P18", "dispatch-one-door cells dod-1/dod-4 (behavior delta merged into hook-runtime dispatch-guard B16a/B18, 2026-08-21)"]
+  decisions: [0023, 72f3d6dd (AO5 config is the authority — tier/model agreement and membership at dispatch), "codex-native-transport D3-D5 (3ceba8f5, D3a c0cba64e, Δ2-amended 760e9b05)", "f6606f4d (execution tier renders a second identity; a catch-all dispatch at that tier is refused naming both, 2026-08-04)", "2d36afc0 (extraction and review keep the 2026-08-03 repair behaviour, hook-runtime dispatch-guard B16a/B18, 2026-08-04)", "dispatch-one-door D1 (every helper dispatch resolves its transport from configuration through one preparation verb; refusals name that verb; a pane-worker slot is named honestly, 2026-08-21)", "dispatch-door-upfront D2 (46827304 — the startup preamble and the compaction orientation carry a Dispatch door block: the preparation verb plus the four tier slots rendered through the resolver the verb reads, 2026-08-22)"]
+  sources: ["advisor-and-orchestration Slice 2A-iii cell ao-2aiii-1 (declared-tier-first dispatch guard, 12 verification rows, 2026-07-17)", "advisor-and-orchestration Slice 3B cells ao-3b-1/ao-3b-2 (config-rendered pinned helper types + flat agents sync + generic-type dispatch refusal + drift advisory, 2026-07-17)", "codex-native-transport cell cnt-7 (Claude model-param guard allowlist folds a configured model-shaped adviser's own model, closing a live adviser-dispatch refusal, allow-only-widening; trace in .bee/cells/, report docs/history/codex-native-transport/reports/cnt-7.md, 2026-07-19)", "docs/specs/hook-runtime.md#B16", "docs/specs/hook-runtime.md#B18", "docs/specs/hook-runtime.md#R5", "docs/specs/hook-runtime.md#E17", "docs/specs/hook-runtime.md#P18", "dispatch-one-door cells dod-1/dod-4 (behavior delta merged into hook-runtime dispatch-guard B16a/B18, 2026-08-21)", "dispatch-door-upfront cells ddu-2/ddu-3 (Dispatch door block in the session preamble and the compaction capsule, tier slots via the shared resolver; capture stub 351f6227 flushed 2026-08-22)"]
   authoritative_for: "hook-runtime: pre-spawn dispatch judgement of tier, model, and helper type"
 ---
 
@@ -122,6 +122,19 @@ caller — and charged a round trip for every guess.
   slot — pane worker, external command, or unconfigured — instead of a
   fixed phrase, because naming a pane-worker slot an external command sent
   readers to a remedy that could not work.
+- **The door is announced before any dispatch, not only inside a refusal.**
+  Both orientations a session can start from — the full startup preamble
+  and the narrowed post-compaction orientation — carry a "Dispatch door"
+  block: the one preparation verb, then one line naming the four work tiers
+  (generation, extraction, review, advisor) with what each currently
+  resolves to. The slot line is rendered through the same resolver the
+  preparation verb itself reads, so the block never disagrees with what a
+  dispatch would get: an unconfigured project shows the runtime defaults, a
+  tier backed by a pane worker shows "pane worker (agent) fallback=…", an
+  external command shows "cli", a native slot shows "native:<model>", and a
+  tier left to the session shows "session default". An actor that reads only
+  its orientation therefore knows the door and the tier shape before its
+  first helper call (dispatch-door-upfront D2, 46827304).
 - Every repair is announced twice — to the actor next to the tool call, to the
   human as a one-line note — and the audit line's transport label says a
   repair happened and records the value that will actually run. A repair

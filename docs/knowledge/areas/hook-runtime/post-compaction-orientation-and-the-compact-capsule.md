@@ -37,7 +37,7 @@ state it describes is not.
 
 | Element | Meaning |
 |---|---|
-| the narrowed orientation | The block a compacting session sees instead of the full startup preamble. Carries twelve items, always in the same order. |
+| the narrowed orientation | The block a compacting session sees instead of the full startup preamble. Carries thirteen items, always in the same order. |
 | item 1 — the intent anchor | Rendered by the anchor's own owner, not by this orientation (see the intent-anchor concept). The narrowed orientation's own content begins at item 2. |
 | item 2 — state mismatch | One line naming every check the integrity sweep found wrong, immediately after the anchor. |
 | item 3 — onboarding-missing notice | Present only when the project's guardrails are not current. |
@@ -50,6 +50,7 @@ state it describes is not.
 | item 10 — recorded commands | The project's setup/start/test/verify commands. |
 | item 11 — compaction survival count | How many times the claimed unit has now been compacted, and, once that count is two or more, an advisory that the unit may be oversized. |
 | item 12 — critical-patterns pointer | One line naming where the durable patterns live, not their content. |
+| item 13 — the dispatch door | The one preparation verb every helper dispatch starts from, plus one line naming the four work tiers and what each resolves to, rendered through the same resolver the verb reads (dispatch-door-upfront D2; the full rule lives in the dispatch-guard concept). |
 
 ## Behaviors & Operations
 
@@ -136,9 +137,10 @@ adopted.
 - **R1** — The narrowed orientation replaces the full startup preamble only on a
   compaction-resume start; every other start stays byte-identical to what it has
   always rendered (compaction-hardening D8).
-- **R2** — The narrowed orientation renders exactly the twelve items above, in that
-  fixed order; the anchor is item 1 but is rendered by its own owner, not by this
-  orientation (compaction-hardening D6, D19).
+- **R2** — The narrowed orientation renders exactly the thirteen items above, in
+  that fixed order; the anchor is item 1 but is rendered by its own owner, not by
+  this orientation (compaction-hardening D6, D19); item 13, the dispatch door,
+  was added by dispatch-door-upfront D2 (2026-08-22).
 - **R3** — No byte of the narrowed orientation may vary with whether an intent
   anchor exists; the integrity sweep's anchor-presence check is muted before the
   state-mismatch line renders, and this was measured to hold even when the

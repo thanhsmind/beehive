@@ -55,6 +55,14 @@ turns, where no stage is running to remind it (B2's failure mode, observed).
   no *ceremony* helpers — reviewers, checkers, panels — never no gathering
   helpers (D3).
 
+- **R6** — A dispatch begins at the preparation command, never at a
+  hand-picked helper identity, model, or tier marker: the actor runs
+  preparation first and then runs exactly the call it returns. Those three
+  fields are what preparation answers, so choosing them by hand is choosing
+  before asking; the standing sheet states the door up front, and the guard
+  behind it refuses or rewrites anything chosen by hand (dispatch-one-door D1;
+  dispatch-door-upfront D1, cell ddu-1, 2026-08-22).
+
 ## Edge Cases Settled
 
 - **The lanes' "zero helpers" rule is not zero helpers.** Small-work lanes
@@ -70,6 +78,7 @@ turns, where no stage is running to remind it (B2's failure mode, observed).
   requires (a `model` param or an anchored `[bee-tier:]` marker, B3a), are
   critical rule 12 on the standing sheet. The guard that rejects a bare,
   config-disagreeing, or cli-tier-declared dispatch (declared tier read before
-  the model param, 2A-iii): `packages/bee/hooks/bee-model-guard.mjs`.
+  the model param, 2A-iii): `packages/bee-rs/crates/bee/src/hooks/model_guard.rs`
+  (the Node-era `bee-model-guard.mjs` is retired; pointer corrected 2026-08-22).
 - Model tiers behind R3: `.bee/config.json` `models` (extraction / generation /
   review / advisor slots), resolved per dispatch by `bee-swarming`.

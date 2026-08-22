@@ -94,6 +94,17 @@ bee:
   identically, because the honesty problem is the same one: the dispatcher
   chose the executor, not the model.
 
+- **R11 —** **The prepared dispatch states whether its channel is reachable,
+  and resolves a unit's tier from the unit** (herding-reach hrc-1/hrc-4,
+  2026-08-22). A pane-worker payload carries whether the pane channel can
+  actually be reached, and why; a stated fallback applies only when it
+  cannot — reachability is a fact the payload carries, never a guess from the
+  channel name. For a unit of work the payload resolves from the tier
+  recorded on that unit: a recorded tier nobody configured is refused by name
+  rather than quietly demoted, a ceiling unit stays on the session's own model
+  with no external command, and the economics record says whether the tier
+  came from the unit or from the default.
+
 ## Edge Cases Settled
 
 - **E1 —** External command reporting success while doing nothing →

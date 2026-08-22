@@ -173,6 +173,20 @@ orchestrator made the path-scoped cell commit itself. A bee-ignorant worker
 does not reliably carry bee's commit conventions, trailer form included,
 even when the brief states the rule.
 
+A second run (dispatch-door-upfront, 2026-08-22) repeated the split on the
+same runtime: two of three workers committed with a bare id line instead of
+the required trailer and never ran the finish step; the orchestrator rewrote
+each commit and capped by hand. The third worker got it right only because
+its brief spelled the exact trailer text and named the finish step — which
+is the second arm of the open gap below, now with evidence that it works.
+
+The same split covers the proof. A foreign worker's result text names a
+command but often not its outcome (herding-reach hrc-2: the proof line
+carried no result), and the completion door records what it is handed
+rather than running anything. So the orchestrator runs the proof itself
+before it caps, and treats the worker's proof text as a claim, never as
+evidence.
+
 ## Open Gaps
 
 - **Whether the brief should even ask the worker to commit is unresolved.**
@@ -180,7 +194,11 @@ even when the brief states the rule.
   for a herding worker entirely and the orchestrator always makes the cell
   commit, or the trailer rule gets restated in a form a bee-ignorant agent
   can follow verbatim instead of assumed known. The counts above (1 correct,
-  5 bare, 3 none, out of 14) are the evidence; no direction has been chosen.
+  5 bare, 3 none, out of 14; then 1 correct, 2 bare, out of 3) are the
+  evidence. The worker brief today says only "cell id as the last body line"
+  while the cap checker demands the literal `cell: <id>` form — a bare id
+  satisfies the brief's letter and fails the cap. Spelling the literal form
+  in the brief is the recorded remedy (backlog, 2026-08-22); not yet applied.
 - **Hang detection remains an open gap.** A worker that is stuck but still
   emitting output satisfies every progress source there is. Accumulated CPU time
   was the intended discriminator and was REFUSED on measurement

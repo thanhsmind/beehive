@@ -237,6 +237,14 @@ silent.
   command belongs to continuous integration, which runs it on every push. The
   rule is authored here because the scope decision is made when the unit is
   written, not when it is capped.
+- **A unit's verification command is one command that runs as written
+  (agent-activity-hook aah-1/aah-2/aah-3, 2026-08-22).** The recurring defect
+  is a filter list the test runner accepts only one of: three units of one
+  feature were authored with two test filters in a single invocation, the
+  runner refused each on first use, and every worker had to invent a
+  replacement — so the proof recorded on the cap was never the command the
+  author wrote. Two filters are two commands joined by `&&`, or one wider
+  filter; never two positionals.
 
 - R46 — A unit's change classification is set explicitly or derived only from
   the behavior-change flag — never any richer auto-derivation — and an

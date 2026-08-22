@@ -283,7 +283,12 @@ pattern candidates, so a worker-reported deviation reaches the automatic
 loop instead of dying in prose. An empty value is refused by name before
 any write; a call without the flag is byte-identical
 (finish-records-deviations cell frd-1, 2026-08-11, after four same-day
-prose-only deviations mined as zero).
+prose-only deviations mined as zero). A deviation the worker records in its
+own structured result is added to the unit's deviation list at completion,
+beside the ones passed by hand. It is a copy, never a move — the result
+keeps its verbatim text. The two sources are treated alike, string and
+non-string entries both, and an entry that renders the same as one already
+there counts once (deviation-one-list cell dol-1, 2026-08-22).
 
 **B31 — A judge verdict is a structured, append-only record with an honest
 independence stamp.** Trigger: a judge examines a unit of work and renders a

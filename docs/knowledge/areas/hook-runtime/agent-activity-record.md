@@ -211,6 +211,14 @@ guess.
 
 ## Open Gaps
 
+- The claim-activity rule the work stamp uses is a second copy of the status
+  reader's rule rather than the same code; the checkpoint has no access to
+  the reader's context. Nothing today fails if the two drift apart
+  (agent-activity-hook aah-4, 2026-08-22).
+- A permission prompt replaces a standing `waiting_input`; the sticky rule in
+  B21 and decision 40c707ba say a turn boundary only. The behavior is the
+  intended one (a prompt is a harder stop than a question) and is pinned by
+  test; the rule text is not yet amended (backlog, 2026-08-22).
 - Only the first runtime's lifecycle events are observed today. The other
   runtimes have no equivalent event set wired, so their sessions carry no
   activity record and read as `no_signal` — correct by this concept's own

@@ -52,10 +52,13 @@ The machinery it starts is documented beside it:
   four run at once.
 - **Enable marker** — an owner-created file. Without it, dispatch selects nothing. It is the switch
   that arms the loop, and only the human sets it — by hand, `touch`/`rm` on the marker file. The
-  equivalent `bee herding enable`/`disable`/`status` CLI verbs performed the identical file
+  equivalent `bee herding enable`/`disable` CLI verbs performed the identical file
   operation and existed purely as a human-typed convenience; they are **not built into the current
   binary** (never ported off Node, and they now refuse by name), so the manual gesture is the only
-  live form. No bee automation ever called them.
+  live form for arming. The enable state is readable as a command again: `bee herding status`
+  reports whether the marker arms dispatch and, beside it, whether the pane transport is
+  reachable at all and why (herding-reach hrc-2, 2026-08-22). It only reads — the marker is
+  still set and cleared by the owner's own hand. No bee automation ever called any of them.
 - **Stop gesture** — an owner-created file that halts the control loops at the next iteration
   boundary. It does **not** halt working agents already running.
 - **Dispatchable** — a backlog item that is ready, unclaimed, has no worktree yet, and passes the
@@ -145,8 +148,9 @@ Windows at all. The one-shot cockpit setup is still a shell script and is a reco
   hardened defect was found by running things; the assembled system's first real run is a watched
   acceptance cycle the owner performs, not a headless claim.
 - R8 — **The enable marker has two equivalent human-typed forms, never an automated one**
-  (herding-dispatch-lock-toggle D1-D5). `bee herding enable`/`disable`/`status` performed byte-identical
-  operations to the manual `touch`/`rm` gesture — same file, same resolution logic as the interlock —
+  (herding-dispatch-lock-toggle D1-D5). `bee herding enable`/`disable` performed byte-identical
+  operations to the manual `touch`/`rm` gesture (`status` is live again as a read-only report,
+  herding-reach hrc-2) — same file, same resolution logic as the interlock —
   and deliberately carried no runtime guard (no TTY check, not hidden from `bee --help --json`): an
   explicit, considered trade-off that keeps the safety property exactly where R3 already put it
   (convention, not enforcement) rather than adding a new one. No bee automation, skill, or agent code
@@ -187,11 +191,13 @@ Windows at all. The one-shot cockpit setup is still a shell script and is a reco
   `herdr-result`, `herdr-pane-id`, `wave`, `occupancy`, `record-worker`, `run` and
   `control-loop`, the ten verbs the current binary actually
   serves — is implemented in `packages/bee-rs/crates/bee/src/herding.rs`, dispatched
-  from `packages/bee-rs/crates/bee/src/router.rs`, and listed (with `enable`,
-  `disable` and `status` marked `unavailable`) in the command catalog
-  `packages/bee-rs/crates/bee/src/catalog.rs`. `enable`, `disable` and `status` are
-  not among the ten live verbs and refuse by name; the manual `touch`/`rm` marker
-  gesture is their only live form (see Data Dictionary). Test coverage is inline:
+  from `packages/bee-rs/crates/bee/src/router.rs`, and listed (with `enable` and
+  `disable` marked `unavailable`) in the command catalog
+  `packages/bee-rs/crates/bee/src/catalog.rs`. `enable` and `disable` are
+  not among the live verbs and refuse by name; the manual `touch`/`rm` marker
+  gesture is their only live form (see Data Dictionary). `status` is live
+  (`herding.rs`, the `"status"` arm): enable state plus transport
+  `{ready, reason, pane_id}`. Test coverage is inline:
   the `#[cfg(test)] mod tests` block in `herding.rs`.
 - The isolation the working agents depend on is `worktree-parallelism`; the guarded landing is that
   area's merge gate.

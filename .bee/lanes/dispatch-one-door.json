@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Fresh binary in place; regen green; `.claude/settings.json` unchanged (hooks kept). Committing the release and running the release script.",
-    "asked_at": "2026-08-22T14:18:47.102Z",
+    "subject": "Meanwhile, the 4 citation-reconcile stubs: the \"touching\" decision is my own impact-deferral note, which changes no rule — the docs need no",
+    "asked_at": "2026-08-22T14:39:27.813Z",
     "session": "48e1abb8-07f6-4058-8db3-383af16fba58"
   },
   "route": {

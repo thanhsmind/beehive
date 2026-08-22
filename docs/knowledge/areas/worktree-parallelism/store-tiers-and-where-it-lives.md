@@ -65,6 +65,16 @@ byte-identical, the filter never engages there. Known residue, named on the cell
 root resolution, so the filter is live through `status`/`orient`/`finish` today and unit-level
 for the rest until those doors widen.
 
+## A worktree's entry point is the main checkout's binary
+
+A worktree session's bee entry point resolves to the main checkout's
+binary, not to the build the worktree just made. Any check that must judge
+the change under test — a manifest render, a parity check, a live probe —
+runs the freshly built binary by its path; running the entry point instead
+silently checks the old behavior and passes. Observed on agent-activity-hook
+cell aah-2 (2026-08-22): a manifest check through the entry point compared
+against the pre-change catalog until the worker pointed it at the new build.
+
 ## Where it lives (reading map)
 
 - Decision + replay logic: `worktree-store.mjs` (`decideWorktreeStore`, `replayLog`,

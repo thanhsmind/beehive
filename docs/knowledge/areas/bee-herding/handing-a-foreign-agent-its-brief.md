@@ -184,7 +184,11 @@ ending in a question mark) it names the matched line and the remedy in its
 error instead of generic timeout wording. This diagnosis pass runs only on
 an already-failed wait, so a false positive costs nothing and it is never
 load-bearing for whether a wait keeps going (herding-prompt-stall D5,
-corrects D3's reach).
+corrects D3's reach). A wait that gives up shows the end of the pane even
+when it recognizes nothing on it, so a person always sees the screen the
+failure happened on; and a spawn that fails names its own cleanup — how to
+look at the pane it left, and the two commands that give back the claim and
+the reserved files (herding-reach hrc-3, 2026-08-22).
 
 ## The worker is kept bee-ignorant, not merely asked to be
 
