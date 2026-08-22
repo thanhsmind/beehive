@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "feature": "deviation-one-list",
+  "mode": "feature",
+  "phase": "exploring",
+  "approved_gates": {
+    "context": true,
+    "shape": true,
+    "execution": true,
+    "review": false,
+    "uat": true
+  },
+  "summary": "Feature \"deviation-one-list\" started at phase \"exploring\" (lane).",
+  "next_action": "Continue bee-exploring for \"deviation-one-list\" (lane).",
+  "created_at": "2026-08-22T00:21:54.466Z",
+  "run_state": "done",
+  "waiting_on": null,
+  "route": {
+    "class": "bugfix",
+    "lane": "small",
+    "flags": [
+      "covered-contract-change"
+    ],
+    "product_files": 1,
+    "rationale": "One product file: verbs/cells/handlers_close.rs. cap writes trace.deviations from --deviations-file plus --deviation only, while the worker's structured deviations arrive in the verbatim --report object; knowledge/promote.rs:286 mines trace.deviations alone, so every deviation a worker recorded structurally is invisible to the knowledge loop. Fix merges report.deviations into trace.deviations at write time, leaving the verbatim report contract untouched. covered-contract-change: the frd-1 ordering test asserts the exact contents and order of trace.deviations.",
+    "updated_at": "2026-08-22T00:22:04.107Z",
+    "feature": "deviation-one-list"
+  }
+}

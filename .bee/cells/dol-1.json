@@ -1,0 +1,160 @@
+{
+  "id": "dol-1",
+  "feature": "deviation-one-list",
+  "title": "Merge the report's deviations into trace.deviations at cap time",
+  "lane": "small",
+  "status": "capped",
+  "deps": [],
+  "files": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs"
+  ],
+  "read_first": [
+    "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+    "packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs"
+  ],
+  "action": "A worker's structured deviations never reach the knowledge loop. `bee cells cap` writes `trace.deviations` from `--deviations-file` plus the single `--deviation` line only (packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs:359-369), while the worker's own Result form arrives in `--report` and is stored VERBATIM as `trace.report` (:387-390). `bee knowledge promote` mines pattern candidates from `trace.deviations` alone (packages/bee-rs/crates/bee/src/verbs/knowledge/promote.rs:286, consumed at :720-724). So a deviation recorded structurally in the report is invisible to mining, and the field comment at handlers_close.rs:80-88 states the intended remedy outright: the orchestrator is expected to re-type the deviation into `--deviation` by hand so it \"carries into the pattern-candidate mining\". That hand-copy is the defect. It silently did not happen and cost real knowledge: `.bee/cells/archive/herding-split-serialize/hss-3.json` holds `trace.deviations: []` beside three entries under `trace.report.deviations`, and its feature's promote-proposals.md consequently printed \"None: no capped cell trace carries a deviation or a failure signature\" over the only genuinely new lesson that feature earned. `docs/knowledge/patterns/20260811-a-cells-declared-file-is-a-hypothesis.md:36-43` predicted exactly this and said it would stay invisible until deviations were recorded structurally.\n\nFix, entirely inside the cap write path in handlers_close.rs. After the existing `--deviations-file` then `--deviation` append (:362-368) and BEFORE `trace.insert(\"deviations\", ...)` at :369, append every entry of the validated report's own `deviations` array that is not already present in the list being built. Rules:\n1. Source the entries from the already-validated report value the same block inserts at :387-390 (`parse_report_flag` has already proven the exact five keys, so `deviations` is present and is an array — do NOT re-validate it, and do NOT re-parse the raw flag string).\n2. Append only entries that are non-empty after trimming, pushed trimmed, as `Value::String`.\n3. Dedupe by EXACT string equality against what is already in the list (including entries that came from `--deviations-file`, which may be arbitrary JSON values, not only strings — compare only against existing string entries, and never mutate or drop a non-string entry a deviations-file supplied).\n4. Order is deviations-file entries, then the `--deviation` line, then the report's entries in their own order. The frd-1 ordering test asserts the first two positions; keep them exactly where they are.\n5. Do NOT touch `trace.report` — the D8 verbatim contract at :387-390 stands, and the report keeps its own copy. This cell makes `trace.deviations` the union, never a move.\n6. Update the doc comment at :80-88 so it no longer instructs a caller to hand-copy a report deviation into `--deviation`: `--deviation` remains for a deviation the ORCHESTRATOR observed that the worker did not report. Name this cell in the comment.\n\nTests in the file's existing test module style (see packages/bee-rs/crates/bee/src/verbs/cells/tests.rs around the frd-1 and D8 report cases at :3845-3930): (a) a cap whose report carries deviations and which passes NO `--deviation` puts those report entries into `trace.deviations` — the exact case that lost hss-3's lesson; (b) a cap passing `--deviations-file`, `--deviation` AND a report with its own entries yields all three groups in that documented order; (c) an entry present in both `--deviation` and the report appears exactly ONCE; (d) a report with an empty deviations array leaves `trace.deviations` byte-identical to today's behaviour; (e) `trace.report` is unchanged in every case above — assert it still equals the parsed report verbatim, deviations included.",
+  "verify": "PATH=\"$HOME/.cargo/bin:$PATH\" cargo test --release --manifest-path packages/bee-rs/Cargo.toml cells",
+  "must_haves": {
+    "truths": [
+      "A deviation a worker records in its report reaches trace.deviations with no hand-copying",
+      "The verbatim trace.report object is unchanged by this cell",
+      "A cap passing no report deviations behaves exactly as it does today"
+    ],
+    "artifacts": [
+      {
+        "path": "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "substantive": "the dedup-merge before the deviations insert, the corrected --deviation doc comment, and the five tests; no TODO stubs"
+      }
+    ],
+    "key_links": [
+      "trace.deviations is the union of deviations-file, --deviation, and the report's own entries, in that order"
+    ],
+    "prohibitions": [
+      "No change to trace.report or to parse_report_flag's validation",
+      "No change to knowledge/promote.rs — this cell fixes the data at the source, not the reader",
+      "No change to the existing order of deviations-file and --deviation entries"
+    ]
+  },
+  "tier": "ceiling",
+  "decisions": [],
+  "trace": {
+    "worker": "w-dol-1",
+    "outcome": "A deviation a worker records in its report now reaches trace.deviations with no hand-copying, in string and non-string form alike, deduped by the same rendering the miner uses.",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+      "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+    ],
+    "deviations": [
+      "Judge raised two residuals across three rounds: a report-side non-string deviation was silently dropped while the same shape from a deviations-file was mined, and the first dedup test passed against the pre-fix code because a skip leaves the same array a dedup does. Both closed and independently reproduced."
+    ],
+    "friction": "The orchestrator called ExitWorktree while a worker was still live in that worktree; a subagent inherits the session cwd, so every subsequent write was refused. Worth a guard or a warning at exit time.",
+    "capped_at": "2026-08-22T01:01:09.477Z",
+    "behavior_change": false,
+    "verification_evidence": null,
+    "verify_output": null,
+    "verify_passed": null,
+    "claim_session": "2a7f3cd2-3cf9-4540-9d24-8a9b64594486",
+    "claimed_at": "2026-08-22T00:23:00.802Z",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "diff-placement",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:399-418 holds the merge block; it sits AFTER the --deviation push (:366-369) and BEFORE trace.insert(\"deviations\", Value::Array(deviations)). It reads report_value.get(\"deviations\") from the value bound at :191 by parse_report_flag — no re-parse of the raw flag, no re-validation. Blob at 9255ff8 is 1350db83…, identical to 78677d6c."
+          },
+          {
+            "id": "union-not-move",
+            "status": "PASS",
+            "evidence": "The merge only reads and pushes into the local deviations vec; trace.insert(\"report\", report_value.clone()) at handlers_close.rs:423 still stores the parsed object verbatim. parse_report_flag (finish_support.rs:94-190) has no hunk in any of the three commits — its newest commit is b09f6c1e. All SIX dol-1 tests call assert_report_verbatim (tests.rs:3884-3891)."
+          },
+          {
+            "id": "passthrough-verbatim",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:405-412 matches Value::String for trim-and-skip-empty and clones any other shape, then pushes at :415 — never stringified, trimmed, or wrapped. an_object_shaped_report_deviation_passes_through_verbatim (tests.rs:4004-4021) is one of the two tests red on the pre-fix copy. A shapes probe printed null, 7, true, [\"a\",\"b\"], {}, {\"description\":\"\"} and a 60-deep nested array all verbatim, order preserved, blank string still dropped."
+          },
+          {
+            "id": "dedup-both-directions",
+            "status": "PASS",
+            "evidence": "Covered in BOTH directions by committed tests. String-first: an_object_and_its_rendered_string_are_one_deviation (tests.rs:4037-4057). Object-first: an_object_from_the_file_absorbs_its_rendered_twin_in_the_report (tests.rs:4062-4090), new in 9255ff8 — a deviations-file object plus the report's rendered line plus a fresh line yields [{object}, \"fresh line\"], so the object keeps its place AND its form. Mechanism is direction-agnostic: :413-415 compares deviation_text(&candidate) against deviation_text(d) for every existing d, so the earlier source always wins."
+          },
+          {
+            "id": "new-test-discriminates",
+            "status": "PASS",
+            "evidence": "Reproduced independently by the judge, not relayed. Pristine HEAD tree copied out, handlers_close.rs replaced by git cat-file blob 459225c:…, run by exact name: FAILED, 0 passed, 1 failed, left [Object{type:scope,…}, String(\"scope: the declared file was a hypothesis\"), String(\"fresh line\")] vs right [Object{…}, String(\"fresh line\")] — byte-identical to the orchestrator's own run. This is the direction a skip cannot fake: the object is already in the list from --deviations-file, so pre-fix code has nothing to skip and appends the rendered string beside its own twin. Whole cells filter on that copy: 229 passed, 2 failed, the two being the object-first and pass-through cases."
+          },
+          {
+            "id": "doc-comment-not-overclaiming",
+            "status": "PASS",
+            "evidence": "tests.rs:4024-4036. The removed claim is replaced by an explicit disclaimer: the case does NOT prove the deviation_text dedup on its own, because the pre-dedup code SKIPPED every non-string report entry and a skip leaves behind exactly the array a dedup does; what it locks is a naive pass-through-plus-raw-equality rewrite; the object-FIRST case is the one that goes red without the dedup. Every clause matches measurement — this test passed against 459225c, the object-first one failed."
+          },
+          {
+            "id": "no-second-rendering",
+            "status": "PASS",
+            "evidence": "promote.rs blob is 26b20cec… at BOTH 459225c and 9255ff8 — byte-identical, no hunk anywhere in dol-1. handlers_close.rs:17 borrows the single definition at promote.rs:68-84 via knowledge/mod.rs's pub(crate) re-export. A search over verbs/cells/ returns only the import at :17, the two call sites at :413-414, and one comment at :392 — no copied {type, description} match arms."
+          },
+          {
+            "id": "string-behaviour-untouched",
+            "status": "PASS",
+            "evidence": "Raw blob-to-blob diff of tests.rs (78677d6c to 9255ff8) shows exactly FOUR deleted lines, all doc-comment, and ZERO deleted code — the five earlier dol-1 tests are byte-unmodified. The String arm at handlers_close.rs:406-411 still trims and continues on empty. frd-1's ordering test (tests.rs:3781-3798) is untouched across all three commits and green in both runs."
+          },
+          {
+            "id": "order-preserved",
+            "status": "PASS",
+            "evidence": "deviations_file_then_flag_then_report_keep_that_order (tests.rs:3917-3945) pins the five-element order [file-object, file-string, flag, report0, report1]. On the pre-fix copy it printed left [Object{note}, \"from the file\", \"from the flag\"] — the first three positions byte-identical pre and post, only the report tail added. The push-only-when-absent structure cannot reorder or rewrite an existing entry."
+          },
+          {
+            "id": "noop-empty-report",
+            "status": "PASS",
+            "evidence": "The Some(Value::Array(reported)) arm iterates zero times on an empty deviations array, and trace.insert(\"deviations\") is unconditional both pre and post, so no key is added or removed. an_empty_report_deviations_array_changes_nothing (tests.rs:3974-3996) passes against the reverted pre-fix build and at HEAD, same expected value under both codepaths."
+          },
+          {
+            "id": "introduced-risk",
+            "status": "PASS",
+            "evidence": "No panic path: jsjson.rs:117-122 stringify only expects on in-memory serialization and UTF-8, neither reachable from a serde_json::Value, and parse_report_flag's from_str enforces serde_json's default 128 recursion limit (no unbounded_depth feature). Probed green on null, 7, true, an array, {}, {\"description\":\"\"}, a 60-deep nested array and a whitespace string. Collision benign: {\"description\":\"why\"} and {\"type\":\"\",\"description\":\"why\"} both render \"why\" and collapse correctly, while {\"type\":\"scope\",\"description\":\"why\"} stays separate; no case was found collapsing two genuinely different deviations. Cost is O(n*m) with the largest real report array at 4 entries. Deliberate symmetry, not a defect: a null or {} entry reaches trace.deviations and renders non-empty so promote would mine it, while an empty STRING is dropped — identical to how a --deviations-file entry has always behaved."
+          },
+          {
+            "id": "doc-comment-corrected",
+            "status": "PASS",
+            "evidence": "handlers_close.rs:79-92. The old hand-copy instruction is replaced: --deviation is now documented as being for a deviation the ORCHESTRATOR observed and the worker did NOT report, because a worker's own structured deviations are merged by cap_cell_from_flags itself, so nobody re-types a report line to get it into the pattern-candidate mining promote.rs reads. The cell is named and frd-1's single-value note is preserved."
+          },
+          {
+            "id": "delta-scope-contained",
+            "status": "PASS",
+            "evidence": "git show --name-only 9255ff8 lists cells/tests.rs ONLY. Blob hashes prove byte-identity for the two files that must not move: handlers_close.rs 1350db83… at both 78677d6c and 9255ff8; promote.rs 26b20cec… at both 459225c and 9255ff8. Worktree clean apart from the pre-existing untracked control-plane file; HEAD is 9255ff85 on 78677d6c on 459225c6, stacked, no amend."
+          },
+          {
+            "id": "overall",
+            "status": "PASS",
+            "evidence": "The cell's goal is met end to end: a deviation a worker records structurally in --report now reaches trace.deviations with no hand-copying, in both string and non-string form, deduped by the SAME rendering the miner uses, with trace.report left verbatim and frd-1's order intact. Judge's own run of the declared verify on the real tree: cargo test --release --manifest-path packages/bee-rs/Cargo.toml cells -> 232 passed, 7 ignored, 0 failed. Both residuals raised across three rounds are closed and independently reproduced. No open finding remains."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-22T01:00:55.966Z"
+      }
+    ],
+    "report": {
+      "outcome": "cap merges the --report Result forms own deviations into trace.deviations as a union (deviations-file, --deviation, then report entries); strings trimmed and empties dropped, any other shape passed through verbatim as a --deviations-file entry always has, deduped by deviation_text borrowed from the miner. trace.report stays verbatim.",
+      "commit": "459225c + 78677d6c + 9255ff8",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/cells/handlers_close.rs",
+        "packages/bee-rs/crates/bee/src/verbs/cells/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml cells — green (232 passed, 7 ignored, 0 failed) — the suite owning the cap write path and its tests; discrimination proven by reverting handlers_close.rs to 459225c with tests at HEAD, which turns the object-first and pass-through cases red with the exact predicted diffs",
+      "deviations": [
+        "Stacked three commits rather than one per cell: a live judge and a cwd move made amending unsafe mid-flight, and the third commit was a coverage fix the judge required. All three carry the dol-1 trailer.",
+        "The second round was verified in a scratchpad copy and landed as a patch, because the orchestrator exited the worktree while the worker was still live and the write guard correctly refused every write into it. The worker did not route around the guard.",
+        "Non-string report entries pass through verbatim rather than being skipped or refused - chosen over making parse_report_flag refuse, because a refusal would block a cap mid-flight over a shape that has never occurred in 180 stored entries."
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
+  }
+}

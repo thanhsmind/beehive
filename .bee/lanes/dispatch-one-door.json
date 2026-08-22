@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "Tiếp theo: để agent kia chạy tiếp. Bạn muốn tôi làm việc khác gì thì nói.",
-    "asked_at": "2026-08-21T15:49:02.590Z",
-    "session": "9d62803d-578e-471a-a4ad-312c69c3a4b6"
+    "subject": "(turn ended)",
+    "asked_at": "2026-08-22T00:34:40.199Z",
+    "session": "1a1174b2-16b6-40b7-be29-f17e74f3b0cd"
   },
   "route": {
     "class": "feature",
