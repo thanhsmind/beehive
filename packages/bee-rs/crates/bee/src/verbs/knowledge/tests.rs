@@ -1884,6 +1884,79 @@ use std::time::Instant;
         assert!(!report.ok);
     }
 
+    /// D4: quoted rule syntax is documentation, not a home. A marker or a
+    /// `(rule: id)` inside an inline backtick span or a fenced block is an
+    /// example of the spelling — the doc that teaches the syntax must not
+    /// register as a second home for every rule id it names.
+    #[test]
+    fn code_quoted_rule_marker_is_never_a_home_or_a_reference() {
+        let (tmp, dir) = bundle();
+        let root = tmp.path();
+        std::fs::write(
+            root.join("AGENTS.md"),
+            "# AGENTS\n<!-- rule: discipline-proof -->\nDiscipline text\n<!-- /rule -->\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("skills/demo")).unwrap();
+        std::fs::write(
+            root.join("skills/demo/SKILL.md"),
+            "Spell a home as `<!-- rule: discipline-proof -->` and a pointer as `(rule: phantom-rule)`.\n\n```\n<!-- rule: fenced-rule -->\n(rule: fenced-ref)\n```\n",
+        )
+        .unwrap();
+        put(
+            &dir,
+            "areas/demo/overview.md",
+            Cx::new("demo-overview")
+                .ty("bee.area")
+                .bee("owns.code", json!(["src/*"]))
+                .body("Teaching doc: `<!-- rule: discipline-proof -->` is the marker form."),
+        );
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        std::fs::write(root.join("src/lib.rs"), "code\n").unwrap();
+
+        let report = check_bundle(&dir, false).unwrap();
+        assert!(
+            of_code(&report.profile_errors, "duplicate_rule_home").is_empty(),
+            "a backticked marker is quotation, not a second home: {:?}",
+            report.profile_errors
+        );
+        assert!(
+            of_code(&report.profile_errors, "unknown_rule_ref").is_empty(),
+            "a backticked or fenced (rule: id) is not a reference: {:?}",
+            report.profile_errors
+        );
+    }
+
+    /// The control pair for the test above: a real marker standing beside a
+    /// quoted one still yields exactly one home, and a real reference beside
+    /// a quoted one still yields exactly one reference.
+    #[test]
+    fn a_real_rule_marker_beside_a_quoted_one_yields_exactly_one() {
+        let quoted_only = "Only quotation here: `<!-- rule: quoted-home -->` and `(rule: quoted-ref)`.\n\n```\n<!-- rule: fenced-home -->\n(rule: fenced-ref)\n```\n";
+        assert!(
+            extract_rule_markers(quoted_only).is_empty(),
+            "quoted markers must not register: {:?}",
+            extract_rule_markers(quoted_only)
+        );
+        assert!(
+            extract_rule_refs(quoted_only).is_empty(),
+            "quoted refs must not register: {:?}",
+            extract_rule_refs(quoted_only)
+        );
+
+        let mixed = "The form is `<!-- rule: quoted-home -->`.\n\n<!-- rule: real-home -->\nBody\n<!-- /rule -->\n\nPointer forms: `(rule: quoted-ref)` versus the live (rule: real-ref).\n";
+        assert_eq!(
+            extract_rule_markers(mixed),
+            vec!["real-home".to_string()],
+            "exactly the unquoted marker registers"
+        );
+        assert_eq!(
+            extract_rule_refs(mixed),
+            vec!["real-ref".to_string()],
+            "exactly the unquoted reference registers"
+        );
+    }
+
     #[test]
     fn applied_at_unlinked_errors_when_target_contains_no_matching_rule_reference() {
         let (tmp, dir) = bundle();

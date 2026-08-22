@@ -462,7 +462,13 @@ pub(crate) fn resolve_target_files(
     Vec::new()
 }
 
+/// A rule marker inside a code region is quotation, not a home: docs that
+/// teach the marker syntax spell `<!-- rule: <id> -->` inside backticks or a
+/// fence, and reading those as homes invents duplicate homes out of examples
+/// (D4). Strip code regions first, then scan.
 pub(crate) fn extract_rule_markers(text: &str) -> Vec<String> {
+    let scannable = strip_code_regions(text);
+    let text: &str = &scannable;
     let mut out = Vec::new();
     let mut cursor = 0usize;
     while let Some(rel_start) = text[cursor..].find("<!--") {
@@ -481,7 +487,12 @@ pub(crate) fn extract_rule_markers(text: &str) -> Vec<String> {
     out
 }
 
+/// Same exclusion as `extract_rule_markers`: a `(rule: <id>)` spelled inside
+/// backticks or a fence is an example of the syntax, not a reference to a
+/// rule, so it must not register as one (D4).
 pub(crate) fn extract_rule_refs(text: &str) -> Vec<String> {
+    let scannable = strip_code_regions(text);
+    let text: &str = &scannable;
     let mut out = Vec::new();
     let mut cursor = 0usize;
     while let Some(rel_start) = text[cursor..].find("(rule:") {

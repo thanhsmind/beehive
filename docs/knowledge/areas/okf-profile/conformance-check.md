@@ -53,7 +53,10 @@ Profile-**error** codes — reported in `profile.errors` and **chain-failing on 
 `--strict` (G14 layer 3, D4). The chain runs `knowledge check` non-strict by design, so a finding that
 guards single-home rules and anti-fork invariants cannot live in `warnings`: a backstop that never
 blocks is not a backstop. Exempt trees (`docs/history/`, `docs/discovery/`, `docs/specs/`, `.bee/`)
-are skipped during rule marker and copy scans.
+are skipped during rule marker and copy scans. Markers and references are read **outside code
+regions only**: a fenced block (` ``` ` / `~~~`) or an inline backtick span is stripped before the
+scan (`strip_code_regions`), so a doc that *teaches* the `<!-- rule: <id> -->` or `(rule: <id>)`
+spelling quotes it without homing a rule or pointing at one.
 
 | Code | Fires when |
 |---|---|
@@ -61,8 +64,8 @@ are skipped during rule marker and copy scans.
 | `malformed_authoritative_for` | A concept's `bee.authoritative_for` is present but is not one non-empty string (a list, a boolean, an empty or blank string). A claim bee cannot read is an owner the anti-fork gate cannot see, so it is never silently skipped. |
 | `dangling_applied_at` (knowledge-one-home koh-2, D4) | A `bee.applied_at` path (trailing-`*` glob allowed) does not resolve to an existing file inside the bundle or at the repo root. With no repo root, out-of-bundle targets are skipped and noted. |
 | `dangling_owns` (knowledge-one-home koh-2, D4) | A `bee.owns.*` path (trailing-`*` glob allowed) does not resolve to an existing file or directory inside the bundle or at the repo root. With no repo root, out-of-bundle targets are skipped and noted. |
-| `duplicate_rule_home` (knowledge-one-home koh-2, D4) | The same `<!-- rule: <id> -->` opening marker appears in two or more files across the bundle, `AGENTS.md`, and `skills/**`. Exempt trees are skipped. |
-| `unknown_rule_ref` (knowledge-one-home koh-2, D4) | A `(rule: <id>)` reference appears in a scanned file whose `<id>` is homed by no `<!-- rule: <id> -->` marker in the bundle or `AGENTS.md`. Exempt trees are skipped. |
+| `duplicate_rule_home` (knowledge-one-home koh-2, D4) | The same `<!-- rule: <id> -->` opening marker appears in two or more files across the bundle, `AGENTS.md`, and `skills/**`. Exempt trees are skipped, and so are code regions — a backticked or fenced marker is quotation, never a home. |
+| `unknown_rule_ref` (knowledge-one-home koh-2, D4) | A `(rule: <id>)` reference appears in a scanned file whose `<id>` is homed by no `<!-- rule: <id> -->` marker in the bundle or `AGENTS.md`. Exempt trees are skipped, and so are code regions — a backticked or fenced reference is quotation, never a pointer. |
 | `applied_at_unlinked` (knowledge-one-home koh-2, D4) | A file listed in a concept's `bee.applied_at` contains no `(rule: <id>)` reference for any rule homed in that concept. |
 | `owns_missing` (knowledge-one-home koh-2, D4) | An area overview concept (`areas/<area>/overview.md` of type `bee.area`) carries none of the `owns.*` keys (`owns.code`, `owns.skills`, `owns.tests`). |
 
