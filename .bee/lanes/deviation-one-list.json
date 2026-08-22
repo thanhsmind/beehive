@@ -11,7 +11,7 @@
     "uat": true
   },
   "summary": "Feature \"deviation-one-list\" started at phase \"exploring\" (lane).",
-  "next_action": "Continue bee-exploring for \"deviation-one-list\" (lane).",
+  "next_action": "Merged into main at 1449cb8; capture what settled, then bee close --feature deviation-one-list.",
   "created_at": "2026-08-22T00:21:54.466Z",
   "run_state": "done",
   "waiting_on": null,
