@@ -165,7 +165,8 @@ cells hps-12 and hps-13).
 ## Transport: herdr or tmux
 
 **The run verb reaches a pane through one of two multiplexers, and a single
-config key picks which** (tmux-herding-transport D1-D4, 2026-08-22).
+config key picks which** (tmux-herding-transport D1-D4, 2026-08-22; the
+marker defaults trace to the source manifest in tmux-herding-transport D5).
 `herding.transport` in `.bee/config.json` is the string `herdr` or the
 string `tmux`. Absent is `herdr` — the unchanged default, and a missing or
 unparseable config reads the same way. bee **never sniffs the environment**
