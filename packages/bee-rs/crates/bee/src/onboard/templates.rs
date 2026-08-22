@@ -186,7 +186,7 @@ pub const STALE_ADVISOR_KEY_WARNING: &str = "advisor mode was removed in 0.1.23;
 /// The `commands.verify` retirement (2.1.0). Two shapes, because the damage
 /// differs: with a `test` recorded the key is merely dead weight; without one
 /// the host just lost every test gate it had.
-pub const RETIRED_VERIFY_KEY_WARNING: &str = "commands.verify was retired in 2.1.0; .bee/config.json still has one and it is now ignored — delete it. commands.test is the one declared test command: the green base check, every cap, close, `bee worktree merge`, and CI all run it.";
+pub const RETIRED_VERIFY_KEY_WARNING: &str = "commands.verify was retired in 2.1.0; .bee/config.json still has one and it is now ignored — delete it. commands.test is the one declared test command: CI runs it on every push, and a worker reaches for it (or a related subset) as its cap proof; no bee door runs it itself.";
 
 pub const RETIRED_VERIFY_KEY_NO_TEST_WARNING: &str = "commands.verify was retired in 2.1.0 and .bee/config.json declares NO commands.test — this repo currently has no test gate at all. FIX: move your verify command to commands.test (a fast subset is better than nothing), or set commands.test to \"none\" if this repo is deliberately test-free. Note: \"none\" on commands.verify no longer declares a no-test repo.";
 
