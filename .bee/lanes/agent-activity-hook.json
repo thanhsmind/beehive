@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "feature": "agent-activity-hook",
   "mode": "feature",
-  "phase": "compounding",
+  "phase": "idle",
   "approved_gates": {
     "context": true,
     "shape": true,
@@ -11,15 +11,10 @@
     "uat": true
   },
   "summary": "Feature \"agent-activity-hook\" started at phase \"planning\" (lane).",
-  "next_action": "Record judge verdicts for aah-1..4, then bee close --feature agent-activity-hook.",
+  "next_action": "bee close finished \"agent-activity-hook\" — feature is closed.",
   "created_at": "2026-08-22T13:01:18.673Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "turn-end",
-    "subject": "Now the capture door while the judge runs.",
-    "asked_at": "2026-08-22T14:20:41.962Z",
-    "session": "48e1abb8-07f6-4058-8db3-383af16fba58"
-  },
+  "run_state": "shaping",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
