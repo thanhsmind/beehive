@@ -74,6 +74,9 @@ pub(crate) fn run_check(flags: Flags, json: bool, pre_json: bool, t0: Instant) -
     for f in &report.warnings {
         lines.push(line_of(f, if strict { "ERROR(strict)" } else { "WARN" }));
     }
+    for n in &report.notes {
+        lines.push(format!("NOTE: {n}"));
+    }
     lines.push(format!(
         "knowledge check: {} concept(s) in {} file(s), {} OKF error(s), {} profile error(s), {} profile warning(s){} — {}",
         report.concepts,
@@ -100,6 +103,9 @@ pub(crate) fn run_check(flags: Flags, json: bool, pre_json: bool, t0: Instant) -
     result.insert("okf".into(), Value::Object(okf));
     result.insert("profile".into(), Value::Object(profile));
     result.insert("counts".into(), Value::Object(counts));
+    if !report.notes.is_empty() {
+        result.insert("notes".into(), Value::Array(report.notes.iter().map(|s| Value::String(s.clone())).collect()));
+    }
 
     Some(ctx.emit(&Value::Object(result), &lines.join("\n"), u8::from(failing)))
 }

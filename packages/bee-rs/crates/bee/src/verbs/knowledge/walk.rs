@@ -346,4 +346,5 @@ pub(crate) struct CheckReport {
     pub(crate) files: usize,
     pub(crate) concepts: usize,
     pub(crate) ok: bool,
+    pub(crate) notes: Vec<String>,
 }
