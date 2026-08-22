@@ -64,6 +64,7 @@ The activity record's fields (decision 2f782f51):
 | `tool_use_id` | Present when the event carried one. The primary identity for clearing `blocked`. |
 | `at` | The ISO-8601 UTC instant the checkpoint observed the event. The only input the signal rule reads. |
 | `pane` | The terminal pane the session runs in, when known — so an operator can go look at it. |
+| `pane_transport` | Which multiplexer named that pane — `herdr` or `tmux`. Present exactly when `pane` is. It records where the session already runs; it never selects a transport. |
 | `cwd` | The working directory the session runs in — which, for a worktree session, is how a reader tells two sessions of the same project apart. |
 | `feature` | The work the session is on, when it is known: the session record's own bound lane, or the default state's feature when the session is unbound. Absent when neither is known. |
 | `cell` | The unit of work the session holds, when it is known: the cell of the one active claim recorded against this session. Absent when the session holds none. |

@@ -254,8 +254,9 @@ fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
         activity.insert("tool_use_id".into(), Value::String(id.clone()));
     }
     activity.insert("at".into(), Value::String(now_iso()));
-    if let Some(pane) = std::env::var("HERDR_PANE_ID").ok().filter(|p| !p.trim().is_empty()) {
-        activity.insert("pane".into(), Value::String(pane.trim().to_string()));
+    if let Some((transport, pane)) = pane_from_env(|key| std::env::var(key).ok()) {
+        activity.insert("pane".into(), Value::String(pane));
+        activity.insert("pane_transport".into(), Value::String(transport));
     }
     activity.insert("cwd".into(), Value::String(ctx.cwd.to_string_lossy().into_owned()));
     // WHAT this session is working on (D2, additive). Both fields are
@@ -275,6 +276,20 @@ fn record_activity(ctx: &HookContext, root: &Path) -> Result<(), String> {
     }
 
     write_activity(ctx, &ctrl, &session_id, &activity, is_transition)
+}
+
+/// The pane this session runs in, and the name of the multiplexer that named
+/// it: `("herdr", id)` from `HERDR_PANE_ID`, else `("tmux", id)` from
+/// `TMUX_PANE`, else nothing. This is identity recording — it reports the pane
+/// the session is ALREADY inside — so it reads no config and selects no
+/// transport; D1 governs transport choice and is untouched here.
+fn pane_from_env(lookup: impl Fn(&str) -> Option<String>) -> Option<(String, String)> {
+    for (transport, key) in [("herdr", "HERDR_PANE_ID"), ("tmux", "TMUX_PANE")] {
+        if let Some(id) = lookup(key).filter(|p| !p.trim().is_empty()) {
+            return Some((transport.to_string(), id.trim().to_string()));
+        }
+    }
+    None
 }
 
 /// D3's two sticky rules. `true` means "leave the record exactly as it is".
@@ -800,6 +815,42 @@ mod tests {
     }
 
     // ── mapping table (D3), as a pure unit ─────────────────────────────────
+
+    #[test]
+    fn activity_pane_prefers_herdr_when_both_transports_name_a_pane() {
+        let got = pane_from_env(|key| match key {
+            "HERDR_PANE_ID" => Some("herdr-3".to_string()),
+            "TMUX_PANE" => Some("%5".to_string()),
+            _ => None,
+        });
+        assert_eq!(got, Some(("herdr".to_string(), "herdr-3".to_string())));
+    }
+
+    #[test]
+    fn activity_pane_reads_tmux_when_only_tmux_names_a_pane() {
+        let got = pane_from_env(|key| match key {
+            "TMUX_PANE" => Some("%5".to_string()),
+            _ => None,
+        });
+        assert_eq!(got, Some(("tmux".to_string(), "%5".to_string())));
+    }
+
+    #[test]
+    fn activity_pane_is_absent_when_neither_transport_names_a_pane() {
+        assert_eq!(pane_from_env(|_| None), None);
+    }
+
+    #[test]
+    fn activity_pane_counts_an_empty_or_blank_value_as_unset() {
+        // A herdr variable exported empty is not a pane: tmux still answers.
+        let got = pane_from_env(|key| match key {
+            "HERDR_PANE_ID" => Some("   ".to_string()),
+            "TMUX_PANE" => Some(" %9 ".to_string()),
+            _ => None,
+        });
+        assert_eq!(got, Some(("tmux".to_string(), "%9".to_string())));
+        assert_eq!(pane_from_env(|_| Some(String::new())), None);
+    }
 
     #[test]
     fn the_event_table_maps_every_decided_event_and_nothing_else() {
