@@ -112,6 +112,10 @@ mod record;
 mod lanes;
 mod projections;
 mod handoff;
+// merge_ready is NOT glob-re-exported: its `clear`/`set_uat`/`set_blocked_by`
+// are far too generic a spelling to live in this module's flat namespace.
+// Callers say `merge_ready::clear(...)` and read as what they are.
+pub(crate) mod merge_ready;
 pub(crate) use self::record::*;
 pub(crate) use self::lanes::*;
 pub(crate) use self::projections::*;
