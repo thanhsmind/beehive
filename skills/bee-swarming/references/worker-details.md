@@ -156,10 +156,7 @@ Fix the root cause and finish again (or run `bee test` alone to see the fresh re
 
 ## Atomic Commit
 
-One commit per cell. The subject describes the change — imperative
-mood, no process narration, no counts, no cell id; the cell id rides
-the last line of the body as a trailer (ids live in records, not in
-subjects — Communication contract rule 8):
+One commit per cell (rule: agents-one-commit-per-cell):
 
 ```bash
 BEE_AGENT_NAME="<name>" git add <files>
@@ -181,7 +178,7 @@ authority, and do not ask the orchestrator to trust a worker-supplied value.
 
 - `[DONE]` — cell finished (a proof line `<command> — <result> — <scope reason>` recorded on the cap, checked — not re-run — at close/merge), one commit made, reservations released.
 - `[BLOCKED]` — cannot continue safely; include the blocker, diagnosis, and current reservation state.
-- `[HANDOFF]` — `.bee/HANDOFF.json` written; include progress, active reservations, and the resume point.
+- `[HANDOFF]` — `.bee/HANDOFF.json` written (rule: agents-context-handoff-65); include progress, active reservations, and the resume point.
 - `[NOOP]` — the assigned cell is unavailable or unsafe; include why and a suggested parent action.
 
 Ambiguities you deferred go in an `Outstanding Questions` section of the report.

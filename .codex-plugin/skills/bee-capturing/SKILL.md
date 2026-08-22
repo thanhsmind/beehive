@@ -36,18 +36,17 @@ announce what settled, then record it:
   same turn, plus a one-line stub via `bee capture add`; the full spec
   merge waits for the flush. High-risk work merges now, never queued.
   A stub whose `--area` owns a skill must also answer whether that skill
-  changed — `--skill-answer "changed: <path>"` or `--skill-answer "not:
-  <why>"`, or the stub is refused
-  (rule: workflow-state-capture-skill-answer;
-  docs/knowledge/areas/workflow-state/capture-queue-and-the-blocker-threshold.md).
+  changed (rule: workflow-state-capture-skill-answer):
+  `--skill-answer "changed: <path>"` or `--skill-answer "not: <why>"`,
+  or the stub is refused. Mechanism:
+  docs/knowledge/areas/workflow-state/capture-queue-and-the-blocker-threshold.md.
 - The user defers work ("later", "phase 2") → `bee backlog add` the
   same turn, announce-then-do.
 - A settlement that contradicts shipped behavior is recorded as "not
   yet implemented — see backlog", never stated as current.
 
 Close every task with a capture line or an explicit "nothing settled"
-(AGENTS.md) — cell, docs write, quick fix alike; smallness is not an
-exemption by default. What deserves a record at all, and at what grain:
+(rule: agents-capture-line-at-close) — smallness is not an exemption. What deserves a record at all, and at what grain:
 `.bee/expertise/decisions.md`.
 
 ## Scribe — keep area specs current

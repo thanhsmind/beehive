@@ -42,7 +42,8 @@ This role may only pick up work when `gate_bypass_level` is exactly `full` or
 announce the refusal into the chat pane (§3) with the actual level and why (an
 auto-created worktree inherits this repo's level, and an unattended agent must
 never inherit `normal`'s latitude for hard-gate work), then end the iteration.
-Live check, every iteration — the level can change between polls.
+Live check, every iteration — the level can change between polls. The level is
+the recorded exception this role runs on (rule: agents-gates-never-self-approved).
 
 ### 3. Find the chat pane (nothing labels it)
 

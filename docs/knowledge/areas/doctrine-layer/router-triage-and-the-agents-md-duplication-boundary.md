@@ -171,6 +171,7 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
 
 - `agents-proof-at-cap` (AGENTS.md § Prove, then say so):
   - applied_at:
+    - `docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md`
     - `docs/knowledge/areas/workflow-state/cells-completion-judge-and-archive.md`
     - `skills/bee-hive/references/gates-and-delegation.md`
     - `skills/bee-planning/SKILL.md`
@@ -178,6 +179,66 @@ Discipline rules homed in `AGENTS.md` have no YAML frontmatter. Their `applied_a
     - `skills/bee-shaping/references/mini-brief-template.md`
     - `skills/bee-shaping/references/implement-plan-template.md`
     - `skills/bee-swarming/references/swarming-reference.md`
+- `agents-never-build-on-red` (AGENTS.md § Prove, then say so):
+  - applied_at:
+    - `docs/knowledge/areas/doctrine-layer/lane-and-working-discipline.md`
+    - `docs/knowledge/areas/doctrine-layer/unenforced-obedience.md`
+    - `skills/bee-hive/SKILL.md`
+    - `skills/bee-hive/references/gates-and-delegation.md`
+    - `skills/bee-swarming/SKILL.md`
+    - `skills/bee-swarming/references/swarming-reference.md`
+- `agents-never-zero-execution-workers` (AGENTS.md § Work in parallel, coordinate through the store):
+  - applied_at:
+    - `docs/knowledge/areas/doctrine-layer/helper-classes-and-transports.md`
+    - `skills/bee-hive/references/gates-and-delegation.md`
+- `agents-capture-line-at-close` (AGENTS.md § Capture what settles):
+  - applied_at:
+    - `skills/bee-capturing/SKILL.md`
+    - `skills/bee-hive/SKILL.md`
+    - `skills/bee-hive/references/routing-and-contracts.md`
+- `agents-context-handoff-65` (AGENTS.md § Care for the session):
+  - applied_at:
+    - `docs/knowledge/areas/onboarding/status-display-vendoring.md`
+    - `skills/bee-hive/SKILL.md`
+    - `skills/bee-hive/references/go-mode.md`
+    - `skills/bee-hive/references/routing-and-contracts.md`
+    - `skills/bee-swarming/SKILL.md`
+    - `skills/bee-swarming/references/swarming-reference.md`
+    - `skills/bee-swarming/references/worker-details.md`
+- `agents-gates-never-self-approved` (AGENTS.md § Bee workflow):
+  - applied_at:
+    - `skills/bee-herding/README.md`
+    - `skills/bee-herding/references/role-dispatch.md`
+    - `skills/bee-hive/SKILL.md`
+    - `skills/bee-hive/references/gates-and-delegation.md`
+- `agents-one-commit-per-cell` (AGENTS.md § Care for the session):
+  - applied_at:
+    - `skills/bee-swarming/references/worker-details.md`
+- `agents-review-user-invoked` (AGENTS.md § Bee workflow):
+  - applied_at:
+    - `docs/knowledge/areas/workflow-state/review-sessions.md`
+    - `skills/bee-hive/SKILL.md`
+    - `skills/bee-hive/references/gates-and-delegation.md`
+    - `skills/bee-hive/references/go-mode.md`
+    - `skills/bee-hive/references/routing-and-contracts.md`
+- `agents-one-next-action` (AGENTS.md § Communication):
+  - applied_at:
+    - `docs/knowledge/areas/doctrine-layer/the-communication-contract.md`
+    - `skills/bee-hive/references/routing-and-contracts.md`
+- `agents-worktree-first` (AGENTS.md § Bee workflow):
+  - applied_at:
+    - `docs/knowledge/areas/workflow-state/worktree-isolation.md`
+    - `docs/knowledge/areas/worktree-parallelism/routing-and-visibility.md`
+    - `skills/bee-hive/SKILL.md`
+    - `skills/bee-hive/references/routing-and-contracts.md`
+    - `skills/bee-hive/references/scout-and-ticks.md`
+    - `skills/bee-planning/SKILL.md`
+    - `skills/bee-swarming/SKILL.md`
+
+The list is kept by hand because `AGENTS.md` carries no frontmatter. A
+`bee.applied_at` key on this concept would not serve: `applied_at_unlinked`
+resolves a target against the rules this concept's own body homes, and these
+ten are homed in `AGENTS.md`, not here.
 
 ## Open Gaps
 

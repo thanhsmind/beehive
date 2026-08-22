@@ -4,7 +4,7 @@
   "skills": [
     {
       "name": "bee-capturing",
-      "sha256": "0f603d02c071191860963a311f9d7a28d2340796650ef52aeb4c0d531b00a09d"
+      "sha256": "5bfc13cccd89be8b72c3cde428f2368e7e8a4d410bf109eee6699424c4ce7a00"
     },
     {
       "name": "bee-evolving",
@@ -16,15 +16,15 @@
     },
     {
       "name": "bee-herding",
-      "sha256": "b3a6c0388e1ae2de80088cd4380a3aa3548fb57152a79ef66aa4b818d7b94de0"
+      "sha256": "cbb51c6d4e8bfa7b5f61bbf54b503358d2bdc7bb072f13056e8be38da540fd72"
     },
     {
       "name": "bee-hive",
-      "sha256": "011f8999b54fd6985fa5288f16910ddfb4fc4ddc2a6b3f00eb32f95952b0ea16"
+      "sha256": "3d3b4613b683f0afde594ad28cdb63efe395eb58e186933ad795b4d29ed378fe"
     },
     {
       "name": "bee-planning",
-      "sha256": "cc08bc92ca9d8d51ddf96cd17d211ed07079d515b0b3fa13a4f958b95198122f"
+      "sha256": "7de4bd82108958ae44748db5346954fcaf0ccb311769bc39b3e6ae34d83e2186"
     },
     {
       "name": "bee-researching",
@@ -40,7 +40,7 @@
     },
     {
       "name": "bee-swarming",
-      "sha256": "5e6ba9c46c3228e00bc2a3cece6ed9373a6dc64d6b8b82f07523f7b3877241b7"
+      "sha256": "50a40a67e7cfa46a153bfaf74d3a1151a2d0fb5478babe22886955f8927f8845"
     },
     {
       "name": "bee-wayfinding",

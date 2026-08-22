@@ -75,8 +75,8 @@ version control, a model without an effort setting — each simply drops its seg
 
 **Context colour is a workflow signal, not a gauge.** The colour of the context
 segment answers one question — "does the human need to think about a handoff?" —
-so its thresholds track bee's handoff mark (pause at roughly 65% of the window
-consumed, i.e. ~35% remaining), not an even split of the scale:
+so its thresholds track bee's handoff mark (rule: agents-context-handoff-65),
+i.e. ~35% of the window remaining, not an even split of the scale:
 
 | Context remaining | Colour | Meaning |
 |---|---|---|

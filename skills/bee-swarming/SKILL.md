@@ -21,7 +21,7 @@ is the **orchestrator**. `bee orient` shows where the work stands either way.
 ## Orchestrate
 
 You launch workers and tend results; you do not implement. The wave runs
-inside the feature's worktree (worktree-first — AGENTS.md). Claiming from
+inside the feature's worktree (rule: agents-worktree-first). Claiming from
 main is control-plane and fine; a Task-tool worker inherits the session's
 OS cwd, so dispatching an execution worker while cwd is main cannot write
 into the worktree and dies on the write guard — enter the worktree first
@@ -96,8 +96,7 @@ finds a staging record then carries the trigger-3 nudge
 Before declaring done: no active reservations, no in-flight workers
 recorded.
 
-The 65%-context handoff (AGENTS.md) holds mid-wave — never push through
-the budget. When a unit finishes and approved work remains, continue
+The 65%-context handoff holds mid-wave (rule: agents-context-handoff-65). When a unit finishes and approved work remains, continue
 in-session; finishing a unit is never a reason to stop.
 
 ## Execute (worker)
@@ -137,8 +136,8 @@ outputs — when a verb refuses, its message names the fix.
 6. Return exactly one token, first thing in your final message, and the
    Result form beside it — never in place of it:
    `[DONE]` (outcome, files, commit) · `[BLOCKED]` (what, why, your
-   diagnosis) · `[HANDOFF]` (the 65% handoff, AGENTS.md — handoff file
-   written before the token) · `[NOOP]` (cell missing or already capped). Never wait
+   diagnosis) · `[HANDOFF]` (the 65% handoff — handoff file
+   written before the token; rule: agents-context-handoff-65) · `[NOOP]` (cell missing or already capped). Never wait
    silently; never ask a blocking question — you run headless.
 
 ## Hard rules (both roles)
@@ -147,7 +146,7 @@ outputs — when a verb refuses, its message names the fix.
   never edits source in a `standard`/`high-risk` wave.
 - One cell per worker; the claim guard refuses a worker that claims, browses, or self-selects.
 - Conflicts are fixed in scope or reservations, never by being careful.
-- Never build on a red base — a red becomes its own fix-first cell.
+- Never build on a red base — a red becomes its own fix-first cell (rule: agents-never-build-on-red).
 
 ## Headless
 

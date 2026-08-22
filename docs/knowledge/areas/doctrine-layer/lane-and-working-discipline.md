@@ -98,26 +98,20 @@ govern the working residue of a cell rather than its content.
   longer, never their combined length, with its findings held until the
   merged approval.
 - **R16c — Test runs are the scarce resource (test-runs-lean D1/D2,
-  2026-07-27).** *(Superseded in part 2026-07-31 — decision 412e9b3a,
-  docs/specs/test-simple.md: per-cell verify commands and the verify-once
-  economics are retired; `bee cells finish` now runs the one declared
-  `commands.test` at every cap and writes the result record the
-  orchestrator reads instead of re-running. The mutation-proof scoping
-  survives as craft. Kept as the historical record. Narrowed again
-  2026-08-18: no door runs tests at all — `bee cells finish` RECORDS the
-  proof line the worker hands it and refuses a red one, and the worker picks
-  the narrowest proof its change type needs rather than the declared suite.)* Verify-once: in a
-  serial tiny/small dispatch the worker's
-  recorded verify output is the cap evidence — the orchestrator repeats the
-  command only when the report smells, the wave ran parallel workers, or the
-  cell is high-risk/hard-gate; proof stays recorded output, it just is not paid
-  for twice. Proving a new suite load-bearing by mutation is owed only when it
-  guards high-risk/hard-gate behavior, at most one cycle, optional elsewhere.
-  A cell's verify field carrying the impacted or full chain is a planning
-  defect the worker refuses — the impacted run belongs to the slice close,
-  never inside a cell. Origin: one session paid five broad suite runs and a
-  test-heavy diff for a ~40-line guard (standing user feedback, strengthens
-  5794a92a).
+  2026-07-27).** The live rule: no door runs tests. The agent owns test
+  scope, picks the narrowest proof its change type needs, and `bee cells
+  finish` RECORDS that proof line and refuses a red one
+  (rule: agents-proof-at-cap). Proving a new suite load-bearing by mutation
+  is owed only when it guards high-risk/hard-gate behavior, at most one
+  cycle, optional elsewhere. A cell's verify field carrying the impacted or
+  full chain is a planning defect the worker refuses — the impacted run
+  belongs to the slice close, never inside a cell. Origin: one session paid
+  five broad suite runs and a test-heavy diff for a ~40-line guard (standing
+  user feedback, strengthens 5794a92a).
+  Superseded notes, in order: per-cell verify commands and the verify-once
+  economics retired (412e9b3a, 2026-07-31, docs/specs/test-simple.md); the
+  cap-time suite run retired in turn (decisions 58ec9664 and 1f534837,
+  2026-08-18).
 - **R17** — There is one canonical scratch home (`f21efe6e`): every ephemeral
   file bee writes for its own working purposes — judge payloads, evidence/
   deviation files, batch inputs, digests, verify logs, probe/debug scripts,
@@ -182,13 +176,13 @@ govern the working residue of a cell rather than its content.
   issue, never a local run), wave close and worktree merge both run the
   impact-registry-scoped `commands.test` instead of the full chain, and the
   full chain itself runs on push in CI, auto-filing a deduped `verify-red`
-  issue when red. *(Amended 2026-07-31 — decision 412e9b3a,
-  docs/specs/test-simple.md: `commands.test` now runs at every
-  `bee cells finish` and again at `bee close`; `bee worktree merge`
-  re-runs `commands.test` against the staged merge as the last net. Amended
-  again 2026-08-18: none of those three doors runs a test. Each CHECKS the
-  proof line already recorded on the cap; continuous integration is the one
-  place the full declared command still runs, on every push.)*
+  issue when red. The live rule: `bee cells finish`, `bee close`, and
+  `bee worktree merge` each CHECK the proof line already recorded on the cap
+  and run no test themselves; CI is the one place the full declared command
+  still runs, on every push (rule: agents-proof-at-cap).
+  Superseded notes, in order: `commands.test` at every finish/close and a
+  re-run at merge (412e9b3a, 2026-07-31, docs/specs/test-simple.md); that
+  cap-time run retired (decisions 58ec9664 and 1f534837, 2026-08-18).
 
   **The claim is still the trigger, not arrival.** It is stated claim-first,
   in the execution discipline rather than in any startup checklist, because a
@@ -198,7 +192,7 @@ govern the working residue of a cell rather than its content.
   touched no cell. A session that answers, reads or explores without ever
   claiming owes no CI check either. Nothing about the gate's strength
   changed — a red result is still surfaced and still becomes its own
-  fix-first cell, and building on red is still forbidden. What changed is the
+  fix-first cell (rule: agents-never-build-on-red). What changed is the
   proof itself: a local run became a CI-status read, and the four milestones
   collapsed into one CI-owned full pass plus registry-scoped local checks.
   full-run-retirement (cell frr-1) completed the retirement: the session-finish
