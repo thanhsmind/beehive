@@ -429,6 +429,8 @@ The orchestrator's loop for one herding cell:
    `status: done` result passes verify, or the orchestrator gives up and
    reports `[BLOCKED]` itself.
 
+**On spawn_failed:** the result JSON's `remedy` field names the unwind (`bee cells unclaim` and `bee reservations release`); claims and reservations stay the orchestrator's to release; the pane stays open as forensics.
+
 ## Worker Prompt Template
 
 Nicknames are Minions character names — recognizable,
