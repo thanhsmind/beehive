@@ -36,7 +36,17 @@ loud and keeps its pane open as forensics (herding-review-slots D3).
 Widening the slot to every purpose needed no change in the model guard, because
 the guard routes on the slot's KIND alone and never on which purpose asked — a
 new purpose inherits the routing for free, and no guard rule has to learn its
-name. The routing is enforced, not merely offered: against a herding-kind slot
+name.
+
+The fallback declaration is the one exception to that kind-only reading. A
+fallback slot publishes a MODEL, not a kind, so the guard's configured-model set
+had to learn the same default-model table preparation reads. Until it did, the
+two doors contradicted each other: preparation published the generation default
+for a herding `generation` slot declaring a default fallback, and the guard
+refused that exact model as unconfigured (guard-herding-fallback D1,
+2026-08-21).
+
+The routing is enforced, not merely offered: against a herding-kind slot
 the guard DENIES a native subagent dispatch outright, so the pane payload is the
 only legal way through and no caller can quietly take the cheaper in-process
 path the operator opted out of.
@@ -134,6 +144,12 @@ naming the file and what went wrong, and the run proceeds regardless — a
 foreign tool's own config being unreadable or unwritable must never fail a
 bee run, but the warning means the gap is never silent either
 (herding-prompt-stall D5).
+
+A trust-file path may be written home-relative (`~/...`). Expansion reads the
+home directory as `HOME` first and `USERPROFILE` second — the only order that
+works on Windows, where `HOME` is normally unset. Neither set, or no leading
+`~`, returns the path unchanged and lets the pre-flight's fail-open read name
+its own warning (windows-suite-green, cell wsg-1, 2026-08-21).
 
 ## Edge Cases Settled
 

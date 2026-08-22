@@ -134,6 +134,15 @@ bought a smaller help output at the price of a blind guard.
   for them. The declaration is pinned to the handler's own list by a
   contract test, so the two cannot drift apart
   (backlog-add-honest-refusal D1, 2026-08-21).
+- R10 — **A flag a handler accepts is declared on BOTH registry entries the
+  verb answers to.** A flow verb is an alias, so one handler is reachable under
+  two names; a flag declared on only one of them makes `bee --help --json`
+  understate the command from exactly one spelling — and the flow spelling is
+  the one docs and skills write down. The source-derived drift net therefore
+  asserts the handler's own accepted-flag list against every entry the verb
+  has, never the first one alone: hard-wiring that net to a single handler is
+  how one verb shipped a flag with no net at all while its sibling had one
+  (store-reach-gaps D2, 2026-08-21).
 
 ## Edge Cases Settled
 
@@ -168,6 +177,11 @@ bought a smaller help output at the price of a blind guard.
 - The porcelain set is a judgement about what a session needs, re-made when the
   flow changes. There is no mechanical test that a given verb *belongs* in it —
   only that whatever is declared is presented consistently.
+- R8's decline-as-refusal repair landed on `backlog add` alone. Sibling handlers
+  in the same file still return the bare "not mine" for problems they fully
+  understand — a missing title, an out-of-enum status, a duplicate row — so each
+  still answers its caller with the dispatcher's guess instead of the real
+  problem (backlog-add-honest-refusal bah-1, 2026-08-21).
 
 ## Pointers
 

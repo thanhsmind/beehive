@@ -215,6 +215,19 @@ red.
   session that ended cleanly while still holding an expired claim belongs to
   the first and not the second (sweep-recovery-door D3, cells srd-1 and srd-2,
   2026-08-14).
+- R135 — **Claim ownership has exactly one home, and the listing verbs read it
+  for the caller.** A unit record's own owner fields are always null; the owner
+  lives only in the claim record. A reader who took a claimed status with a null
+  owner off the unit record therefore read a live sibling's work as idle and
+  offered it up — measured 2026-08-21 on two units held by a live session whose
+  heartbeat was thirty seconds old. The listing and show verbs now join the
+  claim record and the holding session's heartbeat into a DERIVED claim
+  annotation: the holder, its workspace, the claim's expiry, and a
+  held/sweepable verdict that applies the same two gates the claim sweep
+  applies, so a unit reading sweepable is precisely one the next sweep would
+  take. The annotation appears only where a claim record exists, and the unit
+  record on disk is unchanged — a second copy of ownership would drift the
+  moment a claim is swept or adopted (claim-owner-visible D1-D4, 2026-08-21).
 
 ## Edge Cases Settled
 

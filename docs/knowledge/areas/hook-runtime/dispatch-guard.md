@@ -49,7 +49,15 @@ built-in list of acceptable models.
   legitimate route: the configured models, the session-model marker for a
   dispatch meant to run at the session's own model, and adding the model to a
   configured tier slot. A workspace with no configured tiers is not checked
-  (fail-open, unchanged behavior).
+  (fail-open, unchanged behavior). The set also folds one model no tier slot
+  resolves to: a herding-kind `generation` or `review` slot carrying a
+  default-fallback declaration has that slot's own default model published on
+  the prepared payload, so the guard must admit it or refuse a dispatch bee
+  itself prepared. The membership is exactly the image of what preparation can
+  publish — no wider (`extraction` is never a prepared tier token, so its
+  default is never admitted) and no narrower — and it reads the same
+  default-model table preparation reads, never a second copy of it
+  (guard-herding-fallback D1, 2026-08-21).
 - *Tier only:* tiers resolving to a model, a budget, or session-inherit are
   permitted as before. A tier backed by an external command is refused — an
   in-family helper cannot *be* the external command — and the corrective

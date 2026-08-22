@@ -66,6 +66,10 @@ A port is only as good as the instrument that says it is faithful. This is the h
   cells wcpf-1..4, issue #94, 2026-08-16; decision logged same day). The same sweep settled two
   siblings: errno-class checks widened to cover Windows' error codes, and path fixtures
   canonicalized so a symlinked temp dir compares equal to its resolved form.
+  R11 governs repo-relative paths in output and stored records. A RENDERED absolute
+  filesystem path is the opposite case: it carries the platform's own separator, so its
+  assertion derives the expected string from the same `Path::join` the renderer used,
+  rather than spelling either separator (windows-suite-green, cell wsg-1, 2026-08-21).
 - **Windows test hermeticity is pinned in fixtures, never assumed.** Test fixtures pin
   `core.autocrlf` off — Windows runners default it on, silently breaking exact-LF
   assertions — and path assertions compare canonical identity, never string spelling,

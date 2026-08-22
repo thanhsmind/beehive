@@ -70,6 +70,16 @@ the ordinary main checkout:
   itself). The probe runs only after the direct candidates miss, so an ordinary checkout
   spawns no extra process, and every worktree runs the same binary the main checkout does —
   never a stale copy. Found and closed 2026-08-03.
+  Since 2026-08-21 the bootstrap also provisions the binary itself: creating a worktree puts
+  `<worktree>/.bee/bin/bee` in place from the main store's own binary — a symlink where the
+  platform allows one, so a rebuilt main binary is instantly live in every worktree and can
+  never read stale, and a mode-preserving copy where it does not. A destination that already
+  exists is left alone, checked at the link level so a stale-target link is never written
+  *through* into the main store. A missing source or a refused link never fails the bootstrap;
+  the outcome rides the report. So a worktree's `.bee/bin/` now holds prompts AND the binary,
+  and the hook-time resolution above remains the belt to that suspenders — the fix closed the
+  case an agent hits directly, invoking `.bee/bin/bee` by the path AGENTS.md names
+  (store-reach-gaps D2, 2026-08-21).
 - **The creation slug is recorded immutably, because the feature name is not.** Directory, branch
   and the worktree's own feature field all derive from one slug at creation — so at that instant
   they agree by construction. The feature field is then freely rewritten afterwards by ordinary

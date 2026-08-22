@@ -206,6 +206,9 @@ even when the brief states the rule.
   `packages/bee-rs/crates/bee/src/herding/split_lock.rs`; `run.rs`'s
   `split_worker_pane` holds it across the layout read and the split, waiting
   `SPLIT_LOCK_WAIT` (120s) and failing open past it (cells hss-1, hss-2).
+  Release is identity-checked — a guard removes the lock file only while the
+  on-disk holder still carries its own pid AND token, so a process that already
+  lost its turn to a stale takeover cannot delete the winner's lock.
 - `run`'s own module — pane split/start, the native poll loop, and pane-lifecycle
   decisions, each seam-tested with a fake so no test needs a real multiplexer on
   PATH — is `packages/bee-rs/crates/bee/src/herding/run.rs`; the mailbox contract

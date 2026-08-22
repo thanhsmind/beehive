@@ -8,7 +8,7 @@ bee:
   id: pattern-20260818-a-rule-checked-at-two-points-needs-one-shared
   lifecycle: active
   areas: [worktree-parallelism]
-  sources: [".bee/cells/usp-3.json", ".bee/cells/usp-5.json", ".bee/cells/usp-6.json", "original feature: uat-stop-placement, round 2"]
+  sources: [".bee/cells/usp-3.json", ".bee/cells/usp-5.json", ".bee/cells/usp-6.json", "original feature: uat-stop-placement, round 2", ".bee/cells/archive/guard-herding-fallback/hgf-1.json", "recurrence: guard-herding-fallback (the dispatch-prepare door published a model the model-guard door refused; the fix reads the producer's own default-model table rather than a second copy, and the consumer's member set is the exact image of what the producer can publish, narrowed deliberately where the producer cannot reach)"]
   polarity: pitfall
   critical: true
   evidence: wired

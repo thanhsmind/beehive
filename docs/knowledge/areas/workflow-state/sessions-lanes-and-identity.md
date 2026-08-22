@@ -546,6 +546,18 @@ told it lost, never that the feature is untriaged (D4 refinement, decision
   a feature demotes at most once ever (stamped at the first), and same-lane
   re-records, promotions, and off-ladder moves are always allowed (hook-teeth
   D5, cell bh-5, 2026-08-04).
+- R134 — **An unbound session may not blind-write the shared default record
+  while lanes are live.** Recording a route from a session with no lane binding
+  resolves to the default record — which in an active repo is another feature's
+  real triage — so with one or more live lane records the write is refused
+  before any field is set, naming the live lanes and what the default record
+  currently holds. Both exits ride the refusal: bind the session to its lane, or
+  force the default record on purpose. A featureless default record takes its
+  own branch and says so, rather than naming a feature "none" whose triage
+  would be lost. Route targeting is asymmetric by decision: the record selector
+  is a refusal plus one forcing flag, never a second lane-naming flag, because
+  the verb already spends that flag name on the triage classification
+  (store-reach-gaps D1, 2026-08-21).
 
 ## Edge Cases Settled
 
