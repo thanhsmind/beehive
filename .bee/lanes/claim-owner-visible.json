@@ -14,7 +14,12 @@
   "next_action": "bee close finished \"claim-owner-visible\" — feature is closed.",
   "created_at": "2026-08-21T16:05:05.593Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "turn-end",
+    "subject": "Đang chạy full test suite trên main. Chờ xong tôi báo, rồi đóng feature.",
+    "asked_at": "2026-08-21T22:36:18.388Z",
+    "session": "9d62803d-578e-471a-a4ad-312c69c3a4b6"
+  },
   "route": {
     "class": "feature",
     "lane": "small",

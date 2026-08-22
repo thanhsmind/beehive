@@ -8,18 +8,13 @@
     "shape": true,
     "execution": true,
     "review": false,
-    "uat": false
+    "uat": true
   },
   "summary": "Feature \"store-reach-gaps\" started at phase \"exploring\" (lane).",
   "next_action": "Continue bee-exploring for \"store-reach-gaps\" (lane).",
   "created_at": "2026-08-21T15:25:22.880Z",
-  "run_state": "awaiting-approval",
-  "waiting_on": {
-    "kind": "gate",
-    "subject": "uat: store-reach-gaps",
-    "asked_at": "2026-08-21T16:11:49.293Z",
-    "session": "2a7f3cd2-3cf9-4540-9d24-8a9b64594486"
-  },
+  "run_state": "done",
+  "waiting_on": null,
   "route": {
     "class": "feature",
     "lane": "standard",
