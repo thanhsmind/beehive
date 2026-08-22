@@ -574,42 +574,157 @@ fn interlock(flags: &[&str]) -> ExitCode {
     }
 }
 
-pub(crate) fn transport_state_with(lookup: impl Fn(&str) -> Option<String>) -> Map<String, Value> {
-    let herdr_env = lookup("HERDR_ENV");
-    let pane_id = lookup("HERDR_PANE_ID").filter(|s| !s.trim().is_empty());
+/// tmux-herding-transport D1: which terminal multiplexer bee reaches a worker
+/// pane through. Selected by ONE config key (`herding.transport`) and never by
+/// sniffing the environment — a session nested in both tools must not pick by
+/// accident.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TransportKind {
+    Herdr,
+    Tmux,
+}
 
-    let (ready, reason, pane_val) = match (herdr_env.as_deref(), pane_id) {
-        (Some("1"), Some(pid)) => (
-            true,
-            format!("HERDR_ENV=1 and HERDR_PANE_ID={pid} are set"),
-            Value::String(pid),
-        ),
-        (Some("1"), None) => (
-            false,
-            "HERDR_ENV=1 is set but HERDR_PANE_ID is empty or not set".to_string(),
-            Value::Null,
-        ),
-        (Some(other), pid) => (
-            false,
-            format!("HERDR_ENV is {other:?} (expected '1')"),
-            pid.map(Value::String).unwrap_or(Value::Null),
-        ),
-        (None, pid) => (
-            false,
-            "HERDR_ENV is not set — this session is not inside a herdr pane".to_string(),
-            pid.map(Value::String).unwrap_or(Value::Null),
-        ),
+impl TransportKind {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            TransportKind::Herdr => "herdr",
+            TransportKind::Tmux => "tmux",
+        }
+    }
+}
+
+/// tmux-herding-transport D1: read `herding.transport` out of an already-parsed
+/// `.bee/config.json`. Absent is herdr — the byte-identical default. Anything
+/// that is not one of the two legal spellings is a typed refusal naming both,
+/// never a silent fallback: a typo'd transport must not quietly run the other
+/// one.
+pub(crate) fn transport_kind(cfg: &Value) -> Result<TransportKind, String> {
+    match cfg.get("herding").and_then(|h| h.get("transport")) {
+        None => Ok(TransportKind::Herdr),
+        Some(Value::String(s)) if s == "herdr" => Ok(TransportKind::Herdr),
+        Some(Value::String(s)) if s == "tmux" => Ok(TransportKind::Tmux),
+        Some(other) => Err(format!(
+            "herding.transport is {other} — the only legal values are \"herdr\" and \"tmux\""
+        )),
+    }
+}
+
+/// `transport_kind` over `<main_root>/.bee/config.json`. A missing or
+/// unparseable file reads as herdr — the same fail-open posture
+/// `read_command_template_tokens` below takes for the same file, so a repo with
+/// no config at all keeps the pre-tmux behavior exactly.
+pub(crate) fn transport_kind_at(main_root: &Path) -> Result<TransportKind, String> {
+    let path = main_root.join(".bee").join("config.json");
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return Ok(TransportKind::Herdr);
+    };
+    let Ok(cfg) = serde_json::from_str::<Value>(&raw) else {
+        return Ok(TransportKind::Herdr);
+    };
+    transport_kind(&cfg)
+}
+
+/// The herdr-only spelling every pre-tmux caller and test uses: unchanged
+/// behavior, now one delegation deep. Production reaches the probe through
+/// `transport_state_for` with the configured kind, so this name survives for
+/// its callers' sake (tests, and any herdr-only caller added later).
+#[allow(dead_code)]
+pub(crate) fn transport_state_with(lookup: impl Fn(&str) -> Option<String>) -> Map<String, Value> {
+    transport_state_for(TransportKind::Herdr, lookup)
+}
+
+/// tmux-herding-transport D1: the transport-reachability probe for a KNOWN
+/// transport. `kind` comes from the config key, never from the env — with the
+/// key absent this is the herdr arm and the tmux variables are never read.
+pub(crate) fn transport_state_for(
+    kind: TransportKind,
+    lookup: impl Fn(&str) -> Option<String>,
+) -> Map<String, Value> {
+    let (ready, reason, pane_val) = match kind {
+        TransportKind::Herdr => {
+            let herdr_env = lookup("HERDR_ENV");
+            let pane_id = lookup("HERDR_PANE_ID").filter(|s| !s.trim().is_empty());
+
+            match (herdr_env.as_deref(), pane_id) {
+                (Some("1"), Some(pid)) => (
+                    true,
+                    format!("HERDR_ENV=1 and HERDR_PANE_ID={pid} are set"),
+                    Value::String(pid),
+                ),
+                (Some("1"), None) => (
+                    false,
+                    "HERDR_ENV=1 is set but HERDR_PANE_ID is empty or not set".to_string(),
+                    Value::Null,
+                ),
+                (Some(other), pid) => (
+                    false,
+                    format!("HERDR_ENV is {other:?} (expected '1')"),
+                    pid.map(Value::String).unwrap_or(Value::Null),
+                ),
+                (None, pid) => (
+                    false,
+                    "HERDR_ENV is not set — this session is not inside a herdr pane".to_string(),
+                    pid.map(Value::String).unwrap_or(Value::Null),
+                ),
+            }
+        }
+        TransportKind::Tmux => {
+            // tmux exports $TMUX (socket,pid,session) to every pane and
+            // $TMUX_PANE (the pane id) — both non-empty is "inside a pane".
+            let tmux = lookup("TMUX").filter(|s| !s.trim().is_empty());
+            let pane_id = lookup("TMUX_PANE").filter(|s| !s.trim().is_empty());
+
+            match (tmux, pane_id) {
+                (Some(_), Some(pane)) => (
+                    true,
+                    format!("TMUX and TMUX_PANE={pane} are set"),
+                    Value::String(pane),
+                ),
+                (Some(_), None) => (
+                    false,
+                    "TMUX is set but TMUX_PANE is empty or not set".to_string(),
+                    Value::Null,
+                ),
+                (None, pane) => (
+                    false,
+                    "TMUX is not set — this session is not inside a tmux pane".to_string(),
+                    pane.map(Value::String).unwrap_or(Value::Null),
+                ),
+            }
+        }
     };
 
     let mut m = Map::new();
     m.insert("ready".into(), Value::Bool(ready));
     m.insert("reason".into(), Value::String(reason));
     m.insert("pane_id".into(), pane_val);
+    // Additive: `bee herding status --json` gains transport.kind; every key
+    // above keeps its pre-tmux value.
+    m.insert("kind".into(), Value::String(kind.as_str().to_string()));
     m
 }
 
-fn transport_state() -> Map<String, Value> {
-    transport_state_with(|k| std::env::var(k).ok())
+/// The probe `bee herding status` runs. The main root resolves exactly the way
+/// the surrounding `status` does (`--main-root`, else the git common dir); an
+/// unresolvable root falls open to herdr, and a bad `herding.transport` value
+/// is reported as not-ready with the refusal text as the reason — never a
+/// panic.
+fn transport_state(explicit: Option<&str>) -> Map<String, Value> {
+    let kind = match resolve_main_root(explicit) {
+        Some(main_root) => transport_kind_at(&main_root),
+        None => Ok(TransportKind::Herdr),
+    };
+    match kind {
+        Ok(kind) => transport_state_for(kind, |k| std::env::var(k).ok()),
+        Err(reason) => {
+            let mut m = Map::new();
+            m.insert("ready".into(), Value::Bool(false));
+            m.insert("reason".into(), Value::String(reason));
+            m.insert("pane_id".into(), Value::Null);
+            m.insert("kind".into(), Value::Null);
+            m
+        }
+    }
 }
 
 fn status(flags: &[&str]) -> ExitCode {
@@ -631,7 +746,7 @@ fn status(flags: &[&str]) -> ExitCode {
     }
 
     let mut obj = enable_marker_state(explicit);
-    let transport = transport_state();
+    let transport = transport_state(explicit);
     let enabled = obj.get("enabled").and_then(Value::as_bool).unwrap_or(false);
     let transport_ready = transport.get("ready").and_then(Value::as_bool).unwrap_or(false);
     let transport_ready_str = if transport_ready { "ready" } else { "not ready" };
@@ -927,6 +1042,144 @@ mod tests {
         });
         assert_eq!(not_ready_empty_pane.get("ready"), Some(&Value::Bool(false)));
         assert_eq!(not_ready_empty_pane.get("pane_id"), Some(&Value::Null));
+    }
+
+    // ── tmux-herding-transport D1: the config key and the tmux probe arm ────
+
+    #[test]
+    fn transport_kind_defaults_to_herdr_and_refuses_an_unknown_value() {
+        // Absent key (and an absent `herding` block) => herdr, no env read.
+        assert_eq!(transport_kind(&serde_json::json!({})), Ok(TransportKind::Herdr));
+        assert_eq!(
+            transport_kind(&serde_json::json!({"herding": {}})),
+            Ok(TransportKind::Herdr)
+        );
+        // The two legal spellings.
+        assert_eq!(
+            transport_kind(&serde_json::json!({"herding": {"transport": "herdr"}})),
+            Ok(TransportKind::Herdr)
+        );
+        assert_eq!(
+            transport_kind(&serde_json::json!({"herding": {"transport": "tmux"}})),
+            Ok(TransportKind::Tmux)
+        );
+        // Anything else refuses, naming exactly the two legal values.
+        let err = transport_kind(&serde_json::json!({"herding": {"transport": "nope"}}))
+            .unwrap_err();
+        assert_eq!(
+            err,
+            "herding.transport is \"nope\" — the only legal values are \"herdr\" and \"tmux\""
+        );
+        let err_nonstring =
+            transport_kind(&serde_json::json!({"herding": {"transport": 3}})).unwrap_err();
+        assert!(err_nonstring.contains("\"herdr\""), "got {err_nonstring}");
+        assert!(err_nonstring.contains("\"tmux\""), "got {err_nonstring}");
+    }
+
+    #[test]
+    fn transport_kind_at_reads_the_config_and_fails_open() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        // No .bee/config.json at all => herdr (same posture as
+        // read_command_template_tokens).
+        assert_eq!(transport_kind_at(root), Ok(TransportKind::Herdr));
+
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        std::fs::write(root.join(".bee").join("config.json"), "{ not json").unwrap();
+        assert_eq!(transport_kind_at(root), Ok(TransportKind::Herdr));
+
+        std::fs::write(
+            root.join(".bee").join("config.json"),
+            "{\"herding\":{\"transport\":\"tmux\"}}",
+        )
+        .unwrap();
+        assert_eq!(transport_kind_at(root), Ok(TransportKind::Tmux));
+
+        std::fs::write(
+            root.join(".bee").join("config.json"),
+            "{\"herding\":{\"transport\":\"nope\"}}",
+        )
+        .unwrap();
+        assert!(transport_kind_at(root).is_err());
+    }
+
+    #[test]
+    fn transport_state_for_tmux_reads_only_the_tmux_vars() {
+        let env = |tmux: Option<&str>, pane: Option<&str>| {
+            let tmux = tmux.map(str::to_string);
+            let pane = pane.map(str::to_string);
+            move |k: &str| match k {
+                "TMUX" => tmux.clone(),
+                "TMUX_PANE" => pane.clone(),
+                // A herdr pane's variables are present and must not be read.
+                "HERDR_ENV" => Some("1".to_string()),
+                "HERDR_PANE_ID" => Some("w4:p7".to_string()),
+                _ => None,
+            }
+        };
+
+        // Ready: both set.
+        let ready = transport_state_for(
+            TransportKind::Tmux,
+            env(Some("/tmp/tmux-1000/default,42,0"), Some("%3")),
+        );
+        assert_eq!(ready.get("ready"), Some(&Value::Bool(true)));
+        assert_eq!(
+            ready.get("reason"),
+            Some(&Value::String("TMUX and TMUX_PANE=%3 are set".to_string()))
+        );
+        assert_eq!(ready.get("pane_id"), Some(&Value::String("%3".to_string())));
+        assert_eq!(ready.get("kind"), Some(&Value::String("tmux".to_string())));
+
+        // TMUX set, TMUX_PANE missing / empty.
+        for pane in [None, Some(""), Some("   ")] {
+            let m = transport_state_for(
+                TransportKind::Tmux,
+                env(Some("/tmp/tmux-1000/default,42,0"), pane),
+            );
+            assert_eq!(m.get("ready"), Some(&Value::Bool(false)));
+            assert_eq!(
+                m.get("reason"),
+                Some(&Value::String(
+                    "TMUX is set but TMUX_PANE is empty or not set".to_string()
+                ))
+            );
+            assert_eq!(m.get("pane_id"), Some(&Value::Null));
+        }
+
+        // TMUX missing: not ready, and the pane id still rides along.
+        let no_tmux = transport_state_for(TransportKind::Tmux, env(None, Some("%3")));
+        assert_eq!(no_tmux.get("ready"), Some(&Value::Bool(false)));
+        assert_eq!(
+            no_tmux.get("reason"),
+            Some(&Value::String(
+                "TMUX is not set — this session is not inside a tmux pane".to_string()
+            ))
+        );
+        assert_eq!(no_tmux.get("pane_id"), Some(&Value::String("%3".to_string())));
+        assert_eq!(no_tmux.get("kind"), Some(&Value::String("tmux".to_string())));
+    }
+
+    #[test]
+    fn transport_state_carries_the_kind_on_the_herdr_arm_too() {
+        let herdr = transport_state_with(|k| match k {
+            "HERDR_ENV" => Some("1".to_string()),
+            "HERDR_PANE_ID" => Some("w4:p7".to_string()),
+            // Present but never consulted on the herdr arm (D1: no auto-detect).
+            "TMUX" => Some("/tmp/tmux-1000/default,42,0".to_string()),
+            "TMUX_PANE" => Some("%3".to_string()),
+            _ => None,
+        });
+        assert_eq!(herdr.get("kind"), Some(&Value::String("herdr".to_string())));
+        assert_eq!(herdr.get("ready"), Some(&Value::Bool(true)));
+        assert_eq!(
+            herdr.get("reason"),
+            Some(&Value::String("HERDR_ENV=1 and HERDR_PANE_ID=w4:p7 are set".to_string()))
+        );
+        // Additive key: it lands after the three pre-tmux keys, which keep
+        // their order and their values.
+        let keys: Vec<&str> = herdr.keys().map(String::as_str).collect();
+        assert_eq!(keys, vec!["ready", "reason", "pane_id", "kind"]);
     }
 
     #[test]
