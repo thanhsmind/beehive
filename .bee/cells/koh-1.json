@@ -3,7 +3,7 @@
   "feature": "knowledge-one-home",
   "title": "Accept and emit owns.* and applied_at frontmatter keys",
   "lane": "standard",
-  "status": "claimed",
+  "status": "capped",
   "deps": [],
   "decisions": [
     "D4"
@@ -45,17 +45,36 @@
   },
   "trace": {
     "worker": "w-koh-1",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "Accept and emit owns.* and applied_at frontmatter keys under bee: block",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+      "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+    ],
+    "deviations": [
+      "worker commit lacked the cell trailer; orchestrator amended it in place"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-22T04:28:55.659Z",
     "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "81f21058-e64e-4f81-b593-96583f6c9d41",
-    "claimed_at": "2026-08-22T04:21:30.761Z"
+    "claimed_at": "2026-08-22T04:21:30.761Z",
+    "report": {
+      "outcome": "Accept and emit owns.* and applied_at frontmatter keys under bee: block",
+      "commit": "2baaf3ea",
+      "files": [
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/frame.rs",
+        "packages/bee-rs/crates/bee/src/verbs/knowledge/tests.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee knowledge — green — 99 passed 0 failed, knowledge module is the touched scope",
+      "deviations": [
+        "worker commit lacked the cell trailer; orchestrator amended it in place"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   },
   "tier": "generation"
 }

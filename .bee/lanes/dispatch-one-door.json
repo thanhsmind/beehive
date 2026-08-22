@@ -16,8 +16,8 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "The worker forgot the cell trailer on its commit. I use the guard's own recipe to fix the message without touching the shared index.",
-    "asked_at": "2026-08-22T04:17:33.844Z",
+    "subject": "One test is red. I check if it is ours or already red on main.",
+    "asked_at": "2026-08-22T04:28:55.043Z",
     "session": "183cb71e-55d3-47c9-8dae-9225ec998bbf"
   },
   "route": {

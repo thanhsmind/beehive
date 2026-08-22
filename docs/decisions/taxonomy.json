@@ -392,6 +392,9 @@
     "pane-layout",
     "ergonomics",
     "refusals",
-    "cli-flags"
+    "cli-flags",
+    "skill-sync",
+    "cap",
+    "preamble"
   ]
 }

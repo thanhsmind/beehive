@@ -31,19 +31,42 @@
     "D2"
   ],
   "deps": [],
-  "status": "claimed",
+  "status": "capped",
   "trace": {
     "worker": "w-ddu-2",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "Preamble and compaction capsule render a Dispatch door block with the prepare command and resolved claude tier slots via a model_guard helper",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+      "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+      "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+      "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+    ],
+    "deviations": [
+      "worker committed without the cell trailer and did not run cells finish; orchestrator rewrote the trailer via commit-tree and capped"
+    ],
     "friction": null,
-    "capped_at": null,
-    "behavior_change": false,
+    "capped_at": "2026-08-22T04:27:38.403Z",
+    "behavior_change": true,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "374324c6-7065-4c42-8897-a86870abcf6c",
-    "claimed_at": "2026-08-22T04:15:45.925Z"
+    "claimed_at": "2026-08-22T04:15:45.925Z",
+    "report": {
+      "outcome": "Dispatch door block rendered in preamble and compaction",
+      "commit": "37f3cc38",
+      "files": [
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/budget.rs",
+        "packages/bee-rs/crates/bee/src/hooks/session_preamble/tests.rs",
+        "packages/bee-rs/crates/bee/src/hooks/compaction.rs",
+        "packages/bee-rs/crates/bee/src/hooks/model_guard.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml session_preamble — green (49 passed) — touched preamble, compaction and model_guard helper",
+      "deviations": [
+        "worker committed without the cell trailer and did not run cells finish; orchestrator rewrote the trailer via commit-tree and capped"
+      ]
+    },
+    "warnings": [],
+    "tests": "boundary"
   }
 }
