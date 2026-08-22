@@ -11,10 +11,15 @@
     "uat": false
   },
   "summary": "Feature \"tmux-herding-transport\" started at phase \"exploring\" (lane).",
-  "next_action": "bee close --feature tmux-herding-transport",
+  "next_action": "Merged into main at e050f96; reload the product and test \"tmux-herding-transport\", then either approve uat (\"bee gate --name uat --approved true --lane tmux-herding-transport\") or fix it in the worktree and merge again.",
   "created_at": "2026-08-22T16:19:55.642Z",
   "run_state": "awaiting-approval",
-  "waiting_on": null,
+  "waiting_on": {
+    "kind": "gate",
+    "subject": "uat: tmux-herding-transport",
+    "asked_at": "2026-08-22T17:23:20.125Z",
+    "session": "bee-worktree-merge-sessionless"
+  },
   "route": {
     "class": "feature",
     "lane": "standard",
@@ -26,16 +31,6 @@
     "rationale": null,
     "updated_at": "2026-08-22T16:38:01.248Z",
     "feature": "tmux-herding-transport"
-  },
-  "merge_ready": {
-    "since": "2026-08-22T17:16:53.395Z",
-    "branch": "wt/tmux-herding-transport",
-    "worktree_id": "beehive--wt--tmux-herding-transport",
-    "uat": "pending",
-    "blocked_by": [
-      "routing",
-      "doc-deferral"
-    ]
   },
   "last_scribing_run": {
     "feature": "tmux-herding-transport",
