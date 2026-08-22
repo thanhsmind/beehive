@@ -10,6 +10,11 @@ use crate::lock;
 use crate::registry::check_manifest_drift;
 use crate::roots::{resolve_store_root, resolve_store_root_worktree, Roots, RootsWt};
 use crate::state as bstate;
+// dol-1: the ONE rendering of a deviation entry, borrowed from the reader
+// that mines them (`verbs/knowledge/promote.rs`) rather than copied — two
+// copies of those match arms would drift, and the cap's dedup must agree
+// with the miner's own idea of what counts as the same deviation.
+use crate::verbs::knowledge::deviation_text;
 use crate::verbs::reservations as rsv;
 use crate::verbs::reservations::{Err2, FlagV, Out, R2};
 use crate::verbs::{emit_no_root_error, emit_unsupported_root, record_timing};
@@ -79,8 +84,12 @@ pub(crate) struct CapFlags {
     pub(crate) deviations: Vec<Value>,
     /// frd-1: `--deviation "<one line>"`, RAW (untrimmed) — `None` = not
     /// passed. Validated (refused if it trims to empty) and trimmed at cap
-    /// time in `cap_cell_from_flags`, then appended to `deviations` above so
-    /// `trace.deviations` carries it into the pattern-candidate mining
+    /// time in `cap_cell_from_flags`, then appended to `deviations` above.
+    /// dol-1: this flag is for a deviation the ORCHESTRATOR observed and
+    /// the worker did NOT report — a worker's own structured deviations
+    /// (`--report`'s `deviations` array) are merged into `trace.deviations`
+    /// by `cap_cell_from_flags` itself, so nobody re-types a report line
+    /// here to get it into the pattern-candidate mining
     /// `verbs/knowledge/promote.rs` reads. The flag parser (`rsv::Flags`,
     /// mirroring `--did` on `capture add`) is single-value — a repeated
     /// `--deviation` keeps only the LAST occurrence — so this carries one
@@ -364,6 +373,47 @@ pub(crate) fn cap_cell_from_flags(root: &Path, f: &CapFlags, finish: bool) -> MR
             let trimmed = js_trim(raw);
             if !trimmed.is_empty() {
                 deviations.push(Value::String(trimmed.to_string()));
+            }
+        }
+        // dol-1: last, the worker's OWN structured deviations — the
+        // `deviations` array of the validated `--report` object below.
+        // `parse_report_flag` already proved it is an array, so this reads
+        // it, never re-validates or re-parses the raw flag. A deviation the
+        // worker recorded structurally used to reach only `trace.report`,
+        // which `bee knowledge promote` never reads (it mines
+        // `trace.deviations` alone), so the lesson stayed invisible until
+        // someone hand-copied it into `--deviation`. This is a UNION, never
+        // a move: `trace.report` keeps its verbatim copy (D8, below).
+        //
+        // The two sources stay SYMMETRIC. A string entry is trimmed and an
+        // empty one dropped, exactly as `--deviation` above; anything else
+        // passes through VERBATIM, exactly as a `--deviations-file` entry
+        // already does. Mining reads a non-string entry fine — knowledge's
+        // own `deviation_text` has a first-class `{type, description}` arm,
+        // and a live cell already carries that shape from a deviations-file
+        // — so skipping one here would leave this cell's own defect alive
+        // in one branch: dropped silently on the report side, mined on the
+        // file side. Tolerated rather than refused, because a refusal would
+        // block a cap mid-flight over a shape that has never occurred.
+        // Dedup is by that same `deviation_text` rendering rather than raw
+        // equality, so an object and the string it renders to count as ONE
+        // deviation; the earlier source keeps its place and its form.
+        if let Some(Value::Array(reported)) = report_value.get("deviations") {
+            for entry in reported {
+                let candidate = match entry {
+                    Value::String(raw) => {
+                        let trimmed = js_trim(raw);
+                        if trimmed.is_empty() {
+                            continue;
+                        }
+                        Value::String(trimmed.to_string())
+                    }
+                    other => other.clone(),
+                };
+                let text = deviation_text(&candidate);
+                if !deviations.iter().any(|d| deviation_text(d) == text) {
+                    deviations.push(candidate);
+                }
             }
         }
         trace.insert("deviations".into(), Value::Array(deviations));
