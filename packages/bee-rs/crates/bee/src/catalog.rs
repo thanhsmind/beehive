@@ -446,7 +446,20 @@ mod tests {
         // specific other escapes (judge rework, execution worker dispatch,
         // commit trailer); none carries "reason for sync door divergence" —
         // `--sync-ack` is new.
-        const PINNED_FLAG_COUNT: usize = 179;
+        // 179 -> 180 (knowledge-one-home koh-8): `state.plan-conflicts.derive`
+        // and `state.plan-conflicts.verdict` land D5's plan-time conflict
+        // check. Checked first: `--lane`/`--no-lane`/`--json` are the lane
+        // selector every other state mutation already spells this way,
+        // `--id` names a bee entity's id exactly as it does on cells/
+        // decisions/triggers, and `--note` already means "free text stored
+        // beside a recorded fact" (cells.block/drop, perf.stop/section) —
+        // all four reused unchanged, no count cost. `--verdict` is the one
+        // new spelling: no existing flag names a recorded judgement over a
+        // prior decision, and the closest neighbours are different concepts
+        // (`--outcome` is a worker's own result line, `--relation` is a
+        // decision's structural link to another, `--reason` is retrospective
+        // why-text). `--verdict` is new.
+        const PINNED_FLAG_COUNT: usize = 180;
 
         let names: std::collections::BTreeSet<&str> =
             entries().iter().flat_map(|e| e.properties.keys()).map(String::as_str).collect();

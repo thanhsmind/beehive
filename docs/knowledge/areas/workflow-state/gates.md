@@ -398,6 +398,36 @@ a malformed record has earned none.
   actor is refused outright, so the approval can only carry the user's own
   word. It becomes visible in the preamble only once the execution gate is
   approved.
+- R136 — Plan-time conflict candidates are DERIVED, never guessed, and they
+  live on the workflow record beside `plan_rev` as
+  `conflict_review: {plan_rev, derived_at, candidates: [{id, kind, title,
+  verdict, note}]}` (knowledge-one-home D5, cell koh-8, 2026-08-22).
+  `bee state plan-conflicts derive` builds the candidate list from the
+  feature's own open and capped cells — their titles plus the stems of every
+  path in `files`, `affects_skills` and `affects_specs` — and selects two
+  kinds against it: every ACTIVE decision the `decisions log` conflict-hint
+  scorer picks, widened to every decision scoring two or more term hits, and
+  every homed knowledge rule whose home or `applied_at` patterns intersect
+  those same paths. The verb is lane-targeted and takes the same two locks in
+  the same order `plan-rev bump` takes; resolution landing on the default
+  (non-lane) record is refused, because `conflict_review` is as
+  lane-scoped as `plan_rev` itself. The field is seeded ABSENT: a record that
+  was never derived against carries no field at all, which is a different
+  fact from a record that was derived and came back empty. Zero candidates is
+  a valid derive, and it is the ONLY state in which "0 conflicts" is a true
+  statement about a plan revision.
+- R137 — Each derived candidate carries exactly one recorded verdict out of a
+  closed three: `compatible`, `conflicts`, or `retires-prior`
+  (knowledge-one-home D5, cell koh-8, 2026-08-22). `bee state plan-conflicts
+  verdict --id <candidate> --verdict <value> [--note <text>]` sets one
+  candidate and leaves every other candidate — and the derived list itself —
+  as it stands; an id no candidate carries, or a value outside the three, is
+  refused by name and writes nothing. Re-deriving REPLACES the whole list
+  rather than patching it, which is how a re-derive (and therefore a
+  `plan-rev bump` followed by one) clears every verdict already recorded. A
+  recorded `conflicts` verdict does not refuse anything by itself — it is a
+  contradiction taken on with eyes open, and the `--note` is where the prior
+  id a `retires-prior` verdict replaces is named.
 - R104 — An approvals map merges over the gate defaults only when it is stored as
   an object; every other shape yields the defaults untouched, and no shape is
   read partially or refused (js-parity-cleanup D2, cell jp-4, 2026-08-04).
@@ -691,6 +721,22 @@ a malformed record has earned none.
   `docs/history/<slug>/promote-proposals.md`. Evidence: trace
   `.bee/cells/kl-3.json`, commit `384587a1`; trace `.bee/cells/kl-5.json`,
   commit `c8d25dff`.
+- Plan-time conflict check (R136/R137, knowledge-one-home D5):
+  `packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs` — the
+  two handlers plus `derive_candidates` / `build_conflict_review` /
+  `apply_conflict_verdict`, routed from `set_gate.rs`'s `try_native` table
+  beside `plan-rev bump` and sharing its lock order verbatim. Nothing here is
+  a new scorer: it calls `decisions::read`'s own `conflict_candidates` and
+  `count_term_hits` for the decision half and
+  `knowledge::ownership::load_ownership` + `matches_owned` for the rule half.
+  The record field is documented beside `plan_rev` in
+  `verbs/workflow_store/record.rs` (`base_workflow_defaults`), deliberately
+  unseeded. Help text for both spellings lives in
+  `src/generated/registry_payload.json` (hand-edited — no generator exists in
+  this repo, decision `3358743e`), with `catalog.rs`'s `PINNED_FLAG_COUNT` at
+  180 for the one new flag name `--verdict`. Proof: the six
+  `plan-conflicts` rows in `verbs/state_group/tests.rs`, plus
+  `tests/registry_contracts.rs` and `tests/registry_dispatch.rs`.
 - Approvals-map shape coercion (B53/R104): `spread_gates` in
   `packages/bee-rs/crates/bee/src/state.rs:100-121` — one match arm for an
   object, one wildcard arm returning `default_gates()`; re-exported for

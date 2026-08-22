@@ -2515,3 +2515,241 @@ use std::time::Instant;
             "must never use the old bare-release wording: {message}"
         );
     }
+
+    // ═══ state plan-conflicts derive / verdict (D5, koh-8) ══════════════════
+    //
+    // Red-first against `derive_candidates` / `apply_conflict_verdict`: the
+    // handlers themselves are the plan-rev-bump transaction verbatim (peek,
+    // two locks, strict resolve, re-check, patch, rebuild), already covered by
+    // that verb's own rows. What is NEW here is the candidate rule and the
+    // verdict record, so that is what these fixtures pin.
+
+    fn write_plan_cell(root: &Path, id: &str, body: Value) {
+        let dir = root.join(".bee").join("cells");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(format!("{id}.json")), serde_json::to_string(&body).unwrap())
+            .unwrap();
+    }
+
+    /// Two decide events: one whose text shares several of the plan's terms,
+    /// one that shares none.
+    fn write_decisions_fixture(root: &Path) {
+        std::fs::create_dir_all(root.join(".bee")).unwrap();
+        let lines = [
+            serde_json::to_string(&json!({
+                "type": "decide", "id": "dec-match", "date": "2026-08-01",
+                "decision": "Conflict candidates are derived at plan time, never first at cap.",
+                "tags": []
+            }))
+            .unwrap(),
+            serde_json::to_string(&json!({
+                "type": "decide", "id": "dec-miss", "date": "2026-08-02",
+                "decision": "Ship the binaries from CI, never from a laptop.",
+                "tags": []
+            }))
+            .unwrap(),
+        ];
+        std::fs::write(root.join(".bee").join("decisions.jsonl"), lines.join("\n") + "\n").unwrap();
+    }
+
+    /// One homed rule whose `applied_at` glob covers the state_group source
+    /// tree — the same intersection D5 means by "touched path → rules homed
+    /// there".
+    fn write_rule_home_fixture(root: &Path) {
+        let mut data = Map::new();
+        data.insert("type".into(), json!("bee.area"));
+        data.insert("title".into(), json!("Plan conflict rule"));
+        data.insert("description".into(), json!("A fixture rule home"));
+        data.insert("tags".into(), json!(["demo"]));
+        data.insert("timestamp".into(), json!("2026-08-01"));
+        let mut bee = Map::new();
+        bee.insert("id".into(), json!("koh-rule-home"));
+        bee.insert("lifecycle".into(), json!("active"));
+        bee.insert("areas".into(), json!(["workflow-state"]));
+        bee.insert("required_context".into(), json!([]));
+        bee.insert("decisions".into(), json!([]));
+        bee.insert("sources".into(), json!([]));
+        bee.insert(
+            "applied_at".into(),
+            json!(["packages/bee-rs/crates/bee/src/verbs/state_group/**"]),
+        );
+        data.insert("bee".into(), Value::Object(bee));
+        let text = format!(
+            "{}\n# Plan conflict rule\n\n<!-- rule: koh-plan-conflicts -->\nThe rule body.\n<!-- /rule -->\n",
+            crate::verbs::knowledge::emit_frontmatter(&data).unwrap()
+        );
+        let file = root
+            .join("docs")
+            .join("knowledge")
+            .join("areas")
+            .join("workflow-state")
+            .join("token.md");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(file, text).unwrap();
+    }
+
+    /// The cell whose title and paths DO select both fixtures above.
+    fn write_matching_cell(root: &Path) {
+        write_plan_cell(
+            root,
+            "koh-demo",
+            json!({
+                "id": "koh-demo", "feature": "f1", "status": "open",
+                "title": "Derive plan conflict candidates",
+                "files": ["packages/bee-rs/crates/bee/src/verbs/state_group/plan_conflicts.rs"],
+                "affects_skills": [],
+                "affects_specs": ["docs/knowledge/areas/workflow-state/gates.md"]
+            }),
+        );
+    }
+
+    #[test]
+    fn derive_yields_one_null_verdict_candidate_per_matching_decision_and_rule_home() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+
+        let candidates = ok(derive_candidates(root, "f1"));
+        let ids: Vec<String> = candidates.iter().map(|c| js_disp_opt(jget(c, "id"))).collect();
+        assert_eq!(
+            ids,
+            vec!["dec-match".to_string(), "koh-plan-conflicts".to_string()],
+            "exactly the matching decision and the matching rule home: {}",
+            jsjson::stringify(&Value::Array(candidates.clone()))
+        );
+        assert_eq!(candidates[0]["kind"], json!("decision"));
+        assert_eq!(candidates[1]["kind"], json!("rule"));
+        for c in &candidates {
+            assert_eq!(c["verdict"], Value::Null, "a fresh candidate carries no verdict");
+            assert_eq!(c["note"], Value::Null);
+        }
+
+        // The field really lands on the workflow record beside plan_rev.
+        write_workflow(
+            root,
+            "wf-1",
+            json!({"id":"wf-1","feature":"f1","status":"active","phase":"planning","plan_rev":3,
+                   "created_at":"2026-01-01T00:00:00.000Z"}),
+        );
+        let review = build_conflict_review(json!(3), candidates, "2026-08-22T00:00:00.000Z");
+        ok(update_workflow_assuming_lock_with(root, "wf-1", |_| {
+            let mut patch = Map::new();
+            patch.insert("conflict_review".into(), review.clone());
+            Ok(patch)
+        }));
+        let stored = read_workflow_file(root, "wf-1");
+        assert_eq!(stored["conflict_review"]["plan_rev"], json!(3));
+        assert_eq!(stored["conflict_review"]["candidates"].as_array().unwrap().len(), 2);
+    }
+
+    /// D5's only true "0 conflicts": bee looked and returned nothing.
+    #[test]
+    fn derive_yields_an_empty_list_when_nothing_matches() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+        write_plan_cell(
+            root,
+            "koh-other",
+            json!({
+                "id": "koh-other", "feature": "f1", "status": "open",
+                "title": "Rename the installer banner",
+                "files": ["scripts/install.sh"],
+                "affects_skills": [], "affects_specs": []
+            }),
+        );
+
+        let candidates = ok(derive_candidates(root, "f1"));
+        assert!(
+            candidates.is_empty(),
+            "nothing in the plan touches either fixture: {}",
+            jsjson::stringify(&Value::Array(candidates.clone()))
+        );
+    }
+
+    #[test]
+    fn a_verdict_sets_exactly_one_candidate_and_leaves_the_rest_null() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+
+        let candidates = ok(derive_candidates(root, "f1"));
+        let mut review = build_conflict_review(json!(1), candidates, "2026-08-22T00:00:00.000Z");
+        apply_conflict_verdict(&mut review, "dec-match", "retires-prior", Some("supersedes dec-old"))
+            .expect("a derived id must be settable");
+
+        let rows = review["candidates"].as_array().unwrap();
+        assert_eq!(rows[0]["verdict"], json!("retires-prior"));
+        assert_eq!(rows[0]["note"], json!("supersedes dec-old"));
+        assert_eq!(rows[1]["verdict"], Value::Null, "the other candidate is untouched");
+        assert_eq!(rows[1]["note"], Value::Null);
+    }
+
+    /// "plan-rev bump resets the verdicts" (D5) is enforced by REBUILDING the
+    /// list, never by patching it: a re-derive hands back fresh null rows.
+    #[test]
+    fn re_deriving_replaces_the_list_and_clears_every_verdict() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+
+        let mut review = build_conflict_review(
+            json!(1),
+            ok(derive_candidates(root, "f1")),
+            "2026-08-22T00:00:00.000Z",
+        );
+        apply_conflict_verdict(&mut review, "dec-match", "compatible", None).unwrap();
+        apply_conflict_verdict(&mut review, "koh-plan-conflicts", "conflicts", None).unwrap();
+        assert!(review["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c["verdict"] != Value::Null));
+
+        let fresh = build_conflict_review(
+            json!(2),
+            ok(derive_candidates(root, "f1")),
+            "2026-08-22T01:00:00.000Z",
+        );
+        assert_eq!(fresh["plan_rev"], json!(2));
+        assert!(
+            fresh["candidates"].as_array().unwrap().iter().all(|c| c["verdict"] == Value::Null),
+            "a re-derive clears every verdict: {}",
+            jsjson::stringify(&fresh)
+        );
+    }
+
+    #[test]
+    fn an_unknown_candidate_id_refuses_by_name_and_changes_nothing() {
+        let tmp = tmp_root();
+        let root = tmp.path();
+        write_matching_cell(root);
+        write_decisions_fixture(root);
+        write_rule_home_fixture(root);
+
+        let mut review = build_conflict_review(
+            json!(1),
+            ok(derive_candidates(root, "f1")),
+            "2026-08-22T00:00:00.000Z",
+        );
+        let before = jsjson::stringify(&review);
+        let message = apply_conflict_verdict(&mut review, "not-a-candidate", "compatible", None)
+            .expect_err("an unknown id must refuse");
+        assert!(message.contains("not-a-candidate"), "message: {message}");
+        assert!(message.contains("dec-match"), "the refusal lists what IS known: {message}");
+        assert_eq!(jsjson::stringify(&review), before, "a refusal writes nothing");
+    }
+
+    /// The verdict vocabulary is closed — the registry's own enum and the
+    /// refusal text both read from this one list.
+    #[test]
+    fn the_verdict_vocabulary_is_exactly_three_values() {
+        assert_eq!(CONFLICT_VERDICTS, ["compatible", "conflicts", "retires-prior"]);
+    }
