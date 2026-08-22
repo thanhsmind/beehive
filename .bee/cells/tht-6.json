@@ -3,7 +3,7 @@
   "feature": "tmux-herding-transport",
   "title": "Document the tmux transport in the skill, the config sample, and the knowledge bundle",
   "lane": "standard",
-  "status": "open",
+  "status": "capped",
   "deps": [
     "tht-4",
     "tht-5"
@@ -58,16 +58,60 @@
     ]
   },
   "trace": {
-    "worker": null,
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "worker": "w-tht-6",
+    "outcome": "tmux transport documented: herding.transport plus every herding.tmux.* knob in the invariants reference and the annotated sample, a D1-D4 Transport section with the D5 source on the run-verb page, and the herdr-cli dependency reason split by transport",
+    "files_changed": [
+      "skills/bee-herding/SKILL.md",
+      "skills/bee-herding/references/operational-invariants.md",
+      ".bee/config-sample.json",
+      "docs/knowledge/areas/bee-herding/overview.md",
+      "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+      "docs/history/codex-harness-hardening/release-manifest.json"
+    ],
+    "deviations": [
+      "bee dev regen rewrote 15 paths outside the cell files list (the five rendered skill trees plus .bee/onboarding.json timestamp); reserved each under w-tht-6 before committing them with the cell",
+      "added tmux-herding-transport D1-D4 to the run-verb page frontmatter decisions as well as D5 to sources — the new section states those four decisions, so the page must declare them"
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-22T17:16:53.364Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
-    "claim_session": null
-  }
+    "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
+    "claimed_at": "2026-08-22T17:11:23.582Z",
+    "report": {
+      "outcome": "tmux transport documented: herding.transport plus every herding.tmux.* knob in the invariants reference and the annotated sample, a D1-D4 Transport section with the D5 source on the run-verb page, and the herdr-cli dependency reason split by transport",
+      "commit": "fc1d12c701ab3f9296601a069bbeee028fd6c0b2",
+      "files": [
+        "skills/bee-herding/SKILL.md",
+        "skills/bee-herding/references/operational-invariants.md",
+        ".bee/config-sample.json",
+        "docs/knowledge/areas/bee-herding/overview.md",
+        "docs/knowledge/areas/bee-herding/the-run-verb-and-worker-outcomes.md",
+        "docs/history/codex-harness-hardening/release-manifest.json",
+        ".bee/onboarding.json",
+        ".agents/skills/bee-herding/SKILL.md",
+        ".agents/skills/bee-herding/references/operational-invariants.md",
+        ".claude/skills/bee-herding/SKILL.md",
+        ".claude/skills/bee-herding/references/operational-invariants.md",
+        ".claude-plugin/skills/bee-herding/SKILL.md",
+        ".claude-plugin/skills/bee-herding/references/operational-invariants.md",
+        ".codex-plugin/skills/bee-herding/SKILL.md",
+        ".codex-plugin/skills/bee-herding/references/operational-invariants.md",
+        ".opencode/skills/bee-herding/SKILL.md",
+        ".opencode/skills/bee-herding/references/operational-invariants.md"
+      ],
+      "tests": ".bee/bin/bee knowledge check && .bee/bin/bee knowledge index --check && .bee/bin/bee dev release-manifest --check — green (0 OKF errors, 0 stale indexes, 270 files match the stored manifest) — docs-only cell: parity and pointer checks over the knowledge bundle and the regenerated skill manifest are the proof this change type needs",
+      "deviations": [
+        "bee dev regen rewrote 15 paths outside the cell files list (the five rendered skill trees plus .bee/onboarding.json timestamp); reserved each under w-tht-6 before committing them with the cell",
+        "added tmux-herding-transport D1-D4 to the run-verb page frontmatter decisions as well as D5 to sources — the new section states those four decisions, so the page must declare them"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 560 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
+  },
+  "tier": "generation"
 }

@@ -84,7 +84,64 @@
       ]
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1-absent-key-herdr-arm-unchanged-plus-kind",
+            "name": "With herding.transport absent the herdr keys and reason strings are unchanged and transport.kind is herdr",
+            "status": "PASS",
+            "evidence": "herding.rs:117-144 the herdr match arms carry the pre-tmux string literals verbatim; herding.rs:171-178 keeps ready, reason, pane_id and then appends kind. Live run of bee herding status json against a temp main-root with an empty config, TMUX and TMUX_PANE=%3 exported: transport ready true, reason HERDR_ENV=1 and HERDR_PANE_ID=w4:p5 are set, pane_id w4:p5, kind herdr. Unit herding::tests::transport_state_carries_the_kind_on_the_herdr_arm_too pins key order ready, reason, pane_id, kind."
+          },
+          {
+            "id": "truth-2-tmux-arm-ready-names-the-pane",
+            "name": "With herding.transport tmux and both vars set the status is ready and names the pane",
+            "status": "PASS",
+            "evidence": "Live run with config herding.transport=tmux and TMUX_PANE=%3: transport ready true, reason TMUX and TMUX_PANE=%3 are set, pane_id %3, kind tmux. Units herding::tests::transport_state_for_tmux_reads_only_the_tmux_vars and verbs::drivers::tests::transport_probe_tmux_arm_reports_ready_when_both_vars_set."
+          },
+          {
+            "id": "truth-3-illegal-value-not-ready-in-both-surfaces",
+            "name": "An illegal value surfaces as not ready in status and in dispatch prepare with a reason naming both legal values",
+            "status": "PASS",
+            "evidence": "Live run with herding.transport=nope: transport ready false, reason herding.transport is nope - the only legal values are herdr and tmux, pane_id null, kind null, exit 0, no panic; arm at herding.rs:193-203. prepare.rs:494-497 maps the same Err to (false, reason, None); unit verbs::drivers::tests::transport_payload_reports_not_ready_on_an_unknown_transport_value."
+          },
+          {
+            "id": "prohibition-no-auto-detect-d1",
+            "name": "No auto-detect: with the key absent the TMUX vars are never consulted (D1)",
+            "status": "PASS",
+            "evidence": "herding.rs:118-144 the Herdr arm reads only HERDR_ENV and HERDR_PANE_ID; the kind comes from transport_kind_at over config.json, never from the environment. The absent-key live run above had TMUX and TMUX_PANE exported and ignored; unit verbs::drivers::tests::transport_probe_herdr_arm_never_reads_the_tmux_vars."
+          },
+          {
+            "id": "prohibition-existing-probe-tests-not-edited",
+            "name": "Existing probe tests are not edited",
+            "status": "PASS",
+            "evidence": "In commit 3897dad3 both test hunks are pure additions: herding.rs at old line 929 and verbs/drivers/tests.rs at old line 1320 carry zero removed lines; every removal in the commit sits inside the two probe function bodies. herding::tests::transport_state_probe_with_both_env_states and verbs::drivers::tests::herding_transport_probe_reports_ready_when_both_vars_set still pass unedited."
+          },
+          {
+            "id": "key-links-call-sites-pass-the-configured-kind",
+            "name": "Both production call sites pass the kind from transport_kind_at",
+            "status": "PASS",
+            "evidence": "herding.rs:188-194 transport_state(explicit) resolves the main root with resolve_main_root(explicit), the same resolution enable_marker_state uses at herding.rs:519, then transport_kind_at then transport_state_for; prepare.rs:494 matches transport_kind_at(root) into herding_transport_probe_for."
+          },
+          {
+            "id": "proof-verify-command-green",
+            "name": "Cell verify command re-run by the judge",
+            "status": "PASS",
+            "evidence": "cargo test release -p bee filter transport_ printed test result: ok. 20 passed; 0 failed; 2476 filtered out."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-22T17:20:36.194Z"
+      }
+    ]
   },
   "tier": "generation"
 }

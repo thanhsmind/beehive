@@ -3,7 +3,7 @@
   "feature": "tmux-herding-transport",
   "title": "Build herding/tmux.rs: RealTmux implementing PaneTransport with a screen classifier",
   "lane": "standard",
-  "status": "claimed",
+  "status": "capped",
   "deps": [
     "tht-2"
   ],
@@ -52,17 +52,44 @@
   },
   "trace": {
     "worker": "w-tht-3",
-    "outcome": null,
-    "files_changed": [],
-    "deviations": [],
+    "outcome": "RealTmux implements PaneTransport over tmux verbs with a screen classifier and stub-tmux tests",
+    "files_changed": [
+      "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+      "packages/bee-rs/crates/bee/src/herding.rs"
+    ],
+    "deviations": [
+      "process_info format gained a leading #{pane_id} field: list-panes -t <pane> resolves to the pane WINDOW and lists every pane in it, so the cell's three-field format could not tell the target row from a sibling worker's",
+      "agent_prompt preflights the pane and refuses a blocked screen before typing — the cell did not name it, D3's prohibition (no key into a dialog) requires it",
+      "pane_split falls open to tmux's default even split when the parent geometry cannot be read, rather than failing the spawn",
+      "sync-ack: skills/bee-herding docs land in tht-6, the slice's dedicated sync cell; this cell adds an unwired module only. In-module tests are required, not skipped: crates/bee is a binary crate with no lib target, so no tests/ path can reach these items."
+    ],
     "friction": null,
-    "capped_at": null,
+    "capped_at": "2026-08-22T17:04:40.551Z",
     "behavior_change": false,
     "verification_evidence": null,
     "verify_output": null,
     "verify_passed": null,
     "claim_session": "6462a2f6-395a-468b-a50d-9af405debe2c",
-    "claimed_at": "2026-08-22T16:47:45.657Z"
+    "claimed_at": "2026-08-22T16:47:45.657Z",
+    "sync_ack": "skills/bee-herding docs land in tht-6, the slice's dedicated sync cell; this cell adds an unwired module only. In-module tests are required, not skipped: crates/bee is a binary crate with no lib target, so no tests/ path can reach these items.",
+    "report": {
+      "outcome": "RealTmux implements PaneTransport over tmux verbs with a screen classifier and stub-tmux tests",
+      "commit": "7d05b92",
+      "files": [
+        "packages/bee-rs/crates/bee/src/herding/tmux.rs",
+        "packages/bee-rs/crates/bee/src/herding.rs"
+      ],
+      "tests": "cargo test --release --manifest-path packages/bee-rs/Cargo.toml -p bee herding — green (30 tmux tests; 357 across herding) — the cell adds one module and one mod declaration, so the herding module is the whole blast radius",
+      "deviations": [
+        "process_info format gained a leading #{pane_id} field: list-panes -t <pane> resolves to the pane WINDOW and lists every pane in it, so the cell's three-field format could not tell the target row from a sibling worker's",
+        "agent_prompt preflights the pane and refuses a blocked screen before typing — the cell did not name it, D3's prohibition (no key into a dialog) requires it",
+        "pane_split falls open to tmux's default even split when the parent geometry cannot be read, rather than failing the spawn"
+      ]
+    },
+    "warnings": [
+      "advisory: this cap's commit changes 1356 line(s) (over the 150-line finish.advisory_untested_lines threshold) but touches no test-shaped path — consider adding test coverage."
+    ],
+    "tests": "boundary"
   },
   "tier": "generation"
 }

@@ -16,9 +16,9 @@
   "run_state": "awaiting-approval",
   "waiting_on": {
     "kind": "turn-end",
-    "subject": "All five decisions are logged. Now the context record.",
-    "asked_at": "2026-08-22T16:21:05.405Z",
-    "session": "6462a2f6-395a-468b-a50d-9af405debe2c"
+    "subject": "Nothing. Say **\"flush\"** when you want the 5 stubs folded into the knowledge docs.",
+    "asked_at": "2026-08-22T17:05:33.285Z",
+    "session": "48e1abb8-07f6-4058-8db3-383af16fba58"
   },
   "route": {
     "class": "feature",

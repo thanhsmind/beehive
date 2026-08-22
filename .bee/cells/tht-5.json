@@ -69,7 +69,70 @@
       "deviations": []
     },
     "warnings": [],
-    "tests": "boundary"
+    "tests": "boundary",
+    "semantic_judge": [
+      {
+        "schema": "judge-verdict/1",
+        "verdict": "PASS",
+        "checks": [
+          {
+            "id": "truth-1-tmux-pane-recorded",
+            "name": "Inside a tmux pane with no HERDR_PANE_ID the record carries pane and pane_transport tmux",
+            "status": "PASS",
+            "evidence": "activity.rs:286-293 pane_from_env walks [(herdr, HERDR_PANE_ID), (tmux, TMUX_PANE)] and returns the first non-blank value, trimmed; activity.rs:257-260 writes pane and then pane_transport. Unit hooks::activity::tests::activity_pane_reads_tmux_when_only_tmux_names_a_pane returns (tmux, %5)."
+          },
+          {
+            "id": "truth-2-herdr-record-unchanged-plus-additive-key",
+            "name": "Inside herdr the record is unchanged except the additive pane_transport herdr",
+            "status": "PASS",
+            "evidence": "The pane value is still HERDR_PANE_ID trimmed with the same blank filter (activity.rs:286-291); the only new key is pane_transport at activity.rs:259. Unit hooks::activity::tests::activity_pane_prefers_herdr_when_both_transports_name_a_pane returns (herdr, herdr-3) while TMUX_PANE is also set, so HERDR wins. hooks::activity::tests::an_existing_record_keeps_its_own_fields still passes."
+          },
+          {
+            "id": "prohibition-no-config-read-in-the-hook",
+            "name": "No config read in the hook",
+            "status": "PASS",
+            "evidence": "pane_from_env takes a lookup closure over the environment only (activity.rs:286) and the call site passes std::env::var (activity.rs:257); commit c9f063bd adds no fs read, no config path and no transport_kind call to activity.rs. The doc comment at activity.rs:281-285 states it records identity and selects no transport."
+          },
+          {
+            "id": "prohibition-no-change-to-state-transition-logic",
+            "name": "No change to the state-transition logic",
+            "status": "PASS",
+            "evidence": "The activity.rs hunks are only the pane block at 257-260, the new pure fn at 281-293, and four added tests near line 819; sticky_suppresses, map_event and write_activity carry no changed lines."
+          },
+          {
+            "id": "key-link-writer-calls-pane-from-env",
+            "name": "The activity writer calls pane_from_env",
+            "status": "PASS",
+            "evidence": "activity.rs:257 - if let Some((transport, pane)) = pane_from_env(|key| std::env::var(key).ok())."
+          },
+          {
+            "id": "docs-field-list-updated",
+            "name": "The knowledge page enumerates the new field",
+            "status": "PASS",
+            "evidence": "docs/knowledge/areas/hook-runtime/agent-activity-record.md:67 adds the pane_transport row next to pane, stating it is present exactly when pane is and that it never selects a transport."
+          },
+          {
+            "id": "proof-verify-command-green",
+            "name": "Cell verify command re-run by the judge",
+            "status": "PASS",
+            "evidence": "cargo test release -p bee filter activity printed test result: ok. 37 passed; 0 failed, including the four activity_pane_* cases."
+          },
+          {
+            "id": "note-foreign-bytes-in-the-commit",
+            "name": "Advisory: the commit also carries 91 lines of herding/run.rs belonging to cell tht-2",
+            "status": "PASS",
+            "evidence": "Commit c9f063bd also touches packages/bee-rs/crates/bee/src/herding/run.rs (the Herdr to PaneTransport rename), a file outside tht-5 files list and absent from its trace files_changed. Disclosed, not hidden: commit ba3cd405 (cell tht-2) is an empty commit whose body records that a concurrent worker git add swept the file into c9f063bd. No tht-5 behavior is affected; the remedy is a trace record correction, not rework, so it is not scored as a cell failure."
+          }
+        ],
+        "failure_signature": null,
+        "fixability": "automatic",
+        "confidence": "high",
+        "builder_model": "opus",
+        "judge_model": "opus",
+        "model_independence": "same-model",
+        "recorded_at": "2026-08-22T17:20:36.202Z"
+      }
+    ]
   },
   "tier": "generation"
 }
