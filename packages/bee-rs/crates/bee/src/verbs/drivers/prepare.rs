@@ -44,6 +44,36 @@ pub(crate) fn purpose_is_gather(kind: &str) -> bool {
     kind != "cell"
 }
 
+pub(crate) fn is_cell_tier_configured(
+    models: &Map<String, Value>,
+    runtime: &str,
+    tier: &str,
+) -> bool {
+    if !CONFIGURABLE_SLOTS.contains(&tier) {
+        return false;
+    }
+    let rt = if RUNTIMES.contains(&runtime) { runtime } else { "claude" };
+    let table = models.get(rt);
+    if tier == "generation" {
+        if rt == "claude" {
+            table.and_then(|t| t.get("generation")).map(|v| !v.is_null()).unwrap_or(false)
+        } else {
+            true
+        }
+    } else if tier == "review" {
+        let review_val = table.and_then(|t| t.get("review"));
+        if review_val.map(|v| !v.is_null()).unwrap_or(false) {
+            true
+        } else if rt == "claude" {
+            table.and_then(|t| t.get("generation")).map(|v| !v.is_null()).unwrap_or(false)
+        } else {
+            true
+        }
+    } else {
+        table.and_then(|t| t.get(tier)).map(|v| !v.is_null()).unwrap_or(false)
+    }
+}
+
 pub(crate) struct Ownership {
     pub(crate) ok: bool,
     pub(crate) code: Option<&'static str>,
@@ -655,10 +685,24 @@ pub(crate) fn prepare_dispatch(
                 .map(|(_id, worktree_root)| (worktree_root, root.to_string_lossy().into_owned()))
         });
 
-    let tier_token = slot_for_kind(kind);
+    let (tier_token, tier_source) = if kind == "cell" {
+        match cell
+            .as_ref()
+            .and_then(|c| vget(c, "tier"))
+            .and_then(|v| match v {
+                Value::String(s) if !s.is_empty() => Some(s.as_str()),
+                _ => None,
+            })
+        {
+            Some(t) => (t, "cell"),
+            None => (slot_for_kind(kind), "default"),
+        }
+    } else {
+        (slot_for_kind(kind), "default")
+    };
     let models = read_models(root)?;
-    let resolved = if kind == "advisor" {
-        match resolve_advisor(&models, runtime) {
+    let (resolved, is_ceiling) = if kind == "advisor" {
+        let r = match resolve_advisor(&models, runtime) {
             Some(r) => r,
             None => {
                 let mut refusal = Map::new();
@@ -669,8 +713,22 @@ pub(crate) fn prepare_dispatch(
                 )));
                 return Ok(Prepared::Value(Value::Object(refusal)));
             }
-        }
+        };
+        (r, false)
+    } else if tier_token == "ceiling" {
+        (Resolved::Inherit, true)
     } else {
+        if tier_source == "cell" && !is_cell_tier_configured(&models, runtime, tier_token) {
+            let mut refusal = Map::new();
+            refusal.insert("ok".into(), Value::Bool(false));
+            refusal.insert("type".into(), Value::String("refused".into()));
+            refusal.insert("reason".into(), Value::String("tier_not_configured".into()));
+            refusal.insert("tier".into(), Value::String(tier_token.to_string()));
+            refusal.insert("fix".into(), Value::String(format!(
+                "set models.{runtime}.{tier_token} in .bee/config.json to configure this tier."
+            )));
+            return Ok(Prepared::Value(Value::Object(refusal)));
+        }
         let r = resolve_tier(&models, tier_token, runtime, kind);
         if let Resolved::Refused { slot } = &r {
             let mut refusal = Map::new();
@@ -681,7 +739,7 @@ pub(crate) fn prepare_dispatch(
             refusal.insert("fix".into(), Value::String(CLI_REFUSAL_FIX.into()));
             return Ok(Prepared::Value(Value::Object(refusal)));
         }
-        r
+        (r, false)
     };
 
     let prompt_body = match prompt_body_for(
@@ -751,174 +809,199 @@ pub(crate) fn prepare_dispatch(
     let mut extra_transport: Option<&str> = None;
     let mut extra_fallback_reason: Option<&str> = None;
 
-    match &resolved {
-        Resolved::Native { model, effort, fallback, agent_type, .. } => {
-            native_confirmed = classification == Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE);
-            if native_confirmed {
-                tool = "spawn_agent".into();
-                payload.insert(
-                    "agent_type".into(),
-                    Value::String(if agent_type.is_empty() {
-                        "worker".to_string()
-                    } else {
-                        agent_type.clone()
-                    }),
-                );
-                payload.insert(
-                    "message".into(),
-                    Value::String(format!("[bee-tier: {tier_token}]\n{prompt_body}")),
-                );
-                payload.insert("model".into(), Value::String(model.clone()));
-                payload.insert("fork_turns".into(), Value::String("none".into()));
-                if let Some(effort) = effort {
-                    payload.insert("reasoning_effort".into(), Value::String(effort.clone()));
-                }
-                channel = "codex-native".into();
-                extra_transport = Some("native-override");
-            } else if let Some(command) = fallback.as_ref().filter(|c| !c.is_empty()) {
-                // cli-exec: NO label field. This payload is `{command, stdin}`
-                // only — a recorded limit (dispatch-label-chokepoint plan.md
-                // "What this does not do"), not an oversight: no field exists
-                // on an external CLI-executor call to carry a subject.
-                tool = "Bash".into();
-                payload.insert("command".into(), Value::String(command.clone()));
-                payload.insert("stdin".into(), Value::String(prompt_body.clone()));
-                channel = "cli-exec".into();
-                extra_fallback_reason = Some("native_unavailable");
-            } else {
-                let mut r = Map::new();
-                r.insert("ok".into(), Value::Bool(false));
-                r.insert("type".into(), Value::String("refused".into()));
-                r.insert("reason".into(), Value::String("native_unavailable".into()));
-                r.insert(
-                    "detail".into(),
-                    Value::String(
-                        classification
-                            .filter(|c| !c.is_empty())
-                            .unwrap_or(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY)
-                            .to_string(),
-                    ),
-                );
-                refusal = Some(Value::Object(r));
-            }
-        }
-        Resolved::Cli { command } => {
-            // cli-exec: NO label field — see the identical comment on the
-            // native-fallback Bash arm above; this is the same recorded
-            // limit, not an oversight.
-            tool = "Bash".into();
-            payload.insert("command".into(), Value::String(command.clone()));
-            payload.insert("stdin".into(), Value::String(prompt_body.clone()));
-            channel = "cli-exec".into();
-        }
-        Resolved::Herding { agent, fallback } => {
-            // herding-tier D4: mirrors the cli-exec Bash arm above
-            // byte-for-byte in shape — argv cannot carry a long brief, so
-            // the prompt travels on stdin, and this arm fires for EVERY
-            // runtime (no codex/claude split): a herding pane is a Bash
-            // subprocess call, never a native spawn_agent. D6: the payload
-            // carries the brief only, never a bee verb for the worker — ALL
-            // bee bookkeeping (claim, cap, close) stays the orchestrator's
-            // after it reads the herding result (herding-executor D4).
-            // herd-registry D2: a slot naming `agent:"<name>"` appends
-            // `--agent "<name>"` after --cwd (quoted, same as --cwd); a slot
-            // without an agent leaves the command byte-identical to before.
-            tool = "Bash".into();
-            let mut command = ".bee/bin/bee herding run --task-file - --json".to_string();
-            if let Some((worktree_root, _control_root)) = &worktree_location {
-                if !worktree_root.is_empty() {
-                    command.push_str(" --cwd \"");
-                    command.push_str(worktree_root);
-                    command.push('"');
-                }
-            }
-            if let Some(agent) = agent {
-                command.push_str(" --agent \"");
-                command.push_str(agent);
-                command.push('"');
-            }
-            payload.insert("command".into(), Value::String(command));
-            payload.insert("stdin".into(), Value::String(prompt_body.clone()));
-            // herding-reach D1: dispatch prepare reports herding transport
-            // reachability. Probes HERDR_ENV and HERDR_PANE_ID in the caller's
-            // environment and writes transport_ready and transport_reason into
-            // the payload.
-            let (transport_ready, transport_reason, _) =
-                herding_transport_probe(&|k| std::env::var(k).ok());
-            payload.insert("transport_ready".into(), Value::Bool(transport_ready));
-            payload.insert("transport_reason".into(), Value::String(transport_reason));
-            // herding-review-slots D3: `fallback:"default"` on the slot
-            // names the runtime's own default model for this slot (the
-            // same table a gather purpose used to fall back to silently,
-            // pre-D1-widening) so the orchestrator can re-dispatch through
-            // the Agent path on a failed herding run. Only CONFIGURABLE_SLOTS
-            // members have a default-model table entry at all (advisor does
-            // not — resolveAdvisor "NEVER a tier fallback" still holds); no
-            // resolvable default leaves the payload byte-identical to a
-            // slot with no `fallback` field.
-            if fallback.is_some() {
-                if let Some(model) = CONFIGURABLE_SLOTS
-                    .contains(&tier_token)
-                    .then(|| default_models(runtime).get(tier_token).cloned())
-                    .flatten()
-                    .and_then(|v| match v {
-                        Value::String(s) => Some(s),
-                        _ => None,
-                    })
-                {
-                    let mut fb = Map::new();
-                    fb.insert("model".into(), Value::String(model));
-                    fb.insert(
-                        "fallback_when".into(),
-                        Value::String("transport_ready is false".into()),
-                    );
-                    payload.insert("fallback".into(), Value::Object(fb));
-                }
-            }
-            channel = "herding-exec".into();
-        }
-        _ if runtime == "codex" => {
+    if is_ceiling {
+        if runtime == "codex" {
             tool = "spawn_agent".into();
-            // Carries the SAME subject as the claude Agent branch below,
-            // instead of the bare cell id (or "bee-{kind}") it used to —
-            // this arm is exactly the one the codex gap hid in (plan.md).
-            // codex's `task_name` is a plain required string on the
-            // live-probed 0.145.0 schema (see TASK_NAME_MAX); one-lined and
-            // capped so a long subject cannot read like a paragraph.
             payload.insert(
                 "task_name".into(),
                 Value::String(one_line(Some(&Value::String(subject.clone())), TASK_NAME_MAX)),
             );
             payload.insert(
                 "message".into(),
-                Value::String(format!("[bee-tier: {tier_token}]\n{prompt_body}")),
+                Value::String(format!("[bee-tier: ceiling]\n{prompt_body}")),
             );
             payload.insert("fork_turns".into(), Value::String("none".into()));
-            channel = "codex-native".into();
-        }
-        _ => {
+            channel = "session-model".into();
+        } else {
             tool = "Agent".into();
             payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
             payload.insert(
                 "prompt".into(),
-                Value::String(format!("[bee-tier: {tier_token}]\n{prompt_body}")),
+                Value::String(format!("[bee-tier: ceiling]\n{prompt_body}")),
             );
-            // `requestedModel || tierToken`
-            let model_tag = requested_model
-                .clone()
-                .filter(|m| !m.is_empty())
-                .unwrap_or_else(|| tier_token.to_string());
-            // A description that is only a model name is a red flag
-            // (work-visibility D2) — and it was the one prepare emitted, so
-            // orchestrators wrote their own bare `Execute <id>` instead and
-            // the agent list read as a column of ids. `subject` is computed
-            // once, above, and every transport branch (including this one)
-            // reads it.
-            payload.insert("description".into(), Value::String(format!("{subject} ({model_tag})")));
-            if let Resolved::Model { model, .. } = &resolved {
-                payload.insert("model".into(), Value::String(model.clone()));
+            payload.insert("description".into(), Value::String(format!("{subject} (ceiling)")));
+            channel = "session-model".into();
+        }
+    } else {
+        match &resolved {
+            Resolved::Native { model, effort, fallback, agent_type, .. } => {
+                native_confirmed = classification == Some(NATIVE_TRANSPORT_NATIVE_MODEL_OVERRIDE);
+                if native_confirmed {
+                    tool = "spawn_agent".into();
+                    payload.insert(
+                        "agent_type".into(),
+                        Value::String(if agent_type.is_empty() {
+                            "worker".to_string()
+                        } else {
+                            agent_type.clone()
+                        }),
+                    );
+                    payload.insert(
+                        "message".into(),
+                        Value::String(format!("[bee-tier: {tier_token}]\n{prompt_body}")),
+                    );
+                    payload.insert("model".into(), Value::String(model.clone()));
+                    payload.insert("fork_turns".into(), Value::String("none".into()));
+                    if let Some(effort) = effort {
+                        payload.insert("reasoning_effort".into(), Value::String(effort.clone()));
+                    }
+                    channel = "codex-native".into();
+                    extra_transport = Some("native-override");
+                } else if let Some(command) = fallback.as_ref().filter(|c| !c.is_empty()) {
+                    // cli-exec: NO label field. This payload is `{command, stdin}`
+                    // only — a recorded limit (dispatch-label-chokepoint plan.md
+                    // "What this does not do"), not an oversight: no field exists
+                    // on an external CLI-executor call to carry a subject.
+                    tool = "Bash".into();
+                    payload.insert("command".into(), Value::String(command.clone()));
+                    payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+                    channel = "cli-exec".into();
+                    extra_fallback_reason = Some("native_unavailable");
+                } else {
+                    let mut r = Map::new();
+                    r.insert("ok".into(), Value::Bool(false));
+                    r.insert("type".into(), Value::String("refused".into()));
+                    r.insert("reason".into(), Value::String("native_unavailable".into()));
+                    r.insert(
+                        "detail".into(),
+                        Value::String(
+                            classification
+                                .filter(|c| !c.is_empty())
+                                .unwrap_or(NATIVE_TRANSPORT_NATIVE_BUDGET_ONLY)
+                                .to_string(),
+                        ),
+                    );
+                    refusal = Some(Value::Object(r));
+                }
             }
-            channel = "claude-agent".into();
+            Resolved::Cli { command } => {
+                // cli-exec: NO label field — see the identical comment on the
+                // native-fallback Bash arm above; this is the same recorded
+                // limit, not an oversight.
+                tool = "Bash".into();
+                payload.insert("command".into(), Value::String(command.clone()));
+                payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+                channel = "cli-exec".into();
+            }
+            Resolved::Herding { agent, fallback } => {
+                // herding-tier D4: mirrors the cli-exec Bash arm above
+                // byte-for-byte in shape — argv cannot carry a long brief, so
+                // the prompt travels on stdin, and this arm fires for EVERY
+                // runtime (no codex/claude split): a herding pane is a Bash
+                // subprocess call, never a native spawn_agent. D6: the payload
+                // carries the brief only, never a bee verb for the worker — ALL
+                // bee bookkeeping (claim, cap, close) stays the orchestrator's
+                // after it reads the herding result (herding-executor D4).
+                // herd-registry D2: a slot naming `agent:"<name>"` appends
+                // `--agent "<name>"` after --cwd (quoted, same as --cwd); a slot
+                // without an agent leaves the command byte-identical to before.
+                tool = "Bash".into();
+                let mut command = ".bee/bin/bee herding run --task-file - --json".to_string();
+                if let Some((worktree_root, _control_root)) = &worktree_location {
+                    if !worktree_root.is_empty() {
+                        command.push_str(" --cwd \"");
+                        command.push_str(worktree_root);
+                        command.push('"');
+                    }
+                }
+                if let Some(agent) = agent {
+                    command.push_str(" --agent \"");
+                    command.push_str(agent);
+                    command.push('"');
+                }
+                payload.insert("command".into(), Value::String(command));
+                payload.insert("stdin".into(), Value::String(prompt_body.clone()));
+                // herding-reach D1: dispatch prepare reports herding transport
+                // reachability. Probes HERDR_ENV and HERDR_PANE_ID in the caller's
+                // environment and writes transport_ready and transport_reason into
+                // the payload.
+                let (transport_ready, transport_reason, _) =
+                    herding_transport_probe(&|k| std::env::var(k).ok());
+                payload.insert("transport_ready".into(), Value::Bool(transport_ready));
+                payload.insert("transport_reason".into(), Value::String(transport_reason));
+                // herding-review-slots D3: `fallback:"default"` on the slot
+                // names the runtime's own default model for this slot (the
+                // same table a gather purpose used to fall back to silently,
+                // pre-D1-widening) so the orchestrator can re-dispatch through
+                // the Agent path on a failed herding run. Only CONFIGURABLE_SLOTS
+                // members have a default-model table entry at all (advisor does
+                // not — resolveAdvisor "NEVER a tier fallback" still holds); no
+                // resolvable default leaves the payload byte-identical to a
+                // slot with no `fallback` field.
+                if fallback.is_some() {
+                    if let Some(model) = CONFIGURABLE_SLOTS
+                        .contains(&tier_token)
+                        .then(|| default_models(runtime).get(tier_token).cloned())
+                        .flatten()
+                        .and_then(|v| match v {
+                            Value::String(s) => Some(s),
+                            _ => None,
+                        })
+                    {
+                        let mut fb = Map::new();
+                        fb.insert("model".into(), Value::String(model));
+                        fb.insert(
+                            "fallback_when".into(),
+                            Value::String("transport_ready is false".into()),
+                        );
+                        payload.insert("fallback".into(), Value::Object(fb));
+                    }
+                }
+                channel = "herding-exec".into();
+            }
+            _ if runtime == "codex" => {
+                tool = "spawn_agent".into();
+                // Carries the SAME subject as the claude Agent branch below,
+                // instead of the bare cell id (or "bee-{kind}") it used to —
+                // this arm is exactly the one the codex gap hid in (plan.md).
+                // codex's `task_name` is a plain required string on the
+                // live-probed 0.145.0 schema (see TASK_NAME_MAX); one-lined and
+                // capped so a long subject cannot read like a paragraph.
+                payload.insert(
+                    "task_name".into(),
+                    Value::String(one_line(Some(&Value::String(subject.clone())), TASK_NAME_MAX)),
+                );
+                payload.insert(
+                    "message".into(),
+                    Value::String(format!("[bee-tier: {tier_token}]\n{prompt_body}")),
+                );
+                payload.insert("fork_turns".into(), Value::String("none".into()));
+                channel = "codex-native".into();
+            }
+            _ => {
+                tool = "Agent".into();
+                payload.insert("subagent_type".into(), Value::String(pinned_type.into()));
+                payload.insert(
+                    "prompt".into(),
+                    Value::String(format!("[bee-tier: {tier_token}]\n{prompt_body}")),
+                );
+                // `requestedModel || tierToken`
+                let model_tag = requested_model
+                    .clone()
+                    .filter(|m| !m.is_empty())
+                    .unwrap_or_else(|| tier_token.to_string());
+                // A description that is only a model name is a red flag
+                // (work-visibility D2) — and it was the one prepare emitted, so
+                // orchestrators wrote their own bare `Execute <id>` instead and
+                // the agent list read as a column of ids. `subject` is computed
+                // once, above, and every transport branch (including this one)
+                // reads it.
+                payload.insert("description".into(), Value::String(format!("{subject} ({model_tag})")));
+                if let Resolved::Model { model, .. } = &resolved {
+                    payload.insert("model".into(), Value::String(model.clone()));
+                }
+                channel = "claude-agent".into();
+            }
         }
     }
 
@@ -930,13 +1013,14 @@ pub(crate) fn prepare_dispatch(
         ("claude-agent", Resolved::Model { model, .. }) => Some(model.clone()),
         _ => None,
     };
-    let economics = derive_economics(
+    let mut economics = derive_economics(
         &channel,
         tier_token,
         param_model.as_deref(),
         &resolved,
         native_confirmed,
     );
+    economics.insert("tier_source".into(), Value::String(tier_source.to_string()));
 
     let dispatch_id = pseudo_uuid_v4();
 

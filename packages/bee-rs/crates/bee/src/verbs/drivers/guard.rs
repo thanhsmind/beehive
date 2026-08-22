@@ -60,6 +60,8 @@ pub(crate) fn derive_economics(
         "cli-command"
     } else if channel == "herding-exec" {
         "herding-command"
+    } else if channel == "session-model" {
+        "session-model"
     } else if is_native_confirmed {
         "native-model-param"
     } else if channel == "codex-native" {
@@ -71,7 +73,9 @@ pub(crate) fn derive_economics(
     };
 
     let mut effective_model = Value::Null;
-    let effective_model_status = if is_native_confirmed {
+    let effective_model_status = if channel == "session-model" {
+        "inherited-or-unknown"
+    } else if is_native_confirmed {
         "native-requested"
     } else if channel == "codex-native" {
         "inherited-or-unknown"
@@ -84,7 +88,7 @@ pub(crate) fn derive_economics(
         "unverified"
     };
 
-    let requested_model = if channel == "cli-exec" || channel == "herding-exec" {
+    let requested_model = if channel == "cli-exec" || channel == "herding-exec" || channel == "session-model" {
         Value::Null
     } else {
         match param_model.map(str::to_string).or(resolved_model) {
@@ -355,6 +359,15 @@ mod tests {
         assert_eq!(
             jsjson::stringify(&Value::Object(e)),
             r#"{"logical_tier":"generation","requested_model":null,"effective_model":null,"effective_model_status":"unverified","channel":"herding-exec","enforcement":"herding-command"}"#
+        );
+    }
+
+    #[test]
+    fn derive_economics_session_model() {
+        let e = derive_economics("session-model", "ceiling", None, &Resolved::Inherit, false);
+        assert_eq!(
+            jsjson::stringify(&Value::Object(e)),
+            r#"{"logical_tier":"ceiling","requested_model":null,"effective_model":null,"effective_model_status":"inherited-or-unknown","channel":"session-model","enforcement":"session-model"}"#
         );
     }
 }
